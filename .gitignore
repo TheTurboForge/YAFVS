@@ -1,0 +1,34 @@
+# Secrets and local credentials.
+.env
+.env.*
+*.secret
+*.token
+*.pem
+*.key
+*.kdbx
+*.age
+*.gpg
+
+# Local/private work.
+private/
+scratch/
+notes/
+logs/
+
+# Build and tool outputs.
+build/
+cmake-build-*/
+.cache/
+ccache/
+
+# Editor local config.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# Common local/editor noise.
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/

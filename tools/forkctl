@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""TurboVAS monorepo health command surface."""
+"""TurboVAS monorepo health and build-readiness command surface."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,13 +34,7 @@ BASELINE_TOOLS = (
     "cargo",
     "bear",
 )
-DEFERRED_SURFACES = (
-    ("just build", "Build command surface is deferred until component build baselines exist."),
-    ("just test", "Test command surface is deferred until component checks are mapped."),
-    ("just up", "Runtime orchestration is deferred until Docker design is implemented."),
-    ("just down", "Runtime orchestration is deferred until Docker design is implemented."),
-    ("just logs", "Runtime log command is deferred until service orchestration exists."),
-)
+CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 
 
 @dataclass(frozen=True)
@@ -51,100 +46,83 @@ class Component:
     markers: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class BuildMeta:
+    name: str
+    build_system: str
+    order: int
+    pkg_config: tuple[str, ...] = ()
+    programs: tuple[str, ...] = ()
+    package_hints: tuple[str, ...] = ()
+    cmake_args: tuple[str, ...] = ()
+    install_for_dependents: bool = False
+
+
 COMPONENTS: tuple[Component, ...] = (
-    Component(
-        "openvas-scanner",
-        "components/openvas-scanner",
-        "scanner engine and NASL runtime",
-        ("COPYING", "license-details.md"),
-        ("README.md", "CMakeLists.txt", "rust/Cargo.toml"),
-    ),
-    Component(
-        "gvm-libs",
-        "components/gvm-libs",
-        "shared Greenbone/OpenVAS libraries",
-        ("COPYING",),
-        ("README.md", "CMakeLists.txt"),
-    ),
-    Component(
-        "gvmd",
-        "components/gvmd",
-        "manager daemon and GMP API",
-        ("COPYING",),
-        ("README.md", "CMakeLists.txt"),
-    ),
-    Component(
-        "ospd-openvas",
-        "components/ospd-openvas",
-        "scanner adapter service",
-        ("COPYING",),
-        ("README.md", "pyproject.toml"),
-    ),
-    Component(
-        "gsad",
-        "components/gsad",
-        "web service daemon",
-        ("LICENSE",),
-        ("README.md", "CMakeLists.txt"),
-    ),
-    Component(
-        "gsa",
-        "components/gsa",
-        "web user interface",
-        ("LICENSE",),
-        ("README.md", "package.json"),
-    ),
-    Component(
-        "openvas-smb",
-        "components/openvas-smb",
-        "SMB support library",
-        ("COPYING",),
-        ("README.md", "CMakeLists.txt"),
-    ),
-    Component(
-        "notus-scanner",
-        "components/notus-scanner",
-        "Notus local security check scanner",
-        ("LICENSE",),
-        ("README.md", "pyproject.toml"),
-    ),
-    Component(
-        "greenbone-feed-sync",
-        "components/greenbone-feed-sync",
-        "feed synchronization tooling",
-        ("LICENSE",),
-        ("README.md", "pyproject.toml"),
-    ),
-    Component(
-        "python-gvm",
-        "components/python-gvm",
-        "Python GMP client library",
-        ("LICENSE",),
-        ("README.md", "pyproject.toml"),
-    ),
-    Component(
-        "gvm-tools",
-        "components/gvm-tools",
-        "command-line GMP tools",
-        ("LICENSE",),
-        ("README.md", "pyproject.toml"),
-    ),
+    Component("openvas-scanner", "components/openvas-scanner", "scanner engine and NASL runtime", ("COPYING", "license-details.md"), ("README.md", "CMakeLists.txt", "rust/Cargo.toml")),
+    Component("gvm-libs", "components/gvm-libs", "shared Greenbone/OpenVAS libraries", ("COPYING",), ("README.md", "CMakeLists.txt")),
+    Component("gvmd", "components/gvmd", "manager daemon and GMP API", ("COPYING",), ("README.md", "CMakeLists.txt")),
+    Component("ospd-openvas", "components/ospd-openvas", "scanner adapter service", ("COPYING",), ("README.md", "pyproject.toml")),
+    Component("gsad", "components/gsad", "web service daemon", ("LICENSE",), ("README.md", "CMakeLists.txt")),
+    Component("gsa", "components/gsa", "web user interface", ("LICENSE",), ("README.md", "package.json")),
+    Component("openvas-smb", "components/openvas-smb", "SMB support library", ("COPYING",), ("README.md", "CMakeLists.txt")),
+    Component("notus-scanner", "components/notus-scanner", "Notus local security check scanner", ("LICENSE",), ("README.md", "pyproject.toml")),
+    Component("greenbone-feed-sync", "components/greenbone-feed-sync", "feed synchronization tooling", ("LICENSE",), ("README.md", "pyproject.toml")),
+    Component("python-gvm", "components/python-gvm", "Python GMP client library", ("LICENSE",), ("README.md", "pyproject.toml")),
+    Component("gvm-tools", "components/gvm-tools", "command-line GMP tools", ("LICENSE",), ("README.md", "pyproject.toml")),
 )
+COMPONENT_BY_NAME = {component.name: component for component in COMPONENTS}
+
+BUILD_META: dict[str, BuildMeta] = {
+    "gvm-libs": BuildMeta(
+        "gvm-libs",
+        "cmake",
+        10,
+        pkg_config=("glib-2.0", "gio-2.0", "gnutls", "uuid", "libssh", "hiredis", "libxml-2.0", "gpgme", "libgcrypt", "libcjson", "libcurl", "zlib"),
+        programs=("cmake", "ninja", "pkg-config", "gcc", "libnet-config", "pcap-config"),
+        package_hints=("libcjson-dev", "libcrypt-dev", "libcurl4-gnutls-dev", "libgcrypt20-dev", "libglib2.0-dev", "libgnutls28-dev", "libgpgme-dev", "libhiredis-dev", "libnet1-dev", "libpaho-mqtt-dev", "libpcap-dev", "libssh-dev", "libxml2-dev", "uuid-dev"),
+        cmake_args=("-DBUILD_TESTS=OFF",),
+        install_for_dependents=True,
+    ),
+    "openvas-smb": BuildMeta(
+        "openvas-smb",
+        "cmake",
+        20,
+        pkg_config=("gnutls", "heimdal-gssapi", "popt"),
+        programs=("cmake", "ninja", "pkg-config", "gcc", "perl"),
+        package_hints=("gcc-mingw-w64", "heimdal-dev", "libpopt-dev", "libunistring-dev"),
+        install_for_dependents=True,
+    ),
+    "openvas-scanner": BuildMeta(
+        "openvas-scanner",
+        "cmake",
+        30,
+        pkg_config=("glib-2.0", "gio-2.0", "json-glib-1.0", "gnutls", "libssh", "ksba", "gpgme", "libgcrypt", "libbsd", "libcurl", "mit-krb5", "mit-krb5-gssapi", "libgvm_base", "libgvm_util", "libgvm_boreas"),
+        programs=("cmake", "ninja", "pkg-config", "gcc", "bison", "flex", "pcap-config"),
+        package_hints=("bison", "flex", "libjson-glib-dev", "redis-server", "libksba-dev", "libbsd-dev", "krb5-multidev", "libmagic-dev", "libsnmp-dev", "nmap", "pnscan", "python3-impacket"),
+        cmake_args=("-DCMAKE_C_FLAGS=-isystem /usr/include/mit-krb5",),
+    ),
+    "gvmd": BuildMeta("gvmd", "cmake", 40),
+    "gsad": BuildMeta("gsad", "cmake", 50),
+    "gsa": BuildMeta("gsa", "node", 60),
+    "ospd-openvas": BuildMeta("ospd-openvas", "python", 70),
+    "notus-scanner": BuildMeta("notus-scanner", "python", 80),
+    "greenbone-feed-sync": BuildMeta("greenbone-feed-sync", "python", 90),
+    "python-gvm": BuildMeta("python-gvm", "python", 100),
+    "gvm-tools": BuildMeta("gvm-tools", "python", 110),
+}
 
 
 def run_git(repo_root: Path, args: list[str]) -> str | None:
     try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=repo_root,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
+        result = subprocess.run(["git", *args], cwd=repo_root, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
     except (OSError, subprocess.CalledProcessError):
         return None
     return result.stdout.strip()
+
+
+def run_command(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
 def find_repo_root(start: Path) -> Path:
@@ -169,8 +147,8 @@ def status_rank(status: str) -> int:
 
 def aggregate_status(findings: Iterable[dict[str, Any]]) -> str:
     final = "pass"
-    for finding in findings:
-        status = str(finding.get("status", "pass"))
+    for item in findings:
+        status = str(item.get("status", "pass"))
         if status not in STATUSES:
             status = "fail"
         if status_rank(status) > status_rank(final):
@@ -179,13 +157,7 @@ def aggregate_status(findings: Iterable[dict[str, Any]]) -> str:
 
 
 def make_result(command: str, repo_root: Path, summary: str, findings: list[dict[str, Any]], artifacts: list[str] | None = None) -> dict[str, Any]:
-    return {
-        "status": aggregate_status(findings),
-        "summary": summary,
-        "findings": findings,
-        "artifacts": artifacts or [],
-        "metadata": metadata(repo_root, command),
-    }
+    return {"status": aggregate_status(findings), "summary": summary, "findings": findings, "artifacts": artifacts or [], "metadata": metadata(repo_root, command)}
 
 
 def finding(status: str, check: str, message: str, path: str | None = None, details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -195,6 +167,23 @@ def finding(status: str, check: str, message: str, path: str | None = None, deta
     if details:
         item["details"] = details
     return item
+
+
+def build_env(repo_root: Path) -> dict[str, str]:
+    env = dict(os.environ)
+    prefix = repo_root / "build" / "prefix"
+    pkg_paths = [str(prefix / "lib" / "pkgconfig"), str(prefix / "lib64" / "pkgconfig")]
+    current_pkg = env.get("PKG_CONFIG_PATH")
+    if current_pkg:
+        pkg_paths.append(current_pkg)
+    env["PKG_CONFIG_PATH"] = ":".join(pkg_paths)
+    env["CMAKE_PREFIX_PATH"] = str(prefix)
+    ld_paths = [str(prefix / "lib"), str(prefix / "lib64")]
+    current_ld = env.get("LD_LIBRARY_PATH")
+    if current_ld:
+        ld_paths.append(current_ld)
+    env["LD_LIBRARY_PATH"] = ":".join(ld_paths)
+    return env
 
 
 def component_inventory(repo_root: Path, scope: str | None = None) -> list[dict[str, Any]]:
@@ -210,27 +199,34 @@ def component_inventory(repo_root: Path, scope: str | None = None) -> list[dict[
                 "path": component.path,
                 "role": component.role,
                 "exists": component_path.is_dir(),
-                "license_files": [
-                    {"path": f"{component.path}/{license_file}", "exists": (component_path / license_file).is_file()}
-                    for license_file in component.licenses
-                ],
-                "markers": [
-                    {"path": f"{component.path}/{marker}", "exists": (component_path / marker).exists()}
-                    for marker in component.markers
-                ],
+                "license_files": [{"path": f"{component.path}/{license_file}", "exists": (component_path / license_file).is_file()} for license_file in component.licenses],
+                "markers": [{"path": f"{component.path}/{marker}", "exists": (component_path / marker).exists()} for marker in component.markers],
             }
         )
     return rows
 
 
 def nested_git_dirs(repo_root: Path) -> list[str]:
-    nested: list[str] = []
     components = repo_root / "components"
     if not components.is_dir():
-        return nested
-    for path in components.rglob(".git"):
-        nested.append(str(path.relative_to(repo_root)))
-    return sorted(nested)
+        return []
+    return sorted(str(path.relative_to(repo_root)) for path in components.rglob(".git"))
+
+
+def selected_build_metas(component: str | None = None) -> list[BuildMeta]:
+    if component:
+        meta = BUILD_META.get(component)
+        if not meta:
+            raise KeyError(component)
+        return [meta]
+    return sorted(BUILD_META.values(), key=lambda meta: meta.order)
+
+
+def pkg_config_version(module: str, env: dict[str, str]) -> str | None:
+    result = run_command(["pkg-config", "--modversion", module], Path.cwd(), env=env)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
 
 
 def command_status(repo_root: Path) -> dict[str, Any]:
@@ -241,19 +237,9 @@ def command_status(repo_root: Path) -> dict[str, Any]:
     upstream = run_git(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
     findings.append(finding("pass", "git.repository", f"Repository root: {repo_root}"))
     findings.append(finding("pass", "git.head", f"Current branch {branch} at {head}"))
-    if upstream:
-        findings.append(finding("pass", "git.upstream", f"Tracking upstream: {upstream}"))
-    else:
-        findings.append(finding("warn", "git.upstream", "No upstream tracking branch is configured."))
+    findings.append(finding("pass" if upstream else "warn", "git.upstream", f"Tracking upstream: {upstream}" if upstream else "No upstream tracking branch is configured."))
     if porcelain:
-        findings.append(
-            finding(
-                "warn",
-                "git.worktree",
-                "Worktree has uncommitted changes.",
-                details={"changed_files": porcelain.splitlines()},
-            )
-        )
+        findings.append(finding("warn", "git.worktree", "Worktree has uncommitted changes.", details={"changed_files": porcelain.splitlines()}))
     else:
         findings.append(finding("pass", "git.worktree", "Worktree is clean."))
     return make_result("status", repo_root, "Repository status collected.", findings)
@@ -265,10 +251,8 @@ def command_inventory(repo_root: Path, scope: str | None = None) -> dict[str, An
     if scope and not rows:
         findings.append(finding("warn", "inventory.scope", f"No expected components matched scope {scope}."))
     for row in rows:
-        status = "pass" if row["exists"] else "fail"
-        findings.append(finding(status, "component.exists", f"{row['name']}: {row['role']}", row["path"]))
-    summary = f"Inventory contains {len(rows)} expected component(s)."
-    return make_result("inventory", repo_root, summary, findings, artifacts=[])
+        findings.append(finding("pass" if row["exists"] else "fail", "component.exists", f"{row['name']}: {row['role']}", row["path"]))
+    return make_result("inventory", repo_root, f"Inventory contains {len(rows)} expected component(s).", findings)
 
 
 def command_license_report(repo_root: Path) -> dict[str, Any]:
@@ -277,69 +261,131 @@ def command_license_report(repo_root: Path) -> dict[str, Any]:
         component_path = repo_root / component.path
         for license_file in component.licenses:
             relative = f"{component.path}/{license_file}"
-            status = "pass" if (component_path / license_file).is_file() else "fail"
-            findings.append(finding(status, "license.file", f"{component.name}: expected {license_file}", relative))
-    findings.append(
-        finding(
-            "warn",
-            "license.scope",
-            "This report checks preserved license/provenance files only; it is not a legal conclusion.",
-        )
-    )
+            findings.append(finding("pass" if (component_path / license_file).is_file() else "fail", "license.file", f"{component.name}: expected {license_file}", relative))
+    findings.append(finding("warn", "license.scope", "This report checks preserved license/provenance files only; it is not a legal conclusion."))
     return make_result("license-report", repo_root, "License/provenance file presence checked.", findings)
+
+
+def command_deps(repo_root: Path, component: str | None = None) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    env = build_env(repo_root)
+    try:
+        metas = selected_build_metas(component)
+    except KeyError:
+        return make_result("deps", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
+    for meta in metas:
+        component_path = COMPONENT_BY_NAME[meta.name].path
+        findings.append(finding("pass", "build.metadata", f"{meta.name}: {meta.build_system}", component_path, {"order": meta.order, "package_hints": list(meta.package_hints)}))
+        for program in meta.programs:
+            found = shutil.which(program)
+            findings.append(finding("pass" if found else "fail", "program.available", f"{meta.name}: {program}" + (f" at {found}" if found else " not found"), details={"component": meta.name, "program": program}))
+        for module in meta.pkg_config:
+            version = pkg_config_version(module, env)
+            findings.append(finding("pass" if version else "fail", "pkg-config.module", f"{meta.name}: {module}" + (f" {version}" if version else " not found"), details={"component": meta.name, "module": module}))
+    return make_result("deps", repo_root, "Dependency readiness checked.", findings)
+
+
+def cmake_paths(repo_root: Path, component: str) -> tuple[Path, Path, Path]:
+    source = repo_root / COMPONENT_BY_NAME[component].path
+    build = repo_root / "build" / component
+    prefix = repo_root / "build" / "prefix"
+    return source, build, prefix
+
+
+def cmake_configure(repo_root: Path, meta: BuildMeta) -> subprocess.CompletedProcess[str]:
+    source, build, prefix = cmake_paths(repo_root, meta.name)
+    build.mkdir(parents=True, exist_ok=True)
+    prefix.mkdir(parents=True, exist_ok=True)
+    run_dir = repo_root / "build" / "run" / "gvm"
+    state_dir = repo_root / "build" / "var"
+    sysconf_dir = prefix / "etc"
+    command = [
+        "cmake",
+        "-S",
+        str(source),
+        "-B",
+        str(build),
+        "-G",
+        "Ninja",
+        f"-DCMAKE_INSTALL_PREFIX={prefix}",
+        f"-DCMAKE_PREFIX_PATH={prefix}",
+        f"-DSYSCONFDIR={sysconf_dir}",
+        f"-DLOCALSTATEDIR={state_dir}",
+        f"-DGVM_RUN_DIR={run_dir}",
+        *meta.cmake_args,
+    ]
+    return run_command(command, repo_root, env=build_env(repo_root))
+
+
+def command_configure(repo_root: Path, component: str) -> dict[str, Any]:
+    meta = BUILD_META.get(component)
+    if not meta:
+        return make_result("configure", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
+    if meta.build_system != "cmake":
+        return make_result("configure", repo_root, f"{component} is not a CMake component.", [finding("warn", "build.unsupported", f"{component} uses {meta.build_system}, not cmake.")])
+    result = cmake_configure(repo_root, meta)
+    _, build, _ = cmake_paths(repo_root, component)
+    status = "pass" if result.returncode == 0 else "fail"
+    return make_result("configure", repo_root, f"Configure {component} completed with exit code {result.returncode}.", [finding(status, "cmake.configure", f"{component} configure {'succeeded' if status == 'pass' else 'failed'}.", str(build.relative_to(repo_root)), {"output_tail": result.stdout.splitlines()[-80:]})], [str(build.relative_to(repo_root))])
+
+
+def command_build(repo_root: Path, component: str, install: bool = False, configure_first: bool = True) -> dict[str, Any]:
+    meta = BUILD_META.get(component)
+    if not meta:
+        return make_result("build", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
+    if meta.build_system != "cmake":
+        return make_result("build", repo_root, f"{component} is not a CMake component.", [finding("warn", "build.unsupported", f"{component} uses {meta.build_system}, not cmake.")])
+    findings: list[dict[str, Any]] = []
+    _, build, prefix = cmake_paths(repo_root, component)
+    if configure_first:
+        configure = cmake_configure(repo_root, meta)
+        findings.append(finding("pass" if configure.returncode == 0 else "fail", "cmake.configure", f"{component} configure exit code {configure.returncode}.", str(build.relative_to(repo_root)), {"output_tail": configure.stdout.splitlines()[-60:]}))
+        if configure.returncode != 0:
+            return make_result("build", repo_root, f"Build {component} stopped at configure.", findings, [str(build.relative_to(repo_root))])
+    build_result = run_command(["cmake", "--build", str(build), "--parallel"], repo_root, env=build_env(repo_root))
+    findings.append(finding("pass" if build_result.returncode == 0 else "fail", "cmake.build", f"{component} build exit code {build_result.returncode}.", str(build.relative_to(repo_root)), {"output_tail": build_result.stdout.splitlines()[-80:]}))
+    if build_result.returncode == 0 and (install or meta.install_for_dependents):
+        install_result = run_command(["cmake", "--install", str(build)], repo_root, env=build_env(repo_root))
+        findings.append(finding("pass" if install_result.returncode == 0 else "fail", "cmake.install", f"{component} install exit code {install_result.returncode}.", str(prefix.relative_to(repo_root)), {"output_tail": install_result.stdout.splitlines()[-60:]}))
+    return make_result("build", repo_root, f"Build {component} completed.", findings, [str(build.relative_to(repo_root)), str(prefix.relative_to(repo_root))])
+
+
+def command_build_core_c(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    artifacts: list[str] = []
+    for component in CORE_C_CHAIN:
+        result = command_build(repo_root, component, install=BUILD_META[component].install_for_dependents)
+        artifacts.extend(result["artifacts"])
+        findings.append(finding(result["status"], "core-c.component", f"{component}: {result['summary']}", details={"component": component}))
+        for item in result["findings"]:
+            item = dict(item)
+            item["check"] = f"{component}.{item['check']}"
+            findings.append(item)
+        if result["status"] == "fail":
+            break
+    return make_result("build-core-c", repo_root, "Core C build chain attempted.", findings, sorted(set(artifacts)))
 
 
 def command_doctor(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
-    if (repo_root / ".git").exists():
-        findings.append(finding("pass", "repo.git", "Repository metadata is present.", ".git"))
-    else:
-        findings.append(finding("fail", "repo.git", "Repository metadata is missing.", ".git"))
-
+    findings.append(finding("pass" if (repo_root / ".git").exists() else "fail", "repo.git", "Repository metadata is present." if (repo_root / ".git").exists() else "Repository metadata is missing.", ".git"))
     porcelain = run_git(repo_root, ["status", "--short"]) or ""
-    if porcelain:
-        findings.append(finding("warn", "git.worktree", "Worktree has uncommitted changes."))
-    else:
-        findings.append(finding("pass", "git.worktree", "Worktree is clean."))
-
+    findings.append(finding("warn" if porcelain else "pass", "git.worktree", "Worktree has uncommitted changes." if porcelain else "Worktree is clean."))
     for doc in EXPECTED_ROOT_DOCS:
-        status = "pass" if (repo_root / doc).is_file() else "fail"
-        findings.append(finding(status, "root.doc", f"Expected root document {doc}", doc))
-
+        findings.append(finding("pass" if (repo_root / doc).is_file() else "fail", "root.doc", f"Expected root document {doc}", doc))
     for row in component_inventory(repo_root):
-        findings.append(
-            finding(
-                "pass" if row["exists"] else "fail",
-                "component.exists",
-                f"Expected component {row['name']}",
-                row["path"],
-            )
-        )
+        findings.append(finding("pass" if row["exists"] else "fail", "component.exists", f"Expected component {row['name']}", row["path"]))
         for license_file in row["license_files"]:
-            findings.append(
-                finding(
-                    "pass" if license_file["exists"] else "fail",
-                    "component.license",
-                    f"Expected license/provenance file for {row['name']}",
-                    license_file["path"],
-                )
-            )
-
+            findings.append(finding("pass" if license_file["exists"] else "fail", "component.license", f"Expected license/provenance file for {row['name']}", license_file["path"]))
     nested = nested_git_dirs(repo_root)
-    if nested:
-        findings.append(finding("fail", "component.nested_git", "Nested .git directories were found.", details={"paths": nested}))
-    else:
-        findings.append(finding("pass", "component.nested_git", "No nested .git directories found under components/."))
-
+    findings.append(finding("fail" if nested else "pass", "component.nested_git", "Nested .git directories were found." if nested else "No nested .git directories found under components/.", details={"paths": nested} if nested else None))
     for tool in BASELINE_TOOLS:
-        if shutil.which(tool):
-            findings.append(finding("pass", "tool.available", f"{tool} is available."))
-        else:
-            findings.append(finding("warn", "tool.available", f"{tool} is not available on PATH."))
-
-    for command, message in DEFERRED_SURFACES:
-        findings.append(finding("warn", "surface.deferred", message, details={"command": command}))
-
+        findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
+    findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c"]}))
+    findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
+    findings.append(finding("warn", "surface.deferred", "Runtime orchestration is deferred until Docker design is implemented.", details={"command": "just up"}))
+    findings.append(finding("warn", "surface.deferred", "Runtime orchestration is deferred until Docker design is implemented.", details={"command": "just down"}))
+    findings.append(finding("warn", "surface.deferred", "Runtime log command is deferred until service orchestration exists.", details={"command": "just logs"}))
     return make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
 
 
@@ -364,15 +410,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="TurboVAS monorepo health checks")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
-
     subparsers.add_parser("status", parents=[common], help="show repository status")
     inventory = subparsers.add_parser("inventory", parents=[common], help="show expected component inventory")
     inventory.add_argument("--scope", help="limit inventory to a path under the repository")
     subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     subparsers.add_parser("license-report", parents=[common], help="check preserved license/provenance files")
+    deps = subparsers.add_parser("deps", parents=[common], help="check dependency readiness")
+    deps.add_argument("component", nargs="?", help="component name")
+    configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
+    configure.add_argument("component", help="component name")
+    build = subparsers.add_parser("build", parents=[common], help="build a CMake component")
+    build.add_argument("component", help="component name")
+    build.add_argument("--install", action="store_true", help="install into build/prefix after successful build")
+    subparsers.add_parser("build-core-c", parents=[common], help="build gvm-libs, openvas-smb, and openvas-scanner")
     return parser
 
 
@@ -380,7 +432,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     repo_root = find_repo_root(Path.cwd())
-
     if args.command == "status":
         result = command_status(repo_root)
     elif args.command == "inventory":
@@ -389,9 +440,16 @@ def main(argv: list[str] | None = None) -> int:
         result = command_doctor(repo_root)
     elif args.command == "license-report":
         result = command_license_report(repo_root)
+    elif args.command == "deps":
+        result = command_deps(repo_root, args.component)
+    elif args.command == "configure":
+        result = command_configure(repo_root, args.component)
+    elif args.command == "build":
+        result = command_build(repo_root, args.component, install=args.install)
+    elif args.command == "build-core-c":
+        result = command_build_core_c(repo_root)
     else:
         parser.error(f"unknown command {args.command}")
-
     return emit(result, args.json)
 
 

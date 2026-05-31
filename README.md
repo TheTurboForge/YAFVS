@@ -18,9 +18,15 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just inventory`: list the expected monorepo components.
 - `just doctor`: run structural and environment readiness checks.
 - `just license-report`: check preserved license and provenance files.
+- `just deps [component]`: check build dependency readiness.
+- `just configure <component>`: configure a CMake component into `build/<component>/`.
+- `just build <component>`: build a CMake component with local artifacts under `build/`.
+- `just build-core-c`: build the initial core C chain.
 
 The commands delegate to `tools/forkctl`, which also supports JSON output for automation, for example:
 
 ```sh
 tools/forkctl doctor --json
 ```
+
+See `BUILDING.md` for the current build baseline.

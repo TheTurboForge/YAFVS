@@ -14,3 +14,15 @@ doctor:
 
 license-report:
     @tools/forkctl license-report
+
+deps component="":
+    @if [ -n "{{component}}" ]; then tools/forkctl deps "{{component}}"; else tools/forkctl deps; fi
+
+configure component:
+    @tools/forkctl configure "{{component}}"
+
+build component:
+    @tools/forkctl build "{{component}}"
+
+build-core-c:
+    @tools/forkctl build-core-c

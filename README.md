@@ -20,8 +20,12 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just license-report`: check preserved license and provenance files.
 - `just deps [component]`: check build dependency readiness.
 - `just configure <component>`: configure a CMake component into `build/<component>/`.
-- `just build <component>`: build a CMake component with local artifacts under `build/`.
+- `just build <component>`: build a supported component with local artifacts under ignored paths.
 - `just build-core-c`: build the initial core C chain.
+- `just build-c-services`: build the current C service baseline.
+- `just build-ui`: install and build the web UI.
+- `just build-python`: build/import-check Python components.
+- `just build-baseline`: run the inherited-stack build baseline.
 
 The commands delegate to `tools/forkctl`, which also supports JSON output for automation, for example:
 

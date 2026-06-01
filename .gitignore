@@ -21,6 +21,13 @@
 /.cache/
 /ccache/
 
+# Component-local dependency/build outputs.
+/components/gsa/node_modules/
+/components/gsa/dist/
+/components/gsa/.eslintcache
+/components/*/dist/
+/components/*/build/
+
 # Python caches.
 __pycache__/
 *.py[cod]

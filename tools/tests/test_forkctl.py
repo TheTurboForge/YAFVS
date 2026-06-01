@@ -30,6 +30,10 @@ class ForkctlTests(unittest.TestCase):
     def test_core_c_chain_order_is_stable(self):
         self.assertEqual(forkctl.CORE_C_CHAIN, ("gvm-libs", "openvas-smb", "openvas-scanner"))
 
+    def test_expanded_chains_are_stable(self):
+        self.assertEqual(forkctl.C_SERVICES_CHAIN, ("gvm-libs", "openvas-smb", "openvas-scanner", "gvmd", "gsad"))
+        self.assertEqual(forkctl.PYTHON_CHAIN, ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner"))
+
     def test_aggregate_status_prefers_highest_severity(self):
         findings = [
             {"status": "pass"},
@@ -79,6 +83,15 @@ class ForkctlTests(unittest.TestCase):
             self.assertEqual(source, root / "components" / "gvm-libs")
             self.assertEqual(build, root / "build" / "gvm-libs")
             self.assertEqual(prefix, root / "build" / "prefix")
+
+    def test_python_venv_path_uses_ignored_build_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(forkctl.venv_python(root, "python-gvm"), root / "build" / "venvs" / "python-gvm" / "bin" / "python")
+
+    def test_version_tuple_parses_tool_versions(self):
+        self.assertGreaterEqual(forkctl.version_tuple("v22.12.0"), (22, 12, 0))
+        self.assertEqual(forkctl.version_tuple("11.0.0"), (11, 0, 0))
 
 
 if __name__ == "__main__":

@@ -35,6 +35,9 @@ BASELINE_TOOLS = (
     "bear",
 )
 CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
+C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "gvmd", "gsad")
+PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
+BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,9 @@ class BuildMeta:
     package_hints: tuple[str, ...] = ()
     cmake_args: tuple[str, ...] = ()
     install_for_dependents: bool = False
+    node_scripts: tuple[str, ...] = ()
+    python_imports: tuple[str, ...] = ()
+    python_local_deps: tuple[str, ...] = ()
 
 
 COMPONENTS: tuple[Component, ...] = (
@@ -102,14 +108,74 @@ BUILD_META: dict[str, BuildMeta] = {
         package_hints=("bison", "flex", "libjson-glib-dev", "redis-server", "libksba-dev", "libbsd-dev", "krb5-multidev", "libmagic-dev", "libsnmp-dev", "nmap", "pnscan", "python3-impacket"),
         cmake_args=("-DCMAKE_C_FLAGS=-isystem /usr/include/mit-krb5",),
     ),
-    "gvmd": BuildMeta("gvmd", "cmake", 40),
-    "gsad": BuildMeta("gsad", "cmake", 50),
-    "gsa": BuildMeta("gsa", "node", 60),
-    "ospd-openvas": BuildMeta("ospd-openvas", "python", 70),
-    "notus-scanner": BuildMeta("notus-scanner", "python", 80),
-    "greenbone-feed-sync": BuildMeta("greenbone-feed-sync", "python", 90),
-    "python-gvm": BuildMeta("python-gvm", "python", 100),
-    "gvm-tools": BuildMeta("gvm-tools", "python", 110),
+    "gvmd": BuildMeta(
+        "gvmd",
+        "cmake",
+        40,
+        pkg_config=("libcjson", "libgvm_base", "libgvm_util", "libgvm_osp", "libgvm_gmp", "gnutls", "glib-2.0", "libbsd", "libical", "gpgme"),
+        programs=("cmake", "ninja", "pkg-config", "gcc", "pg_config", "xsltproc"),
+        package_hints=("postgresql-server-dev-all", "postgresql-server-dev-16", "libical-dev", "xsltproc"),
+        cmake_args=("-DENABLE_AGENTS=0", "-DENABLE_CONTAINER_SCANNING=0", "-DENABLE_CREDENTIAL_STORES=0", "-DENABLE_JWT_AUTH=0", "-DENABLE_OPENVASD=0", "-DWITH_LIBTHEIA=0"),
+        install_for_dependents=True,
+    ),
+    "gsad": BuildMeta(
+        "gsad",
+        "cmake",
+        50,
+        pkg_config=("libmicrohttpd", "libxml-2.0", "glib-2.0", "libgvm_base", "libgvm_util", "libgvm_gmp", "gnutls", "zlib", "libbrotlienc", "libgcrypt"),
+        programs=("cmake", "ninja", "pkg-config", "gcc"),
+        package_hints=("libmicrohttpd-dev", "libbrotli-dev"),
+        install_for_dependents=True,
+    ),
+    "gsa": BuildMeta(
+        "gsa",
+        "node-npm",
+        60,
+        programs=("node", "npm"),
+        package_hints=("Node.js 22 official binary install", "npm 11"),
+        node_scripts=("build",),
+    ),
+    "python-gvm": BuildMeta(
+        "python-gvm",
+        "python-uv",
+        70,
+        programs=("python3", "uv"),
+        package_hints=("uv",),
+        python_imports=("gvm",),
+    ),
+    "gvm-tools": BuildMeta(
+        "gvm-tools",
+        "python-uv",
+        80,
+        programs=("python3", "uv"),
+        package_hints=("uv",),
+        python_imports=("gvmtools",),
+        python_local_deps=("python-gvm",),
+    ),
+    "greenbone-feed-sync": BuildMeta(
+        "greenbone-feed-sync",
+        "python-uv",
+        90,
+        programs=("python3", "uv"),
+        package_hints=("uv",),
+        python_imports=("greenbone.feed.sync",),
+    ),
+    "ospd-openvas": BuildMeta(
+        "ospd-openvas",
+        "python-poetry-core",
+        100,
+        programs=("python3", "uv"),
+        package_hints=("uv", "poetry-core"),
+        python_imports=("ospd", "ospd_openvas"),
+    ),
+    "notus-scanner": BuildMeta(
+        "notus-scanner",
+        "python-poetry-core",
+        110,
+        programs=("python3", "uv"),
+        package_hints=("uv", "poetry-core"),
+        python_imports=("notus.scanner",),
+    ),
 }
 
 
@@ -229,6 +295,39 @@ def pkg_config_version(module: str, env: dict[str, str]) -> str | None:
     return None
 
 
+def tool_version(program: str) -> str | None:
+    probes = {
+        "node": ["node", "--version"],
+        "npm": ["npm", "--version"],
+        "python3": ["python3", "--version"],
+        "uv": ["uv", "--version"],
+    }
+    command = probes.get(program)
+    if not command or not shutil.which(command[0]):
+        return None
+    result = run_command(command, Path.cwd())
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
+
+
+def version_tuple(version: str) -> tuple[int, ...]:
+    clean = version.strip().lstrip("v")
+    parts: list[int] = []
+    for piece in clean.split("."):
+        number = ""
+        for character in piece:
+            if character.isdigit():
+                number += character
+            else:
+                break
+        if number:
+            parts.append(int(number))
+        else:
+            break
+    return tuple(parts)
+
+
 def command_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     branch = run_git(repo_root, ["branch", "--show-current"]) or "(detached or unavailable)"
@@ -279,9 +378,17 @@ def command_deps(repo_root: Path, component: str | None = None) -> dict[str, Any
         for program in meta.programs:
             found = shutil.which(program)
             findings.append(finding("pass" if found else "fail", "program.available", f"{meta.name}: {program}" + (f" at {found}" if found else " not found"), details={"component": meta.name, "program": program}))
+            version = tool_version(program)
+            if version:
+                findings.append(finding("pass", "program.version", f"{meta.name}: {program} {version}", details={"component": meta.name, "program": program, "version": version}))
         for module in meta.pkg_config:
             version = pkg_config_version(module, env)
             findings.append(finding("pass" if version else "fail", "pkg-config.module", f"{meta.name}: {module}" + (f" {version}" if version else " not found"), details={"component": meta.name, "module": module}))
+        if meta.build_system == "node-npm":
+            node_version = tool_version("node")
+            npm_version = tool_version("npm")
+            findings.append(finding("pass" if node_version and version_tuple(node_version) >= (22, 0) else "fail", "node.version", f"{meta.name}: node {node_version or 'not found'}; required >=22.0", details={"component": meta.name, "required": ">=22.0", "actual": node_version}))
+            findings.append(finding("pass" if npm_version and version_tuple(npm_version) >= (11, 0) else "fail", "npm.version", f"{meta.name}: npm {npm_version or 'not found'}; required >=11.0", details={"component": meta.name, "required": ">=11.0", "actual": npm_version}))
     return make_result("deps", repo_root, "Dependency readiness checked.", findings)
 
 
@@ -297,7 +404,10 @@ def cmake_configure(repo_root: Path, meta: BuildMeta) -> subprocess.CompletedPro
     build.mkdir(parents=True, exist_ok=True)
     prefix.mkdir(parents=True, exist_ok=True)
     run_dir = repo_root / "build" / "run" / "gvm"
+    gvmd_run_dir = repo_root / "build" / "run" / "gvmd"
+    gsad_run_dir = repo_root / "build" / "run" / "gsad"
     state_dir = repo_root / "build" / "var"
+    log_dir = repo_root / "build" / "logs"
     sysconf_dir = prefix / "etc"
     command = [
         "cmake",
@@ -312,6 +422,11 @@ def cmake_configure(repo_root: Path, meta: BuildMeta) -> subprocess.CompletedPro
         f"-DSYSCONFDIR={sysconf_dir}",
         f"-DLOCALSTATEDIR={state_dir}",
         f"-DGVM_RUN_DIR={run_dir}",
+        f"-DGVMD_RUN_DIR={gvmd_run_dir}",
+        f"-DGSAD_RUN_DIR={gsad_run_dir}",
+        f"-DGVM_STATE_DIR={state_dir / 'lib' / 'gvm'}",
+        f"-DGVMD_STATE_DIR={state_dir / 'lib' / 'gvm' / 'gvmd'}",
+        f"-DGVM_LOG_DIR={log_dir}",
         *meta.cmake_args,
     ]
     return run_command(command, repo_root, env=build_env(repo_root))
@@ -333,6 +448,10 @@ def command_build(repo_root: Path, component: str, install: bool = False, config
     meta = BUILD_META.get(component)
     if not meta:
         return make_result("build", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
+    if meta.build_system == "node-npm":
+        return command_build_node(repo_root, meta)
+    if meta.build_system in ("python-uv", "python-poetry-core"):
+        return command_build_python(repo_root, meta)
     if meta.build_system != "cmake":
         return make_result("build", repo_root, f"{component} is not a CMake component.", [finding("warn", "build.unsupported", f"{component} uses {meta.build_system}, not cmake.")])
     findings: list[dict[str, Any]] = []
@@ -350,20 +469,88 @@ def command_build(repo_root: Path, component: str, install: bool = False, config
     return make_result("build", repo_root, f"Build {component} completed.", findings, [str(build.relative_to(repo_root)), str(prefix.relative_to(repo_root))])
 
 
-def command_build_core_c(repo_root: Path) -> dict[str, Any]:
+def command_build_node(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
+    component = COMPONENT_BY_NAME[meta.name]
+    component_path = repo_root / component.path
+    findings: list[dict[str, Any]] = []
+    npm_ci = run_command(["npm", "ci"], component_path, env=build_env(repo_root))
+    findings.append(finding("pass" if npm_ci.returncode == 0 else "fail", "npm.ci", f"{meta.name} npm ci exit code {npm_ci.returncode}.", component.path, {"output_tail": npm_ci.stdout.splitlines()[-80:]}))
+    if npm_ci.returncode != 0:
+        return make_result("build", repo_root, f"Build {meta.name} stopped at npm ci.", findings, [f"{component.path}/node_modules"])
+    for script in meta.node_scripts:
+        result = run_command(["npm", "run", script], component_path, env=build_env(repo_root))
+        findings.append(finding("pass" if result.returncode == 0 else "fail", "npm.script", f"{meta.name} npm run {script} exit code {result.returncode}.", component.path, {"script": script, "output_tail": result.stdout.splitlines()[-80:]}))
+        if result.returncode != 0:
+            break
+    return make_result("build", repo_root, f"Build {meta.name} completed.", findings, [f"{component.path}/node_modules", f"{component.path}/dist"])
+
+
+def venv_python(repo_root: Path, component: str) -> Path:
+    return repo_root / "build" / "venvs" / component / "bin" / "python"
+
+
+def command_build_python(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
+    component = COMPONENT_BY_NAME[meta.name]
+    component_path = repo_root / component.path
+    venv = repo_root / "build" / "venvs" / meta.name
+    findings: list[dict[str, Any]] = []
+    create = run_command(["uv", "venv", "--clear", str(venv)], repo_root, env=build_env(repo_root))
+    findings.append(finding("pass" if create.returncode == 0 else "fail", "python.venv", f"{meta.name} uv venv exit code {create.returncode}.", str(venv.relative_to(repo_root)), {"output_tail": create.stdout.splitlines()[-40:]}))
+    if create.returncode != 0:
+        return make_result("build", repo_root, f"Build {meta.name} stopped at venv creation.", findings, [str(venv.relative_to(repo_root))])
+    python = venv_python(repo_root, meta.name)
+    for local_dep in meta.python_local_deps:
+        dep_path = repo_root / COMPONENT_BY_NAME[local_dep].path
+        install_dep = run_command(["uv", "pip", "install", "--python", str(python), "-e", str(dep_path)], repo_root, env=build_env(repo_root))
+        findings.append(finding("pass" if install_dep.returncode == 0 else "fail", "python.local-dep", f"{meta.name} install local dependency {local_dep} exit code {install_dep.returncode}.", COMPONENT_BY_NAME[local_dep].path, {"dependency": local_dep, "output_tail": install_dep.stdout.splitlines()[-60:]}))
+        if install_dep.returncode != 0:
+            return make_result("build", repo_root, f"Build {meta.name} stopped at local dependency {local_dep}.", findings, [str(venv.relative_to(repo_root))])
+    install = run_command(["uv", "pip", "install", "--python", str(python), "-e", str(component_path)], repo_root, env=build_env(repo_root))
+    findings.append(finding("pass" if install.returncode == 0 else "fail", "python.install", f"{meta.name} editable install exit code {install.returncode}.", component.path, {"output_tail": install.stdout.splitlines()[-80:]}))
+    if install.returncode != 0:
+        return make_result("build", repo_root, f"Build {meta.name} stopped at install.", findings, [str(venv.relative_to(repo_root))])
+    for import_name in meta.python_imports:
+        result = run_command([str(python), "-c", f"import {import_name}"], repo_root, env=build_env(repo_root))
+        findings.append(finding("pass" if result.returncode == 0 else "fail", "python.import", f"{meta.name} import {import_name} exit code {result.returncode}.", component.path, {"import": import_name, "output_tail": result.stdout.splitlines()[-40:]}))
+        if result.returncode != 0:
+            break
+    return make_result("build", repo_root, f"Build {meta.name} completed.", findings, [str(venv.relative_to(repo_root))])
+
+
+def command_build_chain(repo_root: Path, command: str, chain: tuple[str, ...]) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     artifacts: list[str] = []
-    for component in CORE_C_CHAIN:
+    for component in chain:
         result = command_build(repo_root, component, install=BUILD_META[component].install_for_dependents)
         artifacts.extend(result["artifacts"])
-        findings.append(finding(result["status"], "core-c.component", f"{component}: {result['summary']}", details={"component": component}))
+        findings.append(finding(result["status"], f"{command}.component", f"{component}: {result['summary']}", details={"component": component}))
         for item in result["findings"]:
             item = dict(item)
             item["check"] = f"{component}.{item['check']}"
             findings.append(item)
         if result["status"] == "fail":
             break
-    return make_result("build-core-c", repo_root, "Core C build chain attempted.", findings, sorted(set(artifacts)))
+    return make_result(command, repo_root, f"{command} attempted.", findings, sorted(set(artifacts)))
+
+
+def command_build_core_c(repo_root: Path) -> dict[str, Any]:
+    return command_build_chain(repo_root, "build-core-c", CORE_C_CHAIN)
+
+
+def command_build_c_services(repo_root: Path) -> dict[str, Any]:
+    return command_build_chain(repo_root, "build-c-services", C_SERVICES_CHAIN)
+
+
+def command_build_ui(repo_root: Path) -> dict[str, Any]:
+    return command_build(repo_root, "gsa")
+
+
+def command_build_python_chain(repo_root: Path) -> dict[str, Any]:
+    return command_build_chain(repo_root, "build-python", PYTHON_CHAIN)
+
+
+def command_build_baseline(repo_root: Path) -> dict[str, Any]:
+    return command_build_chain(repo_root, "build-baseline", BASELINE_CHAIN)
 
 
 def command_doctor(repo_root: Path) -> dict[str, Any]:
@@ -381,7 +568,7 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     findings.append(finding("fail" if nested else "pass", "component.nested_git", "Nested .git directories were found." if nested else "No nested .git directories found under components/.", details={"paths": nested} if nested else None))
     for tool in BASELINE_TOOLS:
         findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
-    findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c"]}))
+    findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Runtime orchestration is deferred until Docker design is implemented.", details={"command": "just up"}))
     findings.append(finding("warn", "surface.deferred", "Runtime orchestration is deferred until Docker design is implemented.", details={"command": "just down"}))
@@ -425,6 +612,10 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("component", help="component name")
     build.add_argument("--install", action="store_true", help="install into build/prefix after successful build")
     subparsers.add_parser("build-core-c", parents=[common], help="build gvm-libs, openvas-smb, and openvas-scanner")
+    subparsers.add_parser("build-c-services", parents=[common], help="build current C service baseline")
+    subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
+    subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
+    subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
     return parser
 
 
@@ -448,6 +639,14 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build(repo_root, args.component, install=args.install)
     elif args.command == "build-core-c":
         result = command_build_core_c(repo_root)
+    elif args.command == "build-c-services":
+        result = command_build_c_services(repo_root)
+    elif args.command == "build-ui":
+        result = command_build_ui(repo_root)
+    elif args.command == "build-python":
+        result = command_build_python_chain(repo_root)
+    elif args.command == "build-baseline":
+        result = command_build_baseline(repo_root)
     else:
         parser.error(f"unknown command {args.command}")
     return emit(result, args.json)

@@ -26,3 +26,15 @@ build component:
 
 build-core-c:
     @tools/forkctl build-core-c
+
+build-c-services:
+    @tools/forkctl build-c-services
+
+build-ui:
+    @tools/forkctl build-ui
+
+build-python:
+    @tools/forkctl build-python
+
+build-baseline:
+    @tools/forkctl build-baseline

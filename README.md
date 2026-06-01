@@ -26,6 +26,12 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just build-ui`: install and build the web UI.
 - `just build-python`: build/import-check Python components.
 - `just build-baseline`: run the inherited-stack build baseline.
+- `just runtime-plan`: show the persistent Docker runtime layout and deferred surfaces.
+- `just up`: start the current Docker infrastructure services.
+- `just down`: stop the current Docker infrastructure services.
+- `just logs [service]`: show recent Docker runtime logs.
+- `just runtime-status`: show Docker runtime status.
+- `just runtime-smoke`: run infrastructure smoke checks.
 
 The commands delegate to `tools/forkctl`, which also supports JSON output for automation, for example:
 
@@ -33,4 +39,4 @@ The commands delegate to `tools/forkctl`, which also supports JSON output for au
 tools/forkctl doctor --json
 ```
 
-See `BUILDING.md` for the current build baseline.
+See `BUILDING.md` for the current build baseline and `docker/runtime/README.md` for the current runtime groundwork.

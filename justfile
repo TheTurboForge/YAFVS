@@ -38,3 +38,21 @@ build-python:
 
 build-baseline:
     @tools/forkctl build-baseline
+
+runtime-plan:
+    @tools/forkctl runtime-plan
+
+up:
+    @tools/forkctl up
+
+down:
+    @tools/forkctl down
+
+logs service="":
+    @if [ -n "{{service}}" ]; then tools/forkctl logs "{{service}}"; else tools/forkctl logs; fi
+
+runtime-status:
+    @tools/forkctl runtime-status
+
+runtime-smoke:
+    @tools/forkctl runtime-smoke

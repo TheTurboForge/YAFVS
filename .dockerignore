@@ -1,0 +1,25 @@
+# Keep Docker build contexts small. Development containers bind-mount source
+# instead of copying the repository into images.
+.git/
+build/
+cmake-build-*/
+.cache/
+ccache/
+components/gsa/node_modules/
+components/gsa/dist/
+components/*/build/
+components/*/dist/
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+*.secret
+*.token
+*.pem
+*.key
+private/
+scratch/
+notes/
+logs/
+AGENTS.md

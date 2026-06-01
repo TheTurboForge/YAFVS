@@ -93,6 +93,30 @@ class ForkctlTests(unittest.TestCase):
         self.assertGreaterEqual(forkctl.version_tuple("v22.12.0"), (22, 12, 0))
         self.assertEqual(forkctl.version_tuple("11.0.0"), (11, 0, 0))
 
+    def test_runtime_dir_defaults_next_to_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            self.assertEqual(forkctl.runtime_dir(root), Path(tmp) / "TurboVAS-runtime")
+
+    def test_runtime_services_are_infrastructure_only(self):
+        self.assertEqual(forkctl.RUNTIME_SERVICES, ("postgres", "redis", "mosquitto"))
+
+    def test_compose_command_uses_dev_compose_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            command = forkctl.compose_command(root, "ps")
+            self.assertEqual(command[:4], ["docker", "compose", "-f", str(root / "compose" / "dev.yaml")])
+            self.assertEqual(command[-1], "ps")
+
+    def test_runtime_plan_json_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = forkctl.command_runtime_plan(root)
+            self.assertEqual(result["status"], "warn")
+            self.assertIn("Persistent Docker runtime plan", result["summary"])
+            self.assertIn(str(root.parent / "TurboVAS-runtime"), result["artifacts"])
+
 
 if __name__ == "__main__":
     unittest.main()

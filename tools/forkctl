@@ -38,6 +38,13 @@ CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "gvmd", "gsad")
 PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
+RUNTIME_SERVICES = ("postgres", "redis", "mosquitto")
+RUNTIME_DIRS = ("postgres", "redis", "mosquitto", "feeds", "run", "logs", "artifacts")
+RUNTIME_PORTS = {
+    "postgres": "127.0.0.1:15432:5432",
+    "redis": "127.0.0.1:16379:6379",
+    "mosquitto": "127.0.0.1:1883:1883",
+}
 
 
 @dataclass(frozen=True)
@@ -250,6 +257,68 @@ def build_env(repo_root: Path) -> dict[str, str]:
         ld_paths.append(current_ld)
     env["LD_LIBRARY_PATH"] = ":".join(ld_paths)
     return env
+
+
+def runtime_dir(repo_root: Path) -> Path:
+    configured = os.environ.get("TURBOVAS_RUNTIME_DIR")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return (repo_root.parent / "TurboVAS-runtime").resolve()
+
+
+def runtime_env(repo_root: Path) -> dict[str, str]:
+    env = build_env(repo_root)
+    env.setdefault("COMPOSE_PROJECT_NAME", "turbovas")
+    env.setdefault("TURBOVAS_RUNTIME_DIR", str(runtime_dir(repo_root)))
+    env.setdefault("TURBOVAS_UID", str(os.getuid()))
+    env.setdefault("TURBOVAS_GID", str(os.getgid()))
+    return env
+
+
+def compose_file(repo_root: Path) -> Path:
+    return repo_root / "compose" / "dev.yaml"
+
+
+def compose_command(repo_root: Path, *args: str) -> list[str]:
+    return ["docker", "compose", "-f", str(compose_file(repo_root)), *args]
+
+
+def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    root = runtime_dir(repo_root)
+    for dirname in RUNTIME_DIRS:
+        path = root / dirname
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".turbovas-write-test"
+            probe.write_text("ok\n", encoding="utf-8")
+            probe.unlink()
+            status = "pass"
+            message = f"Runtime directory is writable: {path}"
+        except OSError as error:
+            status = "fail"
+            message = f"Runtime directory is not writable: {path}: {error}"
+        findings.append(finding(status, "runtime.dir", message, str(path)))
+    return findings
+
+
+def container_id(repo_root: Path, service: str) -> str | None:
+    result = run_command(compose_command(repo_root, "ps", "-q", service), repo_root, env=runtime_env(repo_root))
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip().splitlines()[0]
+    return None
+
+
+def container_running(repo_root: Path, service: str) -> bool:
+    cid = container_id(repo_root, service)
+    if not cid:
+        return False
+    result = run_command(["docker", "inspect", "-f", "{{.State.Running}}", cid], repo_root, env=runtime_env(repo_root))
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def exec_in_service(repo_root: Path, service: str, command: list[str]) -> subprocess.CompletedProcess[str]:
+    return run_command(compose_command(repo_root, "exec", "-T", service, *command), repo_root, env=runtime_env(repo_root))
 
 
 def component_inventory(repo_root: Path, scope: str | None = None) -> list[dict[str, Any]]:
@@ -553,6 +622,87 @@ def command_build_baseline(repo_root: Path) -> dict[str, Any]:
     return command_build_chain(repo_root, "build-baseline", BASELINE_CHAIN)
 
 
+def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
+    root = runtime_dir(repo_root)
+    findings = [
+        finding("pass", "runtime.compose", "Development Compose file path is defined.", str(compose_file(repo_root).relative_to(repo_root))),
+        finding("pass", "runtime.state", f"Persistent runtime state lives outside the repository at {root}.", str(root)),
+        finding("pass", "runtime.services", "Initial runtime services are infrastructure only: Postgres, Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
+        finding("pass", "runtime.ports", "All initial host port bindings are loopback-only.", details=RUNTIME_PORTS),
+        finding("warn", "runtime.deferred", "gvmd, gsad, ospd-openvas, notus-scanner, feed population, and scanning are intentionally deferred."),
+    ]
+    return make_result("runtime-plan", repo_root, "Persistent Docker runtime plan collected.", findings, [str(root), str(compose_file(repo_root).relative_to(repo_root))])
+
+
+def command_up(repo_root: Path) -> dict[str, Any]:
+    findings = ensure_runtime_dirs(repo_root)
+    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
+    if aggregate_status(findings) == "fail":
+        return make_result("up", repo_root, "Runtime startup stopped before docker compose up.", findings)
+    result = run_command(compose_command(repo_root, "up", "-d", *RUNTIME_SERVICES), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if result.returncode == 0 else "fail", "compose.up", f"docker compose up exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]}))
+    for service in RUNTIME_SERVICES:
+        findings.append(finding("pass" if container_running(repo_root, service) else "fail", "runtime.running", f"{service} container is running.", details={"service": service}))
+    return make_result("up", repo_root, "Runtime infrastructure startup attempted.", findings)
+
+
+def command_down(repo_root: Path) -> dict[str, Any]:
+    result = run_command(compose_command(repo_root, "down"), repo_root, env=runtime_env(repo_root))
+    findings = [finding("pass" if result.returncode == 0 else "fail", "compose.down", f"docker compose down exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]})]
+    return make_result("down", repo_root, "Runtime infrastructure shutdown attempted.", findings)
+
+
+def command_logs(repo_root: Path, service: str | None = None) -> dict[str, Any]:
+    command = compose_command(repo_root, "logs", "--tail", "120")
+    if service:
+        command.append(service)
+    result = run_command(command, repo_root, env=runtime_env(repo_root))
+    output_tail = result.stdout.splitlines()[-120:]
+    message = f"docker compose logs exit code {result.returncode}."
+    if output_tail:
+        message += "\n" + "\n".join(output_tail)
+    findings = [finding("pass" if result.returncode == 0 else "fail", "compose.logs", message, details={"service": service, "output_tail": output_tail})]
+    return make_result("logs", repo_root, "Runtime logs collected.", findings)
+
+
+def command_runtime_status(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    findings.append(finding("pass" if shutil.which("docker") else "fail", "docker.available", "docker is available." if shutil.which("docker") else "docker is not available."))
+    docker = run_command(["docker", "info"], repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if docker.returncode == 0 else "fail", "docker.daemon", f"docker info exit code {docker.returncode}.", details={"output_tail": docker.stdout.splitlines()[-40:]}))
+    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
+    findings.extend(ensure_runtime_dirs(repo_root))
+    ps = run_command(compose_command(repo_root, "ps", "--format", "json"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if ps.returncode == 0 else "fail", "compose.ps", f"docker compose ps exit code {ps.returncode}.", details={"output_tail": ps.stdout.splitlines()[-80:]}))
+    for service in RUNTIME_SERVICES:
+        findings.append(finding("pass" if container_running(repo_root, service) else "warn", "runtime.running", f"{service} container is {'running' if container_running(repo_root, service) else 'not running'}.", details={"service": service}))
+    return make_result("runtime-status", repo_root, "Runtime status collected.", findings, [str(runtime_dir(repo_root))])
+
+
+def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    findings.extend(ensure_runtime_dirs(repo_root))
+    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
+    port_config = run_command(compose_command(repo_root, "config"), repo_root, env=runtime_env(repo_root))
+    broad_bindings = [line.strip() for line in port_config.stdout.splitlines() if "0.0.0.0:" in line or "[::]:" in line]
+    findings.append(finding("fail" if broad_bindings else "pass", "runtime.ports", "No broad host port bindings found." if not broad_bindings else "Broad host port bindings found.", details={"broad_bindings": broad_bindings}))
+    for service in RUNTIME_SERVICES:
+        findings.append(finding("pass" if container_running(repo_root, service) else "fail", "runtime.running", f"{service} container is running.", details={"service": service}))
+    if container_running(repo_root, "postgres"):
+        result = exec_in_service(repo_root, "postgres", ["pg_isready", "-U", "turbovas", "-d", "turbovas"])
+        findings.append(finding("pass" if result.returncode == 0 else "fail", "postgres.ready", f"pg_isready exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
+    if container_running(repo_root, "redis"):
+        result = exec_in_service(repo_root, "redis", ["redis-cli", "ping"])
+        findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis.ready", f"redis-cli ping exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
+    if container_running(repo_root, "mosquitto"):
+        result = exec_in_service(repo_root, "mosquitto", ["mosquitto_pub", "-h", "127.0.0.1", "-p", "1883", "-t", "turbovas/smoke", "-m", "ok"])
+        findings.append(finding("pass" if result.returncode == 0 else "fail", "mosquitto.ready", f"mosquitto_pub broker check exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
+    return make_result("runtime-smoke", repo_root, "Runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
+
+
 def command_doctor(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     findings.append(finding("pass" if (repo_root / ".git").exists() else "fail", "repo.git", "Repository metadata is present." if (repo_root / ".git").exists() else "Repository metadata is missing.", ".git"))
@@ -569,10 +719,9 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     for tool in BASELINE_TOOLS:
         findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
+    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-status", "just runtime-smoke"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
-    findings.append(finding("warn", "surface.deferred", "Runtime orchestration is deferred until Docker design is implemented.", details={"command": "just up"}))
-    findings.append(finding("warn", "surface.deferred", "Runtime orchestration is deferred until Docker design is implemented.", details={"command": "just down"}))
-    findings.append(finding("warn", "surface.deferred", "Runtime log command is deferred until service orchestration exists.", details={"command": "just logs"}))
+    findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration is deferred until database/feed/certificate/scanner registration work is implemented.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
     return make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
 
 
@@ -616,6 +765,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
+    subparsers.add_parser("runtime-plan", parents=[common], help="show Docker runtime layout and deferred surfaces")
+    subparsers.add_parser("up", parents=[common], help="start runtime infrastructure services")
+    subparsers.add_parser("down", parents=[common], help="stop runtime infrastructure services")
+    logs = subparsers.add_parser("logs", parents=[common], help="show runtime logs")
+    logs.add_argument("service", nargs="?", help="optional Compose service name")
+    subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
+    subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     return parser
 
 
@@ -647,6 +803,18 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
+    elif args.command == "runtime-plan":
+        result = command_runtime_plan(repo_root)
+    elif args.command == "up":
+        result = command_up(repo_root)
+    elif args.command == "down":
+        result = command_down(repo_root)
+    elif args.command == "logs":
+        result = command_logs(repo_root, args.service)
+    elif args.command == "runtime-status":
+        result = command_runtime_status(repo_root)
+    elif args.command == "runtime-smoke":
+        result = command_runtime_smoke(repo_root)
     else:
         parser.error(f"unknown command {args.command}")
     return emit(result, args.json)

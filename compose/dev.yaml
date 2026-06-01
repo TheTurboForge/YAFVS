@@ -1,0 +1,91 @@
+name: turbovas
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-turbovas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-turbovas-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-turbovas}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/postgres
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/postgres
+        target: /var/log/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-bookworm
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
+    ports:
+      - "127.0.0.1:16379:6379"
+    volumes:
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/redis
+        target: /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1883:1883"
+    volumes:
+      - type: bind
+        source: ../docker/runtime/mosquitto.conf
+        target: /mosquitto/config/mosquitto.conf
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/mosquitto/data
+        target: /mosquitto/data
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/mosquitto
+        target: /mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t turbovas/health -m ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  dev-shell:
+    profiles: ["tools"]
+    build:
+      context: ..
+      dockerfile: docker/dev/Dockerfile
+    working_dir: /workspace
+    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    environment:
+      HOME: /tmp
+      CCACHE_DIR: /workspace/build/ccache
+      CMAKE_GENERATOR: Ninja
+      TURBOVAS_RUNTIME_DIR: /runtime
+    volumes:
+      - type: bind
+        source: ..
+        target: /workspace
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
+        target: /runtime
+      - type: bind
+        source: ../build
+        target: /workspace/build
+    command: ["sleep", "infinity"]
+
+networks:
+  default:
+    name: turbovas-dev

@@ -53,3 +53,21 @@ The scanner build currently passes `-isystem /usr/include/mit-krb5` through `for
 The web UI baseline uses Node.js 22 with npm 11 from an official Node.js binary installation on the development server. The NodeSource apt repository was not used for the final install because its dry-run transaction would have removed unrelated distro Node tooling.
 
 The Python baseline uses `uv` with per-component virtual environments under `build/venvs`.
+
+## Runtime Groundwork
+
+The current Docker runtime baseline starts infrastructure services only:
+
+```sh
+just runtime-plan
+just up
+just runtime-status
+just runtime-smoke
+just logs postgres
+just down
+```
+
+Runtime state is host-visible and persistent under the sibling
+`TurboVAS-runtime` directory by default when commands are run through
+`tools/forkctl`. Full inherited service orchestration, feed population,
+certificate generation, scanner registration, and scan execution are deferred.

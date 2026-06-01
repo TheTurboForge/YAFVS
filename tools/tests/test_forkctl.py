@@ -3,6 +3,7 @@ import json
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -13,6 +14,13 @@ turbovasctl = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules["turbovasctl"] = turbovasctl
 SPEC.loader.exec_module(turbovasctl)
+
+GMP_SMOKE_PATH = Path(__file__).resolve().parents[1] / "runtime_gmp_smoke.py"
+GMP_SPEC = importlib.util.spec_from_loader("runtime_gmp_smoke", SourceFileLoader("runtime_gmp_smoke", str(GMP_SMOKE_PATH)))
+runtime_gmp_smoke = importlib.util.module_from_spec(GMP_SPEC)
+assert GMP_SPEC.loader is not None
+sys.modules["runtime_gmp_smoke"] = runtime_gmp_smoke
+GMP_SPEC.loader.exec_module(runtime_gmp_smoke)
 
 
 class TurboVASCtlTests(unittest.TestCase):
@@ -100,8 +108,8 @@ class TurboVASCtlTests(unittest.TestCase):
             root.mkdir()
             self.assertEqual(turbovasctl.runtime_dir(root), Path(tmp) / "TurboVAS-runtime")
 
-    def test_runtime_services_are_infrastructure_only(self):
-        self.assertEqual(turbovasctl.RUNTIME_SERVICES, ("postgres", "redis", "mosquitto"))
+    def test_runtime_services_include_scanner_redis(self):
+        self.assertEqual(turbovasctl.RUNTIME_SERVICES, ("postgres", "redis", "redis-openvas", "mosquitto"))
 
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(turbovasctl.APP_SERVICES, ("gvmd", "ospd-openvas", "gsad"))
@@ -110,8 +118,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("certs/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("certs/private/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("secrets", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("redis-openvas", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/gvmd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/ospd", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("run/redis-openvas", turbovasctl.RUNTIME_DIRS)
 
     def test_cert_files_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,6 +138,13 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(command[:4], ["docker", "compose", "-f", str(root / "compose" / "dev.yaml")])
             self.assertEqual(command[-1], "ps")
 
+    def test_scanner_redis_paths_live_under_runtime_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            self.assertEqual(turbovasctl.scanner_redis_socket_path(root), Path(tmp) / "TurboVAS-runtime" / "run" / "redis-openvas" / "redis.sock")
+            self.assertEqual(turbovasctl.openvas_runtime_config_path(root), root / "build" / "prefix" / "etc" / "openvas" / "openvas.conf")
+
     def test_runtime_plan_json_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -139,6 +156,12 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_sql_escaping_helpers(self):
         self.assertEqual(turbovasctl.sql_identifier('a"b'), '"a""b"')
         self.assertEqual(turbovasctl.sql_literal("a'b"), "'a''b'")
+
+    def test_gmp_smoke_parse_version_accepts_text_and_element(self):
+        self.assertEqual(runtime_gmp_smoke.parse_version("<get_version_response><version>22.7</version></get_version_response>"), "22.7")
+        element = ET.fromstring("<get_version_response><version>22.8</version></get_version_response>")
+        self.assertEqual(runtime_gmp_smoke.parse_version(element), "22.8")
+
 
 
 if __name__ == "__main__":

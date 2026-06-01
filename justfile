@@ -66,6 +66,15 @@ runtime-certs-init:
 runtime-manager-init:
     @tools/turbovasctl runtime-manager-init
 
+runtime-scanner-redis-init:
+    @tools/turbovasctl runtime-scanner-redis-init
+
+runtime-gmp-smoke:
+    @tools/turbovasctl runtime-gmp-smoke
+
+runtime-scanner-register:
+    @tools/turbovasctl runtime-scanner-register
+
 runtime-status:
     @tools/turbovasctl runtime-status
 

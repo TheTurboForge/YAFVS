@@ -51,6 +51,40 @@ services:
       timeout: 5s
       retries: 20
 
+  redis-openvas:
+    image: redis:7-bookworm
+    restart: unless-stopped
+    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    command:
+      - sh
+      - -lc
+      - >
+        mkdir -p /run/redis-openvas /data /logs &&
+        rm -f /run/redis-openvas/redis.sock &&
+        exec redis-server
+        --port 0
+        --unixsocket /run/redis-openvas/redis.sock
+        --unixsocketperm 770
+        --dir /data
+        --appendonly yes
+        --pidfile /run/redis-openvas/redis-server.pid
+        --logfile /logs/redis-openvas.log
+    volumes:
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/redis-openvas
+        target: /data
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/redis-openvas
+        target: /run/redis-openvas
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/redis-openvas
+        target: /logs
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -s /run/redis-openvas/redis.sock ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   mosquitto:
     image: eclipse-mosquitto:2
     restart: unless-stopped
@@ -161,6 +195,8 @@ services:
     user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
     depends_on:
       redis:
+        condition: service_healthy
+      redis-openvas:
         condition: service_healthy
       mosquitto:
         condition: service_healthy

@@ -43,7 +43,7 @@ CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
 PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
-RUNTIME_SERVICES = ("postgres", "redis", "mosquitto")
+RUNTIME_SERVICES = ("postgres", "redis", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "gsad")
 RUNTIME_DIRS = (
     "postgres",
@@ -57,11 +57,14 @@ RUNTIME_DIRS = (
     "certs/private/CA",
     "secrets",
     "state",
+    "redis-openvas",
     "run/gvmd",
     "run/ospd",
+    "run/redis-openvas",
     "logs/gvmd",
     "logs/ospd",
     "logs/gsad",
+    "logs/redis-openvas",
 )
 RUNTIME_PORTS = {
     "postgres": "127.0.0.1:15432:5432",
@@ -444,6 +447,13 @@ def ospd_socket_path(repo_root: Path) -> Path:
     return runtime_path(repo_root, "run", "ospd", "ospd-openvas.sock")
 
 
+def scanner_redis_socket_path(repo_root: Path) -> Path:
+    return runtime_path(repo_root, "run", "redis-openvas", "redis.sock")
+
+
+def openvas_runtime_config_path(repo_root: Path) -> Path:
+    return repo_root / "build" / "prefix" / "etc" / "openvas" / "openvas.conf"
+
 
 def wait_for_socket(path: Path, timeout_seconds: int = 20) -> bool:
     deadline = time.monotonic() + timeout_seconds
@@ -463,6 +473,7 @@ def runtime_env(repo_root: Path) -> dict[str, str]:
     env.setdefault("POSTGRES_USER", POSTGRES_DEFAULTS["user"])
     env.setdefault("POSTGRES_PASSWORD", POSTGRES_DEFAULTS["password"])
     env.setdefault("POSTGRES_DB", POSTGRES_DEFAULTS["database"])
+    env.setdefault("OPENVAS_CONFIG", str(openvas_runtime_config_path(repo_root)))
     return env
 
 
@@ -666,6 +677,38 @@ def pg_gvm_extension_status(repo_root: Path) -> dict[str, Any]:
         return finding("fail", "postgres.pg-gvm", f"pg-gvm extension status query exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-40:]})
     version = psql_value(result)
     return finding("pass" if version and version != "missing" else "warn", "postgres.pg-gvm", f"pg-gvm extension is {version}.", details={"version": version})
+
+
+def scanner_redis_ping(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    return exec_in_service(repo_root, "redis-openvas", ["redis-cli", "-s", "/run/redis-openvas/redis.sock", "ping"])
+
+
+def write_openvas_runtime_config(repo_root: Path) -> Path:
+    path = openvas_runtime_config_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# SPDX-FileCopyrightText: 2026 TurboVAS contributors\n"
+        "# SPDX-License-Identifier: GPL-3.0-or-later\n"
+        "# Generated development runtime configuration.\n"
+        "db_address = /runtime/run/redis-openvas/redis.sock\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def parse_named_uuid(output: str, name: str) -> str | None:
+    for line in output.splitlines():
+        if name in line:
+            match = UUID_PATTERN.search(line)
+            if match:
+                return match.group(0).lower()
+    return None
+
+
+def scanner_registration_status(repo_root: Path) -> dict[str, Any]:
+    scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
+    scanner_uuid = parse_named_uuid(scanners.stdout, "OpenVAS Default") if scanners.returncode == 0 else None
+    return finding("pass" if scanner_uuid else "warn", "gvmd.scanner.openvas-default", "OpenVAS Default scanner is registered." if scanner_uuid else "OpenVAS Default scanner is not registered.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners.stdout, 80)})
 
 
 def component_inventory(repo_root: Path, scope: str | None = None) -> list[dict[str, Any]]:
@@ -976,9 +1019,10 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
     findings = [
         finding("pass", "runtime.compose", "Development Compose file path is defined.", str(compose_file(repo_root).relative_to(repo_root))),
         finding("pass", "runtime.state", f"Persistent runtime state lives outside the repository at {root}.", str(root)),
-        finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
+        finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, Redis, scanner Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
         finding("pass", "runtime.app-services", "Experimental application services are available behind the app profile.", details={"services": list(APP_SERVICES)}),
         finding("pass", "runtime.ports", "All host port bindings are loopback-only.", details={**RUNTIME_PORTS, **APP_PORTS}),
+        finding("pass", "runtime.scanner-redis", "OpenVAS scanner KB Redis uses a runtime Unix socket, not host TCP exposure.", str(scanner_redis_socket_path(repo_root))),
         finding("pass", "runtime.pg-gvm", "Postgres pg-gvm extension initialization is handled by just runtime-init after pg-gvm is built."),
         finding("pass", "runtime.certs", "Certificate initialization is handled by just runtime-certs-init and persists outside the repository."),
         finding("warn", "runtime.deferred", "Feed population, scanner registration finalization, Notus bring-up, and scan execution remain intentionally deferred."),
@@ -1078,6 +1122,40 @@ def command_runtime_certs_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-certs-init", repo_root, "Runtime certificate initialization completed.", findings, [str(cert_public_dir(repo_root)), str(cert_private_dir(repo_root))])
 
 
+def command_runtime_scanner_redis_init(repo_root: Path) -> dict[str, Any]:
+    findings = ensure_runtime_dirs(repo_root)
+    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
+    if aggregate_status(findings) == "fail":
+        return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization stopped before service startup.", findings, [str(runtime_dir(repo_root))])
+
+    result = run_command(compose_command(repo_root, "up", "-d", "redis-openvas"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if result.returncode == 0 else "fail", "redis-openvas.up", f"docker compose up redis-openvas exit code {result.returncode}.", details={"output_tail": output_tail(result.stdout, 80)}))
+    if result.returncode != 0:
+        return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization stopped at service startup.", findings, [str(runtime_dir(repo_root))])
+
+    ping: subprocess.CompletedProcess[str] | None = None
+    for _ in range(20):
+        if container_running(repo_root, "redis-openvas"):
+            ping = scanner_redis_ping(repo_root)
+            if ping.returncode == 0 and "PONG" in ping.stdout:
+                break
+        time.sleep(1)
+    findings.append(finding("pass" if ping and ping.returncode == 0 and "PONG" in ping.stdout else "fail", "redis-openvas.ready", f"scanner Redis Unix socket ping exit code {ping.returncode if ping else 'unavailable'}.", str(scanner_redis_socket_path(repo_root)), {"output_tail": output_tail(ping.stdout if ping else "", 20)}))
+
+    config_path = write_openvas_runtime_config(repo_root)
+    findings.append(finding("pass", "openvas.config", "OpenVAS runtime config points db_address to scanner Redis Unix socket.", str(config_path.relative_to(repo_root))))
+    app_build = run_command(compose_command(repo_root, "--profile", "app", "build", "ospd-openvas"), repo_root, env=runtime_env(repo_root), timeout=900)
+    findings.append(finding("pass" if app_build.returncode == 0 else "fail", "compose.ospd-build", f"docker compose build ospd-openvas exit code {app_build.returncode}.", details={"output_tail": output_tail(app_build.stdout, 120)}))
+    if app_build.returncode != 0:
+        return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization stopped while building ospd-openvas image.", findings, [str(runtime_dir(repo_root))])
+    openvas_settings = run_app_oneoff(repo_root, "ospd-openvas", ["openvas", "-s"], no_deps=False)
+    db_lines = [line for line in openvas_settings.stdout.splitlines() if line.startswith("db_address")]
+    db_ok = openvas_settings.returncode == 0 and any("/runtime/run/redis-openvas/redis.sock" in line for line in db_lines)
+    findings.append(finding("pass" if db_ok else "fail", "openvas.db_address", f"openvas -s runtime db_address check exit code {openvas_settings.returncode}.", details={"db_address_lines": db_lines, "output_tail": output_tail(openvas_settings.stdout, 80)}))
+    return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), str(config_path.relative_to(repo_root))])
+
+
 def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
@@ -1123,6 +1201,68 @@ def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-manager-init", repo_root, "Runtime manager initialization completed.", findings, [str(runtime_dir(repo_root)), str(secret_path)])
 
 
+def command_runtime_gmp_smoke(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
+    socket_path = gvmd_socket_path(repo_root)
+    python = venv_python(repo_root, "python-gvm")
+    probe = repo_root / "tools" / "runtime_gmp_smoke.py"
+    findings.append(finding("pass" if socket_path.is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if socket_path.is_socket() else "gvmd socket is not ready.", str(socket_path)))
+    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing; run just runtime-manager-init.", str(secret_path)))
+    findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing; run just build-python.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
+    findings.append(finding("pass" if probe.is_file() else "fail", "gmp.probe", "GMP smoke probe exists." if probe.is_file() else "GMP smoke probe is missing.", str(probe.relative_to(repo_root))))
+    if aggregate_status(findings) == "fail":
+        return make_result("runtime-gmp-smoke", repo_root, "GMP smoke stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
+
+    result = run_command([str(python), str(probe), "--socket", str(socket_path), "--username", DEV_ADMIN_USER, "--password-file", str(secret_path)], repo_root, env=build_env(repo_root), timeout=60)
+    try:
+        parsed = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        parsed = None
+    probe_status = parsed.get("status") if parsed else None
+    findings.append(finding("pass" if result.returncode == 0 and probe_status == "pass" else "fail", "gvmd.gmp", f"python-gvm authenticated get_version exit code {result.returncode}.", details={"probe": parsed, "output_tail": output_tail(result.stdout, 60)}))
+    return make_result("runtime-gmp-smoke", repo_root, "Runtime GMP smoke completed.", findings, [str(runtime_dir(repo_root))])
+
+
+def command_runtime_scanner_register(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    socket_path = ospd_socket_path(repo_root)
+    findings.append(finding("pass" if socket_path.is_socket() else "fail", "ospd.socket", "ospd-openvas socket is ready." if socket_path.is_socket() else "ospd-openvas socket is not ready; run just runtime-app-up and inspect ospd-openvas logs.", str(socket_path)))
+    gmp_smoke = command_runtime_gmp_smoke(repo_root)
+    findings.append(finding(gmp_smoke["status"], "gvmd.gmp", gmp_smoke["summary"], details={"status": gmp_smoke["status"]}))
+    if aggregate_status(findings) == "fail":
+        return make_result("runtime-scanner-register", repo_root, "Scanner registration stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
+
+    scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
+    scanner_uuid = parse_named_uuid(scanners.stdout, "OpenVAS Default") if scanners.returncode == 0 else None
+    findings.append(finding("pass" if scanners.returncode == 0 else "fail", "gvmd.get-scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners.stdout, 80)}))
+    if scanners.returncode != 0:
+        return make_result("runtime-scanner-register", repo_root, "Scanner registration stopped while listing scanners.", findings, [str(runtime_dir(repo_root))])
+
+    scanner_args = [
+        "--scanner-name=OpenVAS Default",
+        "--scanner-type=OpenVAS",
+        "--scanner-host=/runtime/run/ospd/ospd-openvas.sock",
+        "--scanner-port=0",
+        "--no-default-certs",
+    ]
+    if scanner_uuid:
+        change = run_gvmd_oneoff(repo_root, [f"--modify-scanner={scanner_uuid}", *scanner_args], no_deps=False)
+        findings.append(finding("pass" if change.returncode == 0 else "fail", "gvmd.modify-scanner", f"Modify OpenVAS Default scanner exit code {change.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(change.stdout, 80)}))
+    else:
+        change = run_gvmd_oneoff(repo_root, ["--create-scanner=OpenVAS Default", *scanner_args[1:]], no_deps=False)
+        scanner_uuid = parse_named_uuid(change.stdout, "OpenVAS Default") or parse_named_uuid(change.stdout, "Scanner")
+        findings.append(finding("pass" if change.returncode == 0 else "fail", "gvmd.create-scanner", f"Create OpenVAS Default scanner exit code {change.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(change.stdout, 80)}))
+
+    scanners_after = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
+    scanner_uuid = parse_named_uuid(scanners_after.stdout, "OpenVAS Default") if scanners_after.returncode == 0 else scanner_uuid
+    findings.append(finding("pass" if scanner_uuid else "fail", "gvmd.scanner.openvas-default", "OpenVAS Default scanner is registered." if scanner_uuid else "OpenVAS Default scanner registration could not be confirmed.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners_after.stdout, 80)}))
+    if scanner_uuid:
+        verify = run_gvmd_oneoff(repo_root, [f"--verify-scanner={scanner_uuid}"], no_deps=False)
+        findings.append(finding("pass" if verify.returncode == 0 else "warn", "gvmd.verify-scanner", f"Verify OpenVAS Default scanner exit code {verify.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(verify.stdout, 100)}))
+    return make_result("runtime-scanner-register", repo_root, "Runtime scanner registration completed.", findings, [str(runtime_dir(repo_root))])
+
+
 def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
@@ -1132,6 +1272,8 @@ def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
     findings.append(finding(infra["status"], "runtime.infrastructure", infra["summary"], details={"status": infra["status"]}))
     db_init = command_runtime_init(repo_root)
     findings.append(finding(db_init["status"], "runtime.database-init", db_init["summary"], details={"status": db_init["status"]}))
+    scanner_redis = command_runtime_scanner_redis_init(repo_root)
+    findings.append(finding(scanner_redis["status"], "runtime.scanner-redis", scanner_redis["summary"], details={"status": scanner_redis["status"]}))
     cert_findings = cert_file_findings(repo_root)
     if not certs_complete(repo_root):
         cert_findings = [dict(item, status="fail") for item in cert_findings]
@@ -1175,16 +1317,25 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     gvmd_ready = wait_for_socket(gvmd_socket)
     findings.append(finding("pass" if gvmd_ready else "warn", "gvmd.socket", f"gvmd socket {'is ready' if gvmd_ready else 'is not ready'}.", str(gvmd_socket)))
     if gvmd_ready and password:
-        gvm_cli = repo_root / "build" / "venvs" / "gvm-tools" / "bin" / "gvm-cli"
-        gmp = run_command([str(gvm_cli), "--gmp-username", DEV_ADMIN_USER, "--gmp-password", password, "socket", "--socketpath", str(gvmd_socket), "--xml", "<get_version/>", "--raw"], repo_root, env=build_env(repo_root))
-        findings.append(finding("pass" if gmp.returncode == 0 and "get_version_response" in gmp.stdout else "warn", "gvmd.gmp", f"GMP get_version over gvmd socket exit code {gmp.returncode}.", details={"output_tail": output_tail(gmp.stdout, 80, [password])}))
+        gmp = command_runtime_gmp_smoke(repo_root)
+        findings.append(finding(gmp["status"], "gvmd.gmp", gmp["summary"], details={"status": gmp["status"]}))
 
     ospd_socket = ospd_socket_path(repo_root)
     ospd_ready = wait_for_socket(ospd_socket, timeout_seconds=5)
     findings.append(finding("pass" if ospd_ready else "warn", "ospd.socket", f"ospd-openvas socket {'is ready' if ospd_ready else 'is not ready'}.", str(ospd_socket)))
+    if container_running(repo_root, "ospd-openvas"):
+        ospd_logs = service_log_tail(repo_root, "ospd-openvas", lines=120)
+        ospd_errors = [line for line in ospd_logs if "ERROR" in line]
+        known_feed_gap = any("failed to load VTs" in line or "Updating VTs failed" in line for line in ospd_errors)
+        if ospd_errors:
+            message = "ospd-openvas logs contain errors; current known blocker is missing feed/plugin cache." if known_feed_gap else "ospd-openvas logs contain errors that require investigation."
+            findings.append(finding("warn", "ospd.logs", message, details={"known_deferred_feed_state": known_feed_gap, "error_tail": ospd_errors[-20:]}))
+        else:
+            findings.append(finding("pass", "ospd.logs", "ospd-openvas logs contain no ERROR lines in the inspected tail."))
     if ospd_ready:
         scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
-        findings.append(finding("pass" if scanners.returncode == 0 else "warn", "gvmd.scanners", f"gvmd --get-scanners exit code {scanners.returncode}; scanner registration remains under review.", details={"output_tail": output_tail(scanners.stdout, 80, [password])}))
+        findings.append(finding("pass" if scanners.returncode == 0 else "warn", "gvmd.scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"output_tail": output_tail(scanners.stdout, 80, [password])}))
+        findings.append(scanner_registration_status(repo_root))
 
     gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", "https://127.0.0.1:19392/"], repo_root, env=runtime_env(repo_root))
     findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Loopback HTTPS header probe exit code {gsad_http.returncode}.", details={"output_tail": output_tail(gsad_http.stdout, 80, [password])}))
@@ -1269,6 +1420,10 @@ def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
     if container_running(repo_root, "redis"):
         result = exec_in_service(repo_root, "redis", ["redis-cli", "ping"])
         findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis.ready", f"redis-cli ping exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
+    if container_running(repo_root, "redis-openvas"):
+        result = scanner_redis_ping(repo_root)
+        findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis-openvas.ready", f"scanner Redis Unix socket ping exit code {result.returncode}.", str(scanner_redis_socket_path(repo_root)), {"output_tail": result.stdout.splitlines()[-20:]}))
+        findings.append(finding("pass" if scanner_redis_socket_path(repo_root).is_socket() else "fail", "redis-openvas.socket", "scanner Redis Unix socket exists." if scanner_redis_socket_path(repo_root).is_socket() else "scanner Redis Unix socket is missing.", str(scanner_redis_socket_path(repo_root))))
     if container_running(repo_root, "mosquitto"):
         result = exec_in_service(repo_root, "mosquitto", ["mosquitto_pub", "-h", "127.0.0.1", "-p", "1883", "-t", "turbovas/smoke", "-m", "ok"])
         findings.append(finding("pass" if result.returncode == 0 else "fail", "mosquitto.ready", f"mosquitto_pub broker check exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
@@ -1316,7 +1471,7 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     for tool in BASELINE_TOOLS:
         findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
-    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-status", "just runtime-smoke", "just runtime-app-up", "just runtime-app-smoke", "just runtime-app-down", "just gvmd-smoke"]}))
+    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-status", "just runtime-smoke", "just runtime-app-up", "just runtime-app-smoke", "just runtime-app-down", "just gvmd-smoke"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
     return make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
@@ -1370,6 +1525,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-init", parents=[common], help="initialize persistent runtime database prerequisites")
     subparsers.add_parser("runtime-certs-init", parents=[common], help="initialize persistent runtime certificates")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
+    subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
+    subparsers.add_parser("runtime-gmp-smoke", parents=[common], help="run authenticated GMP smoke over the runtime gvmd socket")
+    subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
@@ -1421,6 +1579,12 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_certs_init(repo_root)
     elif args.command == "runtime-manager-init":
         result = command_runtime_manager_init(repo_root)
+    elif args.command == "runtime-scanner-redis-init":
+        result = command_runtime_scanner_redis_init(repo_root)
+    elif args.command == "runtime-gmp-smoke":
+        result = command_runtime_gmp_smoke(repo_root)
+    elif args.command == "runtime-scanner-register":
+        result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-status":
         result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":

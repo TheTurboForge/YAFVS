@@ -150,7 +150,7 @@ FEED_CLASSES: tuple[FeedClass, ...] = (
     FeedClass("nasl", "NASL vulnerability tests", "openvas/plugins", "openvas/plugins", ("plugin_feed_info.inc", "LICENSE")),
     FeedClass("notus", "Notus advisories", "notus", "notus", ("advisories",)),
     FeedClass("scap", "SCAP data", "gvm/scap-data", "gvm/scap-data", ("COPYING",)),
-    FeedClass("cert", "CERT data", "gvm/cert-data", "gvm/cert-data", ("COPYING",)),
+    FeedClass("cert", "CERT data", "gvm/cert-data", "gvm/cert-data", ("COPYING.CERT-BUND", "COPYING.DFN-CERT", "feed.xml")),
     FeedClass("gvmd", "GVMD data objects", f"gvm/data-objects/gvmd/{FEED_RELEASE}", f"gvm/data-objects/gvmd/{FEED_RELEASE}", ("LICENSE", "scan-configs", "report-formats", "port-lists")),
 )
 

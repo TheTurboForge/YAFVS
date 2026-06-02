@@ -118,6 +118,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("certs/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("certs/private/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("secrets", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("state/ospd-gnupg", turbovasctl.RUNTIME_DIRS)
         self.assertIn("redis-openvas", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/gvmd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/ospd", turbovasctl.RUNTIME_DIRS)

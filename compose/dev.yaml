@@ -202,6 +202,7 @@ services:
         condition: service_healthy
     environment:
       HOME: /tmp
+      GNUPGHOME: /runtime/state/ospd-gnupg
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/venvs/ospd-openvas/bin:/workspace/build/openvas-scanner/src:/workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       TURBOVAS_RUNTIME_DIR: /runtime
@@ -222,7 +223,8 @@ services:
       - sh
       - -lc
       - >
-        mkdir -p /runtime/run/ospd /runtime/logs/ospd /runtime/feeds/notus/advisories &&
+        mkdir -p /runtime/run/ospd /runtime/logs/ospd /runtime/feeds/notus/advisories /runtime/state/ospd-gnupg &&
+        chmod 700 /runtime/state/ospd-gnupg &&
         rm -f /runtime/run/ospd/ospd-openvas.sock /runtime/run/ospd/ospd-openvas.pid &&
         exec /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
         --unix-socket=/runtime/run/ospd/ospd-openvas.sock

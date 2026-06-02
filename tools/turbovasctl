@@ -58,6 +58,7 @@ RUNTIME_DIRS = (
     "certs/private/CA",
     "secrets",
     "state",
+    "state/ospd-gnupg",
     "redis-openvas",
     "run/gvmd",
     "run/ospd",

@@ -131,7 +131,20 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_gsad_port_defaults_loopback_and_can_be_overridden(self):
         self.assertEqual(turbovasctl.DEFAULT_GSAD_HOST, "127.0.0.1")
         self.assertEqual(turbovasctl.GSAD_HOST_ENV, "TURBOVAS_GSAD_HOST")
+        self.assertEqual(turbovasctl.GSAD_HOSTS_ENV, "TURBOVAS_GSAD_HOSTS")
         self.assertEqual(turbovasctl.APP_PORTS["gsad"], "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392")
+        self.assertEqual(turbovasctl.DEV_ADMIN_USER, "admin")
+        self.assertEqual(turbovasctl.DEV_ADMIN_PASSWORD, "admin")
+
+    def test_runtime_secret_helper_accepts_default_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            secret, created = turbovasctl.read_or_create_runtime_secret(root, "example", "admin")
+            self.assertTrue(created)
+            self.assertEqual(secret, "admin")
+            secret_path = turbovasctl.runtime_secret_path(root, "example")
+            self.assertEqual(secret_path.read_text(encoding="utf-8").strip(), "admin")
 
     def test_runtime_dirs_include_application_state(self):
         self.assertIn("certs/CA", turbovasctl.RUNTIME_DIRS)
@@ -160,6 +173,27 @@ class TurboVASCtlTests(unittest.TestCase):
             command = turbovasctl.compose_command(root, "ps")
             self.assertEqual(command[:4], ["docker", "compose", "-f", str(root / "compose" / "dev.yaml")])
             self.assertEqual(command[-1], "ps")
+
+    def test_compose_command_adds_gsad_ports_override_for_multiple_hosts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "compose").mkdir()
+            (root / "compose" / "dev.yaml").write_text("services: {}\n", encoding="utf-8")
+            original = turbovasctl.os.environ.get(turbovasctl.GSAD_HOSTS_ENV)
+            try:
+                turbovasctl.os.environ[turbovasctl.GSAD_HOSTS_ENV] = "192.168.178.42,100.80.139.13"
+                command = turbovasctl.compose_command(root, "config")
+            finally:
+                if original is None:
+                    turbovasctl.os.environ.pop(turbovasctl.GSAD_HOSTS_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.GSAD_HOSTS_ENV] = original
+            override = turbovasctl.gsad_ports_override_file(root)
+            self.assertIn(str(override), command)
+            text = override.read_text(encoding="utf-8")
+            self.assertIn("ports: !override", text)
+            self.assertIn('"192.168.178.42:19392:9392"', text)
+            self.assertIn('"100.80.139.13:19392:9392"', text)
 
     def test_scanner_redis_paths_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -213,25 +247,27 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertIn("+net_raw,+net_admin", command)
             self.assertIn("socket.SOCK_RAW", command[-1])
 
-    def test_gsa_static_staging_writes_config_for_active_host(self):
+    def test_gsa_static_staging_writes_browser_relative_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             build = root / "components" / "gsa" / "build"
             (build / "assets").mkdir(parents=True)
             (build / "index.html").write_text('<script src="/assets/index.js"></script><div id="app"></div>', encoding="utf-8")
             (build / "assets" / "index.js").write_text("console.log('ok');\n", encoding="utf-8")
-            original = turbovasctl.os.environ.get(turbovasctl.GSAD_HOST_ENV)
+            original = turbovasctl.os.environ.get(turbovasctl.GSAD_HOSTS_ENV)
             try:
-                turbovasctl.os.environ[turbovasctl.GSAD_HOST_ENV] = "192.168.178.42"
+                turbovasctl.os.environ[turbovasctl.GSAD_HOSTS_ENV] = "192.168.178.42,100.80.139.13"
                 findings = turbovasctl.stage_gsa_static(root)
             finally:
                 if original is None:
-                    turbovasctl.os.environ.pop(turbovasctl.GSAD_HOST_ENV, None)
+                    turbovasctl.os.environ.pop(turbovasctl.GSAD_HOSTS_ENV, None)
                 else:
-                    turbovasctl.os.environ[turbovasctl.GSAD_HOST_ENV] = original
+                    turbovasctl.os.environ[turbovasctl.GSAD_HOSTS_ENV] = original
             self.assertEqual(turbovasctl.aggregate_status(findings), "pass")
             config = turbovasctl.gsad_static_dir(root) / "config.js"
-            self.assertIn("apiServer: '192.168.178.42:19392'", config.read_text(encoding="utf-8"))
+            config_text = config.read_text(encoding="utf-8")
+            self.assertIn("apiServer: window.location.host || '192.168.178.42:19392'", config_text)
+            self.assertIn("apiProtocol: (window.location.protocol || 'https:').replace(':', '')", config_text)
             self.assertEqual(turbovasctl.first_gsa_asset_rel((turbovasctl.gsad_static_dir(root) / "index.html").read_text(encoding="utf-8")), "assets/index.js")
 
     def test_feed_community_key_download_command_targets_runtime_artifact(self):

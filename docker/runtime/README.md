@@ -27,11 +27,14 @@ storage for Postgres, Redis, scanner Redis, Mosquitto, feeds, run sockets, logs,
 artifacts, certificates, secrets, and service state.
 
 Infrastructure services bind host ports to `127.0.0.1` only. `gsad` also
-defaults to loopback, but can be explicitly LAN-bound for development by setting
-`TURBOVAS_GSAD_HOST` before startup. The scanner Redis service does not expose a
-host TCP port. Source, `build/`, and `build/prefix` are bind-mounted for fast
-development feedback instead of forcing container rebuilds after small source
-changes. App containers also mount the checkout at
+defaults to loopback, but can be explicitly bound for development by setting
+`TURBOVAS_GSAD_HOST` for one address or comma-separated `TURBOVAS_GSAD_HOSTS`
+for multiple addresses before startup. The generated GSA `config.js` uses the
+browser's current host so each configured URL can talk back to the same `gsad`
+endpoint. The scanner Redis service does not expose a host TCP port. Source,
+`build/`, and `build/prefix` are bind-mounted for fast development feedback
+instead of forcing container rebuilds after small source changes. App containers
+also mount the checkout at
 `/home/turboforge/Projects/TurboVAS` because the current CMake build baseline
 embeds inherited development paths under that location.
 
@@ -66,8 +69,9 @@ and creates or verifies the `dba` role, role grant, and `pg-gvm` extension. It
 must not delete or recreate existing runtime data.
 
 `runtime-manager-init` runs the `gvmd` database migration, creates or verifies a
-local development admin user, stores the generated development password under
-the runtime `secrets/` directory, and sets the feed import owner when possible.
+local development admin user, stores the local development password under the
+runtime `secrets/` directory, aligns it to the `admin` / `admin` development
+default, and sets the feed import owner when possible.
 
 `runtime-scanner-redis-init` starts the dedicated scanner Redis service, writes
 the ignored development OpenVAS config under `build/prefix/etc/openvas/`, and

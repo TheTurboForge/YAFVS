@@ -123,6 +123,9 @@ assigned TCP and UDP` port list; starting the scan requires the explicit
 
 `build-ui` stages the GSA production bundle under
 `build/prefix/share/gvm/gsad/web` and writes a development `config.js` for the
-active `gsad` endpoint. `gsad` defaults to loopback host binding; for a LAN
-development session set `TURBOVAS_GSAD_HOST` before `runtime-app-up`, then run
-`runtime-webui-smoke`.
+active browser endpoint. `gsad` defaults to loopback host binding; for a single
+development address set `TURBOVAS_GSAD_HOST` before `runtime-app-up`, or for
+multiple explicit development addresses set comma-separated
+`TURBOVAS_GSAD_HOSTS`. Run `runtime-webui-smoke` with the same environment to
+verify every configured URL. The local development admin credentials are
+`admin` / `admin`; do not treat those defaults as production credentials.

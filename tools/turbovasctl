@@ -86,7 +86,9 @@ RUNTIME_PORTS = {
 }
 DEFAULT_GSAD_HOST = "127.0.0.1"
 GSAD_HOST_ENV = "TURBOVAS_GSAD_HOST"
+GSAD_HOSTS_ENV = "TURBOVAS_GSAD_HOSTS"
 GSAD_PORT = "19392"
+GSAD_CONTAINER_PORT = "9392"
 APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
 POSTGRES_DEFAULTS = {
     "user": "turbovas",
@@ -97,6 +99,7 @@ PG_GVM_CONTROL = "pg-gvm.control"
 PG_GVM_LIBRARY = "libpg-gvm.so"
 PG_GVM_EXTENSION = "pg-gvm"
 DEV_ADMIN_USER = "admin"
+DEV_ADMIN_PASSWORD = "admin"
 DEV_ADMIN_SECRET = "gvmd-admin-password"
 FEED_IMPORT_OWNER_SETTING = "78eceaec-3385-11ea-b237-28d24461215b"
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -470,12 +473,63 @@ def gsad_static_dir(repo_root: Path) -> Path:
     return repo_root / "build" / "prefix" / "share" / "gvm" / "gsad" / "web"
 
 
+def split_gsad_hosts(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return ()
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for raw_host in value.split(","):
+        host = raw_host.strip()
+        if not host or host in seen:
+            continue
+        hosts.append(host)
+        seen.add(host)
+    return tuple(hosts)
+
+
+def gsad_hosts(repo_root: Path) -> tuple[str, ...]:
+    env = runtime_env(repo_root)
+    hosts = split_gsad_hosts(env.get(GSAD_HOSTS_ENV))
+    if hosts:
+        return hosts
+    return split_gsad_hosts(env.get(GSAD_HOST_ENV)) or (DEFAULT_GSAD_HOST,)
+
+
 def gsad_host(repo_root: Path) -> str:
-    return runtime_env(repo_root).get(GSAD_HOST_ENV, DEFAULT_GSAD_HOST)
+    return gsad_hosts(repo_root)[0]
 
 
 def gsad_base_url(repo_root: Path) -> str:
     return f"https://{gsad_host(repo_root)}:{GSAD_PORT}"
+
+
+def gsad_base_urls(repo_root: Path) -> tuple[str, ...]:
+    return tuple(f"https://{host}:{GSAD_PORT}" for host in gsad_hosts(repo_root))
+
+
+def gsad_port_bindings(repo_root: Path) -> tuple[str, ...]:
+    return tuple(f"{host}:{GSAD_PORT}:{GSAD_CONTAINER_PORT}" for host in gsad_hosts(repo_root))
+
+
+def gsad_ports_override_file(repo_root: Path) -> Path:
+    return repo_root / "build" / "compose" / "gsad-ports.override.yaml"
+
+
+def ensure_gsad_ports_override(repo_root: Path) -> Path | None:
+    hosts = gsad_hosts(repo_root)
+    if len(hosts) <= 1 and not runtime_env(repo_root).get(GSAD_HOSTS_ENV):
+        return None
+    path = gsad_ports_override_file(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    bindings = "\n".join(f"      - {json.dumps(binding)}" for binding in gsad_port_bindings(repo_root))
+    path.write_text(
+        "services:\n"
+        "  gsad:\n"
+        "    ports: !override\n"
+        f"{bindings}\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def stage_gsa_static(repo_root: Path) -> list[dict[str, Any]]:
@@ -491,15 +545,16 @@ def stage_gsa_static(repo_root: Path) -> list[dict[str, Any]]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
     config_js = destination / "config.js"
+    fallback_api_server = f"{gsad_host(repo_root)}:{GSAD_PORT}"
     config_js.write_text(
         "config = {\n"
-        "  apiProtocol: 'https',\n"
-        f"  apiServer: '{gsad_host(repo_root)}:{GSAD_PORT}',\n"
+        "  apiProtocol: (window.location.protocol || 'https:').replace(':', ''),\n"
+        f"  apiServer: window.location.host || '{fallback_api_server}',\n"
         "};\n",
         encoding="utf-8",
     )
     findings.append(finding("pass", "gsa.static-stage", "GSA production build is staged for gsad.", str(destination)))
-    findings.append(finding("pass", "gsa.config-js", "GSA config.js points at the active gsad endpoint.", str(config_js), {"api_protocol": "https", "api_server": f"{gsad_host(repo_root)}:{GSAD_PORT}"}))
+    findings.append(finding("pass", "gsa.config-js", "GSA config.js uses the browser host with a fallback gsad endpoint.", str(config_js), {"api_protocol": "browser", "api_server_fallback": fallback_api_server, "hosts": list(gsad_hosts(repo_root))}))
     return findings
 
 
@@ -613,12 +668,12 @@ def runtime_secret_path(repo_root: Path, name: str) -> Path:
     return runtime_path(repo_root, "secrets", name)
 
 
-def read_or_create_runtime_secret(repo_root: Path, name: str) -> tuple[str, bool]:
+def read_or_create_runtime_secret(repo_root: Path, name: str, default: str | None = None) -> tuple[str, bool]:
     path = runtime_secret_path(repo_root, name)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file():
         return path.read_text(encoding="utf-8").strip(), False
-    secret = secrets.token_urlsafe(24)
+    secret = default if default is not None else secrets.token_urlsafe(24)
     path.write_text(secret + "\n", encoding="utf-8")
     path.chmod(0o600)
     return secret, True
@@ -780,7 +835,12 @@ def compose_file(repo_root: Path) -> Path:
 
 
 def compose_command(repo_root: Path, *args: str) -> list[str]:
-    return ["docker", "compose", "-f", str(compose_file(repo_root)), *args]
+    command = ["docker", "compose", "-f", str(compose_file(repo_root))]
+    gsad_override = ensure_gsad_ports_override(repo_root)
+    if gsad_override is not None:
+        command.extend(["-f", str(gsad_override)])
+    command.extend(args)
+    return command
 
 
 def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
@@ -1493,7 +1553,7 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
         finding("pass", "runtime.state", f"Persistent runtime state lives outside the repository at {root}.", str(root)),
         finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, Redis, scanner Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
         finding("pass", "runtime.app-services", "Experimental application services are available behind the app profile.", details={"services": list(APP_SERVICES)}),
-        finding("pass", "runtime.ports", "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly LAN-bound with TURBOVAS_GSAD_HOST.", details={**RUNTIME_PORTS, **APP_PORTS}),
+        finding("pass", "runtime.ports", "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly bound with TURBOVAS_GSAD_HOST or TURBOVAS_GSAD_HOSTS.", details={**RUNTIME_PORTS, "gsad": list(gsad_port_bindings(repo_root))}),
         finding("pass", "runtime.scanner-redis", "OpenVAS scanner KB Redis uses a runtime Unix socket, not host TCP exposure.", str(scanner_redis_socket_path(repo_root))),
         finding("pass", "runtime.feed-cache", "Community feed downloads use a persistent host-local cache outside the repository.", str(feed_cache_var_lib(repo_root))),
         finding("pass", "runtime.feed-copy", "Runtime services consume physical copies of the cache under the runtime feed tree.", str(feed_runtime_root(repo_root))),
@@ -1648,9 +1708,16 @@ def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
     if db_init["status"] == "fail":
         return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at database prerequisites.", findings, db_init["artifacts"])
 
-    password, created = read_or_create_runtime_secret(repo_root, DEV_ADMIN_SECRET)
+    password, created = read_or_create_runtime_secret(repo_root, DEV_ADMIN_SECRET, DEV_ADMIN_PASSWORD)
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    findings.append(finding("pass", "runtime.admin-secret", f"Development admin password {'created' if created else 'reused'} in persistent runtime secrets.", str(secret_path)))
+    if password != DEV_ADMIN_PASSWORD:
+        password = DEV_ADMIN_PASSWORD
+        secret_path.write_text(password + "\n", encoding="utf-8")
+        secret_path.chmod(0o600)
+        created = False
+        findings.append(finding("pass", "runtime.admin-secret", "Development admin password was aligned to the local default in persistent runtime secrets.", str(secret_path)))
+    else:
+        findings.append(finding("pass", "runtime.admin-secret", f"Development admin password {'created' if created else 'reused'} in persistent runtime secrets.", str(secret_path)))
     findings.extend(cert_file_findings(repo_root))
 
     app_build = run_command(compose_command(repo_root, "--profile", "app", "build", "gvmd"), repo_root, env=runtime_env(repo_root), timeout=900)
@@ -1668,13 +1735,19 @@ def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
     findings.append(finding("pass" if users.returncode == 0 else "warn", "gvmd.get-users", f"gvmd --get-users --verbose exit code {users.returncode}.", details={"admin_uuid_found": bool(admin_uuid), "output_tail": output_tail(users.stdout, 80, [password])}))
 
     if not admin_uuid:
-        create = run_gvmd_oneoff(repo_root, [f"--create-user={DEV_ADMIN_USER}", f"--password={password}"], no_deps=False)
+        create = run_gvmd_oneoff(repo_root, [f"--create-user={DEV_ADMIN_USER}", f"--password={password}", "--disable-password-policy"], no_deps=False)
         findings.append(finding("pass" if create.returncode == 0 else "fail", "gvmd.create-admin", f"Create/verify development admin user exit code {create.returncode}.", details={"output_tail": output_tail(create.stdout, 80, [password])}))
         if create.returncode != 0:
             return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at admin user creation.", findings, [str(runtime_dir(repo_root))])
         users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False)
         admin_uuid = parse_user_uuid(users.stdout, DEV_ADMIN_USER) if users.returncode == 0 else None
         findings.append(finding("pass" if admin_uuid else "warn", "gvmd.admin-uuid", f"Development admin UUID {'found' if admin_uuid else 'not found after creation'}.", details={"admin_uuid": admin_uuid, "output_tail": output_tail(users.stdout, 80, [password])}))
+
+    if admin_uuid:
+        update_password = run_gvmd_oneoff(repo_root, [f"--user={DEV_ADMIN_USER}", f"--new-password={password}", "--disable-password-policy"], no_deps=False)
+        findings.append(finding("pass" if update_password.returncode == 0 else "fail", "gvmd.admin-password", f"Set development admin password exit code {update_password.returncode}.", details={"output_tail": output_tail(update_password.stdout, 80, [password])}))
+        if update_password.returncode != 0:
+            return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at admin password update.", findings, [str(runtime_dir(repo_root))])
 
     if admin_uuid:
         owner = run_gvmd_oneoff(repo_root, [f"--modify-setting={FEED_IMPORT_OWNER_SETTING}", f"--value={admin_uuid}"], no_deps=False)
@@ -2213,8 +2286,9 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
         findings.append(finding("pass" if scanners.returncode == 0 else "warn", "gvmd.scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"output_tail": output_tail(scanners.stdout, 80, [password])}))
         findings.append(scanner_registration_status(repo_root))
 
-    gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", f"{gsad_base_url(repo_root)}/"], repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Configured HTTPS header probe exit code {gsad_http.returncode}.", details={"url": f"{gsad_base_url(repo_root)}/", "output_tail": output_tail(gsad_http.stdout, 80, [password])}))
+    for base_url in gsad_base_urls(repo_root):
+        gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
+        findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Configured HTTPS header probe exit code {gsad_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(gsad_http.stdout, 80, [password])}))
     return make_result("runtime-app-smoke", repo_root, "Application runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
 
 
@@ -2223,7 +2297,6 @@ def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
     static_dir = gsad_static_dir(repo_root)
     index_path = static_dir / "index.html"
     config_path = static_dir / "config.js"
-    base_url = gsad_base_url(repo_root)
     findings.append(finding("pass" if index_path.is_file() else "fail", "webui.static-index", "Staged GSA index.html exists." if index_path.is_file() else "Staged GSA index.html is missing; run just build-ui.", str(index_path)))
     findings.append(finding("pass" if config_path.is_file() else "fail", "webui.static-config", "Staged GSA config.js exists." if config_path.is_file() else "Staged GSA config.js is missing; run just build-ui.", str(config_path)))
 
@@ -2231,18 +2304,19 @@ def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
     asset_rel = first_gsa_asset_rel(index_text)
     findings.append(finding("pass" if asset_rel else "fail", "webui.static-asset-ref", f"Found GSA asset reference {asset_rel}." if asset_rel else "No GSA asset reference found in index.html.", str(index_path)))
 
-    index_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if index_http.returncode == 0 and '<div id="app">' in index_http.stdout else "fail", "webui.http-index", f"GSA index HTTP probe exit code {index_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(index_http.stdout, 40)}))
+    for base_url in gsad_base_urls(repo_root):
+        index_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
+        findings.append(finding("pass" if index_http.returncode == 0 and '<div id="app">' in index_http.stdout else "fail", "webui.http-index", f"GSA index HTTP probe exit code {index_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(index_http.stdout, 40)}))
 
-    config_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/config.js"], repo_root, env=runtime_env(repo_root))
-    expected_api_server = f"apiServer: '{gsad_host(repo_root)}:{GSAD_PORT}'"
-    findings.append(finding("pass" if config_http.returncode == 0 and expected_api_server in config_http.stdout else "fail", "webui.http-config", f"GSA config.js HTTP probe exit code {config_http.returncode}.", details={"url": f"{base_url}/config.js", "expected": expected_api_server, "output_tail": output_tail(config_http.stdout, 40)}))
+        config_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/config.js"], repo_root, env=runtime_env(repo_root))
+        expected_api_server = "apiServer: window.location.host"
+        findings.append(finding("pass" if config_http.returncode == 0 and expected_api_server in config_http.stdout else "fail", "webui.http-config", f"GSA config.js HTTP probe exit code {config_http.returncode}.", details={"url": f"{base_url}/config.js", "expected": expected_api_server, "output_tail": output_tail(config_http.stdout, 40)}))
 
-    if asset_rel:
-        asset_http = run_command(["curl", "-kfsS", "--max-time", "10", "-o", "/dev/null", f"{base_url}/{asset_rel}"], repo_root, env=runtime_env(repo_root))
-        findings.append(finding("pass" if asset_http.returncode == 0 else "fail", "webui.http-asset", f"GSA asset HTTP probe exit code {asset_http.returncode}.", details={"url": f"{base_url}/{asset_rel}", "output_tail": output_tail(asset_http.stdout, 40)}))
+        if asset_rel:
+            asset_http = run_command(["curl", "-kfsS", "--max-time", "10", "-o", "/dev/null", f"{base_url}/{asset_rel}"], repo_root, env=runtime_env(repo_root))
+            findings.append(finding("pass" if asset_http.returncode == 0 else "fail", "webui.http-asset", f"GSA asset HTTP probe exit code {asset_http.returncode}.", details={"url": f"{base_url}/{asset_rel}", "output_tail": output_tail(asset_http.stdout, 40)}))
 
-    return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), base_url])
+    return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
 
 
 def command_down(repo_root: Path) -> dict[str, Any]:

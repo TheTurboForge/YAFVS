@@ -128,6 +128,11 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(turbovasctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad"))
 
+    def test_gsad_port_defaults_loopback_and_can_be_overridden(self):
+        self.assertEqual(turbovasctl.DEFAULT_GSAD_HOST, "127.0.0.1")
+        self.assertEqual(turbovasctl.GSAD_HOST_ENV, "TURBOVAS_GSAD_HOST")
+        self.assertEqual(turbovasctl.APP_PORTS["gsad"], "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392")
+
     def test_runtime_dirs_include_application_state(self):
         self.assertIn("certs/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("certs/private/CA", turbovasctl.RUNTIME_DIRS)
@@ -186,6 +191,48 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_feed_keyring_constants_match_greenbone_community_key(self):
         self.assertEqual(turbovasctl.GREENBONE_COMMUNITY_KEY_FPR, "8AE4BE429B60A59B311C2E739823FAA60ED1E580")
         self.assertEqual(turbovasctl.GREENBONE_COMMUNITY_KEY_URL, "https://www.greenbone.net/GBCommunitySigningKey.asc")
+
+    def test_capability_helpers_detect_required_scanner_caps(self):
+        self.assertTrue(turbovasctl.cap_hex_has("0000000000003000", 12))
+        self.assertTrue(turbovasctl.cap_hex_has("0000000000003000", 13))
+        self.assertEqual(turbovasctl.missing_required_caps("0000000000003000"), [])
+        self.assertEqual(turbovasctl.missing_required_caps("0000000000001000"), ["NET_RAW"])
+
+    def test_proc_status_helpers_parse_ids(self):
+        values = turbovasctl.parse_proc_status("Uid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\n")
+        self.assertEqual(turbovasctl.first_proc_status_id(values["Uid"]), "1000")
+        self.assertEqual(turbovasctl.first_proc_status_id(values["Gid"]), "1000")
+
+    def test_ospd_setpriv_raw_socket_probe_uses_non_root_caps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            command = turbovasctl.ospd_setpriv_raw_socket_probe_command(root)
+            self.assertEqual(command[:2], ["setpriv", "--reuid"])
+            self.assertIn("--ambient-caps", command)
+            self.assertIn("+net_raw,+net_admin", command)
+            self.assertIn("socket.SOCK_RAW", command[-1])
+
+    def test_gsa_static_staging_writes_config_for_active_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            build = root / "components" / "gsa" / "build"
+            (build / "assets").mkdir(parents=True)
+            (build / "index.html").write_text('<script src="/assets/index.js"></script><div id="app"></div>', encoding="utf-8")
+            (build / "assets" / "index.js").write_text("console.log('ok');\n", encoding="utf-8")
+            original = turbovasctl.os.environ.get(turbovasctl.GSAD_HOST_ENV)
+            try:
+                turbovasctl.os.environ[turbovasctl.GSAD_HOST_ENV] = "192.168.178.42"
+                findings = turbovasctl.stage_gsa_static(root)
+            finally:
+                if original is None:
+                    turbovasctl.os.environ.pop(turbovasctl.GSAD_HOST_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.GSAD_HOST_ENV] = original
+            self.assertEqual(turbovasctl.aggregate_status(findings), "pass")
+            config = turbovasctl.gsad_static_dir(root) / "config.js"
+            self.assertIn("apiServer: '192.168.178.42:19392'", config.read_text(encoding="utf-8"))
+            self.assertEqual(turbovasctl.first_gsa_asset_rel((turbovasctl.gsad_static_dir(root) / "index.html").read_text(encoding="utf-8")), "assets/index.js")
 
     def test_feed_community_key_download_command_targets_runtime_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -449,6 +496,19 @@ class TurboVASCtlTests(unittest.TestCase):
         payload = runtime_full_test_scan.preflight_state(state)
         self.assertEqual(payload["status"], "pass")
         self.assertEqual(payload["details"]["scanner"]["id"], "scanner-1")
+
+    def test_full_test_scan_object_rows_include_progress_and_report(self):
+        response = (
+            "<get_tasks_response>"
+            "<task id=\"task-1\">"
+            "<name>scan</name><status>Running</status><progress>42</progress>"
+            "<report id=\"report-1\"/>"
+            "</task>"
+            "</get_tasks_response>"
+        )
+        row = runtime_full_test_scan.object_rows(response, "task")[0]
+        self.assertEqual(row["progress"], "42")
+        self.assertEqual(row["report_id"], "report-1")
 
 
 

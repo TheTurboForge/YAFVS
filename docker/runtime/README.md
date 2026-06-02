@@ -18,17 +18,20 @@ The experimental `app` profile adds inherited application services:
 
 - `gvmd`, using the persistent Postgres database and a runtime Unix socket
 - `ospd-openvas`, wired to the built OpenVAS scanner binary, scanner Redis Unix socket, and runtime OSP socket path
-- `gsad`, exposed on `127.0.0.1:19392` for local HTTPS/API smoke checks
+- `notus-scanner`, wired to the runtime Notus feed copy and Mosquitto
+- `gsad`, exposed on `127.0.0.1:19392` by default for local HTTPS UI/API smoke checks
 
 Persistent state is stored outside the repository by default, normally in the
 sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
 storage for Postgres, Redis, scanner Redis, Mosquitto, feeds, run sockets, logs,
 artifacts, certificates, secrets, and service state.
 
-The services bind host ports to `127.0.0.1` only. The scanner Redis service does
-not expose a host TCP port. Source, `build/`, and `build/prefix` are bind-mounted
-for fast development feedback instead of forcing container rebuilds after small
-source changes. App containers also mount the checkout at
+Infrastructure services bind host ports to `127.0.0.1` only. `gsad` also
+defaults to loopback, but can be explicitly LAN-bound for development by setting
+`TURBOVAS_GSAD_HOST` before startup. The scanner Redis service does not expose a
+host TCP port. Source, `build/`, and `build/prefix` are bind-mounted for fast
+development feedback instead of forcing container rebuilds after small source
+changes. App containers also mount the checkout at
 `/home/turboforge/Projects/TurboVAS` because the current CMake build baseline
 embeds inherited development paths under that location.
 
@@ -47,7 +50,11 @@ Use the root `justfile` command surface:
 - `just runtime-app-up`
 - `just runtime-gmp-smoke`
 - `just runtime-scanner-register`
+- `just runtime-scanner-capability-check`
+- `just runtime-feed-keyring-init`
+- `just runtime-feed-import-init`
 - `just runtime-app-smoke`
+- `just runtime-webui-smoke`
 - `just runtime-app-down`
 - `just down`
 
@@ -72,6 +79,10 @@ small `python-gvm` probe and calls `get_version` without printing secrets.
 `runtime-scanner-register` creates or verifies the `OpenVAS Default` scanner
 registration against `/runtime/run/ospd/ospd-openvas.sock` on port `0`.
 
+`runtime-scanner-capability-check` verifies that `ospd-openvas` PID 1 runs as
+the development UID/GID with effective/permitted/ambient `NET_RAW` and
+`NET_ADMIN`, and that the same service-user path can open an ICMP raw socket.
+
 ## Current App Runtime Status
 
 The current app profile reaches inherited manager-scanner connectivity:
@@ -80,12 +91,11 @@ The current app profile reaches inherited manager-scanner connectivity:
 - authenticated GMP `get_version` succeeds over the runtime Unix socket.
 - scanner Redis is reachable through `/runtime/run/redis-openvas/redis.sock`.
 - `ospd-openvas` starts and creates `/runtime/run/ospd/ospd-openvas.sock`.
+- `ospd-openvas` runs as the development UID/GID with only the raw-socket
+  capabilities needed for scanner alive detection.
+- `notus-scanner` starts against the runtime Notus feed copy.
 - `OpenVAS Default` is registered and verified by `gvmd` against the OSPD socket.
-- `gsad` starts in API-only mode and responds on loopback HTTPS.
+- `gsad` serves the staged GSA web UI and responds on the configured HTTPS host binding.
 
-`runtime-app-smoke` currently reports `warn` because `ospd-openvas` logs inherited
-VT loading errors when no feed/plugin cache exists yet. That is expected for this
-phase and is intentionally surfaced as a warning instead of hidden.
-
-Full feed population, feed/plugin cache initialization, Notus bring-up, scan
-execution, and production packaging are intentionally deferred.
+Full feed population, feed import, scan execution, and production packaging
+remain guarded development surfaces rather than production deployment behavior.

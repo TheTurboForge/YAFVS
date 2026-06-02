@@ -75,6 +75,9 @@ runtime-gmp-smoke:
 runtime-scanner-register:
     @tools/turbovasctl runtime-scanner-register
 
+runtime-scanner-capability-check *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scanner-capability-check "$@"
+
 runtime-feed-keyring-init *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-feed-keyring-init "$@"
 
@@ -113,6 +116,9 @@ runtime-app-down:
 
 runtime-app-smoke:
     @tools/turbovasctl runtime-app-smoke
+
+runtime-webui-smoke *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-webui-smoke "$@"
 
 gvmd-smoke:
     @tools/turbovasctl gvmd-smoke

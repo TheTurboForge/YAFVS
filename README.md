@@ -39,6 +39,7 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-scanner-redis-init`: initialize scanner Redis and generated OpenVAS runtime configuration.
 - `just runtime-gmp-smoke`: run an authenticated GMP smoke check.
 - `just runtime-scanner-register`: create or verify the OpenVAS scanner registration.
+- `just runtime-scanner-capability-check`: verify non-root OpenVAS raw-socket capabilities.
 - `just runtime-feed-keyring-init`: initialize the shared feed signature GnuPG keyring.
 - `just runtime-feed-import-init`: import the runtime feed copy into gvmd/OpenVAS state.
 - `just runtime-full-test-scan-preflight`: verify readiness for the fixed authorized `192.168.178.0/24` full test scan.
@@ -51,6 +52,7 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-smoke`: run infrastructure smoke checks.
 - `just runtime-app-up`: start experimental inherited application services.
 - `just runtime-app-smoke`: run experimental application service smoke checks.
+- `just runtime-webui-smoke`: verify the staged GSA web UI over `gsad`.
 - `just runtime-app-down`: stop experimental inherited application services.
 - `just gvmd-smoke`: run a narrow experimental manager profile smoke.
 

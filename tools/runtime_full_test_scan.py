@@ -78,9 +78,11 @@ def object_rows(response: Any, object_tag: str) -> list[dict[str, str | None]]:
                 "id": element.get("id"),
                 "name": child_text(element, "name"),
                 "status": child_text(element, "status"),
+                "progress": child_text(element, "progress"),
                 "target_id": child_id(element, "target"),
                 "scanner_id": child_id(element, "scanner"),
                 "config_id": child_id(element, "config"),
+                "report_id": child_id(element, "report"),
             }
         )
     return rows

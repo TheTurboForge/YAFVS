@@ -78,6 +78,7 @@ just runtime-manager-init
 just runtime-scanner-redis-init
 just runtime-gmp-smoke
 just runtime-scanner-register
+just runtime-scanner-capability-check
 just runtime-feed-keyring-init
 just runtime-feed-import-init
 just runtime-full-test-scan-preflight
@@ -90,6 +91,7 @@ just runtime-status
 just runtime-smoke
 just runtime-app-up
 just runtime-app-smoke
+just runtime-webui-smoke
 just runtime-app-down
 just down
 ```
@@ -102,8 +104,13 @@ registration, and feed copy commands are designed to be idempotent and must not
 delete or recreate unrelated runtime data.
 
 The current app profile can start `gvmd`, `ospd-openvas`, `notus-scanner`, and
-`gsad` for service-health checks. Feed downloads use a persistent local
-Community Feed cache under `TurboVAS-runtime/feed-cache/`, then runtime services
+`gsad` for service-health checks. `ospd-openvas` starts through a root
+entrypoint that immediately drops to the development UID/GID with only
+`NET_RAW`/`NET_ADMIN` ambient capabilities so Boreas/OpenVAS can open raw
+sockets without a privileged container or host networking.
+`runtime-scanner-capability-check` verifies that runtime state before scans.
+Feed downloads use a persistent local Community Feed cache under
+`TurboVAS-runtime/feed-cache/`, then runtime services
 consume physical copies under `TurboVAS-runtime/feeds/`. OSPD and Notus share a
 persistent feed signature keyring under `TurboVAS-runtime/state/feed-gnupg`.
 `runtime-feed-import-init` maps gvmd/OpenVAS build-time feed data paths to the
@@ -113,3 +120,9 @@ canonical feed cache. The full-test scan commands are fixed to the authorized
 `192.168.178.0/24` target, the `Full and fast` scan config, and the `All IANA
 assigned TCP and UDP` port list; starting the scan requires the explicit
 `--confirm-authorized-lan` flag.
+
+`build-ui` stages the GSA production bundle under
+`build/prefix/share/gvm/gsad/web` and writes a development `config.js` for the
+active `gsad` endpoint. `gsad` defaults to loopback host binding; for a LAN
+development session set `TURBOVAS_GSAD_HOST` before `runtime-app-up`, then run
+`runtime-webui-smoke`.

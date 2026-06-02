@@ -192,7 +192,6 @@ services:
       context: ..
       dockerfile: docker/dev/Dockerfile
     working_dir: /workspace
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
     cap_add:
       - NET_RAW
       - NET_ADMIN
@@ -209,6 +208,8 @@ services:
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/venvs/ospd-openvas/bin:/workspace/build/openvas-scanner/src:/workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       TURBOVAS_RUNTIME_DIR: /runtime
+      TURBOVAS_UID: ${TURBOVAS_UID:-1000}
+      TURBOVAS_GID: ${TURBOVAS_GID:-1000}
     volumes:
       - type: bind
         source: ..
@@ -226,10 +227,17 @@ services:
       - sh
       - -lc
       - >
-        mkdir -p /runtime/run/ospd /runtime/logs/ospd /runtime/feeds/notus/advisories /runtime/state/feed-gnupg &&
-        chmod 700 /runtime/state/feed-gnupg &&
+        install -d -m 0770 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/run/ospd /runtime/logs/ospd &&
+        install -d -m 0700 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/state/feed-gnupg &&
+        mkdir -p /runtime/feeds/notus/advisories &&
         rm -f /runtime/run/ospd/ospd-openvas.sock /runtime/run/ospd/ospd-openvas.pid &&
-        exec /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
+        exec setpriv
+        --reuid "$${TURBOVAS_UID:-1000}"
+        --regid "$${TURBOVAS_GID:-1000}"
+        --clear-groups
+        --inh-caps +net_raw,+net_admin
+        --ambient-caps +net_raw,+net_admin
+        /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
         --unix-socket=/runtime/run/ospd/ospd-openvas.sock
         --pid-file=/runtime/run/ospd/ospd-openvas.pid
         --lock-file-dir=/runtime/run/ospd
@@ -303,7 +311,7 @@ services:
       PATH: /workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       TURBOVAS_RUNTIME_DIR: /runtime
     ports:
-      - "127.0.0.1:19392:9392"
+      - "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392"
     volumes:
       - type: bind
         source: ..
@@ -321,7 +329,7 @@ services:
       - sh
       - -lc
       - >
-        mkdir -p /runtime/logs/gsad /runtime/state/gsad-static &&
+        mkdir -p /runtime/logs/gsad &&
         exec gsad --foreground
         --listen=0.0.0.0
         --port=9392
@@ -329,8 +337,7 @@ services:
         --ssl-private-key=/runtime/certs/private/CA/serverkey.pem
         --ssl-certificate=/runtime/certs/CA/servercert.pem
         --no-redirect
-        --static-content=/runtime/state/gsad-static
-        --api-only
+        --static-content=/workspace/build/prefix/share/gvm/gsad/web
 
 networks:
   default:

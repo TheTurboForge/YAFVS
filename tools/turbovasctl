@@ -84,7 +84,10 @@ RUNTIME_PORTS = {
     "redis": "127.0.0.1:16379:6379",
     "mosquitto": "127.0.0.1:1883:1883",
 }
-APP_PORTS = {"gsad": "127.0.0.1:19392:9392"}
+DEFAULT_GSAD_HOST = "127.0.0.1"
+GSAD_HOST_ENV = "TURBOVAS_GSAD_HOST"
+GSAD_PORT = "19392"
+APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
 POSTGRES_DEFAULTS = {
     "user": "turbovas",
     "password": "turbovas-dev",
@@ -107,6 +110,7 @@ NOTUS_SIGNATURE_SUBTREES = ("advisories", "products")
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
 IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
 GVMD_IMPORT_TIMEOUT_SECONDS = 7200
+OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
 
 
 @dataclass(frozen=True)
@@ -458,6 +462,52 @@ def feed_copy_pairs(repo_root: Path) -> list[tuple[FeedClass, Path, Path]]:
     return [(feed_class, cache_root / feed_class.cache_rel, runtime_root / feed_class.runtime_rel) for feed_class in FEED_CLASSES]
 
 
+def gsa_build_dir(repo_root: Path) -> Path:
+    return repo_root / "components" / "gsa" / "build"
+
+
+def gsad_static_dir(repo_root: Path) -> Path:
+    return repo_root / "build" / "prefix" / "share" / "gvm" / "gsad" / "web"
+
+
+def gsad_host(repo_root: Path) -> str:
+    return runtime_env(repo_root).get(GSAD_HOST_ENV, DEFAULT_GSAD_HOST)
+
+
+def gsad_base_url(repo_root: Path) -> str:
+    return f"https://{gsad_host(repo_root)}:{GSAD_PORT}"
+
+
+def stage_gsa_static(repo_root: Path) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    source = gsa_build_dir(repo_root)
+    destination = gsad_static_dir(repo_root)
+    index = source / "index.html"
+    findings.append(finding("pass" if index.is_file() else "fail", "gsa.build.index", "GSA production build index.html exists." if index.is_file() else "GSA production build is missing index.html; run just build-ui.", str(index)))
+    if aggregate_status(findings) == "fail":
+        return findings
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, destination)
+    config_js = destination / "config.js"
+    config_js.write_text(
+        "config = {\n"
+        "  apiProtocol: 'https',\n"
+        f"  apiServer: '{gsad_host(repo_root)}:{GSAD_PORT}',\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    findings.append(finding("pass", "gsa.static-stage", "GSA production build is staged for gsad.", str(destination)))
+    findings.append(finding("pass", "gsa.config-js", "GSA config.js points at the active gsad endpoint.", str(config_js), {"api_protocol": "https", "api_server": f"{gsad_host(repo_root)}:{GSAD_PORT}"}))
+    return findings
+
+
+def first_gsa_asset_rel(index_html: str) -> str | None:
+    match = re.search(r"""(?:src|href)=["']/(assets/[^"']+)["']""", index_html)
+    return match.group(1) if match else None
+
+
 def feed_path_summary(path: Path, markers: tuple[str, ...]) -> dict[str, Any]:
     file_count = 0
     byte_count = 0
@@ -721,6 +771,7 @@ def runtime_env(repo_root: Path) -> dict[str, str]:
     env.setdefault("POSTGRES_PASSWORD", POSTGRES_DEFAULTS["password"])
     env.setdefault("POSTGRES_DB", POSTGRES_DEFAULTS["database"])
     env.setdefault("OPENVAS_CONFIG", str(openvas_runtime_config_path(repo_root)))
+    env.setdefault(GSAD_HOST_ENV, DEFAULT_GSAD_HOST)
     return env
 
 
@@ -846,6 +897,59 @@ def container_running(repo_root: Path, service: str) -> bool:
 
 def exec_in_service(repo_root: Path, service: str, command: list[str]) -> subprocess.CompletedProcess[str]:
     return run_command(compose_command(repo_root, "exec", "-T", service, *command), repo_root, env=runtime_env(repo_root))
+
+
+def parse_proc_status(output: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def first_proc_status_id(value: str | None) -> str | None:
+    if not value:
+        return None
+    parts = value.split()
+    return parts[0] if parts else None
+
+
+def cap_hex_has(mask_hex: str | None, cap_bit: int) -> bool:
+    if not mask_hex:
+        return False
+    try:
+        mask = int(mask_hex, 16)
+    except ValueError:
+        return False
+    return bool(mask & (1 << cap_bit))
+
+
+def missing_required_caps(mask_hex: str | None) -> list[str]:
+    return [name for name, bit in OSPD_REQUIRED_CAPS.items() if not cap_hex_has(mask_hex, bit)]
+
+
+def ospd_setpriv_raw_socket_probe_command(repo_root: Path) -> list[str]:
+    env = runtime_env(repo_root)
+    uid = env["TURBOVAS_UID"]
+    gid = env["TURBOVAS_GID"]
+    probe = "import socket; socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP); print('raw-ok')"
+    return [
+        "setpriv",
+        "--reuid",
+        uid,
+        "--regid",
+        gid,
+        "--clear-groups",
+        "--inh-caps",
+        "+net_raw,+net_admin",
+        "--ambient-caps",
+        "+net_raw,+net_admin",
+        "python3",
+        "-c",
+        probe,
+    ]
 
 
 def output_tail(output: str, lines: int = 80, secrets_to_redact: Iterable[str] = ()) -> list[str]:
@@ -1304,7 +1408,7 @@ def command_build_node(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
         findings.append(finding("pass" if result.returncode == 0 else "fail", "npm.script", f"{meta.name} npm run {script} exit code {result.returncode}.", component.path, {"script": script, "output_tail": result.stdout.splitlines()[-80:]}))
         if result.returncode != 0:
             break
-    return make_result("build", repo_root, f"Build {meta.name} completed.", findings, [f"{component.path}/node_modules", f"{component.path}/dist"])
+    return make_result("build", repo_root, f"Build {meta.name} completed.", findings, [f"{component.path}/node_modules", f"{component.path}/build"])
 
 
 def venv_python(repo_root: Path, component: str) -> Path:
@@ -1364,7 +1468,14 @@ def command_build_c_services(repo_root: Path) -> dict[str, Any]:
 
 
 def command_build_ui(repo_root: Path) -> dict[str, Any]:
-    return command_build(repo_root, "gsa")
+    result = command_build(repo_root, "gsa")
+    findings = list(result["findings"])
+    artifacts = list(result["artifacts"])
+    if result["status"] == "pass":
+        stage_findings = stage_gsa_static(repo_root)
+        findings.extend(stage_findings)
+        artifacts.append(str(gsad_static_dir(repo_root)))
+    return make_result("build-ui", repo_root, "Build and stage web UI completed.", findings, sorted(set(artifacts)))
 
 
 def command_build_python_chain(repo_root: Path) -> dict[str, Any]:
@@ -1382,14 +1493,14 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
         finding("pass", "runtime.state", f"Persistent runtime state lives outside the repository at {root}.", str(root)),
         finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, Redis, scanner Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
         finding("pass", "runtime.app-services", "Experimental application services are available behind the app profile.", details={"services": list(APP_SERVICES)}),
-        finding("pass", "runtime.ports", "All host port bindings are loopback-only.", details={**RUNTIME_PORTS, **APP_PORTS}),
+        finding("pass", "runtime.ports", "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly LAN-bound with TURBOVAS_GSAD_HOST.", details={**RUNTIME_PORTS, **APP_PORTS}),
         finding("pass", "runtime.scanner-redis", "OpenVAS scanner KB Redis uses a runtime Unix socket, not host TCP exposure.", str(scanner_redis_socket_path(repo_root))),
         finding("pass", "runtime.feed-cache", "Community feed downloads use a persistent host-local cache outside the repository.", str(feed_cache_var_lib(repo_root))),
         finding("pass", "runtime.feed-copy", "Runtime services consume physical copies of the cache under the runtime feed tree.", str(feed_runtime_root(repo_root))),
         finding("pass", "runtime.feed-keyring", "OSPD and Notus share a persistent feed signature keyring under runtime state.", str(feed_gnupg_home(repo_root))),
         finding("pass", "runtime.pg-gvm", "Postgres pg-gvm extension initialization is handled by just runtime-init after pg-gvm is built."),
         finding("pass", "runtime.certs", "Certificate initialization is handled by just runtime-certs-init and persists outside the repository."),
-        finding("warn", "runtime.deferred", "Feed import and scan execution remain guarded follow-up steps."),
+        finding("warn", "runtime.deferred", "Scan execution remains guarded and requires scanner capability checks."),
     ]
     return make_result("runtime-plan", repo_root, "Persistent Docker runtime plan collected.", findings, [str(root), str(compose_file(repo_root).relative_to(repo_root))])
 
@@ -1823,6 +1934,40 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-feed-import-init", repo_root, "Runtime feed import and verification completed.", findings, [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))])
 
 
+def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    service = "ospd-openvas"
+    running = container_running(repo_root, service)
+    findings.append(finding("pass" if running else "fail", "ospd.running", "ospd-openvas container is running." if running else "ospd-openvas container is not running; run just runtime-app-up.", details={"service": service}))
+    if not running:
+        return make_result("runtime-scanner-capability-check", repo_root, "Scanner capability check stopped because ospd-openvas is not running.", findings)
+
+    status = exec_in_service(repo_root, service, ["sh", "-lc", "sed -n 's/^Uid:/Uid:/p; s/^Gid:/Gid:/p; s/^CapInh:/CapInh:/p; s/^CapPrm:/CapPrm:/p; s/^CapEff:/CapEff:/p; s/^CapBnd:/CapBnd:/p; s/^CapAmb:/CapAmb:/p' /proc/1/status"])
+    values = parse_proc_status(status.stdout)
+    expected_uid = runtime_env(repo_root)["TURBOVAS_UID"]
+    expected_gid = runtime_env(repo_root)["TURBOVAS_GID"]
+    actual_uid = first_proc_status_id(values.get("Uid"))
+    actual_gid = first_proc_status_id(values.get("Gid"))
+    findings.append(finding("pass" if status.returncode == 0 else "fail", "ospd.proc-status", f"/proc/1/status read exit code {status.returncode}.", details={"output_tail": output_tail(status.stdout, 40)}))
+    findings.append(finding("pass" if actual_uid == expected_uid else "fail", "ospd.uid", f"ospd-openvas PID 1 UID is {actual_uid}; expected {expected_uid}.", details={"uid_line": values.get("Uid"), "expected": expected_uid}))
+    findings.append(finding("pass" if actual_gid == expected_gid else "fail", "ospd.gid", f"ospd-openvas PID 1 GID is {actual_gid}; expected {expected_gid}.", details={"gid_line": values.get("Gid"), "expected": expected_gid}))
+
+    for cap_field in ("CapPrm", "CapEff", "CapAmb"):
+        missing = missing_required_caps(values.get(cap_field))
+        findings.append(
+            finding(
+                "pass" if not missing else "fail",
+                f"ospd.{cap_field.lower()}",
+                f"{cap_field} includes NET_RAW and NET_ADMIN." if not missing else f"{cap_field} is missing required capabilities: {', '.join(missing)}.",
+                details={"value": values.get(cap_field), "missing": missing},
+            )
+        )
+
+    raw_probe = exec_in_service(repo_root, service, ospd_setpriv_raw_socket_probe_command(repo_root))
+    findings.append(finding("pass" if raw_probe.returncode == 0 and "raw-ok" in raw_probe.stdout else "fail", "ospd.raw-socket-probe", f"Service-user raw ICMP socket probe exit code {raw_probe.returncode}.", details={"output_tail": output_tail(raw_probe.stdout, 40)}))
+    return make_result("runtime-scanner-capability-check", repo_root, "Scanner capability check completed.", findings)
+
+
 def command_runtime_full_test_scan(repo_root: Path, action: str, confirm_authorized_lan: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
@@ -1838,6 +1983,10 @@ def command_runtime_full_test_scan(repo_root: Path, action: str, confirm_authori
         findings.append(finding("pass", "full-test-scan.artifact-dir", "Full test scan artifact directory is ready.", str(artifact_dir)))
     except OSError as error:
         findings.append(finding("fail", "full-test-scan.artifact-dir", f"Full test scan artifact directory is not usable: {error}", str(artifact_dir)))
+
+    if action in {"preflight", "start"}:
+        capability = command_runtime_scanner_capability_check(repo_root)
+        findings.append(finding(capability["status"], "ospd.capability-check", capability["summary"], details={"status": capability["status"], "findings": capability["findings"]}))
 
     command_name = f"runtime-full-test-scan-{action}"
     if aggregate_status(findings) == "fail":
@@ -1977,6 +2126,7 @@ def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
     if not certs_complete(repo_root):
         cert_findings = [dict(item, status="fail") for item in cert_findings]
     findings.extend(cert_findings)
+    findings.extend(stage_gsa_static(repo_root))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-app-up", repo_root, "Application runtime startup stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
 
@@ -2030,6 +2180,8 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     ospd_ready = wait_for_socket(ospd_socket, timeout_seconds=5)
     findings.append(finding("pass" if ospd_ready else "warn", "ospd.socket", f"ospd-openvas socket {'is ready' if ospd_ready else 'is not ready'}.", str(ospd_socket)))
     if container_running(repo_root, "ospd-openvas"):
+        capability = command_runtime_scanner_capability_check(repo_root)
+        findings.append(finding(capability["status"], "ospd.capability-check", capability["summary"], details={"status": capability["status"], "findings": capability["findings"]}))
         ospd_logs = service_log_tail(repo_root, "ospd-openvas", lines=120)
         ospd_errors = [line for line in ospd_logs if "ERROR" in line]
         ospd_feed_errors = feed_signature_log_errors(ospd_logs)
@@ -2061,9 +2213,36 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
         findings.append(finding("pass" if scanners.returncode == 0 else "warn", "gvmd.scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"output_tail": output_tail(scanners.stdout, 80, [password])}))
         findings.append(scanner_registration_status(repo_root))
 
-    gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", "https://127.0.0.1:19392/"], repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Loopback HTTPS header probe exit code {gsad_http.returncode}.", details={"output_tail": output_tail(gsad_http.stdout, 80, [password])}))
+    gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", f"{gsad_base_url(repo_root)}/"], repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Configured HTTPS header probe exit code {gsad_http.returncode}.", details={"url": f"{gsad_base_url(repo_root)}/", "output_tail": output_tail(gsad_http.stdout, 80, [password])}))
     return make_result("runtime-app-smoke", repo_root, "Application runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
+
+
+def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    static_dir = gsad_static_dir(repo_root)
+    index_path = static_dir / "index.html"
+    config_path = static_dir / "config.js"
+    base_url = gsad_base_url(repo_root)
+    findings.append(finding("pass" if index_path.is_file() else "fail", "webui.static-index", "Staged GSA index.html exists." if index_path.is_file() else "Staged GSA index.html is missing; run just build-ui.", str(index_path)))
+    findings.append(finding("pass" if config_path.is_file() else "fail", "webui.static-config", "Staged GSA config.js exists." if config_path.is_file() else "Staged GSA config.js is missing; run just build-ui.", str(config_path)))
+
+    index_text = index_path.read_text(encoding="utf-8") if index_path.is_file() else ""
+    asset_rel = first_gsa_asset_rel(index_text)
+    findings.append(finding("pass" if asset_rel else "fail", "webui.static-asset-ref", f"Found GSA asset reference {asset_rel}." if asset_rel else "No GSA asset reference found in index.html.", str(index_path)))
+
+    index_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if index_http.returncode == 0 and '<div id="app">' in index_http.stdout else "fail", "webui.http-index", f"GSA index HTTP probe exit code {index_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(index_http.stdout, 40)}))
+
+    config_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/config.js"], repo_root, env=runtime_env(repo_root))
+    expected_api_server = f"apiServer: '{gsad_host(repo_root)}:{GSAD_PORT}'"
+    findings.append(finding("pass" if config_http.returncode == 0 and expected_api_server in config_http.stdout else "fail", "webui.http-config", f"GSA config.js HTTP probe exit code {config_http.returncode}.", details={"url": f"{base_url}/config.js", "expected": expected_api_server, "output_tail": output_tail(config_http.stdout, 40)}))
+
+    if asset_rel:
+        asset_http = run_command(["curl", "-kfsS", "--max-time", "10", "-o", "/dev/null", f"{base_url}/{asset_rel}"], repo_root, env=runtime_env(repo_root))
+        findings.append(finding("pass" if asset_http.returncode == 0 else "fail", "webui.http-asset", f"GSA asset HTTP probe exit code {asset_http.returncode}.", details={"url": f"{base_url}/{asset_rel}", "output_tail": output_tail(asset_http.stdout, 40)}))
+
+    return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), base_url])
 
 
 def command_down(repo_root: Path) -> dict[str, Any]:
@@ -2195,7 +2374,7 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     for tool in BASELINE_TOOLS:
         findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
-    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-app-up", "just runtime-app-smoke", "just runtime-app-down", "just gvmd-smoke"]}))
+    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-app-up", "just runtime-app-smoke", "just runtime-webui-smoke", "just runtime-app-down", "just gvmd-smoke"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
     return make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
@@ -2252,6 +2431,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-gmp-smoke", parents=[common], help="run authenticated GMP smoke over the runtime gvmd socket")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
+    subparsers.add_parser("runtime-scanner-capability-check", parents=[common], help="verify non-root OpenVAS raw-socket capabilities")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
     subparsers.add_parser("runtime-feed-import-init", parents=[common], help="import runtime feed copies into gvmd/OpenVAS state")
     subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight the fixed authorized full test scan")
@@ -2266,6 +2446,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
+    subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     subparsers.add_parser("gvmd-smoke", parents=[common], help="run a narrow gvmd runtime profile smoke")
     return parser
 
@@ -2318,6 +2499,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_gmp_smoke(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
+    elif args.command == "runtime-scanner-capability-check":
+        result = command_runtime_scanner_capability_check(repo_root)
     elif args.command == "runtime-feed-keyring-init":
         result = command_runtime_feed_keyring_init(repo_root)
     elif args.command == "runtime-feed-import-init":
@@ -2344,6 +2527,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_app_down(repo_root)
     elif args.command == "runtime-app-smoke":
         result = command_runtime_app_smoke(repo_root)
+    elif args.command == "runtime-webui-smoke":
+        result = command_runtime_webui_smoke(repo_root)
     elif args.command == "gvmd-smoke":
         result = command_gvmd_smoke(repo_root)
     else:

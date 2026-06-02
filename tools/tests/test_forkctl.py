@@ -36,6 +36,13 @@ assert FULL_TEST_SCAN_SPEC.loader is not None
 sys.modules["runtime_full_test_scan"] = runtime_full_test_scan
 FULL_TEST_SCAN_SPEC.loader.exec_module(runtime_full_test_scan)
 
+RUNTIME_REPORT_PATH = Path(__file__).resolve().parents[1] / "runtime_report.py"
+RUNTIME_REPORT_SPEC = importlib.util.spec_from_loader("runtime_report", SourceFileLoader("runtime_report", str(RUNTIME_REPORT_PATH)))
+runtime_report = importlib.util.module_from_spec(RUNTIME_REPORT_SPEC)
+assert RUNTIME_REPORT_SPEC.loader is not None
+sys.modules["runtime_report"] = runtime_report
+RUNTIME_REPORT_SPEC.loader.exec_module(runtime_report)
+
 
 class TurboVASCtlTests(unittest.TestCase):
     def test_component_registry_has_expected_components(self):
@@ -621,6 +628,149 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(payload["details"]["latest_report"]["result_count"], "23")
         self.assertIn("task_id=task-1", fake.filter_string)
 
+
+
+    def test_runtime_report_paths_live_under_runtime_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            self.assertEqual(turbovasctl.runtime_report_probe_path(root), root / "tools" / "runtime_report.py")
+            self.assertEqual(turbovasctl.report_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "reports")
+            self.assertIn("artifacts/reports", turbovasctl.RUNTIME_DIRS)
+
+    def test_runtime_report_parser_summarizes_results(self):
+        response = (
+            "<get_reports_response>"
+            "<report id=\"report-1\">"
+            "<name>2026-06-02T15:59:28Z</name>"
+            "<task id=\"task-1\"><name>scan task</name></task>"
+            "<report id=\"report-1\">"
+            "<scan_run_status>Done</scan_run_status>"
+            "<scan_start>2026-06-02T15:59:50Z</scan_start>"
+            "<scan_end>2026-06-02T16:02:15Z</scan_end>"
+            "<hosts><count>2</count></hosts>"
+            "<vulns><count>2</count></vulns>"
+            "<cves><count>1</count></cves>"
+            "<os><count>1</count></os>"
+            "<result_count><full>2</full></result_count>"
+            "<results start=\"1\" max=\"100\">"
+            "<result id=\"result-low\">"
+            "<name>ICMP Timestamp Reply Information Disclosure</name>"
+            "<host>192.168.178.1<hostname>router.local</hostname></host>"
+            "<port>general/icmp</port>"
+            "<nvt oid=\"1.2.3\"><name>ICMP Timestamp</name><family>General</family></nvt>"
+            "<threat>Low</threat><severity>2.1</severity>"
+            "<qod><value>80</value></qod>"
+            "<description>Timestamp reply was observed. This is a low severity finding.</description>"
+            "</result>"
+            "<result id=\"result-log\">"
+            "<name>OS Detection Consolidation and Reporting</name>"
+            "<host>192.168.178.42</host>"
+            "<port>general/tcp</port>"
+            "<nvt oid=\"1.2.4\"><name>OS Detection</name><family>Service detection</family></nvt>"
+            "<threat>Log</threat><severity>0.0</severity>"
+            "<qod><value>80</value></qod>"
+            "<description>Detected a host.</description>"
+            "</result>"
+            "</results>"
+            "</report>"
+            "</report>"
+            "</get_reports_response>"
+        )
+        listing = {
+            "id": "report-1",
+            "task_id": "task-1",
+            "result_count": "2",
+            "hosts_count": "2",
+            "vulns_count": "2",
+            "cves_count": "3",
+            "os_count": "1",
+        }
+        parsed, error = runtime_report.parse_report_payload(response, listing, top_limit=1, max_results=100)
+        self.assertIsNone(error)
+        self.assertEqual(parsed["report"]["id"], "report-1")
+        self.assertEqual(parsed["report"]["task_name"], "scan task")
+        self.assertEqual(parsed["report"]["counts"]["cves"], 3)
+        self.assertEqual(parsed["parsed_result_count"], 2)
+        self.assertTrue(parsed["export_complete"])
+        self.assertEqual(parsed["severity_counts"]["Low"], 1)
+        self.assertEqual(parsed["severity_counts"]["Log"], 1)
+        self.assertEqual(parsed["affected_hosts"][0]["host"], "192.168.178.1")
+        self.assertEqual(parsed["affected_hosts"][0]["hostnames"], ["router.local"])
+        self.assertEqual(parsed["top_results"][0]["id"], "result-low")
+        self.assertEqual(parsed["result_filter"], "apply_overrides=0 min_qod=0 first=1 rows=100 sort-reverse=severity")
+
+    def test_runtime_report_summary_defaults_to_latest_full_test_report(self):
+        report_response = (
+            "<get_reports_response>"
+            "<report id=\"report-1\">"
+            "<name>2026-06-02T15:59:28Z</name>"
+            "<task id=\"task-1\"><name>scan task</name></task>"
+            "<report id=\"report-1\">"
+            "<scan_run_status>Done</scan_run_status>"
+            "<scan_start>2026-06-02T15:59:50Z</scan_start>"
+            "<scan_end>2026-06-02T16:02:15Z</scan_end>"
+            "<hosts><count>1</count></hosts>"
+            "<vulns><count>1</count></vulns>"
+            "<cves><count>0</count></cves>"
+            "<os><count>0</count></os>"
+            "<result_count><full>1</full></result_count>"
+            "<results><result id=\"result-1\"><name>Finding</name><host>192.168.178.1</host><port>general/tcp</port><threat>Low</threat><severity>1.0</severity></result></results>"
+            "</report>"
+            "</report>"
+            "</get_reports_response>"
+        )
+
+        class FakeGMP:
+            def get_scan_configs(self):
+                return "<get_configs_response/>"
+
+            def get_port_lists(self):
+                return "<get_port_lists_response/>"
+
+            def get_scanners(self, details=True):
+                return "<get_scanners_response/>"
+
+            def get_targets(self, tasks=True):
+                return "<get_targets_response/>"
+
+            def get_tasks(self, details=True, ignore_pagination=True):
+                return (
+                    "<get_tasks_response>"
+                    "<task id=\"task-1\">"
+                    f"<name>{runtime_full_test_scan.FULL_TEST_TASK_NAME}</name>"
+                    "<status>Done</status>"
+                    "</task>"
+                    "</get_tasks_response>"
+                )
+
+            def get_reports(self, filter_string=None, details=True, ignore_pagination=True):
+                self.latest_filter = filter_string
+                return (
+                    "<get_reports_response>"
+                    "<report id=\"report-1\">"
+                    "<task id=\"task-1\"/>"
+                    "<report id=\"report-1\"><scan_run_status>Done</scan_run_status><result_count><full>1</full></result_count></report>"
+                    "</report>"
+                    "</get_reports_response>"
+                )
+
+            def get_report(self, report_id, filter_string=None, details=True, ignore_pagination=False):
+                self.report_id = report_id
+                self.report_filter = filter_string
+                return report_response
+
+        fake = FakeGMP()
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = runtime_report.command_summary(fake, Path(tmp), report_id=None, max_results=100, top_results_limit=1)
+            artifact_exists = (Path(tmp) / "summary.json").is_file()
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["details"]["report"]["id"], "report-1")
+        self.assertEqual(payload["details"]["top_results"][0]["id"], "result-1")
+        self.assertEqual(fake.report_id, "report-1")
+        self.assertIn("task_id=task-1", fake.latest_filter)
+        self.assertIn("rows=100", fake.report_filter)
+        self.assertTrue(artifact_exists)
 
 
 if __name__ == "__main__":

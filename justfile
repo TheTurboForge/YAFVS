@@ -18,8 +18,8 @@ inventory:
 doctor:
     @tools/turbovasctl doctor
 
-license-report:
-    @tools/turbovasctl license-report
+license-report *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl license-report "$@"
 
 deps component="":
     @if [ -n "{{component}}" ]; then tools/turbovasctl deps "{{component}}"; else tools/turbovasctl deps; fi

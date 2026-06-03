@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 TurboVAS contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import importlib.util
 import json
 import sys
@@ -91,6 +94,44 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             missing = [item for item in result["findings"] if item["status"] == "fail"]
             self.assertEqual(len(missing), 12)
+
+    def test_license_helpers_detect_modified_imported_notice_gaps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "components" / "gvmd" / "src" / "example.c"
+            data = root / "components" / "gsa" / "package.json"
+            source.parent.mkdir(parents=True)
+            data.parent.mkdir(parents=True)
+            source.write_text("/* SPDX-FileCopyrightText: 2024 Greenbone AG\n *\n * SPDX-License-Identifier: AGPL-3.0-or-later\n */\n", encoding="utf-8")
+            data.write_text("{}\n", encoding="utf-8")
+            rows = [("M", "components/gvmd/src/example.c"), ("M", "components/gsa/package.json")]
+            missing, review = turbovasctl.modified_imported_notice_gaps(root, rows)
+            self.assertEqual(missing, ["components/gvmd/src/example.c"])
+            self.assertEqual(review, ["components/gsa/package.json"])
+            source.write_text(source.read_text(encoding="utf-8").replace(" *\n", " * Modified by TurboVAS contributors, 2026.\n *\n", 1), encoding="utf-8")
+            missing, review = turbovasctl.modified_imported_notice_gaps(root, rows)
+            self.assertEqual(missing, [])
+            self.assertEqual(review, ["components/gsa/package.json"])
+
+    def test_license_helpers_require_spdx_for_new_turbovas_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tool = root / "tools" / "example.py"
+            imported = root / "components" / "pg-gvm" / "src" / "array.c"
+            tool.parent.mkdir(parents=True)
+            imported.parent.mkdir(parents=True)
+            tool.write_text("print('missing header')\n", encoding="utf-8")
+            imported.write_text("/* upstream imported file */\n", encoding="utf-8")
+            rows = [("A", "tools/example.py"), ("A", "components/pg-gvm/src/array.c")]
+            self.assertEqual(turbovasctl.added_turbovas_spdx_gaps(root, rows), ["tools/example.py"])
+            tool.write_text("# SPDX-FileCopyrightText: 2026 TurboVAS contributors\n# SPDX-License-Identifier: GPL-3.0-or-later\n\nprint('ok')\n", encoding="utf-8")
+            self.assertEqual(turbovasctl.added_turbovas_spdx_gaps(root, rows), [])
+
+    def test_comment_notice_supported_distinguishes_data_files(self):
+        self.assertTrue(turbovasctl.comment_notice_supported("components/gvmd/src/manage.c"))
+        self.assertTrue(turbovasctl.comment_notice_supported("components/openvas-scanner/compose/tests/smoketest/Makefile"))
+        self.assertFalse(turbovasctl.comment_notice_supported("components/gsa/package-lock.json"))
+        self.assertFalse(turbovasctl.comment_notice_supported("components/openvas-scanner/rust/src/openvasd/config/snapshots/default.snap"))
 
     def test_nested_git_detection(self):
         with tempfile.TemporaryDirectory() as tmp:

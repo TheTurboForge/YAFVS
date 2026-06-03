@@ -1,3 +1,5 @@
+<!-- Modified by TurboVAS contributors, 2026. -->
+
 # OpenVAS Daemon
 
 Is the implementation for [scanner-api](https://greenbone.github.io/scanner-api/).

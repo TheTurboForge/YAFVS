@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TurboVAS contributors
+// SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
+
 use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,5 @@
+<!-- Modified by TurboVAS contributors, 2026. -->
+
 # Naming Conventions <!-- omit in toc -->
 
 - [Modules](#modules)

@@ -1,3 +1,4 @@
+# Modified by TurboVAS contributors, 2026.
 # Openvasd contains several modes to control the behavior of it.
 # Service enables nasl and notus feed observations all endpoints.
 mode = "service"

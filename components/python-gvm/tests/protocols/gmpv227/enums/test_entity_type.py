@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2025 Greenbone AG
+# Modified by TurboVAS contributors, 2026.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #

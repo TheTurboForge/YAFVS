@@ -1,3 +1,5 @@
+# Modified by TurboVAS contributors, 2026.
+
 [authentication]
 jwt_access_duration = 60
 jwt_secret_type = ecdsa

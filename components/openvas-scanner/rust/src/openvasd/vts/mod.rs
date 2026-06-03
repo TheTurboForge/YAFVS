@@ -1,3 +1,4 @@
+/* Modified by TurboVAS contributors, 2026. */
 use std::io::BufReader;
 use std::sync::RwLock;
 use std::{

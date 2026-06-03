@@ -1,3 +1,4 @@
+/* Modified by TurboVAS contributors, 2026. */
 use std::path::PathBuf;
 
 use crate::vts::FeedHashes;

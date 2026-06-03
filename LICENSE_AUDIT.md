@@ -38,6 +38,7 @@ Original TurboVAS-created root tooling and public documentation use `GPL-3.0-or-
 - Treat feed content terms separately from source code licensing.
 - Treat development feed caches and runtime feed copies as local, untracked runtime state; do not commit, bundle, package, or redistribute feed content without a separate feed-terms review.
 - Mark ambiguous cases for human/legal review before public release or distribution.
+- Run `just license-report` during license-sensitive work. The report checks expected component license files, TurboVAS modification notices on modified imported source files, SPDX headers on new TurboVAS-created files, and accidental tracking of runtime feed/cache content.
 
 ## Modification Notice Policy
 
@@ -62,6 +63,11 @@ the file lives. If the governing license is unclear, especially in mixed-license
 areas such as `components/openvas-scanner`, stop and review before adding the file.
 Root-level TurboVAS-only tooling and public documentation currently use
 `GPL-3.0-or-later` as the provisional default.
+
+Some modified imported data or generated files do not safely support comments,
+for example JSON locale/package files or test snapshots. These are reviewed by
+path in `just license-report` instead of receiving syntactically invalid
+file-level comments.
 
 ## Review Items
 

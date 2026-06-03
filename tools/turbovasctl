@@ -24,6 +24,27 @@ from typing import Any, Iterable
 
 STATUSES = ("pass", "warn", "fail")
 EXPECTED_ROOT_DOCS = ("README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md")
+IMPORT_BASELINE_COMMIT = "def84d156dd45c27cad0a75bc2302ce151585d3c"
+TURBOVAS_MODIFICATION_NOTICE = "Modified by TurboVAS contributors, 2026."
+COMMENT_NOTICE_SUFFIXES = frozenset({".c", ".h", ".js", ".jsx", ".ts", ".tsx", ".py", ".cmake", ".rs", ".sh", ".sql", ".xml", ".in", ".md", ".txt", ".toml", ".yml", ".yaml"})
+COMMENT_NOTICE_NAMES = frozenset({"Makefile", ".dockerignore", ".gitignore"})
+IMPORTED_ADDED_PREFIXES = ("components/pg-gvm/",)
+FEED_CONTENT_TRACKED_PREFIXES = (
+    "TurboVAS-runtime/",
+    "feed-cache/",
+    "feeds/openvas/plugins/",
+    "feeds/notus/",
+    "feeds/gvm/scap-data/",
+    "feeds/gvm/cert-data/",
+    "feeds/gvm/data-objects/",
+)
+PUBLIC_READINESS_LICENSE_ITEMS = (
+    "final license decision for original TurboVAS-only files and docs",
+    "AGPL source-publication procedure for network services",
+    "openvas-smb Samba-derived provenance review",
+    "Greenbone Community Feed content terms before bundling or redistribution",
+    "release-time secret scan, attribution review, and source-offer/publication checklist",
+)
 BASELINE_TOOLS = (
     "git",
     "rg",
@@ -302,6 +323,30 @@ def run_git(repo_root: Path, args: list[str]) -> str | None:
     except (OSError, subprocess.CalledProcessError):
         return None
     return result.stdout.strip()
+
+
+def git_name_status(repo_root: Path, base: str, pathspecs: tuple[str, ...] = ()) -> list[tuple[str, str]] | None:
+    args = ["diff", "--name-status", f"{base}..HEAD"]
+    if pathspecs:
+        args.append("--")
+        args.extend(pathspecs)
+    output = run_git(repo_root, args)
+    if output is None:
+        return None
+    rows: list[tuple[str, str]] = []
+    for line in output.splitlines():
+        parts = line.split("	")
+        if len(parts) < 2:
+            continue
+        rows.append((parts[0], parts[-1]))
+    return rows
+
+
+def git_tracked_files(repo_root: Path) -> list[str] | None:
+    output = run_git(repo_root, ["ls-files"])
+    if output is None:
+        return None
+    return [line for line in output.splitlines() if line]
 
 
 def run_command(
@@ -1355,6 +1400,67 @@ def command_inventory(repo_root: Path, scope: str | None = None) -> dict[str, An
     return make_result("inventory", repo_root, f"Inventory contains {len(rows)} expected component(s).", findings)
 
 
+def comment_notice_supported(relative_path: str) -> bool:
+    path = Path(relative_path)
+    return path.name in COMMENT_NOTICE_NAMES or path.suffix in COMMENT_NOTICE_SUFFIXES
+
+
+def file_head(path: Path, limit: int = 5000) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")[:limit]
+    except OSError:
+        return ""
+
+
+def has_spdx_header(path: Path) -> bool:
+    head = file_head(path, 2000)
+    return "SPDX-FileCopyrightText:" in head and "SPDX-License-Identifier:" in head
+
+
+def has_turbovas_modification_notice(path: Path) -> bool:
+    return TURBOVAS_MODIFICATION_NOTICE in file_head(path)
+
+
+def imported_added_path(relative_path: str) -> bool:
+    return any(relative_path.startswith(prefix) for prefix in IMPORTED_ADDED_PREFIXES)
+
+
+def modified_imported_notice_gaps(repo_root: Path, rows: list[tuple[str, str]]) -> tuple[list[str], list[str]]:
+    missing: list[str] = []
+    review: list[str] = []
+    for status, relative_path in rows:
+        if status != "M":
+            continue
+        path = repo_root / relative_path
+        if not path.is_file():
+            continue
+        if has_turbovas_modification_notice(path):
+            continue
+        if comment_notice_supported(relative_path):
+            missing.append(relative_path)
+        else:
+            review.append(relative_path)
+    return missing, review
+
+
+def added_turbovas_spdx_gaps(repo_root: Path, rows: list[tuple[str, str]]) -> list[str]:
+    missing: list[str] = []
+    for status, relative_path in rows:
+        if not status.startswith("A") or imported_added_path(relative_path):
+            continue
+        path = repo_root / relative_path
+        if path.is_file() and not has_spdx_header(path):
+            missing.append(relative_path)
+    return missing
+
+
+def tracked_feed_content_paths(repo_root: Path) -> list[str] | None:
+    tracked = git_tracked_files(repo_root)
+    if tracked is None:
+        return None
+    return [path for path in tracked if any(path.startswith(prefix) for prefix in FEED_CONTENT_TRACKED_PREFIXES)]
+
+
 def command_license_report(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     for component in COMPONENTS:
@@ -1362,8 +1468,58 @@ def command_license_report(repo_root: Path) -> dict[str, Any]:
         for license_file in component.licenses:
             relative = f"{component.path}/{license_file}"
             findings.append(finding("pass" if (component_path / license_file).is_file() else "fail", "license.file", f"{component.name}: expected {license_file}", relative))
-    findings.append(finding("warn", "license.scope", "This report checks preserved license/provenance files only; it is not a legal conclusion."))
-    return make_result("license-report", repo_root, "License/provenance file presence checked.", findings)
+
+    all_rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT)
+    rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT, ("components",))
+    if rows is None:
+        findings.append(finding("warn", "license.git-history", f"Could not compare against import baseline {IMPORT_BASELINE_COMMIT}."))
+    else:
+        missing_notices, review_notices = modified_imported_notice_gaps(repo_root, rows)
+        findings.append(
+            finding(
+                "pass" if not missing_notices else "fail",
+                "license.modified-imported-notices",
+                "Modified imported files have TurboVAS modification notices." if not missing_notices else "Modified imported files are missing TurboVAS modification notices.",
+                details={"baseline": IMPORT_BASELINE_COMMIT, "missing": missing_notices},
+            )
+        )
+        findings.append(
+            finding(
+                "pass" if not review_notices else "warn",
+                "license.modified-imported-review",
+                "No modified imported no-comment data files need notice review." if not review_notices else "Modified imported data/generated files cannot safely receive comments; review explicitly.",
+                details={"paths": review_notices},
+            )
+        )
+
+    if all_rows is None:
+        findings.append(finding("warn", "license.new-file-spdx", f"Could not compare new files against import baseline {IMPORT_BASELINE_COMMIT}."))
+    else:
+        missing_spdx = added_turbovas_spdx_gaps(repo_root, all_rows)
+        findings.append(
+            finding(
+                "pass" if not missing_spdx else "fail",
+                "license.new-file-spdx",
+                "New TurboVAS-created files have SPDX copyright and license headers." if not missing_spdx else "New TurboVAS-created files are missing SPDX copyright or license headers.",
+                details={"missing": missing_spdx},
+            )
+        )
+
+    tracked_feed = tracked_feed_content_paths(repo_root)
+    if tracked_feed is None:
+        findings.append(finding("warn", "license.feed-content-tracking", "Could not list tracked files to verify feed content is untracked."))
+    else:
+        findings.append(
+            finding(
+                "pass" if not tracked_feed else "fail",
+                "license.feed-content-tracking",
+                "No runtime feed/cache content is tracked in Git." if not tracked_feed else "Runtime feed/cache content appears to be tracked in Git.",
+                details={"tracked_paths": tracked_feed},
+            )
+        )
+
+    findings.append(finding("warn", "license.public-readiness", "Public-release license review items remain open; this report is engineering hygiene, not legal advice.", details={"review_items": list(PUBLIC_READINESS_LICENSE_ITEMS)}))
+    return make_result("license-report", repo_root, "License/provenance checks completed.", findings)
 
 
 def command_deps(repo_root: Path, component: str | None = None) -> dict[str, Any]:

@@ -1,3 +1,5 @@
+<!-- Modified by TurboVAS contributors, 2026. -->
+
 ![Greenbone Logo](https://www.greenbone.net/wp-content/uploads/gb_logo_resilience_horizontal.png)
 
 # GVM Example Scripts

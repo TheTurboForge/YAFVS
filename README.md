@@ -17,6 +17,12 @@ Imported upstream components live under `components/`.
 
 See `UPSTREAMS.md` for source provenance and imported commit IDs. See `LICENSE_AUDIT.md` for the initial license and provenance audit notes.
 
+## User Manual
+
+See `docs/USER_MANUAL.md` for the current operator manual, including setup
+orientation, security boundaries, scope-based reporting, and major intentional
+changes from inherited OpenVAS behavior.
+
 ## Operating Model
 
 TurboVAS is an opinionated scanner for vulnerability management operators. It is

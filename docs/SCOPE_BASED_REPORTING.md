@@ -14,6 +14,9 @@ scanner reachability, maintenance windows, port profiles, or scan constraints.
 
 TurboVAS treats those concerns as different layers.
 
+For operator usage, see `USER_MANUAL.md`. This document focuses on the product
+model and implementation rationale.
+
 ## Core Concepts
 
 ### Target

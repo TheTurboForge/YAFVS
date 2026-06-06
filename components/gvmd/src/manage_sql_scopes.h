@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 TurboVAS contributors
+/* SPDX-FileCopyrightText: 2026 TurboVAS contributors
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */

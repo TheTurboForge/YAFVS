@@ -166,6 +166,8 @@ export const DEFAULT_FILTER_SETTINGS: Record<
   result: '739ab810-163d-11e3-9af6-406186ea4fc5',
   scanconfig: '1a9fbd91-0182-44cd-bc88-a13a9b3b1bef',
   scanner: 'ba00fe91-bdce-483c-b8df-2372e9774ad6',
+  scope: '6a0f5d70-5c88-47cb-aa31-9c3f0c73c2c6',
+  scopereport: '7e30d82c-7552-4e26-8b21-ff594971b0a4',
   schedule: 'a83e321b-d994-4ae8-beec-bfb5fe3e7336',
   tag: '108eea3b-fc61-483c-9da9-046762f137a8',
   target: '236e2e41-9771-4e7a-8124-c432045985e0',

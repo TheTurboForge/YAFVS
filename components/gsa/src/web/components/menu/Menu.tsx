@@ -33,8 +33,15 @@ const Menu = () => {
   const location = useLocation();
 
   const reportsMatch = useMatch('/reports');
+  const scopeReportMatch = useMatch('/scope-report/*');
   const reportMatch = useMatch('/report/*');
-  const isReportsActive = Boolean(reportsMatch || reportMatch);
+  const isReportsActive = Boolean(
+    reportsMatch || scopeReportMatch || reportMatch,
+  );
+
+  const scopesMatch = useMatch('/scopes');
+  const scopeMatch = useMatch('/scope/*');
+  const isScopesActive = Boolean(scopesMatch || scopeMatch);
 
   const resultsMatch = useMatch('/results');
   const resultMatch = useMatch('/result/*');
@@ -163,6 +170,8 @@ const Menu = () => {
 
   const mayOpScans = mayAccessAny([
     'task',
+    'scope',
+    'scopereport',
     'report',
     'result',
     'vulnerability',
@@ -194,6 +203,7 @@ const Menu = () => {
         key: 'scans',
         defaultOpened: [
           isTasksActive,
+          isScopesActive,
           isReportsActive,
           isResultsActive,
           isVulnerabilitiesActive,
@@ -206,7 +216,13 @@ const Menu = () => {
             isPathMatch: Boolean(tasksMatch),
             active: isTasksActive,
           },
-          capabilities.mayAccess('report') && {
+          capabilities.mayAccess('scope') && {
+            label: _('Scopes'),
+            to: '/scopes',
+            isPathMatch: Boolean(scopesMatch),
+            active: isScopesActive,
+          },
+          capabilities.mayAccess('scopereport') && {
             label: _('Reports'),
             to: '/reports',
             isPathMatch: Boolean(reportsMatch),

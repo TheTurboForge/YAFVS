@@ -123,6 +123,34 @@ get_reports_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 
 char *
+create_scope_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                  gsad_command_response_data_t *);
+char *
+modify_scope_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                  gsad_command_response_data_t *);
+char *
+delete_scope_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                  gsad_command_response_data_t *);
+char *
+generate_scope_report_gmp (gvm_connection_t *, gsad_credentials_t *,
+                           params_t *, gsad_command_response_data_t *);
+char *
+delete_scope_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                         gsad_command_response_data_t *);
+char *
+get_scope_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+               gsad_command_response_data_t *);
+char *
+get_scopes_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                gsad_command_response_data_t *);
+char *
+get_scope_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                      gsad_command_response_data_t *);
+char *
+get_scope_reports_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
+                       gsad_command_response_data_t *);
+
+char *
 report_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 

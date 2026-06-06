@@ -114,6 +114,7 @@
 #include "manage_resources.h"
 #include "manage_runtime_flags.h"
 #include "manage_settings.h"
+#include "manage_sql_scopes.h"
 #include "manage_schedules.h"
 #include "manage_tags.h"
 #include "manage_targets.h"
@@ -156,7 +157,8 @@
  */
 #define G_LOG_DOMAIN "md    gmp"
 
-
+
+
 /* Static headers. */
 
 /** @todo Exported for manage_sql.c. */
@@ -164,7 +166,8 @@ void
 buffer_results_xml (GString *, iterator_t *, task_t, int, int, int,
                     int, int, const char *, iterator_t *, int, int, int, int);
 
-
+
+
 /* Helper functions. */
 
 /**
@@ -383,7 +386,8 @@ check_public_key (const char *key_str)
   return ret;
 }
 
-
+
+
 /* GMP parser. */
 
 static int
@@ -446,7 +450,8 @@ command_disabled (gmp_parser_t *gmp_parser, const gchar *name)
   return 0;
 }
 
-
+
+
 /* Command data passed between parser callbacks. */
 
 /**
@@ -2902,6 +2907,75 @@ stop_task_data_reset (stop_task_data_t *data)
 }
 
 /**
+ * @brief Command data for scope commands.
+ */
+typedef struct
+{
+  char *scope_id;                  ///< ID of scope.
+  char *scope_report_id;           ///< ID of scope report.
+  char *name;                      ///< Scope name.
+  char *comment;                   ///< Scope comment.
+  char *protection_requirement;    ///< Scope protection requirement.
+  char *target_ids;                ///< Comma or whitespace separated targets.
+  char *host_ids;                  ///< Comma or whitespace separated hosts.
+  int details;                     ///< Whether to include details.
+} scope_command_data_t;
+
+/**
+ * @brief Reset command data.
+ *
+ * @param[in]  data  Command data.
+ */
+static void
+scope_command_data_reset (scope_command_data_t *data)
+{
+  free (data->scope_id);
+  free (data->scope_report_id);
+  free (data->name);
+  free (data->comment);
+  free (data->protection_requirement);
+  free (data->target_ids);
+  free (data->host_ids);
+
+  memset (data, 0, sizeof (scope_command_data_t));
+}
+
+static void
+scope_command_data_start (scope_command_data_t *data,
+                          const gchar **attribute_names,
+                          const gchar **attribute_values,
+                          int default_details)
+{
+  const gchar *attribute;
+
+  scope_command_data_reset (data);
+  data->details = default_details;
+
+  if (find_attribute (attribute_names, attribute_values, "scope_id",
+                      &attribute))
+    data->scope_id = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "scope_report_id",
+                      &attribute))
+    data->scope_report_id = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "name", &attribute))
+    data->name = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "comment", &attribute))
+    data->comment = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values,
+                      "protection_requirement", &attribute))
+    data->protection_requirement = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "target_ids",
+                      &attribute))
+    data->target_ids = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "host_ids",
+                      &attribute))
+    data->host_ids = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "details",
+                      &attribute))
+    data->details = strcmp (attribute, "0") != 0;
+}
+
+/**
  * @brief Command data for the test_alert command.
  */
 typedef struct
@@ -3018,6 +3092,7 @@ typedef union
   create_override_data_t create_override;             ///< create_override
   create_port_range_data_t create_port_range;         ///< create_port_range
   create_report_data_t create_report;                 ///< create_report
+  scope_command_data_t create_scope;                  ///< create_scope
   create_scanner_data_t create_scanner;               ///< create_scanner
   create_schedule_data_t create_schedule;             ///< create_schedule
   create_tag_data_t create_tag;                       ///< create_tag
@@ -3034,6 +3109,8 @@ typedef union
   delete_port_range_data_t delete_port_range;         ///< delete_port_range
   delete_report_data_t delete_report;                 ///< delete_report
   delete_report_format_data_t delete_report_format;   ///< delete_report_format
+  scope_command_data_t delete_scope;                  ///< delete_scope
+  scope_command_data_t delete_scope_report;           ///< delete_scope_report
   delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_tag_data_t delete_tag;                       ///< delete_tag
@@ -3058,6 +3135,10 @@ typedef union
   get_report_formats_data_t get_report_formats;       ///< get_report_formats
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
   get_results_data_t get_results;                     ///< get_results
+  scope_command_data_t get_scope;                     ///< get_scope
+  scope_command_data_t get_scope_report;              ///< get_scope_report
+  scope_command_data_t get_scope_reports;             ///< get_scope_reports
+  scope_command_data_t get_scopes;                    ///< get_scopes
   get_schedules_data_t get_schedules;                 ///< get_schedules
   get_scanners_data_t get_scanners;                   ///< get_scanners
   get_settings_data_t get_settings;                   ///< get_settings
@@ -3076,6 +3157,7 @@ typedef union
   modify_filter_data_t modify_filter;                 ///< modify_filter
   modify_port_list_data_t modify_port_list;           ///< modify_port_list
   modify_report_format_data_t modify_report_format;   ///< modify_report_format
+  scope_command_data_t modify_scope;                  ///< modify_scope
   modify_scanner_data_t modify_scanner;               ///< modify_scanner
   modify_schedule_data_t modify_schedule;             ///< modify_schedule
   modify_setting_data_t modify_setting;               ///< modify_setting
@@ -3088,6 +3170,7 @@ typedef union
   resume_task_data_t resume_task;                     ///< resume_task
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
+  scope_command_data_t generate_scope_report;         ///< generate_scope_report
   test_alert_data_t test_alert;                       ///< test_alert
   verify_report_format_data_t verify_report_format;   ///< verify_report_format
   verify_scanner_data_t verify_scanner;               ///< verify_scanner
@@ -3105,7 +3188,8 @@ command_data_init (command_data_t *data)
   memset (data, 0, sizeof (command_data_t));
 }
 
-
+
+
 /* Global variables. */
 
 /**
@@ -3154,6 +3238,12 @@ static create_port_range_data_t *create_port_range_data
  */
 static create_report_data_t *create_report_data
  = (create_report_data_t*) &(command_data.create_report);
+
+/**
+ * @brief Parser callback data for CREATE_SCOPE.
+ */
+static scope_command_data_t *create_scope_data
+ = &(command_data.create_scope);
 
 /**
  * @brief Parser callback data for CREATE_SCANNER.
@@ -3250,6 +3340,18 @@ static delete_report_data_t *delete_report_data
  */
 static delete_report_format_data_t *delete_report_format_data
  = (delete_report_format_data_t*) &(command_data.delete_report_format);
+
+/**
+ * @brief Parser callback data for DELETE_SCOPE.
+ */
+static scope_command_data_t *delete_scope_data
+ = &(command_data.delete_scope);
+
+/**
+ * @brief Parser callback data for DELETE_SCOPE_REPORT.
+ */
+static scope_command_data_t *delete_scope_report_data
+ = &(command_data.delete_scope_report);
 
 /**
  * @brief Parser callback data for DELETE_SCANNER.
@@ -3396,6 +3498,30 @@ static get_results_data_t *get_results_data
  = &(command_data.get_results);
 
 /**
+ * @brief Parser callback data for GET_SCOPE.
+ */
+static scope_command_data_t *get_scope_data
+ = &(command_data.get_scope);
+
+/**
+ * @brief Parser callback data for GET_SCOPE_REPORT.
+ */
+static scope_command_data_t *get_scope_report_data
+ = &(command_data.get_scope_report);
+
+/**
+ * @brief Parser callback data for GET_SCOPE_REPORTS.
+ */
+static scope_command_data_t *get_scope_reports_data
+ = &(command_data.get_scope_reports);
+
+/**
+ * @brief Parser callback data for GET_SCOPES.
+ */
+static scope_command_data_t *get_scopes_data
+ = &(command_data.get_scopes);
+
+/**
  * @brief Parser callback data for GET_scannerS.
  */
 static get_scanners_data_t *get_scanners_data
@@ -3504,6 +3630,12 @@ static modify_report_format_data_t *modify_report_format_data
  = &(command_data.modify_report_format);
 
 /**
+ * @brief Parser callback data for MODIFY_SCOPE.
+ */
+static scope_command_data_t *modify_scope_data
+ = &(command_data.modify_scope);
+
+/**
  * @brief Parser callback data for MODIFY_SCANNER.
  */
 static modify_scanner_data_t *modify_scanner_data
@@ -3574,6 +3706,12 @@ static stop_task_data_t *stop_task_data
  = (stop_task_data_t*) &(command_data.stop_task);
 
 /**
+ * @brief Parser callback data for GENERATE_SCOPE_REPORT.
+ */
+static scope_command_data_t *generate_scope_report_data
+ = &(command_data.generate_scope_report);
+
+/**
  * @brief Parser callback data for TEST_ALERT.
  */
 static test_alert_data_t *test_alert_data
@@ -3622,7 +3760,8 @@ xml_context = NULL;
  */
 static GMarkupParser xml_parser;
 
-
+
+
 /* Client state. */
 
 /**
@@ -3808,6 +3947,7 @@ typedef enum
   CLIENT_CREATE_REPORT_TASK,
   CLIENT_CREATE_REPORT_TASK_COMMENT,
   CLIENT_CREATE_REPORT_TASK_NAME,
+  CLIENT_CREATE_SCOPE,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
   CLIENT_CREATE_SCANNER_COPY,
@@ -3901,6 +4041,8 @@ typedef enum
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_REPORT_CONFIG,
   CLIENT_DELETE_REPORT_FORMAT,
+  CLIENT_DELETE_SCOPE,
+  CLIENT_DELETE_SCOPE_REPORT,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TAG,
@@ -3952,6 +4094,10 @@ typedef enum
   CLIENT_GET_REPORT_VULNS,
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_RESULTS,
+  CLIENT_GET_SCOPE,
+  CLIENT_GET_SCOPE_REPORT,
+  CLIENT_GET_SCOPE_REPORTS,
+  CLIENT_GET_SCOPES,
   CLIENT_GET_SCANNERS,
   CLIENT_GET_SCHEDULES,
   CLIENT_GET_SETTINGS,
@@ -4050,6 +4196,7 @@ typedef enum
   CLIENT_MODIFY_REPORT_FORMAT_PARAM_NAME,
   CLIENT_MODIFY_REPORT_FORMAT_PARAM_VALUE,
   CLIENT_MODIFY_REPORT_FORMAT_SUMMARY,
+  CLIENT_MODIFY_SCOPE,
   CLIENT_MODIFY_SCANNER,
   CLIENT_MODIFY_SCANNER_COMMENT,
   CLIENT_MODIFY_SCANNER_NAME,
@@ -4128,6 +4275,7 @@ typedef enum
   CLIENT_MOVE_TASK,
   CLIENT_RESTORE,
   CLIENT_RESUME_TASK,
+  CLIENT_GENERATE_SCOPE_REPORT,
   CLIENT_RUN_WIZARD,
   CLIENT_RUN_WIZARD_MODE,
   CLIENT_RUN_WIZARD_NAME,
@@ -4165,7 +4313,8 @@ set_client_state (client_state_t state)
   g_debug ("   client state set: %i", client_state);
 }
 
-
+
+
 /* XML parser handlers. */
 
 /**
@@ -4386,6 +4535,12 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                         attribute_values);
             set_client_state (CLIENT_CREATE_REPORT_FORMAT);
           }
+        else if (strcasecmp ("CREATE_SCOPE", element_name) == 0)
+          {
+            scope_command_data_start (create_scope_data, attribute_names,
+                                      attribute_values, 0);
+            set_client_state (CLIENT_CREATE_SCOPE);
+          }
         else if (strcasecmp ("CREATE_SCANNER", element_name) == 0)
           set_client_state (CLIENT_CREATE_SCANNER);
         else if (strcasecmp ("CREATE_SCHEDULE", element_name) == 0)
@@ -4542,6 +4697,18 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_report_format_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_REPORT_FORMAT);
+          }
+        else if (strcasecmp ("DELETE_SCOPE", element_name) == 0)
+          {
+            scope_command_data_start (delete_scope_data, attribute_names,
+                                      attribute_values, 0);
+            set_client_state (CLIENT_DELETE_SCOPE);
+          }
+        else if (strcasecmp ("DELETE_SCOPE_REPORT", element_name) == 0)
+          {
+            scope_command_data_start (delete_scope_report_data, attribute_names,
+                                      attribute_values, 0);
+            set_client_state (CLIENT_DELETE_SCOPE_REPORT);
           }
         else if (strcasecmp ("DELETE_SCANNER", element_name) == 0)
           {
@@ -5133,6 +5300,30 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
 
             set_client_state (CLIENT_GET_RESULTS);
           }
+        else if (strcasecmp ("GET_SCOPE", element_name) == 0)
+          {
+            scope_command_data_start (get_scope_data, attribute_names,
+                                      attribute_values, 1);
+            set_client_state (CLIENT_GET_SCOPE);
+          }
+        else if (strcasecmp ("GET_SCOPE_REPORT", element_name) == 0)
+          {
+            scope_command_data_start (get_scope_report_data, attribute_names,
+                                      attribute_values, 1);
+            set_client_state (CLIENT_GET_SCOPE_REPORT);
+          }
+        else if (strcasecmp ("GET_SCOPE_REPORTS", element_name) == 0)
+          {
+            scope_command_data_start (get_scope_reports_data, attribute_names,
+                                      attribute_values, 0);
+            set_client_state (CLIENT_GET_SCOPE_REPORTS);
+          }
+        else if (strcasecmp ("GET_SCOPES", element_name) == 0)
+          {
+            scope_command_data_start (get_scopes_data, attribute_names,
+                                      attribute_values, 0);
+            set_client_state (CLIENT_GET_SCOPES);
+          }
         else if (strcasecmp ("GET_SCANNERS", element_name) == 0)
           {
             get_data_parse_attributes (&get_scanners_data->get, "scanner",
@@ -5430,6 +5621,12 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_report_format_data->report_format_id);
             set_client_state (CLIENT_MODIFY_REPORT_FORMAT);
           }
+        else if (strcasecmp ("MODIFY_SCOPE", element_name) == 0)
+          {
+            scope_command_data_start (modify_scope_data, attribute_names,
+                                      attribute_values, 0);
+            set_client_state (CLIENT_MODIFY_SCOPE);
+          }
         else if (strcasecmp ("MODIFY_SCANNER", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "scanner_id",
@@ -5502,6 +5699,12 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "task_id",
                               &resume_task_data->task_id);
             set_client_state (CLIENT_RESUME_TASK);
+          }
+        else if (strcasecmp ("GENERATE_SCOPE_REPORT", element_name) == 0)
+          {
+            scope_command_data_start (generate_scope_report_data,
+                                      attribute_names, attribute_values, 0);
+            set_client_state (CLIENT_GENERATE_SCOPE_REPORT);
           }
         else if (strcasecmp ("RUN_WIZARD", element_name) == 0)
           {
@@ -17747,6 +17950,268 @@ gmp_xml_handle_result ()
  * @param[in]  error             Error parameter.
  */
 static void
+handle_create_scope (gmp_parser_t *gmp_parser, GError **error)
+{
+  char *scope_id = NULL;
+
+  switch (create_scope (create_scope_data->name,
+                        create_scope_data->comment,
+                        create_scope_data->protection_requirement,
+                        create_scope_data->target_ids,
+                        create_scope_data->host_ids,
+                        &scope_id))
+    {
+      case 0:
+        SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_scope"),
+                                 scope_id);
+        break;
+      case 1:
+        SEND_TO_CLIENT_OR_FAIL
+          (XML_ERROR_SYNTAX ("create_scope", "A name attribute is required"));
+        break;
+      case 3:
+        SEND_TO_CLIENT_OR_FAIL
+          (XML_ERROR_SYNTAX ("create_scope",
+                             "Invalid protection_requirement"));
+        break;
+      case 4:
+        SEND_TO_CLIENT_OR_FAIL
+          (XML_ERROR_SYNTAX ("create_scope", "Invalid target_ids"));
+        break;
+      case 5:
+        SEND_TO_CLIENT_OR_FAIL
+          (XML_ERROR_SYNTAX ("create_scope", "Invalid host_ids"));
+        break;
+      case 99:
+        SEND_TO_CLIENT_OR_FAIL
+          (XML_ERROR_SYNTAX ("create_scope", "Permission denied"));
+        break;
+      default:
+        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_scope"));
+        break;
+    }
+
+  g_free (scope_id);
+  scope_command_data_reset (create_scope_data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_modify_scope (gmp_parser_t *gmp_parser, GError **error)
+{
+  if (modify_scope_data->scope_id == NULL)
+    SEND_TO_CLIENT_OR_FAIL
+      (XML_ERROR_SYNTAX ("modify_scope", "A scope_id attribute is required"));
+  else
+    switch (modify_scope (modify_scope_data->scope_id,
+                          modify_scope_data->name,
+                          modify_scope_data->comment,
+                          modify_scope_data->protection_requirement,
+                          modify_scope_data->target_ids,
+                          modify_scope_data->host_ids))
+      {
+        case 0:
+          SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_scope"));
+          break;
+        case 2:
+          if (send_find_error_to_client ("modify_scope", "scope",
+                                         modify_scope_data->scope_id,
+                                         gmp_parser))
+            {
+              error_send_to_client (error);
+              return;
+            }
+          break;
+        case 3:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_ERROR_SYNTAX ("modify_scope",
+                               "Invalid protection_requirement"));
+          break;
+        case 4:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_ERROR_SYNTAX ("modify_scope", "Invalid target_ids"));
+          break;
+        case 5:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_ERROR_SYNTAX ("modify_scope", "Invalid host_ids"));
+          break;
+        case 6:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_ERROR_SYNTAX ("modify_scope",
+                               "Attempt to rename a predefined scope"));
+          break;
+        default:
+          SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_scope"));
+          break;
+      }
+
+  scope_command_data_reset (modify_scope_data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_delete_scope (gmp_parser_t *gmp_parser, GError **error)
+{
+  if (delete_scope_data->scope_id == NULL)
+    SEND_TO_CLIENT_OR_FAIL
+      (XML_ERROR_SYNTAX ("delete_scope", "A scope_id attribute is required"));
+  else
+    switch (delete_scope (delete_scope_data->scope_id))
+      {
+        case 0:
+          SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_scope"));
+          break;
+        case 2:
+          if (send_find_error_to_client ("delete_scope", "scope",
+                                         delete_scope_data->scope_id,
+                                         gmp_parser))
+            {
+              error_send_to_client (error);
+              return;
+            }
+          break;
+        case 3:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_ERROR_SYNTAX ("delete_scope",
+                               "Attempt to delete a predefined scope"));
+          break;
+        default:
+          SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("delete_scope"));
+          break;
+      }
+
+  scope_command_data_reset (delete_scope_data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_generate_scope_report (gmp_parser_t *gmp_parser, GError **error)
+{
+  char *scope_report_id = NULL;
+
+  if (generate_scope_report_data->scope_id == NULL)
+    SEND_TO_CLIENT_OR_FAIL
+      (XML_ERROR_SYNTAX ("generate_scope_report",
+                         "A scope_id attribute is required"));
+  else
+    switch (generate_scope_report (generate_scope_report_data->scope_id,
+                                   &scope_report_id))
+      {
+        case 0:
+          SENDF_TO_CLIENT_OR_FAIL
+            (XML_OK_CREATED_ID ("generate_scope_report"), scope_report_id);
+          break;
+        case 2:
+          if (send_find_error_to_client ("generate_scope_report", "scope",
+                                         generate_scope_report_data->scope_id,
+                                         gmp_parser))
+            {
+              error_send_to_client (error);
+              return;
+            }
+          break;
+        default:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_INTERNAL_ERROR ("generate_scope_report"));
+          break;
+      }
+
+  g_free (scope_report_id);
+  scope_command_data_reset (generate_scope_report_data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_delete_scope_report (gmp_parser_t *gmp_parser, GError **error)
+{
+  if (delete_scope_report_data->scope_report_id == NULL)
+    SEND_TO_CLIENT_OR_FAIL
+      (XML_ERROR_SYNTAX ("delete_scope_report",
+                         "A scope_report_id attribute is required"));
+  else
+    switch (delete_scope_report (delete_scope_report_data->scope_report_id))
+      {
+        case 0:
+          SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_scope_report"));
+          break;
+        case 2:
+          if (send_find_error_to_client ("delete_scope_report",
+                                         "scope_report",
+                                         delete_scope_report_data
+                                           ->scope_report_id,
+                                         gmp_parser))
+            {
+              error_send_to_client (error);
+              return;
+            }
+          break;
+        default:
+          SEND_TO_CLIENT_OR_FAIL
+            (XML_INTERNAL_ERROR ("delete_scope_report"));
+          break;
+      }
+
+  scope_command_data_reset (delete_scope_report_data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_get_scopes_command (gmp_parser_t *gmp_parser, GError **error,
+                           scope_command_data_t *data,
+                           const char *response_name)
+{
+  GString *xml;
+  int count;
+
+  count = scope_count (data->scope_id);
+  xml = g_string_new ("");
+  g_string_append_printf (xml,
+                          "<%s_response status=\"" STATUS_OK "\""
+                          " status_text=\"" STATUS_OK_TEXT "\">"
+                          "<scopes start=\"1\" max=\"-1\">",
+                          response_name);
+  buffer_scopes_xml (xml, data->scope_id, data->details);
+  g_string_append_printf (xml,
+                          "</scopes><scope_count><filtered>%i</filtered>"
+                          "<page>%i</page>%i</scope_count></%s_response>",
+                          count, count, count, response_name);
+
+  SEND_TO_CLIENT_OR_FAIL (xml->str);
+  g_string_free (xml, TRUE);
+  scope_command_data_reset (data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_get_scope_reports_command (gmp_parser_t *gmp_parser, GError **error,
+                                  scope_command_data_t *data,
+                                  const char *response_name)
+{
+  GString *xml;
+  int count;
+
+  count = scope_report_count (data->scope_report_id, data->scope_id);
+  xml = g_string_new ("");
+  g_string_append_printf (xml,
+                          "<%s_response status=\"" STATUS_OK "\""
+                          " status_text=\"" STATUS_OK_TEXT "\">"
+                          "<scope_reports start=\"1\" max=\"-1\">",
+                          response_name);
+  buffer_scope_reports_xml (xml, data->scope_report_id, data->scope_id,
+                            data->details);
+  g_string_append_printf (xml,
+                          "</scope_reports><scope_report_count>"
+                          "<filtered>%i</filtered><page>%i</page>%i"
+                          "</scope_report_count></%s_response>",
+                          count, count, count, response_name);
+
+  SEND_TO_CLIENT_OR_FAIL (xml->str);
+  g_string_free (xml, TRUE);
+  scope_command_data_reset (data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
 gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                             const gchar *element_name,
                             gpointer user_data,
@@ -18076,6 +18541,15 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
 
       CASE_DELETE (REPORT_FORMAT, report_format, "Report format");
+
+      case CLIENT_DELETE_SCOPE:
+        handle_delete_scope (gmp_parser, error);
+        break;
+
+      case CLIENT_DELETE_SCOPE_REPORT:
+        handle_delete_scope_report (gmp_parser, error);
+        break;
+
       CASE_DELETE (SCANNER, scanner, "Scanner");
       CASE_DELETE (SCHEDULE, schedule, "Schedule");
       CASE_DELETE (TAG, tag, "Tag");
@@ -18539,6 +19013,28 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_RESULTS:
         handle_get_results (gmp_parser, error);
+        break;
+
+      case CLIENT_GET_SCOPE:
+        handle_get_scopes_command (gmp_parser, error, get_scope_data,
+                                   "get_scope");
+        break;
+
+      case CLIENT_GET_SCOPE_REPORT:
+        handle_get_scope_reports_command (gmp_parser, error,
+                                          get_scope_report_data,
+                                          "get_scope_report");
+        break;
+
+      case CLIENT_GET_SCOPE_REPORTS:
+        handle_get_scope_reports_command (gmp_parser, error,
+                                          get_scope_reports_data,
+                                          "get_scope_reports");
+        break;
+
+      case CLIENT_GET_SCOPES:
+        handle_get_scopes_command (gmp_parser, error, get_scopes_data,
+                                   "get_scopes");
         break;
 
       case CLIENT_GET_SCANNERS:
@@ -20327,6 +20823,11 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_CREATE_REPORT_FORMAT:
         if (create_report_format_element_end (gmp_parser, error, element_name))
           set_client_state (CLIENT_AUTHENTIC);
+        break;
+
+
+      case CLIENT_CREATE_SCOPE:
+        handle_create_scope (gmp_parser, error);
         break;
 
 
@@ -22803,6 +23304,10 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         modify_report_config_element_end (gmp_parser, error, element_name);
         break;
 
+      case CLIENT_MODIFY_SCOPE:
+        handle_modify_scope (gmp_parser, error);
+        break;
+
       case CLIENT_MODIFY_SCANNER:
         handle_modify_scanner (gmp_parser, error);
         break;
@@ -24176,6 +24681,10 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                               " attribute is required"));
         resume_task_data_reset (resume_task_data);
         set_client_state (CLIENT_AUTHENTIC);
+        break;
+
+      case CLIENT_GENERATE_SCOPE_REPORT:
+        handle_generate_scope_report (gmp_parser, error);
         break;
 
       case CLIENT_RUN_WIZARD:
@@ -25581,7 +26090,8 @@ gmp_xml_handle_error (/* unused */ GMarkupParseContext* context,
   g_debug ("   XML ERROR %s", error->message);
 }
 
-
+
+
 /* GMP input processor. */
 
 /** @todo Most likely the client should get these from init_gmp_process

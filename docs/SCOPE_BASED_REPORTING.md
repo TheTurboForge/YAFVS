@@ -119,6 +119,42 @@ The first scope-based reporting implementation should stay deliberately simple:
 Rule-based membership, coordinated scope runs, richer ownership workflows, and
 additional inventory sources can be added later after the basic model is useful.
 
+## Implemented Behavior
+
+The operator-facing `Reports` page lists scope reports. Raw task reports remain
+available as technical evidence from task, scope, and scope-report detail views.
+
+Scopes manually manage two memberships:
+
+- targets used as evidence sources;
+- host assets included in official scope reporting membership.
+
+The predefined `Organization` scope is global and non-deletable. It includes all
+active targets and all known hosts by definition.
+
+Generating a scope report does not start a scan. TurboVAS selects the newest
+completed scan report for each associated target, excludes import and agent task
+reports in the first implementation, and stores the selected source reports as
+snapshot provenance. Custom scopes count only manually selected hosts. Candidate
+hosts discovered in source reports are shown separately so operators can add them
+to a scope deliberately.
+
+Scope reports expose coverage and freshness signals: source report count, latest
+evidence time, member hosts with evidence, member hosts without evidence, and
+candidate hosts excluded from official counts.
+
+Findings are deduplicated by host identity, NVT/OID, port, and result identity.
+The report keeps representative result provenance and links back to the raw scan
+reports used as evidence.
+
+Runtime helpers are available for development validation:
+
+- `just runtime-scope-smoke --json` creates a temporary high-protection scope,
+  generates a scope report from existing evidence, and cleans it up without
+  starting a scan;
+- `just runtime-scope-report-summary --json` summarizes the latest
+  `Organization` scope report.
+
 ## Product Rule
 
 A target defines how TurboVAS collects evidence. A scope defines why that

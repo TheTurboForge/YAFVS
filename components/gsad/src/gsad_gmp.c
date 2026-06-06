@@ -8691,6 +8691,272 @@ delete_report_gmp (gvm_connection_t *connection,
                           response_data);
 }
 
+/* Scope reports are TurboVAS' operator-facing aggregation layer over raw
+ * technical scan reports.  GSAD still has to proxy them explicitly because it
+ * validates and dispatches every GMP command by name. */
+
+static void
+scope_command_append_attribute (GString *command, const char *name,
+                                const char *value)
+{
+  gchar *escaped;
+
+  if (value == NULL)
+    return;
+
+  escaped = g_markup_escape_text (value, -1);
+  g_string_append_printf (command, " %s=\"%s\"", name, escaped);
+  g_free (escaped);
+}
+
+static char *
+run_scope_command (gvm_connection_t *connection,
+                   gsad_credentials_t *credentials, params_t *params,
+                   gsad_command_response_data_t *response_data,
+                   const char *command, const char *action)
+{
+  entity_t entity = NULL;
+  gchar *html;
+
+  switch (gmp (connection, credentials, NULL, &entity, response_data,
+               command))
+    {
+    case 0:
+      break;
+    case 1:
+      gsad_command_response_data_set_status_code (
+        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "An internal error occurred while sending a scope command. "
+        "Diagnostics: Failure to send command to manager daemon.",
+        response_data);
+    case 2:
+      gsad_command_response_data_set_status_code (
+        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "An internal error occurred while running a scope command. "
+        "It is unclear whether the scope state has been affected. "
+        "Diagnostics: Failure to receive response from manager daemon.",
+        response_data);
+    default:
+      gsad_command_response_data_set_status_code (
+        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "An internal error occurred while running a scope command. "
+        "Diagnostics: Internal Error.",
+        response_data);
+    }
+
+  html = response_from_entity (connection, credentials, params, entity, action,
+                               response_data);
+  free_entity (entity);
+  return html;
+}
+
+char *
+create_scope_gmp (gvm_connection_t *connection,
+                  gsad_credentials_t *credentials, params_t *params,
+                  gsad_command_response_data_t *response_data)
+{
+  const char *name;
+  GString *command;
+  gchar *html;
+
+  name = params_value (params, "name");
+  CHECK_VARIABLE_INVALID (name, "Create Scope");
+
+  command = g_string_new ("<create_scope");
+  scope_command_append_attribute (command, "name", name);
+  scope_command_append_attribute (command, "comment",
+                                  params_value (params, "comment"));
+  scope_command_append_attribute (
+    command, "protection_requirement",
+    params_value (params, "protection_requirement"));
+  scope_command_append_attribute (command, "target_ids",
+                                  params_value (params, "target_ids"));
+  scope_command_append_attribute (command, "host_ids",
+                                  params_value (params, "host_ids"));
+  g_string_append (command, "/>");
+
+  html = run_scope_command (connection, credentials, params, response_data,
+                            command->str, "Create Scope");
+  g_string_free (command, TRUE);
+  return html;
+}
+
+char *
+modify_scope_gmp (gvm_connection_t *connection,
+                  gsad_credentials_t *credentials, params_t *params,
+                  gsad_command_response_data_t *response_data)
+{
+  const char *scope_id;
+  GString *command;
+  gchar *html;
+
+  scope_id = params_value (params, "scope_id");
+  CHECK_VARIABLE_INVALID (scope_id, "Modify Scope");
+
+  command = g_string_new ("<modify_scope");
+  scope_command_append_attribute (command, "scope_id", scope_id);
+  scope_command_append_attribute (command, "name",
+                                  params_value (params, "name"));
+  scope_command_append_attribute (command, "comment",
+                                  params_value (params, "comment"));
+  scope_command_append_attribute (
+    command, "protection_requirement",
+    params_value (params, "protection_requirement"));
+  scope_command_append_attribute (command, "target_ids",
+                                  params_value (params, "target_ids"));
+  scope_command_append_attribute (command, "host_ids",
+                                  params_value (params, "host_ids"));
+  g_string_append (command, "/>");
+
+  html = run_scope_command (connection, credentials, params, response_data,
+                            command->str, "Modify Scope");
+  g_string_free (command, TRUE);
+  return html;
+}
+
+char *
+delete_scope_gmp (gvm_connection_t *connection,
+                  gsad_credentials_t *credentials, params_t *params,
+                  gsad_command_response_data_t *response_data)
+{
+  const char *scope_id;
+  GString *command;
+  gchar *html;
+
+  scope_id = params_value (params, "scope_id");
+  CHECK_VARIABLE_INVALID (scope_id, "Delete Scope");
+
+  command = g_string_new ("<delete_scope");
+  scope_command_append_attribute (command, "scope_id", scope_id);
+  g_string_append (command, "/>");
+
+  html = run_scope_command (connection, credentials, params, response_data,
+                            command->str, "Delete Scope");
+  g_string_free (command, TRUE);
+  return html;
+}
+
+char *
+generate_scope_report_gmp (gvm_connection_t *connection,
+                           gsad_credentials_t *credentials, params_t *params,
+                           gsad_command_response_data_t *response_data)
+{
+  const char *scope_id;
+  GString *command;
+  gchar *html;
+
+  scope_id = params_value (params, "scope_id");
+  CHECK_VARIABLE_INVALID (scope_id, "Generate Scope Report");
+
+  command = g_string_new ("<generate_scope_report");
+  scope_command_append_attribute (command, "scope_id", scope_id);
+  g_string_append (command, "/>");
+
+  html = run_scope_command (connection, credentials, params, response_data,
+                            command->str, "Generate Scope Report");
+  g_string_free (command, TRUE);
+  return html;
+}
+
+char *
+delete_scope_report_gmp (gvm_connection_t *connection,
+                         gsad_credentials_t *credentials, params_t *params,
+                         gsad_command_response_data_t *response_data)
+{
+  const char *scope_report_id;
+  GString *command;
+  gchar *html;
+
+  scope_report_id = params_value (params, "scope_report_id");
+  CHECK_VARIABLE_INVALID (scope_report_id, "Delete Scope Report");
+
+  command = g_string_new ("<delete_scope_report");
+  scope_command_append_attribute (command, "scope_report_id", scope_report_id);
+  g_string_append (command, "/>");
+
+  html = run_scope_command (connection, credentials, params, response_data,
+                            command->str, "Delete Scope Report");
+  g_string_free (command, TRUE);
+  return html;
+}
+
+static gmp_arguments_t *
+scope_get_arguments (params_t *params, const char *scope_id,
+                     const char *scope_report_id)
+{
+  gmp_arguments_t *arguments;
+  const gchar *details;
+
+  arguments = gmp_arguments_new ();
+  details = params_value (params, "details");
+  if (details && !str_equal (details, ""))
+    gmp_arguments_add (arguments, "details", details);
+  if (scope_id && !str_equal (scope_id, ""))
+    gmp_arguments_add (arguments, "scope_id", scope_id);
+  if (scope_report_id && !str_equal (scope_report_id, ""))
+    gmp_arguments_add (arguments, "scope_report_id", scope_report_id);
+
+  return arguments;
+}
+
+char *
+get_scope_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
+               params_t *params, gsad_command_response_data_t *response_data)
+{
+  const char *scope_id;
+
+  scope_id = params_value (params, "scope_id");
+  CHECK_VARIABLE_INVALID (scope_id, "Get Scope");
+
+  return get_entities (connection, "scope", credentials, params,
+                       scope_get_arguments (params, scope_id, NULL),
+                       response_data);
+}
+
+char *
+get_scopes_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
+                params_t *params, gsad_command_response_data_t *response_data)
+{
+  return get_entities (connection, "scopes", credentials, params,
+                       scope_get_arguments (params,
+                                            params_value (params, "scope_id"),
+                                            NULL),
+                       response_data);
+}
+
+char *
+get_scope_report_gmp (gvm_connection_t *connection,
+                      gsad_credentials_t *credentials, params_t *params,
+                      gsad_command_response_data_t *response_data)
+{
+  const char *scope_report_id;
+
+  scope_report_id = params_value (params, "scope_report_id");
+  CHECK_VARIABLE_INVALID (scope_report_id, "Get Scope Report");
+
+  return get_entities (connection, "scope_report", credentials, params,
+                       scope_get_arguments (params, NULL, scope_report_id),
+                       response_data);
+}
+
+char *
+get_scope_reports_gmp (gvm_connection_t *connection,
+                       gsad_credentials_t *credentials, params_t *params,
+                       gsad_command_response_data_t *response_data)
+{
+  return get_entities (connection, "scope_reports", credentials, params,
+                       scope_get_arguments (
+                         params, params_value (params, "scope_id"),
+                         params_value (params, "scope_report_id")),
+                       response_data);
+}
+
 /**
  * @brief Get a report and return the result.
  *
@@ -17692,6 +17958,10 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_scanners)
   ELSE (get_schedule)
   ELSE (get_schedules)
+  ELSE (get_scope)
+  ELSE (get_scopes)
+  ELSE (get_scope_report)
+  ELSE (get_scope_reports)
   ELSE (get_setting)
   ELSE (get_settings)
   ELSE (get_system_reports)
@@ -17954,6 +18224,7 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_report_config)
   ELSE (create_scanner)
   ELSE (create_schedule)
+  ELSE (create_scope)
   ELSE (create_task)
   ELSE (create_tag)
   ELSE (create_target)
@@ -17976,6 +18247,8 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_report_format)
   ELSE (delete_scanner)
   ELSE (delete_schedule)
+  ELSE (delete_scope)
+  ELSE (delete_scope_report)
   ELSE (delete_tag)
   ELSE (delete_target)
   ELSE (delete_task)
@@ -17989,8 +18262,10 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (modify_agent)
   ELSE (delete_agent)
   ELSE (modify_credential_store)
+  ELSE (modify_scope)
   ELSE (move_task)
   ELSE (renew_session)
+  ELSE (generate_scope_report)
   ELSE (report_alert)
   ELSE (restore)
   ELSE (resume_task)

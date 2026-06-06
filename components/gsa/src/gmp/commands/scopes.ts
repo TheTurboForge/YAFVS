@@ -1,0 +1,403 @@
+/* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+import HttpCommand from 'gmp/commands/http';
+import type Http from 'gmp/http/http';
+import type {XmlResponseData} from 'gmp/http/transform/fast-xml';
+import {isDefined} from 'gmp/utils/identity';
+
+export type ProtectionRequirement = 'normal' | 'high' | 'very_high';
+
+export interface ScopeTarget {
+  id: string;
+  name: string;
+}
+
+export interface ScopeHost {
+  id: string;
+  name: string;
+}
+
+export interface ScopeCandidateHost extends ScopeHost {
+  targetId?: string;
+  targetName?: string;
+  sourceReportId?: string;
+}
+
+export interface ScopeReportSummary {
+  id: string;
+  name: string;
+  created?: string;
+  latestEvidenceTime?: string;
+  sourceReportCount: number;
+  hostsTotal: number;
+  hostsWithEvidence: number;
+  hostsMissingEvidence: number;
+  resultsTotal: number;
+  vulnerabilitiesTotal: number;
+  severityHigh: number;
+  severityMedium: number;
+  severityLow: number;
+  severityLog: number;
+  severityFalsePositive: number;
+  excludedCandidateHosts: number;
+}
+
+export interface Scope {
+  id: string;
+  name: string;
+  comment?: string;
+  protectionRequirement: ProtectionRequirement;
+  protectionRequirementLabel: string;
+  predefined: boolean;
+  global: boolean;
+  creationTime?: string;
+  modificationTime?: string;
+  targetCount: number;
+  hostCount: number;
+  scopeReportCount: number;
+  targets: ScopeTarget[];
+  hosts: ScopeHost[];
+  candidateHosts: ScopeCandidateHost[];
+  scopeReports: ScopeReportSummary[];
+}
+
+export interface ScopeReportSource {
+  id?: string;
+  sourceReportId?: string;
+  sourceReportName?: string;
+  targetId?: string;
+  targetName?: string;
+  taskId?: string;
+  taskName?: string;
+  scanEnd?: string;
+  selected: boolean;
+  reason?: string;
+}
+
+export interface ScopeReportResult {
+  id?: string;
+  sourceReportId?: string;
+  host?: string;
+  port?: string;
+  nvtOid?: string;
+  nvtName?: string;
+  severity: number;
+  severityLabel?: string;
+  created?: string;
+}
+
+export interface ScopeReport extends ScopeReportSummary {
+  scopeId: string;
+  scopeName: string;
+  protectionRequirement: ProtectionRequirement;
+  protectionRequirementLabel: string;
+  sources: ScopeReportSource[];
+  topResults: ScopeReportResult[];
+}
+
+type XmlNode = Record<string, unknown>;
+
+interface ScopeWriteParams {
+  id?: string;
+  name?: string;
+  comment?: string;
+  protectionRequirement?: ProtectionRequirement | string;
+  targetIds?: string[];
+  hostIds?: string[];
+}
+
+const asArray = <T,>(value: T | T[] | undefined): T[] => {
+  if (!isDefined(value)) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+};
+
+const getNode = (node: unknown): XmlNode => {
+  if (typeof node === 'object' && node !== null) {
+    return node as XmlNode;
+  }
+  return {};
+};
+
+const text = (node: unknown, fallback = ''): string => {
+  if (!isDefined(node)) {
+    return fallback;
+  }
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node);
+  }
+  const data = getNode(node);
+  if (isDefined(data.__text)) {
+    return String(data.__text);
+  }
+  return fallback;
+};
+
+const optionalText = (node: unknown): string | undefined => {
+  const value = text(node);
+  return value === '' ? undefined : value;
+};
+
+const bool = (node: unknown): boolean => {
+  const value = text(node, '0').toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes';
+};
+
+const integer = (node: unknown): number => {
+  const value = Number.parseInt(text(node, '0'), 10);
+  return Number.isFinite(value) ? value : 0;
+};
+
+const decimal = (node: unknown): number => {
+  const value = Number.parseFloat(text(node, '0'));
+  return Number.isFinite(value) ? value : 0;
+};
+
+const idOf = (node: unknown): string => {
+  const data = getNode(node);
+  return text(data._id, text(data.id));
+};
+
+const protectionValue = (data: XmlNode): ProtectionRequirement => {
+  const protection = getNode(data.protection_requirement);
+  return text(protection.value, text(data.protection_requirement, 'normal')) as ProtectionRequirement;
+};
+
+const protectionLabel = (data: XmlNode): string => {
+  const protection = getNode(data.protection_requirement);
+  return text(protection.label, text(data.protection_requirement_label, 'Normal'));
+};
+
+const countValue = (counts: XmlNode, data: XmlNode, nested: string, flat: string) =>
+  integer(counts[nested] ?? data[flat]);
+
+const parseEntityRef = (node: unknown): ScopeTarget | ScopeHost => {
+  const data = getNode(node);
+  return {
+    id: idOf(data),
+    name: text(data.name),
+  };
+};
+
+const parseScopeReportSummary = (node: unknown): ScopeReportSummary => {
+  const data = getNode(node);
+  const counts = getNode(data.counts);
+  const severity = getNode(counts.severity);
+  return {
+    id: idOf(data),
+    name: text(data.name),
+    created: optionalText(data.created ?? data.creation_time),
+    latestEvidenceTime: optionalText(data.latest_evidence_time),
+    sourceReportCount: countValue(counts, data, 'source_reports', 'source_report_count'),
+    hostsTotal: countValue(counts, data, 'hosts_total', 'member_host_count'),
+    hostsWithEvidence: countValue(counts, data, 'hosts_with_evidence', 'evidence_host_count'),
+    hostsMissingEvidence: countValue(counts, data, 'hosts_missing_evidence', 'missing_host_count'),
+    resultsTotal: countValue(counts, data, 'results_total', 'result_count'),
+    vulnerabilitiesTotal: countValue(counts, data, 'vulnerabilities_total', 'vulnerability_count'),
+    severityHigh: integer(severity.high),
+    severityMedium: integer(severity.medium),
+    severityLow: integer(severity.low),
+    severityLog: integer(severity.log),
+    severityFalsePositive: integer(severity.false_positive),
+    excludedCandidateHosts: countValue(counts, data, 'excluded_candidate_hosts', 'excluded_candidate_host_count'),
+  };
+};
+
+const parseCandidateHost = (node: unknown): ScopeCandidateHost => {
+  if (typeof node === 'string' || typeof node === 'number') {
+    const value = String(node);
+    return {id: value, name: value};
+  }
+  const candidate = getNode(node);
+  const target = getNode(candidate.target);
+  const report = getNode(candidate.source_report);
+  const value = text(candidate.name, text(candidate.__text, idOf(candidate)));
+  return {
+    id: idOf(candidate) || value,
+    name: value,
+    targetId: idOf(target) || undefined,
+    targetName: optionalText(target.name),
+    sourceReportId: idOf(report) || undefined,
+  };
+};
+
+const parseScope = (node: unknown): Scope => {
+  const data = getNode(node);
+  const counts = getNode(data.counts);
+  const targets = getNode(data.targets);
+  const hosts = getNode(data.hosts);
+  const candidateHosts = getNode(data.candidate_hosts);
+  const scopeReports = getNode(data.scope_reports);
+  return {
+    id: idOf(data),
+    name: text(data.name),
+    comment: optionalText(data.comment),
+    protectionRequirement: protectionValue(data),
+    protectionRequirementLabel: protectionLabel(data),
+    predefined: bool(data.predefined),
+    global: bool(data.global),
+    creationTime: optionalText(data.creation_time),
+    modificationTime: optionalText(data.modification_time),
+    targetCount: countValue(counts, data, 'targets', 'target_count'),
+    hostCount: countValue(counts, data, 'hosts', 'host_count'),
+    scopeReportCount: countValue(counts, data, 'scope_reports', 'scope_report_count'),
+    targets: asArray(targets.target).map(parseEntityRef),
+    hosts: asArray(hosts.host).map(parseEntityRef),
+    candidateHosts: [
+      ...asArray(candidateHosts.host).map(parseCandidateHost),
+      ...asArray(candidateHosts.candidate_host).map(parseCandidateHost),
+    ],
+    scopeReports: asArray(scopeReports.scope_report).map(parseScopeReportSummary),
+  };
+};
+
+const parseScopeReport = (node: unknown): ScopeReport => {
+  const data = getNode(node);
+  const summary = parseScopeReportSummary(data);
+  const scope = getNode(data.scope);
+  const sources = getNode(data.sources);
+  const results = getNode(data.top_results ?? data.results);
+  return {
+    ...summary,
+    scopeId: idOf(scope),
+    scopeName: text(scope.name),
+    protectionRequirement: protectionValue(data),
+    protectionRequirementLabel: protectionLabel(data),
+    sources: asArray(sources.source).map(source => {
+      const sourceData = getNode(source);
+      const report = getNode(sourceData.source_report);
+      const target = getNode(sourceData.target);
+      const task = getNode(sourceData.task);
+      return {
+        id: idOf(sourceData),
+        sourceReportId: idOf(report) || optionalText(sourceData._report_id),
+        sourceReportName: optionalText(report.name),
+        targetId: idOf(target) || optionalText(sourceData._target_id),
+        targetName: optionalText(target.name ?? sourceData.target_name),
+        taskId: idOf(task) || optionalText(sourceData._task_id),
+        taskName: optionalText(task.name ?? sourceData.task_name),
+        scanEnd: optionalText(sourceData.scan_end),
+        selected: true,
+        reason: optionalText(sourceData.reason),
+      };
+    }),
+    topResults: asArray(results.result).map(result => {
+      const resultData = getNode(result);
+      const nvt = getNode(resultData.nvt);
+      const sourceReportId = optionalText(resultData._source_report_id);
+      return {
+        id: idOf(resultData),
+        sourceReportId,
+        host: optionalText(resultData.host),
+        port: optionalText(resultData.port),
+        nvtOid: optionalText(nvt.oid) ?? optionalText(resultData.nvt),
+        nvtName: optionalText(nvt.name) ?? optionalText(resultData.nvt),
+        severity: decimal(resultData.severity),
+        severityLabel: optionalText(resultData.severity_label),
+        created: optionalText(resultData.created ?? resultData.date),
+      };
+    }),
+  };
+};
+
+const listPostParam = (values?: string[]) => {
+  if (!isDefined(values)) {
+    return undefined;
+  }
+  return values.join(' ');
+};
+
+const responseRoot = (root: XmlResponseData, name: string): XmlNode => {
+  return getNode(getNode(root[name])[`${name}_response`]);
+};
+
+export class ScopesCommand extends HttpCommand {
+  constructor(http: Http) {
+    super(http, {cmd: 'get_scopes'});
+  }
+
+  async get({id, details = 1}: {id?: string; details?: number} = {}) {
+    const response = await this.httpGetWithTransform({scope_id: id, details});
+    const root = responseRoot(response.data, 'get_scopes');
+    const scopes = getNode(root.scopes);
+    const parsed = asArray(scopes.scope).map(parseScope);
+    return response.set<Scope[]>(parsed);
+  }
+
+  async getOne(id: string) {
+    const response = await this.get({id, details: 1});
+    return response.set<Scope | undefined>(response.data[0]);
+  }
+
+  create(params: ScopeWriteParams) {
+    return this.httpPostWithTransform({
+      cmd: 'create_scope',
+      name: params.name,
+      comment: params.comment,
+      protection_requirement: params.protectionRequirement,
+      target_ids: listPostParam(params.targetIds),
+      host_ids: listPostParam(params.hostIds),
+    });
+  }
+
+  modify(params: ScopeWriteParams) {
+    return this.httpPostWithTransform({
+      cmd: 'modify_scope',
+      scope_id: params.id,
+      name: params.name,
+      comment: params.comment,
+      protection_requirement: params.protectionRequirement,
+      target_ids: listPostParam(params.targetIds),
+      host_ids: listPostParam(params.hostIds),
+    });
+  }
+
+  delete({id}: {id: string}) {
+    return this.httpPostWithTransform({cmd: 'delete_scope', scope_id: id});
+  }
+
+  generateReport({id}: {id: string}) {
+    return this.httpPostWithTransform({
+      cmd: 'generate_scope_report',
+      scope_id: id,
+    });
+  }
+}
+
+export class ScopeReportsCommand extends HttpCommand {
+  constructor(http: Http) {
+    super(http, {cmd: 'get_scope_reports'});
+  }
+
+  async get({
+    id,
+    scopeId,
+    details = 1,
+  }: {id?: string; scopeId?: string; details?: number} = {}) {
+    const response = await this.httpGetWithTransform({
+      scope_report_id: id,
+      scope_id: scopeId,
+      details,
+    });
+    const root = responseRoot(response.data, 'get_scope_reports');
+    const reports = getNode(root.scope_reports);
+    const parsed = asArray(reports.scope_report).map(parseScopeReport);
+    return response.set<ScopeReport[]>(parsed);
+  }
+
+  async getOne(id: string) {
+    const response = await this.get({id, details: 1});
+    return response.set<ScopeReport | undefined>(response.data[0]);
+  }
+
+  delete({id}: {id: string}) {
+    return this.httpPostWithTransform({
+      cmd: 'delete_scope_report',
+      scope_report_id: id,
+    });
+  }
+}

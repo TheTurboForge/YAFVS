@@ -21,6 +21,7 @@ from .requests.v226 import (
     Reports,
     ResourceNames,
     ResourceType,
+    Scopes,
 )
 
 
@@ -182,6 +183,115 @@ class GMPv226(GMPv225[T]):
         """
         return self._send_request_and_transform_response(
             Reports.import_report(report, task_id, in_assets=in_assets)
+        )
+
+    def create_scope(
+        self,
+        name: str,
+        *,
+        comment: str | None = None,
+        protection_requirement: str | None = None,
+        target_ids: Sequence[EntityID] | str | None = None,
+        host_ids: Sequence[EntityID] | str | None = None,
+    ) -> T:
+        """Create a scope for operator-facing reporting."""
+        return self._send_request_and_transform_response(
+            Scopes.create_scope(
+                name,
+                comment=comment,
+                protection_requirement=protection_requirement,
+                target_ids=target_ids,
+                host_ids=host_ids,
+            )
+        )
+
+    def modify_scope(
+        self,
+        scope_id: EntityID,
+        *,
+        name: str | None = None,
+        comment: str | None = None,
+        protection_requirement: str | None = None,
+        target_ids: Sequence[EntityID] | str | None = None,
+        host_ids: Sequence[EntityID] | str | None = None,
+    ) -> T:
+        """Modify an existing scope."""
+        return self._send_request_and_transform_response(
+            Scopes.modify_scope(
+                scope_id,
+                name=name,
+                comment=comment,
+                protection_requirement=protection_requirement,
+                target_ids=target_ids,
+                host_ids=host_ids,
+            )
+        )
+
+    def delete_scope(self, scope_id: EntityID) -> T:
+        """Delete a scope."""
+        return self._send_request_and_transform_response(
+            Scopes.delete_scope(scope_id)
+        )
+
+    def get_scope(
+        self,
+        scope_id: EntityID,
+        *,
+        details: bool | None = True,
+    ) -> T:
+        """Request one scope."""
+        return self._send_request_and_transform_response(
+            Scopes.get_scope(scope_id, details=details)
+        )
+
+    def get_scopes(
+        self,
+        *,
+        scope_id: EntityID | None = None,
+        details: bool | None = None,
+    ) -> T:
+        """Request scopes."""
+        return self._send_request_and_transform_response(
+            Scopes.get_scopes(scope_id=scope_id, details=details)
+        )
+
+    def generate_scope_report(self, scope_id: EntityID) -> T:
+        """Generate a persistent scope-report snapshot."""
+        return self._send_request_and_transform_response(
+            Scopes.generate_scope_report(scope_id)
+        )
+
+    def get_scope_report(
+        self,
+        scope_report_id: EntityID,
+        *,
+        details: bool | None = True,
+    ) -> T:
+        """Request one scope report."""
+        return self._send_request_and_transform_response(
+            Scopes.get_scope_report(scope_report_id, details=details)
+        )
+
+    def get_scope_reports(
+        self,
+        *,
+        scope_report_id: EntityID | None = None,
+        scope_id: EntityID | None = None,
+        details: bool | None = None,
+    ) -> T:
+        """Request scope reports."""
+        return self._send_request_and_transform_response(
+            Scopes.get_scope_reports(
+                scope_report_id=scope_report_id,
+                scope_id=scope_id,
+                details=details,
+            )
+        )
+
+    def delete_scope_report(self, scope_report_id: EntityID) -> T:
+        """Delete a scope report."""
+        return self._send_request_and_transform_response(
+            Scopes.delete_scope_report(scope_report_id)
         )
 
     def create_filter(

@@ -125,7 +125,7 @@ services:
         target: /workspace
       - type: bind
         source: ..
-        target: /home/turboforge/Projects/TurboVAS
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
         target: /runtime
@@ -162,7 +162,7 @@ services:
         target: /workspace
       - type: bind
         source: ..
-        target: /home/turboforge/Projects/TurboVAS
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
         target: /runtime
@@ -216,7 +216,7 @@ services:
         target: /workspace
       - type: bind
         source: ..
-        target: /home/turboforge/Projects/TurboVAS
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
         target: /runtime
@@ -273,7 +273,7 @@ services:
         target: /workspace
       - type: bind
         source: ..
-        target: /home/turboforge/Projects/TurboVAS
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
         target: /runtime
@@ -318,7 +318,7 @@ services:
         target: /workspace
       - type: bind
         source: ..
-        target: /home/turboforge/Projects/TurboVAS
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
         target: /runtime

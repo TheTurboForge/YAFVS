@@ -376,7 +376,16 @@ const loggedInRoutes = [
       {
         path: 'reports',
         lazy: async () => ({
-          Component: (await import('web/pages/reports/ReportListPage')).default,
+          Component: (await import('web/pages/scope-reports/ScopeReportListPage'))
+            .default,
+        }),
+      },
+      {
+        path: 'scope-report/:id',
+        lazy: async () => ({
+          Component: (
+            await import('web/pages/scope-reports/ScopeReportDetailsPage')
+          ).default,
         }),
       },
       {
@@ -514,6 +523,20 @@ const loggedInRoutes = [
         lazy: async () => ({
           Component: (await import('web/pages/scanners/ScannerDetailsPage'))
             .default,
+        }),
+      },
+
+      // Scope routes
+      {
+        path: 'scopes',
+        lazy: async () => ({
+          Component: (await import('web/pages/scopes/ScopeListPage')).default,
+        }),
+      },
+      {
+        path: 'scope/:id',
+        lazy: async () => ({
+          Component: (await import('web/pages/scopes/ScopeDetailsPage')).default,
         }),
       },
 

@@ -4317,6 +4317,92 @@ migrate_278_to_279 ()
 }
 
 
+static int
+migrate_279_to_280 ()
+{
+  sql_begin_immediate ();
+
+  sql ("CREATE TABLE IF NOT EXISTS scopes"
+       " (id SERIAL PRIMARY KEY,"
+       "  uuid text UNIQUE NOT NULL,"
+       "  owner integer REFERENCES users (id) ON DELETE RESTRICT,"
+       "  name text UNIQUE NOT NULL,"
+       "  comment text,"
+       "  protection_requirement text NOT NULL,"
+       "  predefined integer DEFAULT 0,"
+       "  is_global integer DEFAULT 0,"
+       "  creation_time integer,"
+       "  modification_time integer);");
+  sql ("CREATE UNIQUE INDEX IF NOT EXISTS scopes_one_global_idx"
+       " ON scopes (is_global) WHERE is_global = 1;");
+  sql ("CREATE TABLE IF NOT EXISTS scope_targets"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope integer REFERENCES scopes (id) ON DELETE CASCADE,"
+       "  target integer REFERENCES targets (id) ON DELETE CASCADE,"
+       "  target_uuid text NOT NULL,"
+       "  target_name text,"
+       "  added_time integer,"
+       "  UNIQUE (scope, target));");
+  sql ("CREATE TABLE IF NOT EXISTS scope_hosts"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope integer REFERENCES scopes (id) ON DELETE CASCADE,"
+       "  host integer REFERENCES hosts (id) ON DELETE CASCADE,"
+       "  host_uuid text NOT NULL,"
+       "  host_name text NOT NULL,"
+       "  added_time integer,"
+       "  UNIQUE (scope, host));");
+  sql ("CREATE TABLE IF NOT EXISTS scope_reports"
+       " (id SERIAL PRIMARY KEY,"
+       "  uuid text UNIQUE NOT NULL,"
+       "  scope integer,"
+       "  scope_uuid text NOT NULL,"
+       "  scope_name text NOT NULL,"
+       "  protection_requirement text NOT NULL,"
+       "  generated_by integer REFERENCES users (id) ON DELETE RESTRICT,"
+       "  source_report_count integer DEFAULT 0,"
+       "  source_target_count integer DEFAULT 0,"
+       "  member_host_count integer DEFAULT 0,"
+       "  evidence_host_count integer DEFAULT 0,"
+       "  missing_host_count integer DEFAULT 0,"
+       "  result_count integer DEFAULT 0,"
+       "  vulnerability_count integer DEFAULT 0,"
+       "  max_severity double precision DEFAULT 0,"
+       "  latest_evidence_time integer DEFAULT 0,"
+       "  excluded_candidate_host_count integer DEFAULT 0,"
+       "  creation_time integer,"
+       "  modification_time integer);");
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_sources"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  target integer,"
+       "  target_uuid text NOT NULL,"
+       "  target_name text,"
+       "  source_report integer REFERENCES reports (id) ON DELETE RESTRICT,"
+       "  source_report_uuid text NOT NULL,"
+       "  task integer,"
+       "  task_uuid text NOT NULL,"
+       "  task_name text,"
+       "  scan_start integer,"
+       "  scan_end integer,"
+       "  selected_time integer);");
+
+  sql ("INSERT INTO scopes"
+       " (uuid, owner, name, comment, protection_requirement, predefined,"
+       "  is_global, creation_time, modification_time)"
+       " SELECT make_uuid (), id, 'Organization',"
+       "        'Global reporting scope containing all active targets and known hosts.',"
+       "        'normal', 1, 1, m_now (), m_now ()"
+       " FROM users ORDER BY id LIMIT 1"
+       " ON CONFLICT (name) DO NOTHING;");
+
+  set_db_version (280);
+
+  sql_commit ();
+
+  return 0;
+}
+
+
 #undef UPDATE_DASHBOARD_SETTINGS
 
 /**
@@ -4402,6 +4488,7 @@ static migrator_t database_migrators[] = {
   {277, migrate_276_to_277},
   {278, migrate_277_to_278},
   {279, migrate_278_to_279},
+  {280, migrate_279_to_280},
   /* End marker. */
   {-1, NULL}};
 

@@ -27,12 +27,14 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Headers */
 int
 check_db_extensions ();
 
-
+
+
 /* Session. */
 
 /**
@@ -61,7 +63,8 @@ manage_session_set_timezone (const char *zone)
   return;
 }
 
-
+
+
 /* Helpers. */
 
 /**
@@ -103,7 +106,8 @@ db_table_has_column (const gchar *schema, const gchar *table,
                        SQL_STR_PARAM (column), NULL);
 }
 
-
+
+
 /* SCAP. */
 
 /**
@@ -121,7 +125,8 @@ manage_cert_db_exists ()
   return 0;
 }
 
-
+
+
 /* SQL functions. */
 
 /**
@@ -1702,7 +1707,8 @@ manage_create_sql_functions ()
   return 0;
 }
 
-
+
+
 /* Creation. */
 
 /**
@@ -2668,6 +2674,75 @@ create_tables ()
        "  end_time integer,"
        "  min_qod integer);");
 
+  sql ("CREATE TABLE IF NOT EXISTS scopes"
+       " (id SERIAL PRIMARY KEY,"
+       "  uuid text UNIQUE NOT NULL,"
+       "  owner integer REFERENCES users (id) ON DELETE RESTRICT,"
+       "  name text UNIQUE NOT NULL,"
+       "  comment text,"
+       "  protection_requirement text NOT NULL,"
+       "  predefined integer DEFAULT 0,"
+       "  is_global integer DEFAULT 0,"
+       "  creation_time integer,"
+       "  modification_time integer);");
+
+  sql ("CREATE UNIQUE INDEX IF NOT EXISTS scopes_one_global_idx"
+       " ON scopes (is_global) WHERE is_global = 1;");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_targets"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope integer REFERENCES scopes (id) ON DELETE CASCADE,"
+       "  target integer REFERENCES targets (id) ON DELETE CASCADE,"
+       "  target_uuid text NOT NULL,"
+       "  target_name text,"
+       "  added_time integer,"
+       "  UNIQUE (scope, target));");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_hosts"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope integer REFERENCES scopes (id) ON DELETE CASCADE,"
+       "  host integer REFERENCES hosts (id) ON DELETE CASCADE,"
+       "  host_uuid text NOT NULL,"
+       "  host_name text NOT NULL,"
+       "  added_time integer,"
+       "  UNIQUE (scope, host));");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_reports"
+       " (id SERIAL PRIMARY KEY,"
+       "  uuid text UNIQUE NOT NULL,"
+       "  scope integer,"
+       "  scope_uuid text NOT NULL,"
+       "  scope_name text NOT NULL,"
+       "  protection_requirement text NOT NULL,"
+       "  generated_by integer REFERENCES users (id) ON DELETE RESTRICT,"
+       "  source_report_count integer DEFAULT 0,"
+       "  source_target_count integer DEFAULT 0,"
+       "  member_host_count integer DEFAULT 0,"
+       "  evidence_host_count integer DEFAULT 0,"
+       "  missing_host_count integer DEFAULT 0,"
+       "  result_count integer DEFAULT 0,"
+       "  vulnerability_count integer DEFAULT 0,"
+       "  max_severity double precision DEFAULT 0,"
+       "  latest_evidence_time integer DEFAULT 0,"
+       "  excluded_candidate_host_count integer DEFAULT 0,"
+       "  creation_time integer,"
+       "  modification_time integer);");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_sources"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  target integer,"
+       "  target_uuid text NOT NULL,"
+       "  target_name text,"
+       "  source_report integer REFERENCES reports (id) ON DELETE RESTRICT,"
+       "  source_report_uuid text NOT NULL,"
+       "  task integer,"
+       "  task_uuid text NOT NULL,"
+       "  task_name text,"
+       "  scan_start integer,"
+       "  scan_end integer,"
+       "  selected_time integer);");
+
   sql ("CREATE TABLE IF NOT EXISTS results"
        " (id SERIAL PRIMARY KEY,"
        "  uuid text UNIQUE NOT NULL,"
@@ -3312,7 +3387,8 @@ check_db_extensions ()
       return 1;
     }
 }
-
+
+
 /* SecInfo. */
 
 /**

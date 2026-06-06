@@ -54,6 +54,7 @@ const NORMALIZE_TYPES = {
   port_range: 'portrange',
   report_config: 'reportconfig',
   report_format: 'reportformat',
+  scope_report: 'scopereport',
   tls_certificate: 'tlscertificate',
   vuln: 'vulnerability',
 } as const;
@@ -95,6 +96,8 @@ const ENTITY_TYPES = {
   result: _l('Result'),
   scanconfig: _l('Scan Config'),
   scanner: _l('Scanner'),
+  scope: _l('Scope'),
+  scopereport: _l('Scope Report'),
   schedule: _l('Schedule'),
   tag: _l('Tag'),
   target: _l('Target'),
@@ -132,6 +135,7 @@ const ENTITY_TO_API_TYPES = {
   reportconfig: 'report_config',
   reportformat: 'report_format',
   scanconfig: 'config',
+  scopereport: 'scope_report',
   tlscertificate: 'tls_certificate',
   vulnerability: 'vuln',
 } as const;
@@ -155,6 +159,8 @@ export const API_TYPES = [
   'report',
   'result',
   'scanner',
+  'scope',
+  'scope_report',
   'schedule',
   'system_reports',
   'tag',
@@ -226,6 +232,7 @@ const ENTITY_URLS = {
   reportconfig: 'report-config',
   reportformat: 'report-format',
   scanconfig: 'scan-config',
+  scopereport: 'scope-report',
   tlscertificate: 'tls-certificate',
 } as Record<EntityType, string>;
 

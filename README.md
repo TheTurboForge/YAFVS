@@ -59,6 +59,10 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-full-test-scan-preflight`: verify readiness for the fixed authorized `192.168.178.0/24` full test scan.
 - `just runtime-full-test-scan-start --confirm-authorized-lan`: start the fixed authorized full test scan.
 - `just runtime-full-test-scan-status`: report the fixed full test scan task status.
+- `just runtime-report-summary`: summarize the latest raw full-test scan report.
+- `just runtime-report-export`: export parsed raw full-test scan report results as JSON.
+- `just runtime-scope-smoke`: verify scope reporting without starting scans.
+- `just runtime-scope-report-summary`: summarize the latest `Organization` scope report.
 - `just feed-state`: show persistent feed cache and runtime-copy state.
 - `just feed-cache-sync`: start a full Community Feed cache sync in `tmux`.
 - `just feed-copy-to-runtime`: copy cached feed data into the runtime feed tree.

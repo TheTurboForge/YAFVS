@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -350,7 +351,8 @@ file_iterator_content_64 (file_iterator_t* iterator)
   return content;
 }
 
-
+
+
 /* Feed report formats. */
 
 /**

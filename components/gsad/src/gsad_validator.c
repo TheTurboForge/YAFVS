@@ -38,6 +38,7 @@ gsad_init_validator ()
                      "|(create_report_config)"
                      "|(create_scanner)"
                      "|(create_schedule)"
+                     "|(create_scope)"
                      "|(create_tag)"
                      "|(create_tags)"
                      "|(create_target)"
@@ -62,6 +63,8 @@ gsad_init_validator ()
                      "|(delete_report_format)"
                      "|(delete_scanner)"
                      "|(delete_schedule)"
+                     "|(delete_scope)"
+                     "|(delete_scope_report)"
                      "|(delete_tag)"
                      "|(delete_target)"
                      "|(delete_task)"
@@ -163,6 +166,10 @@ gsad_init_validator ()
                      "|(get_scanners)"
                      "|(get_schedule)"
                      "|(get_schedules)"
+                     "|(get_scope)"
+                     "|(get_scopes)"
+                     "|(get_scope_report)"
+                     "|(get_scope_reports)"
                      "|(get_setting)"
                      "|(get_settings)"
                      "|(get_system_reports)"
@@ -193,10 +200,12 @@ gsad_init_validator ()
                      "|(get_user)"
                      "|(get_users)"
                      "|(get_vulns)"
+                     "|(generate_scope_report)"
                      "|(import_config)"
                      "|(import_port_list)"
                      "|(import_report_format)"
                      "|(login)"
+                     "|(modify_scope)"
                      "|(modify_agent)"
                      "|(modify_agent_control_scan_config)"
                      "|(modify_credential_store)"
@@ -357,6 +366,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "hostpath", "^[-_[:alnum:]\\. :/]+$");
   gvm_validator_add (validator, "hosts", "^[-_[:alnum:],: \\./]+$");
   gvm_validator_add (validator, "hosts_opt", "^[-_[:alnum:],: \\./]*$");
+  gvm_validator_add (validator, "host_ids", "^[a-z0-9\\- ,\\n\\r\\t]*$");
   gvm_validator_add (validator, "hour", "^([01]?[0-9]|2[0-3])$");
   gvm_validator_add (validator, "howto_use", "(?s)^.*$");
   gvm_validator_add (validator, "howto_install", "(?s)^.*$");
@@ -407,6 +417,8 @@ gsad_init_validator ()
   gvm_validator_add (validator, "preference:value", "(?s)^.*$");
   gvm_validator_add (validator, "prev_action", "(?s)^.*$");
   gvm_validator_add (validator, "privacy_algorithm", "^(aes|des|)$");
+  gvm_validator_add (validator, "protection_requirement",
+                     "^(normal|high|very_high)$");
   gvm_validator_add (validator, "private_key", "(?s)^.*$");
   gvm_validator_add (validator, "public_key", "(?s)^.*$");
   gvm_validator_add (validator, "pw", "^[[:alnum:]]+$");
@@ -470,6 +482,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "target_source",
                      "^(asset_hosts|file|import|manual)$");
   gvm_validator_add (validator, "target_exclude_source", "^(file|manual)$");
+  gvm_validator_add (validator, "target_ids", "^[a-z0-9\\- ,\\n\\r\\t]*$");
   gvm_validator_add (validator, "timezone", "^.*$");
   gvm_validator_add (validator, "token", "^[a-z0-9\\-]+$");
   gvm_validator_add (validator, "severity",
@@ -539,6 +552,8 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "result_id", "id");
   gvm_validator_alias (validator, "scanner_id", "id");
   gvm_validator_alias (validator, "schedule_id", "id");
+  gvm_validator_alias (validator, "scope_id", "id");
+  gvm_validator_alias (validator, "scope_report_id", "id");
   gvm_validator_alias (validator, "setting_id", "id");
   gvm_validator_alias (validator, "slave_id", "id");
   gvm_validator_alias (validator, "smb_credential_id", "id");

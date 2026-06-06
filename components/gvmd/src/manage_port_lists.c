@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -27,7 +28,8 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Feed port lists. */
 
 /**

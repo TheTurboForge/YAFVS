@@ -20,7 +20,8 @@
 #define G_LOG_DOMAIN "md manage"
 
 
-
+
+
 /* Resource type information. */
 
 /**
@@ -58,6 +59,8 @@ valid_type (const char* type)
          || (strcasecmp (type, "report_format") == 0)
          || (strcasecmp (type, "result") == 0)
          || (strcasecmp (type, "role") == 0)
+         || (strcasecmp (type, "scope") == 0)
+         || (strcasecmp (type, "scope_report") == 0)
          || (strcasecmp (type, "scanner") == 0)
          || (strcasecmp (type, "schedule") == 0)
          || (strcasecmp (type, "tag") == 0)
@@ -128,6 +131,10 @@ type_db_name (const char* type)
     return "report_config";
   if (strcasecmp (type, "Report Format") == 0)
     return "report_format";
+  if (strcasecmp (type, "Scope") == 0)
+    return "scope";
+  if (strcasecmp (type, "Scope Report") == 0)
+    return "scope_report";
   if (strcasecmp (type, "Result") == 0)
     return "result";
   if (strcasecmp (type, "Role") == 0)
@@ -278,6 +285,8 @@ type_has_trash (const char *type)
          && strcasecmp (type, "report")
          && strcasecmp (type, "result")
          && strcasecmp (type, "info")
+         && strcasecmp (type, "scope")
+         && strcasecmp (type, "scope_report")
          && type_is_info_subtype (type) == 0
          && strcasecmp (type, "vuln")
          && strcasecmp (type, "user")
@@ -305,7 +314,8 @@ type_owned (const char* type)
          && strcasecmp (type, "report_operating_system")
          && strcasecmp (type, "report_port")
          && strcasecmp (type, "report_tls_certificate")
-         && strcasecmp (type, "report_vuln");
+         && strcasecmp (type, "report_vuln")
+         && strcasecmp (type, "scope_report");
 }
 
 /**
@@ -321,7 +331,8 @@ type_trash_in_table (const char *type)
   return strcasecmp (type, "task") == 0;
 }
 
-
+
+
 /* SecInfo specific resource type information. */
 
 /**

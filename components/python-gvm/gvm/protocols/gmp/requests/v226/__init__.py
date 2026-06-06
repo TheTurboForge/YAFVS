@@ -65,6 +65,7 @@ from ._filters import Filters, FilterType
 from ._report_configs import ReportConfigParameter, ReportConfigs
 from ._reports import Reports
 from ._resource_names import ResourceNames, ResourceType
+from ._scopes import Scopes
 
 __all__ = (
     "AggregateStatistic",
@@ -107,6 +108,7 @@ __all__ = (
     "ResourceType",
     "Results",
     "ScanConfigs",
+    "Scopes",
     "ScannerType",
     "Scanners",
     "Schedules",

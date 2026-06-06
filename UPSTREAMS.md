@@ -12,6 +12,20 @@ Import method: source snapshot from local upstream cache, excluding only upstrea
 
 TurboVAS is an independent project and is not affiliated with, sponsored by, or endorsed by Greenbone AG. The Greenbone/OpenVAS repositories listed below are upstream source references for the imported components. For official Greenbone/OpenVAS vulnerability-management products, support, or services, contact Greenbone directly at https://www.greenbone.net/.
 
+## Intentional Product Divergence
+
+TurboVAS intentionally diverges from inherited OpenVAS behavior where doing so
+supports a clearer operator workflow. One major planned divergence is
+scope-based reporting: technical targets remain evidence-collection units,
+while scopes become the operator-facing accountability, policy, and reporting
+boundaries. This is intended to avoid tying reports directly to technical target
+definitions when one operational population needs several targets because of
+network boundaries, credentials, scan constraints, or scanner reachability.
+
+See `docs/SCOPE_BASED_REPORTING.md` for the public model.
+
+## Imported Components
+
 | Component | Path | Upstream repository | Imported commit | Role |
 | --- | --- | --- | --- | --- |
 | OpenVAS Scanner | `components/openvas-scanner` | https://github.com/greenbone/openvas-scanner | `f039649` | Scanner engine and NASL/VT execution core; includes C scanner and Rust/openvasd-related code. |

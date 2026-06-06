@@ -23,6 +23,9 @@ TurboVAS is an opinionated scanner for vulnerability management operators. It is
 designed around a specific operating model rather than arbitrary local process
 customization. See `docs/VULNERABILITY_MANAGEMENT_PRACTICE.md`.
 
+TurboVAS also intentionally separates technical scan targets from reporting
+scopes. See `docs/SCOPE_BASED_REPORTING.md`.
+
 ## Development Commands
 
 TurboVAS provides a small root command surface for repository health checks:

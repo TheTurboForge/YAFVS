@@ -5944,6 +5944,84 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           set_client_state (CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL_PORT);
         ELSE_READ_OVER;
 
+      case CLIENT_CREATE_TASK:
+        if (strcasecmp ("ALTERABLE", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_ALTERABLE);
+        else if (strcasecmp ("COPY", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_COPY);
+        else if (strcasecmp ("PREFERENCES", element_name) == 0)
+          {
+            create_task_data->preferences = make_array ();
+            set_client_state (CLIENT_CREATE_TASK_PREFERENCES);
+          }
+        else if (strcasecmp ("NAME", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_NAME);
+        else if (strcasecmp ("COMMENT", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_COMMENT);
+        else if (strcasecmp ("SCANNER", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &create_task_data->scanner_id);
+            set_client_state (CLIENT_CREATE_TASK_SCANNER);
+          }
+        else if (strcasecmp ("CONFIG", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &create_task_data->config_id);
+            set_client_state (CLIENT_CREATE_TASK_CONFIG);
+          }
+#if ENABLE_AGENTS
+        else if (strcasecmp ("AGENT_GROUP", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &create_task_data->agent_group_id);
+            set_client_state (CLIENT_CREATE_TASK_AGENT_GROUP);
+          }
+#endif /* ENABLE_AGENTS */
+        else if (strcasecmp ("ALERT", element_name) == 0)
+          {
+            const gchar *attribute;
+            if (find_attribute (attribute_names, attribute_values, "id",
+                                &attribute))
+              array_add (create_task_data->alerts, g_strdup (attribute));
+            set_client_state (CLIENT_CREATE_TASK_ALERT);
+          }
+        else if (strcasecmp ("SCHEDULE", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &create_task_data->schedule_id);
+            set_client_state (CLIENT_CREATE_TASK_SCHEDULE);
+          }
+        else if (strcasecmp ("SCHEDULE_PERIODS", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_SCHEDULE_PERIODS);
+        else if (strcasecmp ("TARGET", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &create_task_data->target_id);
+            set_client_state (CLIENT_CREATE_TASK_TARGET);
+          }
+        else if (strcasecmp ("USAGE_TYPE", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_USAGE_TYPE);
+        ELSE_READ_OVER;
+
+      case CLIENT_CREATE_TASK_PREFERENCES:
+        if (strcasecmp ("PREFERENCE", element_name) == 0)
+          {
+            assert (create_task_data->preference == NULL);
+            create_task_data->preference = g_malloc (sizeof (name_value_t));
+            create_task_data->preference->name = NULL;
+            create_task_data->preference->value = NULL;
+            set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE);
+          }
+        ELSE_READ_OVER;
+
+      case CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE:
+        if (strcasecmp ("SCANNER_NAME", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE_NAME);
+        else if (strcasecmp ("VALUE", element_name) == 0)
+          set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE_VALUE);
+        ELSE_READ_OVER;
+
       case CLIENT_GET_AGGREGATES:
         if (strcasecmp ("DATA_COLUMN", element_name) == 0)
           {
@@ -6476,6 +6554,95 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL:
         if (strcasecmp ("PORT", element_name) == 0)
           set_client_state (CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL_PORT);
+        ELSE_READ_OVER;
+
+      case CLIENT_MODIFY_TASK:
+        if (strcasecmp ("ALTERABLE", element_name) == 0)
+          set_client_state (CLIENT_MODIFY_TASK_ALTERABLE);
+        else if (strcasecmp ("COMMENT", element_name) == 0)
+          {
+            gvm_append_string (&modify_task_data->comment, "");
+            set_client_state (CLIENT_MODIFY_TASK_COMMENT);
+          }
+        else if (strcasecmp ("SCANNER", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &modify_task_data->scanner_id);
+            set_client_state (CLIENT_MODIFY_TASK_SCANNER);
+          }
+#if ENABLE_AGENTS
+        else if (strcasecmp ("AGENT_GROUP", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &modify_task_data->agent_group_id);
+            set_client_state (CLIENT_MODIFY_TASK_AGENT_GROUP);
+          }
+#endif /* ENABLE_AGENTS */
+        else if (strcasecmp ("ALERT", element_name) == 0)
+          {
+            const gchar *attribute;
+            if (find_attribute (attribute_names, attribute_values, "id",
+                                &attribute))
+              array_add (modify_task_data->alerts, g_strdup (attribute));
+            set_client_state (CLIENT_MODIFY_TASK_ALERT);
+          }
+        else if (strcasecmp ("CONFIG", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &modify_task_data->config_id);
+            set_client_state (CLIENT_MODIFY_TASK_CONFIG);
+          }
+        else if (strcasecmp ("NAME", element_name) == 0)
+          set_client_state (CLIENT_MODIFY_TASK_NAME);
+        else if (strcasecmp ("PREFERENCES", element_name) == 0)
+          {
+            modify_task_data->preferences = make_array ();
+            set_client_state (CLIENT_MODIFY_TASK_PREFERENCES);
+          }
+        else if (strcasecmp ("SCHEDULE", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &modify_task_data->schedule_id);
+            set_client_state (CLIENT_MODIFY_TASK_SCHEDULE);
+          }
+        else if (strcasecmp ("SCHEDULE_PERIODS", element_name) == 0)
+          set_client_state (CLIENT_MODIFY_TASK_SCHEDULE_PERIODS);
+        else if (strcasecmp ("TARGET", element_name) == 0)
+          {
+            append_attribute (attribute_names, attribute_values, "id",
+                              &modify_task_data->target_id);
+            set_client_state (CLIENT_MODIFY_TASK_TARGET);
+          }
+        else if (strcasecmp ("FILE", element_name) == 0)
+          {
+            const gchar *attribute;
+            append_attribute (attribute_names, attribute_values, "name",
+                              &modify_task_data->file_name);
+            if (find_attribute (attribute_names, attribute_values,
+                                "action", &attribute))
+              gvm_append_string (&modify_task_data->action, attribute);
+            else
+              gvm_append_string (&modify_task_data->action, "update");
+            set_client_state (CLIENT_MODIFY_TASK_FILE);
+          }
+        ELSE_READ_OVER;
+
+      case CLIENT_MODIFY_TASK_PREFERENCES:
+        if (strcasecmp ("PREFERENCE", element_name) == 0)
+          {
+            assert (modify_task_data->preference == NULL);
+            modify_task_data->preference = g_malloc (sizeof (name_value_t));
+            modify_task_data->preference->name = NULL;
+            modify_task_data->preference->value = NULL;
+            set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE);
+          }
+        ELSE_READ_OVER;
+
+      case CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE:
+        if (strcasecmp ("SCANNER_NAME", element_name) == 0)
+          set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME);
+        else if (strcasecmp ("VALUE", element_name) == 0)
+          set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE);
         ELSE_READ_OVER;
 
       case CLIENT_RUN_WIZARD:

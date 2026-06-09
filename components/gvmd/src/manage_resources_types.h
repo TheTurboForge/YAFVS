@@ -16,11 +16,6 @@
 
 #include  "iterator.h"
 
-#if ENABLE_AGENTS
-typedef resource_t agent_t;
-typedef resource_t agent_group_t;
-typedef resource_t agent_installer_t;
-#endif
 typedef resource_t alert_t;
 typedef resource_t asset_snapshot_t;
 typedef resource_t config_t;

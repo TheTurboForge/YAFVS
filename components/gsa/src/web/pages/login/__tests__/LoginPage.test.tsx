@@ -191,7 +191,7 @@ describe('LoginPage tests', () => {
   test('should not clear another user saved page on login', async () => {
     sessionStorage.clear();
 
-    sessionStorage.setItem('gsa_last_visited_page_alice', '/agents');
+    sessionStorage.setItem('gsa_last_visited_page_alice', '/reports');
 
     const login = testing.fn().mockResolvedValue({
       locale: 'locale',
@@ -217,7 +217,7 @@ describe('LoginPage tests', () => {
     await wait();
 
     expect(sessionStorage.getItem('gsa_last_visited_page_alice')).toBe(
-      '/agents',
+      '/reports',
     );
   });
 });

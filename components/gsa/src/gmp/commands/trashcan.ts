@@ -7,7 +7,6 @@
 import HttpCommand from 'gmp/commands/http';
 import type Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import AgentGroup from 'gmp/models/agent-group';
 import Alert from 'gmp/models/alert';
 import Credential from 'gmp/models/credential';
 import Filter from 'gmp/models/filter';
@@ -39,7 +38,6 @@ export interface TrashCanGetData {
   tags: Tag[];
   targets: Target[];
   tasks: Task[];
-  agentGroups: AgentGroup[];
   failedRequests?: string[];
 }
 
@@ -99,10 +97,6 @@ interface TasksResponseData {
   get_tasks_response?: {task: UsageTypeElement[] | UsageTypeElement};
 }
 
-interface AgentGroupResponseData {
-  get_agent_groups_response?: {agent_group: ModelElement[] | ModelElement};
-}
-
 interface TrashCanGetResponseData<TData> extends XmlResponseData {
   get_trash: TData;
 }
@@ -135,11 +129,7 @@ class TrashCanCommand extends HttpCommand {
     await this.httpPostWithTransform({cmd: 'empty_trashcan'});
   }
 
-  async get({
-    agentGroups: requestAgentGroups = false,
-  }: {
-    agentGroups?: boolean;
-  } = {}): Promise<Response<TrashCanGetData, XmlMeta>> {
+  async get(): Promise<Response<TrashCanGetData, XmlMeta>> {
     const requests = [
       this.httpGetWithTransform({cmd: 'get_trash_alerts'}) as TrashCanGetPromise<AlertResponseData>,
       this.httpGetWithTransform({cmd: 'get_trash_configs'}) as TrashCanGetPromise<ConfigsResponseData>,
@@ -154,9 +144,6 @@ class TrashCanCommand extends HttpCommand {
       this.httpGetWithTransform({cmd: 'get_trash_tags'}) as TrashCanGetPromise<TagsResponseData>,
       this.httpGetWithTransform({cmd: 'get_trash_targets'}) as TrashCanGetPromise<TargetsResponseData>,
       this.httpGetWithTransform({cmd: 'get_trash_tasks'}) as TrashCanGetPromise<TasksResponseData>,
-      requestAgentGroups
-        ? (this.httpGetWithTransform({cmd: 'get_trash_agent_group'}) as TrashCanGetPromise<AgentGroupResponseData>)
-        : Promise.resolve(),
     ];
 
     const requestNames = [
@@ -173,7 +160,6 @@ class TrashCanCommand extends HttpCommand {
       'tags',
       'targets',
       'tasks',
-      'agentGroups',
     ];
 
     const results = await Promise.allSettled(requests);
@@ -201,7 +187,6 @@ class TrashCanCommand extends HttpCommand {
     const tagsResponse = getResponse<TrashCanGetResponse<TagsResponseData>>(10);
     const targetsResponse = getResponse<TrashCanGetResponse<TargetsResponseData>>(11);
     const tasksResponse = getResponse<TrashCanGetResponse<TasksResponseData>>(12);
-    const agentGroupsResponse = getResponse<TrashCanGetResponse<AgentGroupResponseData>>(13);
 
     const alertsData = alertsResponse?.data.get_trash;
     const configsData = configsResponse?.data.get_trash;
@@ -216,7 +201,6 @@ class TrashCanCommand extends HttpCommand {
     const tagsData = tagsResponse?.data.get_trash;
     const targetsData = targetsResponse?.data.get_trash;
     const tasksData = tasksResponse?.data.get_trash;
-    const agentGroupsData = agentGroupsResponse?.data.get_trash;
 
     const baseResponse =
       targetsResponse ||
@@ -231,8 +215,7 @@ class TrashCanCommand extends HttpCommand {
       scannersResponse ||
       schedulesResponse ||
       tagsResponse ||
-      tasksResponse ||
-      agentGroupsResponse;
+      tasksResponse;
 
     if (!baseResponse) {
       throw new Error('All trash can requests failed');
@@ -252,7 +235,6 @@ class TrashCanCommand extends HttpCommand {
       tags: map(tagsData?.get_tags_response?.tag, element => Tag.fromElement(element)),
       targets: map(targetsData?.get_targets_response?.target, element => Target.fromElement(element)),
       tasks: map(tasksData?.get_tasks_response?.task, element => Task.fromElement(element)),
-      agentGroups: map(agentGroupsData?.get_agent_groups_response?.agent_group, element => AgentGroup.fromElement(element)),
       failedRequests: failedRequests.length > 0 ? failedRequests : undefined,
     });
   }

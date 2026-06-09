@@ -23,12 +23,6 @@
  */
 #define G_LOG_DOMAIN "md   manage"
 
-#ifndef ENABLE_AGENTS
-/**
- * @brief Whether to enable agents.
- */
-#define ENABLE_AGENTS 0
-#endif
 
 
 #ifndef ENABLE_OPENVASD
@@ -44,13 +38,6 @@
  */
 #define ENABLE_CREDENTIAL_STORES 0
 #endif
-
-/**
- * @brief State of a single feature.
- */
-static feature_state_t feature_agents =
-  {ENABLE_AGENTS, 0};
-
 
 /**
  * @brief State of a single feature.
@@ -87,9 +74,6 @@ static feature_state_t feature_jwt_auth =
  */
 struct conf_feature_flags
 {
-  int has_agents;              ///< Whether flag is present.
-  int agents;                  ///< Value of flag.
-
   int has_openvasd;            ///< Whether flag is present.
   int openvasd;                ///< Value of flag.
 
@@ -139,10 +123,6 @@ load_conf_file_feature_flags (struct conf_feature_flags *out)
   kf = get_gvmd_config ();
   if (kf == NULL)
     return 0;
-
-  gvmd_config_get_boolean (kf, "features", "enable_agents",
-                           &out->has_agents,
-                           &out->agents);
 
   gvmd_config_get_boolean (kf, "features", "enable_credential_store",
                            &out->has_credential_store,
@@ -234,11 +214,6 @@ runtime_flags_init ()
       conf_file_feature_flags_init_empty (&conf_flags);
     }
 
-  resolve_feature (&feature_agents,
-                   "GVMD_ENABLE_AGENTS",
-                   conf_flags.has_agents,
-                   conf_flags.agents);
-
   resolve_feature (&feature_openvasd,
                    "GVMD_ENABLE_OPENVASD",
                    conf_flags.has_openvasd,
@@ -283,8 +258,6 @@ feature_enabled (feature_id_t t)
 
   switch (t)
     {
-    case FEATURE_ID_AGENTS:
-      return feature_agents.enabled;
     case FEATURE_ID_OPENVASD_SCANNER:
       return feature_openvasd.enabled;
     case FEATURE_ID_CREDENTIAL_STORES:
@@ -312,8 +285,6 @@ feature_compiled_in (feature_id_t t)
 {
   switch (t)
     {
-    case FEATURE_ID_AGENTS:
-      return feature_agents.compiled_in;
     case FEATURE_ID_OPENVASD_SCANNER:
       return feature_openvasd.compiled_in;
     case FEATURE_ID_CREDENTIAL_STORES:
@@ -337,24 +308,6 @@ feature_compiled_in (feature_id_t t)
 void
 runtime_append_disabled_commands (GString *buf)
 {
-  /* AGENTS */
-  if (!feature_enabled (FEATURE_ID_AGENTS))
-    {
-      append_commands (
-        buf,
-        "get_agents,"
-        "modify_agent,"
-        "delete_agent,"
-        "modify_agent_control_scan_config,"
-        "get_agent_groups,"
-        "create_agent_group,"
-        "modify_agent_group,"
-        "delete_agent_group,"
-        "get_agent_installers,"
-        "get_agent_installer_file,"
-        "sync_agents");
-    }
-
   /* CREDENTIAL_STORES */
   if (!feature_enabled (FEATURE_ID_CREDENTIAL_STORES))
     {

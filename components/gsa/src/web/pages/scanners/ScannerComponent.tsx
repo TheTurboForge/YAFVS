@@ -18,8 +18,6 @@ import FilterTerm from 'gmp/models/filter/filterterm';
 import {
   type default as Scanner,
   type ScannerType,
-  AGENT_CONTROLLER_SCANNER_TYPE,
-  AGENT_CONTROLLER_SENSOR_SCANNER_TYPE,
   OPENVASD_SCANNER_TYPE,
   OPENVASD_SENSOR_SCANNER_TYPE,
 } from 'gmp/models/scanner';
@@ -148,9 +146,7 @@ const ScannerComponent = ({
     if (isDefined(scanner)) {
       const credentialTypes: CredentialType[] =
         scanner.scannerType === OPENVASD_SCANNER_TYPE ||
-        scanner.scannerType === AGENT_CONTROLLER_SCANNER_TYPE ||
-        scanner.scannerType === OPENVASD_SENSOR_SCANNER_TYPE ||
-        scanner.scannerType === AGENT_CONTROLLER_SENSOR_SCANNER_TYPE
+        scanner.scannerType === OPENVASD_SENSOR_SCANNER_TYPE
           ? [CERTIFICATE_CREDENTIAL_TYPE]
           : [];
       const credentialsPromise =

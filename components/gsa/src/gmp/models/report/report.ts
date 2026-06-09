@@ -74,9 +74,6 @@ export interface ReportReportTaskElement {
     name?: string;
     trash?: YesNo;
   };
-  agent_group?: {
-    _id?: string;
-  };
 }
 
 export interface ReportReportElement extends ModelElement {

@@ -172,7 +172,7 @@ describe('ScannerCommand tests', () => {
       args: {
         cmd: 'get_scanner',
         scanner_id: '123',
-        details: '1',
+        details: '0',
       },
     });
     expect(result.data).toEqual(
@@ -222,7 +222,7 @@ describe('ScannerCommand tests', () => {
       args: {
         cmd: 'get_scanner',
         scanner_id: '123',
-        details: '1',
+        details: '0',
       },
     });
     expect(result.data).toEqual(
@@ -234,87 +234,4 @@ describe('ScannerCommand tests', () => {
     );
   });
 
-  test('should modify agent control config with all parameters', async () => {
-    const response = createActionResultResponse({
-      action: 'modify_agent_control_scan_config',
-      id: '123',
-      message: 'Config updated successfully',
-    });
-    const fakeHttp = createHttp(response);
-    const cmd = new ScannerCommand(fakeHttp);
-    await cmd.modifyAgentControlConfig({
-      id: '123',
-      attempts: 3,
-      delayInSeconds: 10,
-      maxJitterInSeconds: 5,
-      bulkSize: 100,
-      bulkThrottleTimeInMs: 500,
-      indexerDirDepth: 3,
-      schedulerCronTimes: ['0 0 * * *', '0 12 * * *'],
-      intervalInSeconds: 60,
-      missUntilInactive: 3,
-      updateToLatest: 1,
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'modify_agent_control_scan_config',
-        agent_control_id: '123',
-        attempts: 3,
-        delay_in_seconds: 10,
-        max_jitter_in_seconds: 5,
-        bulk_size: 100,
-        bulk_throttle_time_in_ms: 500,
-        indexer_dir_depth: 3,
-        'scheduler_cron_times:': '0 0 * * *,0 12 * * *',
-        interval_in_seconds: 60,
-        miss_until_inactive: 3,
-        update_to_latest: 1,
-      },
-    });
-  });
-
-  test('should modify agent control config with partial parameters', async () => {
-    const response = createActionResultResponse({
-      action: 'modify_agent_control_scan_config',
-      id: '123',
-      message: 'Config updated successfully',
-    });
-    const fakeHttp = createHttp(response);
-    const cmd = new ScannerCommand(fakeHttp);
-    await cmd.modifyAgentControlConfig({
-      id: '123',
-      attempts: 5,
-      schedulerCronTimes: ['0 2 * * *'],
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'modify_agent_control_scan_config',
-        agent_control_id: '123',
-        attempts: 5,
-        'scheduler_cron_times:': '0 2 * * *',
-      },
-    });
-  });
-
-  test('should modify agent control config without scheduler cron times if empty', async () => {
-    const response = createActionResultResponse({
-      action: 'modify_agent_control_scan_config',
-      id: '123',
-      message: 'Config updated successfully',
-    });
-    const fakeHttp = createHttp(response);
-    const cmd = new ScannerCommand(fakeHttp);
-    await cmd.modifyAgentControlConfig({
-      id: '123',
-      attempts: 5,
-      schedulerCronTimes: [],
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'modify_agent_control_scan_config',
-        agent_control_id: '123',
-        attempts: 5,
-      },
-    });
-  });
 });

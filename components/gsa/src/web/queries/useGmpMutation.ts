@@ -33,7 +33,7 @@ export function useGmpMutation<
       if (isDefined(invalidateQueryIds)) {
         /*
          * TODO test cache invalidation based on useGetQuery cmd queryKey: [cmd, token, filter]
-         * Invalidate queries for the specific entity type (e.g., get_agents, get_users)
+         * Invalidate queries for the specific entity type (e.g., get_tasks, get_users)
          * Transform entityKey using the same logic as useGetQuery
          */
         void queryClient.invalidateQueries({

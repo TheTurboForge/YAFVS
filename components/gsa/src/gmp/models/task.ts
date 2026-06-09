@@ -131,11 +131,6 @@ export interface TaskElement extends ModelElement {
     name?: string;
     trash?: YesNo;
   };
-  agent_group?: {
-    _id?: string;
-    name?: string;
-    trash?: YesNo;
-  };
   trend?: TaskTrend;
   usage_type?: string;
 }
@@ -190,7 +185,6 @@ export interface TaskProperties extends ModelProperties {
   slave?: TaskSlave;
   status?: TaskStatus;
   target?: Model;
-  agentGroup?: Model;
   trend?: TaskTrend;
   // from preferences
   apply_overrides?: YesNo;
@@ -304,7 +298,6 @@ class Task extends Model {
   readonly slave?: TaskSlave;
   readonly status: TaskStatus;
   readonly target?: Model;
-  readonly agentGroup?: Model;
   readonly trend?: TaskTrend;
   readonly usageType: TaskUsageType;
 
@@ -348,7 +341,6 @@ class Task extends Model {
     slave,
     status = TASK_STATUS.unknown,
     target,
-    agentGroup,
     trend,
     usageType = USAGE_TYPE.scan,
     ...properties
@@ -382,7 +374,6 @@ class Task extends Model {
     this.status = status;
     this.target = target;
     this.trend = trend;
-    this.agentGroup = agentGroup;
     this.usageType = usageType;
   }
 
@@ -455,9 +446,6 @@ class Task extends Model {
     copy.target = isEmpty(element.target?._id)
       ? undefined
       : Model.fromElement(element.target, 'target');
-    copy.agentGroup = isEmpty(element.agent_group?._id)
-      ? undefined
-      : Model.fromElement(element.agent_group, 'agentgroup');
     // slave isn't really an entity type but it has an id
     copy.slave = isEmpty(element.slave?._id)
       ? undefined
@@ -567,12 +555,9 @@ class Task extends Model {
    * Returns true if the task is an import task.
    */
   isImport() {
-    return !isDefined(this.target) && !isDefined(this.agentGroup);
+    return !isDefined(this.target);
   }
 
-  isAgent() {
-    return isDefined(this.agentGroup);
-  }
 }
 
 export default Task;

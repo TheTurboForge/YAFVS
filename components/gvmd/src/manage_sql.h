@@ -18,7 +18,8 @@
 #include "manage.h"
 #include "manage_utils.h"
 
-
+
+
 /* Internal types and preprocessor definitions. */
 
 /**
@@ -117,7 +118,8 @@
  */
 #define DB_SUPERUSER_ROLE "dba"
 
-
+
+
 /* Macros. */
 
 /**
@@ -142,7 +144,8 @@
     }                                                                        \
   while (0)
 
-
+
+
 /* Iterator definitions. */
 
 /**
@@ -161,7 +164,8 @@ struct report_aux {
   GHashTable *hash_hostdetails;  ///< Hash.
 };
 
-
+
+
 /* Variables */
 
 
@@ -221,7 +225,8 @@ extern db_conn_info_t gvmd_db_conn_info;
  */
 extern manage_connection_forker_t manage_fork_connection;
 
-
+
+
 /* Function prototypes */
 
 typedef long long int rowid_t;
@@ -291,9 +296,6 @@ preference_iterator_value (iterator_t *);
 
 int
 create_current_report (task_t, char **, task_status_t);
-
-int
-create_agent_task_current_report (task_t, char *, task_status_t);
 
 int
 set_task_schedule_uuid (const gchar*, schedule_t, int);

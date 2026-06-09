@@ -119,20 +119,6 @@ const Menu = () => {
   const alertMatch = useMatch('/alert/*');
   const isAlertsActive = Boolean(alertsMatch || alertMatch);
 
-  const agentsMatch = useMatch('/agents');
-  const agentMatch = useMatch('/agent/*');
-  const isAgentsActive = Boolean(agentsMatch || agentMatch);
-
-  const agentGroupsMatch = useMatch('/agent-groups');
-  const agentGroupMatch = useMatch('/agent-group/*');
-  const isAgentGroupsActive = Boolean(agentGroupsMatch || agentGroupMatch);
-
-  const agentInstallersMatch = useMatch('/agent-installers');
-  const agentInstallerMatch = useMatch('/agent-installer/*');
-  const isAgentInstallersActive = Boolean(
-    agentInstallersMatch || agentInstallerMatch,
-  );
-
   const schedulesMatch = useMatch('/schedules');
   const scheduleMatch = useMatch('/schedule/*');
   const isSchedulesActive = Boolean(schedulesMatch || scheduleMatch);
@@ -184,9 +170,6 @@ const Menu = () => {
     'override',
   ]);
   const mayOpConfiguration = mayAccessAny([
-    'agent',
-    'agentgroup',
-    'agentinstaller',
     'target',
     'portlist',
     'credential',
@@ -350,9 +333,6 @@ const Menu = () => {
           isScannersActive,
           isFiltersActive,
           isTagsActive,
-          isAgentsActive,
-          isAgentGroupsActive,
-          isAgentInstallersActive,
         ].some(Boolean),
         subNav: [
           capabilities.mayAccess('target') && {
@@ -421,27 +401,6 @@ const Menu = () => {
             isPathMatch: Boolean(tagsMatch),
             active: isTagsActive,
           },
-          capabilities.mayAccess('agent') &&
-            features.featureEnabled('ENABLE_AGENTS') && {
-              label: _('Agents'),
-              to: '/agents',
-              isPathMatch: Boolean(agentsMatch),
-              active: isAgentsActive,
-            },
-          capabilities.mayAccess('agentgroup') &&
-            features.featureEnabled('ENABLE_AGENTS') && {
-              label: _('Agent Groups'),
-              to: '/agent-groups',
-              isPathMatch: Boolean(agentGroupsMatch),
-              active: isAgentGroupsActive,
-            },
-          capabilities.mayAccess('agentinstaller') &&
-            features.featureEnabled('ENABLE_AGENTS') && {
-              label: _('Agent Installers'),
-              to: '/agent-installers',
-              isPathMatch: Boolean(agentInstallersMatch),
-              active: isAgentInstallersActive,
-            },
         ].filter(Boolean),
       },
       {

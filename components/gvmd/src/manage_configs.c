@@ -31,7 +31,8 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Configs. */
 
 /**
@@ -53,7 +54,8 @@ config_predefined_uuid (const gchar *config_id)
   return config_predefined (config);
 }
 
-
+
+
 /* Feed configs. */
 
 /**
@@ -583,8 +585,6 @@ scanner_type_requires_config (int scanner_type)
   switch (scanner_type)
     {
     case SCANNER_TYPE_CVE:
-    case SCANNER_TYPE_AGENT_CONTROLLER:
-    case SCANNER_TYPE_AGENT_CONTROLLER_SENSOR:
       return FALSE;
 
     default:

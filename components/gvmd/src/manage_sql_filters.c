@@ -1276,7 +1276,6 @@ filter_clause (const char* type, const char* filter,
                   "  (CASE WHEN (SELECT "
                   "               ( "
                   "                  target = 0 "
-                  "                  and COALESCE( agent_group, 0) = 0 "
                   "               ) "
                   "              FROM tasks"
                   "              WHERE tasks.id = task)"
@@ -1295,7 +1294,6 @@ filter_clause (const char* type, const char* filter,
                  (order,
                   " ORDER BY"
                   "  (CASE WHEN ( target = 0 "
-                  "               and COALESCE( agent_group, 0) = 0 "
                   "             ) "
                   "    THEN '0'"
                   "    ELSE run_status_name (run_status)"
@@ -1477,7 +1475,6 @@ filter_clause (const char* type, const char* filter,
                   "  (CASE WHEN (SELECT "
                   "               ( "
                   "                  target = 0 "
-                  "                  and COALESCE( agent_group, 0) = 0 "
                   "               ) "
                   "              FROM tasks"
                   "              WHERE tasks.id = task)"
@@ -1496,7 +1493,6 @@ filter_clause (const char* type, const char* filter,
                  (order,
                   " ORDER BY"
                   "  (CASE WHEN ( target = 0 "
-                  "               and COALESCE( agent_group, 0) = 0 "
                   "             ) "
                   "    THEN '0'"
                   "    ELSE run_status_name (run_status)"

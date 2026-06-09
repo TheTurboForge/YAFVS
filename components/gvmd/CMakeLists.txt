@@ -97,18 +97,13 @@ include(CPack)
 
 ## Variables
 
-set(GVMD_DATABASE_VERSION 280)
+set(GVMD_DATABASE_VERSION 281)
 
 set(GVMD_SCAP_DATABASE_VERSION 22)
 
 set(GVMD_CERT_DATABASE_VERSION 8)
 
-if(ENABLE_AGENTS)
-  # Set to the next GMP version if unstable agent features are enabled.
-  set(GMP_VERSION "22.8")
-else()
-  set(GMP_VERSION "22.7")
-endif()
+set(GMP_VERSION "22.7")
 
 if(SYSCONF_INSTALL_DIR)
   set(SYSCONFDIR "${SYSCONF_INSTALL_DIR}")
@@ -243,24 +238,6 @@ if(NOT ENABLE_OPENVASD)
 endif(NOT ENABLE_OPENVASD)
 add_definitions(-DENABLE_OPENVASD=${ENABLE_OPENVASD})
 
-if(NOT ENABLE_AGENTS)
-  set(ENABLE_AGENTS 0)
-endif(NOT ENABLE_AGENTS)
-add_definitions(-DENABLE_AGENTS=${ENABLE_AGENTS})
-
-if(ENABLE_AGENTS EQUAL 1)
-  set(IF_ENABLE_AGENTS "")
-  set(ENDIF_ENABLE_AGENTS "")
-  set(IF_NOT_ENABLE_AGENTS "<!--")
-  set(ENDIF_NOT_ENABLE_AGENTS "-->")
-elseif(ENABLE_AGENTS EQUAL 0)
-  set(IF_ENABLE_AGENTS "<!--")
-  set(ENDIF_ENABLE_AGENTS "-->")
-  set(IF_NOT_ENABLE_AGENTS "")
-  set(ENDIF_NOT_ENABLE_AGENTS "")
-endif()
-
-
 if(NOT ENABLE_JWT_AUTH)
   set(ENABLE_JWT_AUTH 0)
 endif(NOT ENABLE_JWT_AUTH)
@@ -278,8 +255,8 @@ elseif(ENABLE_JWT_AUTH EQUAL 0)
   set(ENDIF_NOT_ENABLE_JWT_AUTH "")
 endif()
 
-# HTTP scanner capability (used by ENABLE_OPENVASD / AGENTS)
-if(ENABLE_OPENVASD OR ENABLE_AGENTS)
+# HTTP scanner capability (used by ENABLE_OPENVASD)
+if(ENABLE_OPENVASD)
   set(ENABLE_HTTP_SCANNER 1)
 else()
   set(ENABLE_HTTP_SCANNER 0)

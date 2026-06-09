@@ -11,7 +11,6 @@ Describe (gvmd_config);
 
 BeforeEach (gvmd_config)
 {
-  unsetenv ("GVMD_ENABLE_AGENTS");
   unsetenv ("GVMD_JWT_ACCESS_DURATION");
 }
 
@@ -45,7 +44,6 @@ Ensure (gvmd_config, can_read_boolean_values)
 {
   const char *conf =
     "[features]\n"
-    "enable_agents = false\n"
     "enable_openvasd = true\n";
   char *path = write_test_config (conf);
   GKeyFile *kf;
@@ -60,13 +58,6 @@ Ensure (gvmd_config, can_read_boolean_values)
   gvmd_config_get_boolean (kf, "invalid_group", "enable_openvasd",
                            &conf_has_value, &conf_value);
   assert_that (conf_has_value, is_false);
-  assert_that (conf_value, is_false);
-
-  conf_has_value = FALSE;
-  conf_value = TRUE;
-  gvmd_config_get_boolean (kf, "features", "enable_agents",
-                           &conf_has_value, &conf_value);
-  assert_that (conf_has_value, is_true);
   assert_that (conf_value, is_false);
 
   conf_has_value = FALSE;
@@ -122,35 +113,35 @@ Ensure (gvmd_config, can_resolve_boolean_values)
 {
   int value = 123;
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 0, 0, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 0, 0, &value);
   assert_that (value, is_equal_to (123));
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 1, 0, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 1, 0, &value);
   assert_that (value, is_equal_to (0));
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 1, 1, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 1, 1, &value);
   assert_that (value, is_equal_to (1));
 
-  setenv ("GVMD_ENABLE_AGENTS", "no", 1);
+  setenv ("GVMD_ENABLE_OPENVASD", "no", 1);
   value = 123;
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 0, 1, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 0, 1, &value);
   assert_that (value, is_equal_to (0));
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 1, 0, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 1, 0, &value);
   assert_that (value, is_equal_to (0));
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 1, 1, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 1, 1, &value);
   assert_that (value, is_equal_to (0));
 
-  setenv ("GVMD_ENABLE_AGENTS", "yes", 1);
+  setenv ("GVMD_ENABLE_OPENVASD", "yes", 1);
   value = 123;
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 0, 0, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 0, 0, &value);
   assert_that (value, is_equal_to (1));
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 1, 0, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 1, 0, &value);
   assert_that (value, is_equal_to (1));
 
-  gvmd_config_resolve_boolean ("GVMD_ENABLE_AGENTS", 1, 1, &value);
+  gvmd_config_resolve_boolean ("GVMD_ENABLE_OPENVASD", 1, 1, &value);
   assert_that (value, is_equal_to (1));
 }
 

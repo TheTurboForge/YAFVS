@@ -32,7 +32,6 @@ interface TaskEntitiesPageProps {
   onAdvancedTaskWizardClick?: () => void;
   onImportTaskCreateClick?: () => void;
   onModifyTaskWizardClick?: () => void;
-  onNewAgentTaskClick?: () => void;
   onReportImportClick?: (task: Task) => void;
   onTaskCloneClick?: (task: Task) => void;
   onTaskCreateClick?: () => void;
@@ -91,7 +90,6 @@ const TaskListPage = ({
         advancedTaskWizard,
         modifyTaskWizard,
         taskWizard,
-        onNewAgentTaskClick,
       }) => (
         <>
           <PageTitle title={_('Tasks')} />
@@ -109,7 +107,6 @@ const TaskListPage = ({
             onFilterChanged={onFilterChanged}
             onImportTaskCreateClick={createImportTask}
             onModifyTaskWizardClick={modifyTaskWizard}
-            onNewAgentTaskClick={onNewAgentTaskClick}
             onReportImportClick={reportImport}
             onTaskCloneClick={clone}
             onTaskCreateClick={create}

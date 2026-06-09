@@ -303,9 +303,6 @@ scanner_type_matches_relay (int scanner_type,
 {
   switch (scanner_type)
   {
-    case SCANNER_TYPE_AGENT_CONTROLLER_SENSOR:
-      return relay_scanner_type == NULL
-             || strcasecmp (relay_scanner_type, "agent-control") == 0;
     case SCANNER_TYPE_OPENVASD_SENSOR:
       return relay_scanner_type == NULL
              || strcasecmp (relay_scanner_type, "openvasd") == 0;

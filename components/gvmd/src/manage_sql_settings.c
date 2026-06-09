@@ -725,14 +725,6 @@ modify_setting (const gchar *uuid, const gchar *name,
       /* Filters */
       if (strcmp (uuid, "b833a6f2-dcdc-4535-bfb0-a5154b5b5092") == 0)
         setting_name = g_strdup ("Alerts Filter");
-#if ENABLE_AGENTS
-      else if (strcmp (uuid, "391fc4f4-9f6c-4f0e-a689-37dd7d70d144") == 0)
-        setting_name = g_strdup ("Agent Groups Filter");
-      else if (strcmp (uuid, "c544a310-dc13-49c6-858e-f3160d75e221") == 0)
-        setting_name = g_strdup ("Agents Filter");
-      else if (strcmp (uuid, "a39a719a-e6bc-4d9f-a1e6-a53e5b014b05") == 0)
-        setting_name = g_strdup ("Agent Installers Filter");
-#endif
       else if (strcmp (uuid, "0f040d06-abf9-43a2-8f94-9de178b0e978") == 0)
         setting_name = g_strdup ("Assets Filter");
       else if (strcmp (uuid, "1a9fbd91-0182-44cd-bc88-a13a9b3b1bef") == 0)
@@ -1019,7 +1011,6 @@ setting_verify (const gchar *uuid, const gchar *value, const gchar *user)
     }
 
   if ((strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0
-     || (strcmp (uuid, SETTING_UUID_AGENT_OWNER) == 0 )
      || (strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER) == 0 ))
     && strlen (value))
     {
@@ -1072,8 +1063,6 @@ setting_verify (const gchar *uuid, const gchar *value, const gchar *user)
 static const gchar *
 setting_description (const gchar *uuid)
 {
-  if (strcmp (uuid, SETTING_UUID_AGENT_OWNER) == 0)
-    return "User who is given ownership of new Agents.";
   if (strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT) == 0)
     return "Default CA Certificate for Scanners";
   if (strcmp (uuid, SETTING_UUID_MAX_ROWS_PER_PAGE) == 0)
@@ -1103,8 +1092,6 @@ setting_description (const gchar *uuid)
 static const gchar *
 setting_name (const gchar *uuid)
 {
-  if (strcmp (uuid, SETTING_UUID_AGENT_OWNER) == 0)
-    return "Agent Owner";
   if (strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT) == 0)
     return "Default CA Cert";
   if (strcmp (uuid, SETTING_UUID_MAX_ROWS_PER_PAGE) == 0)
@@ -1145,8 +1132,7 @@ manage_modify_setting (GSList *log_config, const db_conn_info_t *database,
 
   g_info ("   Modifying setting.");
 
-  if (strcmp (uuid, SETTING_UUID_AGENT_OWNER)
-      && strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT)
+  if (strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT)
       && strcmp (uuid, SETTING_UUID_MAX_ROWS_PER_PAGE)
       && strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER)
       && strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER)
@@ -1177,8 +1163,7 @@ manage_modify_setting (GSList *log_config, const db_conn_info_t *database,
     {
       user_t user;
 
-      if ((strcmp (uuid, SETTING_UUID_AGENT_OWNER) == 0)
-          || (strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT) == 0)
+      if ((strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT) == 0)
           || (strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0)
           || (strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD) == 0)
           || (strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION) == 0)

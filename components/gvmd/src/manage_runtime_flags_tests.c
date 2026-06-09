@@ -23,7 +23,6 @@ Describe (manage_runtime_flags);
 
 BeforeEach (manage_runtime_flags)
 {
-  unsetenv ("GVMD_ENABLE_AGENTS");
   unsetenv ("GVMD_ENABLE_OPENVASD");
   unsetenv ("GVMD_ENABLE_CREDENTIAL_STORES");
   unsetenv ("GVMD_ENABLE_VT_METADATA");
@@ -49,15 +48,6 @@ write_test_config (const char *content)
 Ensure (manage_runtime_flags, default_flags_no_config_no_env)
 {
   runtime_flags_init ();
-
-#if ENABLE_AGENTS
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#endif
-
 
 #if ENABLE_OPENVASD
   assert_that (feature_compiled_in (FEATURE_ID_OPENVASD_SCANNER),
@@ -85,188 +75,6 @@ Ensure (manage_runtime_flags, default_flags_no_config_no_env)
   assert_that (feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT), is_equal_to (0));
 }
 
-Ensure (manage_runtime_flags, config_enables_agents_when_compiled_in)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = true\n";
-
-  char *path = write_test_config (conf);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (1));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#endif
-
-  remove (path);
-  g_free (path);
-}
-
-Ensure (manage_runtime_flags, config_disables_agents_when_compiled_in)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = false\n";
-
-  char *path = write_test_config (conf);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#endif
-
-  remove (path);
-  g_free (path);
-}
-
-Ensure (manage_runtime_flags, env_overrides_config_for_agents)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = false\n";
-
-  char *path = write_test_config (conf);
-
-  setenv ("GVMD_ENABLE_AGENTS", "1", 1);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (1));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#endif
-
-  remove (path);
-  g_free (path);
-}
-
-Ensure (manage_runtime_flags, invalid_env_falls_back_to_config)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = true\n";
-
-  char *path = write_test_config (conf);
-
-  setenv ("GVMD_ENABLE_AGENTS", "test", 1);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (1));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#endif
-
-  remove (path);
-  g_free (path);
-}
-
-Ensure (manage_runtime_flags, compiled_out_feature_ignores_env_and_config)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = true\n";
-
-  char *path = write_test_config (conf);
-
-  setenv ("GVMD_ENABLE_AGENTS", "1", 1);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (1));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_AGENTS), is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_AGENTS), is_equal_to (0));
-#endif
-
-  remove (path);
-  g_free (path);
-}
-
-Ensure (manage_runtime_flags,
-        runtime_append_disabled_commands_disables_agents_when_disabled)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = false\n";
-  char *path = write_test_config (conf);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-
-  GString *buf = g_string_new (NULL);
-  runtime_append_disabled_commands (buf);
-
-  assert_that (buf->len, is_greater_than (0));
-  assert_that (strstr (buf->str, "get_agents"), is_not_equal_to (NULL));
-  assert_that (strstr (buf->str, "modify_agent"), is_not_equal_to (NULL));
-
-  g_string_free (buf, TRUE);
-  remove (path);
-  g_free (path);
-#else
-  GString *buf = g_string_new (NULL);
-  runtime_append_disabled_commands (buf);
-  g_string_free (buf, TRUE);
-#endif
-}
-
-Ensure (manage_runtime_flags,
-        runtime_append_disabled_commands_does_not_disable_enabled_agents)
-{
-  const char *conf =
-    "[features]\n"
-    "enable_agents = true\n";
-  char *path = write_test_config (conf);
-
-  load_gvmd_config (path);
-  runtime_flags_init ();
-
-#if ENABLE_AGENTS
-
-  GString *buf = g_string_new (NULL);
-  runtime_append_disabled_commands (buf);
-
-  if (buf->len > 0)
-    {
-      assert_that (strstr (buf->str, "get_agents"), is_equal_to (NULL));
-      assert_that (strstr (buf->str, "modify_agent"), is_equal_to (NULL));
-    }
-
-  g_string_free (buf, TRUE);
-  remove (path);
-  g_free (path);
-#else
-  GString *buf = g_string_new (NULL);
-  runtime_append_disabled_commands (buf);
-  g_string_free (buf, TRUE);
-#endif
-}
-
 int
 main (int argc, char **argv)
 {
@@ -277,22 +85,6 @@ main (int argc, char **argv)
 
   add_test_with_context (suite, manage_runtime_flags,
                          default_flags_no_config_no_env);
-  add_test_with_context (suite, manage_runtime_flags,
-                         config_enables_agents_when_compiled_in);
-  add_test_with_context (suite, manage_runtime_flags,
-                         config_disables_agents_when_compiled_in);
-  add_test_with_context (suite, manage_runtime_flags,
-                         env_overrides_config_for_agents);
-  add_test_with_context (suite, manage_runtime_flags,
-                         invalid_env_falls_back_to_config);
-  add_test_with_context (suite, manage_runtime_flags,
-                         compiled_out_feature_ignores_env_and_config);
-  add_test_with_context (
-    suite, manage_runtime_flags,
-    runtime_append_disabled_commands_disables_agents_when_disabled);
-  add_test_with_context (
-    suite, manage_runtime_flags,
-    runtime_append_disabled_commands_does_not_disable_enabled_agents);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

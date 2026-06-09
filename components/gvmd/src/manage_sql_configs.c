@@ -35,13 +35,15 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Static headers for internal non-SQL functions. */
 
 int
 sync_configs_with_feed (gboolean);
 
-
+
+
 /* Static headers. */
 
 static int
@@ -50,7 +52,8 @@ switch_representation (config_t, int);
 static void
 update_config_caches (config_t);
 
-
+
+
 /* Helpers. */
 
 /**
@@ -71,7 +74,8 @@ member (GPtrArray *array, const char *string)
   return 0;
 }
 
-
+
+
 /* NVT selectors.  This is part of Configs.
  *
  * An NVT selector is a named selection of NVT's from the cache of all
@@ -1679,7 +1683,8 @@ check_config_families ()
   return ret;
 }
 
-
+
+
 /* NVT preferences.  This is part of Configs. */
 
 /**
@@ -2081,7 +2086,8 @@ set_task_preferences (task_t task, array_t *preferences)
   return 0;
 }
 
-
+
+
 /* Configs. */
 
 /**
@@ -2741,8 +2747,6 @@ create_task_check_scanner_type (scanner_t scanner)
     return 1;
   if (stype == SCANNER_TYPE_OPENVASD)
     return 1;
-  if (stype == SCANNER_TYPE_AGENT_CONTROLLER)
-    return 1;
   if (stype == SCANNER_TYPE_OPENVASD_SENSOR)
     return 1;
 
@@ -2818,9 +2822,6 @@ modify_task_check_config_scanner (task_t task, const char *config_id,
     return 0;
 
   if (stype == SCANNER_TYPE_OPENVASD_SENSOR)
-    return 0;
-
-  if (stype == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR)
     return 0;
 
   /* Default Scanner with OpenVAS Config. */
@@ -4218,7 +4219,8 @@ migrate_predefined_configs ()
        SETTING_UUID_FEED_IMPORT_OWNER);
 }
 
-
+
+
 /* Startup. */
 
 /**

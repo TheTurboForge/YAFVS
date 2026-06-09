@@ -29,45 +29,6 @@ interface InfoElement {
   version?: string;
 }
 
-interface AgentControlRetryElement {
-  attempts?: number;
-  delay_in_seconds?: number;
-  max_jitter_in_seconds?: number;
-}
-
-interface AgentControlElement {
-  retry?: AgentControlRetryElement;
-}
-
-interface AgentScriptExecutorElement {
-  bulk_size?: number;
-  bulk_throttle_time_in_ms?: number;
-  indexer_dir_depth?: number;
-  scheduler_cron_time?: {
-    item?: string | string[];
-  };
-}
-
-interface HeartbeatElement {
-  interval_in_seconds?: number;
-  miss_until_inactive?: number;
-}
-
-interface AgentDefaultsElement {
-  agent_control?: AgentControlElement;
-  agent_script_executor?: AgentScriptExecutorElement;
-  heartbeat?: HeartbeatElement;
-}
-
-interface AgentControlDefaultsElement {
-  update_to_latest?: YesNo;
-}
-
-interface AgentControlConfigElement {
-  agent_defaults?: AgentDefaultsElement;
-  agent_control_defaults?: AgentControlDefaultsElement;
-}
-
 interface ScannerParamElement {
   default?: string | number;
   description?: string;
@@ -108,7 +69,6 @@ export interface ScannerElement extends ModelElement {
   tasks?: {
     task?: ScannerTaskElement | ScannerTaskElement[];
   };
-  agent_control_config_defaults?: AgentControlConfigElement;
   disabled?: YesNo;
 }
 
@@ -147,43 +107,6 @@ interface ScannerTask {
   usageType: 'scan';
 }
 
-interface AgentControlRetry {
-  attempts: number;
-  delayInSeconds: number;
-  maxJitterInSeconds: number;
-}
-
-interface AgentControl {
-  retry: AgentControlRetry;
-}
-
-interface AgentScriptExecutor {
-  bulkSize: number;
-  bulkThrottleTimeInMs: number;
-  indexerDirDepth: number;
-  schedulerCronTimes: string[];
-}
-
-interface Heartbeat {
-  intervalInSeconds: number;
-  missUntilInactive: number;
-}
-
-interface AgentDefaults {
-  agentControl: AgentControl;
-  agentScriptExecutor: AgentScriptExecutor;
-  heartbeat: Heartbeat;
-}
-
-interface AgentControlDefaults {
-  updateToLatest: boolean;
-}
-
-export interface AgentControlConfig {
-  agentDefaults: AgentDefaults;
-  agentControlDefaults: AgentControlDefaults;
-}
-
 interface ScannerProperties extends ModelProperties {
   caPub?: CaPub;
   configs?: Model[];
@@ -193,7 +116,6 @@ interface ScannerProperties extends ModelProperties {
   port?: number;
   scannerType?: ScannerType;
   tasks?: ScannerTask[];
-  agentControlConfig?: AgentControlConfig;
   disabled?: boolean;
 }
 
@@ -204,8 +126,6 @@ export const SCANNER_TYPE_DEFINITIONS = {
   GREENBONE_SENSOR_SCANNER_TYPE: {value: '5', name: _l('Greenbone Sensor')},
   OPENVASD_SCANNER_TYPE: {value: '6', name: _l('OpenVASD Scanner')},
   OPENVASD_SENSOR_SCANNER_TYPE: {value: '8', name: _l('OpenVASD Sensor')},
-  AGENT_CONTROLLER_SCANNER_TYPE: {value: '7', name: _l('Agent Controller')},
-  AGENT_CONTROLLER_SENSOR_SCANNER_TYPE: {value: '9', name: _l('Agent Sensor')},
 } as const;
 
 // Extract individual constants
@@ -216,12 +136,8 @@ export const GREENBONE_SENSOR_SCANNER_TYPE =
   SCANNER_TYPE_DEFINITIONS.GREENBONE_SENSOR_SCANNER_TYPE.value;
 export const OPENVASD_SCANNER_TYPE =
   SCANNER_TYPE_DEFINITIONS.OPENVASD_SCANNER_TYPE.value;
-export const AGENT_CONTROLLER_SCANNER_TYPE =
-  SCANNER_TYPE_DEFINITIONS.AGENT_CONTROLLER_SCANNER_TYPE.value;
 export const OPENVASD_SENSOR_SCANNER_TYPE =
   SCANNER_TYPE_DEFINITIONS.OPENVASD_SENSOR_SCANNER_TYPE.value;
-export const AGENT_CONTROLLER_SENSOR_SCANNER_TYPE =
-  SCANNER_TYPE_DEFINITIONS.AGENT_CONTROLLER_SENSOR_SCANNER_TYPE.value;
 
 // Mapping of scanner types to their display names (automatically generated)
 export const SCANNER_TYPE_NAMES = Object.fromEntries(
@@ -269,7 +185,6 @@ class Scanner extends Model {
   readonly port?: number;
   readonly scannerType?: ScannerType;
   readonly tasks: ScannerTask[];
-  readonly agentControlConfig?: AgentControlConfig;
   readonly disabled?: boolean;
 
   constructor({
@@ -281,7 +196,6 @@ class Scanner extends Model {
     port,
     scannerType,
     tasks = [],
-    agentControlConfig,
     disabled,
     ...properties
   }: ScannerProperties = {}) {
@@ -295,7 +209,6 @@ class Scanner extends Model {
     this.port = port;
     this.scannerType = scannerType;
     this.tasks = tasks;
-    this.agentControlConfig = agentControlConfig;
     this.disabled = disabled;
   }
 
@@ -359,58 +272,7 @@ class Scanner extends Model {
       };
     }
 
-    if (isDefined(element.agent_control_config_defaults)) {
-      const {
-        agent_defaults: agentDefaults,
-        agent_control_defaults: agentControlDefaults,
-      } = element.agent_control_config_defaults;
 
-      if (isDefined(agentDefaults) || isDefined(agentControlDefaults)) {
-        const cronTimes =
-          agentDefaults?.agent_script_executor?.scheduler_cron_time?.item;
-        let schedulerCronTimes: string[] = [];
-        if (isDefined(cronTimes)) {
-          schedulerCronTimes = Array.isArray(cronTimes)
-            ? cronTimes
-            : [cronTimes];
-        }
-
-        ret.agentControlConfig = {
-          agentDefaults: {
-            agentControl: {
-              retry: {
-                attempts: agentDefaults?.agent_control?.retry?.attempts ?? 0,
-                delayInSeconds:
-                  agentDefaults?.agent_control?.retry?.delay_in_seconds ?? 0,
-                maxJitterInSeconds:
-                  agentDefaults?.agent_control?.retry?.max_jitter_in_seconds ??
-                  0,
-              },
-            },
-            agentScriptExecutor: {
-              bulkSize: agentDefaults?.agent_script_executor?.bulk_size ?? 0,
-              bulkThrottleTimeInMs:
-                agentDefaults?.agent_script_executor
-                  ?.bulk_throttle_time_in_ms ?? 0,
-              indexerDirDepth:
-                agentDefaults?.agent_script_executor?.indexer_dir_depth ?? 0,
-              schedulerCronTimes,
-            },
-            heartbeat: {
-              intervalInSeconds:
-                agentDefaults?.heartbeat?.interval_in_seconds ?? 0,
-              missUntilInactive:
-                agentDefaults?.heartbeat?.miss_until_inactive ?? 0,
-            },
-          },
-          agentControlDefaults: {
-            updateToLatest: parseBoolean(
-              agentControlDefaults?.update_to_latest,
-            ),
-          },
-        };
-      }
-    }
 
     ret.disabled = isDefined(element.disabled)
       ? parseBoolean(element.disabled)

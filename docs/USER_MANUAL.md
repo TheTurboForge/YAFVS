@@ -163,9 +163,12 @@ Tasks, Reports, Results, Vulnerabilities, Overrides, Hosts, Operating Systems,
 and TLS Certificates. The ordinary entity list tables and detail workflows remain
 available.
 
-Raw scan/report evidence, Notus, NASL inventory collection, generic report
-import infrastructure, Docker runtime infrastructure, and agent functionality
-remain unless a later full-stack product decision changes them.
+Legacy Agent Controller functionality, including agent groups, agent installers,
+and agent tasks, has been removed. TurboVAS keeps raw scan/report evidence,
+Notus, NASL inventory collection, generic report import infrastructure, and
+Docker runtime infrastructure. Future endpoint evidence or user-provided
+inventory workflows should be designed as separate TurboVAS features instead of
+preserving the inherited Agent Controller subsystem.
 
 ## License And Provenance
 

@@ -10,29 +10,29 @@ import useFeatures from 'web/hooks/useFeatures';
 
 const TestUseFeatures = () => {
   const features = useFeatures();
-  if (features.featureEnabled('ENABLE_AGENTS')) {
-    return <span>May use agents</span>;
+  if (features.featureEnabled('ENABLE_OPENVASD')) {
+    return <span>May use OpenVASD</span>;
   }
-  return <span>Agents are not available</span>;
+  return <span>OpenVASD is not available</span>;
 };
 
 describe('useFeatures tests', () => {
-  test('should be allowed to use the agent feature', () => {
-    const features = new Features(['ENABLE_AGENTS']);
+  test('should expose enabled features', () => {
+    const features = new Features(['ENABLE_OPENVASD']);
     const {render} = rendererWith({features});
 
     const {element} = render(<TestUseFeatures />);
 
-    expect(element).toHaveTextContent(/^May use agents$/);
+    expect(element).toHaveTextContent(/^May use OpenVASD$/);
   });
 
-  test('should not be allowed to use the agents feature', () => {
+  test('should not expose disabled features', () => {
     const features = new Features();
     const {render} = rendererWith({features});
 
     const {element} = render(<TestUseFeatures />);
 
-    expect(element).toHaveTextContent(/^Agents are not available$/);
+    expect(element).toHaveTextContent(/^OpenVASD is not available$/);
   });
 
   test('should throw an error if used outside FeaturesProvider', () => {

@@ -109,9 +109,6 @@
 #include <gvm/util/ldaputils.h>
 #include <gvm/gmp/gmp.h>
 #include "manage_report_configs.h"
-#include "manage_sql_agents.h"
-#include "manage_sql_agent_groups.h"
-#include "manage_sql_agent_installers.h"
 #include "manage_sql_report_hosts.h"
 #include "manage_sql_report_ports.h"
 #include "manage_sql_report_tls_certificates.h"
@@ -158,7 +155,8 @@ __cyg_profile_func_exit (void *func, void *caller)
 }
 #endif
 
-
+
+
 /* Headers from backend specific manage_xxx.c file. */
 
 int
@@ -179,7 +177,8 @@ check_db_encryption_key ();
 void
 manage_attach_databases ();
 
-
+
+
 /* Headers for symbols defined in manage.c which are private to libmanage. */
 
 /**
@@ -194,7 +193,8 @@ int delete_reports (task_t);
 int
 stop_task_internal (task_t);
 
-
+
+
 /* Static headers. */
 
 static int
@@ -253,7 +253,8 @@ static void
 set_credential_snmp_secret (credential_t, const char *, const char *,
                             const char *);
 
-
+
+
 /* Variables. */
 
 /**
@@ -276,7 +277,8 @@ db_conn_info_t gvmd_db_conn_info = { NULL, NULL, NULL, NULL, 60 };
  */
 static gchar *vt_verification_collation = NULL;
 
-
+
+
 /* General helpers. */
 
 /**
@@ -692,7 +694,8 @@ column_array_set (column_t *columns, const gchar *filter, gchar *select)
     }
 }
 
-
+
+
 /* GET iterators. */
 
 /**
@@ -1821,7 +1824,8 @@ info_name_count (const char *type, const char *name)
   return count;
 }
 
-
+
+
 /* Versions. */
 
 /**
@@ -1947,7 +1951,8 @@ set_db_version (int version)
        version);
 }
 
-
+
+
 /* Encryption. */
 
 /**
@@ -2329,7 +2334,8 @@ validate_sort_field (const gchar *table, const gchar *sort_field)
   return !db_table_has_column ("public", table, sort_field);
 }
 
-
+
+
 /* Task subject iterators. */
 
 /**
@@ -2415,7 +2421,8 @@ DEF_ACCESS (task_role_iterator_name, 3);
 
 DEF_ACCESS (task_role_iterator_uuid, 4);
 
-
+
+
 /* Task functions. */
 
 /**
@@ -2486,15 +2493,6 @@ append_to_task_string (task_t task, const char* field, const char* value)
   "false_positive", "log", "low", "medium", "high", "critical"
 
 /**
- * @brief Agent group columns for TASK_ITERATOR_FILTER_COLUMNS.
- */
-#if ENABLE_AGENTS
-  #define TASK_AGENT_GROUP_FILTER_COLUMNS "agent_group_id", "agent_group",
-#else
-  #define TASK_AGENT_GROUP_FILTER_COLUMNS
-#endif
-
-/**
  * @brief Filter columns for task iterator.
  */
 #define TASK_ITERATOR_FILTER_COLUMNS                                         \
@@ -2504,38 +2502,12 @@ append_to_task_string (task_t task, const char* field, const char* value)
     "fp_per_host", "log_per_host", "low_per_host", "medium_per_host",        \
     "high_per_host", "critical_per_host", "target", "usage_type",            \
     "first_report_created", "last_report_created", "scanner_type",           \
-    TASK_AGENT_GROUP_FILTER_COLUMNS                                          \
     NULL}
-
-/**
- * @brief Group columns for TASK_ITERATOR_WHERE_COLUMNS_INNER.
- */
-#if ENABLE_AGENTS
-  #define TASK_AGENT_GROUP_ITERATOR_COLUMNS                                   \
-    ,{                                                                        \
-      "(SELECT uuid FROM agent_groups"                                        \
-      " WHERE agent_groups.id = tasks.agent_group)",                          \
-      "agent_group_id",                                                       \
-      KEYWORD_TYPE_STRING                                                     \
-    },                                                                        \
-    {                                                                         \
-      "(SELECT name FROM agent_groups"                                        \
-      " WHERE agent_groups.id = tasks.agent_group)",                          \
-      "agent_group",                                                          \
-      KEYWORD_TYPE_STRING                                                     \
-    }
-#else
-  #define TASK_AGENT_GROUP_ITERATOR_COLUMNS
-#endif
 
 /**
  * @brief Query for TASK_SEV_CASE_GUARD.
  */
-#if ENABLE_AGENTS
-  #define TASK_NO_TARGET_CTX "(target IS NULL AND agent_group IS NULL)"
-#else
   #define TASK_NO_TARGET_CTX "(target IS NULL)"
-#endif
 
 /**
  * @brief SQL for TASK_ITERATOR_WHERE_COLUMNS_INNER.
@@ -2793,7 +2765,7 @@ append_to_task_string (task_t task, const char* field, const char* value)
      "(SELECT type FROM scanners WHERE scanners.id = tasks.scanner)",        \
      "scanner_type",                                                         \
      KEYWORD_TYPE_INTEGER                                                    \
-   } TASK_AGENT_GROUP_ITERATOR_COLUMNS
+   }
 
 /**
  * @brief Task iterator WHERE columns.
@@ -5396,110 +5368,6 @@ set_task_target (task_t task, target_t target)
        task);
 }
 
-#if ENABLE_AGENTS
-/**
- * @brief Set the agent group of a task, also updating the agent group location.
- *
- * @param[in]  task    Task.
- * @param[in]  agent_group  Agent group.
- */
-void
-set_task_agent_group_and_location (task_t task, agent_group_t agent_group)
-{
-  sql ("UPDATE tasks SET agent_group = %llu, agent_group_location = 0,"
-       " modification_time = m_now ()"
-       " WHERE id = %llu;",
-       agent_group,
-       task);
-}
-
-/**
- * @brief Return whether any task exists for agent groups of a scanner.
- *
- * @param[in] scanner  The row ID of the scanner.
- *
- * @return 1 if at least one task exists, else 0.
- */
-int
-agent_group_tasks_exist_by_scanner (scanner_t scanner)
-{
-  return !!sql_int (
-    "SELECT COUNT(*) FROM tasks"
-    " WHERE agent_group IN ("
-    "  SELECT id FROM agent_groups WHERE scanner = %llu)"
-    " AND agent_group_location = "
-    G_STRINGIFY (LOCATION_TABLE)
-    " AND hidden = 0;",
-    scanner);
-}
-/**
- * @brief Return whether any hidden task exists for agent groups of a scanner.
- *
- * @param[in] scanner  The row ID of the scanner.
- *
- * @return 1 if at least one task exists, else 0.
- */
-int
-agent_group_hidden_tasks_exist_by_scanner (scanner_t scanner)
-{
-  return !!sql_int (
-    "SELECT COUNT(*) FROM tasks "
-    "WHERE hidden != 0 "
-    " AND ("
-    "  (agent_group_location = %d"
-    "   AND agent_group IN ("
-    "    SELECT id FROM agent_groups WHERE scanner = %llu ))"
-    " OR "
-    "  (agent_group_location = %d "
-    "   AND agent_group IN ("
-    "    SELECT id FROM agent_groups_trash WHERE scanner = %llu ))"
-    ");",
-    LOCATION_TABLE, scanner, LOCATION_TRASH, scanner);
-}
-
-/**
- * @brief Return the agent_group of a task.
- *
- * @param[in]  task  Task.
- *
- * @return Agent group of task.
- */
-agent_group_t
-task_agent_group (task_t task)
-{
-  agent_group_t agent_group = 0;
-  switch (sql_int64 (&agent_group,
-                     "SELECT agent_group FROM tasks WHERE id = %llu;",
-                     task))
-    {
-    case 0:
-      return agent_group;
-      break;
-    case 1:        /* Too few rows in result of query. */
-    default:       /* Programming error. */
-      assert (0);
-    case -1:
-      return 0;
-      break;
-    }
-}
-
-/**
- * @brief Return whether the agent group target of a task is in the trashcan.
- *
- * @param[in]  task  Task.
- *
- * @return 1 if in trash, else 0.
- */
-int
-task_agent_group_in_trash (task_t task)
-{
-  return sql_int ("SELECT agent_group_location = "
-                  G_STRINGIFY (LOCATION_TRASH)
-                  " FROM tasks WHERE id = %llu;",
-                  task);
-}
-#endif /*ENABLE_AGENTS*/
 
 
 /**
@@ -6872,7 +6740,8 @@ reschedule_task (const gchar *task_id)
     }
 }
 
-
+
+
 /* Results. */
 
 /**
@@ -7405,7 +7274,8 @@ detect_cleanup:
 }
 
 
-
+
+
 /* Prognostics. */
 
 /**
@@ -7843,7 +7713,8 @@ prognosis_iterator_cvss_double (iterator_t* iterator)
 DEF_ACCESS (prognosis_iterator_description, 2);
 DEF_ACCESS (prognosis_iterator_cpe, 3);
 
-
+
+
 /* Reports. */
 
 /**
@@ -8343,35 +8214,6 @@ create_current_report (task_t task, char **report_id, task_status_t status)
   /* Create the report. */
 
   global_current_report = make_report (task, *report_id, status);
-
-  set_report_scheduled (global_current_report);
-
-  return 0;
-}
-
-/**
- * @brief Create the current report for an agent task.
- *
- * @param[in]   task       The agent task.
- * @param[in]   report_id  Report ID.
- * @param[in]   status     Run status of scan associated with report.
- *
- * @return 0 success, -1 global_current_report is already set, -2 failed if
- *         there is no report ID.
- */
-int
-create_agent_task_current_report (task_t task, char *report_id, task_status_t status)
-{
-
-  assert (global_current_report == (report_t) 0);
-
-  if (global_current_report) return -1;
-
-  if (report_id == NULL) return -2;
-
-  /* Create the report. */
-
-  global_current_report = make_report (task, report_id, status);
 
   set_report_scheduled (global_current_report);
 
@@ -15016,44 +14858,6 @@ print_report_xml_start (report_t report, report_t delta, task_t task,
       free (task_target_name);
       free (task_target_comment);
 
-#if ENABLE_AGENTS
-      agent_group_t agent_group = task_agent_group (task);
-      if (agent_group)
-        {
-          char *ag_uuid, *ag_name, *ag_comment;
-          int in_trash;
-
-          in_trash = task_agent_group_in_trash (task);
-
-          ag_uuid = in_trash
-                      ? trash_agent_group_uuid (agent_group)
-                      : agent_group_uuid (agent_group);
-          ag_name = in_trash
-                      ? trash_agent_group_name (agent_group)
-                      : agent_group_name (agent_group);
-          ag_comment = in_trash
-                         ? trash_agent_group_comment (agent_group)
-                         : agent_group_comment (agent_group);
-
-          PRINT (out,
-                 "<agent_group id=\"%s\">"
-                 "<trash>%i</trash>"
-                 "<name>%s</name>"
-                 "<comment>%s</comment>"
-                 "</agent_group>",
-                 ag_uuid ? ag_uuid : "",
-                 in_trash,
-                 ag_name ? ag_name : "",
-                 ag_comment ? ag_comment : "");
-
-          g_free (ag_uuid);
-          g_free (ag_name);
-          g_free (ag_comment);
-
-          g_free (progress_xml);
-          progress_xml = g_strdup_printf ("%i", 100);
-        }
-#endif /* ENABLE_AGENTS */
 
       PRINT (out, "<progress>%s</progress>", progress_xml);
 
@@ -16340,7 +16144,8 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
   free_entity (entity);
 }
 
-
+
+
 /* More task stuff. */
 
 /**
@@ -16625,7 +16430,6 @@ copy_task (const char* name, const char* comment, const char *task_id,
                             " config_location, target_location,"
                             " schedule_location, scanner_location,"
                             " usage_type,"
-                            " agent_group, agent_group_location,"
                             " alterable",
                             1, &new, &old);
   if (ret)
@@ -17345,7 +17149,6 @@ manage_task_remove_file (const gchar *task_id, const char *name)
  * @param[in]  schedule_id  Schedule.
  * @param[in]  schedule_periods  Period of schedule.
  * @param[in]  preferences       Preferences.
- * @param[in]  agent_group_id    Agent group.
  * @param[out] fail_alert_id     Alert when failed to find alert.
  *
  * @return 0 success, 1 failed to find task, 2 status must be new to edit
@@ -17356,8 +17159,7 @@ manage_task_remove_file (const gchar *task_id, const char *name)
  *         12 failed to find target, 13 invalid auto_delete value, 14 auto
  *         delete count out of range, 15 config and scanner types mismatch,
  *         16 status must be new to edit target, 17 for import tasks only
- *         certain fields may be edited, 18 failed to find agent group,
- *         -1 error.
+ *         certain fields may be edited, -1 error.
  */
 int
 modify_task (const gchar *task_id, const gchar *name,
@@ -17367,7 +17169,6 @@ modify_task (const gchar *task_id, const gchar *name,
              const gchar *alterable, const gchar *schedule_id,
              const gchar *schedule_periods,
              array_t *preferences,
-             const gchar *agent_group_id,
              gchar **fail_alert_id)
 {
   task_t task;
@@ -17383,8 +17184,7 @@ modify_task (const gchar *task_id, const gchar *name,
     return 1;
 
 
-  if ((task_target (task) == 0
-       && (agent_group_id == NULL))
+  if ((task_target (task) == 0)
       && (alerts->len || schedule_id))
     return 17;
 
@@ -17538,26 +17338,6 @@ modify_task (const gchar *task_id, const gchar *name,
       else
         set_task_target (task, target);
     }
-#if ENABLE_AGENTS
-  if (agent_group_id) {
-    agent_group_t agent_group;
-
-    agent_group = 0;
-    if ((task_run_status(task) != TASK_STATUS_NEW)
-        && (task_alterable(task) == 0))
-      return 16;
-    else if (find_agent_group_with_permission(agent_group_id,
-                                              &agent_group,
-                                              "get_agent_groups"))
-      return -1;
-    else if (agent_group == 0)
-      return 18;
-    else
-      {
-        set_task_agent_group_and_location (task, agent_group);
-      }
-  }
-#endif
 
 
   if (preferences)
@@ -17578,7 +17358,8 @@ modify_task (const gchar *task_id, const gchar *name,
   return 0;
 }
 
-
+
+
 /* Credentials. */
 
 /**
@@ -20635,7 +20416,8 @@ credential_scanner_iterator_readable (iterator_t* iterator)
   return iterator_int (iterator, 2);
 }
 
-
+
+
 /* Overrides. */
 
 /**
@@ -20717,7 +20499,8 @@ nvt_exists (const char* nvt)
   return 0;
 }
 
-
+
+
 /* Scanners */
 
 /**
@@ -20943,11 +20726,6 @@ manage_create_scanner (GSList *log_config, const db_conn_info_t *database,
         fprintf (stderr,
                  "openvasd scanner type is not supported"
                  " because the openvasd feature flag is disabled.\n");
-        break;
-      case CREATE_SCANNER_AGENT_DISABLED:
-        fprintf (stderr,
-                 "Agent controller scanner type is not supported"
-                 " because the Agents feature flag is disabled.\n");
         break;
       case CREATE_SCANNER_PERMISSION_DENIED:
         fprintf (stderr, "Permission denied.\n");
@@ -21275,11 +21053,6 @@ manage_modify_scanner (GSList *log_config, const db_conn_info_t *database,
                  "openvasd scanner type is not supported"
                  " because the openvasd feature flag is disabled.\n");
         break;
-      case MODIFY_SCANNER_AGENT_DISABLED:
-        fprintf (stderr,
-                 "Agent controller scanner type is not supported"
-                 " because the Agents feature flag is disabled.\n");
-        break;
       case MODIFY_SCANNER_PERMISSION_DENIED:
         fprintf (stderr, "Permission denied.\n");
         break;
@@ -21510,12 +21283,6 @@ create_scanner (const char* name, const char *comment, const char *host,
       sql_rollback ();
       return CREATE_SCANNER_OPENVASD_DISABLED;
     }
-  else if (feature_res == SCANNER_FEATURE_AGENTS_DISABLED)
-    {
-      /* Agent feature disabled */
-      sql_rollback ();
-      return CREATE_SCANNER_AGENT_DISABLED;
-    }
   if (unix_socket)
     {
       ca_pub = NULL;
@@ -21743,13 +21510,6 @@ modify_scanner (const char *scanner_id, const char *name, const char *comment,
       sql_rollback ();
       return MODIFY_SCANNER_OPENVASD_DISABLED;
     }
-  else if (feature_res == SCANNER_FEATURE_AGENTS_DISABLED)
-    {
-      /* Agent feature disabled */
-      sql_rollback ();
-      return MODIFY_SCANNER_AGENT_DISABLED;
-    }
-
   if (port)
     iport = atoi (port);
   else
@@ -22060,14 +21820,6 @@ delete_scanner (const char *scanner_id, int ultimate)
     {
       scanner_t trash_scanner;
 
-#if ENABLE_AGENTS
-      // check scanner is in use by agent_group
-      if (agent_group_tasks_exist_by_scanner (scanner))
-        {
-          sql_rollback ();
-          return 1;
-        }
-#endif // ENABLE_AGENTS
 
       if (sql_int ("SELECT count(*) FROM tasks"
                    " WHERE scanner = %llu"
@@ -22108,22 +21860,8 @@ delete_scanner (const char *scanner_id, int ultimate)
       permissions_set_orphans ("scanner", scanner, LOCATION_TABLE);
       tags_remove_resource ("scanner", scanner, LOCATION_TABLE);
 
-#if ENABLE_AGENTS
-      if (agent_group_hidden_tasks_exist_by_scanner (scanner)
-          || agent_group_tasks_exist_by_scanner (scanner))
-        {
-          sql_rollback ();
-          return 1;
-        }
-#endif // ENABLE_AGENTS
     }
 
-#if ENABLE_AGENTS
-  // Delete agent groups related to the scanner.
-  delete_agent_groups_by_scanner (scanner);
-  // Delete agents related to the scanner.
-  delete_agents_by_scanner_and_uuids (scanner, NULL);
-#endif // ENABLE_AGENTS
 
   sql ("DELETE FROM scanners WHERE id = %llu;", scanner);
   sql_commit ();
@@ -22934,21 +22672,6 @@ verify_scanner (const char *scanner_id, char **version)
       cleanup_iterator (&scanner);
       return 0;
     }
-#if ENABLE_AGENTS
-  else if (scanner_iterator_type (&scanner) == SCANNER_TYPE_AGENT_CONTROLLER
-           || scanner_iterator_type (&scanner)
-                == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR)
-    {
-      scanner_t scanner_row_id = get_iterator_resource (&scanner);
-      int res = verify_agent_controller_connection (scanner_row_id);
-      cleanup_iterator (&scanner);
-
-      if (res == 1)
-        return 2;
-
-      return 0;
-    }
-#endif
   else if (scanner_iterator_type (&scanner) == SCANNER_TYPE_CVE)
     {
       if (version)
@@ -23013,12 +22736,6 @@ manage_get_scanners (GSList *log_config, const db_conn_info_t *database)
           case SCANNER_TYPE_OPENVASD_SENSOR:
             scanner_type_str = "openvasd-sensor";
             break;
-          case SCANNER_TYPE_AGENT_CONTROLLER:
-            scanner_type_str = "agent-controller";
-            break;
-          case SCANNER_TYPE_AGENT_CONTROLLER_SENSOR:
-            scanner_type_str = "agent-controller-sensor";
-            break;
           default:
             scanner_type_str = NULL;
         }
@@ -23045,7 +22762,8 @@ manage_get_scanners (GSList *log_config, const db_conn_info_t *database)
   return 0;
 }
 
-
+
+
 /* Schema. */
 
 /**
@@ -23256,7 +22974,8 @@ manage_schema (gchar *format, gchar **output_return, gsize *output_length,
   }
 }
 
-
+
+
 /* Trashcan. */
 
 /**
@@ -23285,12 +23004,6 @@ manage_restore (const char *id)
       return 99;
     }
 
-#if ENABLE_AGENTS
-  /* Agent Group. */
-  ret = restore_agent_group (id);
-  if (ret != 2)
-    return ret;
-#endif
 
   /* Port List. */
   ret = restore_port_list (id);
@@ -24219,9 +23932,6 @@ manage_empty_trashcan ()
       sql_rollback ();
       return 99;
     }
-#if ENABLE_AGENTS
-  empty_trashcan_agent_groups ();
-#endif
 
   sql ("DELETE FROM nvt_selectors"
        " WHERE name != '" MANAGE_NVT_SELECTOR_UUID_ALL "'"
@@ -24339,7 +24049,8 @@ manage_empty_trashcan ()
   return 0;
 }
 
-
+
+
 /* Vulns. */
 
 /**
@@ -25104,7 +24815,8 @@ manage_set_radius_info (int enabled, gchar *host, gchar *key)
   sql_commit ();
 }
 
-
+
+
 /* SQL construction */
 
 /**
@@ -25135,11 +24847,6 @@ column_is_timestamp (const char* column)
 column_t *
 type_select_columns (const char *type)
 {
-#if ENABLE_AGENTS
-  static column_t agent_columns[] = AGENT_ITERATOR_COLUMNS;
-  static column_t agent_group_columns[] = AGENT_GROUP_ITERATOR_COLUMNS;
-  static column_t agent_installer_columns[] = AGENT_INSTALLER_ITERATOR_COLUMNS;
-#endif
   static column_t alert_columns[] = ALERT_ITERATOR_COLUMNS;
   static column_t cert_bund_adv_columns[] = CERT_BUND_ADV_INFO_ITERATOR_COLUMNS;
   static column_t config_columns[] = CONFIG_ITERATOR_COLUMNS;
@@ -25165,14 +24872,6 @@ type_select_columns (const char *type)
 
   if (type == NULL)
     return NULL;
-#if ENABLE_AGENTS
-  if (strcasecmp (type, "AGENT") == 0)
-    return agent_columns;
-  if (strcasecmp (type, "AGENT_GROUP") == 0)
-    return agent_group_columns;
-  if (strcasecmp (type, "AGENT_INSTALLER") == 0)
-    return agent_installer_columns;
-#endif
   if (strcasecmp (type, "ALERT") == 0)
     return alert_columns;
   if (strcasecmp (type, "CERT_BUND_ADV") == 0)
@@ -25270,23 +24969,6 @@ type_filter_columns (const char *type)
 {
   if (type == NULL)
     return NULL;
-#if ENABLE_AGENTS
-  if (strcasecmp (type, "AGENT") == 0)
-    {
-      static const char *ret[] = AGENT_ITERATOR_FILTER_COLUMNS;
-      return ret;
-    }
-  if (strcasecmp (type, "AGENT_GROUP") == 0)
-    {
-      static const char *ret[] = AGENT_GROUP_ITERATOR_FILTER_COLUMNS;
-      return ret;
-    }
-  if (strcasecmp (type, "AGENT_INSTALLER") == 0)
-    {
-      static const char *ret[] = AGENT_INSTALLER_ITERATOR_FILTER_COLUMNS;
-      return ret;
-    }
-#endif
   if (strcasecmp (type, "ALERT") == 0)
     {
       static const char *ret[] = ALERT_ITERATOR_FILTER_COLUMNS;
@@ -25762,7 +25444,8 @@ type_build_select (const char *type, const char *columns_str,
   return 0;
 }
 
-
+
+
 /* Optimize. */
 
 /**

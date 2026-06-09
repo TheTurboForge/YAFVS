@@ -106,9 +106,6 @@ const getRestorableDeletableForEntityType = {
     const restorable = schedule && target && config && scanner && alerts;
     return {restorable, deletable: true};
   },
-  agentgroup: entity => {
-    return {restorable: true, deletable: !entity.isInUse()};
-  },
 };
 
 const isAbleToRestoreAndDelete = entity => {

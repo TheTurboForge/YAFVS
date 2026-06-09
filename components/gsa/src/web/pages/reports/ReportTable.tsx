@@ -21,7 +21,6 @@ import {
   type HeaderComponentProps,
 } from 'web/entities/EntitiesTable';
 import useGmp from 'web/hooks/useGmp';
-import {AgentIdTableHead} from 'web/pages/agents/components/AgentIdColumn';
 import ReportTableRow, {
   type ReportTableRowProps,
 } from 'web/pages/reports/ReportTableRow';
@@ -70,12 +69,6 @@ const ReportTableHeader = ({
           sortBy="task"
           title={_('Task')}
           width="39%"
-          onSortChange={onSortChange}
-        />
-        <AgentIdTableHead
-          currentSortBy={currentSortBy}
-          currentSortDir={currentSortDir}
-          sort={sort}
           onSortChange={onSortChange}
         />
         <TableHead

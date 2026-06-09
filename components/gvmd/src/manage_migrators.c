@@ -4403,6 +4403,154 @@ migrate_279_to_280 ()
 }
 
 
+static int
+migrate_280_to_281 ()
+{
+  sql_begin_immediate ();
+
+  if (sql_int ("SELECT count(*) FROM tasks"
+               " WHERE (COALESCE(agent_group, 0) <> 0"
+               "        OR scanner IN (SELECT id FROM scanners"
+               "                       WHERE type IN (%d, %d)))"
+               " AND run_status IN (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d);",
+               7,
+               9,
+               TASK_STATUS_DELETE_REQUESTED,
+               TASK_STATUS_REQUESTED,
+               TASK_STATUS_RUNNING,
+               TASK_STATUS_STOP_REQUESTED,
+               TASK_STATUS_STOP_WAITING,
+               TASK_STATUS_DELETE_ULTIMATE_REQUESTED,
+               TASK_STATUS_DELETE_WAITING,
+               TASK_STATUS_DELETE_ULTIMATE_WAITING,
+               TASK_STATUS_QUEUED,
+               TASK_STATUS_PROCESSING))
+    {
+      g_warning ("Refusing to remove legacy agent support while agent tasks are active");
+      sql_rollback ();
+      return -1;
+    }
+
+  sql ("CREATE TEMP TABLE removed_agent_tasks AS"
+       " SELECT id FROM tasks"
+       " WHERE COALESCE(agent_group, 0) <> 0"
+       " OR scanner IN (SELECT id FROM scanners WHERE type IN (%d, %d));",
+       7,
+       9);
+  sql ("CREATE TEMP TABLE removed_agent_reports AS"
+       " SELECT id FROM reports"
+       " WHERE task IN (SELECT id FROM removed_agent_tasks);");
+  sql ("CREATE TEMP TABLE removed_agent_results AS"
+       " SELECT id FROM results"
+       " WHERE task IN (SELECT id FROM removed_agent_tasks)"
+       " OR report IN (SELECT id FROM removed_agent_reports);");
+  sql ("CREATE TEMP TABLE removed_agent_scope_reports AS"
+       " SELECT DISTINCT scope_report AS id FROM scope_report_sources"
+       " WHERE source_report IN (SELECT id FROM removed_agent_reports);");
+
+  sql ("DELETE FROM scope_report_sources"
+       " WHERE scope_report IN (SELECT id FROM removed_agent_scope_reports)"
+       " OR source_report IN (SELECT id FROM removed_agent_reports)"
+       " OR task IN (SELECT id FROM removed_agent_tasks);");
+  sql ("DELETE FROM scope_reports"
+       " WHERE id IN (SELECT id FROM removed_agent_scope_reports);");
+  sql ("DELETE FROM scan_queue"
+       " WHERE report IN (SELECT id FROM removed_agent_reports);");
+  sql ("DELETE FROM report_host_details WHERE report_host IN"
+       " (SELECT id FROM report_hosts"
+       "  WHERE report IN (SELECT id FROM removed_agent_reports));");
+  sql ("DELETE FROM report_hosts"
+       " WHERE report IN (SELECT id FROM removed_agent_reports);");
+  sql ("DELETE FROM report_counts"
+       " WHERE report IN (SELECT id FROM removed_agent_reports);");
+  sql ("DELETE FROM result_nvt_reports"
+       " WHERE report IN (SELECT id FROM removed_agent_reports);");
+  sql ("DELETE FROM results_trash"
+       " WHERE task IN (SELECT id FROM removed_agent_tasks)"
+       " OR report IN (SELECT id FROM removed_agent_reports);");
+  sql ("DELETE FROM results"
+       " WHERE id IN (SELECT id FROM removed_agent_results);");
+  sql ("DELETE FROM reports"
+       " WHERE id IN (SELECT id FROM removed_agent_reports);");
+  sql ("DELETE FROM task_alerts"
+       " WHERE task IN (SELECT id FROM removed_agent_tasks);");
+  sql ("DELETE FROM task_files"
+       " WHERE task IN (SELECT id FROM removed_agent_tasks);");
+  sql ("DELETE FROM task_preferences"
+       " WHERE task IN (SELECT id FROM removed_agent_tasks);");
+  sql ("DELETE FROM tasks"
+       " WHERE id IN (SELECT id FROM removed_agent_tasks);");
+
+  sql ("DELETE FROM tag_resources"
+       " WHERE resource_type IN ('agent', 'agent_group', 'agent_installer')"
+       " OR (resource_type = 'result'"
+       "     AND resource IN (SELECT id FROM removed_agent_results))"
+       " OR (resource_type = 'report'"
+       "     AND resource IN (SELECT id FROM removed_agent_reports))"
+       " OR (resource_type = 'task'"
+       "     AND resource IN (SELECT id FROM removed_agent_tasks));");
+  sql ("DELETE FROM tag_resources_trash"
+       " WHERE resource_type IN ('agent', 'agent_group', 'agent_installer')"
+       " OR (resource_type = 'result'"
+       "     AND resource IN (SELECT id FROM removed_agent_results))"
+       " OR (resource_type = 'report'"
+       "     AND resource IN (SELECT id FROM removed_agent_reports))"
+       " OR (resource_type = 'task'"
+       "     AND resource IN (SELECT id FROM removed_agent_tasks));");
+  sql ("DELETE FROM tags"
+       " WHERE resource_type IN ('agent', 'agent_group', 'agent_installer');");
+  sql ("DELETE FROM tags_trash"
+       " WHERE resource_type IN ('agent', 'agent_group', 'agent_installer');");
+
+  sql ("UPDATE alerts SET filter = 0"
+       " WHERE filter IN (SELECT id FROM filters"
+       "                  WHERE type IN ('agent', 'agent_group', 'agent_installer'));");
+  sql ("UPDATE alerts_trash SET filter = 0"
+       " WHERE filter IN (SELECT id FROM filters"
+       "                  WHERE type IN ('agent', 'agent_group', 'agent_installer'))"
+       " AND filter_location = %i;",
+       LOCATION_TABLE);
+  sql ("UPDATE alerts_trash SET filter = 0"
+       " WHERE filter IN (SELECT id FROM filters_trash"
+       "                  WHERE type IN ('agent', 'agent_group', 'agent_installer'))"
+       " AND filter_location = %i;",
+       LOCATION_TRASH);
+  sql ("DELETE FROM filters"
+       " WHERE type IN ('agent', 'agent_group', 'agent_installer');");
+  sql ("DELETE FROM filters_trash"
+       " WHERE type IN ('agent', 'agent_group', 'agent_installer');");
+  sql ("DELETE FROM settings"
+       " WHERE uuid IN"
+       " ('1ee1f106-8b2e-461c-b426-7f5d76001b29',"
+       "  '391fc4f4-9f6c-4f0e-a689-37dd7d70d144',"
+       "  'c544a310-dc13-49c6-858e-f3160d75e221',"
+       "  'a39a719a-e6bc-4d9f-a1e6-a53e5b014b05');");
+  sql ("DELETE FROM meta WHERE name = 'agent_installers_last_update';");
+
+  sql ("DROP TABLE IF EXISTS agent_group_agents_trash CASCADE;");
+  sql ("DROP TABLE IF EXISTS agent_groups_trash CASCADE;");
+  sql ("DROP TABLE IF EXISTS agent_group_agents CASCADE;");
+  sql ("DROP TABLE IF EXISTS agent_groups CASCADE;");
+  sql ("DROP TABLE IF EXISTS agent_ip_addresses CASCADE;");
+  sql ("DROP TABLE IF EXISTS agent_installers CASCADE;");
+  sql ("DROP TABLE IF EXISTS agents CASCADE;");
+  sql ("ALTER TABLE tasks DROP COLUMN IF EXISTS agent_group;");
+  sql ("ALTER TABLE tasks DROP COLUMN IF EXISTS agent_group_location;");
+  sql ("DELETE FROM scanners WHERE type IN (%d, %d);",
+       7,
+       9);
+  sql ("DELETE FROM scanners_trash WHERE type IN (%d, %d);",
+       7,
+       9);
+
+  set_db_version (281);
+
+  sql_commit ();
+
+  return 0;
+}
+
+
 #undef UPDATE_DASHBOARD_SETTINGS
 
 /**
@@ -4489,6 +4637,7 @@ static migrator_t database_migrators[] = {
   {278, migrate_277_to_278},
   {279, migrate_278_to_279},
   {280, migrate_279_to_280},
+  {281, migrate_280_to_281},
   /* End marker. */
   {-1, NULL}};
 

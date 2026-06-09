@@ -6,7 +6,6 @@
 from ...gmpnext import GMPTestCase
 from ...gmpnext.entities.tasks import (
     GmpCloneTaskTestMixin,
-    GmpCreateAgentGroupTaskTestMixin,
     GmpCreateContainerTaskTestMixin,
     GmpCreateImportTaskTestMixin,
     GmpCreateTaskTestMixin,
@@ -23,13 +22,6 @@ from ...gmpnext.entities.tasks import (
 
 class GMPCloneTaskTestCase(GmpCloneTaskTestMixin, GMPTestCase):
     pass
-
-
-class GmpCreateAgentGroupTaskTestCase(
-    GmpCreateAgentGroupTaskTestMixin, GMPTestCase
-):
-    pass
-
 
 
 class GMPCreateContainerTaskTestCase(

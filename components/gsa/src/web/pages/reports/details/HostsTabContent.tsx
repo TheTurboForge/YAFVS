@@ -15,20 +15,17 @@ import {
 } from 'web/components/loading/Reload';
 import useGetReportHosts from 'web/hooks/use-query/report-hosts';
 import useTranslation from 'web/hooks/useTranslation';
-import AgentScanningHostsTab from 'web/pages/reports/details/AgentScanningHostsTab';
 import HostsTab from 'web/pages/reports/details/HostsTab';
 
 export interface HostsTabContentProps {
   reportId: string;
   status: TaskStatus;
-  isAgentScanning?: boolean;
   reportFilter: Filter;
 }
 
 const HostsTabContent = ({
   reportId,
   status,
-  isAgentScanning,
   reportFilter,
 }: HostsTabContentProps) => {
   const [_] = useTranslation();
@@ -71,21 +68,6 @@ const HostsTabContent = ({
     counts: data?.entitiesCounts,
     entities: data?.entities ?? [],
   };
-
-  if (isAgentScanning) {
-    return (
-      <AgentScanningHostsTab
-        counts={hosts.counts}
-        filter={reportFilter}
-        hosts={hosts.entities}
-        isUpdating={isFetching}
-        sortField={sortField}
-        sortReverse={sortReverse}
-        onSortChange={handleSortChange}
-      />
-    );
-  }
-
 
   return (
     <HostsTab

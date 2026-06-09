@@ -219,7 +219,7 @@ modify_integration_config (integration_config_data_t config)
  * @brief Count number of integration_config in the database based on filter.
  *
  * @param get GET parameters to use for filtering.
- * @return Count of matching agents.
+ * @return Count of matching integration configs.
  */
 int
 integration_config_count (const get_data_t *get)

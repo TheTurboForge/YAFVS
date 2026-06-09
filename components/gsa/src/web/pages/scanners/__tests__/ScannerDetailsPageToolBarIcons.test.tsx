@@ -12,22 +12,6 @@ import Scanner, {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
 import ScannerDetailsPageToolBarIcons from 'web/pages/scanners/ScannerDetailsPageToolBarIcons';
 
 describe('ScannerDetailsPageToolBarIcons', () => {
-  test('should renders the create icon when agents feature is enabled', () => {
-    const scanner = new Scanner({});
-    const gmp = {
-      settings: {
-        enableGreenboneSensor: false,
-      },
-    };
-    const {render} = rendererWith({
-      capabilities: true,
-      features: new Features(['ENABLE_AGENTS']),
-      gmp,
-    });
-    render(<ScannerDetailsPageToolBarIcons entity={scanner} />);
-
-    expect(screen.getByTitle('Create new Scanner')).toBeInTheDocument();
-  });
 
   test('should renders the create icon when sensors are enabled', () => {
     const scanner = new Scanner({});
@@ -45,7 +29,7 @@ describe('ScannerDetailsPageToolBarIcons', () => {
     expect(screen.getByTitle('Create new Scanner')).toBeInTheDocument();
   });
 
-  test('should not render the create icon when agents feature is disabled', () => {
+  test('should not render the create icon when sensor support is disabled', () => {
     const scanner = new Scanner({});
     const gmp = {
       settings: {
@@ -77,28 +61,6 @@ describe('ScannerDetailsPageToolBarIcons', () => {
     expect(screen.queryByTitle('Create new Scanner')).not.toBeInTheDocument();
   });
 
-  test('should call create handler', () => {
-    const scanner = new Scanner({});
-    const gmp = {
-      settings: {
-        enableGreenboneSensor: true,
-      },
-    };
-    const {render} = rendererWith({
-      capabilities: true,
-      features: new Features(['ENABLE_AGENTS']),
-      gmp,
-    });
-    const handleCreate = testing.fn();
-    render(
-      <ScannerDetailsPageToolBarIcons
-        entity={scanner}
-        onScannerCreateClick={handleCreate}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', {name: 'New Icon'}));
-    expect(handleCreate).toHaveBeenCalledWith();
-  });
 
   test('should render manual icon with correct props', () => {
     const scanner = new Scanner({});

@@ -825,11 +825,6 @@ class Filter extends EntityModel {
 }
 
 export const ALL_FILTER = new Filter().all();
-export const AGENTS_FILTER_FILTER = Filter.fromString('type=agent');
-export const AGENT_GROUPS_FILTER_FILTER = Filter.fromString('type=agent_group');
-export const AGENT_INSTALLERS_FILTER_FILTER = Filter.fromString(
-  'type=agent_installer',
-);
 export const ALERTS_FILTER_FILTER = Filter.fromString('type=alert');
 export const CERTBUND_FILTER_FILTER = Filter.fromString('type=info');
 export const CPES_FILTER_FILTER = Filter.fromString('type=info');

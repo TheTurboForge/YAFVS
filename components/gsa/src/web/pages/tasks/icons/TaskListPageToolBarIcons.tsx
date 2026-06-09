@@ -19,7 +19,6 @@ interface TaskToolBarIconsProps {
   onImportTaskCreateClick?: () => void;
   onTaskCreateClick?: () => void;
   onTaskWizardClick?: () => void;
-  onNewAgentTaskClick?: () => void;
 }
 
 const TaskToolBarIcons = ({
@@ -28,7 +27,6 @@ const TaskToolBarIcons = ({
   onImportTaskCreateClick,
   onTaskCreateClick,
   onTaskWizardClick,
-  onNewAgentTaskClick,
 }: TaskToolBarIconsProps) => {
   const capabilities = useCapabilities();
   const [_] = useTranslation();
@@ -69,7 +67,6 @@ const TaskToolBarIcons = ({
       )}
 
       <NewIconMenu
-        onNewAgentTaskClick={onNewAgentTaskClick}
         onNewClick={onTaskCreateClick}
         onNewImportTaskClick={onImportTaskCreateClick}
       />

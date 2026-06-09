@@ -45,10 +45,6 @@ gsad_init_validator ()
                      "|(create_task)"
                      "|(create_tls_certificate)"
                      "|(create_user)"
-                     "|(create_agent_group)"
-                     "|(create_agent_group_task)"
-                     "|(delete_agent)"
-                     "|(delete_agent_group)"
                      "|(delete_asset)"
                      "|(delete_config)"
                      "|(delete_credential)"
@@ -113,13 +109,6 @@ gsad_init_validator ()
                      "|(export_tasks)"
                      "|(export_user)"
                      "|(export_users)"
-                     "|(get_agent)"
-                     "|(get_agents)"
-                     "|(get_agent_group)"
-                     "|(get_agent_groups)"
-                     "|(get_agent_installers)"
-                     "|(get_agent_installer)"
-                     "|(get_agent_installer_file)"
                      "|(get_aggregate)"
                      "|(get_alert)"
                      "|(get_alerts)"
@@ -183,7 +172,6 @@ gsad_init_validator ()
                      "|(get_timezones)"
                      "|(get_tls_certificate)"
                      "|(get_tls_certificates)"
-                     "|(get_trash_agent_group)"
                      "|(get_trash_alerts)"
                      "|(get_trash_configs)"
                      "|(get_trash_credentials)"
@@ -206,8 +194,6 @@ gsad_init_validator ()
                      "|(import_report_format)"
                      "|(login)"
                      "|(modify_scope)"
-                     "|(modify_agent)"
-                     "|(modify_agent_control_scan_config)"
                      "|(modify_credential_store)"
                      "|(move_task)"
                      "|(new_alert)"
@@ -218,9 +204,6 @@ gsad_init_validator ()
                      "|(resume_task)"
                      "|(run_wizard)"
                      "|(test_alert)"
-                     "|(save_agent_list)"
-                     "|(save_agent_group)"
-                     "|(save_agent_group_task)"
                      "|(save_alert)"
                      "|(save_asset)"
                      "|(save_auth)"
@@ -246,7 +229,6 @@ gsad_init_validator ()
                      "|(save_user)"
                      "|(start_task)"
                      "|(stop_task)"
-                     "|(sync_agents)"
                      "|(sync_feed)"
                      "|(sync_scap)"
                      "|(sync_cert)"
@@ -263,7 +245,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "aggregate_mode", "^[a-z0-9_]+$");
   gvm_validator_add (
     validator, "aggregate_type",
-    "^(agent|agent_group|agent_installer|alert|config|credential|filter|group|"
+    "^(alert|config|credential|filter|group|"
     "host|nvt|os|override|permission|port_list|report|report_config|"
     "report_format|result|role|scanner|schedule|"
     "tag|target|task|user|cve|cpe|ovaldef|cert_bund_adv|dfn_cert_adv|"
@@ -522,17 +504,12 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "update_to_latest", "boolean");
   gvm_validator_alias (validator, "accept_invalid_certs", "boolean");
   gvm_validator_alias (validator, "registry_allow_insecure", "boolean");
-  gvm_validator_alias (validator, "agent_ids:name", "number");
   gvm_validator_alias (validator, "scheduler_cron_time", "name");
   gvm_validator_alias (validator, "scheduler_cron_times:name", "number");
   gvm_validator_alias (validator, "scheduler_cron_times:value", "name");
 
   /* Defined IDs "^[a-z0-9\\-]+$" */
   gvm_validator_alias (validator, "_and_report_id", "id");
-  gvm_validator_alias (validator, "agent_control_id", "id");
-  gvm_validator_alias (validator, "agent_group_id", "id");
-  gvm_validator_alias (validator, "agent_ids:value", "id");
-  gvm_validator_alias (validator, "agent_installer_id", "id");
   gvm_validator_alias (validator, "alert_id_2", "alert_id");
   gvm_validator_alias (validator, "alert_id", "id");
   gvm_validator_alias (validator, "config_id", "id");

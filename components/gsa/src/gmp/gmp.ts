@@ -14,12 +14,6 @@ import 'gmp/commands/tls-certificates';
 import 'gmp/commands/vulns';
 
 import {getCommands} from 'gmp/command';
-import AgentCommand from 'gmp/commands/agent';
-import AgentGroupCommand from 'gmp/commands/agent-group';
-import AgentGroupsCommand from 'gmp/commands/agent-groups';
-import AgentInstallerCommand from 'gmp/commands/agent-installer';
-import AgentInstallersCommand from 'gmp/commands/agent-installers';
-import AgentsCommand from 'gmp/commands/agents';
 import AlertCommand from 'gmp/commands/alert';
 import AlertsCommand from 'gmp/commands/alerts';
 import AuthenticationCommand from 'gmp/commands/auth';
@@ -97,12 +91,6 @@ class Gmp {
   private readonly _login: LoginCommand;
   private _logoutListeners: Listener[];
 
-  public readonly agent: AgentCommand;
-  public readonly agents: AgentsCommand;
-  public readonly agentgroup: AgentGroupCommand;
-  public readonly agentgroups: AgentGroupsCommand;
-  public readonly agentinstaller: AgentInstallerCommand;
-  public readonly agentinstallers: AgentInstallersCommand;
   public readonly alert: AlertCommand;
   public readonly alerts: AlertsCommand;
   public readonly auth: AuthenticationCommand;
@@ -185,12 +173,6 @@ class Gmp {
 
     this._logoutListeners = [];
 
-    this.agent = new AgentCommand(this.http);
-    this.agents = new AgentsCommand(this.http);
-    this.agentgroup = new AgentGroupCommand(this.http);
-    this.agentgroups = new AgentGroupsCommand(this.http);
-    this.agentinstaller = new AgentInstallerCommand(this.http);
-    this.agentinstallers = new AgentInstallersCommand(this.http);
     this.alert = new AlertCommand(this.http);
     this.alerts = new AlertsCommand(this.http);
     this.auth = new AuthenticationCommand(this.http);

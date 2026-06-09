@@ -1223,8 +1223,8 @@ manage_create_sql_functions ()
                "$$ LANGUAGE SQL;",
                TASK_STATUS_DONE);
         }
-      /* column agent_group in table task was added in version 262 */
-      if (current_db_version >= 262)
+      /* column agent_group in table task existed from version 262 to 280 */
+      if (current_db_version >= 262 && current_db_version < 281)
         {
           sql ("CREATE OR REPLACE FUNCTION task_severity (integer," // task
                "                                          integer," // overrides
@@ -2522,84 +2522,6 @@ create_tables ()
        "  relay_host text,"
        "  relay_port integer);");
 
-  sql ("CREATE TABLE IF NOT EXISTS agents"
-    " (id SERIAL PRIMARY KEY,"
-    "  uuid UUID NOT NULL UNIQUE,"
-    "  name TEXT NOT NULL,"
-    "  agent_id TEXT UNIQUE NOT NULL,"
-    "  scanner INTEGER NOT NULL REFERENCES scanners (id) ON DELETE RESTRICT,"
-    "  hostname TEXT,"
-    "  authorized INTEGER NOT NULL,"
-    "  connection_status TEXT,"
-    "  last_update INTEGER,"
-    "  last_updater_heartbeat INTEGER,"
-    "  config TEXT,"
-    "  owner INTEGER REFERENCES users (id) ON DELETE RESTRICT,"
-    "  comment TEXT,"
-    "  creation_time INTEGER,"
-    "  modification_time INTEGER,"
-    "  updater_version TEXT,"
-    "  agent_version TEXT,"
-    "  operating_system TEXT,"
-    "  architecture TEXT,"
-    "  update_to_latest INTEGER,"
-    "  agent_update_available INTEGER NOT NULL DEFAULT 0,"
-    "  updater_update_available INTEGER NOT NULL DEFAULT 0,"
-    "  latest_agent_version TEXT,"
-    "  latest_updater_version TEXT);");
-
-  sql ("CREATE TABLE IF NOT EXISTS agent_ip_addresses"
-    " (id SERIAL PRIMARY KEY,"
-    "  agent_id TEXT REFERENCES agents (agent_id) ON DELETE RESTRICT,"
-    "  ip_address TEXT NOT NULL);");
-
-  sql ("CREATE TABLE IF NOT EXISTS agent_installers"
-    " (id SERIAL PRIMARY KEY,"
-    "  uuid text UNIQUE NOT NULL,"
-    "  owner integer REFERENCES users (id) ON DELETE RESTRICT,"
-    "  name text NOT NULL,"
-    "  comment text,"
-    "  creation_time integer,"
-    "  modification_time integer,"
-    "  description text,"
-    "  content_type text,"
-    "  file_extension text,"
-    "  installer_path text,"
-    "  version text,"
-    "  checksum text);");
-
-  sql ("CREATE TABLE IF NOT EXISTS agent_groups"
-    " (id SERIAL PRIMARY KEY,"
-    "  uuid TEXT NOT NULL UNIQUE,"
-    "  name TEXT UNIQUE NOT NULL,"
-    "  scanner INTEGER NOT NULL REFERENCES scanners (id) ON DELETE RESTRICT,"
-    "  owner INTEGER REFERENCES users (id) ON DELETE RESTRICT,"
-    "  comment TEXT,"
-    "  scheduler_cron_time TEXT,"
-    "  creation_time INTEGER,"
-    "  modification_time INTEGER);");
-
-  sql ("CREATE TABLE IF NOT EXISTS agent_group_agents"
-    " (group_id INTEGER NOT NULL REFERENCES agent_groups (id) ON DELETE CASCADE,"
-    "  agent_id INTEGER NOT NULL REFERENCES agents (id) ON DELETE CASCADE,"
-    "  PRIMARY KEY (group_id, agent_id));");
-
-  sql ("CREATE TABLE IF NOT EXISTS agent_groups_trash"
-    " (id SERIAL PRIMARY KEY,"
-    "  uuid text UNIQUE NOT NULL,"
-    "  owner integer REFERENCES users (id) ON DELETE RESTRICT,"
-    "  scanner INTEGER NOT NULL REFERENCES scanners (id) ON DELETE RESTRICT,"
-    "  name text UNIQUE NOT NULL,"
-    "  comment text,"
-    "  scheduler_cron_time TEXT,"
-    "  creation_time integer,"
-    "  modification_time integer);");
-
-  sql ("CREATE TABLE IF NOT EXISTS agent_group_agents_trash"
-    " (id SERIAL PRIMARY KEY,"
-    "  agent_group integer REFERENCES agent_groups_trash (id) ON DELETE RESTRICT,"
-    "  agent integer REFERENCES agents (id) ON DELETE RESTRICT);");
-
   sql ("CREATE TABLE IF NOT EXISTS tasks"
        " (id SERIAL PRIMARY KEY,"
        "  uuid text UNIQUE NOT NULL,"
@@ -2616,12 +2538,10 @@ create_tables ()
        "  schedule_next_time integer,"
        "  schedule_periods integer,"
        "  scanner integer," // REFERENCES scanner (id) ON DELETE RESTRICT,"
-       "  agent_group integer," // REFERENCES agent_groups (id) ON DELETE RESTRICT,"
        "  config_location integer,"
        "  target_location integer,"
        "  schedule_location integer,"
        "  scanner_location integer,"
-       "  agent_group_location integer,"
        "  upload_result_count integer,"
        "  alterable integer,"
        "  creation_time integer,"

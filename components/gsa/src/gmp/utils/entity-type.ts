@@ -44,8 +44,6 @@ export const pluralizeType = (type: string): string => {
 };
 
 const NORMALIZE_TYPES = {
-  agent_group: 'agentgroup',
-  agent_installer: 'agentinstaller',
   config: 'scanconfig',
   cert_bund_adv: 'certbund',
   dfn_cert_adv: 'dfncert',
@@ -72,9 +70,6 @@ export const normalizeType = (type?: NormalizeType): EntityType | undefined => {
 };
 
 const ENTITY_TYPES = {
-  agent: _l('Agent'),
-  agentgroup: _l('Agent Group'),
-  agentinstaller: _l('Agent Installer'),
   alert: _l('Alert'),
   asset: _l('Asset'),
   certbund: _l('CERT-Bund Advisory'),
@@ -121,8 +116,6 @@ export const typeName = (type?: NormalizeType): string => {
 };
 
 const ENTITY_TO_API_TYPES = {
-  agentgroup: 'agent_group',
-  agentinstaller: 'agent_installer',
   certbund: 'info',
   cpe: 'info',
   cve: 'info',
@@ -141,9 +134,6 @@ const ENTITY_TO_API_TYPES = {
 } as const;
 
 export const API_TYPES = [
-  'agent_group',
-  'agent_installer',
-  'agent',
   'alert',
   'asset',
   'config',
@@ -222,8 +212,6 @@ export const resourceType = (type?: EntityType): string | undefined => {
 };
 
 const ENTITY_URLS = {
-  agentgroup: 'agent-group',
-  agentinstaller: 'agent-installer',
   certbund: 'cert-bund-advisory',
   dfncert: 'dfn-cert-advisory',
   operatingsystem: 'operating-system',

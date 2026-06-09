@@ -92,7 +92,7 @@ describe('LoginPageRoute tests', () => {
   });
 
   test('should not use another users saved page', async () => {
-    sessionStorage.setItem('gsa_last_visited_page_alice', '/agents');
+    sessionStorage.setItem('gsa_last_visited_page_alice', '/reports');
 
     const gmp = createGmp({username: 'bob'});
     renderWithDataRouter(gmp);
@@ -101,7 +101,7 @@ describe('LoginPageRoute tests', () => {
       '/tasks',
     );
     expect(sessionStorage.getItem('gsa_last_visited_page_alice')).toBe(
-      '/agents',
+      '/reports',
     );
   });
 

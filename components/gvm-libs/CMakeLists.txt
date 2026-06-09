@@ -24,7 +24,6 @@ option(BUILD_STATIC "Build static versions of the libraries" OFF)
 option(ENABLE_COVERAGE "Enable support for coverage analysis" OFF)
 option(BUILD_TESTS "Build tests for the libraries" OFF)
 option(ENABLE_OPENVASD "Build openvasd library" ON)
-option(ENABLE_AGENTS "Build agent controller library" ON)
 option(ENABLE_CREDENTIAL_STORES "Build credential store library" ON)
 option(ENABLE_SECURITY_INTELLIGENCE "Build security intelligence library" ON)
 
@@ -48,9 +47,9 @@ if(CLANG_FORMAT)
   add_custom_target(
     format
     COMMAND
-      ${CLANG_FORMAT} "-i" "./agent_controller/*.c" "./base/*.c" "./boreas/*.c"
+      ${CLANG_FORMAT} "-i" "./base/*.c" "./boreas/*.c"
       "./gmp/*.c" "./http_scanner/*.c" "./openvasd/*.c" "./osp/*.c" "./util/*.c"
-      "./agent_controller/*.h" "./base/*.h" "./boreas/*.h" "./gmp/*.h"
+      "./base/*.h" "./boreas/*.h" "./gmp/*.h"
       "./http_scanner/*.h" "./openvasd/*.h" "./osp/*.h" "./util/*.h"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
   )
@@ -269,10 +268,6 @@ if(BUILD_TESTS AND NOT SKIP_SRC)
     )
   endif(ENABLE_OPENVASD)
 
-  if(ENABLE_AGENTS)
-    list(APPEND TESTS agent-controller-test)
-  endif(ENABLE_AGENTS)
-
   if(ENABLE_SECURITY_INTELLIGENCE)
     list(APPEND TESTS security-intelligence-test)
   endif(ENABLE_SECURITY_INTELLIGENCE)
@@ -324,14 +319,12 @@ if(NOT SKIP_SRC)
 
   if(
     ENABLE_OPENVASD
-    OR ENABLE_AGENTS
     OR ENABLE_CREDENTIAL_STORES
     OR ENABLE_SECURITY_INTELLIGENCE
   )
     add_subdirectory(http)
   endif(
     ENABLE_OPENVASD
-    OR ENABLE_AGENTS
     OR ENABLE_CREDENTIAL_STORES
     OR ENABLE_SECURITY_INTELLIGENCE
   )
@@ -340,10 +333,6 @@ if(NOT SKIP_SRC)
     add_subdirectory(http_scanner)
     add_subdirectory(openvasd)
   endif(ENABLE_OPENVASD)
-
-  if(ENABLE_AGENTS)
-    add_subdirectory(agent_controller)
-  endif(ENABLE_AGENTS)
 
   if(ENABLE_CREDENTIAL_STORES)
     add_subdirectory(cyberark)

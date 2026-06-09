@@ -60,11 +60,6 @@
 #define SETTING_UUID_FEED_IMPORT_OWNER "78eceaec-3385-11ea-b237-28d24461215b"
 
 /**
- * @brief UUID of 'Agent Owner' setting.
- */
-#define SETTING_UUID_AGENT_OWNER "1ee1f106-8b2e-461c-b426-7f5d76001b29"
-
-/**
  * @brief UUID of 'Integration Configs Owner' setting.
  */
 #define SETTING_UUID_INTEGRATION_CONFIG_OWNER "e15e8a57-0285-439b-929a-068880b410b4"

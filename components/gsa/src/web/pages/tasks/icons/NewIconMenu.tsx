@@ -8,23 +8,19 @@ import {NewIcon} from 'web/components/icon';
 import IconMenu from 'web/components/menu/IconMenu';
 import MenuEntry from 'web/components/menu/MenuEntry';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useTranslation from 'web/hooks/useTranslation';
 
 interface NewIconMenuProps {
   onNewClick?: () => void;
   onNewImportTaskClick?: () => void;
-  onNewAgentTaskClick?: () => void;
 }
 
 const NewIconMenu = ({
   onNewClick,
   onNewImportTaskClick,
-  onNewAgentTaskClick,
 }: NewIconMenuProps) => {
   const [_] = useTranslation();
   const capabilities = useCapabilities();
-  const features = useFeatures();
   if (capabilities.mayCreate('task')) {
     return (
       <IconMenu icon={<NewIcon />} title={_('New Task Menu')}>
@@ -38,13 +34,6 @@ const NewIconMenu = ({
           title={_('New Import Task')}
           onClick={onNewImportTaskClick}
         />
-        {features.featureEnabled('ENABLE_AGENTS') && (
-          <MenuEntry
-            data-testid="new-agent-task-menu"
-            title={_('New Agent Task')}
-            onClick={onNewAgentTaskClick}
-          />
-        )}
       </IconMenu>
     );
   }

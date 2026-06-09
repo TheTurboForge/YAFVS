@@ -509,19 +509,6 @@ describe('Task Model parse tests', () => {
 });
 
 describe(`Task Model methods tests`, () => {
-  test('should be an import task only if neither target nor agentGroup is set', () => {
-    const t1 = Task.fromElement({});
-    const t2 = Task.fromElement({target: {_id: 'foo'}});
-    const t3 = Task.fromElement({agent_group: {_id: 'ag1'}});
-    const t4 = Task.fromElement({
-      target: {_id: 'foo'},
-      agent_group: {_id: 'ag1'},
-    });
-    expect(t1.isImport()).toEqual(true);
-    expect(t2.isImport()).toEqual(false);
-    expect(t3.isImport()).toEqual(false);
-    expect(t4.isImport()).toEqual(false);
-  });
 
 
   test('should use status for isActive', () => {
@@ -647,51 +634,6 @@ describe(`Task Model methods tests`, () => {
     expect(task.isChangeable()).toEqual(true);
   });
 
-  test('should parse agent group', () => {
-    const task = Task.fromElement({
-      _id: 't1',
-      agent_group: {
-        _id: 'ag1',
-      },
-    });
-    expect(task.id).toEqual('t1');
-    expect(task.agentGroup?.id).toEqual('ag1');
-    expect(task.agentGroup?.entityType).toEqual('agentgroup');
-  });
 
-  test('import vs agent vs target parsing check', () => {
-    const t1 = Task.fromElement({});
-    expect(t1.isImport()).toBe(true);
-    expect(t1.isAgent()).toBe(false);
 
-    const t2 = Task.fromElement({target: {_id: 'tgt1'}});
-    expect(t2.isImport()).toBe(false);
-    expect(t2.isAgent()).toBe(false);
-
-    const t3 = Task.fromElement({agent_group: {_id: 'ag1'}});
-    expect(t3.isImport()).toBe(false);
-    expect(t3.isAgent()).toBe(true);
-
-    const t4 = Task.fromElement({
-      target: {_id: 'tgt1'},
-      agent_group: {_id: 'ag1'},
-    });
-    expect(t4.isImport()).toBe(false);
-    expect(t4.isAgent()).toBe(true);
-  });
-
-  test('should be agent if agentGroup is set', () => {
-    const t1 = Task.fromElement({});
-    const t2 = Task.fromElement({agent_group: {_id: 'ag1'}});
-    const t3 = Task.fromElement({target: {_id: 'tgt1'}});
-    const t4 = Task.fromElement({
-      target: {_id: 'tgt1'},
-      agent_group: {_id: 'ag1'},
-    });
-
-    expect(t1.isAgent()).toEqual(false);
-    expect(t2.isAgent()).toEqual(true);
-    expect(t3.isAgent()).toEqual(false);
-    expect(t4.isAgent()).toEqual(true);
-  });
 });

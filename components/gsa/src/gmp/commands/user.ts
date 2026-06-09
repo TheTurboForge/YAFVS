@@ -144,9 +144,6 @@ export const DEFAULT_FILTER_SETTINGS: Record<
   >,
   string
 > = {
-  agent: 'c544a310-dc13-49c6-858e-f3160d75e221',
-  agentgroup: '391fc4f4-9f6c-4f0e-a689-37dd7d70d144',
-  agentinstaller: 'a39a719a-e6bc-4d9f-a1e6-a53e5b014b05',
   alert: 'b833a6f2-dcdc-4535-bfb0-a5154b5b5092',
   asset: '0f040d06-abf9-43a2-8f94-9de178b0e978',
   certbund: 'e4cf514a-17e2-4ab9-9c90-336f15e24750',

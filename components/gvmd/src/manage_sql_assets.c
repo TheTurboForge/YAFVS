@@ -8,8 +8,6 @@
 #include "manage_acl.h"
 #include "manage_sql.h"
 #include "manage_sql_filters.h"
-#if ENABLE_AGENTS
-#endif
 #include "manage_asset_keys.h"
 #include "manage_report_hosts.h"
 #include "manage_sql_permissions.h"
@@ -1907,80 +1905,6 @@ asset_snapshots_target (report_t report, task_t task, gboolean discovery)
   asset_snapshots_set_target_asset_keys (scanner);
 }
 
-#if ENABLE_AGENTS
-/**
- * @brief Create agent asset snapshots for a completed report.
- *
- * @param[in]  report  Report the snapshot belongs to.
- * @param[in]  task    Task that produced the report.
- * @param[in]  group   Agent group.
- */
-void
-asset_snapshots_agent (report_t report, task_t task, agent_group_t group)
-{
-  agent_uuid_list_t agent_uuids;
-  scanner_t scanner = task_scanner (task);
-
-  agent_uuids = agent_uuid_list_from_group (group);
-  if (agent_uuids == NULL || agent_uuids->count <= 0 || agent_uuids->agent_uuids == NULL)
-    {
-      if (agent_uuids)
-        agent_uuid_list_free (agent_uuids);
-      return;
-    }
-
-  for (int i = 0; i < agent_uuids->count; i++)
-    {
-      const gchar *agent_uuid = agent_uuids->agent_uuids[i];
-      gchar *agent_id = NULL;
-      resource_t asset_snapshot = 0;
-
-      if (agent_uuid == NULL || *agent_uuid == '\0')
-        continue;
-
-      agent_id = agent_id_by_uuid (agent_uuid);
-      if (agent_id == NULL || *agent_id == '\0')
-        {
-          g_free (agent_id);
-          continue;
-        }
-
-      sql_begin_immediate ();
-
-      sql_ps ("INSERT INTO asset_snapshots"
-              " (uuid, task_id, report_id, asset_type,"
-              "  asset_key, creation_time, modification_time, scanner)"
-              " VALUES"
-              " (make_uuid (), $1, $2, $3, $4, m_now (), m_now (), $5);",
-              SQL_RESOURCE_PARAM (task),
-              SQL_RESOURCE_PARAM (report),
-              SQL_INT_PARAM (ASSET_TYPE_AGENT),
-              SQL_STR_PARAM (agent_uuid),
-              SQL_RESOURCE_PARAM (scanner),
-              NULL);
-
-      asset_snapshot = sql_last_insert_id ();
-
-      sql_ps ("INSERT INTO asset_snapshot_identifiers"
-              " (asset_snapshot, identifier_type, identifier_value,"
-              "  creation_time, modification_time)"
-              " VALUES"
-              " ($1, $2, $3, m_now (), m_now ())"
-              " ON CONFLICT (asset_snapshot, identifier_type, identifier_value)"
-              " DO NOTHING;",
-              SQL_RESOURCE_PARAM (asset_snapshot),
-              SQL_INT_PARAM (ASSET_IDENTIFIER_TYPE_AGENT_ID),
-              SQL_STR_PARAM (agent_id),
-              NULL);
-
-      sql_commit ();
-
-      g_free (agent_id);
-    }
-
-  agent_uuid_list_free (agent_uuids);
-}
-#endif /* ENABLE_AGENTS */
 
 
 /**
@@ -2001,7 +1925,6 @@ manage_dump_asset_snapshot_counts (GSList *log_config,
 
   int total_count = 0;
   int target_count = 0;
-  int agent_count = 0;
 
   ret = manage_option_setup (log_config, database,
                              0 /* avoid_db_check_inserts */);
@@ -2017,12 +1940,6 @@ manage_dump_asset_snapshot_counts (GSList *log_config,
     SQL_INT_PARAM (ASSET_TYPE_TARGET),
     NULL);
 
-  agent_count = sql_int_ps (
-    "SELECT COUNT(DISTINCT asset_key) FROM asset_snapshots"
-    " WHERE asset_type =$1;",
-    SQL_INT_PARAM (ASSET_TYPE_AGENT),
-    NULL);
-
   GString *out = g_string_new (NULL);
 
   g_string_append (out, "Asset Snapshot Counts (distinct asset_key)\n");
@@ -2031,10 +1948,6 @@ manage_dump_asset_snapshot_counts (GSList *log_config,
   g_string_append_printf (
     out, "  Targets (type=%d):          %d\n",
     ASSET_TYPE_TARGET, target_count);
-  g_string_append_printf (
-    out, "  Agents  (type=%d):          %d\n",
-    ASSET_TYPE_AGENT, agent_count);
-
   printf ("%s", out->str);
 
   g_string_free (out, TRUE);

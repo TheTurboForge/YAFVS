@@ -173,16 +173,6 @@ valid_db_resource_type (const char *type)
 {
   if (type == NULL)
     return 0;
-#if ENABLE_AGENTS
-  if (strcasecmp (type, "agent_group") == 0)
-    return 1;
-#endif
-
-#ifdef ENABLE_AGENTS
-  if ((strcasecmp (type, "agent") == 0)
-      || (strcasecmp (type, "agent_installer") == 0))
-    return 1;
-#endif /* ENABLE_AGENTS */
 
 #ifdef ENABLE_CREDENTIAL_STORES
   if (strcasecmp (type, "credential_store") == 0)

@@ -65,36 +65,6 @@ Ensure (gsad_validator, validate_comment)
                is_equal_to (0));
 }
 
-Ensure (gsad_validator, validate_agent_installer_id)
-{
-  validator_t validator = gsad_get_validator ();
-  assert_that (gvm_validate (validator, "agent_installer_id", "a1b2c3d4"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "agent_installer_id",
-                             "123e4567-e89b-12d3-a456-426614174000"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "agent_installer_id", ""),
-               is_equal_to (2));
-  assert_that (
-    gvm_validate (validator, "agent_installer_id", "invalid id with space"),
-    is_equal_to (2));
-}
-
-Ensure (gsad_validator, validate_agent_list_ids)
-{
-  validator_t validator = gsad_get_validator ();
-  assert_that (gvm_validate (validator, "agent_ids:value", "a1b2c3d4"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "agent_ids:value",
-                             "123e4567-e89b-12d3-a456-426614174000"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "agent_ids:value", ""),
-               is_equal_to (2));
-  assert_that (
-    gvm_validate (validator, "agent_ids:value", "invalid id with space"),
-    is_equal_to (2));
-}
-
 Ensure (gsad_validator, validate_kdcs_name_and_value)
 {
   validator_t validator = gsad_get_validator ();
@@ -138,20 +108,6 @@ Ensure (gsad_validator, alias_boolean_accept_invalid_certs)
                is_equal_to (2));
   assert_that (gvm_validate (validator, "accept_invalid_certs", NULL),
                is_equal_to (5));
-}
-
-Ensure (gsad_validator, alias_number_agent_ids_name)
-{
-  validator_t validator = gsad_get_validator ();
-  assert_that (gvm_validate (validator, "agent_ids:name", "0"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "agent_ids:name", "42"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "agent_ids:name", "-1"),
-               is_equal_to (2));
-  assert_that (gvm_validate (validator, "agent_ids:name", "abc"),
-               is_equal_to (2));
-  assert_that (gvm_validate (validator, "agent_ids:name", ""), is_equal_to (2));
 }
 
 Ensure (gsad_validator, alias_id_optional_alert_id_optional_value)
@@ -242,13 +198,10 @@ main (int argc, char **argv)
 
   add_test_with_context (suite, gsad_validator, validate_name);
   add_test_with_context (suite, gsad_validator, validate_comment);
-  add_test_with_context (suite, gsad_validator, validate_agent_installer_id);
-  add_test_with_context (suite, gsad_validator, validate_agent_list_ids);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);
   add_test_with_context (suite, gsad_validator, validate_ca_pub);
   add_test_with_context (suite, gsad_validator,
                          alias_boolean_accept_invalid_certs);
-  add_test_with_context (suite, gsad_validator, alias_number_agent_ids_name);
   add_test_with_context (suite, gsad_validator,
                          alias_id_optional_alert_id_optional_value);
   add_test_with_context (suite, gsad_validator,

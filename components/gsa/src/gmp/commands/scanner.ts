@@ -32,20 +32,6 @@ interface ScannerCommandVerifyParams {
   id: string;
 }
 
-export interface ScannerAgentControlConfigParams {
-  id: string;
-  attempts?: number;
-  delayInSeconds?: number;
-  maxJitterInSeconds?: number;
-  bulkSize?: number;
-  bulkThrottleTimeInMs?: number;
-  indexerDirDepth?: number;
-  schedulerCronTimes?: string[];
-  intervalInSeconds?: number;
-  missUntilInactive?: number;
-  updateToLatest?: number;
-}
-
 const log = logger.getLogger('gmp.commands.scanner');
 
 class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
@@ -62,10 +48,8 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     {id}: EntityCommandParams,
     {filter, details, ...options}: {filter?: string; details?: boolean} = {},
   ): Promise<Response<Scanner, XmlMeta>> {
-    // Always request details to get agent_control_config_defaults for agent scanners
-    // Backend only returns this data for agent scanner types
     const response = await this.httpGetWithTransform(
-      {id, filter, details: '1'},
+      {id, filter, details: details ? '1' : '0'},
       options,
     );
     return this.transformResponseToModel(response);
@@ -126,60 +110,6 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
       cmd: 'verify_scanner',
       id,
     });
-  }
-
-  modifyAgentControlConfig({
-    id,
-    attempts,
-    delayInSeconds,
-    maxJitterInSeconds,
-    bulkSize,
-    bulkThrottleTimeInMs,
-    indexerDirDepth,
-    schedulerCronTimes,
-    intervalInSeconds,
-    missUntilInactive,
-    updateToLatest,
-  }: ScannerAgentControlConfigParams) {
-    const data: Record<string, string | number | string[]> = {
-      cmd: 'modify_agent_control_scan_config',
-      agent_control_id: id,
-    };
-
-    if (attempts !== undefined) {
-      data.attempts = attempts;
-    }
-    if (delayInSeconds !== undefined) {
-      data.delay_in_seconds = delayInSeconds;
-    }
-    if (maxJitterInSeconds !== undefined) {
-      data.max_jitter_in_seconds = maxJitterInSeconds;
-    }
-    if (bulkSize !== undefined) {
-      data.bulk_size = bulkSize;
-    }
-    if (bulkThrottleTimeInMs !== undefined) {
-      data.bulk_throttle_time_in_ms = bulkThrottleTimeInMs;
-    }
-    if (indexerDirDepth !== undefined) {
-      data.indexer_dir_depth = indexerDirDepth;
-    }
-    if (schedulerCronTimes !== undefined && schedulerCronTimes.length > 0) {
-      // Join multiple cron times with comma for the API
-      data['scheduler_cron_times:'] = schedulerCronTimes.join(',');
-    }
-    if (intervalInSeconds !== undefined) {
-      data.interval_in_seconds = intervalInSeconds;
-    }
-    if (missUntilInactive !== undefined) {
-      data.miss_until_inactive = missUntilInactive;
-    }
-    if (updateToLatest !== undefined) {
-      data.update_to_latest = updateToLatest;
-    }
-
-    log.debug('Modifying scanner agent control config', data);
-    return this.action(data);
   }
 }
 

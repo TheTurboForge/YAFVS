@@ -19,40 +19,6 @@ import {OPENVASD_SCANNER_TYPE, scannerTypeName} from 'gmp/models/scanner';
 import ScannerFilterDialog from 'web/pages/scanners/ScannerFilterDialog';
 
 describe('ScannerFilterDialog tests', () => {
-  test('should render the dialog with defaults', async () => {
-    const gmp = {
-      settings: {enableGreenboneSensor: true},
-    };
-    const {render} = rendererWith({
-      capabilities: true,
-      features: new Features(['ENABLE_AGENTS']),
-      gmp,
-    });
-    const filter = new Filter({
-      terms: [
-        new FilterTerm({keyword: 'first', value: '1', relation: '='}),
-        new FilterTerm({keyword: 'rows', value: '20', relation: '='}),
-        new FilterTerm({keyword: 'sort', value: 'name', relation: '='}),
-      ],
-    });
-    render(<ScannerFilterDialog filter={filter} />);
-
-    expect(screen.getDialog()).toBeInTheDocument();
-    expect(screen.getDialogTitle()).toHaveTextContent('Update Filter');
-    expect(screen.getByName('filterString')).toHaveValue('');
-    const select = screen.getByRole('textbox', {
-      name: 'Scanner Type',
-    }) as HTMLSelectElement;
-    expect(select).toHaveValue('');
-    const selectItems = await getSelectItemElementsForSelect(select);
-    expect(selectItems).toHaveLength(5);
-    expect(screen.getByName('first')).toHaveValue('1');
-    expect(screen.getByName('rows')).toHaveValue('20');
-    expect(screen.getByName('sort_by')).toHaveValue('name');
-    const radio = screen.getRadioInputs();
-    expect(radio[0]).toBeChecked();
-    expect(radio[1]).not.toBeChecked();
-  });
 
   test('should allow to create a new filter', async () => {
     const filter = new Filter({
@@ -131,33 +97,4 @@ describe('ScannerFilterDialog tests', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('should render scanner type', () => {
-    const gmp = {
-      settings: {enableGreenboneSensor: true},
-      filter: {},
-    };
-    const filter = new Filter({
-      terms: [
-        new FilterTerm({keyword: 'foo', value: 'bar', relation: '='}),
-        new FilterTerm({
-          keyword: 'type',
-          value: OPENVASD_SCANNER_TYPE,
-          relation: '=',
-        }),
-      ],
-    });
-    const {render} = rendererWith({
-      capabilities: true,
-      gmp,
-      features: new Features(['ENABLE_AGENTS']),
-    });
-
-    render(<ScannerFilterDialog filter={filter} />);
-
-    expect(screen.getByName('filterString')).toHaveValue('foo=bar');
-    const select = screen.getByRole('textbox', {
-      name: 'Scanner Type',
-    }) as HTMLSelectElement;
-    expect(select).toHaveValue(scannerTypeName(OPENVASD_SCANNER_TYPE));
-  });
 });

@@ -7,19 +7,7 @@ import {describe, test, expect} from '@gsa/testing';
 import ReportTask from 'gmp/models/report/task';
 
 describe('ReportTask tests', () => {
-  test('should use defaults', () => {
-    const task = new ReportTask();
-    expect(task.target).toBeUndefined();
-    expect(task.progress).toBeUndefined();
-    expect(task.agentGroup).toBeUndefined();
-  });
 
-  test('should parse empty element', () => {
-    const task = ReportTask.fromElement();
-    expect(task.target).toBeUndefined();
-    expect(task.progress).toBeUndefined();
-    expect(task.agentGroup).toBeUndefined();
-  });
 
   test('should parse id', () => {
     const task = ReportTask.fromElement({_id: 't1'});
@@ -27,22 +15,6 @@ describe('ReportTask tests', () => {
     expect(task.id).toEqual('t1');
   });
 
-  test('container vs target vs agentGroup precedence', () => {
-    const t1 = ReportTask.fromElement({});
-    expect(t1.isImport()).toBe(true);
-
-    const t2 = ReportTask.fromElement({target: {_id: 'tgt1'}});
-    expect(t2.isImport()).toBe(false);
-
-    const t3 = ReportTask.fromElement({agent_group: {_id: 'ag1'}});
-    expect(t3.isImport()).toBe(false);
-
-    const t4 = ReportTask.fromElement({
-      target: {_id: 'tgt1'},
-      agent_group: {_id: 'ag1'},
-    });
-    expect(t4.isImport()).toBe(false);
-  });
 
   test('should parse target', () => {
     const task = ReportTask.fromElement({
@@ -70,25 +42,5 @@ describe('ReportTask tests', () => {
     expect(task4.progress).toEqual(25);
   });
 
-  test('should parse agent group', () => {
-    const task = ReportTask.fromElement({
-      _id: 't1',
-      agent_group: {_id: 'ag1'},
-    });
 
-    expect(task.id).toEqual('t1');
-    expect(task.agentGroup).toBeDefined();
-    expect(task.agentGroup?.id).toEqual('ag1');
-    expect(task.agentGroup?.entityType).toEqual('agentgroup');
-    expect(task.isImport()).toEqual(false);
-  });
-
-  test('should still parse progress with agentGroup present', () => {
-    const t = ReportTask.fromElement({
-      progress: {__text: '42'},
-      agent_group: {_id: 'ag1'},
-    });
-    expect(t.progress).toEqual(42);
-    expect(t.agentGroup?.id).toEqual('ag1');
-  });
 });

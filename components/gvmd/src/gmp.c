@@ -72,12 +72,6 @@
  */
 
 #include "gmp.h"
-#if ENABLE_AGENTS
-#include "gmp_agent_control_scan_agent_config.h"
-#include "gmp_agent_groups.h"
-#include "gmp_agents.h"
-#include "gmp_agent_installers.h"
-#endif
 #include "gmp_base.h"
 #if ENABLE_CREDENTIAL_STORES
 #include "gmp_credential_stores.h"
@@ -1026,7 +1020,6 @@ typedef struct
   char *schedule_id;    ///< ID of task schedule.
   char *schedule_periods; ///< Number of periods the schedule must run for.
   char *target_id;      ///< ID of task target.
-  char *agent_group_id; ///< ID of task agent group.
   task_t task;          ///< ID of new task.
   char *usage_type;     ///< Usage type ("scan")
 } create_task_data_t;
@@ -1065,8 +1058,6 @@ create_task_data_reset (create_task_data_t *data)
   free (data->schedule_periods);
   free (data->target_id);
   free (data->usage_type);
-  free (data->agent_group_id);
-
   memset (data, 0, sizeof (create_task_data_t));
 }
 
@@ -2753,7 +2744,6 @@ typedef struct
   char *schedule_id;   ///< ID of new schedule for task.
   char *schedule_periods; ///< Number of periods the schedule must run for.
   char *target_id;     ///< ID of new target for task.
-  char *agent_group_id; ///< ID of new agent group for task.
   char *task_id;       ///< ID of task to modify.
 } modify_task_data_t;
 
@@ -2794,8 +2784,6 @@ modify_task_data_reset (modify_task_data_t *data)
   free (data->schedule_periods);
   free (data->target_id);
   free (data->task_id);
-  free (data->agent_group_id);
-
   memset (data, 0, sizeof (modify_task_data_t));
 }
 
@@ -3777,9 +3765,6 @@ typedef enum
   CLIENT_AUTHENTICATE_CREDENTIALS_PASSWORD,
   CLIENT_AUTHENTICATE_CREDENTIALS_TOKEN,
   CLIENT_AUTHENTICATE_CREDENTIALS_USERNAME,
-#if ENABLE_AGENTS
-  CLIENT_CREATE_AGENT_GROUP,
-#endif /* ENABLE_AGENTS */
   CLIENT_CREATE_ALERT,
   CLIENT_CREATE_ALERT_ACTIVE,
   CLIENT_CREATE_ALERT_COMMENT,
@@ -4000,9 +3985,6 @@ typedef enum
   CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL_PORT,
   CLIENT_CREATE_TARGET_SSH_ELEVATE_CREDENTIAL,
   CLIENT_CREATE_TASK,
-#if ENABLE_AGENTS
-  CLIENT_CREATE_TASK_AGENT_GROUP,
-#endif /* ENABLE_AGENTS */
   CLIENT_CREATE_TASK_ALERT,
   CLIENT_CREATE_TASK_ALTERABLE,
   CLIENT_CREATE_TASK_COMMENT,
@@ -4026,10 +4008,6 @@ typedef enum
   CLIENT_CREATE_USER_PASSWORD,
   CLIENT_CREATE_USER_SOURCES,
   CLIENT_CREATE_USER_SOURCES_SOURCE,
-#if ENABLE_AGENTS
-  CLIENT_DELETE_AGENT_GROUP,
-  CLIENT_DELETE_AGENT,
-#endif /* ENABLE_AGENTS */
   CLIENT_DELETE_ALERT,
   CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
@@ -4052,12 +4030,6 @@ typedef enum
   CLIENT_DELETE_USER,
   CLIENT_DESCRIBE_AUTH,
   CLIENT_EMPTY_TRASHCAN,
-#if ENABLE_AGENTS
-  CLIENT_GET_AGENT_GROUPS,
-  CLIENT_GET_AGENT_INSTALLER_FILE,
-  CLIENT_GET_AGENT_INSTALLERS,
-  CLIENT_GET_AGENTS,
-#endif /* ENABLE_AGENTS */
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
@@ -4113,10 +4085,6 @@ typedef enum
   CLIENT_GET_VULNS,
   CLIENT_HELP,
   CLIENT_LOGOUT,
-#if ENABLE_AGENTS
-  CLIENT_MODIFY_AGENT_GROUP,
-  CLIENT_MODIFY_AGENT,
-#endif /* ENABLE_AGENTS */
   CLIENT_MODIFY_ALERT,
   CLIENT_MODIFY_ALERT_ACTIVE,
   CLIENT_MODIFY_ALERT_COMMENT,
@@ -4246,10 +4214,6 @@ typedef enum
   CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL,
   CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL_PORT,
   CLIENT_MODIFY_TASK,
-#if ENABLE_AGENTS
-  CLIENT_MODIFY_AGENT_CONTROL_SCAN_CONFIG,
-  CLIENT_MODIFY_TASK_AGENT_GROUP,
-#endif /* ENABLE_AGENTS */
   CLIENT_MODIFY_TASK_ALERT,
   CLIENT_MODIFY_TASK_ALTERABLE,
   CLIENT_MODIFY_TASK_COMMENT,
@@ -4285,9 +4249,6 @@ typedef enum
   CLIENT_RUN_WIZARD_PARAMS_PARAM_VALUE,
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
-#if ENABLE_AGENTS
-  CLIENT_SYNC_AGENTS,
-#endif
   CLIENT_TEST_ALERT,
 #if ENABLE_CREDENTIAL_STORES
   CLIENT_VERIFY_CREDENTIAL_STORE,
@@ -4467,14 +4428,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               current_credentials.jwt_requested = strcmp (attribute, "0");
             set_client_state (CLIENT_AUTHENTICATE);
           }
-#if ENABLE_AGENTS
-        else if (strcasecmp ("CREATE_AGENT_GROUP", element_name) == 0)
-          {
-            create_agent_group_start (gmp_parser, attribute_names,
-                                      attribute_values);
-            set_client_state (CLIENT_CREATE_AGENT_GROUP);
-          }
-#endif /* ENABLE_AGENTS */
         else if (strcasecmp ("CREATE_ASSET", element_name) == 0)
           set_client_state (CLIENT_CREATE_ASSET);
         else if (strcasecmp ("CREATE_CONFIG", element_name) == 0)
@@ -4571,19 +4524,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("CREATE_USER", element_name) == 0)
           set_client_state (CLIENT_CREATE_USER);
-#if ENABLE_AGENTS
-        else if (strcasecmp ("DELETE_AGENT_GROUP", element_name) == 0)
-          {
-            delete_start ("agent_group", "Agent Group",
-                          attribute_names, attribute_values);
-            set_client_state (CLIENT_DELETE_AGENT_GROUP);
-          }
-        else if (strcasecmp ("DELETE_AGENT", element_name) == 0)
-          {
-            delete_agent_start (gmp_parser, attribute_names, attribute_values);
-            set_client_state (CLIENT_DELETE_AGENT);
-          }
-#endif /* ENABLE_AGENTS */
         else if (strcasecmp ("DELETE_ALERT", element_name) == 0)
           {
             const gchar* attribute;
@@ -4795,15 +4735,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
         else if (strcasecmp ("EMPTY_TRASHCAN", element_name) == 0)
           set_client_state (CLIENT_EMPTY_TRASHCAN);
 
-#if ENABLE_AGENTS
-        ELSE_GET_START (agent_groups, AGENT_GROUPS)
-
-        ELSE_GET_START (agent_installer_file, AGENT_INSTALLER_FILE)
-
-        ELSE_GET_START (agent_installers, AGENT_INSTALLERS)
-
-        ELSE_GET_START (agents, AGENTS)
-#endif /* ENABLE_AGENTS */
 
         else if (strcasecmp ("GET_AGGREGATES", element_name) == 0)
           {
@@ -5507,28 +5438,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                           attribute_values);
             set_client_state (CLIENT_LOGOUT);
           }
-#if ENABLE_AGENTS
-        else if (strcasecmp ("MODIFY_AGENT_CONTROL_SCAN_CONFIG", element_name)
-                 == 0)
-          {
-            modify_agent_control_scan_config_start (gmp_parser,
-                                                    attribute_names,
-                                                    attribute_values);
-            set_client_state (CLIENT_MODIFY_AGENT_CONTROL_SCAN_CONFIG);
-          }
-        else if (strcasecmp ("MODIFY_AGENT_GROUP", element_name) == 0)
-          {
-              modify_agent_group_start (gmp_parser, attribute_names,
-                                        attribute_values);
-              set_client_state (CLIENT_MODIFY_AGENT_GROUP);
-          }
-        else if (strcasecmp ("MODIFY_AGENT", element_name) == 0)
-          {
-            modify_agent_start (gmp_parser, attribute_names,
-                                 attribute_values);
-            set_client_state (CLIENT_MODIFY_AGENT);
-          }
-#endif /* ENABLE_AGENTS */
         else if (strcasecmp ("MODIFY_ALERT", element_name) == 0)
           {
             modify_alert_data->event_data = make_array ();
@@ -5726,12 +5635,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &stop_task_data->task_id);
             set_client_state (CLIENT_STOP_TASK);
           }
-#if ENABLE_AGENTS
-        else if (strcasecmp ("SYNC_AGENTS", element_name) == 0)
-          {
-            set_client_state (CLIENT_SYNC_AGENTS);
-          }
-#endif
         else if (strcasecmp ("TEST_ALERT", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values,
@@ -5970,14 +5873,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &create_task_data->config_id);
             set_client_state (CLIENT_CREATE_TASK_CONFIG);
           }
-#if ENABLE_AGENTS
-        else if (strcasecmp ("AGENT_GROUP", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_task_data->agent_group_id);
-            set_client_state (CLIENT_CREATE_TASK_AGENT_GROUP);
-          }
-#endif /* ENABLE_AGENTS */
         else if (strcasecmp ("ALERT", element_name) == 0)
           {
             const gchar *attribute;
@@ -6073,26 +5968,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         ELSE_READ_OVER;
 
-#if ENABLE_AGENTS
-      case CLIENT_MODIFY_AGENT_CONTROL_SCAN_CONFIG:
-        modify_agent_control_scan_config_element_start (
-          gmp_parser, element_name,
-          attribute_names,
-          attribute_values);
-        break;
-
-      case CLIENT_MODIFY_AGENT_GROUP:
-        modify_agent_group_element_start (gmp_parser, element_name,
-                                          attribute_names,
-                                          attribute_values);
-        break;
-
-      case CLIENT_MODIFY_AGENT:
-        modify_agent_element_start (gmp_parser, element_name,
-                                     attribute_names,
-                                     attribute_values);
-        break;
-#endif /* ENABLE_AGENTS */
 
       case CLIENT_MODIFY_ALERT:
         if (strcasecmp ("NAME", element_name) == 0)
@@ -6570,14 +6445,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_task_data->scanner_id);
             set_client_state (CLIENT_MODIFY_TASK_SCANNER);
           }
-#if ENABLE_AGENTS
-        else if (strcasecmp ("AGENT_GROUP", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_task_data->agent_group_id);
-            set_client_state (CLIENT_MODIFY_TASK_AGENT_GROUP);
-          }
-#endif /* ENABLE_AGENTS */
         else if (strcasecmp ("ALERT", element_name) == 0)
           {
             const gchar *attribute;
@@ -11436,16 +11303,6 @@ handle_get_features (gmp_parser_t *gmp_parser, GError **error)
     "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
     compiled_in, enabled, "ENABLE_OPENVASD");
 
-  /* AGENTS */
-  compiled_in = feature_compiled_in (FEATURE_ID_AGENTS) ? 1 : 0;
-  if (compiled_in)
-    enabled = feature_enabled (FEATURE_ID_AGENTS) ? 1 : 0;
-  else
-    enabled = 0;
-  SENDF_TO_CLIENT_OR_FAIL (
-    "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
-    compiled_in, enabled, "ENABLE_AGENTS");
-
   /* CREDENTIAL_STORE */
   compiled_in = feature_compiled_in (FEATURE_ID_CREDENTIAL_STORES) ? 1 : 0;
   if (compiled_in)
@@ -15005,32 +14862,6 @@ send_scanner_info (iterator_t *scanners, gmp_parser_t *gmp_parser,
         }
         break;
 #endif
-#if ENABLE_AGENTS
-      case SCANNER_TYPE_AGENT_CONTROLLER:
-      case SCANNER_TYPE_AGENT_CONTROLLER_SENSOR:
-        {
-          scanner_t scanner_row_id = get_iterator_resource (scanners);
-
-          if (!verify_agent_controller_connection (scanner_row_id))
-            {
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<info><scanner><name>agent-controller</name><version>0.1</version>"
-                "</scanner><daemon><name>AgentController</name><version>1.0</version>"
-                "</daemon><protocol><name>SCANNER API</name><version>0.1"
-                "</version></protocol><description>Agent Control Scanner</description>");
-
-              SENDF_TO_CLIENT_OR_FAIL ("<params>");
-              SENDF_TO_CLIENT_OR_FAIL ("</params></info>");
-            }
-          else
-            SENDF_TO_CLIENT_OR_FAIL
-             ("<info><scanner><name/><version/></scanner>"
-              "<daemon><name/><version/></daemon>"
-              "<protocol><name/><version/></protocol><description/><params/>"
-              "</info>");
-        }
-        break;
-#endif
       default:
         {
           SENDF_TO_CLIENT_OR_FAIL
@@ -15167,108 +14998,6 @@ handle_get_scanners (gmp_parser_t *gmp_parser, GError **error)
               g_free (md5_fingerprint);
               g_free (issuer);
             }
-#if ENABLE_AGENTS
-          int stype = scanner_iterator_type (&scanners);
-          if (stype == SCANNER_TYPE_AGENT_CONTROLLER
-              || stype == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR)
-            {
-              scanner_t scanner_id = get_iterator_resource (&scanners);
-              agent_controller_scan_agent_config_t cfg =
-                get_agent_control_scan_agent_config (scanner_id);
-
-              if (!cfg)
-                {
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_control_config_defaults/>");
-                }
-              else if (!cfg->agent_defaults)
-                {
-                  agent_controller_scan_agent_config_free (cfg);
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_control_config_defaults/>");
-                }
-              else
-                {
-                  agent_controller_agent_config_t dflt = cfg->
-                    agent_defaults;
-
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_control_config_defaults>");
-
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_defaults>");
-
-                  /* agent_control/retry */
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_control><retry>");
-                  SENDF_TO_CLIENT_OR_FAIL ("<attempts>%d</attempts>",
-                                           dflt->agent_control.retry.attempts);
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<delay_in_seconds>%d</delay_in_seconds>",
-                    dflt->agent_control.retry.delay_in_seconds);
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<max_jitter_in_seconds>%d</max_jitter_in_seconds>",
-                    dflt->agent_control.retry.max_jitter_in_seconds);
-                  SEND_TO_CLIENT_OR_FAIL ("</retry></agent_control>");
-
-                  /* agent_script_executor */
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_script_executor>");
-                  SENDF_TO_CLIENT_OR_FAIL ("<bulk_size>%d</bulk_size>",
-                                           dflt->agent_script_executor.
-                                           bulk_size);
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<bulk_throttle_time_in_ms>%d</bulk_throttle_time_in_ms>",
-                    dflt->agent_script_executor.bulk_throttle_time_in_ms);
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<indexer_dir_depth>%d</indexer_dir_depth>",
-                    dflt->agent_script_executor.indexer_dir_depth);
-
-                  GPtrArray *cron = dflt->agent_script_executor.
-                                          scheduler_cron_time;
-                  if (cron && cron->len > 0)
-                    {
-                      SEND_TO_CLIENT_OR_FAIL (
-                        "<scheduler_cron_time is_list=\"1\">");
-                      for (guint i = 0; i < cron->len; ++i)
-                        {
-                          const char *item = (const char *) cron->pdata[i];
-                          gchar *esc = g_markup_escape_text (
-                            item ? item : "", -1);
-                          SENDF_TO_CLIENT_OR_FAIL ("<item>%s</item>", esc);
-                          g_free (esc);
-                        }
-                      SEND_TO_CLIENT_OR_FAIL ("</scheduler_cron_time>");
-                    }
-                  else
-                    {
-                      SEND_TO_CLIENT_OR_FAIL (
-                        "<scheduler_cron_time is_list=\"0\"/>");
-                    }
-                  SEND_TO_CLIENT_OR_FAIL ("</agent_script_executor>");
-
-                  /* heartbeat */
-                  SEND_TO_CLIENT_OR_FAIL ("<heartbeat>");
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<interval_in_seconds>%d</interval_in_seconds>",
-                    dflt->heartbeat.interval_in_seconds);
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<miss_until_inactive>%d</miss_until_inactive>",
-                    dflt->heartbeat.miss_until_inactive);
-                  SEND_TO_CLIENT_OR_FAIL ("</heartbeat>");
-
-                  SEND_TO_CLIENT_OR_FAIL ("</agent_defaults>");
-
-                  SEND_TO_CLIENT_OR_FAIL ("<agent_control_defaults>");
-
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<update_to_latest>%d</update_to_latest>",
-                    (cfg->agent_control_defaults
-                      ? cfg->agent_control_defaults->update_to_latest
-                      : 0));
-
-                  SEND_TO_CLIENT_OR_FAIL ("</agent_control_defaults>");
-
-                  SEND_TO_CLIENT_OR_FAIL ("</agent_control_config_defaults>");
-
-                  agent_controller_scan_agent_config_free (cfg);
-                }
-            }
-#endif
         }
 
       credential_id = credential_uuid (scanner_iterator_credential (&scanners));
@@ -16914,8 +16643,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
       gchar *auto_delete, *auto_delete_data, *assets_apply_overrides;
       gchar *assets_min_qod, *accept_invalid_certs, *registry_allow_insecure;
       gchar *cs_allow_failed_retrieval;
-      gchar *agent_group_xml = NULL;
-
       ret = get_next (&tasks, &get_tasks_data->get, &first, &count,
                       init_task_iterator);
       if (ret == 1)
@@ -17184,45 +16911,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
               task_target_name = NULL;
             }
 
-#if ENABLE_AGENTS
-          agent_group_t agent_group = 0;
-          int group_readable = 0;
-          char *task_agent_group_uuid = NULL;
-          char *task_agent_group_name = NULL;
-          agent_group =task_agent_group (index); /* row id or 0 */
-          int agent_group_in_trash = task_agent_group_in_trash (index);
-
-          if (agent_group)
-            {
-              if (agent_group_in_trash)
-                {
-                  task_agent_group_uuid = trash_agent_group_uuid (agent_group);
-                  task_agent_group_name = trash_agent_group_name (agent_group);
-                  group_readable = trash_agent_group_readable (
-                    agent_group);
-                }
-              else
-                {
-                  task_agent_group_uuid = agent_group_uuid (agent_group);
-                  task_agent_group_name = agent_group_name (agent_group);
-                  group_readable = agent_group_readable (agent_group);
-                }
-
-              agent_group_xml = g_markup_printf_escaped (
-                "<agent_group id=\"%s\">"
-                "<name>%s</name>"
-                "<trash>%i</trash>"
-                "%s"
-                "</agent_group>",
-                task_agent_group_uuid ? : "",
-                task_agent_group_name ? : "",
-                agent_group_in_trash,
-                group_readable ? "" : "<permissions/>");
-
-              free (task_agent_group_uuid);
-              free (task_agent_group_name);
-            }
-#endif /* ENABLE_AGENT_GROUPS */
 
           config_available = 1;
           if (task_config_in_trash (index))
@@ -17296,9 +16984,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
                        "<trash>%i</trash>"
                        "%s"
                        "</target>"
-#if ENABLE_AGENTS
-                       "%s"
-#endif
                        "<scanner id='%s'>"
                        "<name>%s</name>"
                        "<type>%d</type>"
@@ -17325,9 +17010,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
                        task_target_name_escaped ?: "",
                        target_in_trash,
                        target_available ? "" : "<permissions/>",
-#if ENABLE_AGENTS
-                       agent_group_xml ?: "",
-#endif
                        task_scanner_uuid,
                        task_scanner_name_escaped,
                        task_scanner_type,
@@ -17363,14 +17045,12 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
                               gmp_parser->client_writer_data))
             {
               g_free (response);
-              g_free (agent_group_xml);
               cleanup_iterator (&tasks);
               error_send_to_client (error);
               cleanup_iterator (&tasks);
               return;
             }
           g_free (response);
-          g_free (agent_group_xml);
           free (owner);
           free (observers);
 
@@ -17973,14 +17653,6 @@ handle_create_scanner (gmp_parser_t *gmp_parser, GError **error)
         ));
         log_event_fail ("scanner", "Scanner", NULL, "created");
         break;
-      case CREATE_SCANNER_AGENT_DISABLED:
-        SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("create_scanner",
-          "Agent controller scanner type is not supported "
-          "because the Agents feature flag is disabled."
-        ));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
       case CREATE_SCANNER_PERMISSION_DENIED:
         SEND_TO_CLIENT_OR_FAIL
          (XML_ERROR_SYNTAX ("create_scanner", "Permission denied"));
@@ -18135,15 +17807,6 @@ handle_modify_scanner (gmp_parser_t *gmp_parser, GError **error)
         (XML_ERROR_SYNTAX ("modify_scanner",
           "openvasd scanner type is not supported "
           "because the openvasd feature flag is disabled."
-        ));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_AGENT_DISABLED:
-        SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("modify_scanner",
-          "Agent controller scanner type is not supported "
-          "because the Agents feature flag is disabled."
         ));
         log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
                         "modified");
@@ -18765,12 +18428,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTICATE_CREDENTIALS);
         break;
 
-#if ENABLE_AGENTS
-      case CLIENT_DELETE_AGENT_GROUP:
-        delete_run (gmp_parser, error);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-#endif /* ENABLE_AGENTS */
 
       CASE_DELETE (ALERT, alert, "Alert");
 
@@ -19274,15 +18931,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           break;
         }
 
-#if ENABLE_AGENTS
-      CASE_GET_END (AGENT_GROUPS, agent_groups);
-
-      CASE_GET_END (AGENT_INSTALLERS, agent_installers);
-
-      CASE_GET_END (AGENT_INSTALLER_FILE, agent_installer_file);
-
-      CASE_GET_END (AGENTS, agents);
-#endif /* ENABLE_AGENTS */
 
       case CLIENT_GET_AGGREGATES:
         handle_get_aggregates (gmp_parser, error);
@@ -19728,12 +19376,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           set_client_state (CLIENT_AUTHENTIC);
         break;
 
-#if ENABLE_AGENTS
-      case CLIENT_CREATE_AGENT_GROUP:
-        if (create_agent_group_element_end (gmp_parser, error, element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-#endif /* ENABLE_AGENTS */
 
       case CLIENT_CREATE_ALERT:
         {
@@ -21815,7 +21457,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           target_t target = 0;
           scanner_t scanner = 0;
           char *tsk_uuid = NULL;
-          gboolean is_agent_task = FALSE;
           guint index;
 
           /* @todo Buffer the entire task creation and pass everything to a
@@ -21903,13 +21544,7 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
             }
 
           if (create_task_data->scanner_id == NULL)
-            {
-              if (create_task_data->agent_group_id)
-                is_agent_task = TRUE;
-              else
-                create_task_data->scanner_id =
-                  g_strdup (scanner_uuid_default ());
-            }
+            create_task_data->scanner_id = g_strdup (scanner_uuid_default ());
 
           if (create_task_data->scanner_id != NULL)
             {
@@ -21928,10 +21563,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                   goto create_task_fail;
                 }
 
-              scanner_type_t type = scanner_type (scanner);
-              if (type == SCANNER_TYPE_AGENT_CONTROLLER
-                  || type == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR)
-                is_agent_task = TRUE;
             }
 
           /* Check permissions. */
@@ -21964,70 +21595,18 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
           /* Check for the right combination of target and config. */
 
-          if (create_task_data->target_id == NULL
-              && create_task_data->agent_group_id == NULL)
+          if (create_task_data->target_id == NULL)
             {
               SEND_TO_CLIENT_OR_FAIL
                (XML_ERROR_SYNTAX ("create_task",
-                                  "A target or agent group is required"));
+                                  "A target is required"));
               goto create_task_fail;
             }
 
-          if (create_task_data->target_id && create_task_data->agent_group_id)
-            {
-              SEND_TO_CLIENT_OR_FAIL
-               (XML_ERROR_SYNTAX ("create_task",
-                                  "Only one of target_id or agent_group_id must be provided"));
-              goto create_task_fail;
-            }
-
-#if ENABLE_AGENTS
-          if (is_agent_task)
-            {
-              /* Agent group task */
-              agent_group_t agent_group = 0;
-              scanner_t group_scanner = 0;
-
-              if (find_agent_group_with_permission (
-                    create_task_data->agent_group_id, &agent_group,
-                    "get_agent_groups"))
-                {
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_task"));
-                  goto create_task_fail;
-                }
-
-              group_scanner = agent_group_scanner (agent_group);
-              if (group_scanner == 0)
-                {
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_task"));
-                  goto create_task_fail;
-                }
-
-              if (create_task_data->scanner_id == NULL)
-                {
-                  /* Scanner not specified by client, use the one from agent
-                   * group */
-                  scanner = group_scanner;
-                }
-              else if (scanner != group_scanner)
-                {
-                  /* Scanner specified by client does not match the one from
-                   * agent group */
-                  SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX (
-                    "create_task",
-                    "Scanner ID does not match agent group's scanner"));
-                  goto create_task_fail;
-                }
-
-              set_task_agent_group_and_location (create_task_data->task,
-                                                 agent_group);
-            }
-#endif /* ENABLE_AGENTS */
 
 
           if (create_task_data->target_id != NULL
-              && strcmp (create_task_data->target_id, "0") == 0
-              && !is_agent_task)
+              && strcmp (create_task_data->target_id, "0") == 0)
             {
               /* Import task. */
 
@@ -22132,24 +21711,21 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
               set_task_config (create_task_data->task, config);
             }
 
-          if (!is_agent_task)
+          if (find_target_with_permission (create_task_data->target_id,
+                                           &target, "get_targets"))
             {
-              if (find_target_with_permission (create_task_data->target_id,
-                                               &target, "get_targets"))
-                {
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_task"));
-                  goto create_task_fail;
-                }
-              if (target == 0)
-                {
-                  if (send_find_error_to_client ("create_task", "target",
-                                                 create_task_data->target_id,
-                                                 gmp_parser))
-                    error_send_to_client (error);
-                  goto create_task_fail;
-                }
-              set_task_target (create_task_data->task, target);
+              SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_task"));
+              goto create_task_fail;
             }
+          if (target == 0)
+            {
+              if (send_find_error_to_client ("create_task", "target",
+                                             create_task_data->target_id,
+                                             gmp_parser))
+                error_send_to_client (error);
+              goto create_task_fail;
+            }
+          set_task_target (create_task_data->task, target);
 
           set_task_scanner (create_task_data->task, scanner);
           set_task_usage_type (create_task_data->task,
@@ -22208,9 +21784,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_TASK, USAGE_TYPE);
       CLOSE (CLIENT_CREATE_TASK, SCHEDULE);
       CLOSE (CLIENT_CREATE_TASK, SCHEDULE_PERIODS);
-#if ENABLE_AGENTS
-      CLOSE (CLIENT_CREATE_TASK, AGENT_GROUP);
-#endif /* ENABLE_AGENTS */
 
 
       case CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE:
@@ -22360,12 +21933,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_CREATE_USER_SOURCES);
         break;
 
-#if ENABLE_AGENTS
-      case CLIENT_DELETE_AGENT:
-        if (delete_agent_element_end (gmp_parser, error, element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-#endif /* ENABLE_AGENTS */
 
       case CLIENT_EMPTY_TRASHCAN:
         switch (manage_empty_trashcan ())
@@ -22395,20 +21962,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
             }
           break;
         }
-#if ENABLE_AGENTS
-    case CLIENT_MODIFY_AGENT_CONTROL_SCAN_CONFIG:
-      if (modify_agent_control_scan_config_element_end (gmp_parser, error, element_name))
-        set_client_state (CLIENT_AUTHENTIC);
-      break;
-      case CLIENT_MODIFY_AGENT_GROUP:
-        if (modify_agent_group_element_end (gmp_parser, error, element_name))
-            set_client_state (CLIENT_AUTHENTIC);
-        break;
-      case CLIENT_MODIFY_AGENT:
-        if (modify_agent_element_end (gmp_parser, error, element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-#endif /* ENABLE_AGENTS */
       case CLIENT_MODIFY_ALERT:
         {
           event_t event;
@@ -24391,7 +23944,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                       modify_task_data->schedule_id,
                                       modify_task_data->schedule_periods,
                                       modify_task_data->preferences,
-                                      modify_task_data->agent_group_id,
                                       &fail_alert_id))
               {
                 case 0:
@@ -24534,19 +24086,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                   modify_task_data->task_id,
                                   "modified");
                   break;
-#if ENABLE_AGENTS
-              case 18 :
-                if (send_find_error_to_client ("modify_task", "agent_group",
-                                               modify_task_data->agent_group_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("task", "Task",
-                                modify_task_data->task_id, "modified");
-                break;
-#endif /*ENABLE_AGENTS*/
                 case 21:
                   SEND_TO_CLIENT_OR_FAIL
                    (XML_ERROR_SYNTAX ("modify_task",
@@ -24582,9 +24121,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_TASK, SCHEDULE);
       CLOSE (CLIENT_MODIFY_TASK, SCHEDULE_PERIODS);
       CLOSE (CLIENT_MODIFY_TASK, TARGET);
-#if ENABLE_AGENTS
-      CLOSE (CLIENT_MODIFY_TASK, AGENT_GROUP);
-#endif /* ENABLE_AGENTS */
       CLOSE (CLIENT_MODIFY_TASK, FILE);
 
 
@@ -25378,12 +24914,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         stop_task_data_reset (stop_task_data);
         set_client_state (CLIENT_AUTHENTIC);
         break;
-#if ENABLE_AGENTS
-      case CLIENT_SYNC_AGENTS:
-        sync_agents_run (gmp_parser, error);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-#endif
 #if ENABLE_CREDENTIAL_STORES
       case CLIENT_VERIFY_CREDENTIAL_STORE:
         {
@@ -25539,11 +25069,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
         gvm_append_text (&(current_credentials.jwt), text, text_len);
         break;
 
-#if ENABLE_AGENTS
-      case CLIENT_DELETE_AGENT:
-        delete_agent_element_text (text, text_len);
-        break;
-#endif /* ENABLE_AGENTS */
 
       case CLIENT_MODIFY_CONFIG:
         modify_config_element_text (text, text_len);
@@ -25680,11 +25205,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_MODIFY_USER_SOURCES_SOURCE,
               &modify_user_data->current_source);
 
-#if ENABLE_AGENTS
-      case CLIENT_CREATE_AGENT_GROUP:
-        create_agent_group_element_text (text, text_len);
-        break;
-#endif /* ENABLE_AGENTS */
 
       APPEND (CLIENT_CREATE_ASSET_ASSET_COMMENT,
               &create_asset_data->comment);
@@ -26215,19 +25735,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
         get_license_element_text (text, text_len);
         break;
 
-#if ENABLE_AGENTS
-    case CLIENT_MODIFY_AGENT_CONTROL_SCAN_CONFIG:
-      modify_agent_control_scan_config_element_text (text, text_len);
-      break;
-
-      case CLIENT_MODIFY_AGENT_GROUP:
-        modify_agent_group_element_text (text, text_len);
-        break;
-
-      case CLIENT_MODIFY_AGENT:
-        modify_agent_element_text (text, text_len);
-        break;
-#endif /* ENABLE_AGENTS */
 
       APPEND (CLIENT_MODIFY_ALERT_NAME,
               &modify_alert_data->name);

@@ -38,7 +38,6 @@
 #include "gmp_base.h"
 #include "ipc.h"
 #include "manage_acl.h"
-#include "manage_agent_installers.h"
 #include "manage_assets.h"
 #include "manage_configs.h"
 #include "manage_nvts.h"
@@ -231,7 +230,8 @@ static int schedule_timeout = SCHEDULE_TIMEOUT_DEFAULT;
  */
 static int scanner_connection_retry = SCANNER_CONNECTION_RETRY_DEFAULT;
 
-
+
+
 /* Certificate and key management. */
 
 /**
@@ -637,7 +637,8 @@ certificate_time_status (time_t activates, time_t expires)
     return "valid";
 }
 
-
+
+
 /* Helpers. */
 
 /**
@@ -814,14 +815,6 @@ check_scanner_feature (scanner_type_t scanner_type)
       return SCANNER_FEATURE_OK;
     }
 
-  if (scanner_type == SCANNER_TYPE_AGENT_CONTROLLER
-      || scanner_type == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR)
-    {
-      if (!feature_enabled (FEATURE_ID_AGENTS))
-        return SCANNER_FEATURE_AGENTS_DISABLED;
-      return SCANNER_FEATURE_OK;
-    }
-
   return SCANNER_FEATURE_OK;
 }
 
@@ -837,8 +830,6 @@ scanner_type_supports_unix_sockets (scanner_type_t scanner_type)
 {
   if (scanner_type == SCANNER_TYPE_OPENVAS
       || scanner_type == SCANNER_TYPE_OSP_SENSOR
-      || scanner_type == SCANNER_TYPE_AGENT_CONTROLLER
-      || scanner_type == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR
       || scanner_type == SCANNER_TYPE_OPENVASD
       || scanner_type == SCANNER_TYPE_OPENVASD_SENSOR)
     return 1;
@@ -866,7 +857,8 @@ get_scanner_type_by_uuid (const char *scanner_id)
   return get_scanner_type (scanner);
 }
 
-
+
+
 /* Severity related functions. */
 
 /**
@@ -987,7 +979,8 @@ severity_to_type (double severity)
     }
 }
 
-
+
+
 /* Encryption key management. */
 
 /**
@@ -1094,7 +1087,8 @@ manage_set_encryption_key (GSList *log_config,
   return 0;
 }
 
-
+
+
 /* Credentials. */
 
 /**
@@ -1102,7 +1096,8 @@ manage_set_encryption_key (GSList *log_config,
  */
 credentials_t current_credentials;
 
-
+
+
 /* Reports. */
 
 /**
@@ -1379,7 +1374,8 @@ severity_data_level_counts (const severity_data_t *severity_data,
                                    level_max_severity ("critical"));
 }
 
-
+
+
 /* Task globals. */
 
 /**
@@ -1392,7 +1388,8 @@ task_t current_scanner_task = (task_t) 0;
  */
 report_t global_current_report = (report_t) 0;
 
-
+
+
 /* General task facilities. */
 
 /**
@@ -1492,7 +1489,8 @@ set_task_interrupted (task_t task, const gchar *message)
     }
 }
 
-
+
+
 /* OSP tasks. */
 
 /**
@@ -1706,7 +1704,8 @@ set_scanner_connection_retry (int new_retry)
     scanner_connection_retry = new_retry;
 }
 
-
+
+
 /* CVE tasks. */
 
 /**
@@ -2384,7 +2383,8 @@ run_cve_task (task_t task)
   return 0;
 }
 
-
+
+
 /* Tasks. */
 
 /**
@@ -2598,11 +2598,6 @@ static int
 run_openvasd_task (task_t task, int from, char **report_id);
 #endif
 
-#if ENABLE_AGENTS
-/* Prototype */
-static int
-run_agent_control_task (task_t task, char **report_id);
-#endif
 
 /**
  * @brief Start or resume a task.
@@ -2672,16 +2667,6 @@ run_task (const char *task_id, char **report_id, int from)
     return run_openvasd_task (task, from, report_id);
 #endif
 
-#if ENABLE_AGENTS
-  if (scanner_type (scanner) == SCANNER_TYPE_AGENT_CONTROLLER
-    || scanner_type (scanner) == SCANNER_TYPE_AGENT_CONTROLLER_SENSOR)
-    {
-      if (from == 1)
-        // Resume task is not supported by agent controller
-        return 4;
-      return run_agent_control_task (task, report_id);
-    }
-#endif
 
 
   return -1; // Unknown scanner type
@@ -3020,7 +3005,8 @@ move_task (const char *task_id, const char *slave_id)
   return 0;
 }
 
-
+
+
 /* Credentials. */
 
 /**
@@ -3063,7 +3049,8 @@ credential_full_type (const char* abbreviation)
     return abbreviation;
 }
 
-
+
+
 /* System reports. */
 
 /**
@@ -3694,7 +3681,8 @@ manage_system_report (const char *name, const char *duration,
   return return_code;
 }
 
-
+
+
 /* Scheduling. */
 
 /**
@@ -4246,9 +4234,6 @@ manage_sync (sigset_t *sigmask_current,
       && (should_sync_configs ()
           || should_sync_port_lists ()
           || should_sync_report_formats ()
-#if ENABLE_AGENTS
-          || should_sync_agent_installers ()
-#endif /* ENABLE_AGENTS */
           ))
     {
       if (wait_for_mem (check_min_mem_feed_update,
@@ -4257,18 +4242,6 @@ manage_sync (sigset_t *sigmask_current,
                         "data objects feed sync") == 0
           && feed_lockfile_lock (&lockfile) == 0)
         {
-#if ENABLE_AGENTS
-          if (feature_enabled (FEATURE_ID_AGENTS))
-            {
-              manage_sync_agent_installers ();
-            }
-          else
-            {
-              g_debug (
-                "%s: AGENTS runtime flag is disabled; skipping agent installers sync",
-                __func__);
-            }
-#endif /* ENABLE_AGENTS */
           manage_sync_configs ();
           /* After config sync, update discovery nvts */
           manage_discovery_nvts ();
@@ -4794,7 +4767,8 @@ set_schedule_timeout (int new_timeout)
     schedule_timeout = new_timeout;
 }
 
-
+
+
 /* SecInfo. */
 
 /* Defined in gmp.c. */
@@ -5527,10 +5501,12 @@ manage_read_info (gchar *type, gchar *uid, gchar *name, gchar **result)
   return 1;
 }
 
-
+
+
 /* Users. */
 
-
+
+
 /* Resource aggregates. */
 
 /**
@@ -5546,7 +5522,8 @@ sort_data_free (sort_data_t *sort_data)
   g_free (sort_data);
 }
 
-
+
+
 /* Feeds. */
 
 /**
@@ -5558,10 +5535,6 @@ gboolean
 manage_gvmd_data_feed_dirs_exist ()
 {
   return gvm_file_is_readable (GVMD_FEED_DIR)
-#if ENABLE_AGENTS
-// TODO: Add this check once the agent installers are added to the feed
-//         && agent_installers_feed_metadata_file_exists ()
-#endif
          && configs_feed_dir_exists ()
          && port_lists_feed_dir_exists ()
          && report_formats_feed_dir_exists ();
@@ -6220,7 +6193,8 @@ gvm_migrate_secinfo (int feed_type)
   return ret;
 }
 
-
+
+
 /* Time zone info. */
 
 /**
@@ -6262,7 +6236,8 @@ manage_timezone_supported (const char *zone)
   return pg_timezone_supported (zone);
 }
 
-
+
+
 /* Wizards. */
 
 /**
@@ -6884,7 +6859,8 @@ manage_run_wizard (const gchar *wizard_name,
   return 0;
 }
 
-
+
+
 /* Resources. */
 
 /**
@@ -6902,10 +6878,6 @@ delete_resource (const char *type, const char *resource_id, int ultimate)
 {
   if (strcasecmp (type, "report_config") == 0)
     return delete_report_config (resource_id, ultimate);
-#if ENABLE_AGENTS
-  if (strcasecmp (type, "agent_group") == 0)
-    return delete_agent_group (resource_id, ultimate);
-#endif
   if (strcasecmp (type, "tls_certificate") == 0)
     return delete_tls_certificate (resource_id, ultimate);
   assert (0);
@@ -7206,369 +7178,4 @@ run_openvasd_task (task_t task, int from, char **report_id)
 
   return 0;
 }
-#endif
-
-#if ENABLE_AGENTS
-
-/**
- * @brief Handle an agent controller scan, retrieving the scan result.
- *
- * @param[in]  task     The task.
- * @param[in]  report   The report.
- * @param[in]  scan_id  The UUID of the scan on the scanner.
- *
- * @return 0 on success, -1 on error.
- */
-static int
-handle_agent_controller_scan (task_t task, report_t report, const char *scan_id)
-{
-  scanner_t scanner = 0;
-  http_scanner_connector_t connector = NULL;
-  GSList *results = NULL;
-
-  if (!task || !report || !scan_id || !*scan_id)
-    return -1;
-
-  scanner = task_scanner (task);
-  if (scanner == 0)
-    {
-      result_t r = make_osp_result (
-          task, "", "", "",
-          threat_message_type ("Error"),
-          "Agent Controller: no scanner associated with task", "", "",
-          QOD_DEFAULT, NULL, NULL);
-      report_add_result (report, r);
-      return -1;
-    }
-
-  connector = http_scanner_connect (scanner, scan_id);
-  if (!connector)
-    {
-      result_t r = make_osp_result (
-          task, "", "", "",
-          threat_message_type ("Error"),
-          "Agent Controller: failed to connect to scanner", "", "",
-          QOD_DEFAULT, NULL, NULL);
-      report_add_result (report, r);
-      return -1;
-    }
-
-  int http_status = http_scanner_parsed_results (connector, 0, 0, &results);
-  if (http_status != 200)
-    {
-      gchar *msg = g_strdup_printf (
-          "Agent Controller: failed to fetch results (HTTP %d)", http_status);
-      result_t r = make_osp_result (
-          task, "", "", "",
-          threat_message_type ("Error"),
-          msg, "", "",
-          QOD_DEFAULT, NULL, NULL);
-      report_add_result (report, r);
-      g_free (msg);
-
-      http_scanner_connector_free (connector);
-      return -1;
-    }
-
-  /* Parse and import into the report */
-  // Expect: agent controller results should be the same as openvasd result
-  parse_http_scanner_report (task, report, results, time (NULL), time (NULL));
-
-  if (results)
-    g_slist_free_full (results, (GDestroyNotify) http_scanner_result_free);
-
-  http_scanner_connector_free (connector);
-  return 0;
-}
-
-/**
- * @brief Launch an agent controller scan for the given task/group.
- *        Initialize the new report with the scan_id
- *
- * @param[in]  task        Task handle for which the scan should be launched.
- * @param[in]  agent_group Agent group containing the agents to scan.
- * @param[out] report_id   On success, set to newly allocated report ID string.
- *                         Caller must free with g_free. Set to NULL on failure.
- * @param[out] error       On failure, optionally set to a newly allocated error
- *                         string (caller must g_free). Ignored if NULL.
- *
- * @return 0 on success, -1 on failure.
- */
-static int
-launch_agent_control_task (task_t task,
-                           agent_group_t agent_group,
-                           char **report_id,
-                           gchar **error)
-{
-  http_scanner_connector_t connection = NULL;
-  agent_controller_agent_list_t agent_control_list = NULL;
-  agent_uuid_list_t agent_uuids = NULL;
-  http_scanner_resp_t http_scanner_resp = NULL;
-  gchar *payload = NULL;
-  scanner_t scanner = 0;
-  int ret = -1;
-
-  if (report_id) *report_id = NULL;
-
-  // Get scanner
-  scanner = task_scanner (task);
-  if (scanner == 0)
-    {
-      if (error) *error = g_strdup ("Scanner is not found");
-      goto make_report;
-    }
-
-  // Connect HTTP scanner
-  connection = http_scanner_connect (scanner, NULL);
-  if (!connection)
-    {
-      if (error) *error = g_strdup ("Could not connect to Scanner");
-      goto make_report;
-    }
-
-  // Build agent UUID list from group
-  agent_uuids = agent_uuid_list_from_group (agent_group);
-  if (!agent_uuids || agent_uuids->count <= 0)
-    {
-      if (error) *error = g_strdup ("No Agents found");
-      goto make_report;
-    }
-
-  // Map UUIDs to agent controller entries
-  agent_control_list = agent_controller_agent_list_new (agent_uuids->count);
-  if (!agent_control_list)
-    {
-      if (error) *error = g_strdup ("Allocation failure (agent list)");
-      goto make_report;
-    }
-
-  if (get_agent_controller_agents_from_uuids (scanner, agent_uuids, agent_control_list) != 0)
-    {
-      if (error) *error = g_strdup ("Could not get Agents from database");
-      goto make_report;
-    }
-
-  // Build create-scan payload
-  payload = agent_controller_build_create_scan_payload (agent_control_list);
-  if (!payload)
-    {
-      if (error) *error = g_strdup ("Could not create scan payload");
-      goto make_report;
-    }
-
-  // Create scan
-  http_scanner_resp = http_scanner_create_scan (connection, payload);
-  if (!http_scanner_resp || http_scanner_resp->code != 201)
-    {
-      if (error) *error = g_strdup ("Scanner failed to create the scan");
-      goto make_report;
-    }
-
-  // Extract scan id
-  {
-    gchar *scan_id = agent_controller_get_scan_id (http_scanner_resp->body);
-    if (!scan_id)
-      {
-        if (error) *error = g_strdup ("Could not get scan id from response");
-        goto make_report;
-      }
-
-    if (report_id) *report_id = g_strdup (scan_id);
-    g_free (scan_id);
-  }
-
-  /* success */
-  ret = 0;
-
-make_report:
-  // Always create a report with TASK_STATUS_REQUESTED
-  {
-    int report_resp = create_agent_task_current_report (
-      task, *report_id, TASK_STATUS_REQUESTED);
-    if (report_resp != 0)
-      {
-        if (error && !*error) *error = g_strdup ("Could not create current report");
-        ret = -1;
-      }
-    goto cleanUp;
-  }
-
-cleanUp:
-  if (http_scanner_resp)
-    http_scanner_response_cleanup (http_scanner_resp);
-  if (agent_control_list)
-    agent_controller_agent_list_free (agent_control_list);
-  if (agent_uuids)
-    agent_uuid_list_free (agent_uuids);
-  if (connection)
-    http_scanner_connector_free (connection);
-
-  g_free (payload);
-
-  return ret;
-}
-
-/**
- * @brief Fork a child to handle an agent controller scan's fetching and inserting.
- *
- * @param[in]   task       The task.
- * @param[in]   agent_group     The Agent group.
- * @param[out]  report_id_return   UUID of the report.
- *
- * @return Parent returns with 0 if success, -1 if failure. Child process
- *         doesn't return and simply exits.
- */
-static int
-fork_agent_controller_scan_handler (task_t task, agent_group_t agent_group,
-                       char **report_id_return)
-{
-  char *report_id, *error = NULL;
-  int rc;
-
-  assert (task);
-  assert (agent_group);
-
-  if (report_id_return)
-    *report_id_return = NULL;
-
-  current_scanner_task = task;
-  set_task_run_status (task, TASK_STATUS_REQUESTED);
-
-  switch (fork ())
-    {
-      case 0:
-        init_sentry ();
-        break;
-      case -1:
-        /* Parent, failed to fork. */
-        global_current_report = 0;
-        g_warning ("%s: Failed to fork: %s",
-                   __func__,
-                   strerror (errno));
-        set_task_interrupted (task,
-                              "Error forking scan handler."
-                              "  Interrupting scan.");
-        set_report_scan_run_status (global_current_report,
-                                    TASK_STATUS_INTERRUPTED);
-        global_current_report = (report_t) 0;
-        current_scanner_task = 0;
-        return -9;
-      default:
-        /* Parent, successfully forked. */
-        global_current_report = 0;
-        current_scanner_task = 0;
-        return 0;
-    }
-
-  /* Child: Re-open DB after fork and periodically check scan progress.
-   * If progress == 100%: Parse the report results and other info then exit(0).
-   * Else, exit(1) in error cases like connection to scanner failure.
-   */
-  reinit_manage_process ();
-  manage_session_init (current_credentials.uuid);
-
-  rc = launch_agent_control_task (task, agent_group, &report_id , &error);
-
-  if (rc < 0)
-    {
-      result_t result;
-
-      g_warning ("Agent Controller start_scan %s: %s", report_id, error);
-      result = make_osp_result (task, "", "", "",
-                                threat_message_type ("Error"),
-                                error, "", "", QOD_DEFAULT, NULL, NULL);
-      report_add_result (global_current_report, result);
-      set_task_run_status (task, TASK_STATUS_DONE);
-      set_report_scan_run_status (global_current_report, TASK_STATUS_DONE);
-      set_task_end_time_epoch (task, time (NULL));
-      set_scan_end_time_epoch (global_current_report, time (NULL));
-
-      g_free (error);
-      g_free (report_id);
-      gvm_close_sentry ();
-      exit (-1);
-    }
-
-  setproctitle ("Agent Controller: Handling scan %s", report_id);
-
-  rc = handle_agent_controller_scan (task, global_current_report, report_id);
-  g_free (report_id);
-
-  if (rc >= 0)
-    {
-      set_task_run_status (task, TASK_STATUS_PROCESSING);
-      set_report_scan_run_status (global_current_report,
-                                  TASK_STATUS_PROCESSING);
-      hosts_set_identifiers (global_current_report);
-      hosts_set_max_severity (global_current_report, NULL, NULL);
-      hosts_set_details (global_current_report);
-      asset_snapshots_agent (global_current_report, task, agent_group);
-      set_task_run_status (task, TASK_STATUS_DONE);
-      set_report_scan_run_status (global_current_report, TASK_STATUS_DONE);
-      if (feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT))
-        {
-          queue_report_for_export (global_current_report);
-        }
-    }
-  else if (rc == -1)
-    {
-      set_task_run_status (task, TASK_STATUS_INTERRUPTED);
-      set_report_scan_run_status (global_current_report,
-                                  TASK_STATUS_INTERRUPTED);
-    }
-
-  set_task_end_time_epoch (task, time (NULL));
-  set_scan_end_time_epoch (global_current_report, time (NULL));
-  global_current_report = 0;
-  current_scanner_task = (task_t) 0;
-  gvm_close_sentry ();
-  exit (rc);
-}
-
-/**
- * @brief Start a task on an agent control scanner.
- *
- * @param[in]   task       The task.
- * @param[out]  report_id  The report ID.
- *
- * @return 0 success, 99 permission denied, -1 error.
- */
-static int
-run_agent_control_task (task_t task, char **report_id)
-{
-  if (!feature_enabled (FEATURE_ID_AGENTS))
-    {
-      g_warning ("%s: Agent runtime flag is disabled", __func__);
-      return -1;
-    }
-  agent_group_t agent_group;
-
-  agent_group = task_agent_group (task);
-  if (agent_group)
-    {
-      char *uuid;
-      target_t found;
-
-      uuid = agent_group_uuid (agent_group);
-      if (find_resource_with_permission ("agent_group", uuid, &found,
-                                         "get_agent_groups", 0))
-        {
-          g_free (uuid);
-          return -1;
-        }
-
-      g_free (uuid);
-
-      if (found == 0)
-        return 99;
-    }
-
-  if (fork_agent_controller_scan_handler (task, agent_group, report_id))
-    {
-      g_warning ("Couldn't fork agent-controller scan handler");
-      return -1;
-    }
-  return 0;
-}
-
 #endif

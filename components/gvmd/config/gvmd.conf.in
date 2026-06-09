@@ -9,7 +9,6 @@ jwt_encode_secret_path = @GVMD_STATE_DIR@/jwt/ecdsa-private.pem
 # jwt_encode_secret = <INSERT_SECRET_HERE>
 
 [features]
-enable_agents = false
 enable_credential_store = false
 enable_openvasd = false
 enable_vt_metadata = false

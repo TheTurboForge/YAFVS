@@ -7,8 +7,6 @@
 import {useState} from 'react';
 import type Credential from 'gmp/models/credential';
 import {
-  AGENT_CONTROLLER_SCANNER_TYPE,
-  AGENT_CONTROLLER_SENSOR_SCANNER_TYPE,
   GREENBONE_SENSOR_SCANNER_TYPE,
   OPENVAS_SCANNER_TYPE,
   OPENVASD_SCANNER_TYPE,
@@ -26,7 +24,6 @@ import NumberField from 'web/components/form/NumberField';
 import Select from 'web/components/form/Select';
 import TextField from 'web/components/form/TextField';
 import {NewIcon} from 'web/components/icon';
-import useCapabilities from 'web/hooks/useCapabilities';
 import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
@@ -70,14 +67,8 @@ export type ScannerDialogState = ScannerDialogValues &
 const CA_CERTIFICATE_LINE = '-----BEGIN CERTIFICATE-----';
 
 const updatePort = (scannerType: ScannerType | undefined) => {
-  if (
-    scannerType === GREENBONE_SENSOR_SCANNER_TYPE ||
-    scannerType === AGENT_CONTROLLER_SENSOR_SCANNER_TYPE
-  ) {
+  if (scannerType === GREENBONE_SENSOR_SCANNER_TYPE) {
     return 22;
-  }
-  if (scannerType === AGENT_CONTROLLER_SCANNER_TYPE) {
-    return 8080;
   }
   if (
     scannerType === OPENVASD_SCANNER_TYPE ||
@@ -106,7 +97,6 @@ const ScannerDialog = ({
   onSave,
 }: ScannerDialogProps) => {
   const [_] = useTranslation();
-  const capabilities = useCapabilities();
   const features = useFeatures();
   const gmp = useGmp();
   const [caCertificate, setCaCertificate] = useState<File | undefined>(
@@ -127,15 +117,6 @@ const ScannerDialog = ({
         return GREENBONE_SENSOR_SCANNER_TYPE;
       }
 
-      // don't allow selecting agent types initially if the feature is disabled or the user has no access
-      if (
-        (!features.featureEnabled('ENABLE_AGENTS') ||
-          !capabilities.mayAccess('agent')) &&
-        (initialScannerType === AGENT_CONTROLLER_SCANNER_TYPE ||
-          initialScannerType === AGENT_CONTROLLER_SENSOR_SCANNER_TYPE)
-      ) {
-        return undefined;
-      }
 
       // don't allow selecting sensor types initially if the setting is disabled
       if (
@@ -178,21 +159,7 @@ const ScannerDialog = ({
     scannerTypes.push(OPENVASD_SENSOR_SCANNER_TYPE);
   }
 
-  if (
-    scannerType === AGENT_CONTROLLER_SCANNER_TYPE ||
-    (features.featureEnabled('ENABLE_AGENTS') &&
-      capabilities.mayAccess('agent'))
-  ) {
-    scannerTypes.push(AGENT_CONTROLLER_SCANNER_TYPE);
-  }
 
-  if (
-    scannerType === AGENT_CONTROLLER_SENSOR_SCANNER_TYPE ||
-    (features.featureEnabled('ENABLE_AGENTS') &&
-      capabilities.mayAccess('agent'))
-  ) {
-    scannerTypes.push(AGENT_CONTROLLER_SENSOR_SCANNER_TYPE);
-  }
 
   if (
     scannerType === GREENBONE_SENSOR_SCANNER_TYPE ||
@@ -232,19 +199,13 @@ const ScannerDialog = ({
   }));
 
   const isGreenboneSensorType = scannerType === GREENBONE_SENSOR_SCANNER_TYPE;
-  const isAgentControllerSensorScannerType =
-    scannerType === AGENT_CONTROLLER_SENSOR_SCANNER_TYPE;
   const showScannerDetails = isDefined(scannerType);
   const showPort = showScannerDetails && !isGreenboneSensorType;
   const showCredentialField =
-    !isGreenboneSensorType &&
-    !isAgentControllerSensorScannerType &&
-    showScannerDetails;
+    !isGreenboneSensorType && showScannerDetails;
   const showCaCertificateField =
-    !isGreenboneSensorType &&
-    !isAgentControllerSensorScannerType &&
-    showScannerDetails;
-  if (isGreenboneSensorType || isAgentControllerSensorScannerType) {
+    !isGreenboneSensorType && showScannerDetails;
+  if (isGreenboneSensorType) {
     credentialId = undefined;
   }
   return (

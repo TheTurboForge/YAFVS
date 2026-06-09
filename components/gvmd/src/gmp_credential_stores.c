@@ -48,7 +48,7 @@ get_credential_stores_reset ()
 }
 
 /**
- * @brief Parse the root element start of the get_agent_groups command.
+ * @brief Parse the root element start of the get_credential_stores command.
  *
  * @param[in] attribute_names  the names of the attributes
  * @param[in] attribute_values the values of the attributes

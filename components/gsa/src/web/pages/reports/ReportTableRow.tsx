@@ -25,7 +25,6 @@ import withEntitiesActions, {
 } from 'web/entities/withEntitiesActions';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
-import {AgentIdTableData} from 'web/pages/agents/components/AgentIdColumn';
 
 interface ReportActionsProps extends WithEntitiesActionsComponentProps<Report> {
   selectedDeltaReport?: Report;
@@ -139,7 +138,6 @@ const ReportTableRow = ({
           </DetailsLink>
         </span>
       </TableData>
-      <AgentIdTableData agentId={task?.agentGroup?.id} />
       <TableData>
         <SeverityBar severity={report?.severity?.filtered} />
       </TableData>

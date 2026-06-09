@@ -14,6 +14,7 @@ attribution. Owner fields are retained as metadata, not as access-control
 boundaries. Product behavior must not depend on hidden roles, hidden groups,
 resource sharing, or per-user host limits.
 
-This document intentionally replaces the inherited RBAC documentation. Agent
-functionality, including `agent_groups`, is tracked separately and is not
-changed by the operator-account model cleanup.
+This document intentionally replaces the inherited RBAC documentation. Legacy
+Agent Controller functionality has been removed separately; future endpoint
+evidence collection must be designed as new TurboVAS behavior, not as hidden
+RBAC or Agent Controller compatibility.

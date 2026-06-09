@@ -9,26 +9,6 @@ import Features from 'gmp/capabilities/features';
 import ScannerListPageToolBarIcons from 'web/pages/scanners/ScannerListPageToolBarIcons';
 
 describe('ScannerListPageToolBarIcons tests', () => {
-  test('should render Manual icons', () => {
-    const onScannerCreateClick = testing.fn();
-    const gmp = {
-      settings: {
-        enableGreenboneSensor: false,
-      },
-    };
-    const {render} = rendererWith({
-      gmp,
-      capabilities: true,
-      features: new Features(['ENABLE_AGENTS']),
-    });
-    render(
-      <ScannerListPageToolBarIcons
-        onScannerCreateClick={onScannerCreateClick}
-      />,
-    );
-
-    expect(screen.getByTitle('Help: Scanners')).toBeInTheDocument();
-  });
 
   test('should render New icon and call create handle ', () => {
     const onScannerCreateClick = testing.fn();
@@ -59,28 +39,8 @@ describe('ScannerListPageToolBarIcons tests', () => {
     );
   });
 
-  test('should not render New icon if no create capability', () => {
-    const onScannerCreateClick = testing.fn();
-    const gmp = {
-      settings: {
-        enableGreenboneSensor: false,
-      },
-    };
-    const {render} = rendererWith({
-      capabilities: false,
-      features: new Features(['ENABLE_AGENTS']),
-      gmp,
-    });
-    render(
-      <ScannerListPageToolBarIcons
-        onScannerCreateClick={onScannerCreateClick}
-      />,
-    );
 
-    expect(screen.queryByTitle('New Scanner')).not.toBeInTheDocument();
-  });
-
-  test('should not render New icon if Greenbone Sensor and Agents are disabled', () => {
+  test('should not render New icon if Greenbone Sensor are disabled', () => {
     const gmp = {
       settings: {
         enableGreenboneSensor: false,

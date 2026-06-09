@@ -7,7 +7,6 @@ import {NewIcon} from 'web/components/icon';
 import ManualIcon from 'web/components/icon/ManualIcon';
 import IconDivider from 'web/components/layout/IconDivider';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 
@@ -20,12 +19,9 @@ const ScannerListPageToolBarIcons = ({
 }: ScannerListPageToolBarIconsProps) => {
   const gmp = useGmp();
   const capabilities = useCapabilities();
-  const features = useFeatures();
   const [_] = useTranslation();
   const showNewScannerIcon =
-    capabilities.mayCreate('scanner') &&
-    (gmp.settings.enableGreenboneSensor ||
-      features.featureEnabled('ENABLE_AGENTS'));
+    capabilities.mayCreate('scanner') && gmp.settings.enableGreenboneSensor;
   return (
     <IconDivider>
       <ManualIcon

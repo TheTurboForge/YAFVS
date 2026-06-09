@@ -216,12 +216,6 @@ static int manager_socket_2 = -1;
 FILE* log_stream = NULL;
 #endif
 
-#if ENABLE_AGENTS
-  static gint64  s_agent_log_next = 0;   /* next time logging is allowed */
-  static gboolean s_agent_log_token = FALSE; /* copied to child at fork */
-
-  #define AGENT_SYNC_WARN_INTERVAL_SEC 600 /* every 10 minutes */
-#endif
 
 /**
  * @brief Whether to use TLS for client connections.
@@ -307,7 +301,8 @@ static int feed_version_check_in_progress = 0;
  */
 GSList *log_config = NULL;
 
-
+
+
 /* Helpers. */
 
 /**
@@ -352,7 +347,8 @@ option_lock (lockfile_t *lockfile_checking)
   return 0;
 }
 
-
+
+
 /* Forking, serving the client. */
 
 /**
@@ -661,7 +657,8 @@ accept_and_maybe_fork (int server_socket, sigset_t *sigmask_current)
     }
 }
 
-
+
+
 /* Connection forker for scheduler. */
 
 /**
@@ -925,7 +922,8 @@ fork_connection_for_event (gvm_connection_t *client_connection,
   return fork_connection_internal (client_connection, uuid, 0);
 }
 
-
+
+
 /* Maintenance functions. */
 
 /**
@@ -1085,7 +1083,8 @@ handle_sigchld (/* unused */ int given_signal, siginfo_t *info, void *ucontext)
     }
 }
 
-
+
+
 
 /**
  * @brief Handle a SIGABRT signal.
@@ -1604,105 +1603,6 @@ fork_report_export_scheduler ()
 }
 
 
-#if ENABLE_AGENTS
-/**
- * @brief Forks a process to sync agents from Agent Control scanners.
- *
- * @return 0 on success, 1 if already in progress, -1 on error.
- */
-static int
-fork_agents_sync ()
-{
-  int pid;
-  sigset_t sigmask_all, sigmask_current;
-
-  static gboolean agent_sync_in_progress = FALSE;
-
-  if (agent_sync_in_progress)
-    {
-      g_debug ("%s: Agent sync skipped because one is already in progress", __func__);
-      return 1;
-    }
-
-  agent_sync_in_progress = TRUE;
-
-  if (sigemptyset (&sigmask_all))
-    {
-      g_critical ("%s: Error emptying signal set", __func__);
-      return -1;
-    }
-
-  if (pthread_sigmask (SIG_BLOCK, &sigmask_all, &sigmask_current))
-    {
-      g_critical ("%s: Error setting signal mask", __func__);
-      return -1;
-    }
-
-  /* Decide in the parent if this child is allowed to log a warning */
-  const gint64 now = g_get_monotonic_time ();
-  if (now >= s_agent_log_next)
-    {
-      s_agent_log_token = TRUE;
-      s_agent_log_next = now + (gint64) AGENT_SYNC_WARN_INTERVAL_SEC *
-                         G_USEC_PER_SEC;
-    }
-  else
-    {
-      s_agent_log_token = FALSE;
-    }
-
-  pid = fork_with_handlers ();
-  switch (pid)
-    {
-      case 0:
-        /* Child */
-        init_sentry ();
-        setproctitle ("Synchronizing agent data");
-
-        if (sigmask_normal)
-          pthread_sigmask (SIG_SETMASK, sigmask_normal, NULL);
-        else
-          pthread_sigmask (SIG_SETMASK, &sigmask_current, NULL);
-
-        cleanup_manage_process (FALSE);
-
-       init_manage_process (&database);
-
-        if (manager_socket > -1)
-          {
-            close (manager_socket);
-            manager_socket = -1;
-          }
-
-        if (manager_socket_2 > -1)
-          {
-            close (manager_socket_2);
-            manager_socket_2 = -1;
-          }
-
-      /* Sync agents from all agent controllers. */
-        manage_agents_sync_from_agent_controllers (&s_agent_log_token);
-
-        cleanup_manage_process (FALSE);
-        gvm_close_sentry ();
-        exit (EXIT_SUCCESS);
-
-      case -1:
-        g_warning ("%s: fork: %s", __func__, strerror (errno));
-        agent_sync_in_progress = FALSE;
-        if (pthread_sigmask (SIG_SETMASK, &sigmask_current, NULL))
-          g_warning ("%s: Error resetting signal mask", __func__);
-        return -1;
-
-      default:
-        g_debug ("%s: %i forked %i", __func__, getpid (), pid);
-        agent_sync_in_progress = FALSE;
-        if (pthread_sigmask (SIG_SETMASK, &sigmask_current, NULL))
-          g_warning ("%s: Error resetting signal mask", __func__);
-        return 0;
-    }
-}
-#endif //ENABLE_AGENTS
 
 /**
  * @brief Forks a process to delete stale asset snapshots.
@@ -1801,7 +1701,6 @@ typedef struct
   time_t last_feed_sync;   ///< Last time the feed sync was executed.
   time_t last_queue;       ///< Last time queued task actions were executed.
   time_t last_report_export; ///< Last time report export was executed
-  time_t last_agents_sync; ///< Last time the agents sync was executed.
   time_t last_asset_snapshot_stale_delete; ///< Last time the delete
                                            ///  asset snapshots was executed.
 } periodic_times_t;
@@ -1918,31 +1817,6 @@ run_report_export (periodic_times_t *t)
 }
 
 /**
- * @brief Run agents sync if due (guarded by ENABLE_AGENTS); updates last on run.
- *
- * @param[in,out] t   Periodic timestamps; updates t->last_agents_sync on run.
- */
-static void
-run_agents_sync (periodic_times_t *t)
-{
-#if ENABLE_AGENTS
-  if (!feature_enabled (FEATURE_ID_AGENTS))
-    {
-      g_debug ("%s: AGENTS runtime flag is disabled; skipping agents sync",
-              __func__);
-      return;
-    }
-  time_t now = time (NULL);
-  if (!time_to_run (t->last_agents_sync, AGENT_SYNC_SCHEDULE_PERIOD, now))
-    return;
-  fork_agents_sync ();
-  set_last_run_time (&t->last_agents_sync, time (NULL));
-#else
-  (void)t;
-#endif
-}
-
-/**
  * @brief Run to delete stale asset snapshots.
  *
  * @param[in,out] t   Periodic timestamps; updates t->last_queue on run.
@@ -1968,7 +1842,6 @@ run_periodic_block (periodic_times_t *t)
 {
   run_schedule (t);
   run_feed_sync (t);
-  run_agents_sync (t);
   run_queue (t);
   run_report_export (t);
   run_asset_snapshot_delete_stale (t);
@@ -1989,7 +1862,6 @@ serve_and_schedule ()
     .last_schedule = 0,
     .last_feed_sync = 0,
     .last_queue = 0,
-    .last_agents_sync = 0,
   };
 
   sigset_t sigmask_all;
@@ -3003,9 +2875,6 @@ gvmd (int argc, char** argv, char *env[])
 #if ENABLE_OPENVASD == 1
       printf ("OpenVASD is enabled\n");
 #endif
-#if ENABLE_AGENTS == 1
-      printf ("Agent scanning and management enabled\n");
-#endif
 #if ENABLE_CREDENTIAL_STORES == 1
       printf ("Credential stores are enabled\n");
 #endif
@@ -3576,12 +3445,6 @@ gvmd (int argc, char** argv, char *env[])
         type = SCANNER_TYPE_OPENVASD;
       else if (!strcasecmp (scanner_type, "openvasd-sensor"))
         type = SCANNER_TYPE_OPENVASD_SENSOR;
-#if ENABLE_AGENTS
-      else if (!strcasecmp (scanner_type, "agent-controller"))
-        type = SCANNER_TYPE_AGENT_CONTROLLER;
-      else if (!strcasecmp (scanner_type, "agent-controller-sensor"))
-        type = SCANNER_TYPE_AGENT_CONTROLLER_SENSOR;
-#endif
       else
         {
           type = atoi (scanner_type);
@@ -3630,12 +3493,6 @@ gvmd (int argc, char** argv, char *env[])
             type = SCANNER_TYPE_OPENVASD;
           else if (!strcasecmp (scanner_type, "openvasd-sensor"))
             type = SCANNER_TYPE_OPENVASD_SENSOR;
-#if ENABLE_AGENTS
-          else if (!strcasecmp (scanner_type, "agent-controller"))
-            type = SCANNER_TYPE_AGENT_CONTROLLER;
-          else if (!strcasecmp (scanner_type, "agent-controller-sensor"))
-            type = SCANNER_TYPE_AGENT_CONTROLLER_SENSOR;
-#endif
           else
             {
               type = atoi (scanner_type);

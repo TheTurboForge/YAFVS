@@ -13,7 +13,6 @@
 #define _GVMD_MANAGE_H
 
 #include "iterator.h"
-#include "manage_agent_installers.h"
 #include "manage_filter_utils.h"
 #include "manage_resources.h"
 
@@ -55,12 +54,6 @@
 #include <gvm/openvasd/openvasd.h>
 #endif
 
-#if ENABLE_AGENTS
-#include <gvm/agent_controller/agent_controller.h>
-#include "manage_agent_control_scan_config.h"
-#include "manage_agent_groups.h"
-#include "manage_agents.h"
-#endif
 
 
 /**
@@ -213,7 +206,8 @@ parse_ssldetails (const char *, time_t *, time_t *, gchar **, gchar **);
 const char*
 tls_certificate_format_str (gnutls_x509_crt_fmt_t certificate_format);
 
-
+
+
 /* Credentials. */
 
 extern credentials_t current_credentials;
@@ -224,7 +218,8 @@ authenticate (credentials_t*);
 void
 logout_user ();
 
-
+
+
 /* Database. */
 
 int
@@ -278,7 +273,8 @@ validate_sort_field (const gchar*, const gchar*);
 void
 manage_session_set_timezone (const char *);
 
-
+
+
 /* Task macros and structures. */
 
 /**
@@ -357,9 +353,9 @@ typedef enum scanner_type
   /* 4 was removed (SCANNER_TYPE_GMP). */
   SCANNER_TYPE_OSP_SENSOR = 5,
   SCANNER_TYPE_OPENVASD = 6,
-  SCANNER_TYPE_AGENT_CONTROLLER = 7,
+  /* 7 was removed. */
   SCANNER_TYPE_OPENVASD_SENSOR = 8,
-  SCANNER_TYPE_AGENT_CONTROLLER_SENSOR = 9,
+  /* 9 was removed. */
   /* 10 was removed. */
   SCANNER_TYPE_MAX = 11,
 } scanner_type_t;
@@ -374,7 +370,6 @@ typedef enum
 {
  SCANNER_FEATURE_OK = 0,
  SCANNER_FEATURE_OPENVASD_DISABLED = 1,
- SCANNER_FEATURE_AGENTS_DISABLED = 2,
  SCANNER_FEATURE_CONTAINER_DISABLED = 3
 } scanner_feature_status_t;
 
@@ -393,7 +388,8 @@ check_scanner_feature (scanner_type_t);
 scanner_type_t
 get_scanner_type_by_uuid (const char *);
 
-
+
+
 /* Resources. */
 
 int
@@ -405,7 +401,8 @@ trash_id_exists (const char *, const char *);
 int
 delete_resource (const char *, const char *, int);
 
-
+
+
 /* Events and Alerts. */
 
 /**
@@ -510,7 +507,8 @@ delete_resource (const char *, const char *, int);
  "Please contact your local system administrator if you think it\n"           \
  "was created or assigned erroneously.\n"
 
-
+
+
 /* Task global variables and preprocessor variables. */
 
 /**
@@ -520,7 +518,8 @@ extern task_t current_scanner_task;
 
 extern report_t global_current_report;
 
-
+
+
 /* Task code specific to the representation of tasks. */
 
 unsigned int
@@ -622,23 +621,6 @@ task_target_in_trash (task_t);
 void
 set_task_target (task_t, target_t);
 
-#if ENABLE_AGENTS
-void
-set_task_agent_group_and_location (task_t task, agent_group_t agent_group);
-
-int
-agent_group_tasks_exist_by_scanner (scanner_t scanner);
-
-int
-agent_group_hidden_tasks_exist_by_scanner (scanner_t scanner);
-
-agent_group_t
-task_agent_group (task_t);
-
-int
-task_agent_group_in_trash (task_t task);
-
-#endif /* ENABLE_AGENTS */
 
 int
 set_task_schedule_and_periods (task_t task, const gchar *schedule_id,
@@ -805,7 +787,7 @@ int
 modify_task (const gchar *, const gchar *, const gchar *, const gchar *,
              const gchar *, const gchar *, const gchar *, array_t *,
              const gchar *, const gchar *, const gchar *, array_t *,
-             const gchar *, gchar **);
+             gchar **);
 
 void
 init_config_file_iterator (iterator_t*, const char*, const char*);
@@ -828,7 +810,8 @@ config_task_iterator_uuid (iterator_t*);
 int
 config_task_iterator_readable (iterator_t*);
 
-
+
+
 /* General severity related facilities. */
 
 const char *
@@ -872,7 +855,8 @@ void
 severity_data_level_counts (const severity_data_t*,
                             int*, int*, int*, int*, int*, int*, int*);
 
-
+
+
 /* General task facilities. */
 
 const char*
@@ -893,7 +877,8 @@ resume_task (const char *, char **);
 int
 move_task (const char*, const char*);
 
-
+
+
 /* Results. */
 
 /**
@@ -1427,7 +1412,8 @@ manage_send_report (report_t, report_t, report_format_t, report_config_t,
                     const gchar *);
 
 
-
+
+
 /* Reports. */
 
 void
@@ -1526,7 +1512,8 @@ prognosis_iterator_cve (iterator_t*);
 const char*
 prognosis_iterator_description (iterator_t*);
 
-
+
+
 /* Configs.
  *
  * These are here because they need definitions that are still in manage.h. */
@@ -1537,7 +1524,8 @@ create_task_check_scanner_type (scanner_t);
 int
 modify_task_check_config_scanner (task_t, const char *, const char *);
 
-
+
+
 /* NVT's. */
 
 char *
@@ -1667,7 +1655,8 @@ nvt_default_timeout (const char *);
 int
 family_nvt_count (const char *);
 
-
+
+
 /* NVT selectors. */
 
 /**
@@ -1720,7 +1709,8 @@ nvt_selector_iterator_include (iterator_t*);
 int
 nvt_selector_iterator_type (iterator_t*);
 
-
+
+
 /* NVT preferences. */
 
 void
@@ -1806,7 +1796,8 @@ nvt_severity_iterator_score (iterator_t *);
 const char *
 nvt_severity_iterator_value (iterator_t *);
 
-
+
+
 /* Credentials. */
 
 /**
@@ -2000,7 +1991,8 @@ credential_value (credential_t, const char*);
 gchar*
 credential_encrypted_value (credential_t, const char*);
 
-
+
+
 /* System reports. */
 
 /**
@@ -2032,7 +2024,8 @@ int
 manage_system_report (const char *, const char *, const char *, const char *,
                       const char *, char **);
 
-
+
+
 /* Scanners. */
 
 /**
@@ -2077,7 +2070,6 @@ typedef enum {
   CREATE_SCANNER_INVALID_RELAY_HOST,          ///< Invalid relay host
   CREATE_SCANNER_UNIX_SOCKET_UNSUPPORTED,     ///< Type doesn't support UNIX sockets
   CREATE_SCANNER_OPENVASD_DISABLED,           ///< openvasd feature is disabled
-  CREATE_SCANNER_AGENT_DISABLED,              ///< Agent feature is disabled
   CREATE_SCANNER_PERMISSION_DENIED = 99       ///< Permission denied
 } create_scanner_return_t;
 
@@ -2104,7 +2096,6 @@ typedef enum {
   MODIFY_SCANNER_INVALID_RELAY_HOST,          ///< Invalid relay host
   MODIFY_SCANNER_UNIX_SOCKET_UNSUPPORTED,     ///< Type doesn't support UNIX sockets
   MODIFY_SCANNER_OPENVASD_DISABLED,           ///< openvasd feature is disabled
-  MODIFY_SCANNER_AGENT_DISABLED,              ///< Agent feature is disabled
   MODIFY_SCANNER_PERMISSION_DENIED = 99       ///< Permission denied
 } modify_scanner_return_t;
 
@@ -2293,12 +2284,6 @@ slave_relay_connection (gvm_connection_t *, gvm_connection_t *);
  */
 #define SCHEDULE_TIMEOUT_DEFAULT 60
 
-#if ENABLE_AGENTS
-  /**
-  * @brief Seconds between calls to fork_agents_sync.
-  */
-  #define AGENT_SYNC_SCHEDULE_PERIOD 300 /* every 5 minutes */
-#endif
 
 /**
  * @brief Seconds between calls to manage_asset_snapshot_delete_stale.
@@ -2334,13 +2319,15 @@ get_schedule_timeout ();
 void
 set_schedule_timeout (int);
 
-
+
+
 /* Schema. */
 
 int
 manage_schema (gchar *, gchar **, gsize *, gchar **, gchar **);
 
-
+
+
 /* Trashcan. */
 
 int
@@ -2349,7 +2336,8 @@ manage_restore (const char *);
 int
 manage_empty_trashcan ();
 
-
+
+
 /* SecInfo */
 
 int
@@ -2529,7 +2517,8 @@ nvt_dfn_cert_adv_iterator_name (iterator_t*);
 int
 secinfo_count_after (const get_data_t *, const char *, time_t, gboolean);
 
-
+
+
 /* Vulns. */
 
 int
@@ -2577,7 +2566,8 @@ manage_get_radius_info (int *, char **, char **);
 void
 manage_set_radius_info (int, gchar *, gchar *);
 
-
+
+
 /* Resource aggregates */
 
 /**
@@ -2621,7 +2611,8 @@ aggregate_iterator_value (iterator_t*);
 const char*
 aggregate_iterator_subgroup_value (iterator_t*);
 
-
+
+
 /* Feeds. */
 
 #define NVT_FEED 1
@@ -2735,7 +2726,8 @@ manage_asset_snapshot_delete_stale (int);
 int
 manage_dump_asset_snapshot_counts (GSList *, const db_conn_info_t *);
 
-
+
+
 /* Timezone info. */
 array_t *
 manage_get_timezones ();
@@ -2743,7 +2735,8 @@ manage_get_timezones ();
 gboolean
 manage_timezone_supported (const char *);
 
-
+
+
 /* Wizards. */
 
 int
@@ -2751,7 +2744,8 @@ manage_run_wizard (const gchar *, int (*) (void*, gchar*, gchar**),
                    void *, array_t *, int, const char*,
                    gchar **, gchar **, gchar **);
 
-
+
+
 /* Helpers. */
 
 gchar *
@@ -2772,19 +2766,22 @@ type_filter_columns (const char *);
 gboolean
 manage_migrate_needs_timezone (GSList *, const db_conn_info_t *);
 
-
+
+
 /* Optimize. */
 
 int
 manage_optimize (GSList *, const db_conn_info_t *, const gchar *);
 
-
+
+
 /* Signal management */
 
 int
 manage_cancel ();
 
-
+
+
 /* General settings */
 const char *
 get_vt_verification_collation ();

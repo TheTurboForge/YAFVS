@@ -12,9 +12,6 @@ from ...utils import SupportsStr
 from .._protocol import T
 from ._gmp227 import GMPv227
 from .requests.next import (
-    AgentGroups,
-    AgentInstallers,
-    Agents,
     Credentials,
     CredentialStoreCredentialType,
     CredentialStores,
@@ -54,269 +51,6 @@ class GMPNext(GMPv227[T]):
     @staticmethod
     def get_protocol_version() -> tuple[int, int]:
         return (22, 8)
-
-    def get_agent_installers(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        trash: bool | None = None,
-        details: bool | None = None,
-    ) -> T:
-        """Request a list of agent installers
-
-        Args:
-            filter_string: Filter term to use for the query
-            filter_id: UUID of an existing filter to use for the query
-            trash: Whether to get the trashcan agent installers instead
-            details: Whether to include extra details like tasks using this
-                scanner
-        """
-        return self._send_request_and_transform_response(
-            AgentInstallers.get_agent_installers(
-                filter_string=filter_string,
-                filter_id=filter_id,
-                trash=trash,
-                details=details,
-            )
-        )
-
-    def get_agent_installer(self, agent_installer_id: EntityID) -> T:
-        """Request a single agent installer
-
-        Args:
-            agent_installer_id: UUID of an existing agent installer
-        """
-        return self._send_request_and_transform_response(
-            AgentInstallers.get_agent_installer(agent_installer_id)
-        )
-
-    def get_agent_installer_file(self, agent_installer_id: EntityID) -> T:
-        """Request a single agent installer file
-
-        Args:
-            agent_installer_id: UUID of an existing agent installer
-        """
-        return self._send_request_and_transform_response(
-            AgentInstallers.get_agent_installer_file(agent_installer_id)
-        )
-
-    def get_agents(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        details: bool | None = None,
-    ) -> T:
-        """Request a list of agents.
-
-        Args:
-            filter_string: Filter term to use for the query.
-            filter_id: UUID of an existing filter to use for the query.
-            details: Whether to include detailed agent info.
-        """
-        return self._send_request_and_transform_response(
-            Agents.get_agents(
-                filter_string=filter_string,
-                filter_id=filter_id,
-                details=details,
-            )
-        )
-
-    def modify_agents(
-        self,
-        agent_ids: list[EntityID],
-        *,
-        authorized: bool | None = None,
-        update_to_latest: bool | None = None,
-        config: Mapping[str, Any] | None = None,
-        comment: str | None = None,
-    ) -> T:
-        """
-        Modify multiple agents.
-
-        Args:
-            agent_ids: List of agent UUIDs to modify.
-            authorized: Whether the agent is authorized.
-            update_to_latest: Whether the agent is allowed to update to latest automatically.
-            config: Nested config for Agent Controller.
-            comment: Optional comment for the change.
-        """
-        return self._send_request_and_transform_response(
-            Agents.modify_agents(
-                agent_ids=agent_ids,
-                authorized=authorized,
-                update_to_latest=update_to_latest,
-                config=config,
-                comment=comment,
-            )
-        )
-
-    def delete_agents(self, agent_ids: list[EntityID]) -> T:
-        """Delete multiple agents
-
-        Args:
-            agent_ids: List of agent UUIDs to delete
-        """
-        return self._send_request_and_transform_response(
-            Agents.delete_agents(agent_ids=agent_ids)
-        )
-
-    def modify_agent_control_scan_config(
-        self,
-        agent_control_id: EntityID,
-        config: Mapping[str, Any],
-    ) -> T:
-        """
-        Modify agent control scan config.
-
-        Args:
-            agent_control_id: The agent control UUID.
-            config: Nested config for Agent Controller.
-        """
-        return self._send_request_and_transform_response(
-            Agents.modify_agent_control_scan_config(
-                agent_control_id=agent_control_id,
-                config_defaults=config,
-            )
-        )
-
-    def get_agent_groups(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        trash: bool | None = None,
-    ) -> T:
-        """Request a list of agent groups.
-
-        Args:
-            filter_string: Filter expression to use.
-            filter_id: UUID of a predefined filter.
-            trash: If True, return trashed agent groups.
-
-        Returns:
-            Request object to fetch agent groups.
-        """
-        return self._send_request_and_transform_response(
-            AgentGroups.get_agent_groups(
-                filter_string=filter_string,
-                filter_id=filter_id,
-                trash=trash,
-            )
-        )
-
-    def get_agent_group(self, agent_group_id: EntityID) -> T:
-        """Request a single agent group by ID.
-
-        Args:
-            agent_group_id: UUID of the agent group.
-
-        Raises:
-            RequiredArgument: If agent_group_id is not provided.
-
-        Returns:
-            Request object to fetch the specific agent group.
-        """
-        return self._send_request_and_transform_response(
-            AgentGroups.get_agent_group(
-                agent_group_id=agent_group_id,
-            )
-        )
-
-    def create_agent_group(
-        self,
-        name: str,
-        agent_ids: list[str],
-        *,
-        comment: str | None = None,
-    ) -> T:
-        """Create a new agent group.
-
-        Args:
-            name: Name of the new agent group.
-            agent_ids: List of agent UUIDs to include in the group (required).
-            comment: Optional comment for the group.
-
-        Raises:
-            RequiredArgument: If name or agent_ids is not provided.
-        """
-        return self._send_request_and_transform_response(
-            AgentGroups.create_agent_group(
-                name=name,
-                comment=comment,
-                agent_ids=agent_ids,
-            )
-        )
-
-    def modify_agent_group(
-        self,
-        agent_group_id: EntityID,
-        *,
-        name: str | None = None,
-        comment: str | None = None,
-        agent_ids: list[str] | None = None,
-    ) -> T:
-        """Modify an existing agent group.
-
-        Args:
-            agent_group_id: UUID of the group to modify.
-            name: Optional new name for the group.
-            comment: Optional comment for the group.
-            agent_ids: Optional list of agent UUIDs to set for the group.
-
-        Raises:
-            RequiredArgument: If agent_group_id is not provided.
-        """
-        return self._send_request_and_transform_response(
-            AgentGroups.modify_agent_group(
-                agent_group_id=agent_group_id,
-                name=name,
-                comment=comment,
-                agent_ids=agent_ids,
-            )
-        )
-
-    def delete_agent_group(
-        self,
-        agent_group_id: EntityID,
-        ultimate: bool = False,
-    ) -> T:
-        """Delete an existing agent group.
-
-        Args:
-            agent_group_id: UUID of the group to delete.
-            ultimate: Whether to permanently delete or move to trashcan.
-
-        Raises:
-            RequiredArgument: If agent_group_id is not provided.
-        """
-        return self._send_request_and_transform_response(
-            AgentGroups.delete_agent_group(
-                agent_group_id=agent_group_id,
-                ultimate=ultimate,
-            )
-        )
-
-    def clone_agent_group(
-        self,
-        agent_group_id: EntityID,
-    ) -> T:
-        """Clone an existing agent group
-
-        Args:
-            agent_group_id: UUID of an existing agent group to clone from
-
-        Returns:
-            Request: GMP command to create a new agent group based on a copy
-        """
-        return self._send_request_and_transform_response(
-            AgentGroups.clone_agent_group(agent_group_id)
-        )
-
-    def sync_agents(self) -> T:
-        """Trigger agents synchronization from all agent controllers."""
-        return self._send_request_and_transform_response(Agents.sync_agents())
 
     def create_credential_store_credential(
         self,
@@ -496,46 +230,6 @@ class GMPNext(GMPv227[T]):
             Tasks.clone_task(task_id)
         )
 
-    def create_agent_group_task(
-        self,
-        name: str,
-        agent_group_id: EntityID,
-        scanner_id: EntityID,
-        *,
-        comment: str | None = None,
-        alterable: bool | None = None,
-        schedule_id: EntityID | None = None,
-        alert_ids: Sequence[EntityID] | None = None,
-        schedule_periods: int | None = None,
-        preferences: Mapping[str, SupportsStr] | None = None,
-    ) -> T:
-        """Create a new scan task using an agent group.
-
-        Args:
-            name: Name of the new task.
-            agent_group_id: UUID of the agent group to be scanned.
-            scanner_id: UUID of scanner to use for scanning the agents.
-            comment: Optional comment for the task.
-            alterable: Whether the task should be alterable.
-            alert_ids: List of UUIDs for alerts to be applied to the task.
-            schedule_id: UUID of a schedule when the task should be run.
-            schedule_periods: Limit to number of scheduled runs, 0 for unlimited.
-            preferences: Scanner preferences as name/value pairs.
-        """
-        return self._send_request_and_transform_response(
-            Tasks.create_agent_group_task(
-                name=name,
-                agent_group_id=agent_group_id,
-                scanner_id=scanner_id,
-                comment=comment,
-                alterable=alterable,
-                schedule_id=schedule_id,
-                alert_ids=alert_ids,
-                schedule_periods=schedule_periods,
-                preferences=preferences,
-            )
-        )
-
     def create_import_task(self, name: str, *, comment: str | None = None) -> T:
         """Create a new import task
 
@@ -673,7 +367,6 @@ class GMPNext(GMPv227[T]):
         config_id: EntityID | None = None,
         target_id: EntityID | None = None,
         scanner_id: EntityID | None = None,
-        agent_group_id: EntityID | None = None,
         alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
@@ -690,7 +383,6 @@ class GMPNext(GMPv227[T]):
             config_id: UUID of scan config to use by the task
             target_id: UUID of target to be scanned
             scanner_id: UUID of scanner to use for scanning the target
-            agent_group_id: UUID of agent group to use for scanning
             comment: The comment on the task.
             alert_ids: List of UUIDs for alerts to be applied to the task
             hosts_ordering: The order hosts are scanned in
@@ -707,7 +399,6 @@ class GMPNext(GMPv227[T]):
                 config_id=config_id,
                 target_id=target_id,
                 scanner_id=scanner_id,
-                agent_group_id=agent_group_id,
                 alterable=alterable,
                 hosts_ordering=hosts_ordering,
                 schedule_id=schedule_id,

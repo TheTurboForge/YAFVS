@@ -46,23 +46,6 @@ interface TaskCommandCreateParams {
   target_id?: string;
 }
 
-interface TaskCommandCreateAgentGroupParams {
-  addTag?: YesNo;
-  alertIds?: string[];
-  alterable?: YesNo;
-  applyOverrides?: YesNo;
-  autoDelete?: TaskAutoDelete;
-  autoDeleteData?: number;
-  comment?: string;
-  inAssets?: YesNo;
-  minQod?: number;
-  name: string;
-  scheduleId?: string;
-  schedulePeriods?: number;
-  tagId?: string;
-  agentGroupId?: string;
-}
-
 export interface TaskCommandCreateImportTaskParams {
   name: string;
   comment?: string;
@@ -88,13 +71,6 @@ interface TaskCommandSaveParams {
   schedule_id?: string;
   schedule_periods?: number;
   target_id?: string;
-}
-
-interface TaskCommandSaveAgentGroupParams extends Omit<
-  TaskCommandCreateAgentGroupParams,
-  'addTag'
-> {
-  id: string;
 }
 
 interface TaskCommandSaveImportTaskParams {
@@ -254,48 +230,6 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     }
   }
 
-  async createAgentGroupTask({
-    addTag,
-    alertIds = [],
-    alterable,
-    applyOverrides,
-    autoDelete,
-    autoDeleteData,
-    comment = '',
-    inAssets,
-    minQod,
-    name,
-    scheduleId,
-    schedulePeriods,
-    tagId,
-    agentGroupId,
-  }: TaskCommandCreateAgentGroupParams) {
-    const data = {
-      cmd: 'create_agent_group_task',
-      add_tag: addTag,
-      'alert_ids:': alertIds,
-      alterable,
-      apply_overrides: applyOverrides,
-      auto_delete: autoDelete,
-      auto_delete_data: autoDeleteData,
-      comment,
-      in_assets: inAssets,
-      min_qod: minQod,
-      name,
-      schedule_id: scheduleId,
-      schedule_periods: schedulePeriods,
-      tag_id: tagId,
-      agent_group_id: agentGroupId,
-    };
-    log.debug('Creating agent group task', data);
-
-    try {
-      return await this.entityAction(data);
-    } catch (error_) {
-      await feedStatusRejection(this.http, error_ as ResponseRejection);
-      throw error_;
-    }
-  }
 
   async createImportTask({
     name,
@@ -366,44 +300,6 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     }
   }
 
-  async saveAgentGroupTask({
-    alertIds = [],
-    alterable,
-    autoDelete,
-    autoDeleteData,
-    applyOverrides,
-    comment = '',
-    id,
-    inAssets,
-    minQod,
-    name,
-    scheduleId = NO_VALUE_ID,
-    schedulePeriods,
-    agentGroupId = NO_VALUE_ID,
-  }: TaskCommandSaveAgentGroupParams) {
-    const data = {
-      alterable,
-      'alert_ids:': alertIds,
-      apply_overrides: applyOverrides,
-      auto_delete: autoDelete,
-      auto_delete_data: autoDeleteData,
-      comment,
-      cmd: 'save_agent_group_task',
-      in_assets: inAssets,
-      min_qod: minQod,
-      name,
-      schedule_id: scheduleId,
-      schedule_periods: schedulePeriods,
-      agent_group_id: agentGroupId,
-      task_id: id,
-    };
-    log.debug('Saving agent task', data);
-    try {
-      await this.httpPostWithTransform(data);
-    } catch (rejection) {
-      await feedStatusRejection(this.http, rejection as ResponseRejection);
-    }
-  }
 
   async saveImportTask({
     name,

@@ -91,30 +91,6 @@ const createGmp = ({
       resume: testing.fn().mockResolvedValue(new Response({})),
       delete: testing.fn().mockResolvedValue(new Response({})),
     },
-    agentGroups: {
-      getAll: testing.fn().mockResolvedValue(new Response([])),
-    },
-    agentgroup: {
-      create: testing
-        .fn()
-        .mockResolvedValue(createActionResultResponse({id: 'new-agent-group'})),
-      clone: testing
-        .fn()
-        .mockResolvedValue(
-          createActionResultResponse({id: 'cloned-agent-group'}),
-        ),
-      delete: testing.fn().mockResolvedValue(new Response({})),
-      export: testing.fn().mockResolvedValue(new Response('agent-group-data')),
-      save: testing
-        .fn()
-        .mockResolvedValue(
-          createActionResultResponse({id: 'saved-agent-group'}),
-        ),
-    },
-    agentgroups: {
-      get: testing.fn().mockResolvedValue({data: [], meta: {filter: {}}}),
-      getAll: testing.fn().mockResolvedValue(new Response([])),
-    },
   };
 };
 
@@ -162,43 +138,6 @@ describe('TaskComponent tests', () => {
     expect(screen.getByText(/Edit Import Task/i)).toBeInTheDocument();
   });
 
-  test('should open correct dialog on edit for agent task', async () => {
-    const gmp = createGmp();
-    const {render} = rendererWith({
-      gmp,
-      capabilities: true,
-      features: new Features(['ENABLE_AGENTS']),
-    });
-
-    const agentTask = Task.fromElement({
-      _id: 'agent-task-id',
-      name: 'Agent Task',
-      agent_group: {
-        _id: 'agent-group-id',
-        name: 'Agent Group',
-      },
-    });
-
-    render(
-      <TaskComponent>
-        {({edit}) => (
-          <Button
-            data-testid="edit-agent-task"
-            onClick={() => edit(agentTask)}
-          />
-        )}
-      </TaskComponent>,
-    );
-
-    const button = screen.getByTestId('edit-agent-task');
-    fireEvent.click(button);
-
-    await wait();
-
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('dialog-test-id')).toBeInTheDocument();
-    expect(screen.getByText(/Edit Agent Task/i)).toBeInTheDocument();
-  });
 
   test('should open correct dialog on edit for standard task', async () => {
     const gmp = createGmp();

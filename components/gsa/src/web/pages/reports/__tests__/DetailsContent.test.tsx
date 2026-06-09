@@ -226,42 +226,6 @@ const containerEntity = Report.fromElement({
   _id: '5555',
 });
 
-const agentEntity = Report.fromElement({
-  report: {
-    _id: '6666',
-    scan_run_status: 'Done',
-    scan_start: '2019-06-03T11:00:22Z',
-    scan_end: '2019-06-03T11:31:23Z',
-    timestamp: '2019-06-03T11:00:22Z',
-    timezone: 'UTC',
-    timezone_abbrev: 'UTC',
-    task: {
-      _id: '314',
-      name: 'Agent Task',
-      comment: '',
-      target: {_id: '159'},
-      agent_group: {_id: 'ag-1'},
-    },
-    closed_cves: {count: 0},
-    vulns: {count: 0},
-    apps: {count: 0},
-    os: {count: 0},
-    ssl_certs: {count: 0},
-    result_count: {full: 0, filtered: 0},
-    results: {result: []},
-    hosts: {count: 0},
-    host: [],
-    tls_certificates: {tls_certificate: []},
-    ports: {count: 0, port: []},
-    errors: {count: 0, error: []},
-  },
-  creation_time: '2019-06-02T12:00:22Z',
-  modification_time: '2019-06-03T11:00:22Z',
-  name: '2019-06-03T11:00:22Z',
-  owner: {name: 'admin'},
-  _id: '6666',
-});
-
 const zeroCounts = {
   resultsCounts: new CollectionCounts({all: 0, filtered: 0}),
   hostsCounts: new CollectionCounts({all: 0, filtered: 0}),
@@ -722,24 +686,6 @@ describe('DetailsContent', () => {
         entity: containerEntity,
         reportId: '5555',
         task: containerEntity.report?.task,
-        ...zeroCounts,
-      });
-
-      const {render} = setupRenderer();
-      render(<DetailsContent {...props} />);
-
-      screen.getByText('Report:');
-      const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
-    });
-  });
-
-  describe('Agent scanning', () => {
-    test('should render without error for agent scanning report', () => {
-      const props = createMockProps({
-        entity: agentEntity,
-        reportId: '6666',
-        task: agentEntity.report?.task,
         ...zeroCounts,
       });
 

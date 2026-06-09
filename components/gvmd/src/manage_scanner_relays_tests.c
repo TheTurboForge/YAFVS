@@ -56,7 +56,8 @@ write_temp_relays_file (const char *content, gchar **path_out)
   return 0;
 }
 
-
+
+
 /* set_relays_path */
 
 Ensure (manage_scanner_relays, set_relays_path_null_disables)
@@ -87,7 +88,8 @@ Ensure (manage_scanner_relays, set_relays_path_overwrites_previous)
   assert_that (get_relays_path (), is_equal_to_string ("/tmp/second.json"));
 }
 
-
+
+
 /* scanner_type_matches_relay */
 
 Ensure (manage_scanner_relays, scanner_type_matches_relay_osp_matches_osp)
@@ -117,9 +119,6 @@ Ensure (manage_scanner_relays,
 {
   assert_that (scanner_type_matches_relay (SCANNER_TYPE_OSP_SENSOR, "openvasd"),
                is_false);
-  assert_that (scanner_type_matches_relay (SCANNER_TYPE_OSP_SENSOR,
-                                           "agent-control"),
-               is_false);
   assert_that (scanner_type_matches_relay (SCANNER_TYPE_OSP_SENSOR, ""),
                is_false);
 }
@@ -136,24 +135,14 @@ Ensure (manage_scanner_relays,
 }
 
 Ensure (manage_scanner_relays,
-        scanner_type_matches_relay_agent_control_matches_agent_control)
-{
-  assert_that (scanner_type_matches_relay
-                (SCANNER_TYPE_AGENT_CONTROLLER_SENSOR, "agent-control"),
-               is_true);
-  assert_that (scanner_type_matches_relay
-                (SCANNER_TYPE_AGENT_CONTROLLER_SENSOR, NULL),
-               is_true);
-}
-
-Ensure (manage_scanner_relays,
         scanner_type_matches_relay_unknown_type_returns_false)
 {
   assert_that (scanner_type_matches_relay (999, "osp"), is_false);
   assert_that (scanner_type_matches_relay (999, NULL), is_false);
 }
 
-
+
+
 /* extract_relays_fields_from_root_cjson */
 
 Ensure (manage_scanner_relays,
@@ -216,7 +205,8 @@ Ensure (manage_scanner_relays,
   cJSON_Delete (root);
 }
 
-
+
+
 /* extract_relay_fields_from_json_item */
 
 Ensure (manage_scanner_relays,
@@ -319,7 +309,8 @@ Ensure (manage_scanner_relays,
   cJSON_Delete (item);
 }
 
-
+
+
 /* get_single_relay_from_file */
 
 Ensure (manage_scanner_relays,
@@ -584,7 +575,8 @@ Ensure (manage_scanner_relays,
   g_free (path);
 }
 
-
+
+
 /* Test suite. */
 
 int
@@ -614,8 +606,6 @@ main (int argc, char **argv)
                          scanner_type_matches_relay_osp_rejects_other);
   add_test_with_context (suite, manage_scanner_relays,
                          scanner_type_matches_relay_openvasd_matches_openvasd);
-  add_test_with_context (suite, manage_scanner_relays,
-                         scanner_type_matches_relay_agent_control_matches_agent_control);
   add_test_with_context (suite, manage_scanner_relays,
                          scanner_type_matches_relay_unknown_type_returns_false);
 

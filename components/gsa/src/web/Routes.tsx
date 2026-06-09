@@ -44,30 +44,6 @@ const loggedInRoutes = [
     element: <LoggedInLayout />,
     HydrateFallback: Loading,
     children: [
-      // Agent routes
-      {
-        path: 'agent-installers',
-        lazy: async () => ({
-          Component: (
-            await import('web/pages/agent-remote-installer/AgentInstallInstructionsPage')
-          ).default,
-        }),
-      },
-      {
-        path: 'agents',
-        lazy: async () => ({
-          Component: (await import('web/pages/agents/AgentListPage')).default,
-        }),
-      },
-      {
-        path: 'agent-groups',
-        lazy: async () => ({
-          Component: (
-            await import('web/pages/agent-groups/AgentGroupsListPage')
-          ).default,
-        }),
-      },
-
       // Alert routes
       {
         path: 'alerts',

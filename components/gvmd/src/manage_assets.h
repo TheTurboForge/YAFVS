@@ -14,8 +14,7 @@
  */
 typedef enum
 {
- ASSET_TYPE_TARGET = 0,
- ASSET_TYPE_AGENT = 1
+ ASSET_TYPE_TARGET = 0
 } asset_type_t;
 
 char*
@@ -156,10 +155,6 @@ asset_snapshot_add_report_host_identifier(const gchar*,
 int
 asset_snapshot_collect_report_identifiers (const char *);
 
-#if ENABLE_AGENTS
-void
-asset_snapshots_agent (report_t, task_t, agent_group_t);
-#endif
 
 
 #endif /* not _GVMD_MANAGE_ASSETS_H */

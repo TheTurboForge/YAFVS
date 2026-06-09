@@ -5,8 +5,6 @@
 
 import type Filter from 'gmp/models/filter';
 import {
-  AGENT_CONTROLLER_SCANNER_TYPE,
-  AGENT_CONTROLLER_SENSOR_SCANNER_TYPE,
   GREENBONE_SENSOR_SCANNER_TYPE,
   OPENVAS_SCANNER_TYPE,
   OPENVASD_SCANNER_TYPE,
@@ -27,7 +25,6 @@ import useFilterDialogSave, {
   type UseFilterDialogStateProps,
 } from 'web/components/powerfilter/useFilterDialogSave';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 
@@ -44,8 +41,6 @@ const ScannerTypeGroup = ({
   filter,
   onFilterValueChange,
 }: ScannerTypeGroupProps) => {
-  const capabilities = useCapabilities();
-  const features = useFeatures();
   const gmp = useGmp();
   const [_] = useTranslation();
 
@@ -54,15 +49,6 @@ const ScannerTypeGroup = ({
     OPENVAS_SCANNER_TYPE,
     OPENVASD_SCANNER_TYPE,
   ];
-  if (
-    features.featureEnabled('ENABLE_AGENTS') &&
-    capabilities.mayAccess('agent')
-  ) {
-    scannerTypes.push(AGENT_CONTROLLER_SCANNER_TYPE);
-    if (gmp.settings.enableGreenboneSensor) {
-      scannerTypes.push(AGENT_CONTROLLER_SENSOR_SCANNER_TYPE);
-    }
-  }
   if (gmp.settings.enableGreenboneSensor) {
     scannerTypes.push(GREENBONE_SENSOR_SCANNER_TYPE);
   }

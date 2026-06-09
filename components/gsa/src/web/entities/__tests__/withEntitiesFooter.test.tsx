@@ -116,25 +116,4 @@ describe('withEntitiesFooter tests', () => {
     );
   });
 
-  test('should not pass agent-specific props to the wrapped component', () => {
-    const MockComponent = testing.fn(() => <div>Mock Component</div>);
-    const WrappedComponent = withEntitiesFooter<Task>()(MockComponent);
-
-    render(
-      <WrappedComponent
-        entities={[new Task({id: '1'})]}
-        onDeleteBulk={testing.fn()}
-      />,
-    );
-
-    expect(MockComponent).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        onAuthorizeClick: expect.any(Function),
-        onRevokeClick: expect.any(Function),
-        onEnableUpdateToLatestClick: expect.any(Function),
-        onDisableUpdateToLatestClick: expect.any(Function),
-      }),
-      {},
-    );
-  });
 });

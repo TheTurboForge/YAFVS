@@ -15,7 +15,6 @@ import EntitiesFooter from 'web/entities/EntitiesFooter';
 import withEntitiesFooter from 'web/entities/withEntitiesFooter';
 import withEntitiesHeader from 'web/entities/withEntitiesHeader';
 import withRowDetails from 'web/entities/withRowDetails';
-import {AgentIdTableHead} from 'web/pages/agents/components/AgentIdColumn';
 import HostDetails from 'web/pages/hosts/Details';
 import HostRow from 'web/pages/hosts/Row';
 import PropTypes from 'web/utils/PropTypes';
@@ -45,13 +44,6 @@ const Header = ({
           sortBy={sort ? 'hostname' : false}
           title={_('Hostname')}
           width="35%"
-          onSortChange={onSortChange}
-        />
-        <AgentIdTableHead
-          currentSortBy={currentSortBy}
-          currentSortDir={currentSortDir}
-          sort={sort}
-          width="8%"
           onSortChange={onSortChange}
         />
         <TableHead

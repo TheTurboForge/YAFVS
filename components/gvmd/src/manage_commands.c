@@ -32,9 +32,6 @@
  */
 command_t gmp_commands[]
  = {{"AUTHENTICATE", "Authenticate with the manager." },
-#if ENABLE_AGENTS
-    {"CREATE_AGENT_GROUP", "Create an agent group."},
-#endif
     {"CREATE_ALERT", "Create an alert."},
     {"CREATE_ASSET", "Create an asset."},
     {"CREATE_CONFIG", "Create a config."},
@@ -54,10 +51,6 @@ command_t gmp_commands[]
     {"CREATE_TASK", "Create a task."},
     {"CREATE_TLS_CERTIFICATE", "Create a TLS certificate."},
     {"CREATE_USER", "Create a new user."},
-#if ENABLE_AGENTS
-    {"DELETE_AGENT_GROUP", "Delete an agent group."},
-    {"DELETE_AGENT", "Delete one or more agents."},
-#endif /* ENABLE_AGENTS */
     {"DELETE_ALERT", "Delete an alert."},
     {"DELETE_ASSET", "Delete an asset."},
     {"DELETE_CONFIG", "Delete a config."},
@@ -80,12 +73,6 @@ command_t gmp_commands[]
     {"DELETE_USER", "Delete an existing user."},
     {"DESCRIBE_AUTH", "Get details about the used authentication methods."},
     {"EMPTY_TRASHCAN", "Empty the trashcan."},
-#if ENABLE_AGENTS
-    {"GET_AGENT_GROUPS", "Get all agent groups."},
-    {"GET_AGENTS", "Get all agents."},
-    {"GET_AGENT_INSTALLERS", "Get all agent installers."},
-    {"GET_AGENT_INSTALLER_FILE", "Get an agent installer file."},
-#endif /* ENABLE_AGENTS */
     {"GET_AGGREGATES", "Get aggregates of resources."},
     {"GET_ALERTS", "Get all alerts."},
     {"GET_ASSETS", "Get all assets."},
@@ -133,11 +120,6 @@ command_t gmp_commands[]
     {"GET_VERSION", "Get the Greenbone Management Protocol version."},
     {"GET_VULNS", "Get all vulnerabilities."},
     {"HELP", "Get this help text."},
-#if ENABLE_AGENTS
-    {"MODIFY_AGENT_CONTROL_SCAN_CONFIG", "Modify an agent control scan agent configuration."},
-    {"MODIFY_AGENT_GROUP", "Modify an agent group."},
-    {"MODIFY_AGENT", "Modify one or more existing agents."},
-#endif /* ENABLE_AGENTS */
     {"MODIFY_ALERT", "Modify an existing alert."},
     {"MODIFY_ASSET", "Modify an existing asset."},
     {"MODIFY_AUTH", "Modify the authentication methods."},
@@ -169,9 +151,6 @@ command_t gmp_commands[]
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
     {"GENERATE_SCOPE_REPORT", "Generate a scope report from existing evidence."},
-#if ENABLE_AGENTS
-    {"SYNC_AGENTS", "Synchronize agents from all agent-controllers."},
-#endif /* ENABLE_AGENTS */
     {"SYNC_CONFIG", "Synchronize a config with a scanner."},
     {"TEST_ALERT", "Run an alert."},
     {"VERIFY_REPORT_FORMAT", "Verify a report format."},

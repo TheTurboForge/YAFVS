@@ -205,9 +205,6 @@ const PageContent = ({
   const hasReport = isDefined(entity);
   const report = entity?.report;
 
-  const isAgentScanning =
-    hasReport && isDefined(entity.report?.task?.agentGroup?.id);
-
   const userTagsCount = report?.userTags?.length ?? 0;
 
   const {results, timestamp, scan_run_status} = report ?? {};
@@ -321,8 +318,7 @@ const PageContent = ({
           activeFilter,
           thresholdConfig,
           <HostsTabContent
-            isAgentScanning={isAgentScanning}
-              reportFilter={activeFilter}
+            reportFilter={activeFilter}
             reportId={reportId}
             status={status}
           />,

@@ -26,13 +26,13 @@ describe('user-last-visited-page utils', () => {
 
     test('should save different paths for different users', () => {
       saveLastVisitedPage('user1', '/tasks');
-      saveLastVisitedPage('user2', '/agents');
+      saveLastVisitedPage('user2', '/reports');
 
       expect(sessionStorage.getItem('gsa_last_visited_page_user1')).toBe(
         '/tasks',
       );
       expect(sessionStorage.getItem('gsa_last_visited_page_user2')).toBe(
-        '/agents',
+        '/reports',
       );
     });
 
@@ -58,10 +58,10 @@ describe('user-last-visited-page utils', () => {
 
     test('should overwrite previous path for same user', () => {
       saveLastVisitedPage('user1', '/tasks');
-      saveLastVisitedPage('user1', '/agents');
+      saveLastVisitedPage('user1', '/reports');
 
       expect(sessionStorage.getItem('gsa_last_visited_page_user1')).toBe(
-        '/agents',
+        '/reports',
       );
     });
   });
@@ -89,13 +89,13 @@ describe('user-last-visited-page utils', () => {
 
     test('should retrieve correct path for specific user', () => {
       sessionStorage.setItem('gsa_last_visited_page_user1', '/tasks');
-      sessionStorage.setItem('gsa_last_visited_page_user2', '/agents');
+      sessionStorage.setItem('gsa_last_visited_page_user2', '/reports');
 
       const result1 = getLastVisitedPage('user1');
       const result2 = getLastVisitedPage('user2');
 
       expect(result1).toBe('/tasks');
-      expect(result2).toBe('/agents');
+      expect(result2).toBe('/reports');
     });
   });
 
@@ -110,13 +110,13 @@ describe('user-last-visited-page utils', () => {
 
     test('should only clear for specific user', () => {
       sessionStorage.setItem('gsa_last_visited_page_user1', '/tasks');
-      sessionStorage.setItem('gsa_last_visited_page_user2', '/agents');
+      sessionStorage.setItem('gsa_last_visited_page_user2', '/reports');
 
       clearLastVisitedPage('user1');
 
       expect(sessionStorage.getItem('gsa_last_visited_page_user1')).toBeNull();
       expect(sessionStorage.getItem('gsa_last_visited_page_user2')).toBe(
-        '/agents',
+        '/reports',
       );
     });
 
@@ -138,8 +138,8 @@ describe('user-last-visited-page utils', () => {
       // User1 logs out from /tasks
       saveLastVisitedPage('user1', '/tasks?filter=open');
 
-      // User2 logs out from /agents
-      saveLastVisitedPage('user2', '/agents');
+      // User2 logs out from /reports
+      saveLastVisitedPage('user2', '/reports');
 
       // User1 logs back in
       const user1Path = getLastVisitedPage('user1');
@@ -148,7 +148,7 @@ describe('user-last-visited-page utils', () => {
 
       // User2 logs back in
       const user2Path = getLastVisitedPage('user2');
-      expect(user2Path).toBe('/agents');
+      expect(user2Path).toBe('/reports');
       clearLastVisitedPage('user2');
 
       // Both should be cleared now

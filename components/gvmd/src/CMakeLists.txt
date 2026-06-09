@@ -29,15 +29,6 @@ if(ENABLE_OPENVASD)
 else(ENABLE_OPENVASD)
   message(STATUS "ENABLE_OPENVASD flag is not enabled")
 endif(ENABLE_OPENVASD)
-if(ENABLE_AGENTS)
-  pkg_check_modules(
-    LIBGVM_AGENT_CONTROLLER
-    REQUIRED
-    libgvm_agent_controller>=23.1
-  )
-else(ENABLE_AGENTS)
-  message(STATUS "ENABLE_AGENTS flag is not enabled")
-endif(ENABLE_AGENTS)
 if(ENABLE_CREDENTIAL_STORES)
   pkg_check_modules(LIBGVM_CYBERARK REQUIRED libgvm_cyberark>=22.30)
 else(ENABLE_CREDENTIAL_STORES)
@@ -126,7 +117,6 @@ else(WITH_LIBTHEIA)
 endif(WITH_LIBTHEIA)
 
 include_directories(
-  ${LIBGVM_AGENT_CONTROLLER_INCLUDE_DIRS}
   ${LIBGVM_GMP_INCLUDE_DIRS}
   ${LIBGVM_OPENVASD_INCLUDE_DIRS}
   ${LIBGVM_BASE_INCLUDE_DIRS}
@@ -208,17 +198,6 @@ set(
   manage_report_export_scheduler.c
 )
 
-if(ENABLE_AGENTS)
-  list(
-    APPEND ALL_MANAGE_SRC
-    manage_agent_common.c
-    manage_agent_groups.c
-    manage_agents.c
-    manage_agent_installers.c
-    manage_agent_control_scan_config.c
-  )
-endif()
-
 if(ENABLE_CREDENTIAL_STORES)
   list(
     APPEND ALL_MANAGE_SRC
@@ -268,15 +247,6 @@ set(
   manage_sql_report_exports.c
 )
 
-if(ENABLE_AGENTS)
-  list(
-    APPEND ALL_MANAGE_SQL_SRC
-    manage_sql_agent_groups.c
-    manage_sql_agents.c
-    manage_sql_agent_installers.c
-  )
-endif()
-
 if(ENABLE_CREDENTIAL_STORES)
   list(APPEND ALL_MANAGE_SQL_SRC manage_sql_credential_stores.c)
 endif()
@@ -305,16 +275,6 @@ set(
   gmp_report_vulns.c
   gmp_tls_certificates.c
 )
-
-if(ENABLE_AGENTS)
-  list(
-    APPEND ALL_GMP_SRC
-    gmp_agent_control_scan_agent_config.c
-    gmp_agent_groups.c
-    gmp_agents.c
-    gmp_agent_installers.c
-  )
-endif()
 
 if(ENABLE_CREDENTIAL_STORES)
   list(APPEND ALL_GMP_SRC gmp_credential_stores.c)
@@ -413,7 +373,6 @@ target_link_libraries(
   ${CJSON_LDFLAGS}
   ${GLIB_LDFLAGS}
   ${GTHREAD_LDFLAGS}
-  ${LIBGVM_AGENT_CONTROLLER_LDFLAGS}
   ${LIBGVM_AUTH_LDFLAGS}
   ${LIBGVM_BASE_LDFLAGS}
   ${LIBGVM_UTIL_LDFLAGS}
@@ -432,7 +391,6 @@ target_link_libraries(
   ${LIBBSD_LDFLAGS}
   ${GLIB_LDFLAGS}
   ${GTHREAD_LDFLAGS}
-  ${LIBGVM_AGENT_CONTROLLER_LDFLAGS}
   ${LIBGVM_BASE_LDFLAGS}
   ${LIBGVM_OPENVASD_LDFLAGS}
   ${LIBGVM_UTIL_LDFLAGS}
@@ -487,19 +445,6 @@ set(
   $<TARGET_OBJECTS:all-sql-obj>
 )
 add_unit_test(manage "${ALL_OBJECTS}" "${ALL_MANAGE_SRC}")
-
-if(ENABLE_AGENTS)
-  set(
-    ALL_OBJECTS
-    $<TARGET_OBJECTS:all-gmp-obj>
-    $<TARGET_OBJECTS:all-manage-sql-obj>
-    $<TARGET_OBJECTS:all-misc-obj>
-    $<TARGET_OBJECTS:all-sql-obj>
-  )
-  set(EXTRA_SRC ${ALL_MANAGE_SRC})
-  list(REMOVE_ITEM EXTRA_SRC manage_sql_agent_installers.c)
-  add_unit_test(manage-agent-installers "${ALL_OBJECTS}" "${EXTRA_SRC}")
-endif()
 
 set(
   ALL_OBJECTS

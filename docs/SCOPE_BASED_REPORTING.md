@@ -144,7 +144,7 @@ The predefined `Organization` scope is global and non-deletable. It includes all
 active targets and all known hosts by definition.
 
 Generating a scope report does not start a scan. TurboVAS selects the newest
-completed scan report for each associated target, excludes import and agent task
+completed normal scan report for each associated target, excludes import-task
 reports in the first implementation, and stores the selected source reports as
 snapshot provenance. Custom scopes count only manually selected hosts. Candidate
 hosts discovered in source reports are shown separately so operators can add them

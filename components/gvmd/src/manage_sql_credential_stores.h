@@ -8,8 +8,7 @@
  * @brief SQL functions and iterator definitions for credential stores.
  *
  * This header provides iterator macros and function declarations used
- * for managing agent groups in the SQL layer of GVMD, including support
- * for trashcan handling and restoration.
+ * for managing credential stores in the SQL layer of GVMD.
  */
 
 #ifndef _GVMD_MANAGE_SQL_CREDENTIAL_STORES_H

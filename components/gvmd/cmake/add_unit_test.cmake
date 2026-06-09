@@ -46,7 +46,6 @@ macro(add_unit_test _baseName _objects _extraSource)
     ${GLIB_LDFLAGS}
     ${GTHREAD_LDFLAGS}
     ${LIBGVM_AUTH_LDFLAGS}
-    ${LIBGVM_AGENT_CONTROLLER_LDFLAGS}
     ${LIBGVM_BASE_LDFLAGS}
     ${LIBGVM_UTIL_LDFLAGS}
     ${LIBGVM_OSP_LDFLAGS}

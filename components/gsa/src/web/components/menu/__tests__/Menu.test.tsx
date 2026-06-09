@@ -98,37 +98,7 @@ describe('Menu rendering', () => {
 
     expect(screen.getByText(label)).toBeInTheDocument();
   });
-
-  test.each(['Agents', 'Agent Groups'])(
-    'should render sub-menu: %s',
-    async label => {
-      renderMenuWith({
-        capabilities: true,
-        features: ['ENABLE_AGENTS'],
-        gmpSettings: {
-          enableAssetManagement: false,
-        },
-      });
-
-      expect(screen.getByText(label)).toBeInTheDocument();
-    },
-  );
-
-  test.each(['Agents', 'Agent Groups'])(
-    'should not render sub-menu %s if feature is missing',
-    async label => {
-      renderMenuWith({
-        capabilities: true,
-        gmpSettings: {
-          enableAssetManagement: false,
-        },
-      });
-
-      expect(screen.queryByText(label)).not.toBeInTheDocument();
-    },
-  );
-
-  test.each(['Configuration', 'Agent', 'Agent Group'])(
+  test.each(['Configuration'])(
     'should not render %s when mayAccess returns false',
     async text => {
       renderMenuWith({

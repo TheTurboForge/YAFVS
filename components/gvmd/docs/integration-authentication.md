@@ -1,6 +1,6 @@
-# Authentication Methods in gvmd (HTTP Scanner & Agent Controller)
+# Authentication Methods in gvmd (HTTP Scanner)
 
-The current `gvmd` implementation supports two authentication methods for communication with external components like the **HTTP Scanner** and the **Agent Controller**.
+The current `gvmd` implementation supports two authentication methods for communication with external HTTP scanner components.
 
 ## Supported Methods
 
@@ -45,7 +45,6 @@ This method uses a static token that must be provided with each request.
 Depending on the component, the token is included in the request header:
 
 * **HTTP Scanner:** `X-API-KEY: <token>`
-* **Agent Controller:** `X-API-KEY: <token>`
 
 Both behave the same way for authentication/authorization.
 
@@ -75,5 +74,4 @@ X-API-KEY: <your_api_key_here>
 ## Notes
 
 * For the **HTTP Scanner**, **Certificates (mTLS)** is currently supported.
-* For the **Agent Controller**, **Certificates (mTLS)** is currently supported.
 * Authentication modes are configured either via **configuration files** or by passing arguments when starting `gvmd`.

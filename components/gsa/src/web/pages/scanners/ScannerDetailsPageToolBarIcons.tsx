@@ -16,7 +16,6 @@ import CreateIcon from 'web/entity/icon/CreateIcon';
 import EditIcon from 'web/entity/icon/EditIcon';
 import TrashIcon from 'web/entity/icon/TrashIcon';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 
@@ -43,12 +42,9 @@ const ScannerDetailsPageToolBarIcons = ({
 }: ScannerDetailsPageToolBarIconsProps) => {
   const [_] = useTranslation();
   const capabilities = useCapabilities();
-  const features = useFeatures();
   const gmp = useGmp();
   const showNewScannerIcon =
-    capabilities.mayCreate('scanner') &&
-    (gmp.settings.enableGreenboneSensor ||
-      features.featureEnabled('ENABLE_AGENTS'));
+    capabilities.mayCreate('scanner') && gmp.settings.enableGreenboneSensor;
   return (
     <Divider margin="10px">
       <IconDivider>

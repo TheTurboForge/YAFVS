@@ -191,6 +191,20 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[2] / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
         self.assertIn("counts.severity ?? data.severity", source)
 
+    def test_gsa_scope_report_list_is_routed_and_linked(self):
+        root = Path(__file__).resolve().parents[2]
+        routes = (root / "components" / "gsa" / "src" / "web" / "Routes.tsx").read_text(encoding="utf-8")
+        scopes_page = (root / "components" / "gsa" / "src" / "web" / "pages" / "scopes" / "ScopeListPage.tsx").read_text(encoding="utf-8")
+        menu = (root / "components" / "gsa" / "src" / "web" / "components" / "menu" / "Menu.tsx").read_text(encoding="utf-8")
+        list_page = (root / "components" / "gsa" / "src" / "web" / "pages" / "scope-reports" / "ScopeReportListPage.tsx").read_text(encoding="utf-8")
+        self.assertIn("path: 'scopes/reports'", routes)
+        self.assertIn("web/pages/scope-reports/ScopeReportListPage", routes)
+        self.assertIn('to="/scopes/reports"', scopes_page)
+        self.assertIn("to: '/scopes/reports'", menu)
+        self.assertIn("_('Scope Reports')", menu)
+        self.assertIn("report.name || report.id", list_page)
+        self.assertIn("report.resultsTotal", list_page)
+
     def test_license_helpers_detect_modified_imported_notice_gaps(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -76,6 +76,7 @@ describe('Menu rendering', () => {
     'Results',
     'Scan Configs',
     'Scanners',
+    'Scope Reports',
     'Schedules',
     'Scopes',
     'Tags',

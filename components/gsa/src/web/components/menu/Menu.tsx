@@ -38,10 +38,15 @@ const Menu = () => {
 
   const scopesMatch = useMatch('/scopes');
   const scopeMatch = useMatch('/scopes/*');
+  const scopeReportsMatch = useMatch('/scopes/reports');
+  const scopeReportMatch = useMatch('/scopes/:scopeId/reports/*');
   const legacyScopeMatch = useMatch('/scope/*');
   const legacyScopeReportMatch = useMatch('/scope-report/*');
+  const isScopeReportsActive = Boolean(
+    scopeReportsMatch || scopeReportMatch || legacyScopeReportMatch,
+  );
   const isScopesActive = Boolean(
-    scopesMatch || scopeMatch || legacyScopeMatch || legacyScopeReportMatch,
+    scopesMatch || legacyScopeMatch || (scopeMatch && !isScopeReportsActive),
   );
 
   const resultsMatch = useMatch('/results');
@@ -222,6 +227,12 @@ const Menu = () => {
             to: '/scopes',
             isPathMatch: Boolean(scopesMatch),
             active: isScopesActive,
+          },
+          capabilities.mayAccess('scope') && {
+            label: _('Scope Reports'),
+            to: '/scopes/reports',
+            isPathMatch: Boolean(scopeReportsMatch),
+            active: isScopeReportsActive,
           },
           capabilities.mayAccess('report') && {
             label: _('Reports'),

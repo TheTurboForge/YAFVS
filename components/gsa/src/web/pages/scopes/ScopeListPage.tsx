@@ -118,6 +118,7 @@ const ScopeListPage = () => {
           title={_('Reload')}
           onClick={() => void loadScopes()}
         />
+        <Link to="/scopes/reports">{_('Scope Reports')}</Link>
       </PageActions>
       {error && <ErrorMessage>{error}</ErrorMessage>}
       <Table>
@@ -139,7 +140,9 @@ const ScopeListPage = () => {
               <TableData>{scope.protectionRequirementLabel}</TableData>
               <TableData>{scope.targetCount}</TableData>
               <TableData>{scope.hostCount}</TableData>
-              <TableData>{scope.scopeReportCount}</TableData>
+              <TableData>
+                <Link to="/scopes/reports">{scope.scopeReportCount}</Link>
+              </TableData>
               <TableData>
                 <PageActions>
                   <Button

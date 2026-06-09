@@ -541,6 +541,14 @@ const loggedInRoutes = [
         }),
       },
       {
+        path: 'scopes/reports',
+        lazy: async () => ({
+          Component: (
+            await import('web/pages/scope-reports/ScopeReportListPage')
+          ).default,
+        }),
+      },
+      {
         path: 'scopes/:id',
         lazy: async () => ({
           Component: (await import('web/pages/scopes/ScopeDetailsPage')).default,

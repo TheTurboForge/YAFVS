@@ -119,15 +119,16 @@ const ScopeReportListPage = () => {
             <TableHead>{_('Latest Evidence')}</TableHead>
             <TableHead>{_('Source Reports')}</TableHead>
             <TableHead>{_('Hosts')}</TableHead>
+            <TableHead>{_('Results')}</TableHead>
             <TableHead>{_('Vulnerabilities')}</TableHead>
             <TableHead>{_('Severity')}</TableHead>
           </TableRow>
-          {reports.length === 0 && <EmptyRow colSpan={8} />}
+          {reports.length === 0 && <EmptyRow colSpan={9} />}
           {reports.map(report => (
             <TableRow key={report.id}>
               <TableData>
                 <Link to={`/scopes/${report.scopeId}/reports/${report.id}`}>
-                  {report.name}
+                  {report.name || report.id}
                 </Link>
               </TableData>
               <TableData>
@@ -139,6 +140,7 @@ const ScopeReportListPage = () => {
               <TableData>
                 {report.hostsWithEvidence}/{report.hostsTotal}
               </TableData>
+              <TableData>{report.resultsTotal}</TableData>
               <TableData>{report.vulnerabilitiesTotal}</TableData>
               <TableData>
                 H {report.severityHigh} / M {report.severityMedium} / L{' '}

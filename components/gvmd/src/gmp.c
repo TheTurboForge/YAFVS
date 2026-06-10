@@ -384,9 +384,6 @@ check_public_key (const char *key_str)
 
 /* GMP parser. */
 
-static int
-process_gmp (gmp_parser_t *, const gchar *, gchar **);
-
 /**
  * @brief Create a GMP parser.
  *
@@ -690,144 +687,6 @@ create_port_range_data_reset (create_port_range_data_t *data)
   free (data->type);
 
   memset (data, 0, sizeof (create_port_range_data_t));
-}
-
-/**
- * @brief Command data for the create_report command.
- */
-typedef struct
-{
-  char *detail_name;              ///< Name of current host detail.
-  char *detail_value;             ///< Value of current host detail.
-  char *detail_source_name;       ///< Name of source of current host detail.
-  char *detail_source_type;       ///< Type of source of current host detail.
-  char *detail_source_desc;       ///< Description of source of current detail.
-  array_t *details;               ///< Host details.
-  char *host_end;                 ///< End time for a host.
-  char *host_end_host;            ///< Host name for end time.
-  array_t *host_ends;             ///< All host ends.
-  char *host_start;               ///< Start time for a host.
-  char *host_start_host;          ///< Host name for start time.
-  array_t *host_starts;           ///< All host starts.
-  char *in_assets;                ///< Whether to create assets from report.
-  char *ip;                       ///< Current host for host details.
-  char *result_description;       ///< Description of NVT for current result.
-  char *result_host;              ///< Host for current result.
-  char *result_hostname;          ///< Hostname for current result.
-  char *result_nvt_oid;           ///< OID of NVT for current result.
-  char *result_port;              ///< Port for current result.
-  char *result_qod;               ///< QoD value of current result.
-  char *result_qod_type;          ///< QoD type of current result.
-  char *result_scan_nvt_version;  ///< Version of NVT used in scan.
-  char *result_severity;          ///< Severity score for current result.
-  char *result_threat;            ///< Message type for current result.
-  char *result_detection_name;    ///< Name of detection in result.
-  char *result_detection_product; ///< product of detection in result.
-  char *result_detection_source_name; ///< source_name of detection in result.
-  char *result_detection_source_oid; ///< source_oid of detection in result.
-  char *result_detection_location; ///< location of detection in result.
-  array_t *result_detection;      ///< Detections for current result
-  array_t *results;               ///< All results.
-  char *scan_end;                 ///< End time for a scan.
-  char *scan_start;               ///< Start time for a scan.
-  char *task_id;                  ///< ID of import task.
-  char *type;                     ///< Type of report.
-  int wrapper;                    ///< Whether there was a wrapper REPORT.
-} create_report_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_report_data_reset (create_report_data_t *data)
-{
-  if (data->details)
-    {
-      guint index = data->details->len;
-      while (index--)
-        {
-          host_detail_t *detail;
-          detail = (host_detail_t*) g_ptr_array_index (data->details, index);
-          if (detail)
-            host_detail_free (detail);
-        }
-      array_free (data->details);
-    }
-  free (data->host_end);
-  if (data->host_ends)
-    {
-      guint index = data->host_ends->len;
-      while (index--)
-        {
-          create_report_result_t *result;
-          result = (create_report_result_t*) g_ptr_array_index
-                                              (data->host_ends,
-                                               index);
-          if (result)
-            {
-              free (result->description);
-              free (result->host);
-            }
-        }
-      array_free (data->host_ends);
-    }
-  free (data->host_start);
-  if (data->host_starts)
-    {
-      guint index = data->host_starts->len;
-      while (index--)
-        {
-          create_report_result_t *result;
-          result = (create_report_result_t*) g_ptr_array_index
-                                              (data->host_starts,
-                                               index);
-          if (result)
-            {
-              free (result->description);
-              free (result->host);
-            }
-        }
-      array_free (data->host_starts);
-    }
-  free (data->in_assets);
-  free (data->ip);
-  free (data->result_description);
-  free (data->result_host);
-  free (data->result_hostname);
-  free (data->result_nvt_oid);
-  free (data->result_port);
-  free (data->result_threat);
-  if (data->results)
-    {
-      guint index = data->results->len;
-      while (index--)
-        {
-          create_report_result_t *result;
-          result = (create_report_result_t*) g_ptr_array_index (data->results,
-                                                                index);
-          if (result)
-            {
-              free (result->host);
-              free (result->hostname);
-              free (result->description);
-              free (result->nvt_oid);
-              free (result->port);
-              free (result->qod);
-              free (result->qod_type);
-              free (result->scan_nvt_version);
-              free (result->severity);
-            }
-        }
-      array_free (data->results);
-    }
-  free (data->scan_end);
-  free (data->scan_start);
-  free (data->task_id);
-  free (data->type);
-
-  memset (data, 0, sizeof (create_report_data_t));
 }
 
 /**
@@ -1790,7 +1649,6 @@ typedef struct
   get_data_t get;        ///< Get args with result filtering.
   get_data_t report_get; ///< Get args with report filtering.
   char *config_id;       ///< ID of report config.
-  char *delta_report_id; ///< ID of report to compare single report to.
   char *format_id;       ///< ID of report format.
   char *alert_id;        ///< ID of alert.
   char *report_id;       ///< ID of single report to get.
@@ -1811,7 +1669,6 @@ get_reports_data_reset (get_reports_data_t *data)
   get_data_reset (&data->get);
   get_data_reset (&data->report_get);
   free (data->config_id);
-  free (data->delta_report_id);
   free (data->format_id);
   free (data->alert_id);
   free (data->report_id);
@@ -2832,27 +2689,6 @@ restore_data_reset (restore_data_t *data)
 }
 
 /**
- * @brief Command data for the resume_task command.
- */
-typedef struct
-{
-  char *task_id;   ///< ID of task to resume.
-} resume_task_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-resume_task_data_reset (resume_task_data_t *data)
-{
-  free (data->task_id);
-
-  memset (data, 0, sizeof (resume_task_data_t));
-}
-
-/**
  * @brief Command data for the start_task command.
  */
 typedef struct
@@ -3027,48 +2863,6 @@ verify_scanner_data_reset (verify_scanner_data_t *data)
 }
 
 /**
- * @brief Command data for the wizard command.
- */
-typedef struct
-{
-  char *mode;          ///< Mode to run the wizard in.
-  char *name;          ///< Name of the wizard.
-  name_value_t *param; ///< Current param.
-  array_t *params;     ///< Parameters.
-  char *read_only;     ///< Read only flag.
-} run_wizard_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-run_wizard_data_reset (run_wizard_data_t *data)
-{
-  free (data->mode);
-  free (data->name);
-  free (data->read_only);
-  if (data->params)
-    {
-      guint index = data->params->len;
-      while (index--)
-        {
-          name_value_t *pair;
-          pair = (name_value_t*) g_ptr_array_index (data->params, index);
-          if (pair)
-            {
-              g_free (pair->name);
-              g_free (pair->value);
-            }
-        }
-    }
-  array_free (data->params);
-
-  memset (data, 0, sizeof (run_wizard_data_t));
-}
-
-/**
  * @brief Command data, as passed between GMP parser callbacks.
  */
 typedef union
@@ -3079,7 +2873,6 @@ typedef union
   create_filter_data_t create_filter;                 ///< create_filter
   create_override_data_t create_override;             ///< create_override
   create_port_range_data_t create_port_range;         ///< create_port_range
-  create_report_data_t create_report;                 ///< create_report
   scope_command_data_t create_scope;                  ///< create_scope
   create_scanner_data_t create_scanner;               ///< create_scanner
   create_schedule_data_t create_schedule;             ///< create_schedule
@@ -3155,14 +2948,12 @@ typedef union
   modify_user_data_t modify_user;                     ///< modify_user
   move_task_data_t move_task;                         ///< move_task
   restore_data_t restore;                             ///< restore
-  resume_task_data_t resume_task;                     ///< resume_task
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
   scope_command_data_t generate_scope_report;         ///< generate_scope_report
   test_alert_data_t test_alert;                       ///< test_alert
   verify_report_format_data_t verify_report_format;   ///< verify_report_format
   verify_scanner_data_t verify_scanner;               ///< verify_scanner
-  run_wizard_data_t wizard;                           ///< run_wizard
 } command_data_t;
 
 /**
@@ -3220,12 +3011,6 @@ static create_override_data_t *create_override_data
  */
 static create_port_range_data_t *create_port_range_data
  = (create_port_range_data_t*) &(command_data.create_port_range);
-
-/**
- * @brief Parser callback data for CREATE_REPORT.
- */
-static create_report_data_t *create_report_data
- = (create_report_data_t*) &(command_data.create_report);
 
 /**
  * @brief Parser callback data for CREATE_SCOPE.
@@ -3676,12 +3461,6 @@ static restore_data_t *restore_data
  = (restore_data_t*) &(command_data.restore);
 
 /**
- * @brief Parser callback data for RESUME_TASK.
- */
-static resume_task_data_t *resume_task_data
- = (resume_task_data_t*) &(command_data.resume_task);
-
-/**
  * @brief Parser callback data for START_TASK.
  */
 static start_task_data_t *start_task_data
@@ -3716,12 +3495,6 @@ static verify_report_format_data_t *verify_report_format_data
  */
 static verify_scanner_data_t *verify_scanner_data
  = (verify_scanner_data_t*) &(command_data.verify_scanner);
-
-/**
- * @brief Parser callback data for WIZARD.
- */
-static run_wizard_data_t *run_wizard_data
- = (run_wizard_data_t*) &(command_data.wizard);
 
 /**
  * @brief Buffer of output to the client.
@@ -3845,93 +3618,6 @@ typedef enum
   CLIENT_CREATE_PORT_RANGE_TYPE,
   CLIENT_CREATE_REPORT_CONFIG,
   CLIENT_CREATE_REPORT_FORMAT,
-  /* CREATE_REPORT. */
-  CLIENT_CREATE_REPORT,
-  CLIENT_CREATE_REPORT_IN_ASSETS,
-  CLIENT_CREATE_REPORT_REPORT,
-  CLIENT_CREATE_REPORT_RR,
-  CLIENT_CREATE_REPORT_RR_FILTERS,
-  CLIENT_CREATE_REPORT_RR_ERRORS,
-  CLIENT_CREATE_REPORT_RR_ERRORS_COUNT,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_DESCRIPTION,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST_ASSET,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST_HOSTNAME,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_NVT,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_NVT_CVSS_BASE,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_NVT_NAME,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_PORT,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_SCAN_NVT_VERSION,
-  CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_SEVERITY,
-  /* RR_H is for RR_HOST because it clashes with entities like HOST_START. */
-  CLIENT_CREATE_REPORT_RR_H,
-  CLIENT_CREATE_REPORT_RR_HOSTS,
-  CLIENT_CREATE_REPORT_RR_HOST_COUNT,
-  CLIENT_CREATE_REPORT_RR_HOST_END,
-  CLIENT_CREATE_REPORT_RR_HOST_END_HOST,
-  CLIENT_CREATE_REPORT_RR_HOST_START,
-  CLIENT_CREATE_REPORT_RR_HOST_START_HOST,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL_NAME,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_DESC,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_NAME,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_TYPE,
-  CLIENT_CREATE_REPORT_RR_H_DETAIL_VALUE,
-  CLIENT_CREATE_REPORT_RR_H_END,
-  CLIENT_CREATE_REPORT_RR_H_IP,
-  CLIENT_CREATE_REPORT_RR_H_START,
-  CLIENT_CREATE_REPORT_RR_PORTS,
-  CLIENT_CREATE_REPORT_RR_REPORT_FORMAT,
-  CLIENT_CREATE_REPORT_RR_RESULTS,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_COMMENT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_CREATION_TIME,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DESCRIPTION,
-
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL_NAME,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL_VALUE,
-
-
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST_ASSET,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST_HOSTNAME,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_MODIFICATION_TIME,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NAME,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_BID,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_CERT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_CERT_CERT_REF,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_CVE,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_CVSS_BASE,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_FAMILY,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_NAME,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_XREF,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_OWNER,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_ORIGINAL_SEVERITY,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_ORIGINAL_THREAT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_OVERRIDES,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_PORT,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD_TYPE,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD_VALUE,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_SCAN_NVT_VERSION,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_SEVERITY,
-  CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_THREAT,
-  CLIENT_CREATE_REPORT_RR_RESULT_COUNT,
-  CLIENT_CREATE_REPORT_RR_SCAN_END,
-  CLIENT_CREATE_REPORT_RR_SCAN_RUN_STATUS,
-  CLIENT_CREATE_REPORT_RR_SCAN_START,
-  CLIENT_CREATE_REPORT_RR_SORT,
-  CLIENT_CREATE_REPORT_RR_TASK,
-  CLIENT_CREATE_REPORT_TASK,
-  CLIENT_CREATE_REPORT_TASK_COMMENT,
-  CLIENT_CREATE_REPORT_TASK_NAME,
   CLIENT_CREATE_SCOPE,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
@@ -4238,15 +3924,7 @@ typedef enum
   CLIENT_MODIFY_USER_SOURCES_SOURCE,
   CLIENT_MOVE_TASK,
   CLIENT_RESTORE,
-  CLIENT_RESUME_TASK,
   CLIENT_GENERATE_SCOPE_REPORT,
-  CLIENT_RUN_WIZARD,
-  CLIENT_RUN_WIZARD_MODE,
-  CLIENT_RUN_WIZARD_NAME,
-  CLIENT_RUN_WIZARD_PARAMS,
-  CLIENT_RUN_WIZARD_PARAMS_PARAM,
-  CLIENT_RUN_WIZARD_PARAMS_PARAM_NAME,
-  CLIENT_RUN_WIZARD_PARAMS_PARAM_VALUE,
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
   CLIENT_TEST_ALERT,
@@ -4474,8 +4152,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("CREATE_PORT_RANGE", element_name) == 0)
           set_client_state (CLIENT_CREATE_PORT_RANGE);
-        else if (strcasecmp ("CREATE_REPORT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_REPORT);
         else if (strcasecmp ("CREATE_REPORT_CONFIG", element_name) == 0)
           {
             create_report_config_start (gmp_parser, attribute_names,
@@ -5090,10 +4766,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &get_reports_data->report_id);
 
-            append_attribute (attribute_names, attribute_values,
-                              "delta_report_id",
-                              &get_reports_data->delta_report_id);
-
             append_attribute (attribute_names, attribute_values, "alert_id",
                               &get_reports_data->alert_id);
 
@@ -5603,25 +5275,11 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &restore_data->id);
             set_client_state (CLIENT_RESTORE);
           }
-        else if (strcasecmp ("RESUME_TASK", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &resume_task_data->task_id);
-            set_client_state (CLIENT_RESUME_TASK);
-          }
         else if (strcasecmp ("GENERATE_SCOPE_REPORT", element_name) == 0)
           {
             scope_command_data_start (generate_scope_report_data,
                                       attribute_names, attribute_values, 0);
             set_client_state (CLIENT_GENERATE_SCOPE_REPORT);
-          }
-        else if (strcasecmp ("RUN_WIZARD", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "name",
-                              &run_wizard_data->name);
-            append_attribute (attribute_names, attribute_values, "read_only",
-                              &run_wizard_data->read_only);
-            set_client_state (CLIENT_RUN_WIZARD);
           }
         else if (strcasecmp ("START_TASK", element_name) == 0)
           {
@@ -6510,44 +6168,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME);
         else if (strcasecmp ("VALUE", element_name) == 0)
           set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE);
-        ELSE_READ_OVER;
-
-      case CLIENT_RUN_WIZARD:
-        if (strcasecmp ("MODE", element_name) == 0)
-          {
-            set_client_state (CLIENT_RUN_WIZARD_MODE);
-          }
-        else if (strcasecmp ("NAME", element_name) == 0)
-          {
-            set_client_state (CLIENT_RUN_WIZARD_NAME);
-          }
-        else if (strcasecmp ("PARAMS", element_name) == 0)
-          {
-            run_wizard_data->params = make_array ();
-            set_client_state (CLIENT_RUN_WIZARD_PARAMS);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_RUN_WIZARD_PARAMS:
-        if (strcasecmp ("PARAM", element_name) == 0)
-          {
-            assert (run_wizard_data->param == NULL);
-            run_wizard_data->param = g_malloc (sizeof (name_value_t));
-            run_wizard_data->param->name = NULL;
-            run_wizard_data->param->value = NULL;
-            set_client_state (CLIENT_RUN_WIZARD_PARAMS_PARAM);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_RUN_WIZARD_PARAMS_PARAM:
-        if (strcasecmp ("NAME", element_name) == 0)
-          {
-            set_client_state (CLIENT_RUN_WIZARD_PARAMS_PARAM_NAME);
-          }
-        else if (strcasecmp ("VALUE", element_name) == 0)
-          {
-            set_client_state (CLIENT_RUN_WIZARD_PARAMS_PARAM_VALUE);
-          }
         ELSE_READ_OVER;
 
       default:
@@ -12884,7 +12504,7 @@ init_alert_get_data(const char *alert_id, get_data_t *get)
 static void
 handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
 {
-  report_t request_report = 0, delta_report = 0, report;
+  report_t request_report = 0, report;
   char no_report_config, no_report_format;
   report_config_t report_config = 0;
   report_format_t report_format = 0;
@@ -12931,18 +12551,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
   if (get_reports_data->report_id
       && find_report_with_permission (get_reports_data->report_id,
                                       &request_report,
-                                      NULL))
-    {
-      get_reports_data_reset (get_reports_data);
-      SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_reports"));
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  if (get_reports_data->delta_report_id
-      && strcmp (get_reports_data->delta_report_id, "0")
-      && find_report_with_permission (get_reports_data->delta_report_id,
-                                      &delta_report,
                                       NULL))
     {
       get_reports_data_reset (get_reports_data);
@@ -13091,22 +12699,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
     {
       if (send_find_error_to_client ("get_reports", "report",
                                      get_reports_data->report_id,
-                                     gmp_parser))
-        {
-          error_send_to_client (error);
-          return;
-        }
-      get_reports_data_reset (get_reports_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  if (get_reports_data->delta_report_id
-      && strcmp (get_reports_data->delta_report_id, "0")
-      && delta_report == 0)
-    {
-      if (send_find_error_to_client ("get_reports", "report",
-                                     get_reports_data->delta_report_id,
                                      gmp_parser))
         {
           error_send_to_client (error);
@@ -13414,7 +13006,7 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
         init_alert_get_data(get_reports_data->alert_id, &get_reports_data->get);
 
       ret = manage_send_report (report,
-                                delta_report,
+                                0,
                                 no_report_format ? -1 : report_format,
                                 report_config,
                                 &get_reports_data->get,
@@ -17831,154 +17423,6 @@ modify_scanner_leave:
 extern char client_address[];
 
 /**
- * @brief Handle create_report_data->results_* for gmp_xml_handle_end_element
- *
- * Uses data:
- * create_report_data->result_description
- * create_report_data->result_host
- * create_report_data->result_hostname
- * create_report_data->result_nvt_oid
- * create_report_data->result_port
- * create_report_data->result_qod
- * create_report_data->result_qod_type
- * create_report_data->result_scan_nvt_version
- * create_report_data->result_severity
- * create_report_data->result_threat
- * create_report_data->result_detection_name
- * create_report_data->result_detection_product
- * create_report_data->result_detection_source_name
- * create_report_data->result_detection_source_oid
- * create_report_data->result_detection_location
- * create_report_data->result_detection
- *
- * to create a create_report_data->result and add it into
- * create_report_data->results
- *
- */
-static void
-gmp_xml_handle_result ()
-{
-  create_report_result_t *result;
-
-  assert (create_report_data->results);
-
-  if (create_report_data->result_scan_nvt_version == NULL)
-    create_report_data->result_scan_nvt_version = strdup ("");
-
-  if (create_report_data->result_severity == NULL)
-    {
-      if (create_report_data->result_threat == NULL)
-        {
-          create_report_data->result_severity = strdup ("");
-        }
-      else if (strcasecmp (create_report_data->result_threat, "Critical") == 0)
-        {
-          create_report_data->result_severity = strdup ("10.0");
-        }
-      else if (strcasecmp (create_report_data->result_threat, "High") == 0)
-        {
-          create_report_data->result_severity = strdup ("8.9");
-        }
-      else if (strcasecmp (create_report_data->result_threat, "Medium") == 0)
-        {
-          create_report_data->result_severity = strdup ("5.0");
-        }
-      else if (strcasecmp (create_report_data->result_threat, "Low") == 0)
-        {
-          create_report_data->result_severity = strdup ("2.0");
-        }
-      else if (strcasecmp (create_report_data->result_threat, "Log") == 0)
-        {
-          create_report_data->result_severity = strdup ("0.0");
-        }
-      else if (strcasecmp (create_report_data->result_threat, "False Positive")
-               == 0)
-        {
-          create_report_data->result_severity = strdup ("-1.0");
-        }
-      else
-        {
-          create_report_data->result_severity = strdup ("");
-        }
-    }
-
-  result = g_malloc (sizeof (create_report_result_t));
-  result->description = create_report_data->result_description;
-  // sometimes host has newlines in it, so we 0 terminate first newline
-  // According to
-  // https://www.freebsd.org/cgi/man.cgi?query=strcspn&sektion=3
-  // strcspn returns the number of chars spanned so it should be safe
-  // without double checking.
-  if (create_report_data->result_host)
-    create_report_data
-      ->result_host[strcspn (create_report_data->result_host, "\n")] = 0;
-  result->host = create_report_data->result_host;
-  result->hostname = create_report_data->result_hostname;
-  result->nvt_oid = create_report_data->result_nvt_oid;
-  result->scan_nvt_version = create_report_data->result_scan_nvt_version;
-  result->port = create_report_data->result_port;
-  result->qod = create_report_data->result_qod;
-  result->qod_type = create_report_data->result_qod_type;
-  result->severity = create_report_data->result_severity;
-  result->threat = create_report_data->result_threat;
-  if (result->host)
-    {
-      for (unsigned int i = 0; i < create_report_data->result_detection->len;
-           i++)
-        {
-          host_detail_t *detail;
-          // prepare detection to be found within
-          // result_detection_reference
-          detection_detail_t *detection =
-            (detection_detail_t *) g_ptr_array_index (
-              create_report_data->result_detection, i);
-
-          // used to find location within report_host_details via
-          // - oid as source_name
-          // - detected_at as name
-          detail = g_malloc (sizeof (host_detail_t));
-          detail->ip = g_strdup (result->host);
-          detail->name = g_strdup ("detected_at");
-          detail->source_desc = g_strdup ("create_report_import");
-          detail->source_name = g_strdup (result->nvt_oid);
-          detail->source_type = g_strdup ("create_report_import");
-          detail->value = g_strdup (detection->location);
-          array_add (create_report_data->details, detail);
-          // used to find oid within report_host_details via
-          // - oid as source_name
-          // - detected_by as name
-          detail = g_malloc (sizeof (host_detail_t));
-          detail->ip = g_strdup (result->host);
-          detail->name = g_strconcat ("detected_by@", detection->location, NULL);
-          detail->source_desc = g_strdup ("create_report_import");
-          detail->source_name = g_strdup (result->nvt_oid);
-          detail->source_type = g_strdup ("create_report_import");
-          detail->value = g_strdup (detection->source_oid);
-          array_add (create_report_data->details, detail);
-          g_free (detection->location);
-          g_free (detection->product);
-          g_free (detection->source_name);
-          g_free (detection->source_oid);
-          g_free (detection);
-        }
-    }
-  array_add (create_report_data->results, result);
-
-  create_report_data->result_description = NULL;
-  create_report_data->result_host = NULL;
-  create_report_data->result_hostname = NULL;
-  create_report_data->result_nvt_oid = NULL;
-  create_report_data->result_port = NULL;
-  create_report_data->result_qod = NULL;
-  create_report_data->result_qod_type = NULL;
-  create_report_data->result_scan_nvt_version = NULL;
-  create_report_data->result_severity = NULL;
-  create_report_data->result_threat = NULL;
-  create_report_data->result_detection = NULL;
-  create_report_data->result_detection = make_array ();
-}
-
-/**
  * @brief Handle the end of a GMP XML element.
  *
  * React to the end of an XML element according to the current value
@@ -20560,296 +20004,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_PORT_RANGE, TYPE);
       CLOSE (CLIENT_CREATE_PORT_RANGE, PORT_LIST);
 
-      case CLIENT_CREATE_REPORT:
-        {
-          char *uuid;
-
-          array_terminate (create_report_data->results);
-          array_terminate (create_report_data->host_ends);
-          array_terminate (create_report_data->host_starts);
-          array_terminate (create_report_data->details);
-
-          if (create_report_data->results == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_report",
-                                "A REPORT element is required"));
-          else if (create_report_data->type
-                   && strcmp (create_report_data->type, "scan"))
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_report",
-                                "Type must be 'scan'"));
-          else switch (create_report
-                        (create_report_data->results,
-                         create_report_data->task_id,
-                         create_report_data->in_assets,
-                         create_report_data->scan_start,
-                         create_report_data->scan_end,
-                         create_report_data->host_starts,
-                         create_report_data->host_ends,
-                         create_report_data->details,
-                         &uuid))
-            {
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_report",
-                                    "Permission denied"));
-                log_event_fail ("report", "Report", NULL, "created");
-                break;
-              case -1:
-              case -2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("create_report"));
-                log_event_fail ("report", "Report", NULL, "created");
-                break;
-              case -3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_report",
-                                    "A TASK id attribute is required"));
-                log_event_fail ("report", "Report", NULL, "created");
-                break;
-              case -4:
-                log_event_fail ("report", "Report", NULL, "created");
-                if (send_find_error_to_client
-                     ("create_report", "task",
-                      create_report_data->task_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case -5:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_report",
-                                    "TASK must be an import task"));
-                log_event_fail ("report", "Report", NULL, "created");
-                break;
-              case -6:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_report",
-                                    "Permission to add to Assets denied"));
-                log_event_fail ("report", "Report", NULL, "created");
-                break;
-              default:
-                {
-                  SENDF_TO_CLIENT_OR_FAIL
-                   (XML_OK_CREATED_ID ("create_report"),
-                    uuid);
-                  log_event ("report", "Report", uuid, "created");
-                  free (uuid);
-                  break;
-                }
-            }
-
-          create_report_data_reset (create_report_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_REPORT, IN_ASSETS);
-      CLOSE (CLIENT_CREATE_REPORT, REPORT);
-      case CLIENT_CREATE_REPORT_RR:
-        if (create_report_data->wrapper)
-          set_client_state (CLIENT_CREATE_REPORT_REPORT);
-        else
-          set_client_state (CLIENT_CREATE_REPORT);
-        break;
-
-      CLOSE (CLIENT_CREATE_REPORT_RR, ERRORS);
-      case CLIENT_CREATE_REPORT_RR_ERRORS_ERROR:
-        {
-          if (create_report_data->result_severity == NULL)
-            {
-              create_report_data->result_severity = strdup ("-3.0");
-            }
-          if (create_report_data->result_threat == NULL)
-            {
-              create_report_data->result_threat = strdup ("Error");
-            }
-          gmp_xml_handle_result();
-          set_client_state (CLIENT_CREATE_REPORT_RR_ERRORS);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR, DESCRIPTION);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR, HOST);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST, ASSET);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST, HOSTNAME);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR, NVT);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR, PORT);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR, SCAN_NVT_VERSION);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR, SEVERITY);
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_NVT, CVSS_BASE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_NVT, NAME);
-
-      case CLIENT_CREATE_REPORT_RR_HOST_END:
-        if (create_report_data->host_end_host)
-          {
-            create_report_result_t *result;
-
-            assert (create_report_data->host_ends);
-            assert (create_report_data->host_end_host);
-
-            result = g_malloc (sizeof (create_report_result_t));
-            result->description = create_report_data->host_end;
-            result->host = create_report_data->host_end_host;
-
-            array_add (create_report_data->host_ends, result);
-
-            create_report_data->host_end = NULL;
-            create_report_data->host_end_host = NULL;
-          }
-        else
-          gvm_free_string_var (&create_report_data->host_end);
-
-        set_client_state (CLIENT_CREATE_REPORT_RR);
-        break;
-      case CLIENT_CREATE_REPORT_RR_HOST_START:
-        if (create_report_data->host_start_host)
-          {
-            create_report_result_t *result;
-
-            assert (create_report_data->host_starts);
-            assert (create_report_data->host_start);
-            assert (create_report_data->host_start_host);
-
-            result = g_malloc (sizeof (create_report_result_t));
-            result->description = create_report_data->host_start;
-            result->host = create_report_data->host_start_host;
-
-            array_add (create_report_data->host_starts, result);
-
-            create_report_data->host_start = NULL;
-            create_report_data->host_start_host = NULL;
-          }
-        else
-          gvm_free_string_var (&create_report_data->host_start);
-
-        set_client_state (CLIENT_CREATE_REPORT_RR);
-        break;
-      CLOSE (CLIENT_CREATE_REPORT_RR, RESULTS);
-      CLOSE (CLIENT_CREATE_REPORT_RR, SCAN_END);
-      CLOSE (CLIENT_CREATE_REPORT_RR, SCAN_START);
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_HOST_END, HOST);
-      CLOSE (CLIENT_CREATE_REPORT_RR_HOST_START, HOST);
-
-      case CLIENT_CREATE_REPORT_RR_H:
-        {
-          if (create_report_data->host_start)
-            {
-              create_report_result_t *result;
-
-              result = g_malloc (sizeof (create_report_result_t));
-              result->description = create_report_data->host_start;
-              result->host = strdup (create_report_data->ip);
-
-              array_add (create_report_data->host_starts, result);
-
-              create_report_data->host_start = NULL;
-            }
-
-          if (create_report_data->host_end)
-            {
-              create_report_result_t *result;
-
-              result = g_malloc (sizeof (create_report_result_t));
-              result->description = create_report_data->host_end;
-              result->host = strdup (create_report_data->ip);
-
-              array_add (create_report_data->host_ends, result);
-
-              create_report_data->host_end = NULL;
-            }
-
-          gvm_free_string_var (&create_report_data->ip);
-          set_client_state (CLIENT_CREATE_REPORT_RR);
-          break;
-        }
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_H, IP);
-      CLOSE (CLIENT_CREATE_REPORT_RR_H, START);
-      CLOSE (CLIENT_CREATE_REPORT_RR_H, END);
-
-      case CLIENT_CREATE_REPORT_RR_H_DETAIL:
-        {
-          assert (create_report_data->details);
-
-          if (create_report_data->ip)
-            {
-              host_detail_t *detail;
-
-              detail = g_malloc (sizeof (host_detail_t));
-              detail->ip = g_strdup (create_report_data->ip);
-              detail->name = create_report_data->detail_name;
-              detail->source_desc = create_report_data->detail_source_desc;
-              detail->source_name = create_report_data->detail_source_name;
-              detail->source_type = create_report_data->detail_source_type;
-              detail->value = create_report_data->detail_value;
-
-              array_add (create_report_data->details, detail);
-
-              create_report_data->detail_name = NULL;
-              create_report_data->detail_source_desc = NULL;
-              create_report_data->detail_source_name = NULL;
-              create_report_data->detail_source_type = NULL;
-              create_report_data->detail_value = NULL;
-            }
-
-          set_client_state (CLIENT_CREATE_REPORT_RR_H);
-          break;
-        }
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_H_DETAIL, NAME);
-      CLOSE (CLIENT_CREATE_REPORT_RR_H_DETAIL, VALUE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_H_DETAIL, SOURCE);
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE, TYPE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE, NAME);
-      case CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_DESC:
-        set_client_state (CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE);
-        break;
-
-      case CLIENT_CREATE_REPORT_RR_RESULTS_RESULT:
-        {
-          gmp_xml_handle_result();
-          set_client_state (CLIENT_CREATE_REPORT_RR_RESULTS);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, DESCRIPTION);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, DETECTION);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION, RESULT);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT, DETAILS);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS, DETAIL);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL, NAME);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL, VALUE);
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, HOST);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST, ASSET);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST, HOSTNAME);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, NVT);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, ORIGINAL_SEVERITY);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, ORIGINAL_THREAT);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, PORT);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, QOD);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD, TYPE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD, VALUE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, SCAN_NVT_VERSION);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, SEVERITY);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT, THREAT);
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, BID);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, CVE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, CVSS_BASE);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, FAMILY);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, NAME);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, XREF);
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT, CERT);
-
-      CLOSE (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_NVT_CERT, CERT_REF);
-
-      CLOSE (CLIENT_CREATE_REPORT, TASK);
-      CLOSE (CLIENT_CREATE_REPORT_TASK, COMMENT);
-      CLOSE (CLIENT_CREATE_REPORT_TASK, NAME);
-
       case CLIENT_CREATE_REPORT_CONFIG:
         create_report_config_element_end (gmp_parser, error, element_name);
         break;
@@ -21617,19 +20771,10 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           if (create_task_data->target_id != NULL
               && strcmp (create_task_data->target_id, "0") == 0)
             {
-              /* Import task. */
-
-              set_task_target (create_task_data->task, 0);
-              set_task_usage_type (create_task_data->task,
-                                   create_task_data->usage_type);
-              SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_task"),
-                                       tsk_uuid);
-              make_task_complete (create_task_data->task);
-              log_event ("task", "Task", tsk_uuid, "created");
-              g_free (tsk_uuid);
-              create_task_data_reset (create_task_data);
-              set_client_state (CLIENT_AUTHENTIC);
-              break;
+              SEND_TO_CLIENT_OR_FAIL
+               (XML_ERROR_SYNTAX ("create_task",
+                                  "A normal target is required"));
+              goto create_task_fail;
             }
 
           /* Set any alert. */
@@ -21662,9 +20807,7 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
           /* Set alterable state. */
 
-          if (create_task_data->alterable
-              && strcmp (create_task_data->alterable, "0"))
-            set_task_alterable (create_task_data->task, 1);
+          set_task_alterable (create_task_data->task, 1);
 
           /* Set any schedule. */
           int schedule_ret = set_task_schedule_and_periods (
@@ -21762,6 +20905,8 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                    (XML_INTERNAL_ERROR ("create_task"));
                   goto create_task_fail;
               }
+
+          enforce_task_defaults (create_task_data->task);
 
           /* Send success response. */
 
@@ -24480,278 +23625,8 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTIC);
         break;
 
-      case CLIENT_RESUME_TASK:
-        if (resume_task_data->task_id)
-          {
-            char *report_id;
-            switch (resume_task (resume_task_data->task_id, &report_id))
-              {
-                case 0:
-                  {
-                    gchar *msg;
-                    msg = g_strdup_printf
-                           ("<resume_task_response"
-                            " status=\"" STATUS_OK_REQUESTED "\""
-                            " status_text=\""
-                            STATUS_OK_REQUESTED_TEXT
-                            "\">"
-                            "<report_id>%s</report_id>"
-                            "</resume_task_response>",
-                            report_id);
-                    free (report_id);
-                    if (send_to_client (msg,
-                                        write_to_client,
-                                        write_to_client_data))
-                      {
-                        g_free (msg);
-                        error_send_to_client (error);
-                        return;
-                      }
-                    g_free (msg);
-                  }
-                  log_event ("task", "Task",
-                             resume_task_data->task_id,
-                             "resumed");
-                  break;
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("resume_task",
-                                      "Task is active already"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case 22:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("resume_task",
-                                      "Task must be in Stopped or Interrupted state"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case 4:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("resume_task",
-                                      "Resuming not supported"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case 3:   /* Find failed. */
-                  if (send_find_error_to_client
-                       ("resume_task", "task", resume_task_data->task_id,
-                        gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("resume_task",
-                                      "Permission denied"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case -6:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("resume_task",
-                                      "There is already a task running in"
-                                      " this process"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case -2:
-                  /* Task target lacks hosts.  This is checked when the
-                   * target is created. */
-                  assert (0);
-                  /* fallthrough */
-                case -4:
-                  /* Task lacks target.  This is checked when the task is
-                   * created anyway. */
-                  assert (0);
-                  /* fallthrough */
-                case -1:
-                case -3: /* Failed to create report. */
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("resume_task"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case -5:
-                  SEND_XML_SERVICE_DOWN ("resume_task");
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                case -7:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("resume_task", "No CA certificate"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-                default: /* Programming error. */
-                  assert (0);
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("resume_task"));
-                  log_event_fail ("task", "Task",
-                                  resume_task_data->task_id,
-                                  "resumed");
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("resume_task",
-                              "A task_id"
-                              " attribute is required"));
-        resume_task_data_reset (resume_task_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
       case CLIENT_GENERATE_SCOPE_REPORT:
         handle_generate_scope_report (gmp_parser, error);
-        break;
-
-      case CLIENT_RUN_WIZARD:
-        if (run_wizard_data->name)
-          {
-            gchar *command_error, *command_error_code;
-            gchar *response = NULL;
-            int read_only;
-
-            read_only = (run_wizard_data->read_only
-                         && strcmp (run_wizard_data->read_only, "")
-                         && strcmp (run_wizard_data->read_only, "0"));
-
-            switch (manage_run_wizard (run_wizard_data->name,
-                                       (int (*) (void *, gchar *, gchar **))
-                                         process_gmp,
-                                       gmp_parser,
-                                       run_wizard_data->params,
-                                       read_only,
-                                       run_wizard_data->mode,
-                                       &command_error,
-                                       &command_error_code,
-                                       &response))
-              {
-                case 0:
-                  {
-                    gchar *msg;
-                    msg = g_strdup_printf
-                           ("<run_wizard_response"
-                            " status=\"%s\""
-                            " status_text=\"%s\">"
-                            "%s%s%s"
-                            "</run_wizard_response>",
-                            command_error_code ? command_error_code
-                                               : STATUS_OK_REQUESTED,
-                            command_error ? command_error
-                                          : STATUS_OK_REQUESTED_TEXT,
-                            response ? "<response>" : "",
-                            response ? response : "",
-                            response ? "</response>" : "");
-                    if (send_to_client (msg,
-                                        write_to_client,
-                                        write_to_client_data))
-                      {
-                        g_free (msg);
-                        g_free (response);
-                        error_send_to_client (error);
-                        return;
-                      }
-                    g_free (msg);
-                    g_free (response);
-                    if (run_wizard_data->read_only == 0)
-                      log_event ("wizard", "Wizard", run_wizard_data->name,
-                                "run");
-                    break;
-                  }
-
-                case 1:
-                  {
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("run_wizard",
-                                        "NAME characters must be alphanumeric"
-                                        " or underscore"));
-                    run_wizard_data_reset (run_wizard_data);
-                    set_client_state (CLIENT_AUTHENTIC);
-                    break;
-                  }
-
-                case 4:
-                case 6:
-                  {
-                    gchar *msg;
-                    msg = g_strdup_printf
-                           ("<run_wizard_response"
-                            " status=\"%s\""
-                            " status_text=\"%s\"/>",
-                            command_error_code ? command_error_code
-                                               : STATUS_ERROR_SYNTAX,
-                            command_error ? command_error : "Internal Error");
-                    if (command_error)
-                      g_free (command_error);
-                    if (send_to_client (msg,
-                                        write_to_client,
-                                        write_to_client_data))
-                      {
-                        g_free (msg);
-                        error_send_to_client (error);
-                        return;
-                      }
-                    g_free (msg);
-                    log_event_fail ("wizard", "Wizard", run_wizard_data->name,
-                                    "run");
-                    break;
-                  }
-
-                case 5:
-                  {
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("run_wizard",
-                                        "Wizard is not marked as read only"));
-                    break;
-                  }
-
-                case 99:
-                  {
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("run_wizard",
-                                        "Permission denied"));
-                    break;
-                  }
-
-                case -1:
-                  {
-                    /* Internal error. */
-                    SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("run_wizard"));
-                    log_event_fail ("wizard", "Wizard", run_wizard_data->name,
-                                    "run");
-                    break;
-                  }
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX ("run_wizard",
-                                                    "A NAME"
-                                                    " element is required"));
-        run_wizard_data_reset (run_wizard_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      CLOSE (CLIENT_RUN_WIZARD, MODE);
-      CLOSE (CLIENT_RUN_WIZARD, NAME);
-      CLOSE (CLIENT_RUN_WIZARD, PARAMS);
-      CLOSE (CLIENT_RUN_WIZARD_PARAMS_PARAM, NAME);
-      CLOSE (CLIENT_RUN_WIZARD_PARAMS_PARAM, VALUE);
-
-      case CLIENT_RUN_WIZARD_PARAMS_PARAM:
-        array_add (run_wizard_data->params, run_wizard_data->param);
-        run_wizard_data->param = NULL;
-        set_client_state (CLIENT_RUN_WIZARD_PARAMS);
         break;
 
       case CLIENT_START_TASK:
@@ -25417,148 +24292,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
               &create_port_range_data->type);
 
 
-      APPEND (CLIENT_CREATE_REPORT_IN_ASSETS,
-              &create_report_data->in_assets);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_DESCRIPTION,
-              &create_report_data->result_description);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST,
-              &create_report_data->result_host);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_HOST_HOSTNAME,
-              &create_report_data->result_hostname);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_SCAN_NVT_VERSION,
-              &create_report_data->result_scan_nvt_version);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_ERRORS_ERROR_PORT,
-              &create_report_data->result_port);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_HOST_END,
-              &create_report_data->host_end);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_HOST_END_HOST,
-              &create_report_data->host_end_host);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_HOST_START,
-              &create_report_data->host_start);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_HOST_START_HOST,
-              &create_report_data->host_start_host);
-
-
-      APPEND (CLIENT_CREATE_REPORT_RR_SCAN_END,
-              &create_report_data->scan_end);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_SCAN_START,
-              &create_report_data->scan_start);
-
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DESCRIPTION,
-              &create_report_data->result_description);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST,
-              &create_report_data->result_host);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_HOST_HOSTNAME,
-              &create_report_data->result_hostname);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_SCAN_NVT_VERSION,
-              &create_report_data->result_scan_nvt_version);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_PORT,
-              &create_report_data->result_port);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD_TYPE,
-              &create_report_data->result_qod_type);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_QOD_VALUE,
-              &create_report_data->result_qod);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_SEVERITY,
-              &create_report_data->result_severity);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_THREAT,
-              &create_report_data->result_threat);
-
-      case CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL_NAME:
-        gvm_append_text (&create_report_data->result_detection_name, text, text_len);
-        break;
-      case CLIENT_CREATE_REPORT_RR_RESULTS_RESULT_DETECTION_RESULT_DETAILS_DETAIL_VALUE:
-        if (create_report_data->result_detection_name != NULL)
-          {
-            if (strcmp("product", create_report_data->result_detection_name) == 0)
-              {
-                gvm_append_text (&create_report_data->result_detection_product, text, text_len);
-              }
-            else if (strcmp("location", create_report_data->result_detection_name) == 0)
-              {
-                gvm_append_text (&create_report_data->result_detection_location, text, text_len);
-              }
-            else if (strcmp("source_oid", create_report_data->result_detection_name) == 0)
-              {
-                gvm_append_text (&create_report_data->result_detection_source_oid, text, text_len);
-              }
-            else if (strcmp("source_name", create_report_data->result_detection_name) == 0)
-              {
-                gvm_append_text (&create_report_data->result_detection_source_name, text, text_len);
-              }
-            free(create_report_data->result_detection_name);
-            create_report_data->result_detection_name = NULL;
-
-            if (create_report_data->result_detection_product &&
-                    create_report_data->result_detection_location &&
-                    create_report_data->result_detection_source_oid &&
-                    create_report_data->result_detection_source_name)
-              {
-
-                detection_detail_t *detail =
-                    (detection_detail_t*) g_malloc (sizeof (detection_detail_t));
-                if (detail)
-                  {
-                    detail->product = create_report_data->result_detection_product;
-                    create_report_data->result_detection_product = NULL;
-                    detail->location = create_report_data->result_detection_location;
-                    create_report_data->result_detection_location = NULL;
-                    detail->source_oid = create_report_data->result_detection_source_oid;
-                    create_report_data->result_detection_source_oid = NULL;
-                    detail->source_name = create_report_data->result_detection_source_name;
-                    create_report_data->result_detection_source_name = NULL;
-                    array_add(create_report_data->result_detection, detail);
-                  }
-            }
-
-
-
-        }
-        break;
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_DETAIL_NAME,
-              &create_report_data->detail_name);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_DETAIL_VALUE,
-              &create_report_data->detail_value);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_DESC,
-              &create_report_data->detail_source_desc);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_NAME,
-              &create_report_data->detail_source_name);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_DETAIL_SOURCE_TYPE,
-              &create_report_data->detail_source_type);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_END,
-              &create_report_data->host_end);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_IP,
-              &create_report_data->ip);
-
-      APPEND (CLIENT_CREATE_REPORT_RR_H_START,
-              &create_report_data->host_start);
-
-
       case CLIENT_CREATE_REPORT_CONFIG:
         create_report_config_element_text (text, text_len);
         break;
@@ -25953,19 +24686,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
         modify_tls_certificate_element_text (text, text_len);
         break;
 
-      APPEND (CLIENT_RUN_WIZARD_MODE,
-              &run_wizard_data->mode);
-
-      APPEND (CLIENT_RUN_WIZARD_NAME,
-              &run_wizard_data->name);
-
-      APPEND (CLIENT_RUN_WIZARD_PARAMS_PARAM_NAME,
-              &run_wizard_data->param->name);
-
-      APPEND (CLIENT_RUN_WIZARD_PARAMS_PARAM_VALUE,
-              &run_wizard_data->param->value);
-
-
       default:
         /* Just pass over the text. */
         break;
@@ -26132,120 +24852,6 @@ process_gmp_client_input ()
       return err;
     }
   from_client_end = from_client_start = 0;
-
-  return 0;
-}
-
-/**
- * @brief Buffer the response for process_gmp.
- *
- * @param[in]  msg     GMP response.
- * @param[in]  buffer  Buffer.
- *
- * @return TRUE if failed, else FALSE.
- */
-static int
-process_gmp_write (const char* msg, void* buffer)
-{
-  g_debug ("-> client internal: %s", msg);
-  g_string_append ((GString*) buffer, msg);
-  return FALSE;
-}
-
-/**
- * @brief Process an XML string.
- *
- * \if STATIC
- *
- * Call the XML parser and let the callback functions do the work
- * (\ref gmp_xml_handle_start_element, \ref gmp_xml_handle_end_element,
- * \ref gmp_xml_handle_text and \ref gmp_xml_handle_error).
- *
- * The callback functions will queue any replies for
- * the client in \ref to_client (using \ref send_to_client).
- *
- * \endif
- *
- * @param[in]  parser    Parser.
- * @param[in]  command   Command.
- * @param[in]  response  Response.
- *
- * @return 0 success,
- *         -4 XML syntax error.
- *         -1 error.
- */
-static int
-process_gmp (gmp_parser_t *parser, const gchar *command, gchar **response)
-{
-  gboolean success;
-  GError* error = NULL;
-  GString *buffer;
-  int (*client_writer) (const char*, void*);
-  void* client_writer_data;
-  GMarkupParseContext *old_xml_context;
-  client_state_t old_client_state;
-  command_data_t old_command_data;
-
-  if (response) *response = NULL;
-
-  old_xml_context = xml_context;
-  xml_context = g_markup_parse_context_new (&xml_parser, 0, parser, NULL);
-  if (xml_context == NULL)
-    {
-      xml_context = old_xml_context;
-      return -1;
-    }
-
-  old_command_data = command_data;
-  command_data_init (&command_data);
-  old_client_state = client_state;
-  client_state = CLIENT_AUTHENTIC;
-  buffer = g_string_new ("");
-  client_writer = parser->client_writer;
-  client_writer_data = parser->client_writer_data;
-  parser->client_writer = process_gmp_write;
-  parser->client_writer_data = buffer;
-  success = g_markup_parse_context_parse (xml_context,
-                                          command,
-                                          strlen (command),
-                                          &error);
-  parser->client_writer = client_writer;
-  parser->client_writer_data = client_writer_data;
-  xml_context = old_xml_context;
-  client_state = old_client_state;
-  command_data = old_command_data;
-  if (success == FALSE)
-    {
-      int err;
-      if (error)
-        {
-          err = -4;
-          if (g_error_matches (error,
-                               G_MARKUP_ERROR,
-                               G_MARKUP_ERROR_UNKNOWN_ELEMENT))
-            g_debug ("   client error: G_MARKUP_ERROR_UNKNOWN_ELEMENT");
-          else if (g_error_matches (error,
-                                    G_MARKUP_ERROR,
-                                    G_MARKUP_ERROR_INVALID_CONTENT))
-            g_debug ("   client error: G_MARKUP_ERROR_INVALID_CONTENT");
-          else if (g_error_matches (error,
-                                    G_MARKUP_ERROR,
-                                    G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE))
-            g_debug ("   client error: G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE");
-          else
-            err = -1;
-          g_debug ("   Failed to parse client XML: %s", error->message);
-          g_error_free (error);
-        }
-      else
-        err = -1;
-      return err;
-    }
-
-  if (response)
-    *response = g_string_free (buffer, FALSE);
-  else
-    g_string_free (buffer, TRUE);
 
   return 0;
 }

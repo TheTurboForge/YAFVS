@@ -209,10 +209,6 @@ static char *
 get_user (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
           gsad_command_response_data_t *);
 
-static char *
-wizard (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-        gsad_command_response_data_t *);
-
 static int
 gmp_success (entity_t entity);
 
@@ -1714,175 +1710,6 @@ resource_action (gvm_connection_t *connection, gsad_credentials_t *credentials,
     }
 
 /**
- * @brief Create a report, get all tasks, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_report_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  int ret;
-  gchar **xml_file_array, *xml_file_escaped;
-  gchar *command, *html;
-  const char *task_id = params_value (params, "task_id"),
-             *xml_file = params_value (params, "xml_file"),
-             *in_assets = params_value (params, "in_assets");
-
-  CHECK_VARIABLE_INVALID (task_id, "Create Report");
-  CHECK_VARIABLE_INVALID (xml_file, "Create Report");
-
-  if (strlen (xml_file) == 0)
-    {
-      return message_invalid (connection, credentials, params, response_data,
-                              "Report required", "Create Report");
-    }
-
-  xml_file_array = g_strsplit (xml_file, "%", -1);
-  if (xml_file_array != NULL && xml_file_array[0] != NULL)
-    xml_file_escaped = g_strjoinv ("%%", xml_file_array);
-  else
-    xml_file_escaped = g_strdup (xml_file);
-  g_strfreev (xml_file_array);
-
-  command = g_strdup_printf ("<create_report>"
-                             "<in_assets>%s</in_assets>"
-                             "<task id=\"%s\"/>"
-                             "%s"
-                             "</create_report>",
-                             in_assets ? in_assets : "0", task_id,
-                             xml_file_escaped ? xml_file_escaped : "");
-  g_free (xml_file_escaped);
-
-  ret = gmp (connection, credentials, NULL, &entity, response_data, command);
-  g_free (command);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new report. "
-        "No new report was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new report. "
-        "It is unclear whether the report has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new report. "
-        "It is unclear whether the report has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Import Report", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Create an import task, serve next page.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_import_task_gmp (gvm_connection_t *connection,
-                        gsad_credentials_t *credentials, params_t *params,
-                        gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  int ret;
-  gchar *command, *html;
-  const char *name, *comment, *usage_type;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  usage_type = params_value (params, "usage_type");
-
-  CHECK_VARIABLE_INVALID (name, "Create Import Task");
-  CHECK_VARIABLE_INVALID (comment, "Create Import Task");
-  CHECK_VARIABLE_INVALID (usage_type, "Create Import Task");
-
-  command = g_markup_printf_escaped ("<create_task>"
-                                     "<target id=\"0\"/>"
-                                     "<name>%s</name>"
-                                     "<comment>%s</comment>"
-                                     "<usage_type>%s</usage_type>"
-                                     "</create_task>",
-                                     name, comment, usage_type);
-  ret = gmp (connection, credentials, NULL, &entity, response_data, command);
-  g_free (command);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating an import task. "
-        "No task was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating an import task. "
-        "It is unclear whether the task has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating an import task. "
-        "It is unclear whether the task has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "task_id", entity_attribute (entity, "id"));
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create Import Task", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
  * @brief Create a task, get all tasks, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -1903,20 +1730,19 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   const char *name, *comment, *config_id, *target_id, *scanner_type;
   const char *scanner_id, *schedule_id, *schedule_periods;
   const char *max_checks, *max_hosts;
-  const char *in_assets, *alterable;
   const char *add_tag, *tag_id, *auto_delete, *auto_delete_data;
   const char *apply_overrides, *min_qod, *usage_type;
   const char *cs_allow_failed_retrieval;
   params_t *alerts;
 
   add_tag = params_value (params, "add_tag");
-  alterable = params_value (params, "alterable");
   apply_overrides = params_value (params, "apply_overrides");
-  auto_delete = params_value (params, "auto_delete");
+  auto_delete = "keep";
   auto_delete_data = params_value (params, "auto_delete_data");
+  if (auto_delete_data == NULL || strlen (auto_delete_data) == 0)
+    auto_delete_data = "10";
   comment = params_value (params, "comment");
   config_id = params_value (params, "config_id");
-  in_assets = params_value (params, "in_assets");
   max_checks = params_value (params, "max_checks");
   max_hosts = params_value (params, "max_hosts");
   min_qod = params_value (params, "min_qod");
@@ -1969,29 +1795,12 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   else
     schedule_periods = "0";
 
-  CHECK_VARIABLE_INVALID (in_assets, "Create Task");
-
-  if (!strcmp (in_assets, "1"))
-    {
-      CHECK_VARIABLE_INVALID (apply_overrides, "Create Task");
-      CHECK_VARIABLE_INVALID (min_qod, "Create Task");
-    }
-  else
-    {
-      if (!params_given (params, "apply_overrides")
-          || !params_valid (params, "apply_overrides"))
-        apply_overrides = "";
-
-      if (!params_given (params, "min_qod")
-          || !params_valid (params, "min_qod"))
-        min_qod = "";
-    }
+  CHECK_VARIABLE_INVALID (apply_overrides, "Create Task");
+  CHECK_VARIABLE_INVALID (min_qod, "Create Task");
 
   CHECK_VARIABLE_INVALID (max_checks, "Create Task");
-  CHECK_VARIABLE_INVALID (auto_delete, "Create Task");
   CHECK_VARIABLE_INVALID (auto_delete_data, "Create Task");
   CHECK_VARIABLE_INVALID (max_hosts, "Create Task");
-  CHECK_VARIABLE_INVALID (alterable, "Create Task");
 
   if (add_tag && strcmp (add_tag, "1") == 0)
     {
@@ -2065,15 +1874,15 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
     "<value>%d</value>"
     "</preference>"
     "</preferences>"
-    "<alterable>%i</alterable>"
+    "<alterable>1</alterable>"
     "<usage_type>%s</usage_type>"
     "</create_task>",
     config_id, schedule_periods, target_id, scanner_id, name, comment,
-    max_checks, max_hosts, strcmp (in_assets, "0") ? "yes" : "no",
+    max_checks, max_hosts, "yes",
     strcmp (apply_overrides, "0") ? "yes" : "no", min_qod, auto_delete,
     auto_delete_data,
     cs_allow_failed_retrieval ? strcmp (cs_allow_failed_retrieval, "0") : 0,
-    alterable ? strcmp (alterable, "0") : 0, usage_type);
+    usage_type);
 
   ret =
     gmp (connection, credentials, NULL, &entity, response_data, command->str);
@@ -2225,9 +2034,9 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                params_t *params, gsad_command_response_data_t *response_data)
 {
   gchar *html, *format;
-  const char *comment, *name, *schedule_id, *in_assets;
+  const char *comment, *name, *schedule_id;
   const char *scanner_id, *task_id, *max_checks, *max_hosts;
-  const char *config_id, *target_id, *alterable;
+  const char *config_id, *target_id;
   const char *scanner_type, *schedule_periods, *auto_delete, *auto_delete_data;
   const char *apply_overrides, *min_qod;
   const char *cs_allow_failed_retrieval;
@@ -2236,13 +2045,13 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   GString *alert_element;
   entity_t entity;
 
-  alterable = params_value (params, "alterable");
   apply_overrides = params_value (params, "apply_overrides");
-  auto_delete = params_value (params, "auto_delete");
+  auto_delete = "keep";
   auto_delete_data = params_value (params, "auto_delete_data");
+  if (auto_delete_data == NULL || strlen (auto_delete_data) == 0)
+    auto_delete_data = "10";
   comment = params_value (params, "comment");
   config_id = params_value (params, "config_id");
-  in_assets = params_value (params, "in_assets");
   max_checks = params_value (params, "max_checks");
   max_hosts = params_value (params, "max_hosts");
   min_qod = params_value (params, "min_qod");
@@ -2288,29 +2097,14 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (scanner_id, "Save Task");
   CHECK_VARIABLE_INVALID (task_id, "Save Task");
   CHECK_VARIABLE_INVALID (max_checks, "Save Task");
-  CHECK_VARIABLE_INVALID (auto_delete, "Save Task");
   CHECK_VARIABLE_INVALID (auto_delete_data, "Save Task");
   CHECK_VARIABLE_INVALID (max_hosts, "Save Task");
-  CHECK_VARIABLE_INVALID (in_assets, "Save Task");
 
   if (params_given (params, "cs_allow_failed_retrieval"))
     CHECK_VARIABLE_INVALID (cs_allow_failed_retrieval, "Save Task");
 
-  if (!strcmp (in_assets, "1"))
-    {
-      CHECK_VARIABLE_INVALID (apply_overrides, "Save Task");
-      CHECK_VARIABLE_INVALID (min_qod, "Save Task");
-    }
-  else
-    {
-      if (!params_given (params, "apply_overrides")
-          || !params_valid (params, "apply_overrides"))
-        apply_overrides = "";
-
-      if (!params_given (params, "min_qod")
-          || !params_valid (params, "min_qod"))
-        min_qod = "";
-    }
+  CHECK_VARIABLE_INVALID (apply_overrides, "Save Task");
+  CHECK_VARIABLE_INVALID (min_qod, "Save Task");
 
   alert_element = g_string_new ("");
   if (params_given (params, "alert_id_optional:"))
@@ -2381,15 +2175,14 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
     "<value>%%s</value>"
     "</preference>"
     "</preferences>"
-    "%s%i%s"
+    "<alterable>1</alterable>"
     "</modify_task>",
-    alert_element->str, alterable ? "<alterable>" : "",
-    alterable ? strcmp (alterable, "0") : 0, alterable ? "</alterable>" : "");
+    alert_element->str);
   entity = NULL;
   ret = gmpf (
     connection, credentials, NULL, &entity, response_data, format, task_id,
     name, comment, target_id, config_id, schedule_id, schedule_periods,
-    scanner_id, max_checks, max_hosts, strcmp (in_assets, "0") ? "yes" : "no",
+    scanner_id, max_checks, max_hosts, "yes",
     strcmp (apply_overrides, "0") ? "yes" : "no", min_qod, auto_delete,
     cs_allow_failed_retrieval ? strcmp (cs_allow_failed_retrieval, "0") : 0,
     auto_delete_data);
@@ -2437,103 +2230,6 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 #undef CHECK
-
-/**
- * @brief Save import task, get next page, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_import_task_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  gchar *format, *html;
-  const char *comment, *name, *task_id;
-  const char *in_assets, *auto_delete, *auto_delete_data;
-  int ret;
-  entity_t entity;
-
-  comment = params_value (params, "comment");
-  in_assets = params_value (params, "in_assets");
-  name = params_value (params, "name");
-  task_id = params_value (params, "task_id");
-  auto_delete = params_value (params, "auto_delete");
-  auto_delete_data = params_value (params, "auto_delete_data");
-  CHECK_VARIABLE_INVALID (name, "Save Import Task")
-  CHECK_VARIABLE_INVALID (comment, "Save Import Task")
-  CHECK_VARIABLE_INVALID (task_id, "Save Import Task")
-  CHECK_VARIABLE_INVALID (in_assets, "Save Import Task")
-  CHECK_VARIABLE_INVALID (auto_delete, "Save Import Task");
-  CHECK_VARIABLE_INVALID (auto_delete_data, "Save Import Task");
-
-  format = g_strdup_printf ("<modify_task task_id=\"%%s\">"
-                            "<name>%%s</name>"
-                            "<comment>%%s</comment>"
-                            "<preferences>"
-                            "<preference>"
-                            "<scanner_name>in_assets</scanner_name>"
-                            "<value>%%s</value>"
-                            "</preference>"
-                            "<preference>"
-                            "<scanner_name>auto_delete</scanner_name>"
-                            "<value>%%s</value>"
-                            "</preference>"
-                            "<preference>"
-                            "<scanner_name>auto_delete_data</scanner_name>"
-                            "<value>%%s</value>"
-                            "</preference>"
-                            "</preferences>"
-                            "</modify_task>");
-
-  entity = NULL;
-  ret = gmpf (connection, credentials, NULL, &entity, response_data, format,
-              task_id, name, comment, strcmp (in_assets, "0") ? "yes" : "no",
-              auto_delete, auto_delete_data);
-  g_free (format);
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving an import task. "
-        "No new task was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving an import task. "
-        "It is unclear whether the task has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving an import task. "
-        "It is unclear whether the task has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Save Import Task", response_data);
-  free_entity (entity);
-  return html;
-}
 
 /**
  * @brief Export a task.
@@ -2586,24 +2282,6 @@ stop_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                params_t *params, gsad_command_response_data_t *response_data)
 {
   return resource_action (connection, credentials, params, "task", "stop",
-                          response_data);
-}
-
-/**
- * @brief Resume a task, get all tasks, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-resume_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return resource_action (connection, credentials, params, "task", "resume",
                           response_data);
 }
 
@@ -4921,8 +4599,6 @@ append_alert_method_data (GString *xml, params_t *data, const char *method,
             || (strcmp (method, "Start Task") == 0
                 && strcmp (name, "start_task_task") == 0)
             || strcmp (name, "details_url") == 0
-            || strcmp (name, "delta_type") == 0
-            || strcmp (name, "delta_report_id") == 0
             || strcmp (name, "composer_include_overrides") == 0
             || strcmp (name, "composer_ignore_pagination") == 0)
           {
@@ -8596,7 +8272,7 @@ get_report (gvm_connection_t *connection, gsad_credentials_t *credentials,
   GString *xml;
   entity_t entity;
   entity_t report_entity;
-  const char *report_id, *delta_report_id;
+  const char *report_id;
   const char *config_id;
   const char *format_id;
   const char *filter;
@@ -8614,7 +8290,6 @@ get_report (gvm_connection_t *connection, gsad_credentials_t *credentials,
 
   CHECK_VARIABLE_INVALID (report_id, "Get Report");
 
-  delta_report_id = params_value (params, "delta_report_id");
   format_id = params_value (params, "report_format_id");
   config_id = params_value (params, "report_config_id");
 
@@ -8635,13 +8310,11 @@ get_report (gvm_connection_t *connection, gsad_credentials_t *credentials,
     " filter=\"%s\""
     " filt_id=\"%s\""
     " report_id=\"%s\""
-    " delta_report_id=\"%s\""
     " config_id=\"%s\""
     " format_id=\"%s\"/>",
     details, ignore_pagination, lean, filter,
     filter_id ? filter_id : FILT_ID_NONE, report_id,
-    delta_report_id ? delta_report_id : "0", config_id ? config_id : "",
-    format_id ? format_id : "");
+    config_id ? config_id : "", format_id ? format_id : "");
 
   if (ret == -1)
     {
@@ -8894,71 +8567,6 @@ get_report (gvm_connection_t *connection, gsad_credentials_t *credentials,
 
       if (extra_xml)
         g_string_append (xml, extra_xml);
-
-      if (delta_report_id)
-        {
-          g_string_append_printf (xml, "<delta>%s</delta>", delta_report_id);
-
-          entity = NULL;
-          if (read_entity_and_string_c (connection, &entity, &xml))
-            {
-              g_string_free (xml, TRUE);
-              gsad_command_response_data_set_status_code (
-                response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-              return gsad_http_create_gsad_message (
-                credentials,
-                "An internal error occurred while getting a report. "
-                "The report could not be delivered. "
-                "Diagnostics: Failure to receive response from manager daemon.",
-                response_data);
-            }
-
-          if (gmp_success (entity) != 1)
-            {
-              gchar *message;
-
-              set_http_status_from_entity (entity, response_data);
-
-              message = gsad_http_create_gsad_message (
-                credentials, entity_attribute (entity, "status_text"),
-                response_data);
-
-              g_string_free (xml, TRUE);
-              free_entity (entity);
-              return message;
-            }
-
-          report_entity = entity_child (entity, "report");
-          if (report_entity)
-            report_entity = entity_child (report_entity, "report");
-          if (report_entity)
-            {
-              const char *id;
-              entity_t task_entity, name;
-
-              id = NULL;
-              task_entity = entity_child (report_entity, "task");
-              if (task_entity)
-                {
-                  id = entity_attribute (task_entity, "id");
-                  name = entity_child (task_entity, "name");
-                }
-              else
-                name = NULL;
-
-              if (delta_report_id && id && name)
-                g_string_append_printf (
-                  xml, "<task id=\"%s\"><name>%s</name></task>", id,
-                  entity_text (name));
-
-              free_entity (entity);
-            }
-
-          g_string_append (xml, "</get_report>");
-
-          return envelope_gmp (connection, credentials, params,
-                               g_string_free (xml, FALSE), response_data);
-        }
 
       if (read_string_c (connection, &xml))
         {
@@ -12297,108 +11905,6 @@ get_resource_names_gmp (gvm_connection_t *connection,
                    response_data);
 }
 
-/**
- * @brief Run a wizard and envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-run_wizard_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  const char *name;
-  int ret;
-  GString *run;
-  param_t *param;
-  gchar *param_name, *html;
-  params_iterator_t iter;
-  params_t *wizard_params;
-  entity_t entity;
-
-  /* The naming is a bit subtle here, because the HTTP request
-   * parameters are called "param"s and so are the GMP wizard
-   * parameters. */
-
-  name = params_value (params, "name");
-  if (name == NULL)
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while trying to start a wizard. "
-        "Diagnostics: Required parameter 'name' was NULL.",
-        response_data);
-    }
-  run = g_string_new ("<run_wizard>");
-
-  g_string_append_printf (run,
-                          "<name>%s</name>"
-                          "<params>",
-                          name);
-
-  wizard_params = params_values (params, "event_data:");
-  if (wizard_params)
-    {
-      params_iterator_init (&iter, wizard_params);
-      while (params_iterator_next (&iter, &param_name, &param))
-        xml_string_append (run,
-                           "<param>"
-                           "<name>%s</name>"
-                           "<value>%s</value>"
-                           "</param>",
-                           param_name, param->value);
-    }
-
-  g_string_append (run, "</params></run_wizard>");
-
-  entity = NULL;
-  ret = gmp (connection, credentials, NULL, &entity, response_data, run->str);
-  g_string_free (run, TRUE);
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while running a wizard. "
-        "The wizard did not start. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while running a wizard. "
-        "It is unclear whether the wizard started or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while running a wizard. "
-        "It is unclear whether the wizard started or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Run Wizard", response_data);
-  free_entity (entity);
-  return html;
-}
-
 #define GET_TRASH_RESOURCE(capability, command, name)                       \
   if (gvm_connection_sendf (connection,                                     \
                             "<" command " filter=\"rows=-1 sort=name\""     \
@@ -14651,128 +14157,6 @@ get_setting_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                        g_string_free (xml, FALSE), response_data);
 }
 
-/* Wizards. */
-
-/**
- * @brief Returns a wizard page.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Credentials of user issuing the action.
- * @param[in]  params         Request parameters.
- * @param[in]  extra_xml      Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-wizard (gvm_connection_t *connection, gsad_credentials_t *credentials,
-        params_t *params, const char *extra_xml,
-        gsad_command_response_data_t *response_data)
-{
-  GString *xml;
-  const char *name = params_value (params, "name");
-
-  if (name == NULL)
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the wizard. "
-        "Given name was invalid",
-        response_data);
-    }
-
-  xml = g_string_new ("");
-  g_string_append_printf (xml, "<wizard>%s<%s/>", extra_xml ? extra_xml : "",
-                          name);
-
-  /* Try to run init mode of the wizard */
-  if (gvm_connection_sendf_xml (connection,
-                                "<run_wizard read_only=\"1\">"
-                                "<name>%s</name>"
-                                "<mode>init</mode>"
-                                "</run_wizard>",
-                                name)
-      == -1)
-    {
-      g_string_free (xml, TRUE);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the wizard. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  if (read_string_c (connection, &xml))
-    {
-      g_string_free (xml, TRUE);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the"
-        " wizard."
-        "Diagnostics: Failure to receive response from"
-        " manager daemon.",
-        response_data);
-    }
-
-  /* Get the setting. */
-
-  if (gvm_connection_sendf_xml (
-        connection, "<get_settings"
-                    " setting_id=\"20f3034c-e709-11e1-87e7-406186ea4fc5\"/>")
-      == -1)
-    {
-      g_string_free (xml, TRUE);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the wizard. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  if (read_string_c (connection, &xml))
-    {
-      g_string_free (xml, TRUE);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while the wizard. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    }
-
-  /* Cleanup, and return transformed XML. */
-
-  g_string_append_printf (xml, "</wizard>");
-  return envelope_gmp (connection, credentials, params,
-                       g_string_free (xml, FALSE), response_data);
-}
-
-/**
- * @brief Returns a wizard page.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Credentials of user issuing the action.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-wizard_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-            params_t *params, gsad_command_response_data_t *response_data)
-{
-  return wizard (connection, credentials, params, NULL, response_data);
-}
-
 /**
  * @brief Delete multiple resources, get next page, envelope the result.
  *
@@ -16624,7 +16008,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_vulns)
   ELSE (new_alert)
   ELSE (ping)
-  ELSE (wizard)
 
   else if (!strcmp (cmd, "download_ssl_cert"))
   {
@@ -16843,14 +16226,12 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_alert)
   ELSE (create_asset)
   ELSE (create_config)
-  ELSE (create_import_task)
   ELSE (create_credential)
   ELSE (create_filter)
   ELSE (create_host)
   ELSE (create_override)
   ELSE (create_port_list)
   ELSE (create_port_range)
-  ELSE (create_report)
   ELSE (create_report_config)
   ELSE (create_scanner)
   ELSE (create_schedule)
@@ -16892,8 +16273,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (generate_scope_report)
   ELSE (report_alert)
   ELSE (restore)
-  ELSE (resume_task)
-  ELSE (run_wizard)
   ELSE (save_alert)
   ELSE (save_asset)
   ELSE (save_auth)
@@ -16913,7 +16292,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_tag)
   ELSE (save_target)
   ELSE (save_task)
-  ELSE (save_import_task)
   ELSE (save_tls_certificate)
   ELSE (save_user)
   ELSE (start_task)

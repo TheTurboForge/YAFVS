@@ -10,14 +10,8 @@ import logger from 'gmp/log';
 import {type default as Filter, ALL_FILTER} from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import Report, {type ReportElement} from 'gmp/models/report';
-import {parseYesNo, type YesNo} from 'gmp/parser';
+import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
-
-interface ReportCommandImportParams {
-  task_id: string;
-  in_assets?: YesNo;
-  xml_file?: string;
-}
 
 interface ReportCommandAddAssetsParams {
   id: string;
@@ -51,7 +45,6 @@ interface ReportCommandDownloadParams {
 interface ReportCommandDownloadOptions {
   reportFormatId: string;
   reportConfigId: string;
-  deltaReportId?: string;
   filter?: Filter;
 }
 
@@ -62,31 +55,14 @@ class ReportCommand extends EntityCommand<Report, ReportElement> {
     super(http, 'report', Report);
   }
 
-  import(args: ReportCommandImportParams) {
-    const {task_id, in_assets = 1, xml_file} = args;
-    log.debug('Creating report', args);
-    return this.httpPostWithTransform({
-      cmd: 'create_report',
-      task_id,
-      in_assets,
-      xml_file,
-    });
-  }
-
   download(
     {id}: ReportCommandDownloadParams,
-    {
-      reportFormatId,
-      reportConfigId,
-      deltaReportId,
-      filter,
-    }: ReportCommandDownloadOptions,
+    {reportFormatId, reportConfigId, filter}: ReportCommandDownloadOptions,
   ) {
     const allFilter = isDefined(filter) ? filter.all() : ALL_FILTER;
     return this.httpRequestWithRejectionTransform<ArrayBuffer>('get', {
       args: {
         cmd: 'get_report',
-        delta_report_id: deltaReportId,
         details: 1,
         report_id: id,
         report_config_id: reportConfigId,
@@ -121,29 +97,6 @@ class ReportCommand extends EntityCommand<Report, ReportElement> {
       report_id,
       filter,
     });
-  }
-
-  async getDelta(
-    {id}: {id: string},
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    {id: delta_report_id}: {id: string},
-    {
-      filter,
-      details = true,
-      ...options
-    }: {filter?: string; details?: boolean; [key: string]: unknown} = {},
-  ) {
-    const response = await this.httpGetWithTransform(
-      {
-        id,
-        delta_report_id,
-        filter,
-        ignore_pagination: 1,
-        details: parseYesNo(details),
-      },
-      options,
-    );
-    return this.transformResponseToModel(response);
   }
 
   async get(

@@ -206,7 +206,6 @@
   "{{subjectType}} {{subjectName}} may delete an existing {{resourceType}}": "{{subject}} {{subject_id}} {{description}} para {{resource}} {{id}}",
   "{{subjectType}} {{subjectName}} may delete {{resourceType}} {{resourceName}}": "{{subject}} {{subject_id}} {{description}} para {{resource}} {{id}}",
   "{{subjectType}} {{subjectName}} may move {{resourceType}}": "{{subject}} {{subject_id}} {{description}} para {{resource}} {{id}}",
-  "{{subjectType}} {{subjectName}} may run Wizard": "{{subject}} {{subject_id}} {{description}}  {{id}}",
   "{{subjectType}} {{subjectName}} may sync {{resourceType}}": "{{subject}} {{subject_id}} {{description}} para {{resource}} {{id}}",
   "{{subjectType}} {{subjectName}} may verify {{resourceType}}": "{{subject}} {{subject_id}} {{description}} para {{resource}} {{id}}",
   "{{title_text}} (Loading...)": "{{title_text}} (Carregando...)",

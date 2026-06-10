@@ -8,17 +8,12 @@ import React, {useState, useEffect, useCallback} from 'react';
 import {useDispatch} from 'react-redux';
 import {isTaskStartManagerResponseFailure} from 'gmp/commands/task';
 import type Rejection from 'gmp/http/rejection';
-import type Response from 'gmp/http/response';
-import {type XmlMeta} from 'gmp/http/transform/fast-xml';
-import date, {type Date} from 'gmp/models/date';
 import {ALL_FILTER} from 'gmp/models/filter';
 import {FULL_AND_FAST_SCAN_CONFIG_ID} from 'gmp/models/scan-config';
 import {OPENVAS_DEFAULT_SCANNER_ID} from 'gmp/models/scanner';
 import {type default as Task, type TaskAutoDelete} from 'gmp/models/task';
 import {NO_VALUE, YES_VALUE, type YesNo} from 'gmp/parser';
-import {DEFAULT_TIMEZONE} from 'gmp/time-zones';
 import {map} from 'gmp/utils/array';
-import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
 import actionFunction from 'web/entity/hooks/action-function';
 import useEntityClone, {
@@ -32,25 +27,14 @@ import useEntityDownload, {
 import useGmp from 'web/hooks/useGmp';
 import useShallowEqualSelector from 'web/hooks/useShallowEqualSelector';
 import useTranslation from 'web/hooks/useTranslation';
-import useUserTimezone from 'web/hooks/useUserTimezone';
 import AlertComponent from 'web/pages/alerts/AlertComponent';
-import ImportReportDialog, {
-  type ReportImportDialogData,
-} from 'web/pages/reports/ReportImportDialog';
 import ScheduleComponent from 'web/pages/schedules/ScheduleComponent';
 import TargetComponent from 'web/pages/targets/TargetComponent';
-import ImportTaskDialog, {
-  type ImportTaskDialogData,
-} from 'web/pages/tasks/ImportTaskDialog';
 import TaskDialog, {type TaskDialogData} from 'web/pages/tasks/TaskDialog';
 import {
   loadEntities as loadAlerts,
   selector as alertSelector,
 } from 'web/store/entities/alerts';
-import {
-  loadEntities as loadCredentials,
-  selector as credentialsSelector,
-} from 'web/store/entities/credentials';
 import {
   loadEntities as loadScanConfigs,
   selector as scanConfigsSelector,
@@ -74,34 +58,19 @@ import {
 import {loadUserSettingDefaults} from 'web/store/usersettings/defaults/actions';
 import {getUserSettingsDefaults} from 'web/store/usersettings/defaults/selectors';
 import {UNSET_VALUE} from 'web/utils/Render';
-import AdvancedTaskWizard, {
-  type AdvancedTaskWizardData,
-} from 'web/wizard/AdvancedTaskWizard';
-import ModifyTaskWizard, {
-  type ModifyTaskWizardData,
-} from 'web/wizard/ModifyTaskWizard';
-import TaskWizard from 'web/wizard/TaskWizard';
 
 interface TaskComponentRenderProps {
   create: () => void;
-  createImportTask: () => void;
   clone: (task: Task) => void;
   delete: (task: Task) => void;
   download: (task: Task) => void;
   edit: (task: Task) => void;
   start: (task: Task) => void;
   stop: (task: Task) => void;
-  resume: (task: Task) => void;
-  reportImport: (task: Task) => void;
-  advancedTaskWizard: () => void;
-  modifyTaskWizard: () => void;
-  taskWizard: () => void;
 }
 
 interface TaskComponentProps {
   children?: (props: TaskComponentRenderProps) => React.ReactNode;
-  onAdvancedTaskWizardError?: (error: Error) => void;
-  onAdvancedTaskWizardSaved?: () => void;
   onCloned?: (response: EntityCloneResponse) => void;
   onCloneError?: (error: Error) => void;
   onCreated?: (response: EntityCreateResponse) => void;
@@ -110,74 +79,40 @@ interface TaskComponentProps {
   onDeleteError?: (error: Error) => void;
   onDownloaded?: OnDownloadedFunc;
   onDownloadError?: (error: Error) => void;
-  onImportTaskCreated?: (response: EntityCreateResponse) => void;
-  onImportTaskCreateError?: (error: Error) => void;
-  onImportTaskSaved?: () => void;
-  onImportTaskSaveError?: (error: Error) => void;
-  onModifyTaskWizardError?: (error: Error) => void;
-  onModifyTaskWizardSaved?: () => void;
-  onReportImported?: () => void;
-  onReportImportError?: (error: Error) => void;
-  onResumed?: (response: Response<Task, XmlMeta>) => void;
-  onResumeError?: (error: Error) => void;
   onSaved?: () => void;
   onSaveError?: (error: Error) => void;
   onStarted?: () => void;
   onStartError?: (error: Error) => void;
   onStopError?: (error: Error) => void;
   onStopped?: () => void;
-  onTaskWizardError?: (error: Error) => void;
-  onTaskWizardSaved?: () => void;
 }
 
 const TAGS_FILTER = ALL_FILTER.copy().set('resource_type', 'task');
 
 const TaskComponent = ({
   children,
-  onAdvancedTaskWizardError,
-  onAdvancedTaskWizardSaved,
   onCloned,
   onCloneError,
-  onImportTaskCreated,
-  onImportTaskCreateError,
-  onImportTaskSaved,
-  onImportTaskSaveError,
   onCreated,
   onCreateError,
   onDeleted,
   onDeleteError,
   onDownloaded,
   onDownloadError,
-  onModifyTaskWizardError,
-  onModifyTaskWizardSaved,
-  onReportImported,
-  onReportImportError,
-  onResumed,
-  onResumeError,
   onSaved,
   onSaveError,
   onStarted,
   onStartError,
   onStopError,
   onStopped,
-  onTaskWizardError,
-  onTaskWizardSaved,
 }: TaskComponentProps) => {
   const gmp = useGmp();
   const [_] = useTranslation();
   const dispatch = useDispatch();
 
-  const [advancedTaskWizardVisible, setAdvancedTaskWizardVisible] =
-    useState(false);
-  const [importTaskDialogVisible, setImportTaskDialogVisible] = useState(false);
-  const [modifyTaskWizardVisible, setModifyTaskWizardVisible] = useState(false);
-  const [reportImportDialogVisible, setReportImportDialogVisible] =
-    useState(false);
   const [taskDialogVisible, setTaskDialogVisible] = useState(false);
-  const [taskWizardVisible, setTaskWizardVisible] = useState(false);
 
   const [alertIds, setAlertIds] = useState<string[]>([]);
-  const [alterable, setAlterable] = useState<YesNo | undefined>();
   const [applyOverrides, setApplyOverrides] = useState<YesNo | undefined>();
   const [autoDelete, setAutoDelete] = useState<TaskAutoDelete | undefined>();
   const [autoDeleteData, setAutoDeleteData] = useState<number | undefined>();
@@ -186,29 +121,15 @@ const TaskComponent = ({
     boolean | undefined
   >();
   const [scanConfigId, setScanConfigId] = useState<string | undefined>();
-  const [esxiCredential, setEsxiCredential] = useState();
-  const [hosts, setHosts] = useState<string | undefined>();
-  const [inAssets, setInAssets] = useState<YesNo | undefined>();
   const [maxChecks, setMaxChecks] = useState<number | undefined>();
   const [maxHosts, setMaxHosts] = useState<number | undefined>();
   const [minQod, setMinQod] = useState<number | undefined>();
   const [name, setName] = useState<string | undefined>();
-  const [reschedule, setReschedule] = useState<YesNo | undefined>();
   const [scannerId, setScannerId] = useState<string | undefined>();
   const [scheduleId, setScheduleId] = useState<string | undefined>();
   const [schedulePeriods, setSchedulePeriods] = useState<YesNo | undefined>();
-  const [sshCredential, setSshCredential] = useState();
-  const [smbCredential, setSmbCredential] = useState();
-  const [startDate, setStartDate] = useState<Date>(date().tz(DEFAULT_TIMEZONE));
-  const [startMinute, setStartMinute] = useState<number>(0);
-  const [startHour, setStartHour] = useState<number>(0);
-  const [startTimezone, setStartTimezone] = useState<string>(DEFAULT_TIMEZONE);
   const [targetId, setTargetId] = useState<string | undefined>();
-  const [targetHosts, setTargetHosts] = useState<string | undefined>();
-  const [taskId, setTaskId] = useState<string | undefined>();
-  const [taskName, setTaskName] = useState<string | undefined>();
   const [task, setTask] = useState<Task | undefined>();
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState<string>('');
 
   const userDefaultsSelector = useShallowEqualSelector(getUserSettingsDefaults);
@@ -233,12 +154,6 @@ const TaskComponent = ({
     scannerSelector(state).getEntities(ALL_FILTER),
   );
 
-  const [timezone] = useUserTimezone();
-
-  const credentials = useShallowEqualSelector(state =>
-    credentialsSelector(state).getEntities(ALL_FILTER),
-  );
-
   const tags = useShallowEqualSelector(state =>
     tagsSelector(state).getEntities(TAGS_FILTER),
   );
@@ -250,24 +165,12 @@ const TaskComponent = ({
 
   const defaultTargetId = userDefaultsSelector.getValueByName('defaulttarget');
 
-  const defaultEsxiCredential = userDefaultsSelector.getValueByName(
-    'defaultesxicredential',
-  );
-
   const defaultScanConfigId = userDefaultsSelector.getValueByName(
     'defaultopenvasscanconfig',
   );
 
   const defaultScannerId = userDefaultsSelector.getValueByName(
     'defaultopenvasscanner',
-  );
-
-  const defaultSshCredential = userDefaultsSelector.getValueByName(
-    'defaultsshcredential',
-  );
-
-  const defaultSmbCredential = userDefaultsSelector.getValueByName(
-    'defaultsmbcredential',
   );
 
   const isLoadingAlerts = useShallowEqualSelector(state =>
@@ -318,11 +221,6 @@ const TaskComponent = ({
   const fetchTags = useCallback(() => {
     // @ts-expect-error
     dispatch(loadTags(gmp)(TAGS_FILTER));
-  }, [dispatch, gmp]);
-
-  const fetchCredentials = useCallback(() => {
-    // @ts-expect-error
-    dispatch(loadCredentials(gmp)(ALL_FILTER));
   }, [dispatch, gmp]);
 
   const fetchScanConfigs = useCallback(() => {
@@ -386,25 +284,6 @@ const TaskComponent = ({
     );
   };
 
-  const handleTaskResume = (task: Task) => {
-    return actionFunction<Response<Task, XmlMeta>, Rejection>(
-      // @ts-expect-error
-      gmp.task.resume(task),
-      {
-        onSuccess: onResumed,
-        onError: onResumeError,
-        successMessage: _('Task {{- name}} resumed successfully.', {
-          name: task.name as string,
-        }),
-      },
-    );
-  };
-
-  const handleTaskWizardNewClick = async () => {
-    await openTaskDialog();
-    closeTaskWizard();
-  };
-
   const handleAlertCreated = (resp: {data: {id: string}}) => {
     const {data} = resp;
 
@@ -428,68 +307,14 @@ const TaskComponent = ({
     setTargetId(data.id);
   };
 
-  const openImportTaskDialog = (task?: Task) => {
-    setImportTaskDialogVisible(true);
-    setTask(task);
-    setName(task ? task.name : _('Unnamed'));
-    setComment(task ? task.comment : '');
-    setInAssets(task ? task.in_assets : undefined);
-    setAutoDelete(task ? task.auto_delete : undefined);
-    setAutoDeleteData(task ? task.auto_delete_data : undefined);
-    setTitle(
-      task
-        ? _('Edit Import Task {{- name}}', {name: task.name as string})
-        : _('New Import Task'),
-    );
-  };
-
-  const closeImportTaskDialog = () => {
-    setImportTaskDialogVisible(false);
-  };
-
-  const handleCloseImportTaskDialog = () => {
-    closeImportTaskDialog();
-  };
-
-  const handleSaveImportTask = ({
-    id,
-    comment,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    in_assets,
-    name,
-  }: ImportTaskDialogData) => {
-    if (isDefined(id)) {
-      return gmp.task
-        .saveImportTask({
-          id,
-          comment,
-          in_assets,
-          name,
-        })
-        .then(onImportTaskSaved, onImportTaskSaveError)
-        .then(() => closeImportTaskDialog());
-    }
-
-    return gmp.task
-      .createImportTask({
-        comment,
-        name,
-      })
-      .then(onImportTaskCreated, onImportTaskCreateError)
-      .then(() => closeImportTaskDialog());
-  };
-
   const handleSaveTask = ({
     add_tag: addTag,
     alert_ids: alertIds,
-    alterable,
-    auto_delete: autoDelete,
     auto_delete_data: autoDeleteData,
     apply_overrides: applyOverrides,
     comment,
     config_id: configId,
     csAllowFailedRetrieval,
-    in_assets: inAssets,
     min_qod: minQod,
     max_checks: maxChecks,
     max_hosts: maxHosts,
@@ -503,25 +328,15 @@ const TaskComponent = ({
     task,
   }: TaskDialogData) => {
     if (isDefined(task)) {
-      // save edit part
-      if (!task.isChangeable()) {
-        // arguments need to be undefined if the task is not changeable
-        targetId = undefined;
-        scannerId = undefined;
-        configId = undefined;
-      }
       return gmp.task
         .save({
           alert_ids: alertIds,
-          alterable,
-          auto_delete: autoDelete,
           auto_delete_data: autoDeleteData,
           apply_overrides: applyOverrides,
           comment,
           config_id: configId,
           csAllowFailedRetrieval,
           id: task.id as string,
-          in_assets: inAssets,
           max_checks: maxChecks,
           max_hosts: maxHosts,
           min_qod: minQod,
@@ -539,14 +354,11 @@ const TaskComponent = ({
       .create({
         add_tag: addTag,
         alert_ids: alertIds,
-        alterable,
         apply_overrides: applyOverrides,
-        auto_delete: autoDelete,
         auto_delete_data: autoDeleteData,
         comment,
         config_id: configId,
         csAllowFailedRetrieval,
-        in_assets: inAssets,
         max_checks: maxChecks,
         max_hosts: maxHosts,
         min_qod: minQod,
@@ -562,12 +374,8 @@ const TaskComponent = ({
       .then(() => closeTaskDialog());
   };
 
-  const openTaskDialog = async (task?: Task) => {
-    if (isDefined(task) && task.isImport()) {
-      openImportTaskDialog(task);
-    } else {
-      openStandardTaskDialog(task);
-    }
+  const openTaskDialog = (task?: Task) => {
+    openStandardTaskDialog(task);
   };
 
   const closeTaskDialog = () => {
@@ -585,9 +393,7 @@ const TaskComponent = ({
     if (isDefined(task)) {
       setName(task.name as string);
       setComment(task.comment);
-      setAlterable(task.alterable);
       setApplyOverrides(task.apply_overrides);
-      setInAssets(task.in_assets);
       setMinQod(task.min_qod);
       setAutoDelete(task.auto_delete);
       setAutoDeleteData(task.auto_delete_data);
@@ -609,9 +415,7 @@ const TaskComponent = ({
     } else {
       setName(undefined);
       setComment(undefined);
-      setAlterable(undefined);
       setApplyOverrides(undefined);
-      setInAssets(undefined);
       setMinQod(undefined);
       setAutoDelete(undefined);
       setAutoDeleteData(undefined);
@@ -631,107 +435,6 @@ const TaskComponent = ({
     setTaskDialogVisible(true);
   };
 
-  const openTaskWizard = () => {
-    void gmp.wizard.task().then(response => {
-      const {data} = response;
-
-      setTaskWizardVisible(true);
-      setHosts(data.clientAddress);
-    });
-  };
-
-  const closeTaskWizard = () => {
-    setTaskWizardVisible(false);
-  };
-
-  const handleSaveTaskWizard = (data: {hosts: string}) => {
-    return gmp.wizard
-      .runQuickFirstScan(data)
-      .then(onTaskWizardSaved, onTaskWizardError)
-      .then(() => closeTaskWizard());
-  };
-
-  const openAdvancedTaskWizard = () => {
-    fetchCredentials();
-    fetchScanConfigs();
-
-    void gmp.wizard.advancedTask().then(response => {
-      const {data} = response;
-
-      const now = date().tz(timezone);
-      setAdvancedTaskWizardVisible(true);
-      setScanConfigId(defaultScanConfigId || FULL_AND_FAST_SCAN_CONFIG_ID);
-      setEsxiCredential(defaultEsxiCredential);
-      setScannerId(defaultScannerId);
-      setSmbCredential(defaultSmbCredential);
-      setSshCredential(defaultSshCredential);
-      setStartDate(now);
-      setStartHour(now.hour());
-      setStartMinute(now.minute());
-      setStartTimezone(timezone as string);
-      setTargetHosts(data.clientAddress);
-      setTaskName(_('New Quick Task'));
-    });
-  };
-
-  const closeAdvancedTaskWizard = () => {
-    setAdvancedTaskWizardVisible(false);
-  };
-
-  const handleSaveAdvancedTaskWizard = (data: AdvancedTaskWizardData) => {
-    return gmp.wizard
-      .runQuickTask(data)
-      .then(onAdvancedTaskWizardSaved, onAdvancedTaskWizardError)
-      .then(() => closeAdvancedTaskWizard());
-  };
-
-  const openModifyTaskWizard = () => {
-    void gmp.wizard.modifyTask().then(response => {
-      const {data} = response;
-      const now = date().tz(timezone);
-
-      setModifyTaskWizardVisible(true);
-      setReschedule(NO_VALUE);
-      setStartDate(now);
-      setStartHour(now.hour());
-      setStartMinute(now.minute());
-      setStartTimezone(timezone as string);
-      setTaskId(selectSaveId(data.tasks));
-      setTasks(data.tasks);
-    });
-  };
-
-  const closeModifyTaskWizard = () => {
-    setModifyTaskWizardVisible(false);
-  };
-
-  const handleSaveModifyTaskWizard = (data: ModifyTaskWizardData) => {
-    return gmp.wizard
-      .runModifyTask(data)
-      .then(onModifyTaskWizardSaved, onModifyTaskWizardError)
-      .then(() => closeModifyTaskWizard());
-  };
-
-  const openReportImportDialog = (task: Task) => {
-    setReportImportDialogVisible(true);
-    setTaskId(task.id);
-    setTasks([task]);
-  };
-
-  const closeReportImportDialog = () => {
-    setReportImportDialogVisible(false);
-  };
-
-  const handleReportImport = (data: ReportImportDialogData) => {
-    return (
-      gmp.report
-        // @ts-expect-error
-        .import(data)
-        .then(onReportImported, onReportImportError)
-        .then(() => closeReportImportDialog())
-    );
-  };
-
   const handleScanConfigChange = (configId?: string) => {
     setScanConfigId(configId);
   };
@@ -742,22 +445,6 @@ const TaskComponent = ({
 
   const handleCloseTaskDialog = () => {
     closeTaskDialog();
-  };
-
-  const handleCloseTaskWizard = () => {
-    closeTaskWizard();
-  };
-
-  const handleCloseAdvancedTaskWizard = () => {
-    closeAdvancedTaskWizard();
-  };
-
-  const handleCloseModifyTaskWizard = () => {
-    closeModifyTaskWizard();
-  };
-
-  const handleCloseReportImportDialog = () => {
-    closeReportImportDialog();
   };
 
   const handleEditTask = async (task: Task) => {
@@ -796,15 +483,9 @@ const TaskComponent = ({
           delete: handleEntityDelete,
           download: handleEntityDownload,
           create: openTaskDialog,
-          createImportTask: openImportTaskDialog,
           edit: handleEditTask,
           start: handleTaskStart,
           stop: handleTaskStop,
-          resume: handleTaskResume,
-          reportImport: openReportImportDialog,
-          advancedTaskWizard: openAdvancedTaskWizard,
-          modifyTaskWizard: openModifyTaskWizard,
-          taskWizard: openTaskWizard,
         })}
 
       {taskDialogVisible && (
@@ -818,14 +499,12 @@ const TaskComponent = ({
                     <TaskDialog
                       alert_ids={alertIds}
                       alerts={alerts}
-                      alterable={alterable}
                       apply_overrides={applyOverrides}
                       auto_delete={autoDelete}
                       auto_delete_data={autoDeleteData}
                       comment={comment}
                       config_id={scanConfigId}
                       csAllowFailedRetrieval={csAllowFailedRetrieval}
-                      in_assets={inAssets}
                       isLoadingAlerts={isLoadingAlerts}
                       isLoadingConfigs={isLoadingConfigs}
                       isLoadingScanners={isLoadingScanners}
@@ -864,70 +543,6 @@ const TaskComponent = ({
             </AlertComponent>
           )}
         </TargetComponent>
-      )}
-
-      {importTaskDialogVisible && (
-        <ImportTaskDialog
-          comment={comment}
-          in_assets={inAssets}
-          name={name}
-          task={task}
-          title={title}
-          onClose={handleCloseImportTaskDialog}
-          onSave={handleSaveImportTask}
-        />
-      )}
-
-      {taskWizardVisible && (
-        <TaskWizard
-          hosts={hosts}
-          onClose={handleCloseTaskWizard}
-          onNewClick={handleTaskWizardNewClick}
-          onSave={handleSaveTaskWizard}
-        />
-      )}
-
-      {advancedTaskWizardVisible && (
-        <AdvancedTaskWizard
-          credentials={credentials}
-          esxiCredential={esxiCredential}
-          scanConfigId={scanConfigId}
-          scanConfigs={scanConfigs}
-          smbCredential={smbCredential}
-          sshCredential={sshCredential}
-          startDate={startDate}
-          startHour={startHour}
-          startMinute={startMinute}
-          startTimezone={startTimezone}
-          targetHosts={targetHosts}
-          taskName={taskName}
-          onClose={handleCloseAdvancedTaskWizard}
-          onSave={handleSaveAdvancedTaskWizard}
-        />
-      )}
-
-      {modifyTaskWizardVisible && (
-        <ModifyTaskWizard
-          reschedule={reschedule}
-          startDate={startDate}
-          startHour={startHour}
-          startMinute={startMinute}
-          startTimezone={startTimezone}
-          taskId={taskId as string}
-          tasks={tasks}
-          onClose={handleCloseModifyTaskWizard}
-          onSave={handleSaveModifyTaskWizard}
-        />
-      )}
-
-      {reportImportDialogVisible && (
-        <ImportReportDialog
-          allowCreateImportTask={false}
-          task_id={taskId as string}
-          tasks={tasks}
-          onClose={handleCloseReportImportDialog}
-          onSave={handleReportImport}
-        />
       )}
 
     </>

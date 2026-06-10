@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2023 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -65,8 +66,6 @@ typedef struct
   char *pos;             ///< Position of report from end.
   char *timezone;        ///< Timezone.
   char *alert_id;        ///< ID of alert.
-  char *delta_report_id; ///< ID of report to compare single report to.
-  char *delta_states;    ///< Delta states (Changed Gone New Same) to include.
   char *host_levels;     ///< Letter encoded threat level filter, for hosts.
   char *search_phrase;   ///< Search phrase result filter.
   char *host_search_phrase; ///< Search phrase result filter.
@@ -97,8 +96,6 @@ static const gmp_get_report_opts_t gmp_get_report_opts_defaults = {
   0,
   0,
   0,
-  NULL,
-  NULL,
   NULL,
   NULL,
   NULL,
@@ -329,12 +326,6 @@ gmp_stop_task (gnutls_session_t *, const char *);
 
 int
 gmp_stop_task_c (gvm_connection_t *, const char *);
-
-int
-gmp_resume_task_report (gnutls_session_t *, const char *, char **);
-
-int
-gmp_resume_task_report_c (gvm_connection_t *, const char *, char **);
 
 int
 gmp_get_tasks (gnutls_session_t *, const char *, int, int, entity_t *);

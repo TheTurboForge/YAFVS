@@ -18,22 +18,18 @@ import Task, {
   HOSTS_ORDERING_RANDOM,
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
   type TaskElement,
-  type TaskAutoDelete,
 } from 'gmp/models/task';
-import {NO_VALUE, YES_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
+import {NO_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
 interface TaskCommandCreateParams {
   add_tag?: YesNo;
   alert_ids?: string[];
-  alterable?: YesNo;
   apply_overrides?: YesNo;
-  auto_delete?: TaskAutoDelete;
   auto_delete_data?: number;
   comment?: string;
   config_id?: string;
   csAllowFailedRetrieval?: boolean;
-  in_assets?: YesNo;
   max_checks?: number;
   max_hosts?: number;
   min_qod?: number;
@@ -46,22 +42,14 @@ interface TaskCommandCreateParams {
   target_id?: string;
 }
 
-export interface TaskCommandCreateImportTaskParams {
-  name: string;
-  comment?: string;
-}
-
 interface TaskCommandSaveParams {
   alert_ids?: string[];
-  alterable?: YesNo;
-  auto_delete?: TaskAutoDelete;
   auto_delete_data?: number;
   apply_overrides?: YesNo;
   comment?: string;
   config_id?: string;
   csAllowFailedRetrieval?: boolean;
   id: string;
-  in_assets?: YesNo;
   max_checks?: number;
   max_hosts?: number;
   min_qod?: number;
@@ -71,13 +59,6 @@ interface TaskCommandSaveParams {
   schedule_id?: string;
   schedule_periods?: number;
   target_id?: string;
-}
-
-interface TaskCommandSaveImportTaskParams {
-  name: string;
-  comment?: string;
-  in_assets?: YesNo;
-  id: string;
 }
 
 const log = logger.getLogger('gmp.commands.tasks');
@@ -157,31 +138,14 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     }
   }
 
-  async resume({id}: EntityCommandParams) {
-    try {
-      await this.httpPostWithTransform({
-        cmd: 'resume_task',
-        id,
-      });
-      log.debug('Resumed task');
-      return await this.get({id});
-    } catch (err) {
-      log.error('An error occurred while resuming the task', id, err);
-      throw err;
-    }
-  }
-
   async create({
     add_tag,
     alert_ids = [],
-    alterable,
     apply_overrides,
-    auto_delete,
     auto_delete_data,
     comment = '',
     config_id,
     csAllowFailedRetrieval,
-    in_assets,
     max_checks,
     max_hosts,
     min_qod,
@@ -197,17 +161,14 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
       cmd: 'create_task',
       add_tag,
       'alert_ids:': alert_ids,
-      alterable,
       apply_overrides,
-      auto_delete,
-      auto_delete_data,
+      auto_delete_data: auto_delete_data ?? AUTO_DELETE_KEEP_DEFAULT_VALUE,
       comment,
       config_id,
       cs_allow_failed_retrieval: isDefined(csAllowFailedRetrieval)
         ? parseYesNo(csAllowFailedRetrieval)
         : undefined,
       hosts_ordering: HOSTS_ORDERING_RANDOM,
-      in_assets,
       max_checks,
       max_hosts,
       min_qod,
@@ -231,31 +192,14 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
   }
 
 
-  async createImportTask({
-    name,
-    comment = '',
-  }: TaskCommandCreateImportTaskParams) {
-    log.debug('Creating import task', name, comment);
-    return await this.entityAction({
-      cmd: 'create_import_task',
-      auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
-      name,
-      comment,
-      usage_type: 'scan',
-    });
-  }
-
   async save({
     alert_ids = [],
-    alterable,
-    auto_delete,
     auto_delete_data,
     apply_overrides,
     comment = '',
     config_id = NO_VALUE_ID,
     csAllowFailedRetrieval,
     id,
-    in_assets,
     max_checks,
     max_hosts,
     min_qod,
@@ -267,11 +211,9 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     target_id = NO_VALUE_ID,
   }: TaskCommandSaveParams) {
     const data = {
-      alterable,
       'alert_ids:': alert_ids,
       apply_overrides,
-      auto_delete,
-      auto_delete_data,
+      auto_delete_data: auto_delete_data ?? AUTO_DELETE_KEEP_DEFAULT_VALUE,
       comment,
       config_id,
       cmd: 'save_task',
@@ -279,7 +221,6 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
         ? parseYesNo(csAllowFailedRetrieval)
         : undefined,
       hosts_ordering: HOSTS_ORDERING_RANDOM,
-      in_assets,
       max_checks,
       max_hosts,
       min_qod,
@@ -300,25 +241,6 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     }
   }
 
-
-  async saveImportTask({
-    name,
-    comment = '',
-    in_assets = YES_VALUE,
-    id,
-  }: TaskCommandSaveImportTaskParams) {
-    log.debug('Saving import task', {name, comment, in_assets, id});
-    await this.httpPostWithTransform({
-      cmd: 'save_import_task',
-      name,
-      comment,
-      in_assets,
-      auto_delete: 'no',
-      auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
-      task_id: id,
-      usage_type: 'scan',
-    });
-  }
 
   getElementFromRoot(root: Element): TaskElement {
     // @ts-expect-error

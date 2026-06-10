@@ -52,7 +52,7 @@ describe('ReportTableRow tests', () => {
       'href',
       '/report/1',
     );
-    expect(screen.getByTestId('statusbar-text')).toHaveTextContent('Uploading');
+    expect(screen.getByTestId('statusbar-text')).toHaveTextContent('50 %');
     expect(screen.getByText('Task Name')).toHaveAttribute(
       'href',
       '/task/task-1',
@@ -100,40 +100,6 @@ describe('ReportTableRow tests', () => {
     expect(handleDelete).toHaveBeenCalledWith(report);
   });
 
-  test('should allow to select a report for delta report comparison', async () => {
-    const handleSelect = testing.fn();
-    const report = Report.fromElement({
-      _id: '1',
-      report: {
-        timestamp: '2024-01-01T12:00:00Z',
-        scan_run_status: TASK_STATUS.done,
-        severity: {filtered: 5},
-        result_count: {
-          high: {filtered: 10},
-          medium: {filtered: 20},
-          low: {filtered: 30},
-          log: {filtered: 40},
-          false_positive: {filtered: 50},
-        },
-        task: {
-          _id: 'task-1',
-          name: 'Task Name',
-          progress: 100,
-        },
-      },
-    });
-    const {render} = rendererWithTableBody({
-      capabilities: true,
-      gmp: createGmp(),
-    });
-    render(
-      <ReportTableRow entity={report} onReportDeltaSelect={handleSelect} />,
-    );
-    const deltaIcon = screen.getByTitle('Select Report for delta comparison');
-    fireEvent.click(deltaIcon);
-    expect(handleSelect).toHaveBeenCalledWith(report);
-  });
-
   test('should disable delete icon when scan is active', () => {
     const handleDelete = testing.fn();
     const report = Report.fromElement({
@@ -170,80 +136,4 @@ describe('ReportTableRow tests', () => {
     expect(handleDelete).not.toHaveBeenCalled();
   });
 
-  test('should show report is selected for delta comparison when report is selected', () => {
-    const report = Report.fromElement({
-      _id: '1',
-      report: {
-        timestamp: '2024-01-01T12:00:00Z',
-        scan_run_status: TASK_STATUS.done,
-        severity: {filtered: 5},
-        result_count: {
-          high: {filtered: 10},
-          medium: {filtered: 20},
-          low: {filtered: 30},
-          log: {filtered: 40},
-          false_positive: {filtered: 50},
-        },
-        task: {
-          _id: 'task-1',
-          name: 'Task Name',
-          progress: 100,
-        },
-      },
-    });
-    const {render} = rendererWithTableBody({
-      capabilities: true,
-      gmp: createGmp(),
-    });
-    render(
-      <ReportTableRow
-        entity={report}
-        selectedDeltaReport={report}
-        onReportDeltaSelect={testing.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByTitle('Report is selected for delta comparison'),
-    ).toBeInTheDocument();
-  });
-
-  test('should show second delta icon when report is selected for delta comparison', () => {
-    const report = Report.fromElement({
-      _id: '1',
-      report: {
-        timestamp: '2024-01-01T12:00:00Z',
-        scan_run_status: TASK_STATUS.done,
-        severity: {filtered: 5},
-        result_count: {
-          high: {filtered: 10},
-          medium: {filtered: 20},
-          low: {filtered: 30},
-          log: {filtered: 40},
-          false_positive: {filtered: 50},
-        },
-        task: {
-          _id: 'task-1',
-          name: 'Task Name',
-          progress: 100,
-        },
-      },
-    });
-    const selectedDeltaReport = new Report({id: '2'});
-    const {render} = rendererWithTableBody({
-      capabilities: true,
-      gmp: createGmp(),
-    });
-    render(
-      <ReportTableRow
-        entity={report}
-        selectedDeltaReport={selectedDeltaReport}
-        onReportDeltaSelect={testing.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByTitle('Select Report for delta comparison'),
-    ).toBeInTheDocument();
-  });
 });

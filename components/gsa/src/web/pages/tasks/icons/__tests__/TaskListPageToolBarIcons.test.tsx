@@ -7,18 +7,13 @@
 import {describe, test, expect, testing} from '@gsa/testing';
 import {screen, rendererWith, fireEvent} from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
-import Features from 'gmp/capabilities/features';
 import TaskToolBarIcons from 'web/pages/tasks/icons/TaskListPageToolBarIcons';
 
 const manualUrl = 'test/';
 
 describe('TaskListPageToolBarIcons test', () => {
   test('should render', () => {
-    const handleAdvancedTaskWizardClick = testing.fn();
-    const handleModifyTaskWizardClick = testing.fn();
-    const handleImportTaskCreateClick = testing.fn();
     const handleTaskCreateClick = testing.fn();
-    const handleTaskWizardClick = testing.fn();
 
     const gmp = {
       settings: {manualUrl},
@@ -32,11 +27,7 @@ describe('TaskListPageToolBarIcons test', () => {
 
     render(
       <TaskToolBarIcons
-        onAdvancedTaskWizardClick={handleAdvancedTaskWizardClick}
-        onImportTaskCreateClick={handleImportTaskCreateClick}
-        onModifyTaskWizardClick={handleModifyTaskWizardClick}
         onTaskCreateClick={handleTaskCreateClick}
-        onTaskWizardClick={handleTaskWizardClick}
       />,
     );
     expect(screen.getByTestId('help-icon')).toHaveAttribute(
@@ -50,11 +41,7 @@ describe('TaskListPageToolBarIcons test', () => {
   });
 
   test('should call click handlers', async () => {
-    const handleAdvancedTaskWizardClick = testing.fn();
-    const handleModifyTaskWizardClick = testing.fn();
-    const handleImportTaskCreateClick = testing.fn();
     const handleTaskCreateClick = testing.fn();
-    const handleTaskWizardClick = testing.fn();
 
     const gmp = {
       settings: {manualUrl},
@@ -68,60 +55,16 @@ describe('TaskListPageToolBarIcons test', () => {
 
     render(
       <TaskToolBarIcons
-        onAdvancedTaskWizardClick={handleAdvancedTaskWizardClick}
-        onImportTaskCreateClick={handleImportTaskCreateClick}
-        onModifyTaskWizardClick={handleModifyTaskWizardClick}
         onTaskCreateClick={handleTaskCreateClick}
-        onTaskWizardClick={handleTaskWizardClick}
       />,
     );
 
-    const wizardButton = screen.getByTitle('Task Wizards Menu');
-    fireEvent.click(wizardButton);
-
-    const taskWizardMenu = await screen.findByTestId('task-wizard-menu');
-    expect(taskWizardMenu).toHaveTextContent('Task Wizard');
-    fireEvent.click(taskWizardMenu);
-    expect(handleTaskWizardClick).toHaveBeenCalled();
-
-    fireEvent.click(wizardButton);
-    const advancedTaskWizardMenu = await screen.findByTestId(
-      'advanced-task-wizard-menu',
-    );
-    expect(advancedTaskWizardMenu).toHaveTextContent('Advanced Task Wizard');
-    fireEvent.click(advancedTaskWizardMenu);
-    expect(handleAdvancedTaskWizardClick).toHaveBeenCalled();
-
-    fireEvent.click(wizardButton);
-    const modifyTaskWizardMenu = await screen.findByTestId(
-      'modify-task-wizard-menu',
-    );
-    expect(modifyTaskWizardMenu).toHaveTextContent('Modify Task Wizard');
-    fireEvent.click(modifyTaskWizardMenu);
-    expect(handleModifyTaskWizardClick).toHaveBeenCalled();
-
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
+    const newTaskButton = screen.getByTitle('New Task');
+    fireEvent.click(newTaskButton);
     expect(handleTaskCreateClick).toHaveBeenCalled();
-
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreateClick).toHaveBeenCalled();
   });
-
-
   test('should not show icons if user does not have the right permissions', () => {
-    const handleAdvancedTaskWizardClick = testing.fn();
-    const handleModifyTaskWizardClick = testing.fn();
-    const handleImportTaskCreateClick = testing.fn();
     const handleTaskCreateClick = testing.fn();
-    const handleTaskWizardClick = testing.fn();
 
     const gmp = {
       settings: {manualUrl},
@@ -134,31 +77,11 @@ describe('TaskListPageToolBarIcons test', () => {
     });
     render(
       <TaskToolBarIcons
-        onAdvancedTaskWizardClick={handleAdvancedTaskWizardClick}
-        onImportTaskCreateClick={handleImportTaskCreateClick}
-        onModifyTaskWizardClick={handleModifyTaskWizardClick}
         onTaskCreateClick={handleTaskCreateClick}
-        onTaskWizardClick={handleTaskWizardClick}
       />,
     );
 
-    const taskWizardMenu = screen.queryByTestId('task-wizard-menu');
-    expect(taskWizardMenu).toBeNull();
-
-    const advancedTaskWizardMenu = screen.queryByTestId(
-      'advanced-task-wizard-menu',
-    );
-    expect(advancedTaskWizardMenu).toBeNull();
-
-    const modifyTaskWizardMenu = screen.queryByTestId(
-      'modify-task-wizard-menu',
-    );
-    expect(modifyTaskWizardMenu).toBeNull();
-
-    const newTaskMenu = screen.queryByTestId('new-task-menu');
-    expect(newTaskMenu).toBeNull();
-
-    const newImportTaskMenu = screen.queryByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toBeNull();
+    const newTaskButton = screen.queryByTestId('new-task');
+    expect(newTaskButton).toBeNull();
   });
 });

@@ -14,22 +14,15 @@ describe('NewIconMenu tests', () => {
     const {render} = rendererWith({capabilities: true});
     render(<NewIconMenu />);
 
-    const button = screen.getByTitle('New Task Menu');
+    const button = screen.getByTitle('New Task');
     expect(button).not.toBeNull();
-    fireEvent.click(button);
-
-    await screen.findByTestId('new-task-menu');
-    expect(screen.getByTestId('new-task-menu')).toBeInTheDocument();
-    expect(screen.getByTestId('new-import-task-menu')).toBeInTheDocument();
+    expect(screen.getByTestId('new-task')).toBeInTheDocument();
   });
 
   test('should not render when capabilities do not allow creating tasks', () => {
     const {render} = rendererWith({capabilities: new Capabilities()});
     render(<NewIconMenu />);
-    expect(screen.queryByTestId('new-task-menu')).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId('new-import-task-menu'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('new-task')).not.toBeInTheDocument();
   });
 
   test('should call onNewClick when New Task is clicked', async () => {
@@ -37,27 +30,10 @@ describe('NewIconMenu tests', () => {
     const {render} = rendererWith({capabilities: true});
     render(<NewIconMenu onNewClick={onNewClick} />);
 
-    const button = screen.getByTitle('New Task Menu');
+    const button = screen.getByTitle('New Task');
     expect(button).not.toBeNull();
     fireEvent.click(button);
 
-    const menuItem = await screen.findByTestId('new-task-menu');
-    fireEvent.click(menuItem);
     expect(onNewClick).toHaveBeenCalled();
   });
-
-  test('calls onNewImportTaskClick when New Import Task is clicked', async () => {
-    const onNewImportTaskClick = testing.fn();
-    const {render} = rendererWith({capabilities: true});
-    render(<NewIconMenu onNewImportTaskClick={onNewImportTaskClick} />);
-
-    const button = screen.getByTitle('New Task Menu');
-    expect(button).not.toBeNull();
-    fireEvent.click(button);
-
-    const menuItem = await screen.findByTestId('new-import-task-menu');
-    fireEvent.click(menuItem);
-    expect(onNewImportTaskClick).toHaveBeenCalled();
-  });
-
 });

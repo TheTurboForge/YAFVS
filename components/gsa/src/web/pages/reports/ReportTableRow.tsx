@@ -11,11 +11,7 @@ import {isDefined} from 'gmp/utils/identity';
 import SeverityBar from 'web/components/bar/SeverityBar';
 import StatusBar from 'web/components/bar/StatusBar';
 import DateTime from 'web/components/date/DateTime';
-import {
-  CircleXDeleteIcon,
-  DeltaIcon,
-  DeltaSecondIcon,
-} from 'web/components/icon';
+import {CircleXDeleteIcon} from 'web/components/icon';
 import IconDivider from 'web/components/layout/IconDivider';
 import DetailsLink from 'web/components/link/DetailsLink';
 import TableData from 'web/components/table/TableData';
@@ -28,9 +24,7 @@ import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 
 interface ReportActionsProps extends WithEntitiesActionsComponentProps<Report> {
-  selectedDeltaReport?: Report;
   onReportDeleteClick?: (report: Report) => Promise<void>;
-  onReportDeltaSelect?: (report: Report) => void;
 }
 
 export interface ReportTableRowProps
@@ -42,12 +36,7 @@ export interface ReportTableRowProps
 }
 
 const ReportActions = withEntitiesActions(
-  ({
-    entity,
-    selectedDeltaReport,
-    onReportDeleteClick,
-    onReportDeltaSelect,
-  }: ReportActionsProps) => {
+  ({entity, onReportDeleteClick}: ReportActionsProps) => {
     const [_] = useTranslation();
     const {report} = entity;
     const scanActive = isActive(report?.scan_run_status);
@@ -56,28 +45,6 @@ const ReportActions = withEntitiesActions(
 
     return (
       <IconDivider grow align={['center', 'center']}>
-        {isDefined(selectedDeltaReport) ? (
-          entity.id === selectedDeltaReport.id ? (
-            <DeltaIcon
-              active={false}
-              title={_('Report is selected for delta comparison')}
-            />
-          ) : (
-            <DeltaSecondIcon
-              title={_('Select Report for delta comparison')}
-              value={entity}
-              onClick={
-                onReportDeltaSelect as (report?: Report) => Promise<void>
-              }
-            />
-          )
-        ) : (
-          <DeltaIcon
-            title={_('Select Report for delta comparison')}
-            value={entity}
-            onClick={onReportDeltaSelect as (report?: Report) => Promise<void>}
-          />
-        )}
         <CircleXDeleteIcon
           active={!scanActive}
           title={title}
@@ -108,14 +75,6 @@ const ReportTableRow = ({
   let progress: number | undefined = undefined;
 
   if (isDefined(task)) {
-    if (task.isImport() && status !== TASK_STATUS.processing) {
-      status =
-        status === TASK_STATUS.interrupted
-          ? TASK_STATUS.uploadinginterrupted
-          : status === TASK_STATUS.running
-            ? TASK_STATUS.uploading
-            : TASK_STATUS.import;
-    }
     progress = task.progress;
   }
 

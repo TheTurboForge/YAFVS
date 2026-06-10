@@ -4551,6 +4551,109 @@ migrate_280_to_281 ()
 }
 
 
+static int
+migrate_281_to_282 ()
+{
+  sql_begin_immediate ();
+
+  if (sql_int ("SELECT count(*) FROM tasks"
+               " WHERE COALESCE(target, 0) = 0"
+               " AND run_status IN (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d);",
+               TASK_STATUS_DELETE_REQUESTED,
+               TASK_STATUS_REQUESTED,
+               TASK_STATUS_RUNNING,
+               TASK_STATUS_STOP_REQUESTED,
+               TASK_STATUS_STOP_WAITING,
+               TASK_STATUS_DELETE_ULTIMATE_REQUESTED,
+               TASK_STATUS_DELETE_WAITING,
+               TASK_STATUS_DELETE_ULTIMATE_WAITING,
+               TASK_STATUS_QUEUED,
+               TASK_STATUS_PROCESSING))
+    {
+      g_warning ("Refusing to remove import-task support while import tasks are active");
+      sql_rollback ();
+      return -1;
+    }
+
+  sql ("CREATE TEMP TABLE removed_import_tasks AS"
+       " SELECT id FROM tasks WHERE COALESCE(target, 0) = 0;");
+  sql ("CREATE TEMP TABLE removed_import_reports AS"
+       " SELECT id FROM reports"
+       " WHERE task IN (SELECT id FROM removed_import_tasks);");
+  sql ("CREATE TEMP TABLE removed_import_results AS"
+       " SELECT id FROM results"
+       " WHERE task IN (SELECT id FROM removed_import_tasks)"
+       " OR report IN (SELECT id FROM removed_import_reports);");
+  sql ("CREATE TEMP TABLE removed_import_scope_reports AS"
+       " SELECT DISTINCT scope_report AS id FROM scope_report_sources"
+       " WHERE source_report IN (SELECT id FROM removed_import_reports);");
+
+  sql ("DELETE FROM scope_report_sources"
+       " WHERE scope_report IN (SELECT id FROM removed_import_scope_reports)"
+       " OR source_report IN (SELECT id FROM removed_import_reports)"
+       " OR task IN (SELECT id FROM removed_import_tasks);");
+  sql ("DELETE FROM scope_reports"
+       " WHERE id IN (SELECT id FROM removed_import_scope_reports);");
+  sql ("DELETE FROM scan_queue"
+       " WHERE report IN (SELECT id FROM removed_import_reports);");
+  sql ("DELETE FROM report_host_details WHERE report_host IN"
+       " (SELECT id FROM report_hosts"
+       "  WHERE report IN (SELECT id FROM removed_import_reports));");
+  sql ("DELETE FROM report_hosts"
+       " WHERE report IN (SELECT id FROM removed_import_reports);");
+  sql ("DELETE FROM report_counts"
+       " WHERE report IN (SELECT id FROM removed_import_reports);");
+  sql ("DELETE FROM result_nvt_reports"
+       " WHERE report IN (SELECT id FROM removed_import_reports);");
+  sql ("DELETE FROM results_trash"
+       " WHERE task IN (SELECT id FROM removed_import_tasks)"
+       " OR report IN (SELECT id FROM removed_import_reports);");
+  sql ("DELETE FROM results"
+       " WHERE id IN (SELECT id FROM removed_import_results);");
+  sql ("DELETE FROM reports"
+       " WHERE id IN (SELECT id FROM removed_import_reports);");
+  sql ("DELETE FROM task_alerts"
+       " WHERE task IN (SELECT id FROM removed_import_tasks);");
+  sql ("DELETE FROM task_files"
+       " WHERE task IN (SELECT id FROM removed_import_tasks);");
+  sql ("DELETE FROM task_preferences"
+       " WHERE task IN (SELECT id FROM removed_import_tasks);");
+  sql ("DELETE FROM tasks"
+       " WHERE id IN (SELECT id FROM removed_import_tasks);");
+
+  sql ("DELETE FROM tag_resources"
+       " WHERE (resource_type = 'result'"
+       "        AND resource IN (SELECT id FROM removed_import_results))"
+       " OR (resource_type = 'report'"
+       "     AND resource IN (SELECT id FROM removed_import_reports))"
+       " OR (resource_type = 'task'"
+       "     AND resource IN (SELECT id FROM removed_import_tasks));");
+  sql ("DELETE FROM tag_resources_trash"
+       " WHERE (resource_type = 'result'"
+       "        AND resource IN (SELECT id FROM removed_import_results))"
+       " OR (resource_type = 'report'"
+       "     AND resource IN (SELECT id FROM removed_import_reports))"
+       " OR (resource_type = 'task'"
+       "     AND resource IN (SELECT id FROM removed_import_tasks));");
+
+  sql ("UPDATE tasks SET alterable = 1;");
+  sql ("DELETE FROM task_preferences"
+       " WHERE name IN ('in_assets', 'auto_delete', 'auto_delete_data');");
+  sql ("INSERT INTO task_preferences (task, name, value)"
+       " SELECT id, 'in_assets', 'yes' FROM tasks;");
+  sql ("INSERT INTO task_preferences (task, name, value)"
+       " SELECT id, 'auto_delete', 'keep' FROM tasks;");
+  sql ("INSERT INTO task_preferences (task, name, value)"
+       " SELECT id, 'auto_delete_data', '10' FROM tasks;");
+
+  set_db_version (282);
+
+  sql_commit ();
+
+  return 0;
+}
+
+
 #undef UPDATE_DASHBOARD_SETTINGS
 
 /**
@@ -4638,6 +4741,7 @@ static migrator_t database_migrators[] = {
   {279, migrate_278_to_279},
   {280, migrate_279_to_280},
   {281, migrate_280_to_281},
+  {282, migrate_281_to_282},
   /* End marker. */
   {-1, NULL}};
 

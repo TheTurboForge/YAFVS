@@ -6,7 +6,7 @@
 
 import {describe, test, expect} from '@gsa/testing';
 import Nvt from 'gmp/models/nvt';
-import Result, {Delta} from 'gmp/models/result';
+import Result from 'gmp/models/result';
 import {testModel} from 'gmp/models/testing';
 
 describe('Result model tests', () => {
@@ -15,7 +15,6 @@ describe('Result model tests', () => {
   test('should use defaults', () => {
     const result = new Result();
     expect(result.compliance).toBeUndefined();
-    expect(result.delta).toBeUndefined();
     expect(result.detection).toBeUndefined();
     expect(result.description).toBeUndefined();
     expect(result.host).toBeUndefined();
@@ -34,7 +33,6 @@ describe('Result model tests', () => {
   test('should parse empty element', () => {
     const result = Result.fromElement();
     expect(result.compliance).toBeUndefined();
-    expect(result.delta).toBeUndefined();
     expect(result.detection).toBeUndefined();
     expect(result.description).toBeUndefined();
     expect(result.host).toBeUndefined();
@@ -235,42 +233,6 @@ describe('Result model tests', () => {
     });
   });
 
-  test('should parse delta', () => {
-    const result = Result.fromElement({delta: 'foo'});
-    expect(result.delta).toBeInstanceOf(Delta);
-    expect(result.delta?.delta_type).toEqual('foo');
-
-    const result2 = Result.fromElement({
-      delta: {
-        __text: 'foo',
-      },
-    });
-    expect(result2.delta).toBeInstanceOf(Delta);
-    expect(result2.delta?.delta_type).toEqual('foo');
-
-    const result3 = Result.fromElement({
-      delta: {
-        __text: Delta.TYPE_CHANGED,
-        diff: 'some foobar diff',
-        result: {
-          _id: 'r1',
-          description: 'some result description',
-        },
-      },
-    });
-    expect(result3.delta).toBeInstanceOf(Delta);
-    expect(result3.delta?.delta_type).toEqual(Delta.TYPE_CHANGED);
-    expect(result3.delta?.diff).toEqual('some foobar diff');
-    expect(result3.delta?.result?.description).toEqual(
-      'some result description',
-    );
-  });
-
-  test('should parse original severity', () => {
-    const result = Result.fromElement({original_severity: 4.2});
-    expect(result.original_severity).toEqual(4.2);
-  });
-
   test('should parse QoD', () => {
     const result = Result.fromElement({
       qod: {
@@ -280,6 +242,11 @@ describe('Result model tests', () => {
     });
     expect(result.qod?.type).toEqual('foo');
     expect(result.qod?.value).toEqual(42.5);
+  });
+
+  test('should parse original severity', () => {
+    const result = Result.fromElement({original_severity: 4.2});
+    expect(result.original_severity).toEqual(4.2);
   });
 
   test('should parse overrides', () => {
@@ -324,13 +291,5 @@ describe('Result model tests', () => {
   test('should parse scan_nvt_version', () => {
     const result = Result.fromElement({scan_nvt_version: '1.2.3'});
     expect(result.scan_nvt_version).toEqual('1.2.3');
-  });
-
-  test('hasDelta() should return correct true/false', () => {
-    const result = Result.fromElement({delta: 'defined'});
-    const result2 = Result.fromElement();
-
-    expect(result.hasDelta()).toEqual(true);
-    expect(result2.hasDelta()).toEqual(false);
   });
 });

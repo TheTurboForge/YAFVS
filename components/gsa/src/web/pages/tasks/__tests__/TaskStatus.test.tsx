@@ -71,55 +71,10 @@ describe('TaskStatus tests', () => {
     expect(detailslink).toHaveAttribute('href', '/report/1234');
   });
 
-  test('should render import task', () => {
-    const task = Task.fromElement({
-      permissions: {permission: [{name: 'everything'}]},
-      last_report: {report: {_id: '42'}},
-    });
-
-    const {render} = rendererWith({capabilities: true, router: true});
-    render(<Status task={task} />);
-
-    const bar = screen.getByTestId('progressbar-box');
-    expect(bar).toHaveAttribute('title', 'Import Task');
-    expect(bar).toHaveTextContent('Import Task');
-
-    const detailslink = screen.queryByTestId('details-link');
-    expect(detailslink).toHaveTextContent('Import Task');
-    expect(detailslink).toHaveAttribute('href', '/report/42');
-  });
-
-  test('should render import task with status interrupted', () => {
-    const task = Task.fromElement({
-      status: TASK_STATUS.interrupted,
-      permissions: {permission: [{name: 'everything'}]},
-    });
-
-    const {render} = rendererWith({capabilities: true});
-    render(<Status task={task} />);
-
-    const bar = screen.getByTestId('progressbar-box');
-    expect(bar).toHaveAttribute('title', TASK_STATUS.interrupted);
-    expect(bar).toHaveTextContent(TASK_STATUS.interrupted);
-  });
-
-  test('should render running import task as processing', () => {
-    const task = Task.fromElement({
-      status: TASK_STATUS.running,
-      permissions: {permission: [{name: 'everything'}]},
-    });
-
-    const {render} = rendererWith({capabilities: true});
-    render(<Status task={task} />);
-
-    const bar = screen.getByTestId('progressbar-box');
-    expect(bar).toHaveAttribute('title', TASK_STATUS.processing);
-    expect(bar).toHaveTextContent(TASK_STATUS.processing);
-  });
-
-  test('should render processing import task as processing', () => {
+  test('should render processing task as processing', () => {
     const task = Task.fromElement({
       status: TASK_STATUS.processing,
+      target: {_id: 'id', name: 'target'},
       permissions: {permission: [{name: 'everything'}]},
     });
 

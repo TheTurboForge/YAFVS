@@ -54,7 +54,6 @@ const Summary = ({
 }: SummaryProps) => {
   const [_] = useTranslation();
   const {
-    delta_report,
     cves,
     hosts,
     result_count,
@@ -118,14 +117,7 @@ const Summary = ({
     ? filter.simple().toFilterString()
     : '';
 
-  const status =
-    isDefined(task?.isImport) && task.isImport()
-      ? TASK_STATUS.import
-      : scan_run_status;
-
-  const delta = isDefined(report.isDeltaReport)
-    ? report.isDeltaReport()
-    : false;
+  const status = scan_run_status;
 
   const isEnded = isDefined(scan_end) && scan_end.isValid();
   const resultCount = result_count?.full ?? results?.counts?.all;
@@ -166,27 +158,9 @@ const Summary = ({
               <TableData>{comment}</TableData>
             </TableRow>
           )}
-          {delta && (
-            <TableRow>
-              <TableData>{_('Report 1')}</TableData>
-              <TableData>
-                <span>
-                  <DetailsLink
-                    id={report.id as string}
-                    textOnly={!links}
-                    type="report"
-                  >
-                    {report.id}
-                  </DetailsLink>
-                </span>
-              </TableData>
-            </TableRow>
-          )}
           {isDefined(scan_start) && (
             <TableRow>
-              <TableData>
-                {delta ? _('Scan Time Report 1') : _('Scan Time')}
-              </TableData>
+              <TableData>{_('Scan Time')}</TableData>
               <TableData flex="row">
                 <DateTime date={scan_start} />
                 {isEnded && (
@@ -200,72 +174,18 @@ const Summary = ({
           )}
           {isEnded && (
             <TableRow>
-              <TableData>
-                {delta ? _('Scan Duration Report 1') : _('Scan Duration')}
-              </TableData>
+              <TableData>{_('Scan Duration')}</TableData>
               <TableData>
                 {scanDuration(scan_start as GmpDate, scan_end as GmpDate)}
               </TableData>
             </TableRow>
           )}
           <TableRow>
-            <TableData>
-              {delta ? _('Scan Status Report 1') : _('Scan Status')}
-            </TableData>
+            <TableData>{_('Scan Status')}</TableData>
             <TableData>
               <StatusBar progress={progress} status={status} />
             </TableData>
           </TableRow>
-          {delta && (
-            <TableRow>
-              <TableData>{_('Report 2')}</TableData>
-              <TableData>
-                <span>
-                  <DetailsLink
-                    id={delta_report?.id as string}
-                    textOnly={!links}
-                    type="report"
-                  >
-                    {delta_report?.id}
-                  </DetailsLink>
-                </span>
-              </TableData>
-            </TableRow>
-          )}
-          {delta && (
-            <TableRow>
-              <TableData>{_('Scan Time Report 2')}</TableData>
-              <TableData flex="row">
-                <DateTime date={delta_report?.scan_start} />
-                {isDefined(delta_report?.scan_end) &&
-                  delta_report.scan_end.isValid() && (
-                    <React.Fragment>
-                      {' - '}
-                      <DateTime date={delta_report.scan_end} />
-                    </React.Fragment>
-                  )}
-              </TableData>
-            </TableRow>
-          )}
-          {delta && delta_report?.scan_end?.isValid() && (
-            <TableRow>
-              <TableData>{_('Scan Duration Report 2')}</TableData>
-              <TableData flex="row">
-                {scanDuration(
-                  delta_report?.scan_start as GmpDate,
-                  delta_report.scan_end,
-                )}
-              </TableData>
-            </TableRow>
-          )}
-          {delta && (
-            <TableRow>
-              <TableData>{_('Scan Status Report 2')}</TableData>
-              <TableData>
-                <StatusBar status={delta_report?.scan_run_status} />
-              </TableData>
-            </TableRow>
-          )}
           {isDefined(slave) && (
             <TableRow>
               <TableData>{_('Scan sensor')}</TableData>

@@ -148,8 +148,6 @@ const method_data_fields = [
   'tp_sms_credential',
   'tp_sms_tls_certificate',
   'tp_sms_tls_workaround',
-  'delta_type',
-  'delta_report_id',
   'report_formats',
   'report_configs',
   'vfire_base_url',

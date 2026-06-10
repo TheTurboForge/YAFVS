@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2023 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -979,109 +980,6 @@ gmp_stop_task_c (gvm_connection_t *connection, const char *id)
 }
 
 /**
- * @brief Resume a task and read the manager response.
- *
- * @param[in]   session    Pointer to GNUTLS session.
- * @param[in]   task_id    ID of task.
- * @param[out]  report_id  ID of report.
- *
- * @return 0 on success, 1 on GMP failure, -1 on error.
- */
-int
-gmp_resume_task_report (gnutls_session_t *session, const char *task_id,
-                        char **report_id)
-{
-  int ret;
-  entity_t entity;
-  if (gvm_server_sendf (session, "<resume_task task_id=\"%s\"/>", task_id)
-      == -1)
-    return -1;
-
-  /* Read the response. */
-
-  entity = NULL;
-  ret = gmp_check_response (session, &entity);
-
-  if (ret == 0)
-    {
-      if (report_id)
-        {
-          entity_t report_id_xml = entity_child (entity, "report_id");
-          if (report_id_xml)
-            *report_id = g_strdup (entity_text (report_id_xml));
-          else
-            {
-              free_entity (entity);
-              return -1;
-            }
-        }
-      free_entity (entity);
-      return 0;
-    }
-  else if (ret == -1)
-    return ret;
-  return 1;
-}
-
-/**
- * @brief Resume a task and read the manager response.
- *
- * @param[in]   connection  Connection.
- * @param[in]   task_id     ID of task.
- * @param[out]  report_id   ID of report.
- *
- * @return 0 on success, 1 on GMP failure, -1 on error.
- */
-int
-gmp_resume_task_report_c (gvm_connection_t *connection, const char *task_id,
-                          char **report_id)
-{
-  if (gvm_connection_sendf (connection, "<resume_task task_id=\"%s\"/>",
-                            task_id)
-      == -1)
-    return -1;
-
-  /* Read the response. */
-
-  entity_t entity = NULL;
-  if (read_entity_c (connection, &entity))
-    return -1;
-
-  /* Check the response. */
-
-  const char *status = entity_attribute (entity, "status");
-  if (status == NULL)
-    {
-      free_entity (entity);
-      return -1;
-    }
-  if (strlen (status) == 0)
-    {
-      free_entity (entity);
-      return -1;
-    }
-  char first = status[0];
-  if (first == '2')
-    {
-      if (report_id)
-        {
-          entity_t report_id_xml = entity_child (entity, "report_id");
-          if (report_id_xml)
-            *report_id = g_strdup (entity_text (report_id_xml));
-          else
-            {
-              free_entity (entity);
-              return -1;
-            }
-        }
-      free_entity (entity);
-      return 0;
-    }
-  free_entity (entity);
-  return 1;
-}
-
-/**
  * @brief Delete a task and read the manager response.
  *
  * @param[in]  session   Pointer to GNUTLS session.
@@ -1414,8 +1312,6 @@ gmp_get_report_ext (gnutls_session_t *session, gmp_get_report_opts_t opts,
         "%s%s%s"
         "%s%s%s"
         "%s%s%s"
-        "%s%s%s"
-        "%s%s%s"
         "%s%s%s%s%s%s%s/>",
         opts.report_id, opts.format_id, opts.host_first_result,
         opts.host_max_results, GMP_FMT_STRING_ATTRIB (opts, type),
@@ -1424,8 +1320,6 @@ gmp_get_report_ext (gnutls_session_t *session, gmp_get_report_opts_t opts,
         GMP_FMT_STRING_ATTRIB (opts, host), GMP_FMT_STRING_ATTRIB (opts, pos),
         GMP_FMT_STRING_ATTRIB (opts, timezone),
         GMP_FMT_STRING_ATTRIB (opts, alert_id),
-        GMP_FMT_STRING_ATTRIB (opts, delta_report_id),
-        GMP_FMT_STRING_ATTRIB (opts, delta_states),
         GMP_FMT_STRING_ATTRIB (opts, host_levels),
         GMP_FMT_STRING_ATTRIB (opts, search_phrase),
         GMP_FMT_STRING_ATTRIB (opts, host_search_phrase),

@@ -102,14 +102,11 @@ describe('Task ToolBarIcons tests', () => {
       config: scanConfig,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -123,14 +120,11 @@ describe('Task ToolBarIcons tests', () => {
       <TaskDetailsPageToolBarIcons
         entity={task}
         overridesCount={3}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -170,14 +164,11 @@ describe('Task ToolBarIcons tests', () => {
       config: scanConfig,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -190,32 +181,20 @@ describe('Task ToolBarIcons tests', () => {
     render(
       <TaskDetailsPageToolBarIcons
         entity={task}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
     );
 
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
+    const newTaskButton = screen.getByTitle('New Task');
+    fireEvent.click(newTaskButton);
     expect(handleTaskCreate).toHaveBeenCalled();
 
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreate).toHaveBeenCalled();
 
     const cloneIcon = screen.getByTitle('Clone Task');
     fireEvent.click(cloneIcon);
@@ -237,9 +216,6 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTitle('Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const totalReports = screen.getByTitle('Total Reports for Task foo');
     expect(totalReports).toHaveAttribute(
@@ -290,14 +266,11 @@ describe('Task ToolBarIcons tests', () => {
       config: scanConfig,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -310,32 +283,20 @@ describe('Task ToolBarIcons tests', () => {
     render(
       <TaskDetailsPageToolBarIcons
         entity={task}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
     );
 
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
+    const newTaskButton = screen.getByTitle('New Task');
+    fireEvent.click(newTaskButton);
     expect(handleTaskCreate).toHaveBeenCalled();
 
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreate).toHaveBeenCalled();
 
     const cloneIcon = screen.getByTitle('Clone Task');
     fireEvent.click(cloneIcon);
@@ -357,9 +318,6 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(stopIcon);
     expect(handleTaskStop).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTitle('Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const currentReportIcon = screen.getByTitle(
       'Current Report for Task foo from 07/30/2019',
@@ -415,14 +373,11 @@ describe('Task ToolBarIcons tests', () => {
       config: scanConfig,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -435,32 +390,20 @@ describe('Task ToolBarIcons tests', () => {
     render(
       <TaskDetailsPageToolBarIcons
         entity={task}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
     );
 
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
+    const newTaskButton = screen.getByTitle('New Task');
+    fireEvent.click(newTaskButton);
     expect(handleTaskCreate).toHaveBeenCalled();
 
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreate).toHaveBeenCalled();
 
     const cloneIcon = screen.getByTitle('Clone Task');
     fireEvent.click(cloneIcon);
@@ -481,10 +424,6 @@ describe('Task ToolBarIcons tests', () => {
     const startIcon = screen.getByTitle('Start');
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
-
-    const resumeIcon = screen.getByTitle('Resume');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).toHaveBeenCalledWith(task);
 
     const currentReportIcon = screen.getByTitle(
       'Current Report for Task foo from 07/30/2019',
@@ -540,14 +479,11 @@ describe('Task ToolBarIcons tests', () => {
       config: scanConfig,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -561,32 +497,20 @@ describe('Task ToolBarIcons tests', () => {
       <TaskDetailsPageToolBarIcons
         entity={task}
         overridesCount={3}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
     );
 
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
+    const newTaskButton = screen.getByTitle('New Task');
+    fireEvent.click(newTaskButton);
     expect(handleTaskCreate).toHaveBeenCalled();
 
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreate).toHaveBeenCalled();
 
     const cloneIcon = screen.getByTitle('Clone Task');
     fireEvent.click(cloneIcon);
@@ -608,9 +532,6 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTitle('Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const currentReportIcon = screen.getByTitle(
       'Last Report for Task foo from 07/30/2019',
@@ -665,14 +586,11 @@ describe('Task ToolBarIcons tests', () => {
       config: scanConfig,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -685,32 +603,20 @@ describe('Task ToolBarIcons tests', () => {
     render(
       <TaskDetailsPageToolBarIcons
         entity={task}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
     );
 
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
+    const newTaskButton = screen.getByTitle('New Task');
+    fireEvent.click(newTaskButton);
     expect(handleTaskCreate).toHaveBeenCalled();
 
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreate).toHaveBeenCalled();
 
     const cloneIcon = screen.getByTitle('Clone Task');
     fireEvent.click(cloneIcon);
@@ -734,9 +640,6 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).not.toHaveBeenCalled();
 
-    const resumeIcon = screen.getByTitle('Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const currentReportIcon = screen.getByTitle(
       'Last Report for Task foo from 07/30/2019',
@@ -797,14 +700,11 @@ describe('Task ToolBarIcons tests', () => {
       schedule_periods: 1,
       preferences: preferences,
     });
-    const handleReportImport = testing.fn();
     const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -817,14 +717,11 @@ describe('Task ToolBarIcons tests', () => {
     render(
       <TaskDetailsPageToolBarIcons
         entity={task}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskCreateClick={handleTaskCreate}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -838,121 +735,6 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTitle('Task is scheduled');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
   });
 
-  test('should call click handlers for import task', async () => {
-    const task = Task.fromElement({
-      _id: '12345',
-      owner: {name: 'admin'},
-      name: 'foo',
-      comment: 'bar',
-      creation_time: '2019-07-16T06:31:29Z',
-      modification_time: '2019-07-16T06:44:55Z',
-      report_count: {__text: 1},
-      result_count: 1,
-      last_report: lastReport,
-      permissions: {permission: [{name: 'everything'}]},
-    });
-    const handleReportImport = testing.fn();
-    const handleTaskCreate = testing.fn();
-    const handleImportTaskCreate = testing.fn();
-    const handleTaskClone = testing.fn();
-    const handleTaskDelete = testing.fn();
-    const handleTaskDownload = testing.fn();
-    const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
-    const handleTaskStart = testing.fn();
-    const handleTaskStop = testing.fn();
-
-    const {render} = rendererWith({
-      gmp: createGmp(),
-      capabilities: true,
-      router: true,
-    });
-
-    render(
-      <TaskDetailsPageToolBarIcons
-        entity={task}
-        onImportTaskCreateClick={handleImportTaskCreate}
-        onReportImportClick={handleReportImport}
-        onTaskCloneClick={handleTaskClone}
-        onTaskCreateClick={handleTaskCreate}
-        onTaskDeleteClick={handleTaskDelete}
-        onTaskDownloadClick={handleTaskDownload}
-        onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
-        onTaskStartClick={handleTaskStart}
-        onTaskStopClick={handleTaskStop}
-      />,
-    );
-
-    const newButton = screen.getByTitle('New Task Menu');
-    fireEvent.click(newButton);
-
-    const newTaskMenu = await screen.findByTestId('new-task-menu');
-    expect(newTaskMenu).toHaveTextContent('New Task');
-    fireEvent.click(newTaskMenu);
-    expect(handleTaskCreate).toHaveBeenCalled();
-
-    fireEvent.click(newButton);
-    const newImportTaskMenu = await screen.findByTestId('new-import-task-menu');
-    expect(newImportTaskMenu).toHaveTextContent('New Import Task');
-    fireEvent.click(newImportTaskMenu);
-    expect(handleImportTaskCreate).toHaveBeenCalled();
-
-    const cloneIcon = screen.getByTitle('Clone Task');
-    fireEvent.click(cloneIcon);
-    expect(handleTaskClone).toHaveBeenCalledWith(task);
-
-    const editIcon = screen.getByTitle('Edit Task');
-    fireEvent.click(editIcon);
-    expect(handleTaskEdit).toHaveBeenCalledWith(task);
-
-    const deleteIcon = screen.getByTitle('Move Task to trashcan');
-    fireEvent.click(deleteIcon);
-    expect(handleTaskDelete).toHaveBeenCalledWith(task);
-
-    const exportIcon = screen.getByTitle('Export Task as XML');
-    fireEvent.click(exportIcon);
-    expect(handleTaskDownload).toHaveBeenCalledWith(task);
-
-    const importIcon = screen.getByTitle('Import Report');
-    fireEvent.click(importIcon);
-    expect(handleReportImport).toHaveBeenCalledWith(task);
-
-    const currentReportIcon = screen.getByTitle(
-      'Last Report for Task foo from 07/30/2019',
-    );
-    expect(currentReportIcon).toHaveAttribute('href', '/report/1234');
-
-    const totalReports = screen.getByTitle('Total Reports for Task foo');
-    expect(totalReports).toHaveAttribute(
-      'href',
-      '/reports?filter=task_id%3D12345',
-    );
-    expect(within(totalReports).getByTestId('badge-icon')).toHaveTextContent(
-      '1',
-    );
-
-    const totalResults = screen.getByTitle('Results for Task foo');
-    expect(totalResults).toHaveAttribute(
-      'href',
-      '/results?filter=task_id%3D12345',
-    );
-    expect(within(totalResults).getByTestId('badge-icon')).toHaveTextContent(
-      '1',
-    );
-
-    const totalOverrides = screen.getByTitle('Overrides for Task foo');
-    expect(totalOverrides).toHaveAttribute(
-      'href',
-      '/overrides?filter=task_id%3D12345',
-    );
-    expect(within(totalOverrides).getByTestId('badge-icon')).toHaveTextContent(
-      '0',
-    );
-  });
 });

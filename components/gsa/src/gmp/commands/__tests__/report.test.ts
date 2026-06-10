@@ -48,7 +48,6 @@ describe('ReportCommand tests', () => {
         cmd: 'get_report',
         details: 1,
         report_id: 'report-uuid',
-        delta_report_id: undefined,
         report_config_id: 'config-uuid',
         report_format_id: 'format-uuid',
         filter: 'first=1 rows=-1',

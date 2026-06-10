@@ -15,7 +15,7 @@ import {isDefined} from 'gmp/utils/identity';
 import SeverityBar from 'web/components/bar/SeverityBar';
 import Comment from 'web/components/comment/Comment';
 import DateTime from 'web/components/date/DateTime';
-import {AlterableIcon, SensorIcon} from 'web/components/icon';
+import {SensorIcon} from 'web/components/icon';
 import IconDivider from 'web/components/layout/IconDivider';
 import Layout from 'web/components/layout/Layout';
 import DetailsLink from 'web/components/link/DetailsLink';
@@ -111,9 +111,6 @@ const TaskRow = ({
             {entity.comment && <Comment>({entity.comment})</Comment>}
           </div>
           <IconDivider>
-            {entity.alterable === 1 && (
-              <AlterableIcon size="small" title={_('Task is alterable')} />
-            )}
             {isDefined(scanner) &&
               scanner.scannerType === GREENBONE_SENSOR_SCANNER_TYPE && (
                 <SensorIcon
@@ -136,14 +133,12 @@ const TaskRow = ({
         <TaskReport links={links} report={displayedReport} />
       </TableData>
       <TableData>
-        {!entity.isImport() && !isDefined(currentReport) && isDefined(lastReport) && (
+        {!isDefined(currentReport) && isDefined(lastReport) && (
           <SeverityBar severity={lastReport.severity} />
         )}
       </TableData>
       <TableData align="center">
-        {!entity.isImport() && (
-          <TaskTrend name={entity.trend as TaskTrendType} />
-        )}
+        <TaskTrend name={entity.trend as TaskTrendType} />
       </TableData>
       <ActionsComponent {...props} entity={entity} links={links} />
     </TableRow>

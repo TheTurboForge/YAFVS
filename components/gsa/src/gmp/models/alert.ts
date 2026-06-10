@@ -130,10 +130,6 @@ export const EMAIL_NOTICE_INCLUDE = '0';
 export const EMAIL_NOTICE_SIMPLE = '1';
 export const EMAIL_NOTICE_ATTACH = '2';
 
-export const DELTA_TYPE_NONE = 'None';
-export const DELTA_TYPE_PREVIOUS = 'Previous';
-export const DELTA_TYPE_REPORT = 'Report';
-
 export const isTaskEvent = (event?: string) =>
   event === EVENT_TYPE_TASK_RUN_STATUS_CHANGED;
 export const isSecinfoEvent = (event?: string) =>

@@ -26,12 +26,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -43,12 +41,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -66,12 +62,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -83,12 +77,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -99,10 +91,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
@@ -134,12 +122,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -151,12 +137,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -170,10 +154,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).not.toHaveBeenCalled();
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute(
@@ -211,12 +191,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -228,12 +206,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -247,13 +223,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).not.toHaveBeenCalled();
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute(
-      'title',
-      'Resume task command unavailable',
-    );
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute(
@@ -291,12 +260,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -308,12 +275,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -324,10 +289,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(stopIcon);
     expect(handleTaskStart).not.toHaveBeenCalled();
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute(
@@ -365,12 +326,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -382,12 +341,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -398,10 +355,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(stopIcon);
     expect(handleTaskStop).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Task is still in use');
@@ -433,12 +386,10 @@ describe('TaskActions tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -450,12 +401,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -466,10 +415,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Resume');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).toHaveBeenCalledWith(task);
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
@@ -506,12 +451,10 @@ describe('TaskActions tests', () => {
       },
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -524,12 +467,10 @@ describe('TaskActions tests', () => {
       <TaskActions
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -547,10 +488,6 @@ describe('TaskActions tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is scheduled');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
@@ -573,67 +510,4 @@ describe('TaskActions tests', () => {
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
   });
 
-  test('should call click handlers for import task', () => {
-    const task = Task.fromElement({
-      permissions: {permission: [{name: 'everything'}]},
-    });
-
-    const handleReportImport = testing.fn();
-    const handleTaskClone = testing.fn();
-    const handleTaskDelete = testing.fn();
-    const handleTaskDownload = testing.fn();
-    const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
-    const handleTaskStart = testing.fn();
-    const handleTaskStop = testing.fn();
-
-    const {render} = rendererWithTableRow({
-      capabilities: true,
-      gmp: createGmp(),
-    });
-    render(
-      <TaskActions
-        entity={task}
-        links={true}
-        onReportImportClick={handleReportImport}
-        onTaskCloneClick={handleTaskClone}
-        onTaskDeleteClick={handleTaskDelete}
-        onTaskDownloadClick={handleTaskDownload}
-        onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
-        onTaskStartClick={handleTaskStart}
-        onTaskStopClick={handleTaskStop}
-      />,
-    );
-
-    const importIcon = screen.getByTestId('import-icon');
-    expect(importIcon).toHaveAttribute('title', 'Import Report');
-    fireEvent.click(importIcon);
-    expect(handleReportImport).toHaveBeenCalledWith(task);
-
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is for import only');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
-
-    const deleteIcon = screen.getByTestId('trashcan-icon');
-    expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
-    fireEvent.click(deleteIcon);
-    expect(handleTaskDelete).toHaveBeenCalledWith(task);
-
-    const editIcon = screen.getByTestId('edit-icon');
-    expect(editIcon).toHaveAttribute('title', 'Edit Task');
-    fireEvent.click(editIcon);
-    expect(handleTaskEdit).toHaveBeenCalledWith(task);
-
-    const cloneIcon = screen.getByTestId('clone-icon');
-    expect(cloneIcon).toHaveAttribute('title', 'Clone Task');
-    fireEvent.click(cloneIcon);
-    expect(handleTaskClone).toHaveBeenCalledWith(task);
-
-    const exportIcon = screen.getByTestId('export-icon');
-    expect(exportIcon).toHaveAttribute('title', 'Export Task');
-    fireEvent.click(exportIcon);
-    expect(handleTaskDownload).toHaveBeenCalledWith(task);
-  });
 });

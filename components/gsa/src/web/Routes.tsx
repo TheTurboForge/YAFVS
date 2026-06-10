@@ -372,13 +372,6 @@ const loggedInRoutes = [
         }),
       },
       {
-        path: 'report/delta/:id/:deltaid',
-        lazy: async () => ({
-          Component: (await import('web/pages/reports/DeltaDetailsPage'))
-            .default,
-        }),
-      },
-      {
         path: 'report/:id',
         lazy: async () => ({
           Component: (await import('web/pages/reports/DetailsPage')).default,

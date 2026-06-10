@@ -69,7 +69,6 @@ import TimezonesCommand from 'gmp/commands/timezones';
 import TrashCanCommand from 'gmp/commands/trashcan';
 import UserCommand from 'gmp/commands/user';
 import UsersCommand from 'gmp/commands/users';
-import WizardCommand from 'gmp/commands/wizard';
 import Http, {type ErrorHandler} from 'gmp/http/http';
 import {buildServerUrl, buildUrlParams, type UrlParams} from 'gmp/http/utils';
 import {setLocale} from 'gmp/locale/lang';
@@ -147,7 +146,6 @@ class Gmp {
   public readonly trashcan: TrashCanCommand;
   public readonly user: UserCommand;
   public readonly users: UsersCommand;
-  public readonly wizard: WizardCommand;
 
   constructor({
     settings,
@@ -229,7 +227,6 @@ class Gmp {
     this.trashcan = new TrashCanCommand(this.http);
     this.user = new UserCommand(this.http);
     this.users = new UsersCommand(this.http);
-    this.wizard = new WizardCommand(this.http);
 
     this._initCommands();
   }

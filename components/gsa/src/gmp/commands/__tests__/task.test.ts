@@ -31,7 +31,6 @@ import {
 import {
   HOSTS_ORDERING_RANDOM,
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
-  AUTO_DELETE_KEEP,
 } from 'gmp/models/task';
 
 let logLevel: LogLevel;
@@ -82,12 +81,9 @@ describe('TaskCommand tests', () => {
 
     const cmd = new TaskCommand(fakeHttp);
     const resp = await cmd.create({
-      alterable: 0,
       apply_overrides: 0,
-      auto_delete: AUTO_DELETE_KEEP,
       comment: 'comment',
       config_id: 'c1',
-      in_assets: 0,
       max_checks: 10,
       max_hosts: 10,
       min_qod: 70,
@@ -101,15 +97,12 @@ describe('TaskCommand tests', () => {
       data: {
         add_tag: undefined,
         'alert_ids:': [],
-        alterable: 0,
         apply_overrides: 0,
-        auto_delete: AUTO_DELETE_KEEP,
-        auto_delete_data: undefined,
+        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'create_task',
         comment: 'comment',
         config_id: 'c1',
         hosts_ordering: HOSTS_ORDERING_RANDOM,
-        in_assets: 0,
         max_checks: 10,
         max_hosts: 10,
         min_qod: 70,
@@ -134,14 +127,11 @@ describe('TaskCommand tests', () => {
     const cmd = new TaskCommand(fakeHttp);
     const resp = await cmd.create({
       add_tag: 1,
-      alterable: 0,
       alert_ids: ['a1', 'a2'],
       apply_overrides: 0,
-      auto_delete: AUTO_DELETE_KEEP,
       auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
       comment: 'comment',
       config_id: 'c1',
-      in_assets: 0,
       max_checks: 10,
       max_hosts: 10,
       min_qod: 70,
@@ -158,15 +148,12 @@ describe('TaskCommand tests', () => {
       data: {
         add_tag: 1,
         'alert_ids:': ['a1', 'a2'],
-        alterable: 0,
         apply_overrides: 0,
-        auto_delete: AUTO_DELETE_KEEP,
         auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'create_task',
         comment: 'comment',
         config_id: 'c1',
         hosts_ordering: HOSTS_ORDERING_RANDOM,
-        in_assets: 0,
         max_checks: 10,
         max_hosts: 10,
         min_qod: 70,
@@ -242,12 +229,9 @@ describe('TaskCommand tests', () => {
       const cmd = new TaskCommand(fakeHttp);
       await expect(
         cmd.create({
-          alterable: 0,
           apply_overrides: 0,
-          auto_delete: AUTO_DELETE_KEEP,
           comment: 'comment',
           config_id: 'c1',
-          in_assets: 0,
           max_checks: 10,
           max_hosts: 10,
           min_qod: 70,
@@ -261,60 +245,14 @@ describe('TaskCommand tests', () => {
     },
   );
 
-  test('should create new import task', async () => {
-    const mockResponse = createActionResultResponse();
-    const fakeHttp = createHttp(mockResponse);
-    const cmd = new TaskCommand(fakeHttp);
-    const response = await cmd.createImportTask({
-      name: 'foo',
-      comment: 'comment',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
-        cmd: 'create_import_task',
-        comment: 'comment',
-        name: 'foo',
-        usage_type: 'scan',
-      },
-    });
-    expect(response.data).toEqual({id: 'foo'});
-  });
-
-  test('should update the import task', async () => {
-    const mockResponse = createActionResultResponse();
-    const fakeHttp = createHttp(mockResponse);
-    const cmd = new TaskCommand(fakeHttp);
-    await cmd.saveImportTask({
-      name: 'foo',
-      comment: 'comment',
-      id: 'test',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_import_task',
-        comment: 'comment',
-        name: 'foo',
-        auto_delete: 'no',
-        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
-        task_id: 'test',
-        usage_type: 'scan',
-        in_assets: 1,
-      },
-    });
-  });
-
   test('should save task', async () => {
     const mockResponse = createActionResultResponse();
     const fakeHttp = createHttp(mockResponse);
     const cmd = new TaskCommand(fakeHttp);
     const response = await cmd.save({
-      alterable: 0,
       apply_overrides: 0,
-      auto_delete: AUTO_DELETE_KEEP,
       comment: 'comment',
       id: 'task1',
-      in_assets: 0,
       max_checks: 10,
       max_hosts: 10,
       min_qod: 70,
@@ -324,15 +262,12 @@ describe('TaskCommand tests', () => {
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         'alert_ids:': [],
-        alterable: 0,
         apply_overrides: 0,
-        auto_delete: AUTO_DELETE_KEEP,
-        auto_delete_data: undefined,
+        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'save_task',
         comment: 'comment',
         config_id: '0',
         hosts_ordering: HOSTS_ORDERING_RANDOM,
-        in_assets: 0,
         max_checks: 10,
         max_hosts: 10,
         min_qod: 70,
@@ -407,12 +342,9 @@ describe('TaskCommand tests', () => {
       const cmd = new TaskCommand(fakeHttp);
       await expect(
         cmd.save({
-          alterable: 0,
           apply_overrides: 0,
-          auto_delete: AUTO_DELETE_KEEP,
           comment: 'comment',
           id: 'task1',
-          in_assets: 0,
           max_checks: 10,
           max_hosts: 10,
           min_qod: 70,
@@ -428,15 +360,12 @@ describe('TaskCommand tests', () => {
     const fakeHttp = createHttp(mockResponse);
     const cmd = new TaskCommand(fakeHttp);
     const response = await cmd.save({
-      alterable: 0,
       alert_ids: ['a1', 'a2'],
       apply_overrides: 0,
-      auto_delete: AUTO_DELETE_KEEP,
       auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
       comment: 'comment',
       config_id: 'c1',
       id: 'task1',
-      in_assets: 0,
       max_checks: 10,
       max_hosts: 10,
       min_qod: 70,
@@ -451,15 +380,12 @@ describe('TaskCommand tests', () => {
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         'alert_ids:': ['a1', 'a2'],
-        alterable: 0,
         apply_overrides: 0,
-        auto_delete: AUTO_DELETE_KEEP,
         auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'save_task',
         comment: 'comment',
         config_id: 'c1',
         hosts_ordering: HOSTS_ORDERING_RANDOM,
-        in_assets: 0,
         max_checks: 10,
         max_hosts: 10,
         min_qod: 70,

@@ -26,7 +26,6 @@ gsad_init_validator ()
                      "|(clone)"
                      "|(create_asset)"
                      "|(create_config)"
-                     "|(create_import_task)"
                      "|(create_credential)"
                      "|(create_alert)"
                      "|(create_filter)"
@@ -34,7 +33,6 @@ gsad_init_validator ()
                      "|(create_override)"
                      "|(create_port_list)"
                      "|(create_port_range)"
-                     "|(create_report)"
                      "|(create_report_config)"
                      "|(create_scanner)"
                      "|(create_schedule)"
@@ -201,8 +199,6 @@ gsad_init_validator ()
                      "|(renew_session)"
                      "|(report_alert)"
                      "|(restore)"
-                     "|(resume_task)"
-                     "|(run_wizard)"
                      "|(test_alert)"
                      "|(save_alert)"
                      "|(save_asset)"
@@ -211,7 +207,6 @@ gsad_init_validator ()
                      "|(save_config)"
                      "|(save_config_family)"
                      "|(save_config_nvt)"
-                     "|(save_import_task)"
                      "|(save_credential)"
                      "|(save_filter)"
                      "|(save_license)"
@@ -236,7 +231,6 @@ gsad_init_validator ()
                      "|(toggle_tag)"
                      "|(verify_credential_store)"
                      "|(verify_scanner)"
-                     "|(wizard)"
                      "|(wizard_get))$");
 
   gvm_validator_add (validator, "action_message", "(?s)^.*$");
@@ -307,7 +301,6 @@ gsad_init_validator ()
   gvm_validator_add (validator, "data_columns:value", "^[_[:alnum:]]+$");
   gvm_validator_add (validator, "default_severity",
                      "^(|10\\.0|[0-9]\\.[0-9])$");
-  gvm_validator_add (validator, "delta_states", "^(c|g|n|s){0,4}$");
   gvm_validator_add (validator, "details_fname",
                      "^([[:alnum:]_-]|%[%CcDFMmNTtUu])+$");
   gvm_validator_add (validator, "domain", "^[-[:alnum:]\\.]+$");
@@ -514,7 +507,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "alert_id", "id");
   gvm_validator_alias (validator, "config_id", "id");
   gvm_validator_alias (validator, "cve_scanner_id", "id");
-  gvm_validator_alias (validator, "delta_report_id", "id");
   gvm_validator_alias (validator, "esxi_credential_id", "id");
   gvm_validator_alias (validator, "filter_id", "id");
   gvm_validator_alias (validator, "format_id", "id");
@@ -579,7 +571,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "alert_ids:name", "number");
   gvm_validator_alias (validator, "alive_tests:name", "number");
   gvm_validator_alias (validator, "allow_simultaneous_ips", "boolean");
-  gvm_validator_alias (validator, "alterable", "boolean");
   gvm_validator_alias (validator, "apply_overrides", "boolean");
   gvm_validator_alias (validator, "autogenerate", "boolean");
   gvm_validator_alias (validator, "auto_cache_rebuild", "boolean");
@@ -614,13 +605,11 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "filter_extra", "filter");
   gvm_validator_alias (validator, "filterbox", "boolean");
   gvm_validator_alias (validator, "from_file", "boolean");
-  gvm_validator_alias (validator, "force_wizard", "boolean");
   gvm_validator_alias (validator, "get_name", "name");
   gvm_validator_alias (validator, "grant_full", "boolean");
   gvm_validator_alias (validator, "hosts_manual", "hosts");
   gvm_validator_alias (validator, "hosts_filter", "filter");
   gvm_validator_alias (validator, "exclude_hosts", "hosts_opt");
-  gvm_validator_alias (validator, "in_assets", "boolean");
   gvm_validator_alias (validator, "in_use", "boolean");
   gvm_validator_alias (validator, "include_related", "number");
   gvm_validator_alias (validator, "include_certificate_data", "boolean");

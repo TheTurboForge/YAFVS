@@ -25,7 +25,7 @@ const TaskStopIcon = <TTask extends Task>({
   const [_] = useTranslation();
   const type = _('task');
 
-  if ((task.isRunning() || task.isQueued()) && !task.isImport()) {
+  if (task.isRunning() || task.isQueued()) {
     if (
       !capabilities.mayOp('stop_task') ||
       !task.userCapabilities.mayOp('stop_task')

@@ -22,9 +22,6 @@ import {
   METHOD_TYPE_SOURCEFIRE,
   METHOD_TYPE_VERINICE,
   METHOD_TYPE_TIPPING_POINT,
-  DELTA_TYPE_NONE,
-  DELTA_TYPE_PREVIOUS,
-  DELTA_TYPE_REPORT,
   isTaskEvent,
   isSecinfoEvent,
 } from 'gmp/models/alert';
@@ -202,8 +199,6 @@ const DEFAULTS = {
   method_data_tp_sms_hostname: '',
   method_data_tp_sms_tls_workaround: NO_VALUE,
   method_data_URL: '',
-  method_data_delta_type: DELTA_TYPE_NONE,
-  method_data_delta_report_id: '',
   name: _('Unnamed'),
   report_configs: [],
   report_config_ids: [],
@@ -244,8 +239,6 @@ class AlertDialog extends React.Component {
         onValueChange(INCLUDE_MESSAGE_DEFAULT, 'method_data_message');
         onValueChange(ATTACH_MESSAGE_DEFAULT, 'method_data_message_attach');
         onValueChange(result_filters, 'condition_data_filters');
-        onValueChange(DELTA_TYPE_NONE, 'method_data_delta_type');
-
         filter_id = selectSaveId(result_filters);
       } else {
         onValueChange(DEFAULT_METHOD, 'method'); // reset method to avoid having an invalid method for secinfo
@@ -576,46 +569,6 @@ class AlertDialog extends React.Component {
                 </FormGroup>
               )}
 
-              {taskEvent && (
-                <FormGroup title={_('Delta Report')}>
-                  <Radio
-                    checked={values.method_data_delta_type === DELTA_TYPE_NONE}
-                    name="method_data_delta_type"
-                    title={_('None')}
-                    value={DELTA_TYPE_NONE}
-                    onChange={onValueChange}
-                  />
-
-                  <Radio
-                    checked={
-                      values.method_data_delta_type === DELTA_TYPE_PREVIOUS
-                    }
-                    name="method_data_delta_type"
-                    title={_('Previous completed report of the same task')}
-                    value={DELTA_TYPE_PREVIOUS}
-                    onChange={onValueChange}
-                  />
-
-                  <Row>
-                    <Radio
-                      checked={
-                        values.method_data_delta_type === DELTA_TYPE_REPORT
-                      }
-                      name="method_data_delta_type"
-                      title={_('Report with ID')}
-                      value={DELTA_TYPE_REPORT}
-                      onChange={onValueChange}
-                    />
-                    <TextField
-                      grow="1"
-                      name="method_data_delta_report_id"
-                      value={values.method_data_delta_report_id}
-                      onChange={onValueChange}
-                    />
-                  </Row>
-                </FormGroup>
-              )}
-
               <FormGroup title={_('Method')}>
                 <Select
                   items={methodTypes}
@@ -854,8 +807,6 @@ AlertDialog.propTypes = {
   method_data_composer_include_overrides: PropTypes.number,
   method_data_defense_center_ip: PropTypes.string,
   method_data_defense_center_port: PropTypes.numberOrNumberString,
-  method_data_delta_report_id: PropTypes.string,
-  method_data_delta_type: PropTypes.string,
   method_data_details_url: PropTypes.string,
   method_data_from_address: PropTypes.string,
   method_data_message: PropTypes.string,

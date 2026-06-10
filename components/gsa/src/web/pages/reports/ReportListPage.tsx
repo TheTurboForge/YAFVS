@@ -4,15 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {useEffect, useState} from 'react';
-import {useDispatch} from 'react-redux';
-import {useNavigate} from 'react-router';
-import {type TaskCommandCreateImportTaskParams} from 'gmp/commands/task';
 import Filter, {REPORTS_FILTER_FILTER} from 'gmp/models/filter';
 import type Report from 'gmp/models/report';
 import {isActive} from 'gmp/models/task';
 import {isDefined} from 'gmp/utils/identity';
-import {ReportIcon, UploadIcon} from 'web/components/icon';
+import {ReportIcon} from 'web/components/icon';
 import ManualIcon from 'web/components/icon/ManualIcon';
 import IconDivider from 'web/components/layout/IconDivider';
 import PageTitle from 'web/components/layout/PageTitle';
@@ -24,31 +20,17 @@ import EntitiesPage from 'web/entities/EntitiesPage';
 import withEntitiesContainer, {
   type WithEntitiesContainerComponentProps,
 } from 'web/entities/withEntitiesContainer';
-import useGmp from 'web/hooks/useGmp';
-import useShallowEqualSelector from 'web/hooks/useShallowEqualSelector';
 import useTranslation from 'web/hooks/useTranslation';
 import ReportFilterDialog from 'web/pages/reports/ReportFilterDialog';
-import ReportImportDialog from 'web/pages/reports/ReportImportDialog';
 import ReportsTable from 'web/pages/reports/ReportTable';
-import ImportTaskDialog from 'web/pages/tasks/ImportTaskDialog';
 import {
   loadEntities,
   selector as entitiesSelector,
 } from 'web/store/entities/reports';
-import {
-  loadAllEntities as loadAllTasks,
-  selector as tasksSelector,
-} from 'web/store/entities/tasks';
-
-interface ToolBarIconsProps {
-  onUploadReportClick?: () => void;
-}
 
 type ReportListPageProps = WithEntitiesContainerComponentProps<Report>;
 
-const IMPORT_TASK_FILTER = Filter.fromString('target=""');
-
-const ToolBarIcons = ({onUploadReportClick}: ToolBarIconsProps) => {
+const ToolBarIcons = () => {
   const [_] = useTranslation();
   return (
     <IconDivider>
@@ -57,7 +39,6 @@ const ToolBarIcons = ({onUploadReportClick}: ToolBarIconsProps) => {
         page="reports"
         title={_('Help: Reports')}
       />
-      <UploadIcon title={_('Upload report')} onClick={onUploadReportClick} />
     </IconDivider>
   );
 };
@@ -65,118 +46,18 @@ const ToolBarIcons = ({onUploadReportClick}: ToolBarIconsProps) => {
 const ReportListPage = ({
   entities,
   filter,
-  onChanged,
   onDelete,
   onError,
   onFilterChanged,
   ...props
 }: ReportListPageProps) => {
-  const gmp = useGmp();
   const [_] = useTranslation();
-  const navigate = useNavigate();
-  const [importDialogVisible, setImportDialogVisible] = useState(false);
-  const [createImportTaskDialogVisible, setCreateImportTaskDialogVisible] =
-    useState(false);
-  const [selectedDeltaReport, setSelectedDeltaReport] = useState<
-    Report | undefined
-  >(undefined);
-  const [taskId, setTaskId] = useState<string | undefined>(undefined);
-  const [beforeSelectFilter, setBeforeSelectFilter] = useState<
-    Filter | undefined
-  >(undefined);
-  const dispatch = useDispatch();
-  const tasks = useShallowEqualSelector(state =>
-    tasksSelector(state).getAllEntities(IMPORT_TASK_FILTER),
-  );
-  const loadTasks = () =>
-    // @ts-expect-error
-    dispatch(loadAllTasks(gmp)(IMPORT_TASK_FILTER)) as Promise<void>;
-
-  useEffect(() => {
-    if (
-      isDefined(selectedDeltaReport?.task) &&
-      (!isDefined(filter) ||
-        filter.get('task_id') !== selectedDeltaReport?.task?.id)
-    ) {
-      // filter has changed. reset delta report selection
-      setSelectedDeltaReport(undefined);
-    }
-  }, [filter, selectedDeltaReport]);
-
-  const openCreateTaskDialog = () => {
-    setCreateImportTaskDialogVisible(true);
-  };
-
-  const openImportDialog = () => {
-    void loadTasks().then(() => {
-      setImportDialogVisible(true);
-    });
-  };
-
-  const closeImportDialog = () => {
-    setImportDialogVisible(false);
-  };
-
-  const handleCloseImportDialog = () => {
-    closeImportDialog();
-  };
-
-  const handleImportReport = data => {
-    return gmp.report
-      .import(data)
-      .then(onChanged, onError)
-      .then(() => closeImportDialog());
-  };
-
-  const closeCreateImportTaskDialog = () => {
-    setCreateImportTaskDialogVisible(false);
-  };
-
-  const handleCreateImportTask = async (
-    data: TaskCommandCreateImportTaskParams,
-  ) => {
-    const response = await gmp.task.createImportTask(data);
-    const {data: task} = response;
-    void loadTasks();
-    setTaskId(task.id);
-    closeCreateImportTaskDialog();
-  };
-
-  const handleCloseCreateImportTask = () => {
-    closeCreateImportTaskDialog();
-  };
-
-  const handleReportDeltaSelect = (report: Report) => {
-    if (isDefined(selectedDeltaReport)) {
-      isDefined(onFilterChanged) &&
-        onFilterChanged(beforeSelectFilter as Filter);
-      void navigate(`/report/delta/${selectedDeltaReport.id}/${report.id}`, {
-        replace: true,
-      });
-    } else {
-      const newFilter = filter || new Filter();
-
-      isDefined(onFilterChanged) &&
-        onFilterChanged(
-          newFilter
-            .copy()
-            .set('first', 1) // reset to first page
-            .set('task_id', report?.task?.id),
-        );
-      setBeforeSelectFilter(newFilter);
-      setSelectedDeltaReport(report);
-    }
-  };
 
   const handleReportDeleteClick = (report: Report) => {
     if (!isDefined(onDelete)) {
       return Promise.resolve();
     }
     return onDelete(report);
-  };
-
-  const handleTaskChange = (taskId: string) => {
-    setTaskId(taskId);
   };
 
   return (
@@ -194,32 +75,14 @@ const ReportListPage = ({
             {...props}
             entities={entities}
             filter={filter}
-            selectedDeltaReport={selectedDeltaReport}
             onReportDeleteClick={handleReportDeleteClick}
-            onReportDeltaSelect={handleReportDeltaSelect}
           />
         }
         title={_('Reports')}
-        toolBarIcons={<ToolBarIcons onUploadReportClick={openImportDialog} />}
+        toolBarIcons={<ToolBarIcons />}
         onError={onError}
         onFilterChanged={onFilterChanged}
       />
-      {importDialogVisible && (
-        <ReportImportDialog
-          task_id={taskId as string}
-          tasks={tasks}
-          onClose={handleCloseImportDialog}
-          onNewImportTaskClick={openCreateTaskDialog}
-          onSave={handleImportReport}
-          onTaskChange={handleTaskChange}
-        />
-      )}
-      {createImportTaskDialogVisible && (
-        <ImportTaskDialog
-          onClose={handleCloseCreateImportTask}
-          onSave={handleCreateImportTask}
-        />
-      )}
     </>
   );
 };

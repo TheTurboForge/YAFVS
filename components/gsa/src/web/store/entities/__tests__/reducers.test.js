@@ -26,7 +26,6 @@ describe('entities reducer tests', () => {
       cpe: initState,
       credential: initState,
       cve: initState,
-      deltaReport: initState,
       dfncert: initState,
       filter: initState,
       host: initState,

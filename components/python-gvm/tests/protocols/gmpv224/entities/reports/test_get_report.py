@@ -47,12 +47,6 @@ class GmpGetReportTestMixin:
             f'"{report_format_id}" details="1"/>'.encode()
         )
 
-    def test_get_report_with_delta_report_id(self):
-        self.gmp.get_report(report_id="r1", delta_report_id="r2")
-
-        self.connection.send.has_been_called_with(
-            b'<get_reports report_id="r1" delta_report_id="r2" details="1"/>'
-        )
 
     def test_get_report_with_ignore_pagination(self):
         self.gmp.get_report(report_id="r1", ignore_pagination=True)

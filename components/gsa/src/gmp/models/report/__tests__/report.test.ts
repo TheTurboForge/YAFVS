@@ -17,7 +17,6 @@ describe('ReportReport tests', () => {
     expect(report.applications).toBeUndefined();
     expect(report.closedCves).toBeUndefined();
     expect(report.cves).toBeUndefined();
-    expect(report.delta_report).toBeUndefined();
     expect(report.errors).toBeUndefined();
     expect(report.filter).toBeUndefined();
     expect(report.hosts).toBeUndefined();
@@ -42,7 +41,6 @@ describe('ReportReport tests', () => {
     expect(report.applications).toEqual(emptyCollection);
     expect(report.closedCves).toEqual(emptyCollection);
     expect(report.cves).toEqual(emptyCollection);
-    expect(report.delta_report).toBeUndefined();
     expect(report.errors).toEqual(emptyCollection);
     expect(report.filter).toBeDefined();
     expect(report.hosts).toBeDefined();
@@ -74,9 +72,9 @@ describe('ReportReport tests', () => {
 
   test('should parse report type', () => {
     const report = ReportReport.fromElement({
-      _type: 'delta',
+      _type: 'scan',
     });
-    expect(report.report_type).toEqual('delta');
+    expect(report.report_type).toEqual('scan');
   });
 
   test('should parse severity', () => {
@@ -115,28 +113,6 @@ describe('ReportReport tests', () => {
     expect(report.task).toBeDefined();
     expect(report.task?.id).toEqual('task1');
     expect(report.task?.name).toEqual('Test Task');
-  });
-
-  test('should parse delta report', () => {
-    const report = ReportReport.fromElement({
-      delta: {
-        report: {
-          _id: 'delta1',
-          scan_run_status: 'completed',
-          scan_start: '2024-01-01T00:00:00Z',
-          scan_end: '2024-01-02T00:00:00Z',
-        },
-      },
-    });
-    expect(report.delta_report).toBeDefined();
-    expect(report.delta_report?.id).toEqual('delta1');
-    expect(report.delta_report?.scan_run_status).toEqual('completed');
-    expect(report.delta_report?.scan_start).toEqual(
-      parseDate('2024-01-01T00:00:00Z'),
-    );
-    expect(report.delta_report?.scan_end).toEqual(
-      parseDate('2024-01-02T00:00:00Z'),
-    );
   });
 
   test('should parse applications', () => {

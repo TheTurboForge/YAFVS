@@ -11,7 +11,7 @@ import {
   createLoadEntities,
   types,
 } from 'web/store/entities/utils/actions';
-import {createReducer, initialState} from 'web/store/entities/utils/reducers';
+import {initialState} from 'web/store/entities/utils/reducers';
 import {createEntitiesSelector} from 'web/store/entities/utils/selectors';
 
 const reportsSelector = createEntitiesSelector('report');
@@ -46,10 +46,7 @@ const reducer = (state = initialState, action) => {
   }
 };
 
-const deltaReducer = createReducer('deltaReport');
-
 export {
-  deltaReducer,
   loadAllEntities,
   loadEntities,
   reducer,

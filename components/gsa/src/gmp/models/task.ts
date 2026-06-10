@@ -16,7 +16,6 @@ import {
   parseYesNo,
   parseYes,
   parseDuration,
-  NO_VALUE,
   YES_VALUE,
   type YesNo,
   parseToString,
@@ -204,7 +203,7 @@ export type TaskUsageType = (typeof USAGE_TYPE)[keyof typeof USAGE_TYPE];
 
 export const AUTO_DELETE_KEEP = 'keep';
 export const AUTO_DELETE_NO = 'no';
-export const AUTO_DELETE_KEEP_DEFAULT_VALUE = 5;
+export const AUTO_DELETE_KEEP_DEFAULT_VALUE = 10;
 
 export const HOSTS_ORDERING_SEQUENTIAL = 'sequential';
 export const HOSTS_ORDERING_RANDOM = 'random';
@@ -220,14 +219,10 @@ export const TASK_STATUS = {
   stoprequested: 'Stop Requested',
   deleterequested: 'Delete Requested',
   ultimatedeleterequested: 'Ultimate Delete Requested',
-  resumerequested: 'Resume Requested',
   requested: 'Requested',
   stopped: 'Stopped',
   new: 'New',
   interrupted: 'Interrupted',
-  import: 'Import',
-  uploading: 'Uploading',
-  uploadinginterrupted: 'Uploading Interrupted',
   processing: 'Processing',
   done: 'Done',
   unknown: 'Unknown',
@@ -242,17 +237,13 @@ const TASK_STATUS_TRANSLATIONS = {
   'Stop Requested': _l('Stop Requested'),
   'Delete Requested': _l('Delete Requested'),
   'Ultimate Delete Requested': _l('Ultimate Delete Requested'),
-  'Resume Requested': _l('Resume Requested'),
   Requested: _l('Requested'),
   Stopped: _l('Stopped'),
   New: _l('New'),
   Interrupted: _l('Interrupted'),
-  Import: _l('Import Task'),
-  Uploading: _l('Uploading'),
   Done: _l('Done'),
   Queued: _l('Queued'),
   Processing: _l('Processing'),
-  'Uploading Interrupted': _l('Interrupted'),
   Unknown: _l('Unknown'),
 } as const;
 
@@ -264,7 +255,6 @@ export const isActive = (status?: TaskStatus) =>
   status === TASK_STATUS.stoprequested ||
   status === TASK_STATUS.deleterequested ||
   status === TASK_STATUS.ultimatedeleterequested ||
-  status === TASK_STATUS.resumerequested ||
   status === TASK_STATUS.requested ||
   status === TASK_STATUS.queued ||
   status === TASK_STATUS.processing;
@@ -544,18 +534,11 @@ class Task extends Model {
   }
 
   isChangeable() {
-    return this.isNew() || this.isAlterable();
+    return true;
   }
 
   isAlterable() {
-    return this.alterable !== NO_VALUE;
-  }
-
-  /**
-   * Returns true if the task is an import task.
-   */
-  isImport() {
-    return !isDefined(this.target);
+    return true;
   }
 
 }

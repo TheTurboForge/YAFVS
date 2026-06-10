@@ -4,10 +4,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from gvm.errors import InvalidArgument, RequiredArgument
+from gvm.errors import RequiredArgument
 from gvm.protocols.core import Request
 from gvm.utils import to_bool
-from gvm.xml import XmlCommand, XmlError
+from gvm.xml import XmlCommand
 
 from .._entity_id import EntityID
 from ..v224._report_formats import ReportFormatType
@@ -38,7 +38,6 @@ class Reports:
         *,
         filter_string: str | None = None,
         filter_id: str | None = None,
-        delta_report_id: EntityID | None = None,
         report_format_id: str | ReportFormatType | None = None,
         report_config_id: str | None = None,
         ignore_pagination: bool | None = None,
@@ -50,7 +49,6 @@ class Reports:
             report_id: UUID of an existing report
             filter_string: Filter term to use to filter results in the report
             filter_id: UUID of filter to use to filter results in the report
-            delta_report_id: UUID of an existing report to compare report to.
             report_format_id: UUID of report format to use
                               or ReportFormatType (enum)
             report_config_id: UUID of report format config to use
@@ -70,9 +68,6 @@ class Reports:
         cmd.set_attribute("usage_type", "scan")
 
         cmd.add_filter(filter_string, filter_id)
-
-        if delta_report_id:
-            cmd.set_attribute("delta_report_id", str(delta_report_id))
 
         if report_format_id:
             cmd.set_attribute("format_id", str(report_format_id))
@@ -124,47 +119,5 @@ class Reports:
 
         if ignore_pagination is not None:
             cmd.set_attribute("ignore_pagination", to_bool(ignore_pagination))
-
-        return cmd
-
-    @classmethod
-    def import_report(
-        cls,
-        report: str,
-        task_id: EntityID,
-        *,
-        in_assets: bool | None = None,
-    ) -> Request:
-        """Import a Report from XML
-
-        Args:
-            report: Report XML as string to import. This XML must contain
-                a :code:`<report>` root element.
-            task_id: UUID of task to import report to
-            in_asset: Whether to create or update assets using the report
-        """
-        if not report:
-            raise RequiredArgument(
-                function=cls.import_report.__name__, argument="report"
-            )
-
-        cmd = XmlCommand("create_report")
-
-        if not task_id:
-            raise RequiredArgument(
-                function=cls.import_report.__name__, argument="task_id"
-            )
-
-        cmd.add_element("task", attrs={"id": str(task_id)})
-
-        if in_assets is not None:
-            cmd.add_element("in_assets", to_bool(in_assets))
-
-        try:
-            cmd.append_xml_str(report)
-        except XmlError as e:
-            raise InvalidArgument(
-                f"Invalid xml passed as report to import_report {e}"
-            ) from None
 
         return cmd

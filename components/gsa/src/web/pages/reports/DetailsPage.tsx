@@ -557,7 +557,6 @@ const ReportDetailsPage = () => {
       </TargetComponent>
       {showFilterDialog && reportFilter && (
         <ReportDetailsFilterDialog
-          delta={false}
           filter={reportFilter}
           onClose={handleFilterDialogClose}
           onFilterChanged={handleFilterChange}

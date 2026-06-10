@@ -1497,7 +1497,6 @@ class GMPv224(GvmProtocol[T]):
         filter_string: str | None = None,
         filter_id: EntityID | None = None,
         report_format_id: EntityID | ReportFormatType | None = None,
-        delta_report_id: EntityID | None = None,
     ) -> T:
         """Run an alert by ignoring its event and conditions
 
@@ -1510,7 +1509,6 @@ class GMPv224(GvmProtocol[T]):
             filter: Filter term to use to filter results in the report
             filter_id: UUID of filter to use to filter results in the report
             report_format_id: UUID of report format to use                              or ReportFormatType (enum)
-            delta_report_id: UUID of an existing report to compare report to.
         """
         return self._send_request_and_transform_response(
             Alerts.trigger_alert(
@@ -1519,7 +1517,6 @@ class GMPv224(GvmProtocol[T]):
                 filter_string=filter_string,
                 filter_id=filter_id,
                 report_format_id=report_format_id,
-                delta_report_id=delta_report_id,
             )
         )
 
@@ -2099,7 +2096,6 @@ class GMPv224(GvmProtocol[T]):
         *,
         filter_string: str | None = None,
         filter_id: str | None = None,
-        delta_report_id: EntityID | None = None,
         report_format_id: str | ReportFormatType | None = None,
         ignore_pagination: bool | None = None,
         details: bool | None = True,
@@ -2110,7 +2106,6 @@ class GMPv224(GvmProtocol[T]):
             report_id: UUID of an existing report
             filter_string: Filter term to use to filter results in the report
             filter_id: UUID of filter to use to filter results in the report
-            delta_report_id: UUID of an existing report to compare report to.
             report_format_id: UUID of report format to use
                               or ReportFormatType (enum)
             ignore_pagination: Whether to ignore the filter terms "first" and
@@ -2123,7 +2118,6 @@ class GMPv224(GvmProtocol[T]):
                 report_id,
                 filter_string=filter_string,
                 filter_id=filter_id,
-                delta_report_id=delta_report_id,
                 report_format_id=report_format_id,
                 ignore_pagination=ignore_pagination,
                 details=details,
@@ -2158,25 +2152,6 @@ class GMPv224(GvmProtocol[T]):
                     ignore_pagination=ignore_pagination,
                     details=details,
             )
-        )
-
-    def import_report(
-        self,
-        report: str,
-        task_id: EntityID,
-        *,
-        in_assets: bool | None = None,
-    ) -> T:
-        """Import a Report from XML
-
-        Args:
-            report: Report XML as string to import. This XML must contain
-                a :code:`<report>` root element.
-            task_id: UUID of task to import report to
-            in_asset: Whether to create or update assets using the report
-        """
-        return self._send_request_and_transform_response(
-            Reports.import_report(report, task_id, in_assets=in_assets)
         )
 
     def get_result(self, result_id: EntityID) -> T:
@@ -2853,22 +2828,6 @@ class GMPv224(GvmProtocol[T]):
             Tasks.clone_task(task_id)
         )
 
-    def create_container_task(
-        self, name: str, *, comment: str | None = None
-    ) -> T:
-        """Create a new container task
-
-        A container task is a "meta" task to import and view reports from other
-        systems.
-
-        Args:
-            name: Name of the task
-            comment: Comment for the task
-        """
-        return self._send_request_and_transform_response(
-            Tasks.create_container_task(name, comment=comment)
-        )
-
     def create_task(
         self,
         name: str,
@@ -2876,7 +2835,6 @@ class GMPv224(GvmProtocol[T]):
         target_id: EntityID,
         scanner_id: EntityID,
         *,
-        alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
         alert_ids: Sequence[EntityID] | None = None,
@@ -2892,7 +2850,6 @@ class GMPv224(GvmProtocol[T]):
             target_id: UUID of target to be scanned
             scanner_id: UUID of scanner to use for scanning the target
             comment: Comment for the task
-            alterable: Whether the task should be alterable
             alert_ids: List of UUIDs for alerts to be applied to the task
             hosts_ordering: The order hosts are scanned in
             schedule_id: UUID of a schedule when the task should be run.
@@ -2907,7 +2864,6 @@ class GMPv224(GvmProtocol[T]):
                 config_id,
                 target_id,
                 scanner_id,
-                alterable=alterable,
                 hosts_ordering=hosts_ordering,
                 schedule_id=schedule_id,
                 alert_ids=alert_ids,
@@ -2981,7 +2937,6 @@ class GMPv224(GvmProtocol[T]):
         config_id: EntityID | None = None,
         target_id: EntityID | None = None,
         scanner_id: EntityID | None = None,
-        alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
         schedule_periods: int | None = None,
@@ -3013,7 +2968,6 @@ class GMPv224(GvmProtocol[T]):
                 config_id=config_id,
                 target_id=target_id,
                 scanner_id=scanner_id,
-                alterable=alterable,
                 hosts_ordering=hosts_ordering,
                 schedule_id=schedule_id,
                 schedule_periods=schedule_periods,
@@ -3044,16 +2998,6 @@ class GMPv224(GvmProtocol[T]):
         """
         return self._send_request_and_transform_response(
             Tasks.start_task(task_id)
-        )
-
-    def resume_task(self, task_id: EntityID) -> T:
-        """Resume an existing stopped task
-
-        Args:
-            task_id: UUID of the task to be resumed
-        """
-        return self._send_request_and_transform_response(
-            Tasks.resume_task(task_id)
         )
 
     def stop_task(self, task_id: EntityID) -> T:

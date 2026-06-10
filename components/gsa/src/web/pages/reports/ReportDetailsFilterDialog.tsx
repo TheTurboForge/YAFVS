@@ -24,15 +24,12 @@ import useFilterDialogSave, {
 } from 'web/components/powerfilter/useFilterDialogSave';
 import useCapabilities from 'web/hooks/useCapabilities';
 import useTranslation from 'web/hooks/useTranslation';
-import DeltaResultsFilterGroup from 'web/pages/reports/DeltaResultsFilterGroup';
 
 interface ReportDetailsFilterDialogProps extends UseFilterDialogSaveProps {
-  delta?: boolean;
   filter?: Filter;
 }
 
 const ReportDetailsFilterDialog = ({
-  delta = false,
   filter: initialFilter,
   onClose,
   onFilterChanged,
@@ -72,13 +69,6 @@ const ReportDetailsFilterDialog = ({
         name="filterString"
         onChange={onFilterStringChange}
       />
-
-      {delta && (
-        <DeltaResultsFilterGroup
-          filter={filter}
-          onChange={onFilterValueChange}
-        />
-      )}
 
       <BooleanFilterGroup
         filter={filter}

@@ -19,10 +19,7 @@ import {reducer as override} from 'web/store/entities/overrides';
 import {reducer as portlist} from 'web/store/entities/portlists';
 import {reducer as reportconfig} from 'web/store/entities/reportconfigs';
 import {reducer as reportformat} from 'web/store/entities/reportformats';
-import {
-  reducer as report,
-  deltaReducer as deltaReport,
-} from 'web/store/entities/reports';
+import {reducer as report} from 'web/store/entities/reports';
 import {reducer as result} from 'web/store/entities/results';
 import {reducer as scanconfig} from 'web/store/entities/scanconfigs';
 import {reducer as scanner} from 'web/store/entities/scanners';
@@ -40,7 +37,6 @@ const entitiesReducer = combineReducers({
   cpe,
   credential,
   cve,
-  deltaReport,
   dfncert,
   filter,
   host,

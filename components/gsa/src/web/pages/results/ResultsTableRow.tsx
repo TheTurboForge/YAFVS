@@ -11,10 +11,7 @@ import {isDefined} from 'gmp/utils/identity';
 import {shorten} from 'gmp/utils/string';
 import SeverityBar from 'web/components/bar/SeverityBar';
 import DateTime from 'web/components/date/DateTime';
-import {
-  DeltaDifferenceIcon,
-  OverrideIcon,
-} from 'web/components/icon';
+import {OverrideIcon} from 'web/components/icon';
 import SolutionTypeIcon from 'web/components/icon/SolutionTypeIcon';
 import IconDivider from 'web/components/layout/IconDivider';
 import Layout from 'web/components/layout/Layout';
@@ -28,12 +25,10 @@ import EntitiesActions, {
 import RowDetailsToggle from 'web/entities/RowDetailsToggle';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
-import ResultDelta from 'web/pages/results/ResultDelta';
 import {renderPercentile, renderScore} from 'web/utils/severity';
 
 export interface ResultTableRowProps extends EntitiesActionsProps<Result> {
   actionsComponent?: React.ComponentType<EntitiesActionsProps<Result>>;
-  delta?: boolean;
   entity: Result;
   links?: boolean;
   onToggleDetailsClick?: () => void;
@@ -42,7 +37,6 @@ export interface ResultTableRowProps extends EntitiesActionsProps<Result> {
 const ResultTableRow = ({
   actionsComponent: ActionsComponent = EntitiesActions,
   'data-testid': dataTestId = 'result-table-row',
-  delta = false,
   entity,
   links = true,
   onToggleDetailsClick,
@@ -57,20 +51,12 @@ const ResultTableRow = ({
   const hasActiveOverrides =
     isDefined(entity.overrides) &&
     entity.overrides.filter(override => override.isActive()).length > 0;
-  const deltaSeverity = entity.delta?.result?.severity;
-  const deltaHostname = entity.delta?.result?.host?.hostname;
-  const deltaQoD = entity.delta?.result?.qod?.value;
   const epssScore = entity?.information?.epss?.maxEpss?.score;
   const epssPercentile = entity?.information?.epss?.maxEpss?.percentile;
   const gmp = useGmp();
   const enableEPSS = gmp.settings.enableEPSS;
   return (
     <TableRow data-testid={dataTestId}>
-      {delta && (
-        <TableData align={['center', 'center']}>
-          {entity.hasDelta() && <ResultDelta delta={entity.delta} />}
-        </TableData>
-      )}
       <TableData>
         <Layout align="space-between">
           <RowDetailsToggle name={entity.id} onClick={onToggleDetailsClick}>
@@ -93,23 +79,11 @@ const ResultTableRow = ({
       <TableData>
         <IconDivider>
           {<SeverityBar severity={entity.severity} />}
-          {isDefined(deltaSeverity) && entity.severity !== deltaSeverity && (
-            <DeltaDifferenceIcon
-              title={_('Severity is changed from {{deltaSeverity}}.', {
-                deltaSeverity,
-              })}
-            />
-          )}
         </IconDivider>
       </TableData>
       <TableData align="end">
         <IconDivider>
           {isDefined(entity.qod?.value) && <Qod value={entity.qod.value} />}
-          {isDefined(deltaQoD) && entity.qod?.value !== deltaQoD && (
-            <DeltaDifferenceIcon
-              title={_('QoD is changed from {{deltaQoD}}.', {deltaQoD})}
-            />
-          )}
         </IconDivider>
       </TableData>
       <TableData title={host?.name}>
@@ -126,15 +100,6 @@ const ResultTableRow = ({
       <TableData title={host?.hostname}>
         <IconDivider>
           {isDefined(host?.hostname) && shorten(host.hostname, 40)}
-          {isDefined(deltaHostname) &&
-            deltaHostname.length > 0 &&
-            host?.hostname !== deltaHostname && (
-              <DeltaDifferenceIcon
-                title={_('Hostname is changed from {{deltaHostname}}.', {
-                  deltaHostname,
-                })}
-              />
-            )}
         </IconDivider>
       </TableData>
       <TableData>{entity.port}</TableData>

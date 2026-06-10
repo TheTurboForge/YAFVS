@@ -144,11 +144,12 @@ The predefined `Organization` scope is global and non-deletable. It includes all
 active targets and all known hosts by definition.
 
 Generating a scope report does not start a scan. TurboVAS selects the newest
-completed normal scan report for each associated target, excludes import-task
-reports in the first implementation, and stores the selected source reports as
-snapshot provenance. Custom scopes count only manually selected hosts. Candidate
-hosts discovered in source reports are shown separately so operators can add them
-to a scope deliberately.
+completed normal scan report for each associated target and stores the selected
+source reports as snapshot provenance. Inherited import-task/report-upload
+product behavior has been removed, so scope reports aggregate scanner-produced
+raw reports. Custom scopes count only manually selected hosts. Candidate hosts
+discovered in source reports are shown separately so operators can add them to a
+scope deliberately.
 
 Scope reports expose coverage and freshness signals: source report count, latest
 evidence time, member hosts with evidence, member hosts without evidence, and
@@ -165,10 +166,12 @@ report are protected from deletion so the snapshot provenance remains intact.
 The current implementation deliberately focuses on core report reading parity:
 scope report list/detail views, information, results, evidence sources, raw
 evidence links, and result navigation. Raw-only workflows such as import/upload,
-delta comparison, report-composer downloads, alerts, and asset/tag mutation stay
-on raw reports. Additional report-like tabs for hosts, ports, applications,
-operating systems, CVEs, TLS certificates, and error messages are follow-up work
-once each collection has a real scope-report-backed query contract.
+delta comparison, report-composer downloads, alerts, and asset/tag mutation are
+not scope-report actions; inherited import/upload and delta comparison have been
+removed from the operator product. Additional report-like tabs for hosts, ports,
+applications, operating systems, CVEs, TLS certificates, and error messages are
+follow-up work once each collection has a real scope-report-backed query
+contract.
 
 Runtime helpers are available for development validation:
 

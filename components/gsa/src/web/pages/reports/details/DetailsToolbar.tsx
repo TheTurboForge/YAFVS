@@ -12,7 +12,6 @@ import Powerfilter from 'web/components/powerfilter/PowerFilter';
 import ToolBarIcons from 'web/pages/reports/details/ToolbarIcons';
 
 export interface DetailsToolbarProps {
-  delta?: boolean;
   filters?: Filter[];
   isLoading?: boolean;
   isLoadingFilters?: boolean;
@@ -38,7 +37,6 @@ export interface DetailsToolbarProps {
 }
 
 const DetailsToolbar = ({
-  delta = false,
   filters,
   isLoading,
   isLoadingFilters,
@@ -65,7 +63,6 @@ const DetailsToolbar = ({
   return (
     <ToolBar>
       <ToolBarIcons
-        delta={delta}
         filter={reportFilter}
         isLoading={isLoading}
         report={report}

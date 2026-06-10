@@ -97,7 +97,7 @@ include(CPack)
 
 ## Variables
 
-set(GVMD_DATABASE_VERSION 281)
+set(GVMD_DATABASE_VERSION 282)
 
 set(GVMD_SCAP_DATABASE_VERSION 22)
 
@@ -598,21 +598,6 @@ install(
     GROUP_EXECUTE
     WORLD_READ
     WORLD_EXECUTE
-)
-
-install(CODE "file (MAKE_DIRECTORY \$ENV{DESTDIR}${GVMD_DATA_DIR}/wizards)")
-
-install(
-  FILES
-    src/wizards/quick_first_scan.xml
-    src/wizards/get_tasks_deep.xml
-    src/wizards/delete_task_deep.xml
-    src/wizards/quick_auth_scan.xml
-    src/wizards/quick_task.xml
-    src/wizards/reset_task.xml
-    src/wizards/modify_task.xml
-  DESTINATION ${GVMD_DATA_DIR}/wizards/
-  PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ
 )
 
 install(

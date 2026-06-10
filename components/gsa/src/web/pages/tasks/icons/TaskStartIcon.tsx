@@ -25,7 +25,7 @@ const TaskStartIcon = <TTask extends Task>({
 
   const capabilities = useCapabilities();
 
-  if (task.isRunning() || task.isImport()) {
+  if (task.isRunning()) {
     return null;
   }
 

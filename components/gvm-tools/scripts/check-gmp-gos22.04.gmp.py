@@ -612,7 +612,7 @@ def status(gmp, im, script_args):
                         f"min_qod= levels=hmlgd autofp={script_args.autofp} "
                         f"apply_overrides={script_args.apply_overrides} "
                         f"overrides={script_args.overrides} first=1 rows=-1 "
-                        f"delta_states=cgns host={host}"
+                        f"host={host}"
                     ),
                     details=True,
                 )

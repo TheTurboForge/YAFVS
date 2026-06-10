@@ -25,7 +25,6 @@ import {
   Download,
   Equal,
   FileOutput,
-  FilePenLine,
   Filter,
   Fingerprint,
   Folder,
@@ -60,7 +59,6 @@ import {
   ShieldCheck,
   ShieldX,
   Square,
-  StepForward,
   Tag,
   Tags,
   Trash2,
@@ -80,8 +78,6 @@ import Clone from 'web/components/icon/svg/clone.svg?react';
 import Config from 'web/components/icon/svg/config.svg?react';
 import Cpe from 'web/components/icon/svg/cpe.svg?react';
 import Cve from 'web/components/icon/svg/cve.svg?react';
-import Delta from 'web/components/icon/svg/delta.svg?react';
-import DeltaSecond from 'web/components/icon/svg/delta_second.svg?react';
 import DfnCertAdv from 'web/components/icon/svg/dfn_cert_adv.svg?react';
 import DlCsv from 'web/components/icon/svg/dl_csv.svg?react';
 import DlDeb from 'web/components/icon/svg/dl_deb.svg?react';
@@ -226,8 +222,6 @@ const getIcons = (): Record<string, IconComponent> => {
     UserCheck: createIcon(UserCheck, 'permission-icon', 'Permission Icon'),
     ChevronLeft: createIcon(ChevronLeft, 'previous-icon', 'Previous Icon'),
     RotateCcw: createIcon(RotateCcw, 'reset-icon', 'Reset Icon'),
-    StepForward: createIcon(StepForward, 'resume-icon', 'Resume Icon'),
-    Alterable: createIcon(FilePenLine, 'alterable-icon', 'Alterable Icon'),
     Clock3: createIcon(Clock3, 'schedule-icon', 'Schedule Icon'),
     Search: createIcon(Search, 'search-icon', 'Search Icon'),
     Settings2: createIcon(Settings2, 'settings-2-icon', 'Settings Icon'),
@@ -273,19 +267,6 @@ const getIcons = (): Record<string, IconComponent> => {
     ),
     CpeLogo: createIcon(Cpe, 'cpe-logo-icon', 'CPE Logo Icon', false),
     Cve: createIcon(Cve, 'cve-icon', 'CVE Icon', false),
-    Delta: createIcon(Delta, 'delta-icon', 'Delta Icon', false),
-    DeltaSecond: createIcon(
-      DeltaSecond,
-      'delta-second-icon',
-      'Delta Second Icon',
-      false,
-    ),
-    DeltaDifference: createIcon(
-      DeltaSecond,
-      'delta-difference-icon',
-      'Delta Difference Icon',
-      false,
-    ),
     DfnCertAdv: createIcon(
       DfnCertAdv,
       'dfn-cert-adv-icon',
@@ -447,9 +428,6 @@ export const CloneIcon = getIcons().Clone;
 export const ConfigIcon = getIcons().ScanConfig;
 export const CpeLogoIcon = getIcons().CpeLogo;
 export const CveIcon = getIcons().Cve;
-export const DeltaIcon = getIcons().Delta;
-export const DeltaDifferenceIcon = getIcons().DeltaDifference;
-export const DeltaSecondIcon = getIcons().DeltaSecond;
 export const DfnCertAdvIcon = getIcons().DfnCertAdv;
 export const DiffIcon = getIcons().Diff;
 export const DisableIcon = getIcons().Disabled;
@@ -515,7 +493,6 @@ export const Settings2Icon = getIcons().Settings2;
 export const VerifyIcon = getIcons().ShieldCheck;
 export const VerifyNoIcon = getIcons().ShieldX;
 export const StopIcon = getIcons().Square;
-export const ResumeIcon = getIcons().StepForward;
 export const StMitigateIcon = getIcons().StMitigate;
 export const StNonAvailableIcon = getIcons().StNonavailable;
 export const StUnknownIcon = getIcons().StUnknown;

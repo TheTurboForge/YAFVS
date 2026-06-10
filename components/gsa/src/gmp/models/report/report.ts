@@ -42,7 +42,7 @@ import {type TaskStatus} from 'gmp/models/task';
 import {parseSeverity, parseDate, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
-export type ReportType = 'scan' | 'assets' | 'delta';
+export type ReportType = 'scan' | 'assets';
 
 interface ReportFiltersElement {
   _id?: string;
@@ -51,16 +51,6 @@ interface ReportFiltersElement {
     keyword?: FilterKeyword | FilterKeyword[];
   };
   term?: string;
-}
-
-interface ReportDeltaElement {
-  report?: {
-    _id?: string;
-    scan_end?: string; // date
-    scan_run_status?: string;
-    scan_start?: string; // date
-    timestamp?: string; // date
-  };
 }
 
 export interface ReportReportTaskElement {
@@ -80,7 +70,6 @@ export interface ReportReportElement extends ModelElement {
   _type?: ReportType;
   apps?: CountElement;
   closed_cves?: CountElement;
-  delta?: ReportDeltaElement;
   errors?: ErrorsElement;
   filters?: ReportFiltersElement;
   gmp?: {
@@ -112,14 +101,6 @@ export interface ReportReportElement extends ModelElement {
   timezone_abbrev?: string;
   tls_certificates?: TlsCertificatesElement;
   vulns?: CountElement;
-}
-
-export interface DeltaReport {
-  id?: string;
-  scan_run_status?: TaskStatus;
-  scan_start?: Date;
-  scan_end?: Date;
-  timestamp?: Date;
 }
 
 interface ReportReportSeverity {
@@ -160,7 +141,6 @@ interface ReportReportProperties extends ModelProperties {
   applications?: CollectionList<ReportApp>;
   closedCves?: CollectionList<ReportClosedCve>;
   cves?: CollectionList<ReportActiveCve>;
-  delta_report?: DeltaReport;
   errors?: CollectionList<ReportError>;
   filter?: Filter;
   hosts?: CollectionList<ReportHost>;
@@ -186,7 +166,6 @@ class ReportReport extends Model {
   readonly applications?: CollectionList<ReportApp>;
   readonly closedCves?: CollectionList<ReportClosedCve>;
   readonly cves?: CollectionList<ReportActiveCve>;
-  readonly delta_report?: DeltaReport;
   readonly errors?: CollectionList<ReportError>;
   readonly filter?: Filter;
   readonly hosts?: CollectionList<ReportHost>;
@@ -209,8 +188,6 @@ class ReportReport extends Model {
     applications,
     closedCves,
     cves,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    delta_report,
     errors,
     filter,
     hosts,
@@ -241,7 +218,6 @@ class ReportReport extends Model {
     this.applications = applications;
     this.closedCves = closedCves;
     this.cves = cves;
-    this.delta_report = delta_report;
     this.errors = errors;
     this.filter = filter;
     this.hosts = hosts;
@@ -270,7 +246,7 @@ class ReportReport extends Model {
   ): ReportReportProperties {
     const copy = super.parseElement(element) as ReportReportProperties;
 
-    const {delta, severity, scan_start, scan_end, task} = element;
+    const {severity, scan_start, scan_end, task} = element;
 
     const filter = isDefined(element.filters)
       ? parseFilter(element)
@@ -313,16 +289,6 @@ class ReportReport extends Model {
     copy.timezone = element.timezone;
     copy.timezone_abbrev = element.timezone_abbrev;
 
-    if (isDefined(delta?.report)) {
-      copy.delta_report = {
-        id: delta.report._id,
-        scan_run_status: delta.report.scan_run_status as TaskStatus,
-        scan_end: parseDate(delta.report.scan_end),
-        scan_start: parseDate(delta.report.scan_start),
-        timestamp: parseDate(delta.report.timestamp),
-      };
-    }
-
     if (isDefined(element.result_count)) {
       copy.result_count = {
         filtered: element.result_count.filtered,
@@ -355,10 +321,6 @@ class ReportReport extends Model {
     }
 
     return copy;
-  }
-
-  isDeltaReport() {
-    return this.report_type === 'delta';
   }
 }
 

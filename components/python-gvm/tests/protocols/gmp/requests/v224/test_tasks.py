@@ -24,23 +24,6 @@ class TasksTestCase(unittest.TestCase):
         with self.assertRaises(RequiredArgument):
             Tasks().clone_task("")
 
-    def test_create_container_task(self):
-        request = Tasks().create_container_task("name")
-        self.assertEqual(
-            bytes(request),
-            b'<create_task><name>name</name><target id="0"/></create_task>',
-        )
-
-    def test_create_container_task_with_comment(self):
-        request = Tasks().create_container_task("name", comment="comment")
-        self.assertEqual(
-            bytes(request),
-            b"<create_task>"
-            b"<name>name</name>"
-            b'<target id="0"/>'
-            b"<comment>comment</comment>"
-            b"</create_task>",
-        )
 
     def test_create_task(self):
         request = Tasks().create_task(
@@ -80,44 +63,6 @@ class TasksTestCase(unittest.TestCase):
             b"</create_task>",
         )
 
-    def test_create_task_with_alterable(self):
-        request = Tasks().create_task(
-            "name",
-            target_id="target_id",
-            config_id="config_id",
-            scanner_id="scanner_id",
-            alterable=True,
-        )
-        self.assertEqual(
-            bytes(request),
-            b"<create_task>"
-            b"<name>name</name>"
-            b"<usage_type>scan</usage_type>"
-            b'<config id="config_id"/>'
-            b'<target id="target_id"/>'
-            b'<scanner id="scanner_id"/>'
-            b"<alterable>1</alterable>"
-            b"</create_task>",
-        )
-
-        request = Tasks().create_task(
-            "name",
-            target_id="target_id",
-            config_id="config_id",
-            scanner_id="scanner_id",
-            alterable=False,
-        )
-        self.assertEqual(
-            bytes(request),
-            b"<create_task>"
-            b"<name>name</name>"
-            b"<usage_type>scan</usage_type>"
-            b'<config id="config_id"/>'
-            b'<target id="target_id"/>'
-            b'<scanner id="scanner_id"/>'
-            b"<alterable>0</alterable>"
-            b"</create_task>",
-        )
 
     def test_create_task_with_hosts_ordering(self):
         request = Tasks().create_task(
@@ -500,22 +445,6 @@ class TasksTestCase(unittest.TestCase):
             b"</modify_task>",
         )
 
-    def test_modify_task_with_alterable(self):
-        request = Tasks().modify_task("task_id", alterable=True)
-        self.assertEqual(
-            bytes(request),
-            b'<modify_task task_id="task_id">'
-            b"<alterable>1</alterable>"
-            b"</modify_task>",
-        )
-
-        request = Tasks().modify_task("task_id", alterable=False)
-        self.assertEqual(
-            bytes(request),
-            b'<modify_task task_id="task_id">'
-            b"<alterable>0</alterable>"
-            b"</modify_task>",
-        )
 
     def test_modify_task_with_hosts_ordering(self):
         request = Tasks().modify_task("task_id", hosts_ordering="random")
@@ -660,19 +589,6 @@ class TasksTestCase(unittest.TestCase):
         with self.assertRaises(RequiredArgument):
             Tasks().start_task(None)
 
-    def test_resume_task(self):
-        request = Tasks().resume_task("task_id")
-        self.assertEqual(
-            bytes(request),
-            b'<resume_task task_id="task_id"/>',
-        )
-
-    def test_resume_task_missing_task_id(self):
-        with self.assertRaises(RequiredArgument):
-            Tasks().resume_task("")
-
-        with self.assertRaises(RequiredArgument):
-            Tasks().resume_task(None)
 
     def test_stop_task(self):
         request = Tasks().stop_task("task_id")

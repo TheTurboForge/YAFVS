@@ -37,7 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 <name>Everything</name>
             </permission>
         </permissions>
-        <alterable>0</alterable>
+        <alterable>1</alterable>
         <usage_type>scan</usage_type>
         <config id="">
             <name></name>
@@ -93,7 +93,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <preference>
                 <name>Add results to Asset Management</name>
                 <scanner_name>in_assets</scanner_name>
-                <value>no</value>
+                <value>yes</value>
             </preference>
             <preference>
                 <name>Apply Overrides when adding Assets</name>

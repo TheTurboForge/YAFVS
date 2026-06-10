@@ -230,31 +230,6 @@ class GMPNext(GMPv227[T]):
             Tasks.clone_task(task_id)
         )
 
-    def create_import_task(self, name: str, *, comment: str | None = None) -> T:
-        """Create a new import task
-
-        An import task is a "meta" task to import and view reports from other
-        systems.
-
-        Args:
-            name: Name of the task
-            comment: Comment for the task
-        """
-        return self._send_request_and_transform_response(
-            Tasks.create_import_task(name=name, comment=comment)
-        )
-
-    def create_container_task(
-        self, name: str, *, comment: str | None = None
-    ) -> T:
-        """[DEPRECATED] Use create_import_task instead.
-
-        This method will be removed in a future version.
-        """
-        return self._send_request_and_transform_response(
-            Tasks.create_container_task(name=name, comment=comment)
-        )
-
     def create_task(
         self,
         name: str,
@@ -262,7 +237,6 @@ class GMPNext(GMPv227[T]):
         target_id: EntityID,
         scanner_id: EntityID,
         *,
-        alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
         alert_ids: Sequence[EntityID] | None = None,
@@ -278,7 +252,6 @@ class GMPNext(GMPv227[T]):
             target_id: UUID of target to be scanned
             scanner_id: UUID of scanner to use for scanning the target
             comment: Comment for the task
-            alterable: Whether the task should be alterable
             alert_ids: List of UUIDs for alerts to be applied to the task
             hosts_ordering: The order hosts are scanned in
             schedule_id: UUID of a schedule when the task should be run.
@@ -293,7 +266,6 @@ class GMPNext(GMPv227[T]):
                 config_id=config_id,
                 target_id=target_id,
                 scanner_id=scanner_id,
-                alterable=alterable,
                 hosts_ordering=hosts_ordering,
                 schedule_id=schedule_id,
                 alert_ids=alert_ids,
@@ -367,7 +339,6 @@ class GMPNext(GMPv227[T]):
         config_id: EntityID | None = None,
         target_id: EntityID | None = None,
         scanner_id: EntityID | None = None,
-        alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
         schedule_periods: int | None = None,
@@ -399,7 +370,6 @@ class GMPNext(GMPv227[T]):
                 config_id=config_id,
                 target_id=target_id,
                 scanner_id=scanner_id,
-                alterable=alterable,
                 hosts_ordering=hosts_ordering,
                 schedule_id=schedule_id,
                 alert_ids=alert_ids,
@@ -433,16 +403,6 @@ class GMPNext(GMPv227[T]):
         """
         return self._send_request_and_transform_response(
             Tasks.start_task(task_id=task_id)
-        )
-
-    def resume_task(self, task_id: EntityID) -> T:
-        """Resume an existing stopped task
-
-        Args:
-            task_id: UUID of the task to be resumed
-        """
-        return self._send_request_and_transform_response(
-            Tasks.resume_task(task_id=task_id)
         )
 
     def stop_task(self, task_id: EntityID) -> T:

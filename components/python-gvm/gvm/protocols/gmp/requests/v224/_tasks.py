@@ -33,33 +33,6 @@ class Tasks:
         return cmd
 
     @classmethod
-    def create_container_task(
-        cls, name: str, *, comment: str | None = None
-    ) -> Request:
-        """Create a new container task
-
-        A container task is a "meta" task to import and view reports from other
-        systems.
-
-        Args:
-            name: Name of the task
-            comment: Comment for the task
-        """
-        if not name:
-            raise RequiredArgument(
-                function=cls.create_container_task.__name__, argument="name"
-            )
-
-        cmd = XmlCommand("create_task")
-        cmd.add_element("name", name)
-        cmd.add_element("target", attrs={"id": "0"})
-
-        if comment:
-            cmd.add_element("comment", comment)
-
-        return cmd
-
-    @classmethod
     def create_task(
         cls,
         name: str,
@@ -67,7 +40,6 @@ class Tasks:
         target_id: EntityID,
         scanner_id: EntityID,
         *,
-        alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
         alert_ids: Sequence[EntityID] | None = None,
@@ -83,7 +55,6 @@ class Tasks:
             target_id: UUID of target to be scanned
             scanner_id: UUID of scanner to use for scanning the target
             comment: Comment for the task
-            alterable: Whether the task should be alterable
             alert_ids: List of UUIDs for alerts to be applied to the task
             hosts_ordering: The order hosts are scanned in
             schedule_id: UUID of a schedule when the task should be run.
@@ -127,9 +98,6 @@ class Tasks:
 
         if comment:
             cmd.add_element("comment", comment)
-
-        if alterable is not None:
-            cmd.add_element("alterable", to_bool(alterable))
 
         if hosts_ordering:
             if not isinstance(hosts_ordering, HostsOrdering):
@@ -255,7 +223,6 @@ class Tasks:
         config_id: EntityID | None = None,
         target_id: EntityID | None = None,
         scanner_id: EntityID | None = None,
-        alterable: bool | None = None,
         hosts_ordering: HostsOrdering | None = None,
         schedule_id: EntityID | None = None,
         schedule_periods: int | None = None,
@@ -299,9 +266,6 @@ class Tasks:
 
         if target_id:
             cmd.add_element("target", attrs={"id": str(target_id)})
-
-        if alterable is not None:
-            cmd.add_element("alterable", to_bool(alterable))
 
         if hosts_ordering:
             if not isinstance(hosts_ordering, HostsOrdering):
@@ -378,22 +342,6 @@ class Tasks:
             )
 
         cmd = XmlCommand("start_task")
-        cmd.set_attribute("task_id", str(task_id))
-        return cmd
-
-    @classmethod
-    def resume_task(cls, task_id: EntityID) -> Request:
-        """Resume an existing stopped task
-
-        Args:
-            task_id: UUID of the task to be resumed
-        """
-        if not task_id:
-            raise RequiredArgument(
-                function=cls.resume_task.__name__, argument="task_id"
-            )
-
-        cmd = XmlCommand("resume_task")
         cmd.set_attribute("task_id", str(task_id))
         return cmd
 

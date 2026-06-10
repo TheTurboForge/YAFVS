@@ -15,7 +15,6 @@ import EditIcon from 'web/entity/icon/EditIcon';
 import TrashIcon from 'web/entity/icon/TrashIcon';
 import useTranslation from 'web/hooks/useTranslation';
 import TaskIconWithSync from 'web/pages/tasks/icons/TaskIconWithSync';
-import TaskImportReportIcon from 'web/pages/tasks/icons/TaskImportReportIcon';
 import TaskScheduleIcon from 'web/pages/tasks/icons/TaskScheduleIcon';
 import TaskStopIcon from 'web/pages/tasks/icons/TaskStopIcon';
 
@@ -24,11 +23,9 @@ export interface TaskActionsProps extends Omit<
   'children'
 > {
   links?: boolean;
-  onReportImportClick?: (task: Task) => void | Promise<void>;
   onTaskCloneClick?: (task: Task) => void | Promise<void>;
   onTaskDeleteClick?: (task: Task) => void | Promise<void>;
   onTaskEditClick?: (task: Task) => void | Promise<void>;
-  onTaskResumeClick?: (task: Task) => void | Promise<void>;
   onTaskStartClick?: (task: Task) => void | Promise<void>;
   onTaskStopClick?: (task: Task) => void | Promise<void>;
   onTaskDownloadClick?: (task: Task) => void | Promise<void>;
@@ -41,12 +38,10 @@ const TaskActions = ({
   selectionType,
   onEntityDeselected,
   onEntitySelected,
-  onReportImportClick,
   onTaskCloneClick,
   onTaskDeleteClick,
   onTaskDownloadClick,
   onTaskEditClick,
-  onTaskResumeClick,
   onTaskStartClick,
   onTaskStopClick,
 }: TaskActionsProps) => {
@@ -65,16 +60,9 @@ const TaskActions = ({
         )}
         <TaskIconWithSync
           task={entity}
-          type="start"
           onClick={onTaskStartClick}
         />
-        <TaskImportReportIcon task={entity} onClick={onReportImportClick} />
         <TaskStopIcon task={entity} onClick={onTaskStopClick} />
-        <TaskIconWithSync
-          task={entity}
-          type="resume"
-          onClick={onTaskResumeClick}
-        />
         <TrashIcon entity={entity} name="task" onClick={onTaskDeleteClick} />
         <EditIcon entity={entity} name="task" onClick={onTaskEditClick} />
         <CloneIcon entity={entity} name="task" onClick={onTaskCloneClick} />

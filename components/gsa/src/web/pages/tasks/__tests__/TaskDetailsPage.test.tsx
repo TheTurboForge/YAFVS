@@ -388,9 +388,5 @@ describe('TaskDetailsPage tests', () => {
     fireEvent.click(startIcon);
     expect(gmp.task.start).toHaveBeenCalledWith(task5);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Resume');
-    fireEvent.click(resumeIcon);
-    expect(gmp.task.resume).toHaveBeenCalledWith(task5);
   });
 });

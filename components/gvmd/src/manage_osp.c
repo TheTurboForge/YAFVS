@@ -775,11 +775,10 @@ launch_osp_openvas_task (task_t task, target_t target, const char *scan_id,
 }
 
 /**
- * @brief Get the last stopped report or a new one for an OSP scan.
+ * @brief Create a new report for an OSP scan.
  *
  * @param[in]   task      The task.
- * @param[in]   from      0 start from beginning, 1 continue from stopped,
- *                        2 continue if stopped else start from beginning.
+ * @param[in]   from      Must be 0. Resume semantics are not supported.
  * @param[out]  report_id UUID of the report.
  *
  * @return 0 success, -1 error
@@ -787,44 +786,12 @@ launch_osp_openvas_task (task_t task, target_t target, const char *scan_id,
 int
 run_osp_scan_get_report (task_t task, int from, char **report_id)
 {
-  report_t resume_report;
-
-  resume_report = 0;
-  *report_id = NULL;
-
-  if (from && task_last_resumable_report (task, &resume_report))
-    {
-      g_warning ("%s: error getting report to resume", __func__);
-      return -1;
-    }
-
-  if (resume_report)
-    {
-      // Report to resume found
-      if (global_current_report)
-        {
-           g_warning ("%s: global_current_report already set", __func__);
-          return -1;
-        }
-      global_current_report = resume_report;
-      *report_id = report_uuid (resume_report);
-
-      /* Ensure the report is marked as requested. */
-      set_report_scan_run_status (resume_report, TASK_STATUS_REQUESTED);
-
-      /* Clear the end times of the task and partial report. */
-      set_task_start_time_epoch (task,
-                                 scan_start_time_epoch (resume_report));
-      set_task_end_time (task, NULL);
-      set_scan_end_time (resume_report, NULL);
-    }
-  else if (from == 1)
-    // No report to resume and starting a new one is not allowed
+  if (from != 0)
     return -1;
 
-  // Try starting a new report
-  if (resume_report == 0
-      && create_current_report (task, report_id, TASK_STATUS_REQUESTED))
+  *report_id = NULL;
+
+  if (create_current_report (task, report_id, TASK_STATUS_REQUESTED))
     {
       g_debug ("   %s: failed to create report", __func__);
       return -1;

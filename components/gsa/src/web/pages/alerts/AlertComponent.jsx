@@ -273,9 +273,6 @@ const AlertComponent = ({
   const [methodDataVfireSessionType, setMethodDataVfireSessionType] =
     useState(undefined);
   const [methodDataURL, setMethodDataURL] = useState(undefined);
-  const [methodDataDeltaType, setMethodDataDeltaType] = useState(undefined);
-  const [methodDataDeltaReportId, setMethodDataDeltaReportId] =
-    useState(undefined);
 
   const credentialTypeRef = useRef(null);
 
@@ -720,10 +717,6 @@ const AlertComponent = ({
       setMethodDataVfireClientId(getValue(method.data.vfire_client_id));
       setMethodDataVfireSessionType(getValue(method.data.vfire_session_type));
       setMethodDataURL(getValue(method.data.URL, ''));
-      setMethodDataDeltaType(getValue(alertObj.method.data.delta_type, ''));
-      setMethodDataDeltaReportId(
-        getValue(alertObj.method.data.delta_report_id, ''),
-      );
       setTasks(tasks);
       setTitle(_('Edit Alert {{- name}}', {name: shorten(alertObj.name)}));
     } else {
@@ -809,8 +802,6 @@ const AlertComponent = ({
       setMethodDataVeriniceServerUrl(undefined);
       setMethodDataVeriniceServerCredential(undefined);
       setMethodDataURL(undefined);
-      setMethodDataDeltaType(undefined);
-      setMethodDataDeltaReportId(undefined);
       setMethodDataRecipientCredential(UNSET_VALUE);
       setMethodDataSendReportConfig(reportConfigId);
       setMethodDataSendReportFormat(reportFormatId);
@@ -1011,8 +1002,6 @@ const AlertComponent = ({
               }
               method_data_defense_center_ip={methodDataDefenseCenterIp}
               method_data_defense_center_port={methodDataDefenseCenterPort}
-              method_data_delta_report_id={methodDataDeltaReportId}
-              method_data_delta_type={methodDataDeltaType}
               method_data_details_url={methodDataDetailsUrl}
               method_data_from_address={methodDataFromAddress}
               method_data_message={methodDataMessage}

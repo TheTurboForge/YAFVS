@@ -675,6 +675,9 @@ add_task_alert (task_t, alert_t);
 void
 set_task_alterable (task_t, int);
 
+void
+enforce_task_defaults (task_t);
+
 int
 set_task_schedule (task_t, schedule_t, int);
 
@@ -872,9 +875,6 @@ int
 stop_task (const char *);
 
 int
-resume_task (const char *, char **);
-
-int
 move_task (const char*, const char*);
 
 
@@ -1017,24 +1017,7 @@ result_t
 make_cve_result (task_t, const char*, const char*, double, const char*);
 
 /**
- * @brief A CREATE_REPORT result.
- */
-typedef struct
-{
-  char *description;       ///< Description of NVT.
-  char *host;              ///< Host.
-  char *hostname;          ///< Hostname.
-  char *nvt_oid;           ///< OID of NVT.
-  char *scan_nvt_version;  ///< Version of NVT used at scan time.
-  char *port;              ///< Port.
-  char *qod;               ///< QoD (quality of detection).
-  char *qod_type;          ///< QoD type.
-  char *severity;          ///< Severity score.
-  char *threat;            ///< Threat.
-} create_report_result_t;
-
-/**
- * @brief A host detail for create_report.
+ * @brief A host detail for report asset processing.
  */
 typedef struct
 {
@@ -1048,7 +1031,7 @@ typedef struct
 
 
 /**
- * @brief A detection detail for create_report.
+ * @brief A detection detail for report asset processing.
  */
 typedef struct
 {
@@ -1072,10 +1055,6 @@ clear_duration_schedules (task_t);
 void
 update_duration_schedule_periods (task_t);
 
-int
-create_report (array_t*, const char *, const char *, const char *, const char *,
-               array_t*, array_t*, array_t*, char **);
-
 void
 report_add_result (report_t, result_t);
 
@@ -1084,9 +1063,6 @@ report_add_results_array (report_t, GArray *);
 
 char*
 report_uuid (report_t);
-
-int
-task_last_resumable_report (task_t, report_t *);
 
 gchar*
 task_second_last_report_id (task_t);
@@ -2734,15 +2710,6 @@ manage_get_timezones ();
 
 gboolean
 manage_timezone_supported (const char *);
-
-
-
-/* Wizards. */
-
-int
-manage_run_wizard (const gchar *, int (*) (void*, gchar*, gchar**),
-                   void *, array_t *, int, const char*,
-                   gchar **, gchar **, gchar **);
 
 
 

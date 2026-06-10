@@ -54,14 +54,6 @@ class ReportsTestCase(unittest.TestCase):
             b'<get_reports report_id="report_id" usage_type="scan" filt_id="filter_id" details="1"/>',
         )
 
-    def test_get_report_with_delta_report_id(self):
-        request = Reports.get_report(
-            "report_id", delta_report_id="delta_report_id"
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports report_id="report_id" usage_type="scan" delta_report_id="delta_report_id" details="1"/>',
-        )
 
     def test_get_report_with_report_format_id(self):
         request = Reports.get_report(
@@ -169,70 +161,3 @@ class ReportsTestCase(unittest.TestCase):
             bytes(request),
             b'<get_reports usage_type="scan" ignore_pagination="0"/>',
         )
-
-    def test_import_report(self):
-        request = Reports.import_report(REPORT_XML_STRING, "task_id")
-        self.assertEqual(
-            bytes(request),
-            b"<create_report>"
-            b'<task id="task_id"/>'
-            b'<report id="67a62fb7-b238-4f0e-bc48-59bde8939cdc">'
-            b'<results max="1" start="1">'
-            b'<result id="f180b40f-49dd-4856-81ed-8c1195afce80">'
-            b"<severity>0.0</severity>"
-            b'<nvt oid="1.3.6.1.4.1.25623.1.0.10330"/>'
-            b"<host>132.67.253.114</host>"
-            b"</result></results></report>"
-            b"</create_report>",
-        )
-
-    def test_import_report_with_in_assets(self):
-        request = Reports.import_report(
-            REPORT_XML_STRING, "task_id", in_assets=False
-        )
-        self.assertEqual(
-            bytes(request),
-            b"<create_report>"
-            b'<task id="task_id"/>'
-            b"<in_assets>0</in_assets>"
-            b'<report id="67a62fb7-b238-4f0e-bc48-59bde8939cdc">'
-            b'<results max="1" start="1">'
-            b'<result id="f180b40f-49dd-4856-81ed-8c1195afce80">'
-            b"<severity>0.0</severity>"
-            b'<nvt oid="1.3.6.1.4.1.25623.1.0.10330"/>'
-            b"<host>132.67.253.114</host>"
-            b"</result></results></report>"
-            b"</create_report>",
-        )
-
-        request = Reports.import_report(
-            REPORT_XML_STRING, "task_id", in_assets=True
-        )
-        self.assertEqual(
-            bytes(request),
-            b"<create_report>"
-            b'<task id="task_id"/>'
-            b"<in_assets>1</in_assets>"
-            b'<report id="67a62fb7-b238-4f0e-bc48-59bde8939cdc">'
-            b'<results max="1" start="1">'
-            b'<result id="f180b40f-49dd-4856-81ed-8c1195afce80">'
-            b"<severity>0.0</severity>"
-            b'<nvt oid="1.3.6.1.4.1.25623.1.0.10330"/>'
-            b"<host>132.67.253.114</host>"
-            b"</result></results></report>"
-            b"</create_report>",
-        )
-
-    def test_import_report_missing_report(self):
-        with self.assertRaises(RequiredArgument):
-            Reports.import_report(None, "task_id")
-
-        with self.assertRaises(RequiredArgument):
-            Reports.import_report("", "task_id")
-
-    def test_import_report_missing_task_id(self):
-        with self.assertRaises(RequiredArgument):
-            Reports.import_report("report", None)
-
-        with self.assertRaises(RequiredArgument):
-            Reports.import_report("report", "")

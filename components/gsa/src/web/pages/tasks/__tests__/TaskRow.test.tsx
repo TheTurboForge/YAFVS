@@ -47,12 +47,10 @@ describe('TaskRow tests', () => {
       target: {_id: '5678', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -67,12 +65,10 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
@@ -121,8 +117,6 @@ describe('TaskRow tests', () => {
     // Actions
     const startIcon = screen.getByTestId('start-icon');
     expect(startIcon).toHaveAttribute('title', 'Start');
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
     const editIcon = screen.getByTestId('edit-icon');
@@ -152,12 +146,10 @@ describe('TaskRow tests', () => {
       },
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -172,20 +164,15 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
       />,
     );
-
-    const alterableIcon = screen.getByTestId('alterable-icon');
-    expect(alterableIcon).toHaveAttribute('title', 'Task is alterable');
 
     const sensorIcon = screen.getByTestId('sensor-icon');
     expect(sensorIcon).toHaveAttribute(
@@ -207,12 +194,10 @@ describe('TaskRow tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -227,12 +212,10 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
@@ -258,10 +241,6 @@ describe('TaskRow tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
@@ -299,12 +278,10 @@ describe('TaskRow tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -319,12 +296,10 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
@@ -372,10 +347,6 @@ describe('TaskRow tests', () => {
     expect(stopIcon).toHaveAttribute('title', 'Stop');
     expect(handleTaskStart).not.toHaveBeenCalled();
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Task is still in use');
@@ -412,12 +383,10 @@ describe('TaskRow tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -432,12 +401,10 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
@@ -485,10 +452,6 @@ describe('TaskRow tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Resume');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).toHaveBeenCalledWith(task);
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
@@ -525,12 +488,10 @@ describe('TaskRow tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -545,12 +506,10 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
@@ -598,10 +557,6 @@ describe('TaskRow tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
@@ -638,12 +593,10 @@ describe('TaskRow tests', () => {
       target: {_id: 'id', name: 'target'},
     });
 
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
     const handleToggleDetailsClick = testing.fn();
@@ -658,12 +611,10 @@ describe('TaskRow tests', () => {
       <TaskRow
         entity={task}
         links={true}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
         onToggleDetailsClick={handleToggleDetailsClick}
@@ -715,10 +666,6 @@ describe('TaskRow tests', () => {
     fireEvent.click(startIcon);
     expect(handleTaskStart).not.toHaveBeenCalled();
 
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTestId('trashcan-icon');
     expect(deleteIcon).toHaveAttribute(
@@ -744,114 +691,4 @@ describe('TaskRow tests', () => {
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
   });
 
-  test('should call click handlers for import task', () => {
-    const task = Task.fromElement({
-      _id: '314',
-      owner: {name: 'username'},
-      name: 'foo',
-      comment: 'bar',
-      report_count: {__text: 1, finished: 1},
-      last_report: lastReport,
-      permissions: {permission: [{name: 'everything'}]},
-    });
-
-    const handleReportImport = testing.fn();
-    const handleTaskClone = testing.fn();
-    const handleTaskDelete = testing.fn();
-    const handleTaskDownload = testing.fn();
-    const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
-    const handleTaskStart = testing.fn();
-    const handleTaskStop = testing.fn();
-    const handleToggleDetailsClick = testing.fn();
-
-    const {render} = rendererWithTableBody({
-      gmp: createGmp(),
-      capabilities: true,
-      router: true,
-    });
-
-    const {baseElement} = render(
-      <TaskRow
-        entity={task}
-        links={true}
-        onReportImportClick={handleReportImport}
-        onTaskCloneClick={handleTaskClone}
-        onTaskDeleteClick={handleTaskDelete}
-        onTaskDownloadClick={handleTaskDownload}
-        onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
-        onTaskStartClick={handleTaskStart}
-        onTaskStopClick={handleTaskStop}
-        onToggleDetailsClick={handleToggleDetailsClick}
-      />,
-    );
-
-    const rowDetails = screen.getByTestId('row-details-toggle');
-    fireEvent.click(rowDetails);
-    expect(handleToggleDetailsClick).toHaveBeenCalledWith(undefined, '314');
-
-    // Status
-    const bars = screen.getAllByTestId('progressbar-box');
-    expect(bars[0]).toHaveAttribute('title', 'Import Task');
-    expect(bars[0]).toHaveTextContent('Import Task');
-
-    const detailsLinks = screen.getAllByTestId('details-link');
-    expect(detailsLinks[0]).toHaveTextContent('Import Task');
-    expect(detailsLinks[0]).toHaveAttribute('href', '/report/1234');
-
-    // Reports
-    const links = baseElement.querySelectorAll('a');
-    expect(links[1]).toHaveTextContent('1');
-    expect(links[1]).toHaveAttribute(
-      'title',
-      'View list of all reports for Task foo, including unfinished ones',
-    );
-    expect(links[1]).toHaveAttribute(
-      'href',
-      '/reports?filter=task_id%3D314%20sort-reverse%3Ddate',
-    );
-
-    // Last Report
-    expect(detailsLinks[1]).toHaveTextContent(
-      'Wed, Jul 10, 2019 2:51 PM Central European Summer Time',
-    );
-    expect(detailsLinks[1]).toHaveAttribute('href', '/report/1234');
-
-    // Severity
-    expect(bars.length).toBe(1);
-    // because import tasks do not have a severity
-
-    // Actions
-    const importIcon = screen.getByTestId('import-icon');
-    expect(importIcon).toHaveAttribute('title', 'Import Report');
-    fireEvent.click(importIcon);
-    expect(handleReportImport).toHaveBeenCalledWith(task);
-    expect(handleTaskStart).not.toHaveBeenCalled();
-
-    const resumeIcon = screen.getByTestId('resume-icon');
-    expect(resumeIcon).toHaveAttribute('title', 'Task is for import only');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
-
-    const deleteIcon = screen.getByTestId('trashcan-icon');
-    expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');
-    fireEvent.click(deleteIcon);
-    expect(handleTaskDelete).toHaveBeenCalledWith(task);
-
-    const editIcon = screen.getByTestId('edit-icon');
-    expect(editIcon).toHaveAttribute('title', 'Edit Task');
-    fireEvent.click(editIcon);
-    expect(handleTaskEdit).toHaveBeenCalledWith(task);
-
-    const cloneIcon = screen.getByTestId('clone-icon');
-    expect(cloneIcon).toHaveAttribute('title', 'Clone Task');
-    fireEvent.click(cloneIcon);
-    expect(handleTaskClone).toHaveBeenCalledWith(task);
-
-    const downloadIcon = screen.getByTestId('export-icon');
-    expect(downloadIcon).toHaveAttribute('title', 'Export Task');
-    fireEvent.click(downloadIcon);
-    expect(handleTaskDownload).toHaveBeenCalledWith(task);
-  });
 });

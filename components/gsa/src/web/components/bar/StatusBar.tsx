@@ -34,11 +34,9 @@ const StatusBar = ({
     status === TASK_STATUS.unknown ||
     status === TASK_STATUS.new ||
     status === TASK_STATUS.done ||
-    status === TASK_STATUS.import ||
     status === TASK_STATUS.stoprequested ||
     status === TASK_STATUS.deleterequested ||
     status === TASK_STATUS.ultimatedeleterequested ||
-    status === TASK_STATUS.resumerequested ||
     status === TASK_STATUS.requested ||
     status === TASK_STATUS.queued
   ) {
@@ -57,18 +55,13 @@ const StatusBar = ({
     status === TASK_STATUS.stoprequested ||
     status === TASK_STATUS.deleterequested ||
     status === TASK_STATUS.ultimatedeleterequested ||
-    status === TASK_STATUS.resumerequested ||
     status === TASK_STATUS.requested ||
     status === TASK_STATUS.queued
   ) {
     background = BACKGROUND_STATES.WARN;
   } else if (status === TASK_STATUS.interrupted) {
     background = BACKGROUND_STATES.ERROR;
-  } else if (
-    status === TASK_STATUS.uploading ||
-    status === TASK_STATUS.import ||
-    status === TASK_STATUS.done
-  ) {
+  } else if (status === TASK_STATUS.done) {
     background = BACKGROUND_STATES.LOW;
   } else if (status === TASK_STATUS.new) {
     background = BACKGROUND_STATES.NEW;

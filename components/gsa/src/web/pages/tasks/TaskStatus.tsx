@@ -5,7 +5,7 @@
  */
 
 import styled from 'styled-components';
-import {type default as Task, TASK_STATUS} from 'gmp/models/task';
+import type Task from 'gmp/models/task';
 import {isDefined} from 'gmp/utils/identity';
 import StatusBar from 'web/components/bar/StatusBar';
 import DetailsLink from 'web/components/link/DetailsLink';
@@ -31,7 +31,6 @@ const TaskStatus = ({task, links = true}: TaskStatusProps) => {
     report_id = '';
     links = false;
   }
-  const isImport = task.isImport();
   return (
     <StyledDetailsLink
       id={report_id}
@@ -40,16 +39,7 @@ const TaskStatus = ({task, links = true}: TaskStatusProps) => {
     >
       <StatusBar
         progress={task.progress}
-        status={
-          isImport
-            ? task.status === TASK_STATUS.interrupted
-              ? TASK_STATUS.uploadinginterrupted
-              : task.status === TASK_STATUS.running ||
-                  task.status === TASK_STATUS.processing
-                ? TASK_STATUS.processing
-                : TASK_STATUS.import
-            : task.status
-        }
+        status={task.status}
       />
     </StyledDetailsLink>
   );

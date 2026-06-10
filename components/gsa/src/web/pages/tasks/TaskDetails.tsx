@@ -11,7 +11,6 @@ import type ScanConfig from 'gmp/models/scan-config';
 import {scannerTypeName} from 'gmp/models/scanner';
 import type Schedule from 'gmp/models/schedule';
 import type Task from 'gmp/models/task';
-import {YES_VALUE} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 import DateTime from 'web/components/date/DateTime';
 import HorizontalSep from 'web/components/layout/HorizontalSep';
@@ -100,7 +99,6 @@ const TaskDetails = ({entity, links = true}: TaskDetailsProps) => {
     average_duration: averageDuration,
     config,
     csAllowFailedRetrieval,
-    in_assets: inAssets,
     last_report: lastReport,
     min_qod: minQod,
     scanner,
@@ -221,23 +219,14 @@ const TaskDetails = ({entity, links = true}: TaskDetailsProps) => {
         <DetailsTable>
           <TableBody>
             <TableRow>
-              <TableData>{_('Add to Assets')}</TableData>
-              <TableData>{renderYesNo(inAssets as number)}</TableData>
+              <TableData>{_('Apply Overrides')}</TableData>
+              <TableData>{renderYesNo(applyOverrides as number)}</TableData>
             </TableRow>
 
-            {inAssets === YES_VALUE && (
-              <TableRow>
-                <TableData>{_('Apply Overrides')}</TableData>
-                <TableData>{renderYesNo(applyOverrides as number)}</TableData>
-              </TableRow>
-            )}
-
-            {inAssets === YES_VALUE && (
-              <TableRow>
-                <TableData>{_('Min QoD')}</TableData>
-                <TableData>{minQod + ' %'}</TableData>
-              </TableRow>
-            )}
+            <TableRow>
+              <TableData>{_('Min QoD')}</TableData>
+              <TableData>{minQod + ' %'}</TableData>
+            </TableRow>
 
             {isCredentialStore && (
               <TableRow>

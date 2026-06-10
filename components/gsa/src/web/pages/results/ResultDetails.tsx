@@ -22,14 +22,7 @@ import useTranslation from 'web/hooks/useTranslation';
 import NvtReferences from 'web/pages/nvts/NvtReferences';
 import P from 'web/pages/nvts/Preformatted';
 import Solution from 'web/pages/nvts/Solution';
-import ResultDiff, {Added, Removed} from 'web/pages/results/ResultDiff';
 import {renderNvtName} from 'web/utils/Render';
-
-interface DerivedDiffProps {
-  deltaType?: string;
-  firstDescription: string;
-  secondDescription: string;
-}
 
 export interface ResultDetailsProps {
   className?: string;
@@ -51,40 +44,6 @@ const GrowDiv = styled.div`
   max-width: 1080px;
 `;
 
-const DerivedDiff = ({
-  deltaType,
-  firstDescription,
-  secondDescription,
-}: DerivedDiffProps) => {
-  const [_] = useTranslation();
-  let Component: React.ComponentType<{children: React.ReactNode}>;
-  let lines: string[];
-  let prefix: string;
-
-  if (deltaType === 'new') {
-    lines = secondDescription.split(/\r|\n|\r\n/);
-    Component = Added;
-    prefix = '+';
-  } else if (deltaType === 'gone') {
-    lines = firstDescription.split(/\r|\n|\r\n/);
-    Component = Removed;
-    prefix = '-';
-  } else {
-    lines = [_('None.')];
-    Component = Pre;
-    prefix = '';
-  }
-
-  return (
-    <>
-      {lines.map((line, i) => {
-        const lineWithPrefix = prefix + line;
-        return <Component key={i}>{lineWithPrefix}</Component>;
-      })}
-    </>
-  );
-};
-
 const ResultDetails = ({
   className,
   links = true,
@@ -103,40 +62,6 @@ const ResultDetails = ({
     ? result.detection.result.details
     : undefined;
 
-  const result2 = isDefined(result.delta) ? result.delta.result : undefined;
-  const result2Id = isDefined(result2) ? result2.id : undefined;
-
-  const deltaType = isDefined(result.delta)
-    ? result.delta.delta_type
-    : undefined;
-
-  let result2Description: string | undefined;
-  let result1Description: string | undefined;
-  let result1Link: string | undefined;
-  let result2Link: string | undefined;
-
-  if (deltaType === 'same') {
-    result2Description = result.description;
-    result1Description = result.description;
-    result1Link = result.id;
-    result2Link = result.id;
-  } else if (deltaType === 'changed') {
-    result1Description = result.description;
-    result2Description = result2?.description;
-    result1Link = result.id;
-    result2Link = result2Id;
-  } else if (deltaType === 'new') {
-    result1Description = undefined;
-    result2Description = result.description;
-    result1Link = undefined;
-    result2Link = result.id;
-  } else {
-    result1Description = result.description;
-    result2Description = undefined;
-    result1Link = result.id;
-    result2Link = undefined;
-  }
-
   return (
     <Layout className={className} flex="column" grow="1">
       {isDefined(tags.summary) && (
@@ -145,68 +70,15 @@ const ResultDetails = ({
         </DetailsBlock>
       )}
 
-      {result.hasDelta() ? (
-        <DetailsBlock title={_('Detection Results')}>
-          <div>
-            {isDefined(result1Link) ? (
-              <DetailsLink id={result1Link} type="result">
-                <h3>{_('Result 1')}</h3>
-              </DetailsLink>
-            ) : (
-              <h3>{_('Result 1')}</h3>
-            )}
-            <Pre>
-              {isDefined(result1Description)
-                ? result1Description
-                : _('No first result available.')}
-            </Pre>
-          </div>
-          <div>
-            {isDefined(result2Link) ? (
-              <DetailsLink id={result2Link} type="result">
-                <h3>{_('Result 2')}</h3>
-              </DetailsLink>
-            ) : (
-              <h3>{_('Result 2')}</h3>
-            )}
-            <Pre>
-              {isDefined(result2Description)
-                ? result2Description
-                : _('No second result available.')}
-            </Pre>
-          </div>
-          <div>
-            <h3>{_('Different Lines')}</h3>
-            {isDefined(result.delta?.diff) && result.delta.diff.length > 0 ? (
-              <ResultDiff>{result.delta.diff}</ResultDiff>
-            ) : (
-              <DerivedDiff
-                deltaType={deltaType}
-                firstDescription={
-                  isDefined(result1Description) ? result1Description : ''
-                }
-                secondDescription={
-                  isDefined(result2Description) ? result2Description : ''
-                }
-              />
-            )}
-          </div>
-        </DetailsBlock>
-      ) : (
-        <DetailsBlock title={_('Detection Result')}>
-          {!isEmpty(result.description) &&
-          (result.description?.length || 0) > 1 ? (
-            <GrowDiv>
-              <Pre>{result.description}</Pre>
-            </GrowDiv>
-          ) : (
-            _(
-              'Vulnerability was detected according to the ' +
-                'Detection Method.',
-            )
-          )}
-        </DetailsBlock>
-      )}
+      <DetailsBlock title={_('Detection Result')}>
+        {!isEmpty(result.description) && (result.description?.length || 0) > 1 ? (
+          <GrowDiv>
+            <Pre>{result.description}</Pre>
+          </GrowDiv>
+        ) : (
+          _('Vulnerability was detected according to the Detection Method.')
+        )}
+      </DetailsBlock>
 
       {hasDetection && (
         <DetailsBlock title={_('Product Detection Result')}>

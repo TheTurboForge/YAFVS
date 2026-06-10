@@ -56,10 +56,6 @@ class ReportTask extends Model {
 
     return copy;
   }
-
-  isImport() {
-    return !isDefined(this.target);
-  }
 }
 
 export default ReportTask;

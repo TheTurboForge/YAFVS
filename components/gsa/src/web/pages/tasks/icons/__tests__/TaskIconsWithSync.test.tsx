@@ -13,24 +13,13 @@ import {setSyncStatus} from 'web/store/feedStatus/actions';
 describe('TaskIconWithSync component tests', () => {
   const testCases = [
     {
-      description:
-        'should render StartIcon when type is "start" and not syncing',
-      type: 'start' as const,
+      description: 'should render StartIcon when feed is not syncing',
       taskStatus: TASK_STATUS.new,
       expectedTitle: 'Start',
       expectedFill: false,
     },
     {
-      description:
-        'should render ResumeIcon when type is "resume" and not syncing',
-      type: 'resume' as const,
-      taskStatus: TASK_STATUS.stopped,
-      expectedTitle: 'Resume',
-      expectedFill: false,
-    },
-    {
       description: 'should render syncing message when feed is syncing',
-      type: 'start' as const,
       taskStatus: TASK_STATUS.new,
       expectedTitle: 'Feed is currently syncing. Please try again later.',
       expectedFill: true,
@@ -40,7 +29,7 @@ describe('TaskIconWithSync component tests', () => {
 
   test.each(testCases)(
     '$description',
-    ({type, taskStatus, expectedTitle, expectedFill, isSyncing = false}) => {
+    ({taskStatus, expectedTitle, expectedFill, isSyncing = false}) => {
       const caps = new Capabilities(['everything']);
       const task = Task.fromElement({
         status: taskStatus,
@@ -54,12 +43,12 @@ describe('TaskIconWithSync component tests', () => {
       store.dispatch(setSyncStatus(isSyncing));
 
       const {element} = render(
-        <TaskIconWithSync task={task} type={type} onClick={clickHandler} />,
+        <TaskIconWithSync task={task} onClick={clickHandler} />,
       );
 
       if (!isSyncing) {
-        expect(caps.mayOp(`${type}_task`)).toEqual(true);
-        expect(task.userCapabilities.mayOp(`${type}_task`)).toEqual(true);
+        expect(caps.mayOp('start_task')).toEqual(true);
+        expect(task.userCapabilities.mayOp('start_task')).toEqual(true);
 
         fireEvent.click(element);
 

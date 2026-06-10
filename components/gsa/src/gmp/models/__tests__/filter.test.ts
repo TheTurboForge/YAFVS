@@ -1127,7 +1127,7 @@ describe('Filter merge extra keywords', () => {
     const filter1 = Filter.fromString('abc=1');
     const filter2 = Filter.fromString(
       'apply_overrides=1 overrides=1 ' +
-        'delta_states=1 first=1 levels=hml min_qod=70 ' +
+        'first=1 levels=hml min_qod=70 ' +
         'result_hosts_only=1 rows=10 sort=name timezone=CET',
     );
 
@@ -1136,7 +1136,6 @@ describe('Filter merge extra keywords', () => {
     expect(filter3.get('abc')).toBe('1');
     expect(filter3.get('apply_overrides')).toBe(1);
     expect(filter3.get('overrides')).toBe(1);
-    expect(filter3.get('delta_states')).toBe('1');
     expect(filter3.get('first')).toBe(1);
     expect(filter3.get('levels')).toBe('hml');
     expect(filter3.get('min_qod')).toBe(70);
@@ -1148,12 +1147,12 @@ describe('Filter merge extra keywords', () => {
 
   test('should merge new keywords', () => {
     const filter1 = Filter.fromString('abc=1 trend=more');
-    const filter2 = Filter.fromString('delta_states=1 severity>3 sort=name');
+    const filter2 = Filter.fromString('first=1 severity>3 sort=name');
 
     const filter3 = filter2.mergeKeywords(filter1);
 
     expect(filter3.get('abc')).toBe('1');
-    expect(filter3.get('delta_states')).toBe('1');
+    expect(filter3.get('first')).toBe(1);
     expect(filter3.get('sort')).toBe('name');
     expect(filter3.get('severity')).toBe('3');
     expect(filter3.get('trend')).toBe('more');
@@ -1229,7 +1228,7 @@ describe('Filter merge extra keywords', () => {
     filter1.id = 'f1';
     const filter2 = Filter.fromString(
       'apply_overrides=1 overrides=1 ' +
-        'delta_states=1 first=1 levels=hml min_qod=70 ' +
+        'first=1 levels=hml min_qod=70 ' +
         'result_hosts_only=1 rows=10 sort=name timezone=CET',
     );
     // @ts-expect-error

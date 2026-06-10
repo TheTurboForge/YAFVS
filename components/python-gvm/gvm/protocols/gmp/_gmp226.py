@@ -102,7 +102,6 @@ class GMPv226(GMPv225[T]):
         *,
         filter_string: str | None = None,
         filter_id: str | None = None,
-        delta_report_id: EntityID | None = None,
         report_format_id: str | ReportFormatType | None = None,
         report_config_id: str | None = None,
         ignore_pagination: bool | None = None,
@@ -114,7 +113,6 @@ class GMPv226(GMPv225[T]):
             report_id: UUID of an existing report
             filter_string: Filter term to use to filter results in the report
             filter_id: UUID of filter to use to filter results in the report
-            delta_report_id: UUID of an existing report to compare report to.
             report_format_id: UUID of report format to use
                               or ReportFormatType (enum)
             report_config_id: UUID of report format config to use
@@ -128,7 +126,6 @@ class GMPv226(GMPv225[T]):
                 report_id,
                 filter_string=filter_string,
                 filter_id=filter_id,
-                delta_report_id=delta_report_id,
                 report_format_id=report_format_id,
                 report_config_id=report_config_id,
                 ignore_pagination=ignore_pagination,
@@ -164,25 +161,6 @@ class GMPv226(GMPv225[T]):
                     ignore_pagination=ignore_pagination,
                     details=details,
             )
-        )
-
-    def import_report(
-        self,
-        report: str,
-        task_id: EntityID,
-        *,
-        in_assets: bool | None = None,
-    ) -> T:
-        """Import a scan Report from XML
-
-        Args:
-            report: Report XML as string to import. This XML must contain
-                a :code:`<report>` root element.
-            task_id: UUID of task to import report to
-            in_asset: Whether to create or update assets using the report
-        """
-        return self._send_request_and_transform_response(
-            Reports.import_report(report, task_id, in_assets=in_assets)
         )
 
     def create_scope(

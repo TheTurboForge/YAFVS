@@ -2600,15 +2600,14 @@ run_openvasd_task (task_t task, int from, char **report_id);
 
 
 /**
- * @brief Start or resume a task.
+ * @brief Start a task.
  *
  * A process will be forked to handle the task, but the forked process will
  * never return.
  *
  * @param[in]   task_id     The task ID.
  * @param[out]  report_id   The report ID.
- * @param[in]   from        0 start from beginning, 1 continue from stopped, 2
- *                          continue if stopped else start from beginning.
+ * @param[in]   from        Must be 0. Resume semantics are not supported.
  *
  * @return 1 task is active already,
  *         3 failed to find task,
@@ -2627,23 +2626,14 @@ run_task (const char *task_id, char **report_id, int from)
   task_t task;
   scanner_t scanner;
   int ret;
-  const char *permission;
-
   if (current_scanner_task)
     return -6;
 
-  if (from == 0)
-    permission = "start_task";
-  else if (from == 1)
-    permission = "resume_task";
-  else
-    {
-      assert (0);
-      permission = "internal_error";
-    }
+  if (from != 0)
+    return 4;
 
   task = 0;
-  if (find_task_with_permission (task_id, &task, permission))
+  if (find_task_with_permission (task_id, &task, "start_task"))
     return -1;
   if (task == 0)
     return 3;
@@ -2683,7 +2673,7 @@ run_task (const char *task_id, char **report_id, int from)
  *
  * @return 1 task is active already,
  *         3 failed to find task,
- *         4 resuming task not supported,
+ *         4 resume semantics are not supported,
  *         99 permission denied,
  *         -1 error,
  *         -2 task is missing a target,
@@ -2840,49 +2830,6 @@ stop_task (const char *task_id)
 }
 
 /**
- * @brief Resume a task.
- *
- * A process will be forked to handle the task, but the forked process will
- * never return.
- *
- * @param[in]   task_id    Task UUID.
- * @param[out]  report_id  If successful, ID of the resultant report.
- *
- * @return 1 task is active already,
- *         3 failed to find task,
- *         4 resuming task not supported,
- *         22 caller error (task must be in "stopped" or "interrupted" state),
- *         99 permission denied,
- *         -1 error,
- *         -2 task is missing a target,
- *         -3 creating the report failed,
- *         -4 target missing hosts,
- *         -6 already a task running in this process,
- *         -9 fork failed.
- */
-int
-resume_task (const char *task_id, char **report_id)
-{
-  task_t task;
-  task_status_t run_status;
-
-  if (acl_user_may ("resume_task") == 0)
-    return 99;
-
-  task = 0;
-  if (find_task_with_permission (task_id, &task, "resume_task"))
-    return -1;
-  if (task == 0)
-    return 3;
-
-  run_status = task_run_status (task);
-  if ((run_status == TASK_STATUS_STOPPED)
-      || (run_status == TASK_STATUS_INTERRUPTED))
-    return run_task (task_id, report_id, 1);
-  return 22;
-}
-
-/**
  * @brief Reassign a task to another slave.
  *
  * @param[in]  task_id    UUID of task.
@@ -2891,7 +2838,7 @@ resume_task (const char *task_id, char **report_id)
  * @return 0 success, 2 task not found,
  *         3 slave not found, 4 slaves not supported by scanner, 5 task cannot
  *         be stopped currently, 6 scanner does not allow stopping, 7 new
- *         scanner does not support slaves, 98 stop and resume permission
+ *         scanner does not support slaves, 98 unused legacy error code,
  *         denied, 99 permission denied, -1 error.
  */
 int
@@ -2901,7 +2848,6 @@ move_task (const char *task_id, const char *slave_id)
   int task_scanner_type, slave_scanner_type;
   scanner_t slave, scanner;
   task_status_t status;
-  int should_resume_task = 0;
 
   if (task_id == NULL)
     return -1;
@@ -2961,24 +2907,7 @@ move_task (const char *task_id, const char *slave_id)
       case TASK_STATUS_QUEUED:
         if (task_scanner_type == SCANNER_TYPE_CVE)
           return 6;
-        // Check permissions to stop and resume task
-        if (acl_user_has_access_uuid ("task", task_id, "stop_task", 0)
-            && acl_user_has_access_uuid ("task", task_id, "resume_task", 0))
-          {
-            // Stop the task, wait and resume after changes
-            stop_task_internal (task);
-            should_resume_task = 1;
-
-            status = task_run_status (task);
-            while (status == TASK_STATUS_STOP_REQUESTED
-                   || status == TASK_STATUS_STOP_WAITING)
-              {
-                sleep (5);
-                status = task_run_status (task);
-              }
-          }
-        else
-          return 98;
+        return 5;
         break;
       case TASK_STATUS_STOP_REQUESTED:
       case TASK_STATUS_STOP_WAITING:
@@ -2996,11 +2925,6 @@ move_task (const char *task_id, const char *slave_id)
   /* Update scanner. */
 
   set_task_scanner (task, slave);
-
-  /* Resume task if required. */
-
-  if (should_resume_task)
-    resume_task (task_id, NULL);
 
   return 0;
 }
@@ -3968,36 +3892,33 @@ scheduled_task_start (scheduled_task_t *scheduled_task,
       exit (EXIT_FAILURE);
     }
 
-  if (gmp_resume_task_report_c (&connection,
-                                scheduled_task->task_uuid,
-                                NULL))
-    {
-      gmp_start_task_opts_t opts;
+  {
+    gmp_start_task_opts_t opts;
 
-      opts = gmp_start_task_opts_defaults;
-      opts.task_id = scheduled_task->task_uuid;
+    opts = gmp_start_task_opts_defaults;
+    opts.task_id = scheduled_task->task_uuid;
 
-      switch (gmp_start_task_ext_c (&connection, opts))
-        {
-          case 0:
-            break;
+    switch (gmp_start_task_ext_c (&connection, opts))
+      {
+        case 0:
+          break;
 
-          case 99:
-            g_warning ("%s: user denied permission to start task", __func__);
-            scheduled_task_free (scheduled_task);
-            gvm_connection_free (&connection);
-            gvm_close_sentry ();
-            /* Return success, so that parent stops trying to start the task. */
-            exit (EXIT_SUCCESS);
+        case 99:
+          g_warning ("%s: user denied permission to start task", __func__);
+          scheduled_task_free (scheduled_task);
+          gvm_connection_free (&connection);
+          gvm_close_sentry ();
+          /* Return success, so that parent stops trying to start the task. */
+          exit (EXIT_SUCCESS);
 
-          default:
-            g_warning ("%s: gmp_start_task and gmp_resume_task failed", __func__);
-            scheduled_task_free (scheduled_task);
-            gvm_connection_free (&connection);
-            gvm_close_sentry ();
-            exit (EXIT_FAILURE);
-        }
-    }
+        default:
+          g_warning ("%s: gmp_start_task failed", __func__);
+          scheduled_task_free (scheduled_task);
+          gvm_connection_free (&connection);
+          gvm_close_sentry ();
+          exit (EXIT_FAILURE);
+      }
+  }
 
   scheduled_task_free (scheduled_task);
   gvm_connection_free (&connection);
@@ -6238,629 +6159,6 @@ manage_timezone_supported (const char *zone)
 
 
 
-/* Wizards. */
-
-/**
- * @brief Run a wizard.
- *
- * @param[in]  wizard_name       Wizard name.
- * @param[in]  run_command       Function to run GMP command.
- * @param[in]  run_command_data  Argument for run_command.
- * @param[in]  params            Wizard params.  Array of name_value_t.
- * @param[in]  read_only         Whether to only allow wizards marked as
- *                               read only.
- * @param[in]  mode              Name of the mode to run the wizard in.
- * @param[out] command_error     Either NULL or an address for an error message
- *                               when return is 0, 4 or 6.
- * @param[out] command_error_code  Either NULL or an address for a status code
- *                                 from the failed command when return is 0
- *                                 or 4.
- * @param[out] ret_response      Address for response string of last command.
- *
- * @return 0 success,
- *         1 name error,
- *         4 command in wizard failed,
- *         5 wizard not read only,
- *         6 Parameter validation failed,
- *         -1 internal error,
- *         99 permission denied.
- */
-int
-manage_run_wizard (const gchar *wizard_name,
-                   int (*run_command) (void*, gchar*, gchar**),
-                   void *run_command_data,
-                   array_t *params,
-                   int read_only,
-                   const char *mode,
-                   gchar **command_error,
-                   gchar **command_error_code,
-                   gchar **ret_response)
-{
-  GString *params_xml;
-  gchar *file, *file_name, *response, *extra, *extra_wrapped, *wizard;
-  gsize wizard_len;
-  GError *get_error;
-  entity_t entity, mode_entity, params_entity, read_only_entity;
-  entity_t param_def, step;
-  entities_t modes, steps, param_defs;
-  int ret;
-  const gchar *point;
-
-  if (acl_user_may ("run_wizard") == 0)
-    return 99;
-
-  if (command_error)
-    *command_error = NULL;
-
-  if (command_error_code)
-    *command_error_code = NULL;
-
-  if (ret_response)
-    *ret_response = NULL;
-
-  point = wizard_name;
-  while (*point && (isalnum (*point) || *point == '_')) point++;
-  if (*point)
-    return 1;
-
-  /* Read wizard from file. */
-
-  file_name = g_strdup_printf ("%s.xml", wizard_name);
-  file = g_build_filename (GVMD_DATA_DIR,
-                           "wizards",
-                           file_name,
-                           NULL);
-  g_free (file_name);
-
-  get_error = NULL;
-  g_file_get_contents (file,
-                       &wizard,
-                       &wizard_len,
-                       &get_error);
-  g_free (file);
-  if (get_error)
-    {
-      g_warning ("%s: Failed to read wizard: %s",
-                 __func__,
-                 get_error->message);
-      g_error_free (get_error);
-      return -1;
-    }
-
-  /* Parse wizard. */
-
-  entity = NULL;
-  if (parse_entity (wizard, &entity))
-    {
-      g_warning ("%s: Failed to parse wizard", __func__);
-      g_free (wizard);
-      return -1;
-    }
-  g_free (wizard);
-
-  /* Select mode */
-  if (mode && strcmp (mode, ""))
-    {
-      modes = entity->entities;
-      int mode_found = 0;
-      while (mode_found == 0 && (mode_entity = first_entity (modes)))
-        {
-          if (strcasecmp (entity_name (mode_entity), "mode") == 0)
-            {
-              entity_t name_entity;
-              name_entity = entity_child (mode_entity, "name");
-
-              if (strcmp (entity_text (name_entity), mode) == 0)
-                mode_found = 1;
-            }
-          modes = next_entities (modes);
-        }
-
-      if (mode_found == 0)
-        {
-          free_entity (entity);
-          if (ret_response)
-            *ret_response = g_strdup ("");
-
-          return 0;
-        }
-    }
-  else
-    {
-      mode_entity = entity;
-    }
-
-  /* If needed, check if wizard is marked as read only.
-   * This does not check the actual commands.
-   */
-  if (read_only)
-    {
-      read_only_entity = entity_child (mode_entity, "read_only");
-      if (read_only_entity == NULL)
-        {
-          free_entity (entity);
-          return 5;
-        }
-    }
-
-  /* Check params */
-  params_xml = g_string_new ("");
-  params_entity = entity_child (mode_entity, "params");
-  if (params_entity)
-    param_defs = params_entity->entities;
-
-  while (params_entity && (param_def = first_entity (param_defs)))
-    {
-      if (strcasecmp (entity_name (param_def), "param") == 0)
-        {
-          entity_t name_entity, regex_entity, optional_entity;
-          const char *name, *regex;
-          int optional;
-          int param_found = 0;
-
-          name_entity = entity_child (param_def, "name");
-          if ((name_entity == NULL)
-              || (strcmp (entity_text (name_entity), "") == 0))
-            {
-              g_warning ("%s: Wizard PARAM missing NAME",
-                         __func__);
-              free_entity (entity);
-              return -1;
-            }
-          else
-            name = entity_text (name_entity);
-
-          regex_entity = entity_child (param_def, "regex");
-          if ((regex_entity == NULL)
-              || (strcmp (entity_text (regex_entity), "") == 0))
-            {
-              g_warning ("%s: Wizard PARAM missing REGEX",
-                         __func__);
-              free_entity (entity);
-              return -1;
-            }
-          else
-            regex = entity_text (regex_entity);
-
-          optional_entity = entity_child (param_def, "optional");
-          optional = (optional_entity
-                      && strcmp (entity_text (optional_entity), "")
-                      && strcmp (entity_text (optional_entity), "0"));
-
-          if (params)
-            {
-              guint index = params->len;
-              while (index--)
-                {
-                  name_value_t *pair;
-
-                  pair = (name_value_t*) g_ptr_array_index (params, index);
-
-                  if (pair == NULL)
-                    continue;
-
-                  if ((pair->name)
-                      && (pair->value)
-                      && (strcmp (pair->name, name) == 0))
-                    {
-                      index = 0; // end loop;
-                      param_found = 1;
-
-                      if (g_regex_match_simple (regex, pair->value, 0, 0) == 0)
-                        {
-                          if (command_error)
-                            {
-                              *command_error
-                                = g_strdup_printf ("Value '%s' is not valid for"
-                                                  " parameter '%s'.",
-                                                  pair->value, name);
-                            }
-                          free_entity (entity);
-                          g_string_free (params_xml, TRUE);
-                          return 6;
-                        }
-                    }
-                }
-            }
-
-          if (optional == 0 && param_found == 0)
-            {
-              if (command_error)
-                {
-                  *command_error = g_strdup_printf ("Mandatory wizard param '%s'"
-                                                    " missing",
-                                                    name);
-                }
-              free_entity (entity);
-              return 6;
-            }
-
-
-        }
-      param_defs = next_entities (param_defs);
-    }
-
-  /* Buffer params */
-  if (params)
-    {
-      guint index = params->len;
-      while (index--)
-        {
-          name_value_t *pair;
-
-          pair = (name_value_t*) g_ptr_array_index (params, index);
-          xml_string_append (params_xml,
-                             "<param>"
-                             "<name>%s</name>"
-                             "<value>%s</value>"
-                             "</param>",
-                             pair->name ? pair->name : "",
-                             pair->value ? pair->value : "");
-        }
-    }
-
-  /* Run each step of the wizard. */
-
-  response = NULL;
-  extra = NULL;
-  steps = mode_entity->entities;
-  while ((step = first_entity (steps)))
-    {
-      if (strcasecmp (entity_name (step), "step") == 0)
-        {
-          entity_t command, extra_xsl;
-          gchar *gmp;
-          int xsl_fd, xml_fd;
-          char xsl_file_name[] = "/tmp/gvmd-xsl-XXXXXX";
-          FILE *xsl_file, *xml_file;
-          char xml_file_name[] = "/tmp/gvmd-xml-XXXXXX";
-          char extra_xsl_file_name[] = "/tmp/gvmd-extra-xsl-XXXXXX";
-          char extra_xml_file_name[] = "/tmp/gvmd-extra-xml-XXXXXX";
-
-          /* Get the command element. */
-
-          command = entity_child (step, "command");
-          if (command == NULL)
-            {
-              g_warning ("%s: Wizard STEP missing COMMAND",
-                         __func__);
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          /* Save the command XSL from the element to a file. */
-
-          xsl_fd = mkstemp (xsl_file_name);
-          if (xsl_fd == -1)
-            {
-              g_warning ("%s: Wizard XSL file create failed",
-                         __func__);
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          xsl_file = fdopen (xsl_fd, "w");
-          if (xsl_file == NULL)
-            {
-              g_warning ("%s: Wizard XSL file open failed",
-                         __func__);
-              close (xsl_fd);
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          if (first_entity (command->entities))
-            print_entity (xsl_file, first_entity (command->entities));
-
-          /* Write the params as XML to a file. */
-
-          xml_fd = mkstemp (xml_file_name);
-          if (xml_fd == -1)
-            {
-              g_warning ("%s: Wizard XML file create failed",
-                         __func__);
-              fclose (xsl_file);
-              unlink (xsl_file_name);
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          xml_file = fdopen (xml_fd, "w");
-          if (xml_file == NULL)
-            {
-              g_warning ("%s: Wizard XML file open failed",
-                         __func__);
-              fclose (xsl_file);
-              unlink (xsl_file_name);
-              close (xml_fd);
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          if (fprintf (xml_file,
-                       "<wizard>"
-                       "<params>%s</params>"
-                       "<previous>"
-                       "<response>%s</response>"
-                       "<extra_data>%s</extra_data>"
-                       "</previous>"
-                       "</wizard>\n",
-                       params_xml->str ? params_xml->str : "",
-                       response ? response : "",
-                       extra ? extra : "")
-              < 0)
-            {
-              fclose (xsl_file);
-              unlink (xsl_file_name);
-              fclose (xml_file);
-              unlink (xml_file_name);
-              free_entity (entity);
-              g_warning ("%s: Wizard failed to write XML",
-                         __func__);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          fflush (xml_file);
-
-          /* Combine XSL and XML to get the GMP command. */
-
-          gmp = xsl_transform (xsl_file_name, xml_file_name, NULL,
-                               NULL);
-          fclose (xsl_file);
-          unlink (xsl_file_name);
-          fclose (xml_file);
-          unlink (xml_file_name);
-          if (gmp == NULL)
-            {
-              g_warning ("%s: Wizard XSL transform failed",
-                         __func__);
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          /* Run the GMP command. */
-
-          g_free (response);
-          response = NULL;
-          ret = run_command (run_command_data, gmp, &response);
-          if (ret == 0)
-            {
-              /* Command succeeded. */
-            }
-          else
-            {
-              free_entity (entity);
-              g_free (response);
-              g_free (extra);
-              g_string_free (params_xml, TRUE);
-              return -1;
-            }
-
-          /* Exit if the command failed. */
-
-          if (response)
-            {
-              const char *status;
-              entity_t response_entity;
-
-              response_entity = NULL;
-              if (parse_entity (response, &response_entity))
-                {
-                  g_warning ("%s: Wizard failed to parse response",
-                             __func__);
-                  free_entity (entity);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return -1;
-                }
-
-              status = entity_attribute (response_entity, "status");
-              if ((status == NULL)
-                  || (strlen (status) == 0)
-                  || (status[0] != '2'))
-                {
-                  g_debug ("response was %s", response);
-                  if (command_error)
-                    {
-                      const char *text;
-                      text = entity_attribute (response_entity, "status_text");
-                      if (text)
-                        *command_error = g_strdup (text);
-                    }
-                  if (command_error_code)
-                    {
-                      *command_error_code = g_strdup (status);
-                    }
-                  free_entity (response_entity);
-                  free_entity (entity);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return 4;
-                }
-
-              free_entity (response_entity);
-            }
-
-          /* Get the extra_data element. */
-
-          extra_xsl = entity_child (step, "extra_data");
-          if (extra_xsl)
-            {
-              /* Save the extra_data XSL from the element to a file. */
-
-              xsl_fd = mkstemp (extra_xsl_file_name);
-              if (xsl_fd == -1)
-                {
-                  g_warning ("%s: Wizard extra_data XSL file create failed",
-                            __func__);
-                  free_entity (entity);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return -1;
-                }
-
-              xsl_file = fdopen (xsl_fd, "w");
-              if (xsl_file == NULL)
-                {
-                  g_warning ("%s: Wizard extra_data XSL file open failed",
-                            __func__);
-                  close (xsl_fd);
-                  free_entity (entity);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return -1;
-                }
-
-              if (first_entity (extra_xsl->entities))
-                print_entity (xsl_file, first_entity (extra_xsl->entities));
-
-              /* Write the params as XML to a file. */
-
-              xml_fd = mkstemp (extra_xml_file_name);
-              if (xml_fd == -1)
-                {
-                  g_warning ("%s: Wizard XML file create failed",
-                            __func__);
-                  fclose (xsl_file);
-                  unlink (xsl_file_name);
-                  free_entity (entity);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return -1;
-                }
-
-              xml_file = fdopen (xml_fd, "w");
-              if (xml_file == NULL)
-                {
-                  g_warning ("%s: Wizard XML file open failed",
-                            __func__);
-                  fclose (xsl_file);
-                  unlink (xsl_file_name);
-                  close (xml_fd);
-                  free_entity (entity);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return -1;
-                }
-
-              if (fprintf (xml_file,
-                           "<wizard>"
-                           "<params>%s</params>"
-                           "<current>"
-                           "<response>%s</response>"
-                           "</current>"
-                           "<previous>"
-                           "<extra_data>%s</extra_data>"
-                           "</previous>"
-                           "</wizard>\n",
-                           params_xml->str ? params_xml->str : "",
-                           response ? response : "",
-                           extra ? extra : "")
-                  < 0)
-                {
-                  fclose (xsl_file);
-                  unlink (extra_xsl_file_name);
-                  fclose (xml_file);
-                  unlink (extra_xml_file_name);
-                  free_entity (entity);
-                  g_warning ("%s: Wizard failed to write XML",
-                            __func__);
-                  g_free (response);
-                  g_free (extra);
-                  g_string_free (params_xml, TRUE);
-                  return -1;
-                }
-
-              fflush (xml_file);
-
-              g_free (extra);
-              extra = xsl_transform (extra_xsl_file_name, extra_xml_file_name,
-                                     NULL, NULL);
-              fclose (xsl_file);
-              unlink (extra_xsl_file_name);
-              fclose (xml_file);
-              unlink (extra_xml_file_name);
-            }
-        }
-      steps = next_entities (steps);
-    }
-
-  if (extra)
-    extra_wrapped = g_strdup_printf ("<extra_data>%s</extra_data>",
-                                     extra);
-  else
-    extra_wrapped = NULL;
-  g_free (extra);
-
-  if (ret_response)
-    *ret_response = response;
-
-  if (extra_wrapped)
-    {
-      entity_t extra_entity, status_entity, status_text_entity;
-      ret = parse_entity (extra_wrapped, &extra_entity);
-      if (ret == 0)
-        {
-          status_entity = entity_child (extra_entity, "status");
-          status_text_entity = entity_child (extra_entity, "status_text");
-
-          if (status_text_entity && command_error)
-            {
-              *command_error = g_strdup (entity_text (status_text_entity));
-            }
-
-          if (status_entity && command_error_code)
-            {
-              *command_error_code = g_strdup (entity_text (status_entity));
-            }
-          free_entity (extra_entity);
-        }
-      else
-        {
-          g_warning ("%s: failed to parse extra data", __func__);
-          free_entity (entity);
-          g_string_free (params_xml, TRUE);
-          return -1;
-        }
-    }
-
-  free_entity (entity);
-  g_string_free (params_xml, TRUE);
-
-  /* All the steps succeeded. */
-
-  return 0;
-}
-
-
-
 /* Resources. */
 
 /**
@@ -6954,6 +6252,8 @@ scan_semaphore_update_end (int add_result_on_error,
     }
   return 0;
 }
+
+
 
 #if ENABLE_OPENVASD
 /* openvasd */

@@ -18,6 +18,7 @@
 #include <gvm/base/gvm_sentry.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 #include <sys/wait.h>
 
 #undef G_LOG_DOMAIN
@@ -219,7 +220,7 @@ handle_scan_queue_entry (const char *report_id, report_t report, task_t task,
           int in_assets_int;
 
           in_assets = task_preference_value (task, "in_assets");
-          in_assets_int = atoi (in_assets);
+          in_assets_int = in_assets == NULL || strcmp (in_assets, "no");
           g_free (in_assets);
 
           report_set_processing_required (report, 1, in_assets_int);

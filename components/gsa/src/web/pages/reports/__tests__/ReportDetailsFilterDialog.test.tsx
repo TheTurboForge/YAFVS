@@ -36,7 +36,6 @@ describe('Details Filter Dialog for Report', () => {
 
     render(
       <ReportDetailsFilterDialog
-        delta={false}
         filter={filter}
         onClose={onClose}
         onFilterChanged={onFilterChanged}
@@ -108,7 +107,6 @@ describe('Details Filter Dialog for Report', () => {
 
     render(
       <ReportDetailsFilterDialog
-        delta={false}
         filter={filter}
         onClose={onClose}
         onFilterChanged={onFilterChanged}
@@ -150,7 +148,6 @@ describe('Details Filter Dialog for Report', () => {
 
     render(
       <ReportDetailsFilterDialog
-        delta={false}
         filter={filter}
         onClose={onClose}
         onFilterChanged={onFilterChanged}

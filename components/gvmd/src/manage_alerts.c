@@ -41,7 +41,8 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Variables. */
 
 /**
@@ -146,7 +147,8 @@ set_max_email_message_size (int size)
   max_email_message_size = size;
 }
 
-
+
+
 /* Alert report data. */
 
 /**
@@ -183,7 +185,8 @@ alert_report_data_reset (alert_report_data_t *data)
   memset (data, 0, sizeof (alert_report_data_t));
 }
 
-
+
+
 /* Alert conditions. */
 
 /**
@@ -286,7 +289,8 @@ alert_condition_from_name (const char* name)
   return ALERT_CONDITION_ERROR;
 }
 
-
+
+
 /* Alert methods. */
 
 /**
@@ -518,7 +522,8 @@ manage_check_alerts (GSList *log_config, const db_conn_info_t *database)
   return ret;
 }
 
-
+
+
 /* Triggering an Alert. */
 
 /**
@@ -3585,53 +3590,6 @@ email_secinfo (alert_t alert, task_t task, event_t event,
 }
 
 /**
- * @brief Get the delta report to be used for an alert.
- *
- * @param[in]  alert         Alert.
- * @param[in]  task          Task.
- * @param[in]  report        Report.
- *
- * @return Report to compare with if required, else 0.
- */
-static report_t
-get_delta_report (alert_t alert, task_t task, report_t report)
-{
-  char *delta_type;
-  report_t delta_report;
-
-  delta_type = alert_data (alert,
-                           "method",
-                           "delta_type");
-
-  if (delta_type == NULL)
-    return 0;
-
-  delta_report = 0;
-  if (strcmp (delta_type, "Previous") == 0)
-    {
-      if (task_report_previous (task, report, &delta_report))
-        g_warning ("%s: failed to get previous report", __func__);
-    }
-  else if (strcmp (delta_type, "Report") == 0)
-    {
-      char *delta_report_id;
-
-      delta_report_id = alert_data (alert,
-                                    "method",
-                                    "delta_report_id");
-
-      if (delta_report_id
-          && find_report_with_permission (delta_report_id,
-                                          &delta_report,
-                                          "get_reports"))
-        g_warning ("%s: error while finding report", __func__);
-    }
-  free (delta_type);
-
-  return delta_report;
-}
-
-/**
  * @brief  Generates report results get data for an alert.
  *
  * @param[in]  alert              The alert to try to get the filter data from.
@@ -3944,7 +3902,7 @@ report_content_for_alert (alert_t alert, report_t report, task_t task,
   // Generate report content
 
   report_content = manage_report (report,
-                                  get_delta_report (alert, task, report),
+                                  0,
                                   alert_filter_get ? alert_filter_get : get,
                                   report_format,
                                   report_config,
@@ -4143,8 +4101,7 @@ trigger_to_vfire (alert_t alert, task_t task, report_t report, event_t event,
           alert_report_item = g_malloc0 (sizeof (alert_report_data_t));
 
           report_content = manage_report (report,
-                                          get_delta_report
-                                            (alert, task, report),
+                                          0,
                                           alert_filter_get
                                             ? alert_filter_get
                                             : get,

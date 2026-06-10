@@ -279,7 +279,7 @@ class Page extends React.Component {
       task_uuid: task.id,
       result_uuid: result.id,
       result_name: result.name,
-      severity: result.original_severity > 0 ? 0.1 : result.original_severity,
+      severity: result.severity,
       hosts: MANUAL,
       hosts_manual: host.name,
       port: MANUAL,

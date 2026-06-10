@@ -92,11 +92,6 @@ const Details = ({entity, links}: DetailsProps) => {
           </TableRow>
 
           <TableRow>
-            <TableData>{_('Alterable')}</TableData>
-            <TableData>{renderYesNo(entity.isAlterable())}</TableData>
-          </TableRow>
-
-          <TableRow>
             <TableData>{_('Status')}</TableData>
             <TableData>
               <TaskStatus task={entity} />
@@ -142,11 +137,6 @@ const TaskDetailsPage = ({
       onDeleted={goToList('tasks', navigate)}
       onDownloadError={onError}
       onDownloaded={onDownloaded}
-      onImportTaskCreated={goToDetails('task', navigate)}
-      onImportTaskSaved={onChanged}
-      onReportImported={onChanged}
-      onResumeError={onError}
-      onResumed={onChanged}
       onSaved={onChanged}
       onStartError={onError}
       onStarted={onChanged}
@@ -156,14 +146,11 @@ const TaskDetailsPage = ({
       {({
         clone,
         create,
-        createImportTask,
         delete: deleteFunc,
         download,
         edit,
         start,
         stop,
-        resume,
-        reportImport,
       }) => (
         <EntityPage
           {...props}
@@ -175,14 +162,11 @@ const TaskDetailsPage = ({
             <TaskDetailsPageToolBarIcons
               entity={entity}
               overridesCount={overrides.length}
-              onImportTaskCreateClick={createImportTask}
-              onReportImportClick={reportImport}
               onTaskCloneClick={clone}
               onTaskCreateClick={create}
               onTaskDeleteClick={deleteFunc}
               onTaskDownloadClick={download}
               onTaskEditClick={edit}
-              onTaskResumeClick={resume}
               onTaskStartClick={start}
               onTaskStopClick={stop}
             />
@@ -249,7 +233,7 @@ const load = (gmp: Gmp) => {
 };
 
 export const reloadInterval = ({entity}: {entity: Task}) => {
-  if (!isDefined(entity) || entity.isImport()) {
+  if (!isDefined(entity)) {
     return NO_RELOAD;
   }
   return entity.isActive()

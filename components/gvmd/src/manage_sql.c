@@ -912,7 +912,7 @@ init_get_iterator2_with (iterator_t* iterator, const char *type,
     init_iterator (iterator,
                    "%sSELECT %s"
                    " FROM %ss%s %s"
-                   " WHERE"
+                   " WHERE "
                    "%s"
                    "%s"
                    "%s%s;",
@@ -1735,7 +1735,7 @@ count2 (const char *type, const get_data_t *get, column_t *select_columns,
       && (extra_tables == NULL)
       && (clause == NULL)
       && (extra_where == NULL)
-      && (strcmp (owned_clause, " t ()") == 0))
+      && (strcmp (owned_clause, "t ()") == 0))
     ret = sql_int ("%sSELECT count (*) FROM %ss%s;",
                    with ? with : "", type,
                    get->trash && strcmp (type, "task") ? "_trash" : "");
@@ -4163,7 +4163,7 @@ init_manage_internal (GSList *log_config,
    *                             init_manage_process
    *                         serve_client
    *                     fork two
-   *                         gmp_auth, gmp_start_task_report, gmp_resume_task_report.
+   *                         gmp_auth, gmp_start_task_report.
    *     --create-user --delete-user --get-users
    *         manage_create, ...
    *             init_manage_helper
@@ -5851,41 +5851,6 @@ task_second_last_report (task_t task, report_t *report)
 }
 
 /**
- * @brief Get the report from the most recently stopped invocation of task.
- *
- * @param[in]  task    The task.
- * @param[out] report  Report return, 0 if successfully failed to select report.
- *
- * @return 0 success, -1 error.
- */
-int
-task_last_resumable_report (task_t task, report_t *report)
-{
-  switch (sql_int64 (report,
-                     "SELECT id FROM reports WHERE task = %llu"
-                     " AND (scan_run_status = %u"
-                     "      OR scan_run_status = %u)"
-                     " ORDER BY creation_time DESC LIMIT 1;",
-                     task,
-                     TASK_STATUS_STOPPED,
-                     TASK_STATUS_INTERRUPTED))
-    {
-      case 0:
-        break;
-      case 1:        /* Too few rows in result of query. */
-        *report = 0;
-        return 0;
-        break;
-      default:       /* Programming error. */
-        assert (0);
-      case -1:
-        return -1;
-        break;
-    }
-  return 0;
-}
-
-/**
  * @brief Get report ID from second most recently completed invocation of task.
  *
  * @param[in]  task  The task.
@@ -6628,6 +6593,8 @@ auto_delete_reports ()
                      " WHERE task = %llu"
                      " AND start_time IS NOT NULL"
                      " AND start_time > 0"
+                     " AND NOT EXISTS (SELECT 1 FROM scope_report_sources"
+                     "                 WHERE source_report = reports.id)"
                      " ORDER BY start_time DESC LIMIT %s OFFSET %i;",
                      task,
                      sql_select_limit (-1),
@@ -8285,20 +8252,9 @@ insert_report_host_detail (report_t report, const char *host,
 }
 
 /**
- * @brief Maximum number of COPY statements per transaction,
- *        when uploading report.
- */
-#define CREATE_REPORT_COPY_CHUNK_SIZE 3000
-
-/**
- * @brief Number of results per transaction, when uploading report.
- */
-#define CREATE_REPORT_CHUNK_SIZE 10
-
-/**
  * @brief Number of microseconds to sleep between insert chunks.
  */
-#define CREATE_REPORT_CHUNK_SLEEP 1000
+#define REPORT_PROCESSING_CHUNK_SLEEP 1000
 
 /**
  * @brief Size of the buffer used for COPY statements in bytes.
@@ -8353,7 +8309,7 @@ check_report_discovery (report_t report)
 }
 
 /**
- * @brief Process imported report.
+ * @brief Process report data after scan completion.
  *
  * Adds TLS certificates to the database and creates assets from the report.
  *
@@ -8389,7 +8345,7 @@ process_report_import (report_t report)
   while (next (&hosts))
     {
       const char* host = host_iterator_host (&hosts);
-      gvm_usleep (CREATE_REPORT_CHUNK_SLEEP);
+      gvm_usleep (REPORT_PROCESSING_CHUNK_SLEEP);
       add_assets_from_host_in_report (report, host);
     }
 
@@ -8440,474 +8396,6 @@ process_report_import (report_t report)
   return 0;
 }
 
-/**
- * @brief Create a report from an array of results.
- *
- * @param[in]   results       Array of create_report_result_t pointers.
- * @param[in]   task_id       UUID of import task, or NULL to create new one.
- * @param[in]   in_assets     Whether to create assets from the report.
- * @param[in]   scan_start    Scan start time text.
- * @param[in]   scan_end      Scan end time text.
- * @param[in]   host_starts   Array of create_report_result_t pointers.  Host
- *                            name in host, time in description.
- * @param[in]   host_ends     Array of create_report_result_t pointers.  Host
- *                            name in host, time in description.
- * @param[in]   details       Array of host_detail_t pointers.
- * @param[out]  report_id     Report ID.
- *
- * @return 0 success, 99 permission denied, -1 error, -2 failed to generate ID,
- *         -3 task_id is NULL, -4 failed to find task, -5 task must be
- *         import task, -6 permission to create assets denied.
- */
-int
-create_report (array_t *results, const char *task_id, const char *in_assets,
-               const char *scan_start, const char *scan_end,
-               array_t *host_starts, array_t *host_ends, array_t *details,
-               char **report_id)
-{
-  int index, in_assets_int, count, rc;
-  create_report_result_t *result, *end, *start;
-  report_t report;
-  user_t owner;
-  task_t task;
-  pid_t pid;
-  host_detail_t *detail;
-  db_copy_buffer_t copy_buffer;
-  resource_t result_rowid, report_host_details_rowid;
-
-  in_assets_int
-    = (in_assets && strcmp (in_assets, "") && strcmp (in_assets, "0"));
-
-  if (in_assets_int && acl_user_may ("create_asset") == 0)
-    return -6;
-
-  g_debug ("%s", __func__);
-
-  if (acl_user_may ("create_report") == 0)
-    return 99;
-
-  if (task_id == NULL)
-    return -3;
-
-  sql_begin_immediate ();
-
-  /* Find the task. */
-
-  rc = 0;
-
-  /* It's important that the task is not in the trash, because we
-   * are inserting results below.  This find function will fail if
-   * the task is in the trash. */
-  if (find_task_with_permission (task_id, &task, "modify_task"))
-    rc = -1;
-  else if (task == 0)
-    rc = -4;
-  else if (task_target (task))
-    rc = -5;
-  if (rc)
-    {
-      sql_rollback ();
-      return rc;
-    }
-
-  /* Generate report UUID. */
-
-  *report_id = gvm_uuid_make ();
-  if (*report_id == NULL) return -2;
-
-  /* Create the report. */
-
-  report = make_report (task, *report_id, TASK_STATUS_RUNNING);
-
-  if (scan_start)
-    {
-      sql ("UPDATE reports SET start_time = %i WHERE id = %llu;",
-           parse_iso_time (scan_start),
-           report);
-    }
-
-  if (scan_end)
-    {
-      sql ("UPDATE reports SET end_time = %i WHERE id = %llu;",
-           parse_iso_time (scan_end),
-           report);
-    }
-
-  /* Show that the upload has started. */
-
-  set_task_run_status (task, TASK_STATUS_RUNNING);
-  sql ("UPDATE tasks SET upload_result_count = %llu WHERE id = %llu;",
-       results->len,
-       task);
-  sql_commit ();
-
-  /* Fork a child to import the results while the parent responds to the
-   * client. */
-
-  pid = fork ();
-  switch (pid)
-    {
-      case 0:
-        {
-          /* Child.
-           *
-           * Fork again so the parent can wait on the child, to prevent
-           * zombies. */
-          init_sentry ();
-          cleanup_manage_process (FALSE);
-          pid = fork ();
-          switch (pid)
-            {
-              case 0:
-                /* Grandchild.  Reopen the database (required after fork) and carry on
-                 * to import the reports, . */
-                init_sentry ();
-                reinit_manage_process ();
-                break;
-              case -1:
-                /* Grandchild's parent when error. */
-                g_warning ("%s: fork: %s", __func__, strerror (errno));
-                gvm_close_sentry ();
-                exit (EXIT_FAILURE);
-                break;
-              default:
-                /* Grandchild's parent.  Exit, to close parent's wait. */
-                g_debug ("%s: %i forked %i", __func__, getpid (), pid);
-                gvm_close_sentry ();
-                exit (EXIT_SUCCESS);
-                break;
-            }
-        }
-        break;
-      case -1:
-        /* Parent when error. */
-        g_warning ("%s: fork: %s", __func__, strerror (errno));
-        global_current_report = report;
-        set_task_interrupted (task,
-                              "Failed to fork child to import report."
-                              "  Setting task status to Interrupted.");
-        global_current_report = 0;
-        return -1;
-        break;
-      default:
-        {
-          int status;
-
-          /* Parent.  Wait to prevent zombie, then return to respond to client. */
-          g_debug ("%s: %i forked %i", __func__, getpid (), pid);
-          while (waitpid (pid, &status, 0) < 0)
-            {
-              if (errno == ECHILD)
-                {
-                  g_warning ("%s: Failed to get child exit status",
-                             __func__);
-                  return -1;
-                }
-              if (errno == EINTR)
-                continue;
-              g_warning ("%s: waitpid: %s",
-                         __func__,
-                         strerror (errno));
-              return -1;
-            }
-          return 0;
-          break;
-        }
-    }
-
-  setproctitle ("Importing results");
-
-  /* Add the results. */
-
-  db_copy_buffer_init (&copy_buffer,
-                       BUFFER_SIZE,
-                       "COPY results"
-                       " (id, uuid, owner, date, task, host, hostname, port,"
-                       "  nvt, type, description,"
-                       "  nvt_version, severity, qod, qod_type,"
-                       "  result_nvt, report)"
-                       " FROM STDIN;");
-
-  if (sql_int64 (&owner,
-                 "SELECT owner FROM tasks WHERE tasks.id = %llu",
-                 task))
-    {
-      g_warning ("%s: failed to get owner of task", __func__);
-      return -1;
-    }
-
-  sql_begin_immediate ();
-  g_debug ("%s: add hosts", __func__);
-  index = 0;
-  while ((start = (create_report_result_t*) g_ptr_array_index (host_starts,
-                                                               index++)))
-    if (start->host && start->description)
-      manage_report_host_add (report, start->host,
-                              parse_iso_time (start->description),
-                              0);
-
-  g_debug ("%s: add results", __func__);
-  index = 0;
-  count = 0;
-  while ((result = (create_report_result_t*) g_ptr_array_index (results,
-                                                                index++)))
-    {
-      gchar *quoted_host, *quoted_hostname, *quoted_port, *quoted_nvt_oid;
-      gchar *quoted_description, *quoted_scan_nvt_version, *quoted_severity;
-      gchar *quoted_qod, *quoted_qod_type;
-      g_debug ("%s: add results: index: %i", __func__, index);
-
-      quoted_host = sql_copy_escape (result->host ? result->host : "");
-      quoted_hostname = sql_copy_escape (result->hostname ? result->hostname : "");
-      quoted_port = sql_copy_escape (result->port ? result->port : "");
-      quoted_nvt_oid = sql_copy_escape (result->nvt_oid ? result->nvt_oid : "");
-      quoted_description = sql_copy_escape (result->description
-                                       ? result->description
-                                       : "");
-      quoted_scan_nvt_version = sql_copy_escape (result->scan_nvt_version
-                                       ? result->scan_nvt_version
-                                       : "");
-      quoted_severity =  sql_copy_escape (result->severity ? result->severity : "");
-      if (result->qod && strcmp (result->qod, "") && strcmp (result->qod, "0"))
-        quoted_qod = sql_copy_escape (result->qod);
-      else
-        quoted_qod = g_strdup (G_STRINGIFY (QOD_DEFAULT));
-      quoted_qod_type = sql_copy_escape (result->qod_type ? result->qod_type : "");
-      result_nvt_notice (quoted_nvt_oid);
-
-      if (sql_int64 (&result_rowid,
-        "SELECT nextval('results_id_seq');"))
-        {
-          g_warning ("%s: failed to get result row ID", __func__);
-          return -1;
-        }
-
-      char* uuid = gvm_uuid_make ();
-      if (uuid == NULL)
-        {
-          g_warning ("%s: failed to generate result UUID", __func__);
-          return -2;
-        }
-      time_t date = time (NULL);
-
-      resource_t result_nvt;
-
-      if (sql_int64 (&result_nvt,
-                     "SELECT id FROM result_nvts WHERE nvt = '%s';",
-                     quoted_nvt_oid))
-        {
-          g_warning ("%s: failed to get result_nvt ID", __func__);
-          return -1;
-        }
-
-      int ret = db_copy_buffer_append_printf
-                  (&copy_buffer,
-                  "%llu\t%s\t%llu\t%lld\t%llu\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%llu\t%llu\n",
-                  result_rowid,
-                  uuid,
-                  owner,
-                  (long long) date,
-                  task,
-                  quoted_host,
-                  quoted_hostname,
-                  quoted_port,
-                  quoted_nvt_oid,
-                  result->threat
-                  ? threat_message_type (result->threat)
-                  : "Log Message",
-                  quoted_description,
-                  quoted_scan_nvt_version,
-                  quoted_severity,
-                  quoted_qod,
-                  quoted_qod_type,
-                  result_nvt,
-                  report);
-
-      g_free (quoted_host);
-      g_free (quoted_hostname);
-      g_free (quoted_port);
-      g_free (quoted_nvt_oid);
-      g_free (quoted_description);
-      g_free (quoted_scan_nvt_version);
-      g_free (quoted_severity);
-      g_free (quoted_qod);
-      g_free (quoted_qod_type);
-      g_free (uuid);
-
-      if (ret)
-        {
-          g_warning ("%s: failed to write to database copy buffer",
-                     __func__);
-          db_copy_buffer_cleanup (&copy_buffer);
-          return -1;
-        }
-
-      count++;
-
-      if (count == CREATE_REPORT_COPY_CHUNK_SIZE)
-        {
-          if (db_copy_buffer_commit (&copy_buffer, FALSE))
-            {
-              db_copy_buffer_cleanup (&copy_buffer);
-              return -1;
-            }
-          report_cache_counts (report, 1, 1, NULL);
-          sql_commit ();
-          gvm_usleep (CREATE_REPORT_CHUNK_SLEEP);
-          sql_begin_immediate ();
-          count = 0;
-        }
-    }
-
-  if (count > 0)
-    {
-      if (db_copy_buffer_commit (&copy_buffer, TRUE))
-      {
-        db_copy_buffer_cleanup (&copy_buffer);
-        return -1;
-      }
-      report_cache_counts (report, 1, 1, NULL);
-      sql_commit ();
-      gvm_usleep (CREATE_REPORT_CHUNK_SLEEP);
-      sql_begin_immediate ();
-    }
-
-  sql ("INSERT INTO result_nvt_reports (result_nvt, report)"
-       " SELECT distinct result_nvt, %llu FROM results"
-       " WHERE results.report = %llu;",
-       report,
-       report);
-
-  g_debug ("%s: add host ends", __func__);
-  index = 0;
-  count = 0;
-  while ((end = (create_report_result_t*) g_ptr_array_index (host_ends,
-                                                             index++)))
-    if (end->host)
-      {
-        gchar *quoted_host;
-
-        quoted_host = sql_quote (end->host);
-
-        if (end->description)
-          sql ("UPDATE report_hosts SET end_time = %i"
-               " WHERE report = %llu AND host = '%s';",
-               parse_iso_time (end->description),
-               report,
-               quoted_host);
-        else
-          sql ("UPDATE report_hosts SET end_time = NULL"
-               " WHERE report = %llu AND host = '%s';",
-               report,
-               quoted_host);
-
-        g_free (quoted_host);
-
-        count++;
-        if (count == CREATE_REPORT_CHUNK_SIZE)
-          {
-            sql_commit ();
-            gvm_usleep (CREATE_REPORT_CHUNK_SLEEP);
-            sql_begin_immediate ();
-            count = 0;
-          }
-      }
-
-  g_debug ("%s: add host details", __func__);
-
-
-  db_copy_buffer_init (&copy_buffer,
-                       BUFFER_SIZE,
-                       "COPY report_host_details"
-                       " (id, report_host, source_type, source_name,"
-                           "  source_description, name, value)"
-                       " FROM STDIN;");
-
-  index = 0;
-  count = 0;
-  while ((detail = (host_detail_t*) g_ptr_array_index (details, index++)))
-    if (detail->ip && detail->name)
-      {
-        char *quoted_host, *quoted_source_name, *quoted_source_type;
-        char *quoted_source_desc, *quoted_name, *quoted_value;
-
-        quoted_host = sql_copy_escape (detail->ip);
-        quoted_source_type = sql_copy_escape (detail->source_type ?: "");
-        quoted_source_name = sql_copy_escape (detail->source_name ?: "");
-        quoted_source_desc = sql_copy_escape (detail->source_desc ?: "");
-        quoted_name = sql_copy_escape (detail->name);
-        quoted_value = sql_copy_escape (detail->value ?: "");
-
-        if (sql_int64 (&report_host_details_rowid,
-          "SELECT nextval('report_host_details_id_seq');"))
-          {
-            g_warning ("%s: failed to get report_host_details row ID", __func__);
-            return -1;
-          }
-
-        resource_t report_host;
-
-        sql_int64 (&report_host,
-                    "SELECT id FROM report_hosts"
-                    "   WHERE report = %llu AND host = '%s';",
-                    report,
-                    quoted_host);
-
-        int ret = db_copy_buffer_append_printf
-                    (&copy_buffer,
-                    "%llu\t%llu\t%s\t%s\t%s\t%s\t%s\n",
-                    report_host_details_rowid,
-                    report_host,
-                    quoted_source_type,
-                    quoted_source_name,
-                    quoted_source_desc,
-                    quoted_name,
-                    quoted_value);
-
-        if (ret)
-        {
-          g_warning ("%s: failed to write to database copy buffer",
-                      __func__);
-          db_copy_buffer_cleanup (&copy_buffer);
-          return -1;
-        }
-
-        g_free (quoted_host);
-        g_free (quoted_source_type);
-        g_free (quoted_source_name);
-        g_free (quoted_source_desc);
-        g_free (quoted_name);
-        g_free (quoted_value);
-
-        count++;
-        if (count == CREATE_REPORT_COPY_CHUNK_SIZE)
-          {
-            if (db_copy_buffer_commit (&copy_buffer, FALSE))
-            {
-              db_copy_buffer_cleanup (&copy_buffer);
-              return -1;
-            }
-            sql_commit ();
-            gvm_usleep (CREATE_REPORT_CHUNK_SLEEP);
-            sql_begin_immediate ();
-            count = 0;
-          }
-      }
-  if (db_copy_buffer_commit (&copy_buffer, TRUE))
-    {
-      db_copy_buffer_cleanup (&copy_buffer);
-      return -1;
-    }
-
-  sql_commit ();
-
-  report_set_processing_required (report, 1, in_assets_int);
-
-  gvm_close_sentry ();
-  cleanup_manage_process (FALSE); //check this
-  exit (EXIT_SUCCESS);
-  return 0;
-}
 
 /**
  * @brief Return the UUID of a report.
@@ -16398,6 +15886,7 @@ make_task (char* name, char* comment, int in_assets, int event)
   task_t task;
   char* uuid = gvm_uuid_make ();
   gchar *quoted_name, *quoted_comment;
+  (void) in_assets;
   if (uuid == NULL) abort ();
   quoted_name = name ? sql_quote ((gchar*) name) : NULL;
   quoted_comment = comment ? sql_quote ((gchar*) comment) : NULL;
@@ -16407,7 +15896,7 @@ make_task (char* name, char* comment, int in_assets, int event)
        "  scanner_location, schedule_location, alterable,"
        "  creation_time, modification_time, usage_type)"
        " VALUES ((SELECT id FROM users WHERE users.uuid = '%s'),"
-       "         '%s', '%s', 0, '%s', 0, 0, 0, 0, 0, 0, 0, 0, m_now (),"
+       "         '%s', '%s', 0, '%s', 0, 0, 0, 0, 0, 0, 0, 1, m_now (),"
        "         m_now (), 'scan');",
        current_credentials.uuid,
        uuid,
@@ -16421,7 +15910,7 @@ make_task (char* name, char* comment, int in_assets, int event)
   sql ("INSERT INTO task_preferences (task, name, value)"
        " VALUES (%llu, 'in_assets', '%s')",
        task,
-       in_assets ? "yes" : "no");
+       "yes");
   sql ("INSERT INTO task_preferences (task, name, value)"
        " VALUES (%llu, 'assets_apply_overrides', 'yes')",
        task);
@@ -16429,6 +15918,7 @@ make_task (char* name, char* comment, int in_assets, int event)
        " VALUES (%llu, 'assets_min_qod', %d)",
        task,
        MIN_QOD_DEFAULT);
+  enforce_task_defaults (task);
   free (uuid);
   free (name);
   free (comment);
@@ -16449,6 +15939,35 @@ make_task_complete (task_t task)
   cache_permissions_for_resource ("task", task, NULL);
 
   event (EVENT_TASK_RUN_STATUS_CHANGED, (void*) TASK_STATUS_NEW, task, 0);
+}
+
+/**
+ * @brief Enforce TurboVAS task defaults.
+ *
+ * Tasks are always alterable, always processed into assets, and always keep a
+ * bounded set of recent raw reports. Scope-report source reports are protected
+ * separately in the deletion path.
+ *
+ * @param[in]  task  Task to normalize.
+ */
+void
+enforce_task_defaults (task_t task)
+{
+  assert (task);
+  set_task_alterable (task, 1);
+  sql ("DELETE FROM task_preferences"
+       " WHERE task = %llu"
+       " AND name IN ('in_assets', 'auto_delete', 'auto_delete_data');",
+       task);
+  sql ("INSERT INTO task_preferences (task, name, value)"
+       " VALUES (%llu, 'in_assets', 'yes')",
+       task);
+  sql ("INSERT INTO task_preferences (task, name, value)"
+       " VALUES (%llu, 'auto_delete', 'keep')",
+       task);
+  sql ("INSERT INTO task_preferences (task, name, value)"
+       " VALUES (%llu, 'auto_delete_data', '10')",
+       task);
 }
 
 /**
@@ -16506,6 +16025,7 @@ copy_task (const char* name, const char* comment, const char *task_id,
 {
   task_t new, old;
   int ret;
+  (void) alterable;
 
   assert (current_credentials.uuid);
 
@@ -16529,13 +16049,8 @@ copy_task (const char* name, const char* comment, const char *task_id,
       return ret;
     }
 
-  if (alterable >= 0)
-    sql ("UPDATE tasks SET alterable = %i, hidden = 0 WHERE id = %llu;",
-         alterable,
-         new);
-  else
-    sql ("UPDATE tasks SET hidden = 0 WHERE id = %llu;",
-         new);
+  sql ("UPDATE tasks SET alterable = 1, hidden = 0 WHERE id = %llu;",
+       new);
 
   set_task_run_status (new, TASK_STATUS_NEW);
   sql ("INSERT INTO task_preferences (task, name, value)"
@@ -16543,6 +16058,7 @@ copy_task (const char* name, const char* comment, const char *task_id,
        " WHERE task = %llu;",
        new,
        old);
+  enforce_task_defaults (new);
 
   sql ("INSERT INTO task_alerts (task, alert, alert_location)"
        " SELECT %llu, alert, alert_location FROM task_alerts"
@@ -17265,6 +16781,7 @@ modify_task (const gchar *task_id, const gchar *name,
   task_t task;
   int type_of_scanner;
   scanner_t scanner;
+  (void) alterable;
 
   /* @todo Probably better to rollback on error. */
 
@@ -17273,6 +16790,8 @@ modify_task (const gchar *task_id, const gchar *name,
     return -1;
   if (task == 0)
     return 1;
+
+  set_task_alterable (task, 1);
 
 
   if ((task_target (task) == 0)
@@ -17379,13 +16898,6 @@ modify_task (const gchar *task_id, const gchar *name,
         }
     }
 
-  if (alterable && (task_alterable (task) != atoi (alterable)))
-    {
-      if (task_run_status (task) != TASK_STATUS_NEW)
-        return 9;
-      set_task_alterable (task, strcmp (alterable, "0"));
-    }
-
   if (schedule_id)
     {
       schedule_t schedule = 0;
@@ -17445,6 +16957,8 @@ modify_task (const gchar *task_id, const gchar *name,
         default:
           return -1;
       }
+
+  enforce_task_defaults (task);
 
   return 0;
 }

@@ -63,12 +63,3 @@ class GmpTriggerAlertTestMixin:
             b'<get_reports report_id="r1" alert_id="a1" '
             b'format_id="9e5e5deb-879e-4ecc-8be6-a71cd0875cdd"/>'
         )
-
-    def test_trigger_alert_with_delta_report_id(self):
-        self.gmp.trigger_alert(
-            alert_id="a1", report_id="r1", delta_report_id="r2"
-        )
-
-        self.connection.send.has_been_called_with(
-            b'<get_reports report_id="r1" alert_id="a1" delta_report_id="r2"/>'
-        )

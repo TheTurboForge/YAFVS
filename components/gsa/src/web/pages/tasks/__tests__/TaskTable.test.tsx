@@ -90,12 +90,10 @@ const createGmp = () => ({
 
 describe('TaskTable tests', () => {
   test('should render', () => {
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -111,12 +109,10 @@ describe('TaskTable tests', () => {
         entities={[task, task2, task3]}
         entitiesCounts={counts}
         filter={filter}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -133,12 +129,10 @@ describe('TaskTable tests', () => {
   });
 
   test('should unfold all details', () => {
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -155,12 +149,10 @@ describe('TaskTable tests', () => {
         entities={[task, task2, task3]}
         entitiesCounts={counts}
         filter={filter}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -176,12 +168,10 @@ describe('TaskTable tests', () => {
   });
 
   test('should call click handlers', () => {
-    const handleReportImport = testing.fn();
     const handleTaskClone = testing.fn();
     const handleTaskDelete = testing.fn();
     const handleTaskDownload = testing.fn();
     const handleTaskEdit = testing.fn();
-    const handleTaskResume = testing.fn();
     const handleTaskStart = testing.fn();
     const handleTaskStop = testing.fn();
 
@@ -198,12 +188,10 @@ describe('TaskTable tests', () => {
         entities={[task, task2, task3]}
         entitiesCounts={counts}
         filter={filter}
-        onReportImportClick={handleReportImport}
         onTaskCloneClick={handleTaskClone}
         onTaskDeleteClick={handleTaskDelete}
         onTaskDownloadClick={handleTaskDownload}
         onTaskEditClick={handleTaskEdit}
-        onTaskResumeClick={handleTaskResume}
         onTaskStartClick={handleTaskStart}
         onTaskStopClick={handleTaskStop}
       />,
@@ -213,11 +201,6 @@ describe('TaskTable tests', () => {
     expect(startIcon).toHaveAttribute('title', 'Start');
     fireEvent.click(startIcon);
     expect(handleTaskStart).toHaveBeenCalledWith(task);
-
-    const resumeIcon = screen.getAllByTestId('resume-icon')[0];
-    expect(resumeIcon).toHaveAttribute('title', 'Task is not stopped');
-    fireEvent.click(resumeIcon);
-    expect(handleTaskResume).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getAllByTestId('trashcan-icon')[0];
     expect(deleteIcon).toHaveAttribute('title', 'Move Task to trashcan');

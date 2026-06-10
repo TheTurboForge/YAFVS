@@ -7,12 +7,7 @@
 import type Task from 'gmp/models/task';
 import {isDefined} from 'gmp/utils/identity';
 import Badge from 'web/components/badge/Badge';
-import {
-  AlterableIcon,
-  OverrideIcon,
-  ReportIcon,
-  ResultIcon,
-} from 'web/components/icon';
+import {OverrideIcon, ReportIcon, ResultIcon} from 'web/components/icon';
 import ExportIcon from 'web/components/icon/ExportIcon';
 import ListIcon from 'web/components/icon/ListIcon';
 import ManualIcon from 'web/components/icon/ManualIcon';
@@ -26,7 +21,6 @@ import TrashIcon from 'web/entity/icon/TrashIcon';
 import useTranslation from 'web/hooks/useTranslation';
 import NewIconMenu from 'web/pages/tasks/icons/NewIconMenu';
 import TaskIconWithSync from 'web/pages/tasks/icons/TaskIconWithSync';
-import TaskImportReportIcon from 'web/pages/tasks/icons/TaskImportReportIcon';
 import TaskScheduleIcon from 'web/pages/tasks/icons/TaskScheduleIcon';
 import TaskStopIcon from 'web/pages/tasks/icons/TaskStopIcon';
 import {formattedUserSettingShortDate} from 'web/utils/user-setting-time-date-formatters';
@@ -35,14 +29,11 @@ interface TaskDetailsPageToolBarIconsProps {
   entity: Task;
   links?: boolean;
   overridesCount?: number;
-  onImportTaskCreateClick?: () => void | Promise<void>;
-  onReportImportClick?: (value: Task) => void | Promise<void>;
   onTaskCloneClick?: (value: Task) => void | Promise<void>;
   onTaskCreateClick?: () => void | Promise<void>;
   onTaskDeleteClick?: (value: Task) => void | Promise<void>;
   onTaskDownloadClick?: (value: Task) => void | Promise<void>;
   onTaskEditClick?: (value: Task) => void | Promise<void>;
-  onTaskResumeClick?: (value: Task) => void | Promise<void>;
   onTaskStartClick?: (value: Task) => void | Promise<void>;
   onTaskStopClick?: (value: Task) => void | Promise<void>;
 }
@@ -55,12 +46,9 @@ export const TaskDetailsPageToolBarIcons = ({
   onTaskCloneClick,
   onTaskDownloadClick,
   onTaskEditClick,
-  onReportImportClick,
   onTaskCreateClick,
-  onImportTaskCreateClick,
   onTaskStartClick,
   onTaskStopClick,
-  onTaskResumeClick,
 }: TaskDetailsPageToolBarIconsProps) => {
   const [_] = useTranslation();
   const {
@@ -78,21 +66,10 @@ export const TaskDetailsPageToolBarIcons = ({
           title={_('Help: Tasks')}
         />
         <ListIcon page="tasks" title={_('Task List')} />
-        {entity.isAlterable() && !entity.isNew() && (
-          <AlterableIcon
-            title={_(
-              'This is an Alterable Task. Reports may not relate to ' +
-                'current Scan Config or Target!',
-            )}
-          />
-        )}
       </IconDivider>
 
       <IconDivider>
-        <NewIconMenu
-          onNewClick={onTaskCreateClick}
-          onNewImportTaskClick={onImportTaskCreateClick}
-        />
+        <NewIconMenu onNewClick={onTaskCreateClick} />
         <CloneIcon entity={entity} name="task" onClick={onTaskCloneClick} />
         <EditIcon entity={entity} name="task" onClick={onTaskEditClick} />
         <TrashIcon entity={entity} name="task" onClick={onTaskDeleteClick} />
@@ -109,21 +86,9 @@ export const TaskDetailsPageToolBarIcons = ({
         )}
         <TaskIconWithSync
           task={entity}
-          type="start"
           onClick={onTaskStartClick}
         />
-
-        <TaskImportReportIcon task={entity} onClick={onReportImportClick} />
-
         <TaskStopIcon task={entity} onClick={onTaskStopClick} />
-
-        {!entity.isImport() && (
-          <TaskIconWithSync
-            task={entity}
-            type="resume"
-            onClick={onTaskResumeClick}
-          />
-        )}
       </IconDivider>
 
       <Divider margin="10px">

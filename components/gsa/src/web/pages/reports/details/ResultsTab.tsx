@@ -144,7 +144,6 @@ const ResultsTabWrapper = ({
 
   return (
     <ResultsTable
-      delta={false}
       entities={results}
       entitiesCounts={resultsCounts}
       filter={displayedFilter}

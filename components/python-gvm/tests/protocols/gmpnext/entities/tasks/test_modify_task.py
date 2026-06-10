@@ -88,18 +88,6 @@ class GmpModifyTaskTestMixin:
             b'<modify_task task_id="t1"><alert id="0"/></modify_task>'
         )
 
-    def test_modify_task_with_alterable(self):
-        self.gmp.modify_task(task_id="t1", alterable=True)
-
-        self.connection.send.has_been_called_with(
-            b'<modify_task task_id="t1"><alterable>1</alterable></modify_task>'
-        )
-
-        self.gmp.modify_task(task_id="t1", alterable=False)
-
-        self.connection.send.has_been_called_with(
-            b'<modify_task task_id="t1"><alterable>0</alterable></modify_task>'
-        )
 
     def test_modify_task_with_hosts_ordering(self):
         self.gmp.modify_task(task_id="t1", hosts_ordering=HostsOrdering.REVERSE)

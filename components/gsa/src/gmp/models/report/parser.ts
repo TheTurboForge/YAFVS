@@ -61,7 +61,6 @@ export interface ReportResultElement {
   _id?: string;
   compliance?: ComplianceType; // only for compliance reports
   creation_time?: string;
-  delta?: string; // only for delta reports
   description?: string;
   detection?: {
     result?: {
@@ -116,8 +115,6 @@ export interface ReportResultElement {
     tags?: string;
     type?: 'cve' | 'nvt';
   };
-  original_severity?: string; // only for delta reports
-  original_threat?: string; // only for delta reports
   port?: string;
   qod?: QoDParams;
   scan_nvt_version?: string;
@@ -761,7 +758,7 @@ const parseReportReportCounts = (element: ResultsReportElement) => {
     length,
     all: isDefined(resultCountElement?.full)
       ? resultCountElement.full
-      : resultCountElement?.filtered, // ec.full isn't available for delta reports
+      : resultCountElement?.filtered,
     filtered: resultCountElement?.filtered,
   });
 };

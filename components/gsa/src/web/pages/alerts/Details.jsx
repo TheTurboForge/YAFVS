@@ -7,8 +7,6 @@ import React from 'react';
 import {
   EVENT_TYPE_UPDATED_SECINFO,
   EVENT_TYPE_NEW_SECINFO,
-  DELTA_TYPE_PREVIOUS,
-  DELTA_TYPE_REPORT,
 } from 'gmp/models/alert';
 import {isDefined} from 'gmp/utils/identity';
 import HorizontalSep from 'web/components/layout/HorizontalSep';
@@ -57,35 +55,6 @@ const AlertDetails = ({capabilities, entity, reportFormats, reportConfigs}) => {
               <Event event={event} />
             </TableData>
           </TableRow>
-
-          {capabilities.mayAccess('report') &&
-            method?.data?.delta_type?.value === DELTA_TYPE_PREVIOUS && (
-              <TableRow>
-                <TableData>{_('Delta Report')}</TableData>
-                <TableData>
-                  {_('Previous completed report of the same task')}
-                </TableData>
-              </TableRow>
-            )}
-
-          {capabilities.mayAccess('report') &&
-            isDefined(method?.data?.delta_type) &&
-            isDefined(method?.data?.delta_report_id) &&
-            method.data.delta_type.value === DELTA_TYPE_REPORT && (
-              <TableRow>
-                <TableData>{_('Delta Report')}</TableData>
-                <TableData>
-                  <span>
-                    <DetailsLink
-                      id={method.data.delta_report_id.value}
-                      type="report"
-                    >
-                      {_('Report ')} {method.data.delta_report_id.value}
-                    </DetailsLink>
-                  </span>
-                </TableData>
-              </TableRow>
-            )}
 
           <TableRow>
             <TableData>{_('Method')}</TableData>

@@ -5,18 +5,16 @@
 
 import {useSelector} from 'react-redux';
 import type Task from 'gmp/models/task';
-import {ResumeIcon, StartIcon} from 'web/components/icon';
+import {StartIcon} from 'web/components/icon';
 import useTranslation from 'web/hooks/useTranslation';
-import TaskResumeIconBase from 'web/pages/tasks/icons/TaskResumeIcon';
 import TaskStartIconBase from 'web/pages/tasks/icons/TaskStartIcon';
 
 interface TaskIconWithSyncProps {
-  type: 'start' | 'resume';
   task: Task;
   onClick?: (task: Task) => void | Promise<void>;
 }
 
-const TaskIconWithSync = ({type, ...props}: TaskIconWithSyncProps) => {
+const TaskIconWithSync = (props: TaskIconWithSyncProps) => {
   const [_] = useTranslation();
 
   const feedSyncingStatus = useSelector<
@@ -25,17 +23,15 @@ const TaskIconWithSync = ({type, ...props}: TaskIconWithSyncProps) => {
   >(state => state.feedStatus);
 
   if (feedSyncingStatus.isSyncing) {
-    const SyncingIcon = type === 'start' ? StartIcon : ResumeIcon;
     return (
-      <SyncingIcon
+      <StartIcon
         active={false}
         title={_('Feed is currently syncing. Please try again later.')}
       />
     );
   }
 
-  const BaseIcon = type === 'start' ? TaskStartIconBase : TaskResumeIconBase;
-  return <BaseIcon {...props} />;
+  return <TaskStartIconBase {...props} />;
 };
 
 export default TaskIconWithSync;

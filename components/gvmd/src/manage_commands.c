@@ -146,8 +146,6 @@ command_t gmp_commands[]
     {"MODIFY_USER", "Modify a user."},
     {"MOVE_TASK", "Assign task to another slave scanner, even while running."},
     {"RESTORE", "Restore a resource."},
-    {"RESUME_TASK", "Resume a stopped task."},
-    {"RUN_WIZARD", "Run a wizard."},
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
     {"GENERATE_SCOPE_REPORT", "Generate a scope report from existing evidence."},
@@ -222,6 +220,5 @@ gmp_command_takes_resource (const char* name)
          && strcasecmp (name, "EMPTY_TRASHCAN")
          && strcasecmp (name, "GET_VERSION")
          && strcasecmp (name, "HELP")
-         && strcasecmp (name, "RUN_WIZARD")
          && strcasestr (name, "SYNC_") != name;
 }

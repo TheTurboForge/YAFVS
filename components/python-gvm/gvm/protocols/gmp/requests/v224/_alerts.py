@@ -357,7 +357,6 @@ class Alerts:
         filter_string: str | None = None,
         filter_id: EntityID | None = None,
         report_format_id: EntityID | ReportFormatType | None = None,
-        delta_report_id: EntityID | None = None,
     ) -> Request:
         """Run an alert by ignoring its event and conditions
 
@@ -370,7 +369,6 @@ class Alerts:
             filter: Filter term to use to filter results in the report
             filter_id: UUID of filter to use to filter results in the report
             report_format_id: UUID of report format to use                              or ReportFormatType (enum)
-            delta_report_id: UUID of an existing report to compare report to.
         """
         if not alert_id:
             raise RequiredArgument(
@@ -391,9 +389,6 @@ class Alerts:
 
         if report_format_id:
             cmd.set_attribute("format_id", str(report_format_id))
-
-        if delta_report_id:
-            cmd.set_attribute("delta_report_id", str(delta_report_id))
 
         return cmd
 

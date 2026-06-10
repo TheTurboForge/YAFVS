@@ -161,36 +161,6 @@ const setupRenderer = (gmpOptions: {reportResultsThreshold?: number} = {}) => {
   return {render, store};
 };
 
-const importEntity = Report.fromElement({
-  report: {
-    _id: '7777',
-    scan_run_status: 'Done',
-    scan_start: '2019-06-03T11:00:22Z',
-    scan_end: '2019-06-03T11:31:23Z',
-    timestamp: '2019-06-03T11:00:22Z',
-    timezone: 'UTC',
-    timezone_abbrev: 'UTC',
-    task: {_id: '999', name: 'import-task', comment: 'imported'},
-    closed_cves: {count: 0},
-    vulns: {count: 0},
-    apps: {count: 0},
-    os: {count: 0},
-    ssl_certs: {count: 0},
-    result_count: {full: 0, filtered: 0},
-    results: {result: []},
-    hosts: {count: 0},
-    host: [],
-    tls_certificates: {tls_certificate: []},
-    ports: {count: 0, port: []},
-    errors: {count: 0, error: []},
-  },
-  creation_time: '2019-06-02T12:00:22Z',
-  modification_time: '2019-06-03T11:00:22Z',
-  name: '2019-06-03T11:00:22Z',
-  owner: {name: 'admin'},
-  _id: '7777',
-});
-
 const containerEntity = Report.fromElement({
   report: {
     _id: '5555',
@@ -202,7 +172,7 @@ const containerEntity = Report.fromElement({
     timezone_abbrev: 'UTC',
     task: {
       _id: '314',
-      name: 'Import Task',
+      name: 'Scan Task',
       comment: '',
       target: {_id: '159'},
     },
@@ -651,23 +621,7 @@ describe('DetailsContent', () => {
     });
   });
 
-  describe('Import task status', () => {
-    test('should show Import status bar when task is an import task', () => {
-      const props = createMockProps({
-        entity: importEntity,
-        reportId: '7777',
-        task: importEntity.report?.task,
-        ...zeroCounts,
-      });
-
-      const {render} = setupRenderer();
-      render(<DetailsContent {...props} />);
-
-      const bars = screen.getAllByTestId('progressbar-box');
-      expect(bars[0]).toHaveAttribute('title', 'Import Task');
-      expect(bars[0]).toHaveTextContent('Import Task');
-    });
-
+  describe('Report status', () => {
     test('should show Done status bar for normal task', () => {
       const props = createMockProps();
 

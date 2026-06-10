@@ -170,19 +170,4 @@ END:VCALENDAR
     expect(screen.queryByTestId('start-icon')).toEqual(null);
   });
 
-  test('should not be rendered if task is a container', () => {
-    const caps = new Capabilities(['everything']);
-    const task = Task.fromElement({
-      status: TASK_STATUS.new,
-      permissions: {permission: [{name: 'everything'}]},
-    });
-
-    const {render} = rendererWith({capabilities: caps});
-
-    render(<TaskStartIcon task={task} />);
-
-    expect(caps.mayOp('start_task')).toEqual(true);
-    expect(task.userCapabilities.mayOp('start_task')).toEqual(true);
-    expect(screen.queryByTestId('start-icon')).toEqual(null);
-  });
 });

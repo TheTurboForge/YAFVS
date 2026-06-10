@@ -106,20 +106,4 @@ describe('Task StopIcon component tests', () => {
     expect(screen.queryByTestId('stop-icon')).toEqual(null);
   });
 
-  test('should not be rendered if task is a container', () => {
-    const caps = new Capabilities(['everything']);
-    const task = Task.fromElement({
-      status: TASK_STATUS.running,
-      permissions: {permission: [{name: 'everything'}]},
-    });
-    const clickHandler = testing.fn();
-
-    const {render} = rendererWith({capabilities: caps});
-
-    render(<TaskStopIcon task={task} onClick={clickHandler} />);
-
-    expect(caps.mayOp('stop_task')).toEqual(true);
-    expect(task.userCapabilities.mayOp('stop_task')).toEqual(true);
-    expect(screen.queryByTestId('stop-icon')).toEqual(null);
-  });
 });

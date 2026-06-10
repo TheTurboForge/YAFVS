@@ -26,7 +26,6 @@ import useTranslation from 'web/hooks/useTranslation';
 import AlertActions from 'web/pages/reports/details/AlertActions';
 import PropTypes from 'web/utils/PropTypes';
 const ToolBarIcons = ({
-  delta = false,
   filter,
   isLoading,
   report,
@@ -88,16 +87,14 @@ const ToolBarIcons = ({
             >
               <VulnerabilityIcon />
             </Link>
-            {!delta && (
-              <Link
-                filter={'report_id=' + reportId}
-                title={_('Corresponding TLS Certificates')}
-                to="tlscertificates"
-              >
-                <TlsCertificateIcon />
-              </Link>
-            )}
-            {isDefined(task) && !task.isImport() && (
+            <Link
+              filter={'report_id=' + reportId}
+              title={_('Corresponding TLS Certificates')}
+              to="tlscertificates"
+            >
+              <TlsCertificateIcon />
+            </Link>
+            {isDefined(task) && (
               <Link
                 query={{
                   start: isDefined(report.scan_start)
@@ -122,17 +119,15 @@ const ToolBarIcons = ({
               title={_('Download filtered Report')}
               onClick={onReportDownloadClick}
             />
-            {!delta && (
-              <AlertActions
-                filter={filter}
-                reportId={reportId}
-                showError={showError}
-                showErrorMessage={showErrorMessage}
-                showSuccessMessage={showSuccessMessage}
-                showThresholdMessage={showThresholdMessage}
-                threshold={threshold}
-              />
-            )}
+            <AlertActions
+              filter={filter}
+              reportId={reportId}
+              showError={showError}
+              showErrorMessage={showErrorMessage}
+              showSuccessMessage={showSuccessMessage}
+              showThresholdMessage={showThresholdMessage}
+              threshold={threshold}
+            />
           </IconDivider>
         </React.Fragment>
       )}
@@ -141,7 +136,6 @@ const ToolBarIcons = ({
 };
 
 ToolBarIcons.propTypes = {
-  delta: PropTypes.bool,
   filter: PropTypes.filter,
   isLoading: PropTypes.bool,
   report: PropTypes.shape({

@@ -17,8 +17,8 @@ import Scanner, {
 import {
   type default as Task,
   type TaskAutoDelete,
+  AUTO_DELETE_KEEP,
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
-  AUTO_DELETE_NO,
   DEFAULT_MAX_CHECKS,
   DEFAULT_MAX_HOSTS,
   DEFAULT_MIN_QOD,
@@ -40,7 +40,6 @@ import Divider from 'web/components/layout/Divider';
 import useCapabilities from 'web/hooks/useCapabilities';
 import useFeatures from 'web/hooks/useFeatures';
 import useTranslation from 'web/hooks/useTranslation';
-import AddResultsToAssetsGroup from 'web/pages/tasks/AddResultsToAssetsGroup';
 import AutoDeleteReportsGroup from 'web/pages/tasks/AutoDeleteReportsGroup';
 import {
   type RenderSelectItemProps,
@@ -67,14 +66,12 @@ interface TaskDialogValues {
 
 interface TaskDialogDefaultValues {
   add_tag?: YesNo;
-  alterable?: YesNo;
   apply_overrides?: YesNo;
   auto_delete?: TaskAutoDelete;
   auto_delete_data?: number;
   comment?: string;
   config_id?: string;
   csAllowFailedRetrieval?: boolean;
-  in_assets?: YesNo;
   max_checks?: number;
   max_hosts?: number;
   min_qod?: number;
@@ -91,14 +88,12 @@ interface TaskDialogProps {
   add_tag?: YesNo;
   alert_ids?: string[];
   alerts?: RenderSelectItemProps[];
-  alterable?: YesNo;
   apply_overrides?: YesNo;
   auto_delete?: TaskAutoDelete;
   auto_delete_data?: number;
   comment?: string;
   config_id?: string;
   csAllowFailedRetrieval?: boolean;
-  in_assets?: YesNo;
   isLoadingAlerts?: boolean;
   isLoadingConfigs?: boolean;
   isLoadingScanners?: boolean;
@@ -179,19 +174,16 @@ const TaskDialog = ({
   // eslint-disable-next-line @typescript-eslint/naming-convention
   alert_ids = [],
   alerts = [],
-  alterable = NO_VALUE,
   // eslint-disable-next-line @typescript-eslint/naming-convention
   apply_overrides = YES_VALUE,
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  auto_delete = AUTO_DELETE_NO,
+  auto_delete = AUTO_DELETE_KEEP,
   // eslint-disable-next-line @typescript-eslint/naming-convention
   auto_delete_data = AUTO_DELETE_KEEP_DEFAULT_VALUE,
   comment = '',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   config_id,
   csAllowFailedRetrieval = false,
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  in_assets = YES_VALUE,
   isLoadingAlerts = false,
   isLoadingConfigs = false,
   isLoadingScanners = false,
@@ -259,7 +251,7 @@ const TaskDialog = ({
   // having a task means we are editing a task
   const hasTask = isDefined(task);
 
-  const changeTask = hasTask ? task.isChangeable() : true;
+  const changeTask = true;
 
   const showTagSelection = !hasTask && tags.length > 0;
 
@@ -269,14 +261,12 @@ const TaskDialog = ({
 
   const uncontrolledData: TaskDialogDefaultValues = {
     add_tag,
-    alterable,
     apply_overrides,
     auto_delete,
     auto_delete_data,
     comment,
     config_id,
     csAllowFailedRetrieval,
-    in_assets,
     max_checks,
     max_hosts,
     min_qod,
@@ -332,15 +322,7 @@ const TaskDialog = ({
             </FormGroup>
 
             <FormGroup direction="row" title={_('Scan Targets')}>
-              <Title
-                title={
-                  changeTask
-                    ? undefined
-                    : _(
-                        'This setting is not alterable once task has been run at least once.',
-                      )
-                }
-              >
+              <Title>
                 <Select
                   disabled={!changeTask}
                   isLoading={isLoadingTargets}
@@ -400,14 +382,8 @@ const TaskDialog = ({
               </FormGroup>
             )}
 
-            <AddResultsToAssetsGroup
-              inAssets={state.in_assets}
-              onChange={onValueChange}
-            />
-
             <FormGroup title={_('Apply Overrides')}>
               <YesNoRadio
-                disabled={state.in_assets !== YES_VALUE}
                 name="apply_overrides"
                 value={state.apply_overrides}
                 onChange={onValueChange}
@@ -431,7 +407,6 @@ const TaskDialog = ({
 
             <FormGroup title={_('Min QoD')}>
               <Spinner
-                disabled={state.in_assets !== YES_VALUE}
                 max={100}
                 min={0}
                 name="min_qod"
@@ -441,32 +416,12 @@ const TaskDialog = ({
               />
             </FormGroup>
 
-            {changeTask && (
-              <FormGroup title={_('Alterable Task')}>
-                <YesNoRadio
-                  disabled={task && !task.isNew()}
-                  name="alterable"
-                  value={state.alterable}
-                  onChange={onValueChange}
-                />
-              </FormGroup>
-            )}
-
             <AutoDeleteReportsGroup
-              autoDelete={state.auto_delete}
               autoDeleteData={state.auto_delete_data}
               onChange={onValueChange}
             />
 
-            <Title
-              title={
-                changeTask
-                  ? undefined
-                  : _(
-                      'This setting is not alterable once task has been run at least once.',
-                    )
-              }
-            >
+            <Title>
               <ScannerSelect
                 changeTask={changeTask}
                 isLoading={isLoadingScanners}
@@ -479,13 +434,7 @@ const TaskDialog = ({
               <>
                 <FormGroup title={_('Scan Config')}>
                   <Title
-                    title={
-                      changeTask
-                        ? undefined
-                        : _(
-                            'This setting is not alterable once task has been run at least once.',
-                          )
-                    }
+                    title={undefined}
                   >
                     <Select
                       disabled={!changeTask}

@@ -69,6 +69,18 @@ credentials, port lists, alive-test behavior, and scan constraints. A task runs 
 scan against a target with a scan configuration and scanner. Raw task reports
 remain available as technical evidence and provenance.
 
+Task creation is deliberately streamlined. TurboVAS does not expose inherited
+task wizards, import-task creation, task resume semantics, or per-task switches
+for alterability and asset processing. Tasks are always alterable, scan results
+are always added to assets, and old raw reports are automatically pruned by a
+retention count. The default retention count is `10`. Pruning skips raw reports
+that are referenced by scope reports so generated scope-report provenance remains
+intact.
+
+Stopping or cancelling an active scan remains available. Resuming a partial scan
+is not part of the product model: in-progress scan state is disposable, while
+completed raw reports and scope reports are the valuable evidence artifacts.
+
 For `Full and fast` scan fidelity, the development runtime keeps OpenVAS and
 OSPD non-root and grants only the scanner/Nmap capabilities needed for raw
 network probes. The scanner service also uses a stable runtime hostname so NASL
@@ -87,8 +99,8 @@ constraints, or probe capability limits.
 ## Reports And Scope Reports
 
 The `Reports` page keeps the inherited raw scan-report list. Use it when you
-need to inspect individual technical task reports, unfinished reports, imported
-reports, or evidence from a specific scan run.
+need to inspect individual technical task reports, unfinished reports, or
+evidence from a specific scan run.
 
 Scope reports are reached from `Scopes`, not from the top-level `Reports` page.
 They are report-shaped snapshots for reporting populations. The experience is
@@ -101,9 +113,9 @@ Scope report result rows use the standard result table behavior for the core
 reading workflow: filtering, sorting, pagination, severity display, and result
 detail expansion. Each row remains linked to the raw scan report evidence it was
 derived from. Raw report management actions that do not fit aggregated snapshots,
-such as report upload/import, delta comparison, report-composer downloads,
-alerts, and asset/tag mutation, remain raw-report workflows rather than scope
-report actions.
+such as report-composer downloads, alerts, and asset/tag mutation, remain
+raw-report workflows rather than scope report actions. Inherited operator-facing
+report upload/import and raw delta-report comparison workflows have been removed.
 
 A scope is a reporting population. It describes the set of assets an operator
 wants to understand, such as an organization, a technology class, an exposure
@@ -175,9 +187,18 @@ Tasks, Reports, Results, Vulnerabilities, Overrides, Hosts, Operating Systems,
 and TLS Certificates. The ordinary entity list tables and detail workflows remain
 available.
 
+Inherited task wizards, import tasks/report upload, task resume, and raw
+delta-report comparison were removed. TurboVAS uses one normal task form with
+prescribed defaults: tasks are alterable, results are added to assets, and old
+unreferenced raw reports are pruned by retention count.
+
+The Trashcan remains available for retained resource types. It is useful as an
+operator recovery mechanism, but it only covers resource types still supported by
+TurboVAS.
+
 Legacy Agent Controller functionality, including agent groups, agent installers,
 and agent tasks, has been removed. TurboVAS keeps raw scan/report evidence,
-Notus, NASL inventory collection, generic report import infrastructure, and
+Notus, NASL inventory collection, runtime report summary/export helpers, and
 Docker runtime infrastructure. Future endpoint evidence or user-provided
 inventory workflows should be designed as separate TurboVAS features instead of
 preserving the inherited Agent Controller subsystem.

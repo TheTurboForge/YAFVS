@@ -17,7 +17,7 @@ import {
   parseFloat,
 } from 'gmp/parser';
 import {forEach, map} from 'gmp/utils/array';
-import {isDefined, isString} from 'gmp/utils/identity';
+import {isDefined} from 'gmp/utils/identity';
 
 interface CveResult {
   name: string;
@@ -45,32 +45,6 @@ interface EpssValue {
 interface Epss {
   maxEpss?: EpssValue;
   maxSeverity?: EpssValue;
-}
-
-interface DeltaElement {
-  __text: string;
-  diff?: string;
-  result?: {
-    _id?: string;
-    compliance?: string;
-    description?: string;
-    host?: {
-      hostname?: string;
-    };
-    qod?: QoDParams;
-    severity?: number;
-  };
-}
-
-interface DeltaResult {
-  compliance?: string;
-  description?: string;
-  host?: {
-    hostname?: string;
-  };
-  id?: string;
-  qod?: QoD;
-  severity?: number;
 }
 
 interface ResultDetectionDetailElement {
@@ -103,7 +77,6 @@ interface ResultNvtElement extends ResultInformationElement {
 
 interface ResultElement extends ModelElement {
   compliance?: string;
-  delta?: DeltaElement | string;
   description?: string;
   detection?: {
     result?: {
@@ -122,7 +95,6 @@ interface ResultElement extends ModelElement {
   };
   nvt?: ResultNvtElement | ResultCveElement;
   original_severity?: number;
-  original_threat?: string;
   overrides?: {
     override?: OverrideElement | OverrideElement[];
   };
@@ -157,7 +129,6 @@ interface ResultDetection {
 
 interface ResultProperties extends ModelProperties {
   compliance?: ComplianceType;
-  delta?: Delta;
   detection?: ResultDetection;
   description?: string;
   host?: ResultHost;
@@ -208,43 +179,10 @@ const createCveResult = ({name, epss}: ResultCveElement): CveResult => {
   };
 };
 
-export class Delta {
-  static readonly TYPE_NEW = 'new';
-  static readonly TYPE_SAME = 'same';
-  static readonly TYPE_CHANGED = 'changed';
-  static readonly TYPE_GONE = 'gone';
-
-  readonly delta_type: string;
-  readonly diff?: string;
-  readonly result?: DeltaResult;
-
-  constructor(elem: DeltaElement | string) {
-    if (isString(elem)) {
-      this.delta_type = elem;
-    } else {
-      this.delta_type = parseToString(elem.__text) as string;
-      this.diff = elem.diff;
-      this.result = {
-        id: parseToString(elem.result?._id),
-        description: parseToString(elem.result?.description),
-        host: {
-          hostname: parseToString(elem.result?.host?.hostname),
-        },
-        severity: parseSeverity(elem.result?.severity),
-        compliance: parseToString(elem.result?.compliance),
-        qod: isDefined(elem.result?.qod)
-          ? parseQod(elem.result.qod)
-          : undefined,
-      };
-    }
-  }
-}
-
 class Result extends Model {
   static readonly entityType = 'result';
 
   readonly compliance?: ComplianceType;
-  readonly delta?: Delta;
   readonly detection?: ResultDetection;
   readonly description?: string;
   readonly host?: ResultHost;
@@ -261,7 +199,6 @@ class Result extends Model {
 
   constructor({
     compliance,
-    delta,
     detection,
     description,
     host,
@@ -282,7 +219,6 @@ class Result extends Model {
     super(properties);
 
     this.compliance = compliance;
-    this.delta = delta;
     this.detection = detection;
     this.description = description;
     this.host = host;
@@ -317,7 +253,6 @@ class Result extends Model {
       report,
       severity,
       task,
-      delta,
       qod,
     } = element;
 
@@ -371,7 +306,6 @@ class Result extends Model {
       };
     }
 
-    copy.delta = isDefined(delta) ? new Delta(delta) : undefined;
     copy.original_severity = isDefined(original_severity)
       ? parseSeverity(original_severity)
       : undefined;
@@ -381,10 +315,6 @@ class Result extends Model {
     );
 
     return copy;
-  }
-
-  hasDelta() {
-    return isDefined(this.delta);
   }
 }
 

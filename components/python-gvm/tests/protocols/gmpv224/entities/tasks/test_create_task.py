@@ -152,44 +152,6 @@ class GmpCreateTaskTestMixin:
             b"</create_task>"
         )
 
-    def test_create_task_with_alterable(self):
-        self.gmp.create_task(
-            name="foo",
-            config_id="c1",
-            target_id="t1",
-            scanner_id="s1",
-            alterable=True,
-        )
-
-        self.connection.send.has_been_called_with(
-            b"<create_task>"
-            b"<name>foo</name>"
-            b"<usage_type>scan</usage_type>"
-            b'<config id="c1"/>'
-            b'<target id="t1"/>'
-            b'<scanner id="s1"/>'
-            b"<alterable>1</alterable>"
-            b"</create_task>"
-        )
-
-        self.gmp.create_task(
-            name="foo",
-            config_id="c1",
-            target_id="t1",
-            scanner_id="s1",
-            alterable=False,
-        )
-
-        self.connection.send.has_been_called_with(
-            b"<create_task>"
-            b"<name>foo</name>"
-            b"<usage_type>scan</usage_type>"
-            b'<config id="c1"/>'
-            b'<target id="t1"/>'
-            b'<scanner id="s1"/>'
-            b"<alterable>0</alterable>"
-            b"</create_task>"
-        )
 
     def test_create_task_with_hosts_ordering(self):
         self.gmp.create_task(

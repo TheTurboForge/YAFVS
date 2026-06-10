@@ -194,7 +194,6 @@ def create_tasks(
                 name = row[0]
                 targetId = target_id(gmp, row[1])
                 scannerId = scanner_id(gmp, row[2])
-                alterable = "True"
                 configId = config_id(gmp, row[3])
                 scheduleId = schedule_id(gmp, row[4])
 
@@ -240,7 +239,6 @@ def create_tasks(
                         target_id=targetId,
                         hosts_ordering=scanOrder,
                         scanner_id=scannerId,
-                        alterable=alterable,
                         schedule_id=scheduleId,
                         alert_ids=alerts,
                     )

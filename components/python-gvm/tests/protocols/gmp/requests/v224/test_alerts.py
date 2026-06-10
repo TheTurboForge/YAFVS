@@ -755,15 +755,6 @@ class AlertsTestCase(unittest.TestCase):
             f'format_id="{ReportFormatType.SVG}"/>'.encode(),
         )
 
-    def test_trigger_alert_with_delta_report_id(self):
-        request = Alerts.trigger_alert(
-            alert_id="a1", report_id="r1", delta_report_id="d1"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports report_id="r1" alert_id="a1" delta_report_id="d1"/>',
-        )
 
     def test_trigger_alert_missing_alert_id(self):
         with self.assertRaises(RequiredArgument):

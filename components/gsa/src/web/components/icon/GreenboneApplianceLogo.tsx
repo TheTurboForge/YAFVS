@@ -39,7 +39,7 @@ const LazyIconWrapper = ({
     <DynamicIcon
       dataTestId={testId}
       icon={Icon}
-      size={['150px', '150px']}
+      size={props.size ?? ['128px', '32px']}
       {...props}
     />
   );

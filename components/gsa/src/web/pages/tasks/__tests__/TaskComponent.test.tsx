@@ -107,38 +107,6 @@ describe('TaskComponent tests', () => {
   });
 
 
-  test('should open correct dialog on edit for import task', async () => {
-    const gmp = createGmp();
-    const {render} = rendererWith({gmp, capabilities: true});
-
-    const importTask = Task.fromElement({
-      _id: 'import-task-id',
-      name: 'Import Task',
-      usage_type: 'scan',
-    });
-
-    render(
-      <TaskComponent>
-        {({edit}) => (
-          <Button
-            data-testid="edit-import-task"
-            onClick={() => edit(importTask)}
-          />
-        )}
-      </TaskComponent>,
-    );
-
-    const button = screen.getByTestId('edit-import-task');
-    fireEvent.click(button);
-
-    await wait();
-
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('dialog-test-id')).toBeInTheDocument();
-    expect(screen.getByText(/Edit Import Task/i)).toBeInTheDocument();
-  });
-
-
   test('should open correct dialog on edit for standard task', async () => {
     const gmp = createGmp();
     const {render} = rendererWith({gmp, capabilities: true});

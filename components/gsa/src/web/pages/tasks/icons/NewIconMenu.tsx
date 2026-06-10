@@ -5,36 +5,19 @@
  */
 
 import {NewIcon} from 'web/components/icon';
-import IconMenu from 'web/components/menu/IconMenu';
-import MenuEntry from 'web/components/menu/MenuEntry';
 import useCapabilities from 'web/hooks/useCapabilities';
 import useTranslation from 'web/hooks/useTranslation';
 
 interface NewIconMenuProps {
   onNewClick?: () => void;
-  onNewImportTaskClick?: () => void;
 }
 
-const NewIconMenu = ({
-  onNewClick,
-  onNewImportTaskClick,
-}: NewIconMenuProps) => {
+const NewIconMenu = ({onNewClick}: NewIconMenuProps) => {
   const [_] = useTranslation();
   const capabilities = useCapabilities();
   if (capabilities.mayCreate('task')) {
     return (
-      <IconMenu icon={<NewIcon />} title={_('New Task Menu')}>
-        <MenuEntry
-          data-testid="new-task-menu"
-          title={_('New Task')}
-          onClick={onNewClick}
-        />
-        <MenuEntry
-          data-testid="new-import-task-menu"
-          title={_('New Import Task')}
-          onClick={onNewImportTaskClick}
-        />
-      </IconMenu>
+      <NewIcon data-testid="new-task" title={_('New Task')} onClick={onNewClick} />
     );
   }
   return null;

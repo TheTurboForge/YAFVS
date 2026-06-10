@@ -8,9 +8,7 @@ import {describe, test, expect, testing} from '@gsa/testing';
 import Filter from 'gmp/models/filter';
 import {isFunction} from 'gmp/utils/identity';
 import {
-  deltaReportActions,
   loadReport,
-  loadDeltaReport,
   loadReportIfNeeded,
   loadReportWithThreshold,
   reportActions,
@@ -20,7 +18,6 @@ import {types} from 'web/store/entities/utils/actions';
 import {createState, testEntityActions} from 'web/store/entities/utils/testing';
 
 testEntityActions('report', reportActions);
-testEntityActions('deltaReport', deltaReportActions);
 
 describe('loadReport function tests', () => {
   test('should load report successfully', () => {
@@ -750,184 +747,5 @@ describe('loadReportWithThreshold tests', () => {
         expect(dispatch).not.toHaveBeenCalled();
       },
     );
-  });
-});
-
-describe('loadDeltaReport function tests', () => {
-  test('should load delta report successfully', () => {
-    const id = 'a1';
-    const deltaId = 'a2';
-    const identifier = `${id}+${deltaId}`;
-
-    const rootState = createState('deltaReport', {
-      isLoading: {
-        [identifier]: false,
-      },
-    });
-    const getState = testing.fn().mockReturnValue(rootState);
-
-    const dispatch = testing.fn();
-
-    const getDelta = testing.fn().mockResolvedValue({
-      data: {foo: 'bar'},
-    });
-
-    const gmp = {
-      report: {
-        getDelta,
-      },
-    };
-
-    expect(loadDeltaReport).toBeDefined();
-    expect(isFunction(loadDeltaReport)).toBe(true);
-
-    return loadDeltaReport(gmp)(id, deltaId)(dispatch, getState).then(() => {
-      expect(getState).toBeCalled();
-      expect(getDelta).toBeCalledWith({id}, {id: deltaId}, {filter: undefined});
-      expect(dispatch).toHaveBeenCalledTimes(2);
-      expect(dispatch.mock.calls[0]).toEqual([
-        {
-          type: types.ENTITY_LOADING_REQUEST,
-          entityType: 'deltaReport',
-          id: identifier,
-        },
-      ]);
-      expect(dispatch.mock.calls[1]).toEqual([
-        {
-          type: types.ENTITY_LOADING_SUCCESS,
-          entityType: 'deltaReport',
-          data: {foo: 'bar'},
-          id: identifier,
-        },
-      ]);
-    });
-  });
-
-  test('should load delta report with results filter successfully', () => {
-    const id = 'a1';
-    const deltaId = 'a2';
-    const identifier = `${id}+${deltaId}`;
-
-    const rootState = createState('deltaReport', {
-      isLoading: {
-        [identifier]: false,
-      },
-    });
-    const getState = testing.fn().mockReturnValue(rootState);
-
-    const dispatch = testing.fn();
-
-    const getDelta = testing.fn().mockResolvedValue({
-      data: {foo: 'bar'},
-    });
-
-    const gmp = {
-      report: {
-        getDelta,
-      },
-    };
-
-    const filter = Filter.fromString('foo=bar');
-
-    expect(loadDeltaReport).toBeDefined();
-    expect(isFunction(loadDeltaReport)).toBe(true);
-
-    return loadDeltaReport(gmp)(
-      id,
-      deltaId,
-      filter,
-    )(dispatch, getState).then(() => {
-      expect(getState).toBeCalled();
-      expect(getDelta).toBeCalledWith({id}, {id: deltaId}, {filter});
-      expect(dispatch).toHaveBeenCalledTimes(2);
-      expect(dispatch.mock.calls[0]).toEqual([
-        {
-          type: types.ENTITY_LOADING_REQUEST,
-          entityType: 'deltaReport',
-          id: identifier,
-        },
-      ]);
-      expect(dispatch.mock.calls[1]).toEqual([
-        {
-          type: types.ENTITY_LOADING_SUCCESS,
-          entityType: 'deltaReport',
-          data: {foo: 'bar'},
-          id: identifier,
-        },
-      ]);
-    });
-  });
-
-  test('should not load delta report if isLoading is true', () => {
-    const id = 'a1';
-    const deltaId = 'a2';
-    const identifier = `${id}+${deltaId}`;
-    const rootState = createState('deltaReport', {
-      isLoading: {
-        [identifier]: true,
-      },
-    });
-
-    const getState = testing.fn().mockReturnValue(rootState);
-
-    const dispatch = testing.fn();
-
-    const getDelta = testing.fn().mockResolvedValue([{id: 'foo'}]);
-
-    const gmp = {
-      report: {
-        getDelta,
-      },
-    };
-
-    return loadDeltaReport(gmp)(id, deltaId)(dispatch, getState).then(() => {
-      expect(getState).toBeCalled();
-      expect(dispatch).not.toBeCalled();
-      expect(getDelta).not.toBeCalled();
-    });
-  });
-
-  test('should fail loading delta report with an error', () => {
-    const id = 'a1';
-    const deltaId = 'a2';
-    const identifier = `${id}+${deltaId}`;
-    const rootState = createState('deltaReport', {
-      [identifier]: {
-        isLoading: false,
-      },
-    });
-
-    const getState = testing.fn().mockReturnValue(rootState);
-
-    const dispatch = testing.fn();
-
-    const getDelta = testing.fn().mockRejectedValue('An Error');
-
-    const gmp = {
-      report: {
-        getDelta,
-      },
-    };
-
-    return loadDeltaReport(gmp)(id, deltaId)(dispatch, getState).then(() => {
-      expect(getState).toBeCalled();
-      expect(getDelta).toBeCalledWith({id}, {id: deltaId}, {filter: undefined});
-      expect(dispatch).toHaveBeenCalledTimes(2);
-      expect(dispatch.mock.calls[0]).toEqual([
-        {
-          type: types.ENTITY_LOADING_REQUEST,
-          entityType: 'deltaReport',
-          id: identifier,
-        },
-      ]);
-      expect(dispatch.mock.calls[1]).toEqual([
-        {
-          type: types.ENTITY_LOADING_ERROR,
-          entityType: 'deltaReport',
-          error: 'An Error',
-          id: identifier,
-        },
-      ]);
-    });
   });
 });

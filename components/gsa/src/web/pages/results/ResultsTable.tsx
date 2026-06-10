@@ -27,7 +27,6 @@ import ResultsRow, {
 import {type SortDirectionType} from 'web/utils/sort-direction';
 
 interface ResultTableHeaderProps extends WithEntitiesHeaderComponentProps {
-  delta?: boolean;
   sort?: boolean;
   currentSortBy?: string;
   currentSortDir?: SortDirectionType;
@@ -36,7 +35,6 @@ interface ResultTableHeaderProps extends WithEntitiesHeaderComponentProps {
 
 const ResultTableHeader = ({
   actionsColumn,
-  delta = false,
   sort = true,
   currentSortBy,
   currentSortDir,
@@ -47,18 +45,6 @@ const ResultTableHeader = ({
   return (
     <TableHeader>
       <TableRow>
-        {delta && (
-          <TableHead
-            currentSortBy={currentSortBy}
-            currentSortDir={currentSortDir}
-            rowSpan={2}
-            sort={sort}
-            sortBy="delta"
-            title={_('Delta')}
-            width="4%"
-            onSortChange={onSortChange}
-          />
-        )}
         <TableHead
           currentSortBy={currentSortBy}
           currentSortDir={currentSortDir}

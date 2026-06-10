@@ -223,10 +223,7 @@ const PageContent = ({
   const showThresholdMessage =
     !isLoading && hasReport && (results?.counts?.filtered ?? 0) > threshold;
 
-  const isImport = isDefined(task) && task.isImport();
-  const status = isImport
-    ? TASK_STATUS.import
-    : (scan_run_status ?? TASK_STATUS.unknown);
+  const status = scan_run_status ?? TASK_STATUS.unknown;
   const progress = task?.progress ?? 0;
 
   const showIsLoading = isLoading && !hasReport;
@@ -294,7 +291,7 @@ const PageContent = ({
       renderTab: () => <TabTitle counts={resultsCounts} title={_('Results')} />,
       renderPanel: () => (
         <ResultsTabContent
-          hasTarget={!isImport}
+          hasTarget={isDefined(task?.target)}
           progress={progress}
           reportFilter={activeFilter}
           reportId={reportId}
@@ -449,7 +446,6 @@ const PageContent = ({
   return (
     <Layout grow align={['start', 'stretch']} flex="column">
       <DetailsToolbar
-        delta={false}
         filters={filters}
         isLoading={showIsLoading}
         isLoadingFilters={isLoadingFilters}

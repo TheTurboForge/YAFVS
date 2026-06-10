@@ -26,7 +26,6 @@ describe('ReportTask tests', () => {
 
     expect(task.target).toBeDefined();
     expect(task.target?.id).toEqual('t1');
-    expect(task.isImport()).toEqual(false);
   });
 
   test('should parse progress', () => {

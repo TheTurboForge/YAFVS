@@ -35,12 +35,6 @@ clone_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
            gsad_command_response_data_t *);
 
 char *
-create_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-create_import_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
-char *
 create_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 char *
@@ -49,12 +43,6 @@ delete_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 save_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
-char *
-save_import_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-resume_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
 char *
 start_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);
@@ -603,13 +591,6 @@ bulk_delete_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 bulk_export_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
-
-char *
-run_wizard_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
-char *
-wizard_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-            gsad_command_response_data_t *);
 
 char *
 get_trash_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *params,

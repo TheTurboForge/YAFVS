@@ -33,22 +33,22 @@ describe('Report tests', () => {
   test('should parse report', () => {
     const report = Report.fromElement({
       report: {
-        _type: 'delta',
+        _type: 'scan',
         _id: '123',
         name: 'Test Report',
       },
     });
     expect(report.report).toBeDefined();
-    expect(report.report?.report_type).toEqual('delta');
+    expect(report.report?.report_type).toEqual('scan');
     expect(report.report?.id).toEqual('123');
     expect(report.report?.name).toEqual('Test Report');
   });
 
   test('should parse report type', () => {
     const report = Report.fromElement({
-      _type: 'delta',
+      _type: 'scan',
     });
-    expect(report.report_type).toEqual('delta');
+    expect(report.report_type).toEqual('scan');
   });
 
   test('should parse report config', () => {

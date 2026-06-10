@@ -193,6 +193,7 @@ const Menu = () => {
         defaultOpened: [
           isTasksActive,
           isScopesActive,
+          isScopeReportsActive,
           isReportsActive,
           isResultsActive,
           isVulnerabilitiesActive,

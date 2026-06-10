@@ -260,26 +260,6 @@ This script starts a new scan on the given host.
 
 ---
 
-## `send-delta-emails.gmp.py`
-
-This script, once started, will continuously send delta reports via email for selected tasks. The routine follows this procedure:
-
-Every `<interval>` minutes do:
-* Get all tasks where the tag `<task_tag>` is attached.
-* For each of these tasks get the finished reports:
-  * If less than 2 reports, continue with next task
-  * If latest report has tag "delta_alert_sent", continue with next task
-  * Create a CSV report from the delta of latest vs. previous report where filtered for only the new results.
-  * Send the CSV as an attachment to the configured email address.
-
-> You may edit the scripts hardcoded variables like `from_address`, `to_address`, etc.
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/send-delta-emails.gmp.py`
-
----
-
 ## `send-schedules.gmp.py`
 
 This script pulls schedule data from an xml document and feeds it to a desired GSM.

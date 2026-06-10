@@ -90,7 +90,6 @@ const ScopeReportResultsTab = ({scopeReportId}: ScopeReportResultsTabProps) => {
 
   return (
     <ResultsTable
-      delta={false}
       entities={results}
       entitiesCounts={resultsCounts}
       filter={displayedFilter}

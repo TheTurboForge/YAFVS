@@ -7,7 +7,6 @@
 export const EXTRA_KEYWORDS = [
   'apply_overrides',
   'compliance_levels',
-  'delta_states',
   'first',
   'levels',
   'min_qod',

@@ -18548,6 +18548,15 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                   delete_report_data->report_id,
                                   "deleted");
                   break;
+                case 4:
+                  SEND_TO_CLIENT_OR_FAIL
+                   (XML_ERROR_SYNTAX
+                     ("delete_report",
+                      "Report is referenced by a scope report"));
+                  log_event_fail ("report", "Report",
+                                  delete_report_data->report_id,
+                                  "deleted");
+                  break;
                 case 99:
                   SEND_TO_CLIENT_OR_FAIL
                    (XML_ERROR_SYNTAX ("delete_report",

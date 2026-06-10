@@ -10433,6 +10433,7 @@ results_extra_where (int trash, report_t report, const gchar* host,
   int min_qod;
   gchar *levels, *compliance_levels;
   gchar *report_clause, *host_clause, *min_qod_clause;
+  gchar *scope_report_id, *scope_report_clause;
   gchar *compliance_levels_clause;
   GString *levels_clause;
   gchar *new_severity_sql;
@@ -10444,6 +10445,7 @@ results_extra_where (int trash, report_t report, const gchar* host,
     levels = g_strdup ("chmlgdf");
 
   compliance_levels = filter_term_value (filter, "compliance_levels");
+  scope_report_id = filter_term_value (filter, "_and_scope_report_id");
 
   // Build clause fragments
 
@@ -10468,6 +10470,51 @@ results_extra_where (int trash, report_t report, const gchar* host,
 
   min_qod_clause = where_qod (min_qod);
 
+  if (scope_report_id)
+    {
+      gchar *quoted_scope_report_id;
+
+      quoted_scope_report_id = sql_quote (scope_report_id);
+      scope_report_clause = g_strdup_printf
+        (" AND (results.id IN ("
+         "WITH ranked_scope_report_results AS ("
+         " SELECT r.id,"
+         "        row_number () OVER ("
+         "          PARTITION BY lower (coalesce (nullif (r.host, ''),"
+         "                                        r.hostname, '')),"
+         "                       coalesce (r.nvt, ''),"
+         "                       coalesce (r.port, '')"
+         "          ORDER BY coalesce (r.severity, 0) DESC,"
+         "                   coalesce (r.date, 0) DESC,"
+         "                   r.id DESC) AS row_number"
+         "   FROM results r"
+         "   JOIN scope_report_sources srs"
+         "     ON srs.source_report = r.report"
+         "   JOIN scope_reports sr"
+         "     ON sr.id = srs.scope_report"
+         "   JOIN scopes sc"
+         "     ON sc.id = sr.scope"
+         "  WHERE sr.uuid = '%s'"
+         "    AND coalesce (r.severity, 0) != "
+              G_STRINGIFY (SEVERITY_ERROR)
+         "    AND (coalesce (sc.is_global, 0) = 1"
+         "         OR EXISTS ("
+         "              SELECT 1"
+         "                FROM scope_hosts sh"
+         "               WHERE sh.scope = sr.scope"
+         "                 AND lower (sh.host_name)"
+         "                     = lower (coalesce (nullif (r.host, ''),"
+         "                                         r.hostname, ''))))"
+         ")"
+         " SELECT id"
+         "   FROM ranked_scope_report_results"
+         "  WHERE row_number = 1)) ",
+         quoted_scope_report_id);
+      g_free (quoted_scope_report_id);
+    }
+  else
+    scope_report_clause = NULL;
+
   levels_clause = where_levels_auto (levels,
                                      given_new_severity_sql
                                       ? given_new_severity_sql
@@ -10477,10 +10524,12 @@ results_extra_where (int trash, report_t report, const gchar* host,
 
   g_free (levels);
   g_free (new_severity_sql);
+  g_free (scope_report_id);
 
-  extra_where = g_strdup_printf("%s%s%s%s%s",
+  extra_where = g_strdup_printf("%s%s%s%s%s%s",
                                 report_clause ? report_clause : "",
                                 host_clause ? host_clause : "",
+                                scope_report_clause ? scope_report_clause : "",
                                 (levels_clause && levels_clause->str) ?
                                   levels_clause->str : "",
                                 min_qod_clause ? min_qod_clause : "",
@@ -10490,9 +10539,38 @@ results_extra_where (int trash, report_t report, const gchar* host,
   g_string_free (levels_clause, TRUE);
   g_free (report_clause);
   g_free (host_clause);
+  g_free (scope_report_clause);
   g_free (compliance_levels_clause);
 
   return extra_where;
+}
+
+/**
+ * @brief Return the fallback filter used for single-result result iterators.
+ *
+ * Hidden TurboVAS scope-report filters must also constrain single-result
+ * lookups so expanded result details cannot drift back to an unrelated raw
+ * report row.
+ *
+ * @param[in]  filter  Original result filter.
+ *
+ * @return Newly allocated fallback filter.
+ */
+static gchar*
+results_single_filter (const gchar *filter)
+{
+  gchar *scope_report_id, *single_filter;
+
+  scope_report_id = filter_term_value (filter, "_and_scope_report_id");
+  if (scope_report_id)
+    {
+      single_filter = g_strdup_printf ("min_qod=0 _and_scope_report_id=%s",
+                                       scope_report_id);
+      g_free (scope_report_id);
+      return single_filter;
+    }
+
+  return g_strdup ("min_qod=0");
 }
 
 /**
@@ -10523,6 +10601,7 @@ init_result_get_iterator_severity (iterator_t* iterator, const get_data_t *get,
   gchar *filter;
   int apply_overrides, dynamic_severity;
   gchar *extra_tables, *extra_where, *extra_where_single, *opts, *with_clause;
+  gchar *single_filter;
   const gchar *lateral;
 
   assert (report);
@@ -10673,11 +10752,13 @@ init_result_get_iterator_severity (iterator_t* iterator, const get_data_t *get,
                                      filter ? filter : get->filter,
                                      "lateral_severity");
 
+  single_filter = results_single_filter (filter ? filter : get->filter);
   extra_where_single = results_extra_where (get->trash, report, host,
                                             apply_overrides,
                                             dynamic_severity,
-                                            "min_qod=0",
+                                            single_filter,
                                             "lateral_severity");
+  g_free (single_filter);
 
   free (filter);
 
@@ -10850,6 +10931,7 @@ init_result_get_iterator (iterator_t* iterator, const get_data_t *get,
   static column_t columns_no_cert[] = RESULT_ITERATOR_COLUMNS_NO_CERT;
   int ret;
   gchar *filter, *extra_tables, *extra_where, *extra_where_single;
+  gchar *single_filter;
   gchar *opts_tables, *lateral_clause;
   int apply_overrides, dynamic_severity;
   column_t *actual_columns;
@@ -10902,11 +10984,13 @@ init_result_get_iterator (iterator_t* iterator, const get_data_t *get,
                                      filter ? filter : get->filter,
                                      NULL);
 
+  single_filter = results_single_filter (filter ? filter : get->filter);
   extra_where_single = results_extra_where (get->trash, report, host,
                                             apply_overrides,
                                             dynamic_severity,
-                                            "min_qod=0",
+                                            single_filter,
                                             NULL);
+  g_free (single_filter);
 
   free (filter);
 
@@ -13065,7 +13149,8 @@ report_severity (report_t report, int overrides, int min_qod)
  *
  * @param[in]  report  Report.
  *
- * @return 0 success, 2 report is in use, -1 error.
+ * @return 0 success, 2 report is in use, 4 report is referenced by a scope
+ *         report, -1 error.
  */
 int
 delete_report_internal (report_t report)
@@ -13085,6 +13170,11 @@ delete_report_internal (report_t report)
                TASK_STATUS_STOP_REQUESTED,
                TASK_STATUS_STOP_WAITING))
     return 2;
+
+  if (sql_int ("SELECT count(*) FROM scope_report_sources"
+               " WHERE source_report = %llu;",
+               report))
+    return 4;
 
   /* This needs to have exclusive access to reports because otherwise at this
    * point another process (like a RESUME_TASK handler) could store the report
@@ -13170,7 +13260,8 @@ delete_report_internal (report_t report)
  * @param[in]  dummy      Dummy arg to match other delete functions.
  *
  * @return 0 success, 2 failed to find report, 3 reports table is locked,
- *         99 permission denied, -1 error.
+ *         4 report is referenced by a scope report, 99 permission denied,
+ *         -1 error.
  */
 int
 delete_report (const char *report_id, int dummy)

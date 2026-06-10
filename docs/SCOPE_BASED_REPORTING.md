@@ -155,11 +155,20 @@ evidence time, member hosts with evidence, member hosts without evidence, and
 candidate hosts excluded from official counts.
 
 Findings are deduplicated by host identity, NVT/OID, port, and result identity.
-The report keeps representative result provenance and links back to the raw scan
-reports used as evidence. The current implementation exposes a report-like
-scope-report page and representative result rows; the next reporting UX slice
-should make the result collection pageable and filterable through report-like
-APIs instead of treating scope-report results as a bespoke preview payload.
+The result collection is served through the standard result-query path with a
+TurboVAS scope-report constraint, so operators get the familiar result table,
+filtering, sorting, pagination, severity presentation, and result drill-down.
+The scope report keeps representative result provenance and links back to the
+raw scan reports used as evidence. Raw source reports referenced by a scope
+report are protected from deletion so the snapshot provenance remains intact.
+
+The current implementation deliberately focuses on core report reading parity:
+scope report list/detail views, information, results, evidence sources, raw
+evidence links, and result navigation. Raw-only workflows such as import/upload,
+delta comparison, report-composer downloads, alerts, and asset/tag mutation stay
+on raw reports. Additional report-like tabs for hosts, ports, applications,
+operating systems, CVEs, TLS certificates, and error messages are follow-up work
+once each collection has a real scope-report-backed query contract.
 
 Runtime helpers are available for development validation:
 

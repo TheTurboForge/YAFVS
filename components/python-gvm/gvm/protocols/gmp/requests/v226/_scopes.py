@@ -162,6 +162,28 @@ class Scopes:
         )
 
     @classmethod
+    def get_scope_report_results(
+        cls,
+        scope_report_id: EntityID,
+        *,
+        filter_string: str | None = None,
+        details: bool | None = True,
+    ) -> Request:
+        """Request deduplicated results for a scope-report snapshot."""
+        if not scope_report_id:
+            raise RequiredArgument(
+                function=cls.get_scope_report_results.__name__,
+                argument="scope_report_id",
+            )
+
+        scoped_filter = f"{filter_string or ''} _and_scope_report_id={scope_report_id}"
+        cmd = XmlCommand("get_results")
+        cmd.add_filter(scoped_filter.strip(), None)
+        if details is not None:
+            cmd.set_attribute("details", to_bool(details))
+        return cmd
+
+    @classmethod
     def delete_scope_report(cls, scope_report_id: EntityID) -> Request:
         """Delete a scope report."""
         if not scope_report_id:

@@ -288,6 +288,22 @@ class GMPv226(GMPv225[T]):
             )
         )
 
+    def get_scope_report_results(
+        self,
+        scope_report_id: EntityID,
+        *,
+        filter_string: str | None = None,
+        details: bool | None = True,
+    ) -> T:
+        """Request deduplicated result rows for a scope-report snapshot."""
+        return self._send_request_and_transform_response(
+            Scopes.get_scope_report_results(
+                scope_report_id,
+                filter_string=filter_string,
+                details=details,
+            )
+        )
+
     def delete_scope_report(self, scope_report_id: EntityID) -> T:
         """Delete a scope report."""
         return self._send_request_and_transform_response(

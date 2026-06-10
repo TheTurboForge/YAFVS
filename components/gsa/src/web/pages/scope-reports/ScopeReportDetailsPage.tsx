@@ -30,6 +30,7 @@ import TableHead from 'web/components/table/TableHead';
 import TableRow from 'web/components/table/TableRow';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
+import ScopeReportResultsTab from 'web/pages/scope-reports/ScopeReportResultsTab';
 import {
   EmptyRow,
   ErrorMessage,
@@ -172,43 +173,7 @@ const ScopeReportDetailsPage = () => {
     </InfoTable>
   );
 
-  const resultsTab = (
-    <Table>
-      <TableBody>
-        <TableRow>
-          <TableHead>{_('Host')}</TableHead>
-          <TableHead>{_('Port')}</TableHead>
-          <TableHead>{_('NVT')}</TableHead>
-          <TableHead>{_('Severity')}</TableHead>
-          <TableHead>{_('QoD')}</TableHead>
-          <TableHead>{_('Created')}</TableHead>
-          <TableHead>{_('Evidence')}</TableHead>
-        </TableRow>
-        {report.topResults.length === 0 && <EmptyRow colSpan={7} />}
-        {report.topResults.map(result => (
-          <TableRow key={`${result.sourceReportId}-${result.id}`}>
-            <TableData>{result.host || '-'}</TableData>
-            <TableData>{result.port || '-'}</TableData>
-            <TableData>{result.nvtName || result.nvtOid || '-'}</TableData>
-            <TableData>
-              <SeverityBar severity={result.severity} />
-            </TableData>
-            <TableData>{result.qod ?? '-'}</TableData>
-            <TableData>{formatDate(result.created)}</TableData>
-            <TableData>
-              {result.sourceReportId ? (
-                <Link to={`/report/${result.sourceReportId}`}>
-                  {_('Raw Report')}
-                </Link>
-              ) : (
-                '-'
-              )}
-            </TableData>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
+  const resultsTab = <ScopeReportResultsTab scopeReportId={report.id} />;
 
   const sourcesTab = (
     <Table>

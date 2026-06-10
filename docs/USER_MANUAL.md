@@ -97,6 +97,14 @@ evidence, and drill-down remain recognizable, while the evidence source changes
 from one technical scan report to the newest completed raw reports for the
 scope's targets.
 
+Scope report result rows use the standard result table behavior for the core
+reading workflow: filtering, sorting, pagination, severity display, and result
+detail expansion. Each row remains linked to the raw scan report evidence it was
+derived from. Raw report management actions that do not fit aggregated snapshots,
+such as report upload/import, delta comparison, report-composer downloads,
+alerts, and asset/tag mutation, remain raw-report workflows rather than scope
+report actions.
+
 A scope is a reporting population. It describes the set of assets an operator
 wants to understand, such as an organization, a technology class, an exposure
 class, a protection requirement group, or a business service.
@@ -120,6 +128,10 @@ completed scan report for each associated target, stores those source reports as
 snapshot provenance, deduplicates findings, and exposes coverage and freshness
 signals. Candidate hosts discovered in the source reports can be shown so an
 operator can decide whether to add them to a custom scope.
+
+Because scope reports are source-reference snapshots, TurboVAS blocks deletion
+of a raw source report while a scope report still references it. Delete the scope
+report first if the raw evidence can intentionally be removed.
 
 Scope report finding counts exclude scanner execution error rows, such as VT
 timeout messages. Those rows remain available in the raw technical reports for

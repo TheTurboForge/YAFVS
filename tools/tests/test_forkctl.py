@@ -209,7 +209,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("_('Information')", details_page)
         self.assertIn("_('Results')", details_page)
         self.assertIn("_('Evidence Sources')", details_page)
-        self.assertIn("<SeverityBar severity={result.severity} />", details_page)
+        self.assertIn("ScopeReportResultsTab", details_page)
+        results_tab = (root / "components" / "gsa" / "src" / "web" / "pages" / "scope-reports" / "ScopeReportResultsTab.tsx").read_text(encoding="utf-8")
+        self.assertIn("_and_scope_report_id", results_tab)
+        self.assertIn("<ResultsTable", results_tab)
 
     def test_license_helpers_detect_modified_imported_notice_gaps(self):
         with tempfile.TemporaryDirectory() as tmp:

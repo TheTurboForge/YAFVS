@@ -52,6 +52,7 @@ MODIFIED_IMPORTED_NO_COMMENT_FILES = {
     "components/gsa/public/locales/gsa-en.json": "JSON locale catalog; comments would make the file invalid.",
     "components/gsa/public/locales/gsa-zh_CN.json": "JSON locale catalog; comments would make the file invalid.",
     "components/gsa/public/locales/gsa-zh_TW.json": "JSON locale catalog; comments would make the file invalid.",
+    "components/gvm-libs/.docker/prod-oldstable.Dockerfile": "Dockerfile syntax/positioning is build-sensitive; a file-level notice could alter build semantics.",
     "components/gvmd/docs/gvmd.8": "Generated manpage output; comments would alter generated artifact semantics.",
     "components/gvmd/docs/gvmd.html": "Generated HTML documentation output; comments would alter generated artifact semantics.",
     "components/openvas-scanner/rust/src/openvasd/config/snapshots/openvasd__config__tests__defaults.snap": "Generated insta snapshot; changing contents would alter test fixture semantics.",

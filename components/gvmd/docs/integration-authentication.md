@@ -1,3 +1,5 @@
+<!-- Modified by TurboVAS contributors, 2026. -->
+
 # Authentication Methods in gvmd (HTTP Scanner)
 
 The current `gvmd` implementation supports two authentication methods for communication with external HTTP scanner components.

@@ -32,6 +32,18 @@ class Reports:
         return cmd
 
     @classmethod
+    def get_report_metrics(cls, report_id: EntityID) -> Request:
+        """Request CVSS Load and authenticated coverage metrics for a report."""
+        if not report_id:
+            raise RequiredArgument(
+                function=cls.get_report_metrics.__name__, argument="report_id"
+            )
+
+        cmd = XmlCommand("get_report_metrics")
+        cmd.set_attribute("report_id", str(report_id))
+        return cmd
+
+    @classmethod
     def get_report(
         cls,
         report_id: EntityID,

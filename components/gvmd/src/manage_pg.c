@@ -2645,6 +2645,14 @@ create_tables ()
        "  max_severity double precision DEFAULT 0,"
        "  latest_evidence_time integer DEFAULT 0,"
        "  excluded_candidate_host_count integer DEFAULT 0,"
+       "  metric_alive_system_count integer DEFAULT 0,"
+       "  metric_total_system_cvss_load double precision DEFAULT 0,"
+       "  metric_average_system_cvss_load double precision DEFAULT 0,"
+       "  metric_authenticated_system_count integer DEFAULT 0,"
+       "  metric_auth_failed_system_count integer DEFAULT 0,"
+       "  metric_no_credential_path_system_count integer DEFAULT 0,"
+       "  metric_unknown_authentication_system_count integer DEFAULT 0,"
+       "  metric_authenticated_scan_coverage double precision DEFAULT 0,"
        "  creation_time integer,"
        "  modification_time integer);");
 
@@ -2662,6 +2670,32 @@ create_tables ()
        "  scan_start integer,"
        "  scan_end integer,"
        "  selected_time integer);");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_system_metrics"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  host text NOT NULL,"
+       "  cvss_load double precision DEFAULT 0,"
+       "  max_cvss double precision DEFAULT 0,"
+       "  vulnerability_count integer DEFAULT 0,"
+       "  authentication_state text NOT NULL DEFAULT 'unknown',"
+       "  source_report_count integer DEFAULT 0);");
+  sql ("SELECT create_index ('scope_report_system_metrics_by_report',"
+       "                     'scope_report_system_metrics', 'scope_report');");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_vulnerability_metrics"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  nvt_oid text NOT NULL,"
+       "  nvt_name text,"
+       "  cvss_score double precision DEFAULT 0,"
+       "  affected_system_count integer DEFAULT 0,"
+       "  cvss_load double precision DEFAULT 0,"
+       "  average_contribution double precision DEFAULT 0,"
+       "  source_report_count integer DEFAULT 0);");
+  sql ("SELECT create_index ('scope_report_vulnerability_metrics_by_report',"
+       "                     'scope_report_vulnerability_metrics',"
+       "                     'scope_report');");
 
   sql ("CREATE TABLE IF NOT EXISTS results"
        " (id SERIAL PRIMARY KEY,"

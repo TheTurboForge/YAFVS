@@ -5,6 +5,11 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import {
+  getMetricsNode,
+  parseReportMetrics,
+} from 'gmp/commands/report-metrics';
+import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
@@ -47,6 +52,10 @@ interface ReportCommandDownloadOptions {
   reportFormatId: string;
   reportConfigId: string;
   filter?: Filter;
+}
+
+interface ReportCommandMetricsParams {
+  id: string;
 }
 
 const log = logger.getLogger('gmp.commands.reports');
@@ -120,6 +129,17 @@ class ReportCommand extends EntityCommand<Report, ReportElement> {
       ...params,
     });
     return this.transformResponseToModel(response);
+  }
+
+  async getMetrics({id}: ReportCommandMetricsParams) {
+    const response = await this.httpGetWithTransform(
+      {cmd: 'get_report_metrics', report_id: id},
+      {includeDefaultParams: false},
+    );
+    const metrics = parseReportMetrics(
+      getMetricsNode(response.data, 'get_report_metrics', 'report_metrics'),
+    );
+    return response.set<ReportMetrics>(metrics);
   }
 
   getElementFromRoot(root: XmlResponseData): ReportElement {

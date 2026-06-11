@@ -4,6 +4,11 @@
  */
 
 import HttpCommand from 'gmp/commands/http';
+import {
+  getMetricsNode,
+  parseReportMetrics,
+} from 'gmp/commands/report-metrics';
+import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
 import type {XmlResponseData} from 'gmp/http/transform/fast-xml';
 import {isDefined} from 'gmp/utils/identity';
@@ -396,6 +401,21 @@ export class ScopeReportsCommand extends HttpCommand {
   async getOne(id: string) {
     const response = await this.get({id, details: 1});
     return response.set<ScopeReport | undefined>(response.data[0]);
+  }
+
+  async getMetrics(id: string) {
+    const response = await this.httpGetWithTransform(
+      {cmd: 'get_scope_report_metrics', scope_report_id: id},
+      {includeDefaultParams: false},
+    );
+    const metrics = parseReportMetrics(
+      getMetricsNode(
+        response.data,
+        'get_scope_report_metrics',
+        'scope_report_metrics',
+      ),
+    );
+    return response.set<ReportMetrics>(metrics);
   }
 
   delete({id}: {id: string}) {

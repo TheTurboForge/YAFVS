@@ -174,23 +174,39 @@ function isScopeReportDetailUrl(url) {
   return /\/scopes\/[^/]+\/reports\/[^/?#]+/.test(new URL(url).pathname);
 }
 
-async function clickTab(page, text) {
+function isRawReportDetailUrl(url) {
+  return /\/report\/[^/?#]+/.test(new URL(url).pathname);
+}
+
+async function clickTab(page, text, expectedUrl = () => true) {
   const before = page.url();
   const pattern = new RegExp(`^\\s*${escapeRegExp(text)}\\b`, 'i');
-  const candidates = [
-    page.getByRole('tab', { name: pattern }).first(),
-    page.locator('[role="tab"]').filter({ hasText: pattern }).first(),
-  ];
-  for (const tab of candidates) {
-    if (await tab.count()) {
-      await tab.click();
-      await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
-      if (!isScopeReportDetailUrl(page.url())) {
-        await page.goto(before, { waitUntil: 'networkidle', timeout: config.timeoutMs }).catch(() => null);
-        return false;
-      }
-      return true;
+  const tabs = page.locator('[role="tab"]');
+  const tabTexts = await tabs.evaluateAll(elements => elements.map(element => element.textContent || ''));
+  const tabIndex = tabTexts.findIndex(value => pattern.test(value));
+  if (tabIndex >= 0) {
+    await tabs.nth(tabIndex).click();
+    let selected = await page.waitForFunction(
+      index => document.querySelectorAll('[role="tab"]')[index]?.getAttribute('aria-selected') === 'true',
+      tabIndex,
+      { timeout: config.timeoutMs },
+    ).then(() => true).catch(() => false);
+    if (!selected) {
+      const url = new URL(page.url());
+      url.searchParams.set('tab', String(tabIndex));
+      await page.goto(url.toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+      selected = await page.waitForFunction(
+        index => document.querySelectorAll('[role="tab"]')[index]?.getAttribute('aria-selected') === 'true',
+        tabIndex,
+        { timeout: config.timeoutMs },
+      ).then(() => true).catch(() => false);
     }
+    await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+    if (!expectedUrl(page.url())) {
+      await page.goto(before, { waitUntil: 'networkidle', timeout: config.timeoutMs }).catch(() => null);
+      return false;
+    }
+    return selected;
   }
   return false;
 }
@@ -207,6 +223,14 @@ async function clickFirstResultRow(page) {
     add(config.expectResultRow ? 'fail' : 'warn', 'scope-report.results-row-click', 'No Results table rows were available to click.', { url: page.url() });
   }
   await assertNoAppError(page, 'scope-report.results-after-row-click');
+}
+
+async function waitForMetricLabels(page) {
+  await page.waitForFunction(
+    () => /CVSS Load/i.test(document.body.innerText) && /Authenticated Scan Coverage/i.test(document.body.innerText),
+    null,
+    { timeout: config.timeoutMs },
+  ).catch(() => null);
 }
 
 async function runForBaseUrl(baseUrl) {
@@ -233,12 +257,23 @@ async function runForBaseUrl(baseUrl) {
     await screenshot(page, 'scope-report-detail');
     await assertNoAppError(page, 'scope-report-detail.app-error');
     const detailText = await bodyText(page);
-    const requiredTabs = ['Information', 'Results', 'Evidence Sources'];
+    const requiredTabs = ['Information', 'Metrics', 'Results', 'Evidence Sources'];
     const missingTabs = requiredTabs.filter(tab => !detailText.includes(tab));
     add(missingTabs.length ? 'fail' : 'pass', 'scope-report-detail.tabs', missingTabs.length ? 'Scope-report detail is missing expected report-like tabs.' : 'Scope-report detail exposes expected report-like tabs.', { missing: missingTabs });
 
     const detailUrl = page.url();
-    if (await clickTab(page, 'Results')) {
+    if (await clickTab(page, 'Metrics', isScopeReportDetailUrl)) {
+      await waitForMetricLabels(page);
+      await screenshot(page, 'scope-report-metrics-tab');
+      const metricsText = await bodyText(page);
+      const hasMetrics = /CVSS Load/i.test(metricsText) && /Authenticated Scan Coverage/i.test(metricsText);
+      add(hasMetrics ? 'pass' : 'fail', 'scope-report.metrics-tab', hasMetrics ? 'Scope-report Metrics tab exposes CVSS Load and Authenticated Scan Coverage.' : 'Scope-report Metrics tab is missing expected metric labels.');
+    } else {
+      add('fail', 'scope-report.metrics-tab', 'Could not activate the Metrics tab.');
+    }
+
+    await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: config.timeoutMs });
+    if (await clickTab(page, 'Results', isScopeReportDetailUrl)) {
       await screenshot(page, 'scope-report-results-tab');
       await clickFirstResultRow(page);
     } else {
@@ -246,7 +281,7 @@ async function runForBaseUrl(baseUrl) {
     }
 
     await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: config.timeoutMs });
-    if (await clickTab(page, 'Evidence Sources')) {
+    if (await clickTab(page, 'Evidence Sources', isScopeReportDetailUrl)) {
       await screenshot(page, 'scope-report-evidence-sources-tab');
       const rawReportHref = await firstHref(page, /\/report\//);
       add(rawReportHref ? 'pass' : 'fail', 'scope-report.evidence-raw-report-link', rawReportHref ? 'Evidence Sources contains a raw-report link.' : 'Evidence Sources does not contain a raw-report link.', { href: rawReportHref });
@@ -254,6 +289,15 @@ async function runForBaseUrl(baseUrl) {
         await page.goto(new URL(rawReportHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
         await screenshot(page, 'raw-report-from-evidence-link');
         await assertNoAppError(page, 'raw-report-from-evidence-link.app-error');
+        if (await clickTab(page, 'Metrics', isRawReportDetailUrl)) {
+          await waitForMetricLabels(page);
+          await screenshot(page, 'raw-report-metrics-tab');
+          const rawMetricsText = await bodyText(page);
+          const hasRawMetrics = /CVSS Load/i.test(rawMetricsText) && /Authenticated Scan Coverage/i.test(rawMetricsText);
+          add(hasRawMetrics ? 'pass' : 'fail', 'raw-report.metrics-tab', hasRawMetrics ? 'Raw-report Metrics tab exposes CVSS Load and Authenticated Scan Coverage.' : 'Raw-report Metrics tab is missing expected metric labels.');
+        } else {
+          add('fail', 'raw-report.metrics-tab', 'Could not activate the raw-report Metrics tab.');
+        }
       }
     } else {
       add('fail', 'scope-report.evidence-sources-tab', 'Could not activate the Evidence Sources tab.');

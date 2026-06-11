@@ -184,6 +184,19 @@ class Scopes:
         return cmd
 
     @classmethod
+    def get_scope_report_metrics(cls, scope_report_id: EntityID) -> Request:
+        """Request CVSS Load and authenticated coverage metrics for a scope report."""
+        if not scope_report_id:
+            raise RequiredArgument(
+                function=cls.get_scope_report_metrics.__name__,
+                argument="scope_report_id",
+            )
+
+        cmd = XmlCommand("get_scope_report_metrics")
+        cmd.set_attribute("scope_report_id", str(scope_report_id))
+        return cmd
+
+    @classmethod
     def delete_scope_report(cls, scope_report_id: EntityID) -> Request:
         """Delete a scope report."""
         if not scope_report_id:

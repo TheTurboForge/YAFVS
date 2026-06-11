@@ -163,6 +163,12 @@ class GMPv226(GMPv225[T]):
             )
         )
 
+    def get_report_metrics(self, report_id: EntityID) -> T:
+        """Request CVSS Load and authenticated coverage metrics for a report."""
+        return self._send_request_and_transform_response(
+            Reports.get_report_metrics(report_id)
+        )
+
     def create_scope(
         self,
         name: str,
@@ -280,6 +286,12 @@ class GMPv226(GMPv225[T]):
                 filter_string=filter_string,
                 details=details,
             )
+        )
+
+    def get_scope_report_metrics(self, scope_report_id: EntityID) -> T:
+        """Request CVSS Load and authenticated coverage metrics for a scope report."""
+        return self._send_request_and_transform_response(
+            Scopes.get_scope_report_metrics(scope_report_id)
         )
 
     def delete_scope_report(self, scope_report_id: EntityID) -> T:

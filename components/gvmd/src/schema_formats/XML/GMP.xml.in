@@ -17003,6 +17003,76 @@ END:VCALENDAR
     </example>
   </command>
   <command>
+    <name>get_report_metrics</name>
+    <summary>Get snapshot metrics from a raw report</summary>
+    <description>
+      <p>
+        The client uses the get_report_metrics command to get TurboVAS CVSS
+        Load and Authenticated Scan Coverage metrics for a single raw scan
+        report. Raw report metrics are computed on demand from the immutable
+        report evidence.
+      </p>
+    </description>
+    <pattern>
+      <attrib>
+        <name>report_id</name>
+        <summary>ID of the raw report to summarize</summary>
+        <type>uuid</type>
+        <required>1</required>
+      </attrib>
+    </pattern>
+    <response>
+      <pattern>
+        <attrib>
+          <name>status</name>
+          <type>status</type>
+          <required>1</required>
+        </attrib>
+        <attrib>
+          <name>status_text</name>
+          <type>text</type>
+          <required>1</required>
+        </attrib>
+        <e>report_metrics</e>
+      </pattern>
+    </response>
+  </command>
+  <command>
+    <name>get_scope_report_metrics</name>
+    <summary>Get snapshot metrics from a scope report</summary>
+    <description>
+      <p>
+        The client uses the get_scope_report_metrics command to get TurboVAS
+        CVSS Load and Authenticated Scan Coverage metrics for a generated scope
+        report. Scope report metrics are part of the generated scope-report
+        snapshot.
+      </p>
+    </description>
+    <pattern>
+      <attrib>
+        <name>scope_report_id</name>
+        <summary>ID of the scope report to summarize</summary>
+        <type>uuid</type>
+        <required>1</required>
+      </attrib>
+    </pattern>
+    <response>
+      <pattern>
+        <attrib>
+          <name>status</name>
+          <type>status</type>
+          <required>1</required>
+        </attrib>
+        <attrib>
+          <name>status_text</name>
+          <type>text</type>
+          <required>1</required>
+        </attrib>
+        <e>scope_report_metrics</e>
+      </pattern>
+    </response>
+  </command>
+  <command>
     <name>get_report_formats</name>
     <summary>Get one or many report formats</summary>
     <description>

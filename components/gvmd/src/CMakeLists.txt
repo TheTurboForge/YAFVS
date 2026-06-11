@@ -234,6 +234,7 @@ set(
   manage_sql_report_tls_certificates.c
   manage_sql_scanner_relays.c
   manage_sql_schedules.c
+  manage_sql_metrics.c
   manage_sql_scopes.c
   manage_sql_settings.c
   manage_sql_tags.c

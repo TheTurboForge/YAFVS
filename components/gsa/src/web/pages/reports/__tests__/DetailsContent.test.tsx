@@ -235,7 +235,7 @@ describe('DetailsContent', () => {
       // When entity is present, the component does NOT return the ErrorPanel early.
       // Instead it renders the full report view (tabs, toolbar, etc.)
       const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
     });
   });
 
@@ -384,7 +384,7 @@ describe('DetailsContent', () => {
   });
 
   describe('Tabs', () => {
-    test('should render all 11 tabs with correct names', () => {
+    test('should render all 12 tabs with correct names', () => {
       const props = createMockProps();
 
       const {render} = setupRenderer();
@@ -392,10 +392,11 @@ describe('DetailsContent', () => {
 
       const tablist = screen.getByRole('tablist');
       const tabs = within(tablist).getAllByRole('tab');
-      expect(tabs).toHaveLength(11);
+      expect(tabs).toHaveLength(12);
 
       within(tablist).getByRole('tab', {name: /^information/i});
       within(tablist).getByRole('tab', {name: /^results/i});
+      within(tablist).getByRole('tab', {name: /^metrics/i});
       within(tablist).getByRole('tab', {name: /^hosts/i});
       within(tablist).getByRole('tab', {name: /^ports/i});
       within(tablist).getByRole('tab', {name: /^applications/i});
@@ -648,7 +649,7 @@ describe('DetailsContent', () => {
 
       screen.getByText('Report:');
       const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
     });
   });
 
@@ -741,7 +742,7 @@ describe('DetailsContent', () => {
 
       // Tabs
       const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
 
       // Powerfilter
       within(screen.getPowerFilter()).getByTitle('Loaded filter');

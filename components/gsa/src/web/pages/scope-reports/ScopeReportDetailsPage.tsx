@@ -30,6 +30,7 @@ import TableHead from 'web/components/table/TableHead';
 import TableRow from 'web/components/table/TableRow';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
+import MetricsTab from 'web/pages/reports/details/MetricsTab';
 import ScopeReportResultsTab from 'web/pages/scope-reports/ScopeReportResultsTab';
 import {
   EmptyRow,
@@ -174,6 +175,7 @@ const ScopeReportDetailsPage = () => {
   );
 
   const resultsTab = <ScopeReportResultsTab scopeReportId={report.id} />;
+  const metricsTab = <MetricsTab id={report.id} source="scopeReport" />;
 
   const sourcesTab = (
     <Table>
@@ -245,17 +247,19 @@ const ScopeReportDetailsPage = () => {
       </PageActions>
       {error && <ErrorMessage>{error}</ErrorMessage>}
       <TabsContainer flex="column" grow="1">
-        <TabLayout align={['start', 'end']} grow="1">
-          <TabList align={['start', 'stretch']}>
-            <Tab>{_('Information')}</Tab>
-            <Tab>{_('Results')}</Tab>
-            <Tab>{_('Evidence Sources')}</Tab>
-          </TabList>
-        </TabLayout>
         <Tabs>
+          <TabLayout align={['start', 'end']} grow="1">
+            <TabList align={['start', 'stretch']}>
+              <Tab>{_('Information')}</Tab>
+              <Tab>{_('Results')}</Tab>
+              <Tab>{_('Metrics')}</Tab>
+              <Tab>{_('Evidence Sources')}</Tab>
+            </TabList>
+          </TabLayout>
           <TabPanels>
             <TabPanel>{informationTab}</TabPanel>
             <TabPanel>{resultsTab}</TabPanel>
+            <TabPanel>{metricsTab}</TabPanel>
             <TabPanel>{sourcesTab}</TabPanel>
           </TabPanels>
         </Tabs>

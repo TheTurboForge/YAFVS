@@ -108,11 +108,17 @@ runtime-report-summary *args:
 runtime-report-export *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-report-export "$@"
 
+runtime-report-metrics *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-report-metrics "$@"
+
 runtime-scope-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scope-smoke "$@"
 
 runtime-scope-report-summary *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scope-report-summary "$@"
+
+runtime-scope-report-metrics *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scope-report-metrics "$@"
 
 feed-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-state "$@"

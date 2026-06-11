@@ -46,6 +46,20 @@ assert RUNTIME_REPORT_SPEC.loader is not None
 sys.modules["runtime_report"] = runtime_report
 RUNTIME_REPORT_SPEC.loader.exec_module(runtime_report)
 
+RUNTIME_SCOPE_PATH = Path(__file__).resolve().parents[1] / "runtime_scope.py"
+RUNTIME_SCOPE_SPEC = importlib.util.spec_from_loader("runtime_scope", SourceFileLoader("runtime_scope", str(RUNTIME_SCOPE_PATH)))
+runtime_scope = importlib.util.module_from_spec(RUNTIME_SCOPE_SPEC)
+assert RUNTIME_SCOPE_SPEC.loader is not None
+sys.modules["runtime_scope"] = runtime_scope
+RUNTIME_SCOPE_SPEC.loader.exec_module(runtime_scope)
+
+RUNTIME_METRICS_PATH = Path(__file__).resolve().parents[1] / "runtime_metrics.py"
+RUNTIME_METRICS_SPEC = importlib.util.spec_from_loader("runtime_metrics", SourceFileLoader("runtime_metrics", str(RUNTIME_METRICS_PATH)))
+runtime_metrics = importlib.util.module_from_spec(RUNTIME_METRICS_SPEC)
+assert RUNTIME_METRICS_SPEC.loader is not None
+sys.modules["runtime_metrics"] = runtime_metrics
+RUNTIME_METRICS_SPEC.loader.exec_module(runtime_metrics)
+
 BROWSER_SMOKE_PATH = Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py"
 BROWSER_SMOKE_SPEC = importlib.util.spec_from_loader("runtime_browser_smoke", SourceFileLoader("runtime_browser_smoke", str(BROWSER_SMOKE_PATH)))
 runtime_browser_smoke = importlib.util.module_from_spec(BROWSER_SMOKE_SPEC)
@@ -173,6 +187,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "runtime-app-down",
             "runtime-app-smoke",
             "runtime-browser-smoke",
+            "runtime-report-metrics",
+            "runtime-scope-report-metrics",
             "gvmd-smoke",
         ]
         for wrapper in wrappers:
@@ -222,6 +238,79 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("_and_scope_report_id", results_tab)
         self.assertIn("<ResultsTable", results_tab)
 
+    def test_report_metrics_commands_are_registered_across_layers(self):
+        root = Path(__file__).resolve().parents[2]
+        gvmd_commands = (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")
+        gvmd_gmp = (root / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
+        gsad = (root / "components" / "gsad" / "src" / "gsad_gmp.c").read_text(encoding="utf-8")
+        python_gmp = (root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp" / "_gmp226.py").read_text(encoding="utf-8")
+        gsa_report = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "report.ts").read_text(encoding="utf-8")
+        gsa_scopes = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
+        schema = (root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
+        for command in ("get_report_metrics", "get_scope_report_metrics"):
+            with self.subTest(command=command):
+                self.assertIn(command.upper(), gvmd_commands)
+                self.assertIn(command, gvmd_gmp)
+                self.assertIn(command, gsad)
+                self.assertIn(command, python_gmp)
+                self.assertIn(command, schema)
+        self.assertIn("getMetrics", gsa_report)
+        self.assertIn("getMetrics", gsa_scopes)
+
+    def test_report_metrics_sql_deduplicates_and_filters_findings(self):
+        source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "manage_sql_metrics.c").read_text(encoding="utf-8")
+        self.assertIn("METRIC_FINDING_CLAUSE", source)
+        self.assertIn("coalesce (r.severity, 0) > 0", source)
+        self.assertIn("SEVERITY_ERROR", source)
+        self.assertIn("GROUP BY host_key, nvt_oid", source)
+        self.assertIn("sum (cvss_score) AS cvss_load", source)
+        self.assertIn("max (v.cvss_score) * count (DISTINCT v.host_key)", source)
+        self.assertIn("targets_login_data", source)
+        self.assertIn("no_credential_path", source)
+        self.assertIn("authenticated_scan_coverage_percent", source)
+
+    def test_runtime_metrics_parser_preserves_summary_systems_and_vulnerabilities(self):
+        xml = """
+        <get_report_metrics_response status="200" status_text="OK">
+          <report_metrics id="report-1">
+            <summary>
+              <alive_system_count>2</alive_system_count>
+              <total_system_cvss_load>12.3</total_system_cvss_load>
+              <average_system_cvss_load>6.15</average_system_cvss_load>
+              <vulnerability_count>2</vulnerability_count>
+              <authenticated_system_count>1</authenticated_system_count>
+              <authentication_failed_system_count>0</authentication_failed_system_count>
+              <no_credential_path_system_count>1</no_credential_path_system_count>
+              <unknown_authentication_system_count>0</unknown_authentication_system_count>
+              <authenticated_scan_coverage_percent>50.0</authenticated_scan_coverage_percent>
+            </summary>
+            <systems>
+              <system><host>192.0.2.10</host><cvss_load>7.0</cvss_load><max_cvss>7.0</max_cvss><vulnerability_count>1</vulnerability_count><authentication_state>authenticated</authentication_state><source_report_count>1</source_report_count></system>
+            </systems>
+            <vulnerabilities>
+              <vulnerability><nvt_oid>1.2.3</nvt_oid><name>Example</name><cvss_score>7.0</cvss_score><affected_system_count>1</affected_system_count><cvss_load>7.0</cvss_load><average_contribution>3.5</average_contribution><source_report_count>1</source_report_count></vulnerability>
+            </vulnerabilities>
+          </report_metrics>
+        </get_report_metrics_response>
+        """
+        parsed = runtime_metrics.parse_metrics(xml, "report_metrics")
+        self.assertEqual(parsed["id"], "report-1")
+        self.assertEqual(parsed["summary"]["alive_system_count"], 2)
+        self.assertEqual(parsed["summary"]["authenticated_scan_coverage_percent"], 50.0)
+        self.assertEqual(parsed["systems"][0]["authentication_state"], "authenticated")
+        self.assertEqual(parsed["vulnerabilities"][0]["average_contribution"], 3.5)
+
+    def test_report_metrics_ui_is_exposed_on_raw_and_scope_report_details(self):
+        root = Path(__file__).resolve().parents[2]
+        raw_details = (root / "components" / "gsa" / "src" / "web" / "pages" / "reports" / "DetailsContent.tsx").read_text(encoding="utf-8")
+        scope_details = (root / "components" / "gsa" / "src" / "web" / "pages" / "scope-reports" / "ScopeReportDetailsPage.tsx").read_text(encoding="utf-8")
+        metrics_tab = (root / "components" / "gsa" / "src" / "web" / "pages" / "reports" / "details" / "MetricsTab.tsx").read_text(encoding="utf-8")
+        self.assertIn("MetricsTab", raw_details)
+        self.assertIn("MetricsTab", scope_details)
+        self.assertIn("Average System CVSS Load", metrics_tab)
+        self.assertIn("Authenticated Scan Coverage", metrics_tab)
+        self.assertIn("No Credential Path", metrics_tab)
+
     def test_runtime_browser_smoke_is_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
@@ -230,6 +319,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("runtime-browser-smoke", source)
         self.assertIn("runtime-browser-smoke *args:", justfile)
         self.assertIn('tools/turbovasctl runtime-browser-smoke "$@"', justfile)
+
+    def test_runtime_browser_smoke_checks_metrics_tabs(self):
+        source = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")
+        self.assertIn("scope-report.metrics-tab", source)
+        self.assertIn("raw-report.metrics-tab", source)
+        self.assertIn("CVSS Load", source)
+        self.assertIn("Authenticated Scan Coverage", source)
 
     def test_runtime_browser_smoke_playwright_search_paths(self):
         candidates = runtime_browser_smoke.PLAYWRIGHT_NODE_PATHS

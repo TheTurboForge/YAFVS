@@ -105,3 +105,14 @@ class ScopesTestCase(unittest.TestCase):
     def test_get_scope_report_results_missing_id(self):
         with self.assertRaises(RequiredArgument):
             Scopes.get_scope_report_results("")
+
+    def test_get_scope_report_metrics(self):
+        request = Scopes.get_scope_report_metrics("scope-report-1")
+        self.assertEqual(
+            bytes(request),
+            b'<get_scope_report_metrics scope_report_id="scope-report-1"/>',
+        )
+
+    def test_get_scope_report_metrics_missing_id(self):
+        with self.assertRaises(RequiredArgument):
+            Scopes.get_scope_report_metrics("")

@@ -9,6 +9,7 @@
  */
 
 #include "manage_sql_scopes.h"
+#include "manage_sql_metrics.h"
 #include "manage_utils.h"
 
 #undef G_LOG_DOMAIN
@@ -626,6 +627,7 @@ generate_scope_report (const char *scope_uuid, char **scope_report_uuid)
        scope_report, target_filter, TASK_STATUS_DONE);
 
   update_scope_report_counts (scope_report, scope, global);
+  rebuild_scope_report_metrics (scope_report, scope, global);
   sql_commit ();
 
   g_free (target_filter);

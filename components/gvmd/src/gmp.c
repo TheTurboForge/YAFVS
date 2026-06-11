@@ -108,6 +108,7 @@
 #include "manage_resources.h"
 #include "manage_runtime_flags.h"
 #include "manage_settings.h"
+#include "manage_sql_metrics.h"
 #include "manage_sql_scopes.h"
 #include "manage_schedules.h"
 #include "manage_tags.h"
@@ -2736,6 +2737,7 @@ stop_task_data_reset (stop_task_data_t *data)
 typedef struct
 {
   char *scope_id;                  ///< ID of scope.
+  char *report_id;                 ///< ID of raw scan report.
   char *scope_report_id;           ///< ID of scope report.
   char *name;                      ///< Scope name.
   char *comment;                   ///< Scope comment.
@@ -2754,6 +2756,7 @@ static void
 scope_command_data_reset (scope_command_data_t *data)
 {
   free (data->scope_id);
+  free (data->report_id);
   free (data->scope_report_id);
   free (data->name);
   free (data->comment);
@@ -2778,6 +2781,9 @@ scope_command_data_start (scope_command_data_t *data,
   if (find_attribute (attribute_names, attribute_values, "scope_id",
                       &attribute))
     data->scope_id = g_strdup (attribute);
+  if (find_attribute (attribute_names, attribute_values, "report_id",
+                      &attribute))
+    data->report_id = g_strdup (attribute);
   if (find_attribute (attribute_names, attribute_values, "scope_report_id",
                       &attribute))
     data->scope_report_id = g_strdup (attribute);
@@ -2912,12 +2918,14 @@ typedef union
   get_port_lists_data_t get_port_lists;               ///< get_port_lists
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
+  scope_command_data_t get_report_metrics;            ///< get_report_metrics
   get_report_configs_data_t get_report_configs;       ///< get_report_configs
   get_report_formats_data_t get_report_formats;       ///< get_report_formats
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
   get_results_data_t get_results;                     ///< get_results
   scope_command_data_t get_scope;                     ///< get_scope
   scope_command_data_t get_scope_report;              ///< get_scope_report
+  scope_command_data_t get_scope_report_metrics;      ///< get_scope_report_metrics
   scope_command_data_t get_scope_reports;             ///< get_scope_reports
   scope_command_data_t get_scopes;                    ///< get_scopes
   get_schedules_data_t get_schedules;                 ///< get_schedules
@@ -3247,6 +3255,12 @@ static get_reports_data_t *get_reports_data
  = &(command_data.get_reports);
 
 /**
+ * @brief Parser callback data for GET_REPORT_METRICS.
+ */
+static scope_command_data_t *get_report_metrics_data
+ = &(command_data.get_report_metrics);
+
+/**
  * @brief Parser callback data for GET_REPORT_CONFIGS.
  */
 static get_report_configs_data_t *get_report_configs_data
@@ -3281,6 +3295,12 @@ static scope_command_data_t *get_scope_data
  */
 static scope_command_data_t *get_scope_report_data
  = &(command_data.get_scope_report);
+
+/**
+ * @brief Parser callback data for GET_SCOPE_REPORT_METRICS.
+ */
+static scope_command_data_t *get_scope_report_metrics_data
+ = &(command_data.get_scope_report_metrics);
 
 /**
  * @brief Parser callback data for GET_SCOPE_REPORTS.
@@ -3739,6 +3759,7 @@ typedef enum
   CLIENT_GET_PORT_LISTS,
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
+  CLIENT_GET_REPORT_METRICS,
   CLIENT_GET_REPORT_APPLICATIONS,
   CLIENT_GET_REPORT_CLOSED_CVES,
   CLIENT_GET_REPORT_CONFIGS,
@@ -3754,6 +3775,7 @@ typedef enum
   CLIENT_GET_RESULTS,
   CLIENT_GET_SCOPE,
   CLIENT_GET_SCOPE_REPORT,
+  CLIENT_GET_SCOPE_REPORT_METRICS,
   CLIENT_GET_SCOPE_REPORTS,
   CLIENT_GET_SCOPES,
   CLIENT_GET_SCANNERS,
@@ -4810,6 +4832,13 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_GET_REPORTS);
           }
 
+        else if (strcasecmp ("GET_REPORT_METRICS", element_name) == 0)
+          {
+            scope_command_data_start (get_report_metrics_data,
+                                      attribute_names, attribute_values, 1);
+            set_client_state (CLIENT_GET_REPORT_METRICS);
+          }
+
         ELSE_GET_START (report_applications, REPORT_APPLICATIONS)
 
         ELSE_GET_START (report_closed_cves, REPORT_CLOSED_CVES)
@@ -4914,6 +4943,12 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             scope_command_data_start (get_scope_report_data, attribute_names,
                                       attribute_values, 1);
             set_client_state (CLIENT_GET_SCOPE_REPORT);
+          }
+        else if (strcasecmp ("GET_SCOPE_REPORT_METRICS", element_name) == 0)
+          {
+            scope_command_data_start (get_scope_report_metrics_data,
+                                      attribute_names, attribute_values, 1);
+            set_client_state (CLIENT_GET_SCOPE_REPORT_METRICS);
           }
         else if (strcasecmp ("GET_SCOPE_REPORTS", element_name) == 0)
           {
@@ -17402,6 +17437,86 @@ handle_get_scope_reports_command (gmp_parser_t *gmp_parser, GError **error,
 }
 
 static void
+handle_get_report_metrics_command (gmp_parser_t *gmp_parser, GError **error,
+                                   scope_command_data_t *data)
+{
+  GString *xml;
+  int ret;
+
+  if (data->report_id == NULL)
+    {
+      SEND_TO_CLIENT_OR_FAIL
+        (XML_ERROR_SYNTAX ("get_report_metrics",
+                           "A report_id attribute is required"));
+      scope_command_data_reset (data);
+      set_client_state (CLIENT_AUTHENTIC);
+      return;
+    }
+
+  xml = g_string_new ("<get_report_metrics_response status=\""
+                      STATUS_OK "\" status_text=\"" STATUS_OK_TEXT
+                      "\">");
+  ret = buffer_report_metrics_xml (xml, data->report_id);
+  if (ret == 2)
+    {
+      g_string_free (xml, TRUE);
+      if (send_find_error_to_client ("get_report_metrics", "report",
+                                     data->report_id, gmp_parser))
+        error_send_to_client (error);
+      scope_command_data_reset (data);
+      set_client_state (CLIENT_AUTHENTIC);
+      return;
+    }
+
+  g_string_append (xml, "</get_report_metrics_response>");
+  SEND_TO_CLIENT_OR_FAIL (xml->str);
+  g_string_free (xml, TRUE);
+  scope_command_data_reset (data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
+handle_get_scope_report_metrics_command (gmp_parser_t *gmp_parser,
+                                         GError **error,
+                                         scope_command_data_t *data)
+{
+  GString *xml;
+  int ret;
+
+  if (data->scope_report_id == NULL)
+    {
+      SEND_TO_CLIENT_OR_FAIL
+        (XML_ERROR_SYNTAX ("get_scope_report_metrics",
+                           "A scope_report_id attribute is required"));
+      scope_command_data_reset (data);
+      set_client_state (CLIENT_AUTHENTIC);
+      return;
+    }
+
+  xml = g_string_new ("<get_scope_report_metrics_response status=\""
+                      STATUS_OK "\" status_text=\"" STATUS_OK_TEXT
+                      "\">");
+  ret = buffer_scope_report_metrics_xml (xml, data->scope_report_id);
+  if (ret == 2)
+    {
+      g_string_free (xml, TRUE);
+      if (send_find_error_to_client ("get_scope_report_metrics",
+                                     "scope_report", data->scope_report_id,
+                                     gmp_parser))
+        error_send_to_client (error);
+      scope_command_data_reset (data);
+      set_client_state (CLIENT_AUTHENTIC);
+      return;
+    }
+
+  g_string_append (xml, "</get_scope_report_metrics_response>");
+  SEND_TO_CLIENT_OR_FAIL (xml->str);
+  g_string_free (xml, TRUE);
+  scope_command_data_reset (data);
+  set_client_state (CLIENT_AUTHENTIC);
+}
+
+static void
 gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                             const gchar *element_name,
                             gpointer user_data,
@@ -18165,6 +18280,11 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_reports (gmp_parser, error);
         break;
 
+      case CLIENT_GET_REPORT_METRICS:
+        handle_get_report_metrics_command (gmp_parser, error,
+                                           get_report_metrics_data);
+        break;
+
       CASE_GET_END (REPORT_APPLICATIONS, report_applications);
 
       CASE_GET_END (REPORT_CLOSED_CVES, report_closed_cves);
@@ -18208,6 +18328,11 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_scope_reports_command (gmp_parser, error,
                                           get_scope_report_data,
                                           "get_scope_report");
+        break;
+
+      case CLIENT_GET_SCOPE_REPORT_METRICS:
+        handle_get_scope_report_metrics_command (gmp_parser, error,
+                                                 get_scope_report_metrics_data);
         break;
 
       case CLIENT_GET_SCOPE_REPORTS:

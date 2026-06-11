@@ -40,6 +40,7 @@ import CvesTab from 'web/pages/reports/details/CvesTab';
 import DetailsToolbar from 'web/pages/reports/details/DetailsToolbar';
 import ErrorsTab from 'web/pages/reports/details/ErrorsTab';
 import HostsTabContent from 'web/pages/reports/details/HostsTabContent';
+import MetricsTab from 'web/pages/reports/details/MetricsTab';
 import OperatingSystemsTab from 'web/pages/reports/details/OperatingSystemsTab';
 import PortsTab from 'web/pages/reports/details/PortsTab';
 import ResultsTabContent from 'web/pages/reports/details/ResultsTabContent';
@@ -307,6 +308,11 @@ const PageContent = ({
       ),
     },
     {
+      key: 'metrics',
+      renderTab: () => _('Metrics'),
+      renderPanel: () => <MetricsTab id={reportId} source="report" />,
+    },
+    {
       key: 'hosts',
       renderTab: () => <TabTitle counts={hostsCounts} title={_('Hosts')} />,
       renderPanel: () =>
@@ -475,16 +481,15 @@ const PageContent = ({
           <Loading />
         ) : (
           <TabsContainer flex="column" grow="1">
-            <TabLayout align={['start', 'end']} grow="1">
-              <TabList align={['start', 'stretch']}>
-                {tabDefinitions.map(tab => (
-                  <Tab key={tab.key}>{tab.renderTab()}</Tab>
-                ))}
-              </TabList>
-            </TabLayout>
-
             {tabDefinitions.length > 0 ? (
               <Tabs>
+                <TabLayout align={['start', 'end']} grow="1">
+                  <TabList align={['start', 'stretch']}>
+                    {tabDefinitions.map(tab => (
+                      <Tab key={tab.key}>{tab.renderTab()}</Tab>
+                    ))}
+                  </TabList>
+                </TabLayout>
                 <TabPanels>
                   {tabDefinitions.map(tab => (
                     <TabPanel key={tab.key}>{tab.renderPanel()}</TabPanel>

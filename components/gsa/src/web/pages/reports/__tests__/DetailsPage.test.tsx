@@ -174,12 +174,13 @@ describe('DetailsPage', () => {
       );
     });
 
-    test('should render all 11 tabs once entity is loaded', async () => {
+    test('should render all 12 tabs once entity is loaded', async () => {
       const {render} = setupRenderer();
       renderPage(render);
 
       const tablist = await screen.findByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
+      within(tablist).getByRole('tab', {name: /^metrics/i});
     });
 
     test('should render toolbar help and list links', async () => {

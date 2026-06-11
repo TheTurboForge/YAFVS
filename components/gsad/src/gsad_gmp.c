@@ -8242,6 +8242,24 @@ get_scope_report_gmp (gvm_connection_t *connection,
 }
 
 char *
+get_scope_report_metrics_gmp (gvm_connection_t *connection,
+                              gsad_credentials_t *credentials,
+                              params_t *params,
+                              gsad_command_response_data_t *response_data)
+{
+  const char *scope_report_id;
+  gmp_arguments_t *arguments;
+
+  scope_report_id = params_value (params, "scope_report_id");
+  CHECK_VARIABLE_INVALID (scope_report_id, "Get Scope Report Metrics");
+
+  arguments = gmp_arguments_new ();
+  gmp_arguments_add (arguments, "scope_report_id", scope_report_id);
+  return get_entities (connection, "scope_report_metrics", credentials,
+                       params, arguments, response_data);
+}
+
+char *
 get_scope_reports_gmp (gvm_connection_t *connection,
                        gsad_credentials_t *credentials, params_t *params,
                        gsad_command_response_data_t *response_data)
@@ -9615,6 +9633,23 @@ get_reports_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 
   return get_entities (connection, "reports", credentials, params, arguments,
                        response_data);
+}
+
+char *
+get_report_metrics_gmp (gvm_connection_t *connection,
+                        gsad_credentials_t *credentials, params_t *params,
+                        gsad_command_response_data_t *response_data)
+{
+  const char *report_id;
+  gmp_arguments_t *arguments;
+
+  report_id = params_value (params, "report_id");
+  CHECK_VARIABLE_INVALID (report_id, "Get Report Metrics");
+
+  arguments = gmp_arguments_new ();
+  gmp_arguments_add (arguments, "report_id", report_id);
+  return get_entities (connection, "report_metrics", credentials, params,
+                       arguments, response_data);
 }
 
 /**
@@ -15961,6 +15996,7 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_report_ports)
   ELSE (get_report_tls_certificates)
   ELSE (get_report_vulns)
+  ELSE (get_report_metrics)
   ELSE (get_reports)
   ELSE (get_report_config)
   ELSE (get_report_configs)
@@ -15976,6 +16012,7 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_scope)
   ELSE (get_scopes)
   ELSE (get_scope_report)
+  ELSE (get_scope_report_metrics)
   ELSE (get_scope_reports)
   ELSE (get_setting)
   ELSE (get_settings)

@@ -115,6 +115,7 @@
 #include <sys/wait.h>
 #endif
 #include "manage_migrators_219_to_220_names.h"
+#include "manage_sql_metrics.h"
 #include "manage_sql.h"
 #include "sql.h"
 #include "utils.h"
@@ -4654,6 +4655,100 @@ migrate_281_to_282 ()
 }
 
 
+static int
+migrate_282_to_283 ()
+{
+  iterator_t reports;
+  GArray *metric_rebuilds;
+
+  typedef struct
+  {
+    resource_t scope_report;
+    resource_t scope;
+    int global;
+  } metric_rebuild_t;
+
+  sql_begin_immediate ();
+
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_alive_system_count integer DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_total_system_cvss_load double precision DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_average_system_cvss_load double precision DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_authenticated_system_count integer DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_auth_failed_system_count integer DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_no_credential_path_system_count integer DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_unknown_authentication_system_count integer DEFAULT 0;");
+  sql ("ALTER TABLE scope_reports"
+       " ADD COLUMN IF NOT EXISTS metric_authenticated_scan_coverage double precision DEFAULT 0;");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_system_metrics"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  host text NOT NULL,"
+       "  cvss_load double precision DEFAULT 0,"
+       "  max_cvss double precision DEFAULT 0,"
+       "  vulnerability_count integer DEFAULT 0,"
+       "  authentication_state text NOT NULL DEFAULT 'unknown',"
+       "  source_report_count integer DEFAULT 0);");
+  sql ("SELECT create_index ('scope_report_system_metrics_by_report',"
+       "                     'scope_report_system_metrics', 'scope_report');");
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_vulnerability_metrics"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  nvt_oid text NOT NULL,"
+       "  nvt_name text,"
+       "  cvss_score double precision DEFAULT 0,"
+       "  affected_system_count integer DEFAULT 0,"
+       "  cvss_load double precision DEFAULT 0,"
+       "  average_contribution double precision DEFAULT 0,"
+       "  source_report_count integer DEFAULT 0);");
+  sql ("SELECT create_index ('scope_report_vulnerability_metrics_by_report',"
+       "                     'scope_report_vulnerability_metrics',"
+       "                     'scope_report');");
+
+  metric_rebuilds = g_array_new (FALSE, FALSE, sizeof (metric_rebuild_t));
+
+  init_iterator (&reports,
+                 "SELECT sr.id, sr.scope, coalesce (s.is_global, 0)"
+                 " FROM scope_reports sr"
+                 " LEFT JOIN scopes s ON s.id = sr.scope;");
+  while (next (&reports))
+    {
+      metric_rebuild_t rebuild;
+
+      rebuild.scope_report = iterator_int64 (&reports, 0);
+      rebuild.scope = iterator_int64 (&reports, 1);
+      rebuild.global = iterator_int (&reports, 2);
+      g_array_append_val (metric_rebuilds, rebuild);
+    }
+  cleanup_iterator (&reports);
+
+  for (guint i = 0; i < metric_rebuilds->len; i++)
+    {
+      metric_rebuild_t rebuild;
+
+      rebuild = g_array_index (metric_rebuilds, metric_rebuild_t, i);
+      rebuild_scope_report_metrics (rebuild.scope_report, rebuild.scope,
+                                    rebuild.global);
+    }
+
+  g_array_free (metric_rebuilds, TRUE);
+
+  set_db_version (283);
+
+  sql_commit ();
+
+  return 0;
+}
+
+
 #undef UPDATE_DASHBOARD_SETTINGS
 
 /**
@@ -4742,6 +4837,7 @@ static migrator_t database_migrators[] = {
   {280, migrate_279_to_280},
   {281, migrate_280_to_281},
   {282, migrate_281_to_282},
+  {283, migrate_282_to_283},
   /* End marker. */
   {-1, NULL}};
 

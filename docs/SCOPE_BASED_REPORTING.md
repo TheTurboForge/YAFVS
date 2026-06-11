@@ -159,6 +159,24 @@ Scope reports expose coverage and freshness signals: source report count, latest
 evidence time, member hosts with evidence, member hosts without evidence, and
 candidate hosts excluded from official counts.
 
+Scope reports also persist snapshot metrics when they are generated. The first
+metric families are `CVSS Load` and `Authenticated Scan Coverage`.
+
+`CVSS Load` is calculated from vulnerability findings with positive severity,
+excluding logs, false positives, scanner execution errors, informational rows,
+and severity-zero rows. TurboVAS counts an NVT once per alive system, even if it
+appears on multiple ports. A system's CVSS Load is the sum of the unique
+vulnerability scores on that system. A vulnerability's CVSS Load is its score
+multiplied by the number of affected systems. The average system load and
+average vulnerability contribution divide those totals by the alive-system count
+for the report or scope.
+
+`Authenticated Scan Coverage` is evidence-based: only report evidence of
+successful authenticated checks counts as authenticated. Missing target
+credentials become `No Credential Path`; configured credentials without reliable
+success or failure evidence become `Unknown`. This prevents TurboVAS from
+mistaking intended authenticated scanning for proven authenticated scanning.
+
 Findings are deduplicated by host identity, NVT/OID, port, and result identity.
 The result collection is served through the standard result-query path with a
 TurboVAS scope-report constraint, so operators get the familiar result table,
@@ -183,7 +201,11 @@ Runtime helpers are available for development validation:
   generates a scope report from existing evidence, and cleans it up without
   starting a scan;
 - `just runtime-scope-report-summary --json` summarizes the latest
-  `Organization` scope report.
+  `Organization` scope report;
+- `just runtime-report-metrics --json` reads CVSS Load and authenticated
+  coverage for the latest completed full-test raw report;
+- `just runtime-scope-report-metrics --json` reads CVSS Load and authenticated
+  coverage for the latest `Organization` scope report.
 
 ## Product Rule
 

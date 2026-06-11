@@ -57,6 +57,8 @@ Useful development checks include:
 - `just feed-state --json`
 - `just runtime-scope-smoke --json`
 - `just runtime-scope-report-summary --json`
+- `just runtime-report-metrics --json`
+- `just runtime-scope-report-metrics --json`
 
 See `../BUILDING.md` and `../docker/runtime/README.md` for build and runtime
 command details.
@@ -149,6 +151,26 @@ report first if the raw evidence can intentionally be removed.
 Scope report finding counts exclude scanner execution error rows, such as VT
 timeout messages. Those rows remain available in the raw technical reports for
 scan-fidelity troubleshooting.
+
+Raw report details and scope report details include a `Metrics` tab. The first
+snapshot metrics are `CVSS Load` and `Authenticated Scan Coverage`.
+
+`CVSS Load` is a derived burden metric, not a replacement for CVSS itself.
+TurboVAS counts each vulnerability once per alive system, even when the same NVT
+appears on several ports. It excludes logs, false positives, scanner execution
+errors, informational rows, and severity-zero rows. A system's CVSS Load is the
+sum of the unique vulnerability scores found on that system. The report or scope
+average divides the total system load by the number of alive systems. The
+vulnerability view shows each NVT's score, affected-system count, total CVSS
+Load contribution, and average contribution per alive system.
+
+`Authenticated Scan Coverage` is also conservative. TurboVAS counts an alive
+system as authenticated only when the report contains evidence of successful
+authenticated checks. A configured credential alone is not treated as success.
+Systems without a credential path are shown as `No Credential Path`; systems
+with configured credentials but unclear report evidence are shown as `Unknown`.
+For scope reports, these values are part of the generated scope-report snapshot
+and therefore do not change when newer raw reports are created later.
 
 Use `/scopes` to manage scopes, `/scopes/reports` to list generated scope
 reports, `/scopes/:id` to inspect and edit a scope, and

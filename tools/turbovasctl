@@ -884,6 +884,10 @@ def runtime_browser_smoke_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_browser_smoke.py"
 
 
+def runtime_metrics_probe_path(repo_root: Path) -> Path:
+    return repo_root / "tools" / "runtime_metrics.py"
+
+
 def runtime_rbac_smoke_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_rbac_smoke.py"
 
@@ -898,6 +902,10 @@ def report_artifact_dir(repo_root: Path) -> Path:
 
 def scope_report_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "scope-reports")
+
+
+def metrics_artifact_dir(repo_root: Path) -> Path:
+    return runtime_path(repo_root, "artifacts", "metrics")
 
 
 def browser_smoke_artifact_dir(repo_root: Path) -> Path:
@@ -2694,6 +2702,64 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
 
 
 
+def command_runtime_metrics(repo_root: Path, action: str, report_id: str | None = None, scope_report_id: str | None = None) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
+    python = venv_python(repo_root, "python-gvm")
+    probe = runtime_metrics_probe_path(repo_root)
+    artifact_dir = metrics_artifact_dir(repo_root)
+    findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
+    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
+    findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
+    findings.append(finding("pass" if probe.is_file() else "fail", "runtime-metrics.probe", "Runtime metrics helper exists." if probe.is_file() else "Runtime metrics helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
+    try:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        findings.append(finding("pass", "runtime-metrics.artifact-dir", "Runtime metrics artifact directory is ready.", str(artifact_dir)))
+    except OSError as error:
+        findings.append(finding("fail", "runtime-metrics.artifact-dir", f"Runtime metrics artifact directory is not usable: {error}", str(artifact_dir)))
+
+    command_name = "runtime-report-metrics" if action == "report" else "runtime-scope-report-metrics"
+    if aggregate_status(findings) == "fail":
+        return make_result(command_name, repo_root, "Runtime metrics command stopped at prerequisites.", findings, [str(artifact_dir)])
+
+    args = [
+        str(python),
+        str(probe),
+        action,
+        "--socket",
+        str(gvmd_socket_path(repo_root)),
+        "--username",
+        DEV_ADMIN_USER,
+        "--password-file",
+        str(secret_path),
+        "--artifact-dir",
+        str(artifact_dir),
+    ]
+    if report_id:
+        args.extend(["--report-id", report_id])
+    if scope_report_id:
+        args.extend(["--scope-report-id", scope_report_id])
+    result = run_command(args, repo_root, env=build_env(repo_root), timeout=180)
+    try:
+        parsed = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        parsed = None
+    helper_status = parsed.get("status") if parsed else None
+    finding_status = helper_status if result.returncode == 0 and helper_status in {"pass", "warn"} else "fail"
+    password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
+    findings.append(
+        finding(
+            finding_status,
+            f"runtime-metrics.{action}",
+            parsed.get("summary", f"Runtime metrics helper exit code {result.returncode}.") if parsed else f"Runtime metrics helper exit code {result.returncode}.",
+            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120, [password])},
+        )
+    )
+    artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
+    summary = parsed.get("summary") if parsed else f"Runtime metrics {action} command completed with exit code {result.returncode}."
+    return make_result(command_name, repo_root, summary, findings, artifacts)
+
+
 def command_runtime_rbac_smoke(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
@@ -3207,7 +3273,7 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     license_result = command_license_report(repo_root)
     findings.append(finding(license_result["status"], "license.compliance", license_result["summary"], details={"status": license_result["status"], "findings": license_result["findings"]}))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
-    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-app-up", "just runtime-app-smoke", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-app-down", "just gvmd-smoke"]}))
+    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-app-up", "just runtime-app-smoke", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-app-down", "just gvmd-smoke"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
     return make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
@@ -3282,8 +3348,12 @@ def build_parser() -> argparse.ArgumentParser:
     report_export.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     report_export.add_argument("--max-results", type=int, default=1000, help="maximum results to fetch from the selected report")
     report_export.add_argument("--top-results", type=int, default=10, help="number of top results to include")
+    report_metrics = subparsers.add_parser("runtime-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a raw report")
+    report_metrics.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     subparsers.add_parser("runtime-scope-smoke", parents=[common], help="verify scope reporting without starting scans")
     subparsers.add_parser("runtime-scope-report-summary", parents=[common], help="summarize the latest Organization scope report")
+    scope_report_metrics = subparsers.add_parser("runtime-scope-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a scope report")
+    scope_report_metrics.add_argument("--scope-report-id", help="optional scope report id; defaults to the latest Organization scope report")
     subparsers.add_parser("feed-state", parents=[common], help="show Greenbone Community Feed cache and runtime-copy state")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("feed-copy-to-runtime", parents=[common], help="copy cached feed data into the runtime feed tree")
@@ -3367,10 +3437,14 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_report(repo_root, "summary", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
     elif args.command == "runtime-report-export":
         result = command_runtime_report(repo_root, "export", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
+    elif args.command == "runtime-report-metrics":
+        result = command_runtime_metrics(repo_root, "report", report_id=args.report_id)
     elif args.command == "runtime-scope-smoke":
         result = command_runtime_scope(repo_root, "smoke")
     elif args.command == "runtime-scope-report-summary":
         result = command_runtime_scope(repo_root, "summary")
+    elif args.command == "runtime-scope-report-metrics":
+        result = command_runtime_metrics(repo_root, "scope-report", scope_report_id=args.scope_report_id)
     elif args.command == "feed-state":
         result = command_feed_state(repo_root)
     elif args.command == "feed-cache-sync":

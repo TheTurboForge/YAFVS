@@ -49,6 +49,9 @@ Useful development checks include:
 
 - `just runtime-status`
 - `just runtime-smoke`
+- `just runtime-log-review --json`
+- `just runtime-data-state --json`
+- `just runtime-performance-snapshot --json`
 - `just runtime-app-smoke`
 - `just runtime-webui-smoke --json`
 - `just runtime-browser-smoke --json`

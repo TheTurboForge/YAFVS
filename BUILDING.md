@@ -39,6 +39,7 @@ just build-c-services
 just build-ui
 just build-python
 just build-baseline
+just quality-gate
 ```
 
 Machine-readable output is available through `tools/turbovasctl`, for example:
@@ -89,6 +90,9 @@ just feed-cache-sync
 just feed-copy-to-runtime
 just runtime-status
 just runtime-smoke
+just runtime-log-review
+just runtime-data-state
+just runtime-performance-snapshot
 just runtime-app-up
 just runtime-app-smoke
 just runtime-webui-smoke

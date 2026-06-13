@@ -536,6 +536,91 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("runtime-credential-smoke *args:", justfile)
         self.assertIn('tools/turbovasctl runtime-credential-smoke "$@"', justfile)
 
+    def test_technical_foundation_commands_are_registered(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        for command in ("runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "quality-gate"):
+            with self.subTest(command=command):
+                self.assertIn(command, source)
+                self.assertIn(f"{command} *args:", justfile)
+                self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
+        self.assertIn("def command_runtime_log_review", source)
+        self.assertIn("def command_runtime_data_state", source)
+        self.assertIn("def command_runtime_performance_snapshot", source)
+        self.assertIn("def command_quality_gate", source)
+
+    def test_justfile_forwards_common_recipe_arguments(self):
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        for recipe in (
+            "status",
+            "inventory",
+            "doctor",
+            "deps",
+            "configure",
+            "build",
+            "build-core-c",
+            "build-c-services",
+            "build-ui",
+            "build-python",
+            "build-baseline",
+            "runtime-plan",
+            "up",
+            "down",
+            "logs",
+        ):
+            with self.subTest(recipe=recipe):
+                self.assertIn(f"{recipe} *args:", justfile)
+                self.assertIn(f'tools/turbovasctl {recipe} "$@"', justfile)
+
+    def test_runtime_log_review_detects_known_regressions(self):
+        matches = turbovasctl.log_review_matches(
+            [
+                "Nmap (NASL wrapper): You requested a scan type which requires root privileges.",
+                "database collation version mismatch",
+                "Error: Unable to open log file /mosquitto/log/mosquitto.log for writing.",
+                "Traceback (most recent call last):",
+            ]
+        )
+        keys = {match["key"] for match in matches}
+        self.assertIn("nmap-root-privilege", keys)
+        self.assertIn("postgres-collation", keys)
+        self.assertIn("mosquitto-log-file", keys)
+        self.assertIn("traceback", keys)
+
+    def test_data_state_table_sets_capture_current_schema_expectations(self):
+        self.assertIn("reports", turbovasctl.DATABASE_CORE_TABLES)
+        self.assertIn("scope_reports", turbovasctl.DATABASE_SCOPE_TABLES)
+        self.assertIn("scope_report_system_metrics", turbovasctl.DATABASE_SCOPE_TABLES)
+        self.assertIn("roles", turbovasctl.DATABASE_REMOVED_TABLES)
+        self.assertIn("agent_groups", turbovasctl.DATABASE_REMOVED_TABLES)
+
+    def test_quality_gate_downgrades_known_doctor_notes_only(self):
+        status, summary = turbovasctl.quality_gate_doctor_status(
+            {
+                "status": "warn",
+                "summary": "Monorepo health checks completed.",
+                "findings": [
+                    {"status": "warn", "check": "git.worktree"},
+                    {"status": "warn", "check": "surface.deferred"},
+                ],
+            }
+        )
+        self.assertEqual(status, "pass")
+        self.assertIn("worktree", summary)
+
+    def test_quality_gate_preserves_unexpected_doctor_warning(self):
+        status, summary = turbovasctl.quality_gate_doctor_status(
+            {
+                "status": "warn",
+                "summary": "Monorepo health checks completed.",
+                "findings": [
+                    {"status": "warn", "check": "tool.available"},
+                ],
+            }
+        )
+        self.assertEqual(status, "warn")
+        self.assertEqual(summary, "Monorepo health checks completed.")
+
     def test_runtime_credential_smoke_uses_existing_playwright_paths(self):
         self.assertEqual(
             runtime_credential_smoke.playwright_node_path_candidates,

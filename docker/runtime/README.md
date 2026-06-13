@@ -50,6 +50,9 @@ Use the root `justfile` command surface:
 - `just runtime-scanner-redis-init`
 - `just runtime-status`
 - `just runtime-smoke`
+- `just runtime-log-review`
+- `just runtime-data-state`
+- `just runtime-performance-snapshot`
 - `just runtime-app-up`
 - `just runtime-gmp-smoke`
 - `just runtime-scanner-register`
@@ -64,6 +67,13 @@ Use the root `justfile` command surface:
 - `just runtime-credential-smoke`
 - `just runtime-app-down`
 - `just down`
+
+`runtime-log-review` writes redacted recent log tails and a JSON finding set
+under the runtime artifact tree. `runtime-data-state` reports the current
+database version, expected live tables, removed feature-table absence, and known
+non-database runtime state. `runtime-performance-snapshot` captures Docker,
+database, artifact, and build-size facts for future instrumentation work; it is
+diagnostic only and does not optimize or mutate runtime state.
 
 `runtime-certs-init` uses inherited `gvm-manage-certs` with persistent runtime
 certificate directories and does not rotate existing certificates.

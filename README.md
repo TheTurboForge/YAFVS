@@ -39,6 +39,7 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just status`: show repository branch, HEAD, upstream, and worktree state.
 - `just inventory`: list the expected monorepo components.
 - `just doctor`: run structural and environment readiness checks.
+- `just quality-gate`: run the local source quality gate.
 - `just license-report`: check preserved license and provenance files.
 - `just license-public-release-gate`: fail until public-release license review items are closed.
 - `just deps [component]`: check build dependency readiness.
@@ -69,13 +70,18 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-full-test-scan-status`: report the fixed full test scan task status.
 - `just runtime-report-summary`: summarize the latest completed raw full-test scan report.
 - `just runtime-report-export`: export parsed raw full-test scan report results as JSON, defaulting to the latest completed full-test report.
+- `just runtime-report-metrics`: read CVSS Load and authenticated coverage metrics for a raw report.
 - `just runtime-scope-smoke`: verify scope reporting without starting scans.
 - `just runtime-scope-report-summary`: summarize the latest `Organization` scope report.
+- `just runtime-scope-report-metrics`: read CVSS Load and authenticated coverage metrics for a scope report.
 - `just feed-state`: show persistent feed cache and runtime-copy state.
 - `just feed-cache-sync`: start a full Community Feed cache sync in `tmux`.
 - `just feed-copy-to-runtime`: copy cached feed data into the runtime feed tree.
 - `just runtime-status`: show Docker runtime status.
 - `just runtime-smoke`: run infrastructure smoke checks.
+- `just runtime-log-review`: review recent full-stack runtime logs for high-signal regressions.
+- `just runtime-data-state`: inspect database-centered runtime data state and known non-DB runtime artifacts.
+- `just runtime-performance-snapshot`: capture a lightweight runtime performance baseline.
 - `just runtime-app-up`: start experimental inherited application services.
 - `just runtime-app-smoke`: run experimental application service smoke checks.
 - `just runtime-webui-smoke`: verify the staged GSA web UI over `gsad`.
@@ -84,10 +90,12 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-app-down`: stop experimental inherited application services.
 - `just gvmd-smoke`: run a narrow experimental manager profile smoke.
 
-The commands delegate to `tools/turbovasctl`, which also supports JSON output for
-automation, for example:
+The commands delegate to `tools/turbovasctl`. The root `justfile` forwards
+additional command arguments consistently, so JSON output can be requested via
+either surface, for example:
 
 ```sh
+just doctor --json
 tools/turbovasctl doctor --json
 ```
 

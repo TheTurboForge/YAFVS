@@ -9,14 +9,14 @@ turbovasctl *args:
 forkctl *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/forkctl "$@"
 
-status:
-    @tools/turbovasctl status
+status *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl status "$@"
 
-inventory:
-    @tools/turbovasctl inventory
+inventory *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl inventory "$@"
 
-doctor:
-    @tools/turbovasctl doctor
+doctor *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl doctor "$@"
 
 license-report *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl license-report "$@"
@@ -24,41 +24,41 @@ license-report *args:
 license-public-release-gate *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl license-report --public-release "$@"
 
-deps component="":
-    @if [ -n "{{component}}" ]; then tools/turbovasctl deps "{{component}}"; else tools/turbovasctl deps; fi
+deps *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl deps "$@"
 
-configure component:
-    @tools/turbovasctl configure "{{component}}"
+configure *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl configure "$@"
 
-build component:
-    @tools/turbovasctl build "{{component}}"
+build *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build "$@"
 
-build-core-c:
-    @tools/turbovasctl build-core-c
+build-core-c *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-core-c "$@"
 
-build-c-services:
-    @tools/turbovasctl build-c-services
+build-c-services *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-c-services "$@"
 
-build-ui:
-    @tools/turbovasctl build-ui
+build-ui *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-ui "$@"
 
-build-python:
-    @tools/turbovasctl build-python
+build-python *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-python "$@"
 
-build-baseline:
-    @tools/turbovasctl build-baseline
+build-baseline *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-baseline "$@"
 
-runtime-plan:
-    @tools/turbovasctl runtime-plan
+runtime-plan *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-plan "$@"
 
-up:
-    @tools/turbovasctl up
+up *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl up "$@"
 
-down:
-    @tools/turbovasctl down
+down *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl down "$@"
 
-logs service="":
-    @if [ -n "{{service}}" ]; then tools/turbovasctl logs "{{service}}"; else tools/turbovasctl logs; fi
+logs *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl logs "$@"
 
 runtime-init *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-init "$@"
@@ -135,6 +135,15 @@ runtime-status *args:
 runtime-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-smoke "$@"
 
+runtime-log-review *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-log-review "$@"
+
+runtime-data-state *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-data-state "$@"
+
+runtime-performance-snapshot *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-performance-snapshot "$@"
+
 runtime-app-up *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-app-up "$@"
 
@@ -155,6 +164,9 @@ runtime-credential-smoke *args:
 
 runtime-rbac-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-rbac-smoke "$@"
+
+quality-gate *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl quality-gate "$@"
 
 gvmd-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl gvmd-smoke "$@"

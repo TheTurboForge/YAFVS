@@ -569,6 +569,8 @@ create_credential_data_reset (create_credential_data_t *data)
   free (data->comment);
   free (data->copy);
   free (data->kdc);
+  free (data->kdcs_kdc);
+  array_free (data->kdcs);
   free (data->key_phrase);
   free (data->key_private);
   free (data->key_public);
@@ -5388,6 +5390,142 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           set_client_state (CLIENT_AUTHENTICATE_CREDENTIALS_PASSWORD);
         else if (strcasecmp ("TOKEN", element_name) == 0)
           set_client_state (CLIENT_AUTHENTICATE_CREDENTIALS_TOKEN);
+        ELSE_READ_OVER;
+
+      case CLIENT_CREATE_CREDENTIAL:
+        if (strcasecmp ("ALLOW_INSECURE", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_ALLOW_INSECURE);
+        else if (strcasecmp ("AUTH_ALGORITHM", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_AUTH_ALGORITHM);
+        else if (strcasecmp ("CERTIFICATE", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->certificate);
+            gvm_append_string (&create_credential_data->certificate, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_CERTIFICATE);
+          }
+        else if (strcasecmp ("COMMENT", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->comment);
+            gvm_append_string (&create_credential_data->comment, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_COMMENT);
+          }
+        else if (strcasecmp ("COMMUNITY", element_name) == 0)
+          {
+            gvm_append_string (&create_credential_data->community, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_COMMUNITY);
+          }
+        else if (strcasecmp ("COPY", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_COPY);
+        else if (strcasecmp ("KDC", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->kdc);
+            gvm_append_string (&create_credential_data->kdc, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KDC);
+          }
+        else if (strcasecmp ("KDCS", element_name) == 0)
+          {
+            array_free (create_credential_data->kdcs);
+            create_credential_data->kdcs = make_array ();
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KDCS);
+          }
+        else if (strcasecmp ("KEY", element_name) == 0)
+          {
+            create_credential_data->key = 1;
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KEY);
+          }
+        else if (strcasecmp ("LOGIN", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_LOGIN);
+        else if (strcasecmp ("NAME", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->name);
+            gvm_append_string (&create_credential_data->name, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_NAME);
+          }
+        else if (strcasecmp ("PASSWORD", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->password);
+            gvm_append_string (&create_credential_data->password, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_PASSWORD);
+          }
+        else if (strcasecmp ("PRIVACY", element_name) == 0)
+          {
+            set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY);
+            gvm_append_string (&create_credential_data->privacy_algorithm,
+                               "");
+          }
+        else if (strcasecmp ("REALM", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->realm);
+            gvm_append_string (&create_credential_data->realm, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_REALM);
+          }
+#if ENABLE_CREDENTIAL_STORES
+        else if (strcasecmp ("CREDENTIAL_STORE_ID", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_CREDENTIAL_STORE_ID);
+        else if (strcasecmp ("VAULT_ID", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->vault_id);
+            gvm_append_string (&create_credential_data->vault_id, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_VAULT_ID);
+          }
+        else if (strcasecmp ("HOST_IDENTIFIER", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->host_identifier);
+            gvm_append_string (&create_credential_data->host_identifier, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_HOST_IDENTIFIER);
+          }
+        else if (strcasecmp ("PRIVACY_HOST_IDENTIFIER", element_name) == 0)
+          {
+            gvm_free_string_var
+              (&create_credential_data->privacy_host_identifier);
+            gvm_append_string (&create_credential_data->privacy_host_identifier,
+                               "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_HOST_IDENTIFIER);
+          }
+#endif
+        else if (strcasecmp ("TYPE", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_TYPE);
+        ELSE_READ_OVER;
+
+      case CLIENT_CREATE_CREDENTIAL_KDCS:
+        if (strcasecmp ("KDC", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->kdcs_kdc);
+            gvm_append_string (&create_credential_data->kdcs_kdc, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KDCS_KDC);
+          }
+        ELSE_READ_OVER;
+
+      case CLIENT_CREATE_CREDENTIAL_KEY:
+        if (strcasecmp ("PHRASE", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->key_phrase);
+            gvm_append_string (&create_credential_data->key_phrase, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KEY_PHRASE);
+          }
+        else if (strcasecmp ("PRIVATE", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->key_private);
+            gvm_append_string (&create_credential_data->key_private, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KEY_PRIVATE);
+          }
+        else if (strcasecmp ("PUBLIC", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->key_public);
+            gvm_append_string (&create_credential_data->key_public, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_KEY_PUBLIC);
+          }
+        ELSE_READ_OVER;
+
+      case CLIENT_CREATE_CREDENTIAL_PRIVACY:
+        if (strcasecmp ("ALGORITHM", element_name) == 0)
+          set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_ALGORITHM);
+        else if (strcasecmp ("PASSWORD", element_name) == 0)
+          {
+            gvm_free_string_var (&create_credential_data->privacy_password);
+            gvm_append_string (&create_credential_data->privacy_password, "");
+            set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD);
+          }
         ELSE_READ_OVER;
 
       case CLIENT_CREATE_SCANNER:

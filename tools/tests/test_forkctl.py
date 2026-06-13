@@ -190,6 +190,13 @@ assert BROWSER_SMOKE_SPEC.loader is not None
 sys.modules["runtime_browser_smoke"] = runtime_browser_smoke
 BROWSER_SMOKE_SPEC.loader.exec_module(runtime_browser_smoke)
 
+CREDENTIAL_SMOKE_PATH = Path(__file__).resolve().parents[1] / "runtime_credential_smoke.py"
+CREDENTIAL_SMOKE_SPEC = importlib.util.spec_from_loader("runtime_credential_smoke", SourceFileLoader("runtime_credential_smoke", str(CREDENTIAL_SMOKE_PATH)))
+runtime_credential_smoke = importlib.util.module_from_spec(CREDENTIAL_SMOKE_SPEC)
+assert CREDENTIAL_SMOKE_SPEC.loader is not None
+sys.modules["runtime_credential_smoke"] = runtime_credential_smoke
+CREDENTIAL_SMOKE_SPEC.loader.exec_module(runtime_credential_smoke)
+
 
 class TurboVASCtlTests(unittest.TestCase):
     def test_component_registry_has_expected_components(self):
@@ -297,6 +304,30 @@ class TurboVASCtlTests(unittest.TestCase):
             with self.subTest(transition=transition):
                 self.assertIn(transition, start_handler)
 
+    def test_gvmd_credential_parser_consumes_create_credential_elements(self):
+        gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
+        start_handler = gmp_source[
+            gmp_source.index("gmp_xml_handle_start_element"):
+            gmp_source.index("/**\n * @brief Send XML for an NVT.")
+        ]
+        required_transitions = [
+            "case CLIENT_CREATE_CREDENTIAL:",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_NAME);",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_TYPE);",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_LOGIN);",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_PASSWORD);",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_KEY);",
+            "case CLIENT_CREATE_CREDENTIAL_KEY:",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_KEY_PRIVATE);",
+            "case CLIENT_CREATE_CREDENTIAL_PRIVACY:",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD);",
+            "case CLIENT_CREATE_CREDENTIAL_KDCS:",
+            "set_client_state (CLIENT_CREATE_CREDENTIAL_KDCS_KDC);",
+        ]
+        for transition in required_transitions:
+            with self.subTest(transition=transition):
+                self.assertIn(transition, start_handler)
+
     def test_runtime_just_wrappers_forward_args(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
@@ -310,6 +341,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "runtime-app-down",
             "runtime-app-smoke",
             "runtime-browser-smoke",
+            "runtime-credential-smoke",
             "runtime-report-metrics",
             "runtime-scope-report-metrics",
             "gvmd-smoke",
@@ -494,6 +526,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("runtime-browser-smoke", source)
         self.assertIn("runtime-browser-smoke *args:", justfile)
         self.assertIn('tools/turbovasctl runtime-browser-smoke "$@"', justfile)
+
+    def test_runtime_credential_smoke_is_registered(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertIn("def command_runtime_credential_smoke", source)
+        self.assertIn("runtime_credential_smoke_probe_path", source)
+        self.assertIn("runtime-credential-smoke", source)
+        self.assertIn("runtime-credential-smoke *args:", justfile)
+        self.assertIn('tools/turbovasctl runtime-credential-smoke "$@"', justfile)
+
+    def test_runtime_credential_smoke_uses_existing_playwright_paths(self):
+        self.assertEqual(
+            runtime_credential_smoke.playwright_node_path_candidates,
+            runtime_browser_smoke.playwright_node_path_candidates,
+        )
 
     def test_runtime_browser_smoke_checks_metrics_tabs(self):
         source = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")

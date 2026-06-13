@@ -92,6 +92,8 @@ just runtime-smoke
 just runtime-app-up
 just runtime-app-smoke
 just runtime-webui-smoke
+just runtime-browser-smoke
+just runtime-credential-smoke
 just runtime-app-down
 just down
 ```

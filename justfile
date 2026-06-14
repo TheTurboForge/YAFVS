@@ -24,6 +24,9 @@ license-report *args:
 license-public-release-gate *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl license-report --public-release "$@"
 
+production-posture-check *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl production-posture-check "$@"
+
 deps *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl deps "$@"
 

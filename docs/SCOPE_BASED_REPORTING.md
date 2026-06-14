@@ -186,14 +186,18 @@ raw scan reports used as evidence. Raw source reports referenced by a scope
 report are protected from deletion so the snapshot provenance remains intact.
 
 The current implementation deliberately focuses on core report reading parity:
-scope report list/detail views, information, results, evidence sources, raw
-evidence links, and result navigation. Raw-only workflows such as import/upload,
-delta comparison, report-composer downloads, alerts, and asset/tag mutation are
-not scope-report actions; inherited import/upload and delta comparison have been
-removed from the operator product. Additional report-like tabs for hosts, ports,
-applications, operating systems, CVEs, TLS certificates, and error messages are
-follow-up work once each collection has a real scope-report-backed query
-contract.
+scope report list/detail views, information, results, metrics, evidence sources,
+raw evidence links, and result navigation. Scope report details also expose lazy
+source-backed evidence tabs for hosts, ports, applications, operating systems,
+CVEs, TLS certificates, and error messages. Those tabs load the selected raw
+source reports as evidence. The final backend direction remains to add dedicated
+scope-report collection contracts where that is more efficient than per-source
+raw evidence loading.
+
+Raw-only workflows such as import/upload, delta comparison, report-composer
+downloads, alerts, and asset/tag mutation are not scope-report actions;
+inherited import/upload and delta comparison have been removed from the operator
+product.
 
 Runtime helpers are available for development validation:
 

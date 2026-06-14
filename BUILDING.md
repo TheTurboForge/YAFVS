@@ -42,6 +42,7 @@ just build-baseline
 just quality-gate
 just quality-gate-state
 just quality-gate-schedule --status
+just production-posture-check --json
 ```
 
 Machine-readable output is available through `tools/turbovasctl`, for example:
@@ -50,6 +51,7 @@ Machine-readable output is available through `tools/turbovasctl`, for example:
 tools/turbovasctl deps --json
 tools/turbovasctl build-baseline --json
 tools/turbovasctl quality-gate-state --json
+tools/turbovasctl production-posture-check --json
 ```
 
 `tools/forkctl` remains as a temporary compatibility wrapper during the command
@@ -68,6 +70,10 @@ CI intentionally does not start app runtime services, start scans, mutate feeds,
 or run the stricter public-release license gate. Runtime-aware continuous
 checking remains on the development server through the `quality-gate-schedule`
 systemd timer and retained runtime artifacts.
+
+`just production-posture-check --json` is a separate non-destructive checklist.
+It is expected to fail or warn while TurboVAS is still using development
+credentials, development TLS material, and a development-only Docker runtime.
 
 ## Notes
 

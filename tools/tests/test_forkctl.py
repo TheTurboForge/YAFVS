@@ -540,7 +540,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -548,6 +548,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_log_review", source)
         self.assertIn("def command_runtime_data_state", source)
         self.assertIn("def command_runtime_performance_snapshot", source)
+        self.assertIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
         self.assertIn("def command_quality_gate_state", source)
         self.assertIn("def command_quality_gate_schedule", source)

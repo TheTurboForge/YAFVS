@@ -2484,6 +2484,76 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-plan", repo_root, "Persistent Docker runtime plan collected.", findings, [str(root), str(compose_file(repo_root).relative_to(repo_root))])
 
 
+def command_production_posture_check(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {}
+
+    required_docs = (
+        "docs/USER_MANUAL.md",
+        "docs/CHANGES_FROM_UPSTREAM.md",
+        "docs/PRODUCTION_POSTURE.md",
+        "docs/PUBLIC_RELEASE_READINESS.md",
+        "docs/VALIDATION_STANDARDS.md",
+        "UPSTREAMS.md",
+        "LICENSE_AUDIT.md",
+    )
+    for relative in required_docs:
+        path = repo_root / relative
+        findings.append(finding("pass" if path.is_file() else "fail", "production.docs", f"{relative} {'exists' if path.is_file() else 'is missing'}.", relative))
+
+    license_gate = command_license_report(repo_root, public_release=True)
+    details["public_release_license_gate"] = {
+        "status": license_gate["status"],
+        "summary": license_gate["summary"],
+    }
+    findings.append(
+        finding(
+            "pass" if license_gate["status"] == "pass" else "fail",
+            "production.public-release-license-gate",
+            "Public-release license gate passes." if license_gate["status"] == "pass" else "Public-release license gate is not satisfied; do not publish or distribute.",
+            details=details["public_release_license_gate"],
+        )
+    )
+
+    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
+    secret_value = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else None
+    if secret_value == DEV_ADMIN_PASSWORD:
+        findings.append(finding("fail", "production.default-credentials", "Development admin password is still the default value; rotate before production exposure.", str(secret_path)))
+    elif secret_value:
+        findings.append(finding("pass", "production.default-credentials", "Development admin password is not the default value.", str(secret_path)))
+    else:
+        findings.append(finding("warn", "production.default-credentials", "Development admin password secret is not initialized; verify first-login/password-rotation workflow before production.", str(secret_path)))
+
+    hosts = gsad_hosts(repo_root)
+    wildcard_hosts = [host for host in hosts if host in {"0.0.0.0", "::", "[::]"}]
+    non_loopback_hosts = [host for host in hosts if host not in {"127.0.0.1", "localhost", "::1", "[::1]"}]
+    if wildcard_hosts:
+        port_status = "fail"
+        port_message = "GSA is configured for broad wildcard host binding."
+    elif non_loopback_hosts:
+        port_status = "warn"
+        port_message = "GSA is configured for explicit non-loopback development access; review network exposure before production."
+    else:
+        port_status = "pass"
+        port_message = "GSA host binding is loopback-only by default."
+    findings.append(finding(port_status, "production.gsad-binding", port_message, details={"hosts": list(hosts), "bindings": list(gsad_port_bindings(repo_root))}))
+
+    compose = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    findings.append(finding("pass" if compose.returncode == 0 else "fail", "production.compose-config", f"Compose config validation exit code {compose.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": compose.stdout.splitlines()[-40:]}))
+
+    cert_findings = cert_file_findings(repo_root)
+    if certs_complete(repo_root):
+        findings.append(finding("warn", "production.tls", "Development TLS files exist, but trusted production certificates and hostname/SAN policy still need deployment review.", details={"cert_files": [item.get("path") for item in cert_findings]}))
+    else:
+        findings.append(finding("fail", "production.tls", "Runtime TLS files are incomplete; production exposure requires a complete trusted TLS setup.", details={"cert_files": [item.get("path") for item in cert_findings]}))
+
+    findings.append(finding("warn", "production.runtime-model", "The current Docker runtime is documented as development-only; production deployment architecture remains a release blocker."))
+
+    result = make_result("production-posture-check", repo_root, "Production posture checklist completed.", findings)
+    result["details"] = details
+    return result
+
+
 def command_up(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
@@ -4225,6 +4295,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     license_report = subparsers.add_parser("license-report", parents=[common], help="check preserved license/provenance files")
     license_report.add_argument("--public-release", action="store_true", help="fail while public-release license review items remain open")
+    subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
     deps = subparsers.add_parser("deps", parents=[common], help="check dependency readiness")
     deps.add_argument("component", nargs="?", help="component name")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
@@ -4310,6 +4381,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_doctor(repo_root)
     elif args.command == "license-report":
         result = command_license_report(repo_root, public_release=args.public_release)
+    elif args.command == "production-posture-check":
+        result = command_production_posture_check(repo_root)
     elif args.command == "deps":
         result = command_deps(repo_root, args.component)
     elif args.command == "configure":

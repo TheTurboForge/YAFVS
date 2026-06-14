@@ -54,6 +54,7 @@ Useful development checks include:
 - `just runtime-performance-snapshot --json`
 - `just quality-gate-state --json`
 - `just quality-gate-schedule --json --status`
+- `just production-posture-check --json`
 - `just runtime-app-smoke`
 - `just runtime-webui-smoke --json`
 - `just runtime-browser-smoke --json`
@@ -180,10 +181,18 @@ and therefore do not change when newer raw reports are created later.
 
 Use `/scopes` to manage scopes, `/scopes/reports` to list generated scope
 reports, `/scopes/:id` to inspect and edit a scope, and
-`/scopes/:id/reports/:report_id` to inspect a generated scope report. Raw
-`/reports` and `/report/:id` pages remain available for technical evidence.
+`/scopes/:id/reports/:report_id` to inspect a generated scope report. Scope
+editing uses explicit target and host membership controls; candidate hosts found
+in evidence can be promoted into official custom-scope membership before saving.
+Raw `/reports` and `/report/:id` pages remain available for technical evidence.
+
+Scope report details include lazy evidence tabs for Hosts, Ports, Applications,
+Operating Systems, CVEs, TLS Certificates, and Error Messages. These tabs load
+the selected raw source reports as evidence rather than copying raw rows into a
+separate truth store.
 
 See `SCOPE_BASED_REPORTING.md` for the detailed scope model and
+`REPORTING_MODEL.md` for the first reporting loop. See
 `VULNERABILITY_MANAGEMENT_PRACTICE.md` for the operating model behind it.
 
 ## Intentional Changes From Upstream Behavior
@@ -241,3 +250,6 @@ current license and provenance notes.
 Public release, packaging, publication, distribution, or feed redistribution
 requires additional license and feed-terms review beyond the development checks
 described in this manual.
+
+For release and deployment posture, see `PRODUCTION_POSTURE.md` and
+`PUBLIC_RELEASE_READINESS.md`.

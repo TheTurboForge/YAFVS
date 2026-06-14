@@ -3,7 +3,7 @@
 
 # TurboVAS
 
-TurboVAS is an OpenVAS-derived monorepo for vulnerability scanner operators. It is intentionally organized around the components required to run OpenVAS Scan / TurboVAS as one coherent scanner system.
+TurboVAS is an OpenVAS-derived monorepo for vulnerability scanner operators. It is intentionally organized around the components required to run TurboVAS as one coherent scanner system.
 
 This repository is currently in an early private development phase. The initial source snapshot preserves upstream component boundaries and provenance so future changes can be made with clear licensing and attribution context.
 
@@ -22,6 +22,8 @@ See `UPSTREAMS.md` for source provenance and imported commit IDs. See `LICENSE_A
 See `docs/USER_MANUAL.md` for the current operator manual, including setup
 orientation, security boundaries, scope-based reporting, and major intentional
 changes from inherited OpenVAS behavior.
+See `docs/CHANGES_FROM_UPSTREAM.md` for a concise public-safe overview of
+intentional divergences from upstream behavior.
 
 ## Operating Model
 
@@ -31,6 +33,12 @@ customization. See `docs/VULNERABILITY_MANAGEMENT_PRACTICE.md`.
 
 TurboVAS also intentionally separates technical scan targets from reporting
 scopes. See `docs/SCOPE_BASED_REPORTING.md`.
+
+For the first prescriptive reporting loop, see `docs/REPORTING_MODEL.md`.
+For production posture and public-release gating, see
+`docs/PRODUCTION_POSTURE.md` and `docs/PUBLIC_RELEASE_READINESS.md`.
+For minimum validation expectations by change class, see
+`docs/VALIDATION_STANDARDS.md`.
 
 For current implementation flow maps and data-placement rules, see
 `docs/ARCHITECTURE_FLOWS.md` and `docs/DATABASE_GRAVITY.md`.
@@ -47,6 +55,7 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just quality-gate-schedule`: install, inspect, or disable the server-side development quality-gate timer.
 - `just license-report`: check preserved license and provenance files.
 - `just license-public-release-gate`: fail until public-release license review items are closed.
+- `just production-posture-check`: run the non-destructive production posture checklist.
 - `just deps [component]`: check build dependency readiness.
 - `just configure <component>`: configure a CMake component into `build/<component>/`.
 - `just build <component>`: build a supported component with local artifacts under ignored paths.

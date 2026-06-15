@@ -53,6 +53,7 @@ PUBLIC_READINESS_LICENSE_ITEMS = (
     "release-time secret scan, attribution review, and source-offer/publication checklist",
 )
 MODIFIED_IMPORTED_NO_COMMENT_FILES = {
+    "components/gsa/index.html": "HTML application shell served to browsers; a file-level modification comment would become runtime page content.",
     "components/gsa/package-lock.json": "JSON dependency lockfile; comments would make the file invalid.",
     "components/gsa/package.json": "JSON package manifest; comments would make the file invalid.",
     "components/gsa/public/locales/gsa-de.json": "JSON locale catalog; comments would make the file invalid.",
@@ -560,6 +561,15 @@ def build_env(repo_root: Path) -> dict[str, str]:
     if current_ld:
         ld_paths.append(current_ld)
     env["LD_LIBRARY_PATH"] = ":".join(ld_paths)
+    return env
+
+
+def gsa_quality_env(repo_root: Path) -> dict[str, str]:
+    env = build_env(repo_root)
+    node_options = env.get("NODE_OPTIONS", "").split()
+    if not any(option.startswith("--max-old-space-size=") for option in node_options):
+        node_options.append("--max-old-space-size=4096")
+    env["NODE_OPTIONS"] = " ".join(node_options).strip()
     return env
 
 
@@ -4217,11 +4227,11 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     details["steps"]["compose-config"] = {"exit_code": compose.returncode, "output_tail": output_tail(compose.stdout, 120)}
     findings.append(process_step_finding("pass" if compose.returncode == 0 else "fail", "quality.compose-config", f"Compose config validation exit code {compose.returncode}.", compose, compose_command_line))
 
-    gsa_type = run_command(["bash", "-lc", "cd components/gsa && npm run type-check"], repo_root, env=build_env(repo_root), timeout=600)
+    gsa_type = run_command(["bash", "-lc", "cd components/gsa && npm run type-check"], repo_root, env=gsa_quality_env(repo_root), timeout=600)
     details["steps"]["gsa-type-check"] = {"exit_code": gsa_type.returncode, "output_tail": output_tail(gsa_type.stdout, 120)}
     findings.append(process_step_finding("pass" if gsa_type.returncode == 0 else "fail", "quality.gsa-type-check", f"GSA type-check exit code {gsa_type.returncode}.", gsa_type, ["bash", "-lc", "cd components/gsa && npm run type-check"]))
 
-    gsa_fast = run_command(["bash", "-lc", "cd components/gsa && npm run test:web-fast"], repo_root, env=build_env(repo_root), timeout=900)
+    gsa_fast = run_command(["bash", "-lc", "cd components/gsa && npm run test:web-fast"], repo_root, env=gsa_quality_env(repo_root), timeout=900)
     details["steps"]["gsa-test-web-fast"] = {"exit_code": gsa_fast.returncode, "output_tail": output_tail(gsa_fast.stdout, 160)}
     findings.append(process_step_finding("pass" if gsa_fast.returncode == 0 else "fail", "quality.gsa-test-web-fast", f"GSA web-fast test exit code {gsa_fast.returncode}.", gsa_fast, ["bash", "-lc", "cd components/gsa && npm run test:web-fast"]))
 

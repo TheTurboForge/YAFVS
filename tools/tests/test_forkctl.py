@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 import xml.etree.ElementTree as ET
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -934,8 +935,19 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_comment_notice_supported_distinguishes_data_files(self):
         self.assertTrue(turbovasctl.comment_notice_supported("components/gvmd/src/manage.c"))
         self.assertTrue(turbovasctl.comment_notice_supported("components/openvas-scanner/compose/tests/smoketest/Makefile"))
+        self.assertFalse(turbovasctl.comment_notice_supported("components/gsa/index.html"))
         self.assertFalse(turbovasctl.comment_notice_supported("components/gsa/package-lock.json"))
         self.assertFalse(turbovasctl.comment_notice_supported("components/openvas-scanner/rust/src/openvasd/config/snapshots/default.snap"))
+
+    def test_gsa_quality_env_adds_node_heap_headroom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(turbovasctl.gsa_quality_env(root)["NODE_OPTIONS"], "--max-old-space-size=4096")
+            with unittest.mock.patch.dict(os.environ, {"NODE_OPTIONS": "--trace-warnings"}, clear=True):
+                self.assertEqual(turbovasctl.gsa_quality_env(root)["NODE_OPTIONS"], "--trace-warnings --max-old-space-size=4096")
+            with unittest.mock.patch.dict(os.environ, {"NODE_OPTIONS": "--max-old-space-size=6144"}, clear=True):
+                self.assertEqual(turbovasctl.gsa_quality_env(root)["NODE_OPTIONS"], "--max-old-space-size=6144")
 
     def test_nested_git_detection(self):
         with tempfile.TemporaryDirectory() as tmp:

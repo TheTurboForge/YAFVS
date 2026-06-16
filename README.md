@@ -93,7 +93,7 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-report-metrics`: read CVSS Load and authenticated coverage metrics for a raw report.
 - `just runtime-scope-smoke`: verify scope reporting without starting scans.
 - `just runtime-scope-report-summary`: summarize the latest `Organization` scope report.
-- `just runtime-scope-report-metrics`: read CVSS Load and authenticated coverage metrics for a scope report.
+- `just runtime-scope-report-metrics`: read CVSS Load and authenticated coverage metrics for a scope report through the internal native API.
 - `just feed-state`: show persistent feed cache and runtime-copy state.
 - `just feed-cache-sync`: start a full Community Feed cache sync in `tmux`.
 - `just feed-copy-to-runtime`: copy cached feed data into the runtime feed tree.

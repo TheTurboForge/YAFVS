@@ -118,6 +118,10 @@ DB-backed Results, Hosts, CVEs, Error Messages, and Metrics collections from ins
 Docker network. It does not expose a host port and does not use GMP/XML for the
 tested read path.
 
+`runtime-scope-report-metrics` now uses this internal native API path for scope
+report metrics. `runtime-report-metrics` still uses the inherited GMP/XML helper
+until a raw-report metrics endpoint lands.
+
 `runtime-scanner-register` creates or verifies the `OpenVAS Default` scanner
 registration against `/runtime/run/ospd/ospd-openvas.sock` on port `0`.
 

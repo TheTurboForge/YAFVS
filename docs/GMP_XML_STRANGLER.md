@@ -38,7 +38,7 @@ boundary step.
 | Scope-report list/detail | GMP scope-report commands and GSA scope-report pages | `/api/v1/scopes/reports` and canonical scoped detail path | GSA list/detail reads use server-backed JSON collections and browser smoke remains green. |
 | Scope-report Results | gvmd source-report-constrained GMP collection | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results` | Same filters/sorts/pages and raw evidence links work without UI-side XML parsing. |
 | Scope-report Results/Hosts/CVEs | Lazy GSA tabs and report-reading paths currently stitch source raw reports or use GMP collection commands | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results`, `/hosts`, and `/cves` | DB-backed collection contracts replace source-by-source raw report loading and prove report-reading data can leave XML/GMP. |
-| Runtime report/scope helpers | `turbovasctl` helpers using `python-gvm` | Native API-backed helper calls | `native-tooling-state --json` reports no required runtime helper dependence for migrated reads. |
+| Runtime report/scope helpers | `turbovasctl` helpers using `python-gvm` | Native API-backed helper calls | `runtime-scope-report-metrics` now uses the internal native API; raw report metrics and other GMP probes remain temporary inherited paths until their native replacements land. |
 | gvm-tools product scripts | Imported GMP scripts, plus TurboVAS scope/report scripts | `turbovasctl` or native API client commands | No operator or validation workflow requires `gvm-tools`; remaining scripts are optional compatibility or removed. |
 
 ## Expansion Rule

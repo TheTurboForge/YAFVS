@@ -43,8 +43,8 @@ For minimum validation expectations by change class, see
 For current implementation flow maps and data-placement rules, see
 `docs/ARCHITECTURE_FLOWS.md` and `docs/DATABASE_GRAVITY.md`.
 For the native HTTP/JSON API direction and GMP/XML retirement map, see
-`docs/API_CONTRACT.md`, `docs/GMP_XML_STRANGLER.md`, and
-`api/openapi/turbovas-v1.yaml`.
+`docs/API_CONTRACT.md`, `docs/NATIVE_API_PROOF_PLAN.md`,
+`docs/GMP_XML_STRANGLER.md`, and `api/openapi/turbovas-v1.yaml`.
 
 ## Development Commands
 

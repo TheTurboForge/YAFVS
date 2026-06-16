@@ -47,6 +47,11 @@ source of truth for the first native API shape until a live implementation
 lands. Future endpoint work must update the OpenAPI contract and the GMP/XML
 strangler map in the same slice.
 
+The first runtime implementation proof is scoped in
+`docs/NATIVE_API_PROOF_PLAN.md`. It starts with scope-report Hosts because that
+read path validates DB-backed scope membership, evidence provenance, and lazy
+tab loading without changing scanner control behavior.
+
 ## Non-Goals For V1
 
 - Do not expose arbitrary GMP command forwarding through `/api/v1`.

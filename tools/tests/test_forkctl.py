@@ -576,6 +576,51 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_quality_gate_state", source)
         self.assertIn("def command_quality_gate_schedule", source)
 
+    def test_native_api_smoke_summarizes_large_responses(self):
+        payload = {
+            "summary": {"alive_system_count": 4, "vulnerability_count": 2},
+            "systems": [
+                {"host": "192.0.2.10", "cvss_load": 11.0},
+                {"host": "192.0.2.11", "cvss_load": 7.0},
+                {"host": "192.0.2.12", "cvss_load": 1.0},
+                {"host": "192.0.2.13", "cvss_load": 0.0},
+            ],
+            "vulnerabilities": [
+                {"nvt_oid": "nvt-a", "name": "Finding A", "cvss_load": 14.0},
+                {"nvt_oid": "nvt-b", "name": "Finding B", "cvss_load": 4.0},
+                {"nvt_oid": "nvt-c", "name": "Finding C", "cvss_load": 1.0},
+                {"nvt_oid": "nvt-d", "name": "Finding D", "cvss_load": 0.5},
+            ],
+        }
+        summary = turbovasctl.summarize_native_api_response(payload)
+        self.assertEqual(summary["summary"], payload["summary"])
+        self.assertEqual(summary["systems_count"], 4)
+        self.assertEqual(summary["vulnerabilities_count"], 4)
+        self.assertEqual(len(summary["systems_sample"]), 3)
+        self.assertEqual(len(summary["vulnerabilities_sample"]), 3)
+        self.assertNotIn("systems", summary)
+        self.assertNotIn("vulnerabilities", summary)
+
+    def test_native_api_probe_finding_uses_response_summary(self):
+        result = turbovasctl.subprocess.CompletedProcess(
+            ["curl"],
+            0,
+            stdout=json.dumps({"systems": [{"host": f"192.0.2.{i}"} for i in range(20)]}),
+            stderr="",
+        )
+        finding = turbovasctl.native_api_probe_finding(
+            "pass",
+            "native-api.example",
+            "Example probe.",
+            result,
+            ["curl", "http://example.invalid"],
+            json.loads(result.stdout),
+        )
+        details = finding["details"]
+        self.assertEqual(details["response_summary"]["systems_count"], 20)
+        self.assertEqual(len(details["response_summary"]["systems_sample"]), 3)
+        self.assertNotIn("output_tail", details)
+
     def test_security_policy_check_validates_seeded_policy(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_security_policy_check(root)

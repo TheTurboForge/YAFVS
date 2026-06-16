@@ -4596,6 +4596,82 @@ def parse_json_output(result: subprocess.CompletedProcess[str]) -> dict[str, Any
     return parsed if isinstance(parsed, dict) else None
 
 
+def summarize_native_item(item: Any) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {"type": type(item).__name__}
+    keys = (
+        "id",
+        "name",
+        "status",
+        "host",
+        "port",
+        "nvt_oid",
+        "severity",
+        "max_severity",
+        "result_count",
+        "vulnerability_count",
+        "affected_system_count",
+        "source_report_count",
+        "created_at",
+        "creation_time",
+    )
+    summary = {key: item[key] for key in keys if key in item}
+    scope = item.get("scope")
+    if isinstance(scope, dict):
+        summary["scope"] = {key: scope[key] for key in ("id", "name") if key in scope}
+    return summary
+
+
+def summarize_native_api_response(parsed: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(parsed, dict):
+        return {"parsed": False}
+    summary: dict[str, Any] = {"parsed": True}
+    for key in ("status", "database", "id"):
+        if key in parsed:
+            summary[key] = parsed[key]
+    if isinstance(parsed.get("page"), dict):
+        summary["page"] = parsed["page"]
+    if isinstance(parsed.get("summary"), dict):
+        summary["summary"] = parsed["summary"]
+    items = parsed.get("items")
+    if isinstance(items, list):
+        summary["item_count_in_response"] = len(items)
+        summary["items_sample"] = [summarize_native_item(item) for item in items[:3]]
+    for key in ("systems", "vulnerabilities"):
+        values = parsed.get(key)
+        if isinstance(values, list):
+            summary[f"{key}_count"] = len(values)
+            summary[f"{key}_sample"] = [summarize_native_item(item) for item in values[:3]]
+    return summary
+
+
+def compact_text_tail(output: str, max_chars: int = 1200) -> str:
+    stripped = output.strip()
+    if len(stripped) <= max_chars:
+        return stripped
+    return f"{stripped[:max_chars]}...<truncated {len(stripped) - max_chars} chars>"
+
+
+def native_api_probe_finding(
+    status: str,
+    check: str,
+    message: str,
+    result: subprocess.CompletedProcess[str],
+    command: list[str],
+    parsed: dict[str, Any] | None,
+) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "exit_code": result.returncode,
+        "command": " ".join(shlex.quote(part) for part in command),
+        "response_summary": summarize_native_api_response(parsed),
+    }
+    if parsed is None and result.stdout:
+        details["stdout_tail"] = compact_text_tail(result.stdout)
+    if result.stderr:
+        details["stderr_tail"] = compact_text_tail(result.stderr)
+    return finding(status, check, message, details=details)
+
+
 def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -4619,28 +4695,30 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
 
     health = native_api_curl(repo_root, "/healthz")
     health_json = parse_json_output(health)
-    details["health"] = health_json
+    details["health"] = summarize_native_api_response(health_json)
     findings.append(
-        process_step_finding(
+        native_api_probe_finding(
             "pass" if health.returncode == 0 and health_json and health_json.get("status") == "ok" else "fail",
             "native-api.healthz",
             f"Native API health probe exit code {health.returncode}.",
             health,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/healthz"),
+            health_json,
         )
     )
 
     reports = native_api_curl(repo_root, "/api/v1/scope-reports?page_size=1&sort=-creation_time")
     reports_json = parse_json_output(reports)
-    details["scope_reports"] = reports_json
+    details["scope_reports"] = summarize_native_api_response(reports_json)
     report_items = reports_json.get("items", []) if isinstance(reports_json, dict) else []
     findings.append(
-        process_step_finding(
+        native_api_probe_finding(
             "pass" if reports.returncode == 0 and isinstance(report_items, list) else "fail",
             "native-api.scope-reports",
             f"Native API scope-report list probe exit code {reports.returncode}.",
             reports,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?page_size=1"),
+            reports_json,
         )
     )
 
@@ -4649,7 +4727,7 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
         raw_metrics_path = f"/api/v1/reports/{raw_report_id}/metrics"
         raw_metrics = native_api_curl(repo_root, raw_metrics_path)
         raw_metrics_json = parse_json_output(raw_metrics)
-        details["raw_report_metrics"] = raw_metrics_json
+        details["raw_report_metrics"] = summarize_native_api_response(raw_metrics_json)
         raw_metrics_ok = (
             raw_metrics.returncode == 0
             and isinstance(raw_metrics_json, dict)
@@ -4658,12 +4736,13 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             and isinstance(raw_metrics_json.get("vulnerabilities"), list)
         )
         findings.append(
-            process_step_finding(
+            native_api_probe_finding(
                 "pass" if raw_metrics_ok else "fail",
                 "native-api.raw-report-metrics",
                 f"Native API raw-report Metrics probe exit code {raw_metrics.returncode}.",
                 raw_metrics,
                 compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../metrics"),
+                raw_metrics_json,
             )
         )
     else:
@@ -4677,63 +4756,67 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             results_path = f"/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results?page_size=5&sort=-severity"
             results = native_api_curl(repo_root, results_path)
             results_json = parse_json_output(results)
-            details["results"] = results_json
+            details["results"] = summarize_native_api_response(results_json)
             result_items = results_json.get("items", []) if isinstance(results_json, dict) else []
             findings.append(
-                process_step_finding(
+                native_api_probe_finding(
                     "pass" if results.returncode == 0 and isinstance(result_items, list) else "fail",
                     "native-api.scope-report-results",
                     f"Native API scope-report Results probe exit code {results.returncode}.",
                     results,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../results?page_size=5"),
+                    results_json,
                 )
             )
             hosts_path = f"/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts?page_size=5&sort=host"
             hosts = native_api_curl(repo_root, hosts_path)
             hosts_json = parse_json_output(hosts)
-            details["hosts"] = hosts_json
+            details["hosts"] = summarize_native_api_response(hosts_json)
             host_items = hosts_json.get("items", []) if isinstance(hosts_json, dict) else []
             findings.append(
-                process_step_finding(
+                native_api_probe_finding(
                     "pass" if hosts.returncode == 0 and isinstance(host_items, list) else "fail",
                     "native-api.scope-report-hosts",
                     f"Native API scope-report Hosts probe exit code {hosts.returncode}.",
                     hosts,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../hosts?page_size=5"),
+                    hosts_json,
                 )
             )
             cves_path = f"/api/v1/scopes/{scope_id}/reports/{scope_report_id}/cves?page_size=5&sort=-max_severity"
             cves = native_api_curl(repo_root, cves_path)
             cves_json = parse_json_output(cves)
-            details["cves"] = cves_json
+            details["cves"] = summarize_native_api_response(cves_json)
             cve_items = cves_json.get("items", []) if isinstance(cves_json, dict) else []
             findings.append(
-                process_step_finding(
+                native_api_probe_finding(
                     "pass" if cves.returncode == 0 and isinstance(cve_items, list) else "fail",
                     "native-api.scope-report-cves",
                     f"Native API scope-report CVEs probe exit code {cves.returncode}.",
                     cves,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../cves?page_size=5"),
+                    cves_json,
                 )
             )
             errors_path = f"/api/v1/scopes/{scope_id}/reports/{scope_report_id}/errors?page_size=5&sort=-created_at"
             errors = native_api_curl(repo_root, errors_path)
             errors_json = parse_json_output(errors)
-            details["errors"] = errors_json
+            details["errors"] = summarize_native_api_response(errors_json)
             error_items = errors_json.get("items", []) if isinstance(errors_json, dict) else []
             findings.append(
-                process_step_finding(
+                native_api_probe_finding(
                     "pass" if errors.returncode == 0 and isinstance(error_items, list) else "fail",
                     "native-api.scope-report-errors",
                     f"Native API scope-report Error Messages probe exit code {errors.returncode}.",
                     errors,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../errors?page_size=5"),
+                    errors_json,
                 )
             )
             metrics_path = f"/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics"
             metrics = native_api_curl(repo_root, metrics_path)
             metrics_json = parse_json_output(metrics)
-            details["metrics"] = metrics_json
+            details["metrics"] = summarize_native_api_response(metrics_json)
             metrics_ok = (
                 metrics.returncode == 0
                 and isinstance(metrics_json, dict)
@@ -4742,12 +4825,13 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
                 and isinstance(metrics_json.get("vulnerabilities"), list)
             )
             findings.append(
-                process_step_finding(
+                native_api_probe_finding(
                     "pass" if metrics_ok else "fail",
                     "native-api.scope-report-metrics",
                     f"Native API scope-report Metrics probe exit code {metrics.returncode}.",
                     metrics,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics"),
+                    metrics_json,
                 )
             )
         else:

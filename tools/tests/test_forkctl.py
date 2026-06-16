@@ -634,6 +634,16 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.redis_reference_category("docker/dev/Dockerfile", "redis-tools libhiredis-dev"), "dependency_build")
         self.assertEqual(turbovasctl.redis_reference_category("docs/ARCHITECTURE_FLOWS.md", "Redis"), "documentation")
 
+    def test_redis_compose_boundaries_expect_generic_redis_removed(self):
+        root = Path(__file__).resolve().parents[2]
+        boundaries = turbovasctl.redis_compose_boundaries(root)
+        self.assertFalse(boundaries["generic_redis_service_present"])
+        self.assertFalse(boundaries["generic_redis_loopback_tcp"])
+        self.assertFalse(boundaries["gvmd_depends_on_generic_redis"])
+        self.assertTrue(boundaries["scanner_redis_no_tcp_port"])
+        self.assertTrue(boundaries["scanner_redis_unix_socket"])
+        self.assertTrue(boundaries["ospd_depends_on_scanner_redis"])
+
     def test_branding_state_separates_provenance_from_active_surfaces(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_branding_state(root)
@@ -1043,7 +1053,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(turbovasctl.runtime_dir(root), Path(tmp) / "TurboVAS-runtime")
 
     def test_runtime_services_include_scanner_redis(self):
-        self.assertEqual(turbovasctl.RUNTIME_SERVICES, ("postgres", "redis", "redis-openvas", "mosquitto"))
+        self.assertEqual(turbovasctl.RUNTIME_SERVICES, ("postgres", "redis-openvas", "mosquitto"))
 
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(turbovasctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad"))

@@ -9,7 +9,6 @@ production deployment definition yet.
 The default Compose stack starts infrastructure services:
 
 - Postgres, using a TurboVAS development image with pg-gvm runtime dependencies
-- Redis for inherited generic runtime surfaces
 - Redis for OpenVAS scanner KB state, using a Unix socket only
 - Mosquitto
 - optional `dev-shell` profile for toolchain/container experiments
@@ -23,7 +22,7 @@ The experimental `app` profile adds inherited application services:
 
 Persistent state is stored outside the repository by default, normally in the
 sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
-storage for Postgres, Redis, scanner Redis, Mosquitto, feeds, run sockets, logs,
+storage for Postgres, scanner Redis, Mosquitto, feeds, run sockets, logs,
 artifacts, certificates, secrets, and service state.
 
 Infrastructure services bind host ports to `127.0.0.1` only. `gsad` also
@@ -31,7 +30,8 @@ defaults to loopback, but can be explicitly bound for development by setting
 `TURBOVAS_GSAD_HOST` for one address or comma-separated `TURBOVAS_GSAD_HOSTS`
 for multiple addresses before startup. The generated GSA `config.js` uses the
 browser's current host so each configured URL can talk back to the same `gsad`
-endpoint. The scanner Redis service does not expose a host TCP port. Source,
+endpoint. TurboVAS no longer starts the inherited generic Redis service in the
+development runtime. The scanner Redis service does not expose a host TCP port. Source,
 `build/`, and `build/prefix` are bind-mounted for fast development feedback
 instead of forcing container rebuilds after small source changes. App containers
 also mount the checkout at

@@ -87,11 +87,10 @@ CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
 PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
-RUNTIME_SERVICES = ("postgres", "redis", "redis-openvas", "mosquitto")
+RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad")
 RUNTIME_DIRS = (
     "postgres",
-    "redis",
     "mosquitto",
     "feeds",
     "run",
@@ -130,7 +129,6 @@ RUNTIME_DIRS = (
 )
 RUNTIME_PORTS = {
     "postgres": "127.0.0.1:15432:5432",
-    "redis": "127.0.0.1:16379:6379",
     "mosquitto": "127.0.0.1:1883:1883",
 }
 DEFAULT_GSAD_HOST = "127.0.0.1"
@@ -2364,12 +2362,14 @@ def redis_compose_boundaries(repo_root: Path) -> dict[str, Any]:
         text = path.read_text(encoding="utf-8")
     except OSError:
         text = ""
+    generic_redis_present = re.search(r"(?m)^  redis:\s*$", text) is not None
     return {
         "compose_file": str(path.relative_to(repo_root)) if path.exists() else str(path),
+        "generic_redis_service_present": generic_redis_present,
         "generic_redis_loopback_tcp": '"127.0.0.1:16379:6379"' in text,
         "scanner_redis_no_tcp_port": "--port 0" in text,
         "scanner_redis_unix_socket": "/run/redis-openvas/redis.sock" in text,
-        "gvmd_depends_on_generic_redis": "gvmd:" in text and "redis:" in text,
+        "gvmd_depends_on_generic_redis": "gvmd:" in text and re.search(r"(?m)^\s{6}redis:\s*$", text) is not None,
         "ospd_depends_on_scanner_redis": "ospd-openvas:" in text and "redis-openvas:" in text,
     }
 
@@ -2395,13 +2395,13 @@ def command_runtime_redis_state(repo_root: Path) -> dict[str, Any]:
     runtime = redis_runtime_probe(repo_root)
     findings = [
         finding("pass", "redis.source-map", f"Classified {len(references)} Redis reference surface(s).", details=reference_summary),
-        finding("pass" if boundaries["generic_redis_loopback_tcp"] else "warn", "redis.generic-boundary", "Generic Redis is bound to loopback TCP in the development Compose file." if boundaries["generic_redis_loopback_tcp"] else "Generic Redis loopback binding was not recognized in Compose.", boundaries["compose_file"], boundaries),
+        finding("warn" if boundaries["generic_redis_service_present"] else "pass", "redis.generic-boundary", "Generic Redis is still present in the development Compose file." if boundaries["generic_redis_service_present"] else "Generic Redis is absent from the development Compose file; scanner Redis remains the retained Redis boundary.", boundaries["compose_file"], boundaries),
         finding("pass" if boundaries["scanner_redis_no_tcp_port"] and boundaries["scanner_redis_unix_socket"] else "fail", "redis.scanner-boundary", "Scanner Redis is configured with no TCP port and a runtime Unix socket." if boundaries["scanner_redis_no_tcp_port"] and boundaries["scanner_redis_unix_socket"] else "Scanner Redis network/socket boundary is not as expected.", boundaries["compose_file"], boundaries),
     ]
     if runtime["redis"].get("running"):
-        findings.append(finding(runtime["redis"].get("ping_status", "fail"), "redis.runtime-ping", "Generic Redis responded to ping." if runtime["redis"].get("ping_status") == "pass" else "Generic Redis ping failed.", details=runtime["redis"]))
+        findings.append(finding("warn", "redis.runtime-ping", "Generic Redis container is still running as stale runtime state; remove the orphan container after Compose reconciliation.", details=runtime["redis"]))
     else:
-        findings.append(finding("warn", "redis.runtime-ping", "Generic Redis container is not running; runtime ping skipped.", details=runtime["redis"]))
+        findings.append(finding("pass", "redis.runtime-ping", "Generic Redis container is not running, as expected.", details=runtime["redis"]))
     if runtime["redis-openvas"].get("running"):
         scanner_ready = runtime["redis-openvas"].get("ping_status") == "pass" and runtime["redis-openvas"].get("socket_exists") is True
         findings.append(finding("pass" if scanner_ready else "fail", "redis-openvas.runtime-ping", "Scanner Redis Unix socket responded to ping." if scanner_ready else "Scanner Redis Unix socket ping failed.", str(scanner_redis_socket_path(repo_root)), runtime["redis-openvas"]))
@@ -2831,7 +2831,7 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
     findings = [
         finding("pass", "runtime.compose", "Development Compose file path is defined.", str(compose_file(repo_root).relative_to(repo_root))),
         finding("pass", "runtime.state", f"Persistent runtime state lives outside the repository at {root}.", str(root)),
-        finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, Redis, scanner Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
+        finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, scanner Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
         finding("pass", "runtime.app-services", "Experimental application services are available behind the app profile.", details={"services": list(APP_SERVICES)}),
         finding("pass", "runtime.ports", "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly bound with TURBOVAS_GSAD_HOST or TURBOVAS_GSAD_HOSTS.", details={**RUNTIME_PORTS, "gsad": list(gsad_port_bindings(repo_root))}),
         finding("pass", "runtime.scanner-redis", "OpenVAS scanner KB Redis uses a runtime Unix socket, not host TCP exposure.", str(scanner_redis_socket_path(repo_root))),
@@ -4432,9 +4432,6 @@ def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
             extension = dict(extension)
             extension["status"] = "fail"
         findings.append(extension)
-    if container_running(repo_root, "redis"):
-        result = exec_in_service(repo_root, "redis", ["redis-cli", "ping"])
-        findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis.ready", f"redis-cli ping exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
     if container_running(repo_root, "redis-openvas"):
         result = scanner_redis_ping(repo_root)
         findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis-openvas.ready", f"scanner Redis Unix socket ping exit code {result.returncode}.", str(scanner_redis_socket_path(repo_root)), {"output_tail": result.stdout.splitlines()[-20:]}))

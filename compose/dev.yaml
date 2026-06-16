@@ -35,22 +35,6 @@ services:
       timeout: 5s
       retries: 20
 
-  redis:
-    image: redis:7-bookworm
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
-    ports:
-      - "127.0.0.1:16379:6379"
-    volumes:
-      - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/redis
-        target: /data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   redis-openvas:
     image: redis:7-bookworm
     restart: unless-stopped
@@ -144,8 +128,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       mosquitto:
         condition: service_healthy
     environment:
@@ -200,8 +182,6 @@ services:
       - NET_RAW
       - NET_ADMIN
     depends_on:
-      redis:
-        condition: service_healthy
       redis-openvas:
         condition: service_healthy
       mosquitto:

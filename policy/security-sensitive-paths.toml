@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: 2026 TurboVAS contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[[areas]]
+id = "protocol-parsing"
+title = "Protocol and XML parsing"
+risk = "Malformed GMP/XML or proxied protocol input can cross trust boundaries."
+paths = [
+  "components/gvmd/src/gmp.c",
+  "components/gsad/src/gsad_gmp.c",
+  "components/python-gvm/gvm/protocols/",
+]
+required_checks = [
+  "focused parser/protocol tests",
+  "security review for new XML/GMP input handling",
+]
+
+[[areas]]
+id = "auth-session"
+title = "Authentication, session, and operator boundary"
+risk = "TurboVAS treats login as the scanner-administration boundary, so auth/session changes are high consequence."
+paths = [
+  "components/gvmd/src/manage_sql_users.c",
+  "components/gsad/src/gsad.c",
+  "components/gsa/src/web/pages/login/",
+]
+required_checks = [
+  "runtime app smoke",
+  "browser login smoke",
+  "last usable account safeguard validation when account behavior changes",
+]
+
+[[areas]]
+id = "scanner-execution"
+title = "Scanner execution and privileges"
+risk = "Scanner runtime changes can alter raw-socket capability, scan fidelity, or host exposure."
+paths = [
+  "components/openvas-scanner/",
+  "components/ospd-openvas/",
+  "compose/dev.yaml",
+  "docker/runtime/",
+]
+required_checks = [
+  "runtime scanner capability check",
+  "runtime nmap capability check",
+  "runtime scanner process check",
+]
+
+[[areas]]
+id = "feed-handling"
+title = "Feed handling and signature boundaries"
+risk = "Feed changes can break scanner correctness, signature validation, or feed-content terms."
+paths = [
+  "components/greenbone-feed-sync/",
+  "components/notus-scanner/",
+  "tools/turbovasctl",
+  "docker/runtime/README.md",
+]
+required_checks = [
+  "license/feed terms review",
+  "feed-state check",
+  "runtime feed keyring/import checks when feed loading changes",
+]
+
+[[areas]]
+id = "runtime-orchestration"
+title = "Docker runtime, exposed services, and persistent state"
+risk = "Runtime changes can expose the scanner, lose state, or invalidate development diagnostics."
+paths = [
+  "compose/dev.yaml",
+  "docker/runtime/",
+  "tools/turbovasctl",
+  "ops/systemd/",
+]
+required_checks = [
+  "compose config validation",
+  "runtime status/smoke",
+  "runtime log review",
+]
+
+[[areas]]
+id = "native-api"
+title = "Native HTTP/JSON API and DB-backed product data"
+risk = "Native APIs must not become an untyped REST wrapper over GMP/XML or leak product data semantics."
+paths = [
+  "api/openapi/",
+  "docs/API_CONTRACT.md",
+  "docs/GMP_XML_STRANGLER.md",
+  "docs/DATABASE_GRAVITY.md",
+]
+required_checks = [
+  "OpenAPI contract review",
+  "database-gravity check",
+  "browser/API workflow validation when endpoints land",
+]
+
+[[areas]]
+id = "public-release"
+title = "Public release, licensing, branding, and publication posture"
+risk = "Release-facing changes can create license, provenance, trademark, maturity, or security-boundary problems."
+paths = [
+  "README.md",
+  "UPSTREAMS.md",
+  "LICENSE_AUDIT.md",
+  "docs/PUBLIC_RELEASE_READINESS.md",
+  "docs/PRODUCTION_POSTURE.md",
+]
+required_checks = [
+  "license-report",
+  "license-public-release-gate before publication",
+  "production-posture-check before production-like deployment",
+]

@@ -580,7 +580,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -591,10 +591,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_data_state", source)
         self.assertIn("def command_runtime_performance_snapshot", source)
         self.assertIn("def command_runtime_redis_state", source)
+        self.assertIn("def command_security_policy_check", source)
         self.assertIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
         self.assertIn("def command_quality_gate_state", source)
         self.assertIn("def command_quality_gate_schedule", source)
+
+    def test_security_policy_check_validates_seeded_policy(self):
+        root = Path(__file__).resolve().parents[2]
+        result = turbovasctl.command_security_policy_check(root)
+        self.assertEqual(result["status"], "pass")
+        area_ids = {area["id"] for area in result["details"]["areas"]}
+        self.assertIn("protocol-parsing", area_ids)
+        self.assertIn("scanner-execution", area_ids)
+        self.assertIn("native-api", area_ids)
+        self.assertGreaterEqual(result["details"]["area_count"], 7)
 
     def test_native_tooling_state_classifies_dependency_surfaces(self):
         root = Path(__file__).resolve().parents[2]

@@ -87,3 +87,8 @@ report result reading uses the standard result-query path constrained by the
 scope-report snapshot. Browser-side code may still present lazy evidence tabs,
 but product report-reading collections should continue moving toward manager
 queries rather than client-side source-report stitching.
+
+The native `/api/v1` contract in `docs/API_CONTRACT.md` builds on the same
+rule: product reads should expose typed DB-owned state instead of forwarding
+GMP/XML payloads. Contract-first API work must keep raw reports inspectable as
+evidence and must not create a second hidden truth store for report data.

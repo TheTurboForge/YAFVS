@@ -1,0 +1,454 @@
+# SPDX-FileCopyrightText: 2026 TurboVAS contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+openapi: 3.1.0
+info:
+  title: TurboVAS Native API
+  version: 0.1.0-contract
+  description: Read-only contract baseline for DB-backed TurboVAS product workflows.
+servers:
+  - url: /api/v1
+security:
+  - operatorSession: []
+paths:
+  /reports:
+    get:
+      summary: List raw scan reports
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Raw report collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCollection'
+  /reports/{report_id}:
+    get:
+      summary: Read one raw scan report summary
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: Raw report detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+  /reports/{report_id}/metrics:
+    get:
+      summary: Read raw report metrics
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: CVSS Load and authenticated coverage metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportMetrics'
+  /scopes:
+    get:
+      summary: List scopes
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeCollection'
+  /scopes/{scope_id}:
+    get:
+      summary: Read one scope
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+      responses:
+        '200':
+          description: Scope detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scope'
+  /scopes/reports:
+    get:
+      summary: List generated scope reports
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeReportCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}:
+    get:
+      summary: Read one scope report
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+      responses:
+        '200':
+          description: Scope report detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeReport'
+  /scopes/{scope_id}/reports/{scope_report_id}/results:
+    get:
+      summary: List deduplicated scope report results
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report result collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/hosts:
+    get:
+      summary: List scope report hosts
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report host collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/cves:
+    get:
+      summary: List scope report CVEs
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report CVE collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CveCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/metrics:
+    get:
+      summary: Read scope report metrics
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+      responses:
+        '200':
+          description: CVSS Load and authenticated coverage metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportMetrics'
+components:
+  securitySchemes:
+    operatorSession:
+      type: apiKey
+      in: cookie
+      name: turbovas_session
+      description: Placeholder for the authenticated same-origin operator session.
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 50
+    Sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+    Filter:
+      name: filter
+      in: query
+      schema:
+        type: string
+    ReportId:
+      name: report_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ScopeId:
+      name: scope_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ScopeReportId:
+      name: scope_report_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    PageInfo:
+      type: object
+      required: [page, page_size, total]
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        sort:
+          type: string
+        filter:
+          type: string
+    ReportCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Report'
+    ScopeCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scope'
+    ScopeReportCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeReport'
+    ResultCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Result'
+    HostCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Host'
+    CveCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Cve'
+    Report:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        task_id:
+          type: string
+          format: uuid
+        scan_start:
+          type: string
+          format: date-time
+        scan_end:
+          type: string
+          format: date-time
+        severity:
+          type: number
+        result_count:
+          type: integer
+        vulnerability_count:
+          type: integer
+        host_count:
+          type: integer
+    Scope:
+      type: object
+      required: [id, name, protection_requirement]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        protection_requirement:
+          enum: [Normal, High, Very High]
+        predefined:
+          type: boolean
+        target_count:
+          type: integer
+        host_count:
+          type: integer
+    ScopeReport:
+      allOf:
+        - $ref: '#/components/schemas/Report'
+        - type: object
+          required: [scope_id, source_report_count]
+          properties:
+            scope_id:
+              type: string
+              format: uuid
+            scope_name:
+              type: string
+            source_report_count:
+              type: integer
+            latest_evidence_time:
+              type: string
+              format: date-time
+            covered_host_count:
+              type: integer
+            missing_evidence_host_count:
+              type: integer
+    Result:
+      type: object
+      required: [id, host, nvt_oid, name, severity]
+      properties:
+        id:
+          type: string
+        host:
+          type: string
+        port:
+          type: string
+        nvt_oid:
+          type: string
+        name:
+          type: string
+        severity:
+          type: number
+        source_report_id:
+          type: string
+          format: uuid
+        raw_evidence_href:
+          type: string
+    Host:
+      type: object
+      required: [host]
+      properties:
+        host:
+          type: string
+        source_report_count:
+          type: integer
+        result_count:
+          type: integer
+        authenticated_scan_state:
+          enum: [Authenticated, Authentication Failed, No Credential Path, Unknown]
+    Cve:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        severity:
+          type: number
+        affected_system_count:
+          type: integer
+        source_report_count:
+          type: integer
+    ReportMetrics:
+      type: object
+      required: [summary, systems, vulnerabilities]
+      properties:
+        summary:
+          type: object
+          properties:
+            total_system_cvss_load:
+              type: number
+            average_system_cvss_load:
+              type: number
+            authenticated_scan_coverage_percent:
+              type: number
+            alive_system_count:
+              type: integer
+            vulnerability_count:
+              type: integer
+        systems:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        vulnerabilities:
+          type: array
+          items:
+            type: object
+            additionalProperties: true

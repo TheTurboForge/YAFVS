@@ -21,6 +21,21 @@ visible state. A feature is not really removed or added until the GSA command,
 GSAD proxy/validation, gvmd GMP command, database behavior, protocol clients,
 tests, and public docs agree.
 
+## Native API Direction
+
+TurboVAS is moving toward typed HTTP/JSON product APIs for DB-backed report,
+scope, metric, and evidence reads:
+
+```text
+GSA or runtime helper -> /api/v1 JSON contract -> TurboVAS product query layer -> gvmd/PostgreSQL
+```
+
+The first native API work is contract-first. It must not become a REST wrapper
+around GMP/XML. GMP remains compatibility and high-consequence control plumbing
+until each product workflow has a proven native replacement with tests and
+browser/runtime coverage. See `docs/API_CONTRACT.md`,
+`docs/GMP_XML_STRANGLER.md`, and `api/openapi/turbovas-v1.yaml`.
+
 ## Scan Flow
 
 Technical evidence collection:

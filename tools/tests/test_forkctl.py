@@ -580,7 +580,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -589,6 +589,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_log_review", source)
         self.assertIn("def command_runtime_data_state", source)
         self.assertIn("def command_runtime_performance_snapshot", source)
+        self.assertIn("def command_runtime_redis_state", source)
         self.assertIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
         self.assertIn("def command_quality_gate_state", source)
@@ -614,6 +615,23 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "product_workflow")
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
+
+    def test_redis_reference_summary_separates_scanner_and_generic_paths(self):
+        references = [
+            {"path": "compose/dev.yaml", "category": "scanner_kb", "markers": ["redis-openvas"]},
+            {"path": "docker/dev/Dockerfile", "category": "dependency_build", "markers": ["redis-tools"]},
+            {"path": "docs/DATABASE_GRAVITY.md", "category": "documentation", "markers": ["Redis"]},
+            {"path": "components/gvmd/src/example.c", "category": "generic_runtime", "markers": ["redis"]},
+        ]
+        summary = turbovasctl.summarize_redis_references(references)
+        self.assertEqual(summary["by_category"]["scanner_kb"]["paths"], ["compose/dev.yaml"])
+        self.assertEqual(summary["by_category"]["dependency_build"]["count"], 1)
+        self.assertEqual(summary["by_category"]["generic_runtime"]["paths"], ["components/gvmd/src/example.c"])
+
+    def test_redis_reference_category_identifies_scanner_socket(self):
+        self.assertEqual(turbovasctl.redis_reference_category("compose/dev.yaml", "/run/redis-openvas/redis.sock"), "scanner_kb")
+        self.assertEqual(turbovasctl.redis_reference_category("docker/dev/Dockerfile", "redis-tools libhiredis-dev"), "dependency_build")
+        self.assertEqual(turbovasctl.redis_reference_category("docs/ARCHITECTURE_FLOWS.md", "Redis"), "documentation")
 
     def test_retained_json_artifacts_write_latest_history_and_prune(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -112,7 +112,7 @@ Routine foundation commands keep the runtime inspectable:
 quality-gate -> retained quality artifacts
 runtime-log-review -> service-specific redacted log artifacts
 runtime-data-state -> DB/table/runtime-state classification + product-data audit
-runtime-performance-snapshot -> parsed Docker/DB/report-workflow/static-asset baselines
+runtime-performance-snapshot -> parsed Docker/DB/report-workflow/scanner-Redis/static-asset baselines
 ```
 
 Diagnostics should create artifacts outside git under `TurboVAS-runtime`, not

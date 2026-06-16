@@ -53,6 +53,7 @@ tools/turbovasctl build-baseline --json
 tools/turbovasctl quality-gate-state --json
 tools/turbovasctl production-posture-check --json
 tools/turbovasctl rust-migration-state --json
+tools/turbovasctl runtime-native-api-smoke --json
 ```
 
 `tools/forkctl` remains as a temporary compatibility wrapper during the command
@@ -62,8 +63,9 @@ rename.
 
 `just quality-gate` and `tools/turbovasctl quality-gate --json` are the local
 source-quality contract. They run the routine license report, doctor checks,
-Python unit tests, Python compile checks, Docker Compose config validation, GSA
-type-checking, and the fast GSA web test suite.
+Python unit tests, Python compile checks, Docker Compose config validation,
+the native Rust API service tests when present, GSA type-checking, and the fast
+GSA web test suite.
 
 `.github/workflows/quality-gate.yml` runs that same source-only contract in
 GitHub Actions on pushes to `main`, pull requests, and manual dispatch. Hosted

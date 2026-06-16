@@ -19,6 +19,7 @@ The experimental `app` profile adds inherited application services:
 - `ospd-openvas`, wired to the built OpenVAS scanner binary, scanner Redis Unix socket, and runtime OSP socket path
 - `notus-scanner`, wired to the runtime Notus feed copy and Mosquitto
 - `gsad`, exposed on `127.0.0.1:19392` by default for local HTTPS UI/API smoke checks
+- `turbovas-api`, an internal-only Rust proof service for DB-backed typed HTTP/JSON reads
 
 Persistent state is stored outside the repository by default, normally in the
 sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
@@ -31,7 +32,9 @@ defaults to loopback, but can be explicitly bound for development by setting
 for multiple addresses before startup. The generated GSA `config.js` uses the
 browser's current host so each configured URL can talk back to the same `gsad`
 endpoint. TurboVAS no longer starts the inherited generic Redis service in the
-development runtime. The scanner Redis service does not expose a host TCP port. Source,
+development runtime. The scanner Redis service does not expose a host TCP port.
+The first native API sidecar is not published on any host port; smoke checks
+reach it from inside the Docker network. Source,
 `build/`, and `build/prefix` are bind-mounted for fast development feedback
 instead of forcing container rebuilds after small source changes. App containers
 also mount the checkout at
@@ -64,6 +67,7 @@ Use the root `justfile` command surface:
 - `just runtime-feed-keyring-init`
 - `just runtime-feed-import-init`
 - `just runtime-app-smoke`
+- `just runtime-native-api-smoke`
 - `just runtime-webui-smoke`
 - `just runtime-browser-smoke`
 - `just runtime-credential-smoke`
@@ -108,6 +112,11 @@ verifies that `openvas -s` reports the scanner Redis Unix socket as `db_address`
 `runtime-gmp-smoke` authenticates over the persistent `gvmd` Unix socket with a
 small `python-gvm` probe and calls `get_version` without printing secrets.
 
+`runtime-native-api-smoke` verifies the internal `turbovas-api` sidecar by
+querying `/healthz`, `/api/v1/scope-reports`, and the first scope report's
+DB-backed Hosts collection from inside the Docker network. It does not expose a
+host port and does not use GMP/XML for the tested read path.
+
 `runtime-scanner-register` creates or verifies the `OpenVAS Default` scanner
 registration against `/runtime/run/ospd/ospd-openvas.sock` on port `0`.
 
@@ -138,6 +147,8 @@ The current app profile reaches inherited manager-scanner connectivity:
 - `notus-scanner` starts against the runtime Notus feed copy.
 - `OpenVAS Default` is registered and verified by `gvmd` against the OSPD socket.
 - `gsad` serves the staged GSA web UI and responds on the configured HTTPS host binding.
+- `turbovas-api` is available inside the Docker network as the first DB-first
+  native API proof; it is not exposed directly to LAN/Tailscale.
 
 Full feed population, feed import, scan execution, and production packaging
 remain guarded development surfaces rather than production deployment behavior.

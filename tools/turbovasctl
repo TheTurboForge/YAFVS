@@ -102,10 +102,11 @@ RUST_MIGRATION_FIRST_CANDIDATE = {
 }
 CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
+NATIVE_RUST_SERVICES = ("turbovas-api",)
 PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
-APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad")
+APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
 RUNTIME_DIRS = (
     "postgres",
     "mosquitto",
@@ -127,6 +128,7 @@ RUNTIME_DIRS = (
     "logs/ospd",
     "logs/notus",
     "logs/gsad",
+    "logs/turbovas-api",
     "logs/redis-openvas",
     "logs/feed-sync",
     "logs/quality-gate",
@@ -136,6 +138,7 @@ RUNTIME_DIRS = (
     "artifacts/performance",
     "artifacts/reports",
     "artifacts/credential-smoke",
+    "artifacts/native-api",
     "feed-cache/community/22.04/var-lib",
     "feeds/openvas/plugins",
     "feeds/notus/advisories",
@@ -154,6 +157,7 @@ GSAD_HOSTS_ENV = "TURBOVAS_GSAD_HOSTS"
 GSAD_PORT = "19392"
 GSAD_CONTAINER_PORT = "9392"
 APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
+TURBOVAS_API_CONTAINER_PORT = "9080"
 POSTGRES_DEFAULTS = {
     "user": "turbovas",
     "password": "turbovas-dev",
@@ -283,7 +287,7 @@ LOG_REVIEW_PATTERNS: tuple[tuple[str, str, str, str], ...] = (
     ("fail", "postgres-collation", r"collation version mismatch|database .* has a collation version mismatch", "Postgres collation mismatch found."),
     ("fail", "mosquitto-log-file", r"unable to open log file|error: unable to open log file", "Mosquitto file-log permission warning found."),
     ("fail", "feed-signature", r"bad signature|no public key|sha256sums\.asc|advisory load failed", "Feed signature/advisory-load problem found."),
-    ("fail", "traceback", r"traceback \(most recent call last\)|uncaught exception|panic:", "Runtime traceback or panic found."),
+    ("fail", "traceback", r"traceback \(most recent call last\)|uncaught exception|panic:|panicked at|thread .* panicked", "Runtime traceback or panic found."),
     ("fail", "crash", r"segmentation fault|core dumped|fatal error|critical", "Crash/critical runtime error found."),
     ("fail", "permission", r"permission denied|operation not permitted", "Permission error found."),
     ("warn", "manager-response", r"failure to receive response from manager daemon", "Manager-response failure found."),
@@ -362,6 +366,7 @@ DATA_STATE_ARTIFACT_PATHS = (
     ("log-review", "diagnostic_artifact", ("artifacts", "log-review"), True),
     ("quality-gate", "diagnostic_artifact", ("artifacts", "quality-gate"), True),
     ("performance", "diagnostic_artifact", ("artifacts", "performance"), True),
+    ("native-api", "diagnostic_artifact", ("artifacts", "native-api"), True),
     ("runtime-feeds", "feed_content", ("feeds",), False),
     ("feed-cache", "feed_content", ("feed-cache",), False),
     ("runtime-logs", "diagnostic_artifact", ("logs",), False),
@@ -1166,6 +1171,10 @@ def performance_artifact_dir(repo_root: Path) -> Path:
 
 def rust_migration_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "rust-migration")
+
+
+def native_api_artifact_dir(repo_root: Path) -> Path:
+    return runtime_path(repo_root, "artifacts", "native-api")
 
 
 def write_json_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> str:
@@ -4368,7 +4377,115 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     for base_url in gsad_base_urls(repo_root):
         gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
         findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Configured HTTPS header probe exit code {gsad_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(gsad_http.stdout, 80, [password])}))
+    if container_running(repo_root, "turbovas-api"):
+        native_api = command_runtime_native_api_smoke(repo_root)
+        findings.append(finding(native_api["status"], "native-api.smoke", native_api["summary"], details={"status": native_api["status"], "findings": native_api["findings"]}))
     return make_result("runtime-app-smoke", repo_root, "Application runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
+
+
+def native_api_curl(repo_root: Path, path: str) -> subprocess.CompletedProcess[str]:
+    return run_command(
+        compose_command(
+            repo_root,
+            "exec",
+            "-T",
+            "turbovas-api",
+            "curl",
+            "-fsS",
+            "--max-time",
+            "10",
+            f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{path}",
+        ),
+        repo_root,
+        env=runtime_env(repo_root),
+        timeout=30,
+    )
+
+
+def parse_json_output(result: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
+    artifact_dir = native_api_artifact_dir(repo_root)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {"service": "turbovas-api"}
+
+    running = container_running(repo_root, "turbovas-api")
+    findings.append(
+        finding(
+            "pass" if running else "fail",
+            "native-api.running",
+            "turbovas-api container is running." if running else "turbovas-api container is not running; run just runtime-app-up.",
+            details={"service": "turbovas-api", "logs_tail": [] if running else service_log_tail(repo_root, "turbovas-api")},
+        )
+    )
+    if not running:
+        result = make_result("runtime-native-api-smoke", repo_root, "Native API smoke could not run because turbovas-api is not running.", findings, [str(artifact_dir)])
+        result["details"] = details
+        write_json_artifact(artifact_dir, "native-api-smoke.json", result)
+        return result
+
+    health = native_api_curl(repo_root, "/healthz")
+    health_json = parse_json_output(health)
+    details["health"] = health_json
+    findings.append(
+        process_step_finding(
+            "pass" if health.returncode == 0 and health_json and health_json.get("status") == "ok" else "fail",
+            "native-api.healthz",
+            f"Native API health probe exit code {health.returncode}.",
+            health,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/healthz"),
+        )
+    )
+
+    reports = native_api_curl(repo_root, "/api/v1/scope-reports?page_size=1&sort=-creation_time")
+    reports_json = parse_json_output(reports)
+    details["scope_reports"] = reports_json
+    report_items = reports_json.get("items", []) if isinstance(reports_json, dict) else []
+    findings.append(
+        process_step_finding(
+            "pass" if reports.returncode == 0 and isinstance(report_items, list) else "fail",
+            "native-api.scope-reports",
+            f"Native API scope-report list probe exit code {reports.returncode}.",
+            reports,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?page_size=1"),
+        )
+    )
+
+    if report_items:
+        first_report = report_items[0]
+        scope_id = first_report.get("scope", {}).get("id") if isinstance(first_report, dict) else None
+        scope_report_id = first_report.get("id") if isinstance(first_report, dict) else None
+        if scope_id and scope_report_id:
+            hosts_path = f"/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts?page_size=5&sort=host"
+            hosts = native_api_curl(repo_root, hosts_path)
+            hosts_json = parse_json_output(hosts)
+            details["hosts"] = hosts_json
+            host_items = hosts_json.get("items", []) if isinstance(hosts_json, dict) else []
+            findings.append(
+                process_step_finding(
+                    "pass" if hosts.returncode == 0 and isinstance(host_items, list) else "fail",
+                    "native-api.scope-report-hosts",
+                    f"Native API scope-report Hosts probe exit code {hosts.returncode}.",
+                    hosts,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../hosts?page_size=5"),
+                )
+            )
+        else:
+            findings.append(finding("fail", "native-api.scope-report-hosts", "Scope-report list did not include a scope/report id pair for the host probe."))
+    else:
+        findings.append(finding("warn", "native-api.scope-report-hosts", "No scope reports exist yet, so the host collection probe was skipped."))
+
+    result = make_result("runtime-native-api-smoke", repo_root, "Native API smoke checks completed.", findings, [str(artifact_dir / "native-api-smoke.json")])
+    result["details"] = details
+    write_json_artifact(artifact_dir, "native-api-smoke.json", result)
+    return result
 
 
 def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
@@ -4890,7 +5007,7 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     license_result = command_license_report(repo_root)
     findings.append(finding(license_result["status"], "license.compliance", license_result["summary"], details={"status": license_result["status"], "findings": license_result["findings"]}))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
-    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-log-review", "just runtime-data-state", "just runtime-performance-snapshot", "just runtime-app-up", "just runtime-app-smoke", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-credential-smoke", "just runtime-app-down", "just gvmd-smoke", "just quality-gate", "just quality-gate-state", "just quality-gate-schedule"]}))
+    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-log-review", "just runtime-data-state", "just runtime-performance-snapshot", "just runtime-app-up", "just runtime-app-smoke", "just runtime-native-api-smoke", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-credential-smoke", "just runtime-app-down", "just gvmd-smoke", "just quality-gate", "just quality-gate-state", "just quality-gate-schedule"]}))
     findings.append(finding("pass", "surface.diagnostics", "Native API, Redis, path-coupling, and security-policy diagnostics are available.", details={"commands": ["just native-tooling-state", "just runtime-redis-state", "just path-coupling-state", "just security-policy-check"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
@@ -4941,6 +5058,18 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     compose = run_command(compose_command_line, repo_root, env=runtime_env(repo_root), timeout=120)
     details["steps"]["compose-config"] = {"exit_code": compose.returncode, "output_tail": output_tail(compose.stdout, 120)}
     findings.append(process_step_finding("pass" if compose.returncode == 0 else "fail", "quality.compose-config", f"Compose config validation exit code {compose.returncode}.", compose, compose_command_line))
+
+    api_manifest = repo_root / "services" / "turbovas-api" / "Cargo.toml"
+    if api_manifest.is_file():
+        cargo_fmt_command = ["bash", "-lc", "cd services/turbovas-api && cargo fmt --check"]
+        cargo_fmt = run_command(cargo_fmt_command, repo_root, env=build_env(repo_root), timeout=120)
+        details["steps"]["turbovas-api-fmt"] = {"exit_code": cargo_fmt.returncode, "output_tail": output_tail(cargo_fmt.stdout, 120)}
+        findings.append(process_step_finding("pass" if cargo_fmt.returncode == 0 else "fail", "quality.turbovas-api-fmt", f"turbovas-api cargo fmt exit code {cargo_fmt.returncode}.", cargo_fmt, cargo_fmt_command))
+
+        cargo_test_command = ["bash", "-lc", "cd services/turbovas-api && cargo test --locked"]
+        cargo_test = run_command(cargo_test_command, repo_root, env=build_env(repo_root), timeout=600)
+        details["steps"]["turbovas-api-test"] = {"exit_code": cargo_test.returncode, "output_tail": output_tail(cargo_test.stdout, 160)}
+        findings.append(process_step_finding("pass" if cargo_test.returncode == 0 else "fail", "quality.turbovas-api-test", f"turbovas-api cargo test exit code {cargo_test.returncode}.", cargo_test, cargo_test_command))
 
     gsa_type = run_command(["bash", "-lc", "cd components/gsa && npm run type-check"], repo_root, env=gsa_quality_env(repo_root), timeout=600)
     details["steps"]["gsa-type-check"] = {"exit_code": gsa_type.returncode, "output_tail": output_tail(gsa_type.stdout, 120)}
@@ -5136,6 +5265,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
+    subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
     subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
@@ -5264,6 +5394,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_app_down(repo_root)
     elif args.command == "runtime-app-smoke":
         result = command_runtime_app_smoke(repo_root)
+    elif args.command == "runtime-native-api-smoke":
+        result = command_runtime_native_api_smoke(repo_root)
     elif args.command == "runtime-webui-smoke":
         result = command_runtime_webui_smoke(repo_root)
     elif args.command == "runtime-browser-smoke":

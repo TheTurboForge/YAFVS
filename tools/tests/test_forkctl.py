@@ -580,7 +580,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -592,6 +592,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_data_state", source)
         self.assertIn("def command_runtime_performance_snapshot", source)
         self.assertIn("def command_runtime_redis_state", source)
+        self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn("def command_security_policy_check", source)
         self.assertIn("def command_path_coupling_state", source)
         self.assertIn("def command_production_posture_check", source)
@@ -881,6 +882,7 @@ db2:keys=5,expires=0,avg_ttl=0
             "fetch-depth: 0",
             "python-version: \"3.12\"",
             "node-version: \"22\"",
+            "rustup toolchain install stable --profile minimal",
             "cache-dependency-path: components/gsa/package-lock.json",
             "npm ci",
             "TURBOVAS_RUNTIME_DIR=\"$RUNNER_TEMP/turbovas-runtime\"",
@@ -1144,13 +1146,15 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(turbovasctl.RUNTIME_SERVICES, ("postgres", "redis-openvas", "mosquitto"))
 
     def test_app_services_are_experimental_profile_services(self):
-        self.assertEqual(turbovasctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad"))
+        self.assertEqual(turbovasctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api"))
 
     def test_gsad_port_defaults_loopback_and_can_be_overridden(self):
         self.assertEqual(turbovasctl.DEFAULT_GSAD_HOST, "127.0.0.1")
         self.assertEqual(turbovasctl.GSAD_HOST_ENV, "TURBOVAS_GSAD_HOST")
         self.assertEqual(turbovasctl.GSAD_HOSTS_ENV, "TURBOVAS_GSAD_HOSTS")
         self.assertEqual(turbovasctl.APP_PORTS["gsad"], "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392")
+        self.assertNotIn("turbovas-api", turbovasctl.APP_PORTS)
+        self.assertEqual(turbovasctl.TURBOVAS_API_CONTAINER_PORT, "9080")
         self.assertEqual(turbovasctl.DEV_ADMIN_USER, "admin")
         self.assertEqual(turbovasctl.DEV_ADMIN_PASSWORD, "admin")
 

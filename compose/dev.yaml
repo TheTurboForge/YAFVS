@@ -330,6 +330,21 @@ services:
         --no-redirect
         --static-content=/workspace/build/prefix/share/gvm/gsad/web
 
+  turbovas-api:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/turbovas-api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-turbovas}:${POSTGRES_PASSWORD:-turbovas-dev}@postgres:5432/${POSTGRES_DB:-turbovas}
+      RUST_LOG: ${TURBOVAS_API_LOG:-info}
+      TURBOVAS_API_BIND: 0.0.0.0:9080
+    # Intentionally no host port: the first native API proof is Docker-internal only.
+
 networks:
   default:
     name: turbovas-dev

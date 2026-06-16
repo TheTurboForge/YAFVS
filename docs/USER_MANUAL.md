@@ -56,6 +56,7 @@ Useful development checks include:
 - `just quality-gate-schedule --json --status`
 - `just production-posture-check --json`
 - `just runtime-app-smoke`
+- `just runtime-native-api-smoke --json`
 - `just runtime-webui-smoke --json`
 - `just runtime-browser-smoke --json`
 - `just runtime-credential-smoke --json`

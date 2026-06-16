@@ -42,7 +42,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bear \
-            cargo \
             clang \
             cmake \
             fd-find \
@@ -58,6 +57,11 @@ jobs:
           fi
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
 
       - name: Install GSA dependencies
         run: npm ci

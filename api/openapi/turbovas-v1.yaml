@@ -403,16 +403,25 @@ components:
           type: string
     Host:
       type: object
-      required: [host]
+      required: [host, scope_membership]
       properties:
         host:
           type: string
+        scope_membership:
+          enum: [organization, member, candidate]
         source_report_count:
           type: integer
         result_count:
           type: integer
+        vulnerability_count:
+          type: integer
         authenticated_scan_state:
           enum: [Authenticated, Authentication Failed, No Credential Path, Unknown]
+        source_report_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
     Cve:
       type: object
       required: [id]

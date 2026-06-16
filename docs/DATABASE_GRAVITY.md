@@ -92,3 +92,8 @@ The native `/api/v1` contract in `docs/API_CONTRACT.md` builds on the same
 rule: product reads should expose typed DB-owned state instead of forwarding
 GMP/XML payloads. Contract-first API work must keep raw reports inspectable as
 evidence and must not create a second hidden truth store for report data.
+
+The first native API proof implements that direction as an internal Rust
+sidecar: scope-report list and host evidence collections are queried from
+gvmd/PostgreSQL and returned as typed JSON, while GMP/XML remains available for
+the inherited browser/control path until that workflow is deliberately migrated.

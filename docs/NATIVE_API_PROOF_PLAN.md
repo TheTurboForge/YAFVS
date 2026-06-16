@@ -24,7 +24,8 @@ Why this is the best first proof:
 - it should be backed by gvmd/PostgreSQL state already present in
   `scope_reports`, `scope_report_sources`, `scope_hosts`, `report_hosts`, and
   host/result tables;
-- it can replace browser-side source-report stitching for one lazy tab without
+- it can first prove DB-backed report reading inside the Docker app profile,
+  then replace browser-side source-report stitching for one lazy tab without
   moving the entire UI at once.
 
 ## Query Characterization Targets
@@ -55,8 +56,10 @@ The first endpoint is not complete until it proves:
   members implicitly;
 - every row can point back to source raw report evidence;
 - results match the existing scope-report detail tab for the same snapshot;
-- browser smoke can load the tab through the native client without falling back
-  to XML parsing.
+- the internal `runtime-native-api-smoke` can load the endpoint without GMP/XML.
+
+Browser smoke through the native client remains the next proof step after the
+internal sidecar and database query contract are stable.
 
 ## Not In The First Proof
 

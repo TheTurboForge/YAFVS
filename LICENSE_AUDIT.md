@@ -11,6 +11,14 @@ TurboVAS is an independent project and is not affiliated with, sponsored by, or 
 
 Original TurboVAS-created root tooling and public documentation use `GPL-3.0-or-later` as the provisional project default unless a more specific compatible license is selected for a component-local file.
 
+TurboVAS-created service code outside imported upstream component trees, including
+`services/turbovas-api`, currently follows this provisional `GPL-3.0-or-later`
+default. Third-party Rust crate dependencies recorded in
+`services/turbovas-api/Cargo.lock` are external package dependencies, not
+vendored source. Keep the lockfile tracked for reproducibility and run the
+normal license/public-release gates before packaging, publishing, or distributing
+artifacts that include the service.
+
 ## Component License Summary
 
 | Component | Path | License declaration observed | Preserved license/provenance files | Notes |
@@ -81,4 +89,6 @@ reason it cannot.
 - Revisit the provisional `GPL-3.0-or-later` root tooling/documentation default before public release and before adding substantial original application code.
 - Review `components/openvas-smb` Samba-derived provenance before public release or distribution.
 - Review Greenbone Community Feed terms before bundling, redistributing, mirroring, or packaging feed content.
+- Review third-party Rust crate license and security posture for
+  `services/turbovas-api` before public release, packaging, or distribution.
 - Define release-time source publication and attribution procedures before making this repository public.

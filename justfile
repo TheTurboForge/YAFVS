@@ -174,6 +174,9 @@ runtime-app-down *args:
 runtime-app-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-app-smoke "$@"
 
+runtime-native-api-smoke *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-smoke "$@"
+
 runtime-webui-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-webui-smoke "$@"
 

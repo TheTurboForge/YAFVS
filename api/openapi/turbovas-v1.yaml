@@ -388,25 +388,70 @@ components:
         host_count:
           type: integer
     ScopeReport:
-      allOf:
-        - $ref: '#/components/schemas/Report'
-        - type: object
-          required: [scope_id, source_report_count]
+      type: object
+      required: [id, name, status, scope, source_report_count, result_count, vulnerability_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        scope:
+          type: object
+          required: [id, name]
           properties:
-            scope_id:
+            id:
               type: string
               format: uuid
-            scope_name:
+            name:
               type: string
-            source_report_count:
-              type: integer
-            latest_evidence_time:
-              type: string
-              format: date-time
-            covered_host_count:
-              type: integer
-            missing_evidence_host_count:
-              type: integer
+        protection_requirement:
+          enum: [Normal, High, Very High]
+        source_report_count:
+          type: integer
+        source_target_count:
+          type: integer
+        member_host_count:
+          type: integer
+        evidence_host_count:
+          type: integer
+        missing_host_count:
+          type: integer
+        result_count:
+          type: integer
+        vulnerability_count:
+          type: integer
+        severity:
+          $ref: '#/components/schemas/SeverityCounts'
+        max_severity:
+          type: number
+        latest_evidence_time:
+          type: string
+          format: date-time
+        excluded_candidate_host_count:
+          type: integer
+        creation_time:
+          type: string
+          format: date-time
+        modification_time:
+          type: string
+          format: date-time
+    SeverityCounts:
+      type: object
+      required: [high, medium, low, log, false_positive]
+      properties:
+        high:
+          type: integer
+        medium:
+          type: integer
+        low:
+          type: integer
+        log:
+          type: integer
+        false_positive:
+          type: integer
     Result:
       type: object
       required: [id, host, nvt_oid, name, severity]

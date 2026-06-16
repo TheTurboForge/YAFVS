@@ -515,8 +515,10 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         self.assertFalse((root / "tools" / "runtime_metrics.py").exists())
         self.assertNotIn("runtime_metrics_probe_path", source)
+        self.assertIn("def command_runtime_scope_report_summary_native", source)
         self.assertIn("def command_runtime_report_metrics_native", source)
         self.assertIn("def command_runtime_scope_report_metrics_native", source)
+        self.assertIn("/api/v1/scope-reports?page_size=1&sort=-creation_time&filter=Organization", source)
         self.assertIn("/api/v1/reports/{urllib.parse.quote(selected_report_id)}/metrics", source)
         self.assertIn("/api/v1/scopes/{selected_scope_id}/reports/{selected_scope_report_id}/metrics", source)
 
@@ -615,6 +617,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scopes/{scope_id}/reports/{scope_report_id}/errors", endpoints)
         self.assertIn("/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics", endpoints)
         self.assertIn("/api/v1/reports/{report_id}/metrics", endpoints)
+        scope_report_candidates = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/scope-reports")
+        self.assertIn("runtime-scope-report-summary helper (migrated)", scope_report_candidates["replacement_candidates"])
 
     def test_rust_migration_state_tracks_tools_and_first_candidate(self):
         root = Path(__file__).resolve().parents[2]

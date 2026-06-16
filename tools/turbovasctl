@@ -2340,7 +2340,7 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             {
                 "endpoint": "/api/v1/scope-reports",
                 "status": "implemented_internal",
-                "replacement_candidates": ["scope-report list reads", "gvm-tools list-scope-reports script"],
+                "replacement_candidates": ["runtime-scope-report-summary helper (migrated)", "scope-report list reads", "gvm-tools list-scope-reports script"],
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts",
@@ -4058,7 +4058,86 @@ def command_runtime_report(
     return make_result(command_name, repo_root, summary, findings, artifacts)
 
 
+def json_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def command_runtime_scope_report_summary_native(repo_root: Path) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    artifact_dir = scope_report_artifact_dir(repo_root)
+    try:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        findings.append(finding("pass", "runtime-scope.artifact-dir", "Runtime scope artifact directory is ready.", str(artifact_dir)))
+    except OSError as error:
+        findings.append(finding("fail", "runtime-scope.artifact-dir", f"Runtime scope artifact directory is not usable: {error}", str(artifact_dir)))
+    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading native scope-report summaries."))
+    if aggregate_status(findings) == "fail":
+        return make_result("runtime-scope-report-summary", repo_root, "Runtime scope report summary stopped at native API prerequisites.", findings, [str(artifact_dir)])
+
+    list_path = "/api/v1/scope-reports?page_size=1&sort=-creation_time&filter=Organization"
+    listing = native_api_curl(repo_root, list_path)
+    listing_json = parse_json_output(listing)
+    items = listing_json.get("items", []) if isinstance(listing_json, dict) else []
+    selected = items[0] if items and isinstance(items[0], dict) else None
+    page = listing_json.get("page", {}) if isinstance(listing_json, dict) and isinstance(listing_json.get("page"), dict) else {}
+    if selected is None or not isinstance(selected.get("scope"), dict):
+        payload = {
+            "status": "fail",
+            "summary": "No Organization scope report exists through the native API.",
+            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            "details": {"source": "turbovas-api", "listing": listing_json},
+        }
+        payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
+        findings.append(process_step_finding("fail", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
+        return make_result("runtime-scope-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
+
+    scope = selected["scope"]
+    protection_requirement = str(selected.get("protection_requirement") or "").lower().replace(" ", "_")
+    payload = {
+        "status": "pass",
+        "summary": "Latest Organization scope report read through the native API.",
+        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "details": {
+            "source": "turbovas-api",
+            "scope": {
+                "id": scope.get("id"),
+                "name": scope.get("name"),
+                "global": scope.get("name") == "Organization",
+                "protection_requirement": protection_requirement,
+                "target_count": json_int(selected.get("source_target_count")),
+                "host_count": json_int(selected.get("member_host_count")),
+                "scope_report_count": json_int(page.get("total")),
+            },
+            "scope_report": {
+                "id": selected.get("id"),
+                "name": selected.get("name"),
+                "scope_id": scope.get("id"),
+                "scope_name": scope.get("name"),
+                "created": selected.get("creation_time"),
+                "latest_evidence_time": selected.get("latest_evidence_time"),
+                "source_report_count": json_int(selected.get("source_report_count")),
+                "hosts_total": json_int(selected.get("member_host_count")),
+                "hosts_with_evidence": json_int(selected.get("evidence_host_count")),
+                "hosts_missing_evidence": json_int(selected.get("missing_host_count")),
+                "results_total": json_int(selected.get("result_count")),
+                "vulnerabilities_total": json_int(selected.get("vulnerability_count")),
+                "excluded_candidate_hosts": json_int(selected.get("excluded_candidate_host_count")),
+                "severity": selected.get("severity") if isinstance(selected.get("severity"), dict) else {},
+            },
+        },
+    }
+    payload["artifacts"] = [write_json_artifact(artifact_dir, "summary.json", payload)]
+    findings.append(process_step_finding("pass", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
+    return make_result("runtime-scope-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
+
+
 def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
+    if action == "summary":
+        return command_runtime_scope_report_summary_native(repo_root)
+
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     python = venv_python(repo_root, "python-gvm")

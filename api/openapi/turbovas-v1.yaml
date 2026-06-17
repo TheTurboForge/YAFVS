@@ -70,6 +70,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportHostCollection'
+  /reports/{report_id}/ports:
+    get:
+      summary: List raw scan report ports
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Raw report port collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortCollection'
   /reports/{report_id}/metrics:
     get:
       summary: Read raw report metrics

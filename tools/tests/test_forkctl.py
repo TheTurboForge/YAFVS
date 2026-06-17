@@ -731,6 +731,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/reports", endpoints)
         self.assertIn("/api/v1/reports/{report_id}", endpoints)
         self.assertIn("/api/v1/reports/{report_id}/results", endpoints)
+        self.assertIn("/api/v1/reports/{report_id}/ports", endpoints)
         self.assertIn("/api/v1/scopes", endpoints)
         self.assertIn("/api/v1/scopes/{scope_id}", endpoints)
         self.assertIn("/api/v1/scope-reports", endpoints)
@@ -763,6 +764,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/reports:", openapi)
         self.assertIn("/reports/{report_id}:", openapi)
         self.assertIn("/reports/{report_id}/results:", openapi)
+        self.assertIn("/reports/{report_id}/ports:", openapi)
         self.assertIn("description_excerpt", openapi)
         self.assertIn("nvt_family", openapi)
         self.assertIn("count(DISTINCT nullif(res.nvt, '')) FILTER (WHERE coalesce(res.severity, 0) != -3.0)", source)
@@ -771,9 +773,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("route(\"/api/v1/reports\", get(reports))", source)
         self.assertIn("route(\"/api/v1/reports/:report_id\", get(report_detail))", source)
         self.assertIn("route(\"/api/v1/reports/:report_id/results\", get(report_results))", source)
+        self.assertIn("route(\"/api/v1/reports/:report_id/ports\", get(report_ports))", source)
         self.assertIn("native-api.raw-reports", smoke)
         self.assertIn("native-api.raw-report-detail", smoke)
         self.assertIn("native-api.raw-report-results", smoke)
+        self.assertIn("native-api.raw-report-ports", smoke)
 
     def test_openapi_tracks_scope_read_contracts(self):
         root = Path(__file__).resolve().parents[2]

@@ -71,7 +71,8 @@ Error Messages, scope-report Metrics, and raw report Metrics because those read
 paths validate DB-backed evidence, scope membership, provenance, and report
 reading without changing scanner control behavior. Browser-facing proof now
 covers the raw `/reports` list, `/scopes` list/detail reads, raw report Results,
-raw report Hosts, report Metrics, and all current scope-report evidence tabs:
+raw report Hosts, raw report Ports, report Metrics, and all current
+scope-report evidence tabs:
 GSA calls same-origin `/api/v1/...` paths, and `gsad` authenticates and
 allowlists those reads before proxying to the internal sidecar.
 `runtime-report-summary --json` now also uses the native raw report
@@ -95,6 +96,11 @@ port/application counts, authenticated-scan state, scan timestamps, result and
 vulnerability counts, severity buckets, maximum severity, and source report ID.
 The raw report Hosts tab uses this endpoint through the same authenticated
 browser proxy.
+
+Native raw report port rows include port, protocol, affected host count,
+result count, vulnerability count, maximum severity, and source report ID
+provenance. The raw report Ports tab uses this endpoint through the same
+authenticated browser proxy.
 
 Raw report `vulnerability_count` mirrors inherited raw-report summary semantics:
 it counts distinct NVTs on non-error result rows, including log-level rows. CVSS

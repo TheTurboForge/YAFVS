@@ -422,6 +422,14 @@ async function runForBaseUrl(baseUrl) {
         } else {
           add('fail', 'raw-report.hosts-tab', 'Could not activate the raw-report Hosts tab.');
         }
+        if (await clickTab(page, 'Ports', isRawReportDetailUrl)) {
+          await screenshot(page, 'raw-report-ports-tab');
+          await assertNoAppError(page, 'raw-report-ports-tab.app-error');
+          const nativeRawPorts = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports\/[^/]+\/ports$/);
+          add(nativeRawPorts ? 'pass' : 'fail', 'raw-report.ports-native-api', nativeRawPorts ? 'Raw-report Ports tab loaded through same-origin native API.' : 'Raw-report Ports tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/ports')) });
+        } else {
+          add('fail', 'raw-report.ports-tab', 'Could not activate the raw-report Ports tab.');
+        }
         if (await clickTab(page, 'Metrics', isRawReportDetailUrl)) {
           await waitForMetricLabels(page);
           await screenshot(page, 'raw-report-metrics-tab');

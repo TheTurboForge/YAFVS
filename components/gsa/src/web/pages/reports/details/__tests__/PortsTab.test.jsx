@@ -1,14 +1,12 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
-import {screen, rendererWith, wait} from 'web/testing';
-import {waitFor} from '@testing-library/react';
-import CollectionCounts from 'gmp/collection/collection-counts';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
+import {screen, rendererWith} from 'web/testing';
 import Filter from 'gmp/models/filter';
-import ReportPort from 'gmp/models/report/port';
 import {createSession} from 'gmp/testing';
 import {SEVERITY_RATING_CVSS_3} from 'gmp/utils/severity';
 import PortsTab from 'web/pages/reports/details/PortsTab';
@@ -17,50 +15,58 @@ const reportFilter = Filter.fromString(
   'apply_overrides=0 levels=hml rows=2 min_qod=70 first=1 sort-reverse=severity',
 );
 
-const port1 = ReportPort.fromElement({
-  host: '1.1.1.1',
-  __text: '123/tcp',
-  severity: 10.0,
-  threat: 'High',
-});
-port1.addHost({ip: '1.1.1.1'});
-
-const port2 = ReportPort.fromElement({
-  host: '2.2.2.2',
-  __text: '456/tcp',
-  severity: 5.0,
-  threat: 'Medium',
-});
-port2.addHost({ip: '2.2.2.2'});
-
-const ports = [port1, port2];
-
-const createGmp = ({
-  getReportPorts = testing.fn().mockResolvedValue({
-    data: ports,
-    meta: {
-      filter: reportFilter,
-      counts: new CollectionCounts({
-        first: 1,
-        all: 2,
-        filtered: 2,
-        length: 2,
-        rows: 10,
-      }),
-    },
+const createGmp = () => ({
+  buildUrl: testing.fn((path, params = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value));
+      }
+    });
+    return `https://turbovas.example/${path}${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`;
   }),
-} = {}) => ({
-  reportports: {
-    get: getReportPorts,
-  },
   settings: {
     severityRating: SEVERITY_RATING_CVSS_3,
   },
   session: createSession({token: 'test-token', username: 'admin'}),
 });
 
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
+
 describe('Report Ports Tab tests', () => {
   test('should render Report Ports Tab', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 2, sort: '-max_severity', filter: ''},
+        items: [
+          {
+            port: '123/tcp',
+            protocol: 'tcp',
+            host_count: 1,
+            result_count: 4,
+            vulnerability_count: 2,
+            max_severity: 10.0,
+            source_report_ids: ['1234'],
+          },
+          {
+            port: '456/tcp',
+            protocol: 'tcp',
+            host_count: 1,
+            result_count: 2,
+            vulnerability_count: 1,
+            max_severity: 5.0,
+            source_report_ids: ['1234'],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const gmp = createGmp();
     const {render} = rendererWith({
       gmp,
@@ -71,13 +77,7 @@ describe('Report Ports Tab tests', () => {
       <PortsTab reportFilter={reportFilter} reportId="1234" />,
     );
 
-    await wait();
-
-    await waitFor(() => {
-      expect(screen.getAllByTestId('progressbar-box').length).toBeGreaterThan(
-        0,
-      );
-    });
+    expect(await screen.findByText('123/tcp')).toBeInTheDocument();
 
     const header = baseElement.querySelectorAll('th');
     const rows = baseElement.querySelectorAll('tr');
@@ -85,27 +85,25 @@ describe('Report Ports Tab tests', () => {
 
     // Headings
     expect(header[0]).toHaveTextContent('Port');
-    expect(header[1]).toHaveTextContent('Hosts');
-    expect(header[2]).toHaveTextContent('Severity');
+    expect(header[1]).toHaveTextContent('Protocol');
+    expect(header[2]).toHaveTextContent('Hosts');
+    expect(header[3]).toHaveTextContent('Results');
+    expect(header[4]).toHaveTextContent('Vulnerabilities');
+    expect(header[5]).toHaveTextContent('Severity');
 
     // Row 1
-    expect(rows[1]).toHaveTextContent('123/tcp1'); // Port 123/tcp, Hosts 1
+    expect(rows[1]).toHaveTextContent('123/tcptcp142');
     expect(bars[0]).toHaveAttribute('title', 'Critical');
     expect(bars[0]).toHaveTextContent('10.0 (Critical)');
 
     // Row 2
-    expect(rows[2]).toHaveTextContent('456/tcp1'); // Port 456/tcp, Hosts 1
+    expect(rows[2]).toHaveTextContent('456/tcptcp121');
     expect(bars[1]).toHaveAttribute('title', 'Medium');
     expect(bars[1]).toHaveTextContent('5.0 (Medium)');
 
-    // Filter
-    expect(baseElement).toHaveTextContent(
-      '(Applied filter: apply_overrides=0 levels=hml rows=2 min_qod=70 first=1 sort-reverse=severity)',
-    );
-
-    // Verify report_id was passed as a separate parameter
-    expect(gmp.reportports.get).toHaveBeenCalledWith(
-      expect.objectContaining({report_id: '1234'}),
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/reports/1234/ports'),
+      expect.objectContaining({credentials: 'include'}),
     );
   });
 });

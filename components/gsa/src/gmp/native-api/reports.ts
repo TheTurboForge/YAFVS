@@ -107,6 +107,21 @@ interface NativeReportHostsPayload {
   items?: NativeReportHostPayload[];
 }
 
+interface NativeReportPortPayload {
+  port: string;
+  protocol: string;
+  host_count: number;
+  result_count: number;
+  vulnerability_count: number;
+  max_severity: number;
+  source_report_ids?: string[];
+}
+
+interface NativeReportPortsPayload {
+  page?: Partial<NativeReportPage>;
+  items?: NativeReportPortPayload[];
+}
+
 type NativeReportDetailPayload = NativeReportItem;
 
 export interface NativeReportQuery {
@@ -170,6 +185,21 @@ export interface NativeReportHostsResponse {
   page: NativeReportPage;
 }
 
+export interface NativeReportPortItem {
+  port: string;
+  protocol: string;
+  hostCount: number;
+  resultCount: number;
+  vulnerabilityCount: number;
+  maxSeverity: number;
+  sourceReportIds: string[];
+}
+
+export interface NativeReportPortsResponse {
+  items: NativeReportPortItem[];
+  page: NativeReportPage;
+}
+
 const REPORT_SORT_FIELDS: Record<string, string> = {
   date: 'creation_time',
   creation_time: 'creation_time',
@@ -225,14 +255,47 @@ const HOST_SORT_FIELDS: Record<string, string> = {
   vulnerability_count: 'vulnerability_count',
 };
 
+const PORT_SORT_FIELDS: Record<string, string> = {
+  host_count: 'host_count',
+  hosts: 'host_count',
+  max_severity: 'max_severity',
+  name: 'port',
+  port: 'port',
+  protocol: 'protocol',
+  result_count: 'result_count',
+  severity: 'max_severity',
+  vulnerability_count: 'vulnerability_count',
+};
+
 const integerValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const nativePortSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending) || 'port';
+  const nativeField = PORT_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
+};
+
 const numberValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseFloat(String(value ?? fallback));
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+export const nativeReportPortsQueryFromFilter = (
+  filter?: Filter,
+): NativeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativePortSortFromFilter(filter),
+    filter: nativeSearchFromFilter(filter),
+  };
 };
 
 const stringValue = (value: unknown): string =>
@@ -354,6 +417,20 @@ const nativeReportHostFromPayload = (
   },
   maxSeverity: numberValue(item.max_severity),
   sourceReportId: stringValue(item.source_report_id),
+});
+
+const nativeReportPortFromPayload = (
+  item: NativeReportPortPayload,
+): NativeReportPortItem => ({
+  port: stringValue(item.port),
+  protocol: stringValue(item.protocol),
+  hostCount: integerValue(item.host_count),
+  resultCount: integerValue(item.result_count),
+  vulnerabilityCount: integerValue(item.vulnerability_count),
+  maxSeverity: numberValue(item.max_severity),
+  sourceReportIds: Array.isArray(item.source_report_ids)
+    ? item.source_report_ids.filter(value => typeof value === 'string')
+    : [],
 });
 
 const nativeCounts = (page: NativeReportPage, length: number) =>
@@ -541,6 +618,35 @@ export const fetchNativeReportHosts = async (
   };
   return {
     items: (payload.items ?? []).map(nativeReportHostFromPayload),
+    page,
+  };
+};
+
+export const fetchNativeReportPorts = async (
+  gmp: NativeApiGmp,
+  reportId: string,
+  query: NativeReportQuery,
+): Promise<NativeReportPortsResponse> => {
+  const payload = await fetchNativeJson<NativeReportPortsPayload>(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(reportId)}/ports`,
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  return {
+    items: (payload.items ?? []).map(nativeReportPortFromPayload),
     page,
   };
 };

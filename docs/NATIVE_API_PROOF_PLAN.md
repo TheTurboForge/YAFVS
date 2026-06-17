@@ -85,7 +85,7 @@ high-consequence inherited control paths until separately designed and reviewed.
 
 After scope-report Results/Hosts/Ports/Applications/Operating Systems/CVEs/TLS
 Certificates/Error Messages/Metrics, raw report Metrics, raw report
-list/detail/result/host rows, raw report Results/Hosts browser reads, and scope metadata
+list/detail/result/host/port rows, raw report Results/Hosts/Ports browser reads, and scope metadata
 reads, the next candidates are the remaining native raw report tab collections
 or helper/tooling replacements, only if they directly unlock migration away
 from GMP/XML.

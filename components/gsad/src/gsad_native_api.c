@@ -62,6 +62,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *metrics_suffix = "/metrics";
   const gchar *results_suffix = "/results";
   const gchar *hosts_suffix = "/hosts";
+  const gchar *ports_suffix = "/ports";
   const gchar *scope_collection_suffixes[] = { "/metrics",
                                                "/results",
                                                "/hosts",
@@ -109,6 +110,15 @@ native_api_path_is_allowed (const gchar *path)
       const gchar *id = path + strlen (raw_report_prefix);
       gsize id_len = strlen (path) - strlen (raw_report_prefix)
                      - strlen (hosts_suffix);
+      return is_uuid_segment (id, id_len);
+    }
+
+  if (g_str_has_prefix (path, raw_report_prefix)
+      && g_str_has_suffix (path, ports_suffix))
+    {
+      const gchar *id = path + strlen (raw_report_prefix);
+      gsize id_len = strlen (path) - strlen (raw_report_prefix)
+                     - strlen (ports_suffix);
       return is_uuid_segment (id, id_len);
     }
 

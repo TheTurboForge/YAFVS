@@ -2526,6 +2526,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA raw report Hosts tab (migrated through gsad same-origin proxy)", "host evidence reads for raw reports"],
             },
             {
+                "endpoint": "/api/v1/reports/{report_id}/ports",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA raw report Ports tab (migrated through gsad same-origin proxy)", "port evidence reads for raw reports"],
+            },
+            {
                 "endpoint": "/api/v1/scopes",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA scope list reads (migrated through gsad same-origin proxy)", "gvm-tools scope list scripts"],
@@ -5342,6 +5347,20 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
                     raw_report_hosts,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../hosts?page_size=5"),
                     raw_report_hosts_json,
+                )
+            )
+            raw_report_ports = native_api_curl(repo_root, f"/api/v1/reports/{urllib.parse.quote(raw_report_detail_id)}/ports?page_size=5&sort=port")
+            raw_report_ports_json = parse_json_output(raw_report_ports)
+            details["raw_report_ports"] = summarize_native_api_response(raw_report_ports_json)
+            raw_report_port_items = raw_report_ports_json.get("items", []) if isinstance(raw_report_ports_json, dict) else []
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if raw_report_ports.returncode == 0 and isinstance(raw_report_port_items, list) else "fail",
+                    "native-api.raw-report-ports",
+                    f"Native API raw-report Ports probe exit code {raw_report_ports.returncode}.",
+                    raw_report_ports,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../ports?page_size=5"),
+                    raw_report_ports_json,
                 )
             )
         else:

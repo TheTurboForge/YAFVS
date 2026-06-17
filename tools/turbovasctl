@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -199,6 +200,9 @@ NMAP_PRIVILEGE_WARNING_PATTERNS = (
 LOG_REVIEW_TAIL_LINES = 300
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
 RETAINED_PERFORMANCE_ARTIFACTS = 30
+GSA_OPERATION_LOCK = "gsa-quality"
+RUNTIME_MANAGER_LOCK = "runtime-manager"
+DEFAULT_RUNTIME_LOCK_TIMEOUT_SECONDS = 1800
 QUALITY_GATE_SYSTEMD_UNITS = ("turbovas-quality-gate.service", "turbovas-quality-gate.timer")
 QUALITY_GATE_TIMER_NAME = "turbovas-quality-gate.timer"
 NATIVE_TOOLING_CATEGORIES = (
@@ -696,6 +700,118 @@ def runtime_path(repo_root: Path, *parts: str) -> Path:
     return runtime_dir(repo_root).joinpath(*parts)
 
 
+class RuntimeLockTimeout(TimeoutError):
+    """Raised when another runtime command holds a named operation lock."""
+
+    def __init__(self, lock_name: str, operation: str, metadata: dict[str, Any] | None):
+        self.lock_name = lock_name
+        self.operation = operation
+        self.metadata = metadata or {}
+        super().__init__(f"Timed out waiting for runtime lock {lock_name!r} for {operation}.")
+
+
+@dataclass
+class RuntimeOperationLock:
+    path: Path
+    metadata_path: Path
+    handle: Any
+
+    def __enter__(self) -> "RuntimeOperationLock":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        try:
+            self.metadata_path.unlink(missing_ok=True)
+        finally:
+            fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
+            self.handle.close()
+
+
+def runtime_lock_dir(repo_root: Path) -> Path:
+    return runtime_path(repo_root, "run", "locks")
+
+
+def runtime_lock_paths(repo_root: Path, name: str) -> tuple[Path, Path]:
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip(".-") or "runtime"
+    directory = runtime_lock_dir(repo_root)
+    return directory / f"{safe_name}.lock", directory / f"{safe_name}.json"
+
+
+def read_runtime_lock_metadata(repo_root: Path, name: str) -> dict[str, Any] | None:
+    _, metadata_path = runtime_lock_paths(repo_root, name)
+    try:
+        data = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def runtime_lock_status(repo_root: Path, name: str) -> dict[str, Any]:
+    lock_path, metadata_path = runtime_lock_paths(repo_root, name)
+    metadata = read_runtime_lock_metadata(repo_root, name)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {
+                "name": name,
+                "active": True,
+                "path": str(lock_path),
+                "metadata_path": str(metadata_path),
+                "metadata": metadata or {},
+            }
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            return {
+                "name": name,
+                "active": False,
+                "path": str(lock_path),
+                "metadata_path": str(metadata_path),
+                "metadata": metadata or {},
+            }
+
+
+def acquire_runtime_lock(
+    repo_root: Path,
+    name: str,
+    operation: str,
+    *,
+    timeout_seconds: int = DEFAULT_RUNTIME_LOCK_TIMEOUT_SECONDS,
+) -> RuntimeOperationLock:
+    lock_path, metadata_path = runtime_lock_paths(repo_root, name)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                metadata = read_runtime_lock_metadata(repo_root, name)
+                handle.close()
+                raise RuntimeLockTimeout(name, operation, metadata)
+            time.sleep(1)
+    metadata = {
+        "name": name,
+        "operation": operation,
+        "pid": os.getpid(),
+        "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    }
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return RuntimeOperationLock(lock_path, metadata_path, handle)
+
+
+def runtime_lock_timeout_finding(exc: RuntimeLockTimeout, check: str) -> dict[str, Any]:
+    return finding(
+        "fail",
+        check,
+        f"Timed out waiting for runtime lock {exc.lock_name!r}; another operation may still be running.",
+        details={"operation": exc.operation, "holder": exc.metadata},
+    )
+
+
 def feed_cache_root(repo_root: Path) -> Path:
     return runtime_path(repo_root, "feed-cache", "community", FEED_RELEASE)
 
@@ -1034,6 +1150,19 @@ def service_log_tail(repo_root: Path, service: str, lines: int = 80) -> list[str
     return result.stdout.splitlines()[-lines:]
 
 
+def runtime_manager_diagnostics(repo_root: Path) -> dict[str, Any]:
+    ps = run_command(compose_command(repo_root, "ps", "--all"), repo_root, env=runtime_env(repo_root), timeout=120)
+    return {
+        "compose_ps_exit_code": ps.returncode,
+        "compose_ps_tail": output_tail(ps.stdout, 120),
+        "postgres_running": container_running(repo_root, "postgres"),
+        "gvmd_running": container_running(repo_root, "gvmd"),
+        "gvmd_socket": unix_socket_status(gvmd_socket_path(repo_root)),
+        "gvmd_logs_tail": service_log_tail(repo_root, "gvmd", lines=80),
+        "postgres_logs_tail": service_log_tail(repo_root, "postgres", lines=80),
+    }
+
+
 def runtime_file_tail(path: Path, lines: int = 80) -> list[str]:
     try:
         return path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
@@ -1247,13 +1376,58 @@ def gvm_cli_path(repo_root: Path) -> Path:
     return repo_root / "build" / "venvs" / "gvm-tools" / "bin" / "gvm-cli"
 
 
+def unix_socket_status(path: Path, *, timeout_seconds: float = 1.0) -> dict[str, Any]:
+    details: dict[str, Any] = {"path": str(path)}
+    if not path.exists():
+        details["state"] = "missing"
+        return details
+    if not path.is_socket():
+        details["state"] = "not-socket"
+        return details
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(timeout_seconds)
+    try:
+        client.connect(str(path))
+    except ConnectionRefusedError as exc:
+        details.update({"state": "stale", "error": str(exc), "errno": exc.errno})
+    except socket.timeout as exc:
+        details.update({"state": "timeout", "error": str(exc)})
+    except OSError as exc:
+        details.update({"state": "error", "error": str(exc), "errno": exc.errno})
+    else:
+        details["state"] = "ready"
+    finally:
+        client.close()
+    return details
+
+
+def socket_ready(path: Path) -> bool:
+    return unix_socket_status(path).get("state") == "ready"
+
+
+def socket_readiness_finding(check: str, label: str, path: Path, *, missing_status: str = "warn") -> dict[str, Any]:
+    status = unix_socket_status(path)
+    state = status.get("state")
+    if state == "ready":
+        return finding("pass", check, f"{label} socket accepts connections.", str(path), {"socket": status})
+    severity = missing_status if state == "missing" else "fail"
+    message = {
+        "missing": f"{label} socket is missing.",
+        "not-socket": f"{label} path exists but is not a socket.",
+        "stale": f"{label} socket path exists but no process is listening.",
+        "timeout": f"{label} socket connection timed out.",
+        "error": f"{label} socket connection failed.",
+    }.get(str(state), f"{label} socket state is {state or 'unknown'}.")
+    return finding(severity, check, message, str(path), {"socket": status})
+
+
 def wait_for_socket(path: Path, timeout_seconds: int = 20) -> bool:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        if path.is_socket():
+        if socket_ready(path):
             return True
         time.sleep(1)
-    return path.is_socket()
+    return socket_ready(path)
 
 
 def runtime_env(repo_root: Path) -> dict[str, str]:
@@ -3078,6 +3252,16 @@ def command_build(repo_root: Path, component: str, install: bool = False, config
 
 
 def command_build_node(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
+    if meta.name == "gsa":
+        try:
+            with acquire_runtime_lock(repo_root, GSA_OPERATION_LOCK, f"build {meta.name}"):
+                return command_build_node_unlocked(repo_root, meta)
+        except RuntimeLockTimeout as exc:
+            return make_result("build", repo_root, f"Build {meta.name} stopped while waiting for the GSA operation lock.", [runtime_lock_timeout_finding(exc, "gsa.lock")], [f"{COMPONENT_BY_NAME[meta.name].path}/node_modules"])
+    return command_build_node_unlocked(repo_root, meta)
+
+
+def command_build_node_unlocked(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
     component = COMPONENT_BY_NAME[meta.name]
     component_path = repo_root / component.path
     findings: list[dict[str, Any]] = []
@@ -3487,6 +3671,20 @@ def command_runtime_scanner_redis_init(repo_root: Path, probe_openvas: bool = Tr
 
 
 def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, RUNTIME_MANAGER_LOCK, "runtime-manager-init"):
+            return command_runtime_manager_init_unlocked(repo_root)
+    except RuntimeLockTimeout as exc:
+        return make_result(
+            "runtime-manager-init",
+            repo_root,
+            "Runtime manager initialization stopped while waiting for another manager operation.",
+            [runtime_lock_timeout_finding(exc, "runtime.manager-lock")],
+            [str(runtime_dir(repo_root))],
+        )
+
+
+def command_runtime_manager_init_unlocked(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     db_init = command_runtime_init(repo_root)
@@ -3512,7 +3710,10 @@ def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
         return make_result("runtime-manager-init", repo_root, "Manager initialization stopped while building the app image.", findings, [str(runtime_dir(repo_root))])
 
     migrate = run_gvmd_oneoff(repo_root, ["--migrate"], no_deps=False)
-    findings.append(finding("pass" if migrate.returncode == 0 else "fail", "gvmd.migrate", f"gvmd --migrate exit code {migrate.returncode}.", details={"output_tail": output_tail(migrate.stdout, 100, [password])}))
+    migrate_details: dict[str, Any] = {"output_tail": output_tail(migrate.stdout, 100, [password])}
+    if migrate.returncode != 0:
+        migrate_details["runtime_manager_diagnostics"] = runtime_manager_diagnostics(repo_root)
+    findings.append(finding("pass" if migrate.returncode == 0 else "fail", "gvmd.migrate", f"gvmd --migrate exit code {migrate.returncode}.", details=migrate_details))
     if migrate.returncode != 0:
         return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at database migration.", findings, [str(runtime_dir(repo_root))])
 
@@ -3550,7 +3751,7 @@ def command_runtime_gmp_smoke(repo_root: Path) -> dict[str, Any]:
     socket_path = gvmd_socket_path(repo_root)
     python = venv_python(repo_root, "python-gvm")
     probe = repo_root / "tools" / "runtime_gmp_smoke.py"
-    findings.append(finding("pass" if socket_path.is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if socket_path.is_socket() else "gvmd socket is not ready.", str(socket_path)))
+    findings.append(socket_readiness_finding("gvmd.socket", "gvmd", socket_path, missing_status="fail"))
     findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing; run just runtime-manager-init.", str(secret_path)))
     findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing; run just build-python.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
     findings.append(finding("pass" if probe.is_file() else "fail", "gmp.probe", "GMP smoke probe exists." if probe.is_file() else "GMP smoke probe is missing.", str(probe.relative_to(repo_root))))
@@ -4495,6 +4696,9 @@ def command_runtime_app_down(repo_root: Path) -> dict[str, Any]:
 
 def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
+    if manager_lock["active"]:
+        findings.append(finding("fail", "runtime.manager-lock", "A manager initialization or manager operation is active; app smoke would race transient state.", details={"lock": manager_lock}))
     findings.extend(command_feed_state(repo_root)["findings"])
     findings.extend(cert_file_findings(repo_root))
     if not certs_complete(repo_root):
@@ -4515,15 +4719,17 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
         findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
 
     gvmd_socket = gvmd_socket_path(repo_root)
-    gvmd_ready = wait_for_socket(gvmd_socket)
-    findings.append(finding("pass" if gvmd_ready else "warn", "gvmd.socket", f"gvmd socket {'is ready' if gvmd_ready else 'is not ready'}.", str(gvmd_socket)))
+    gvmd_socket_finding = socket_readiness_finding("gvmd.socket", "gvmd", gvmd_socket)
+    findings.append(gvmd_socket_finding)
+    gvmd_ready = gvmd_socket_finding["status"] == "pass"
     if gvmd_ready and password:
         gmp = command_runtime_gmp_smoke(repo_root)
         findings.append(finding(gmp["status"], "gvmd.gmp", gmp["summary"], details={"status": gmp["status"]}))
 
     ospd_socket = ospd_socket_path(repo_root)
-    ospd_ready = wait_for_socket(ospd_socket, timeout_seconds=5)
-    findings.append(finding("pass" if ospd_ready else "warn", "ospd.socket", f"ospd-openvas socket {'is ready' if ospd_ready else 'is not ready'}.", str(ospd_socket)))
+    ospd_socket_finding = socket_readiness_finding("ospd.socket", "ospd-openvas", ospd_socket)
+    findings.append(ospd_socket_finding)
+    ospd_ready = ospd_socket_finding["status"] == "pass"
     if container_running(repo_root, "ospd-openvas"):
         capability = command_runtime_scanner_capability_check(repo_root)
         findings.append(finding(capability["status"], "ospd.capability-check", capability["summary"], details={"status": capability["status"], "findings": capability["findings"]}))
@@ -5141,6 +5347,11 @@ def command_runtime_data_state(repo_root: Path) -> dict[str, Any]:
     }
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
+    manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
+    details["runtime_manager_lock"] = manager_lock
+    if manager_lock["active"]:
+        findings.append(finding("warn", "data-state.runtime-manager-lock", "runtime-manager-init or another manager operation is currently active; data-state may be transient.", details={"lock": manager_lock}))
+
     if not container_running(repo_root, "postgres"):
         findings.append(finding("warn", "data-state.postgres", "Postgres is not running; database state is unavailable."))
     else:
@@ -5284,6 +5495,8 @@ def command_runtime_performance_snapshot(repo_root: Path) -> dict[str, Any]:
 
 def command_runtime_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
+    findings.append(finding("warn" if manager_lock["active"] else "pass", "runtime.manager-lock", "A manager operation is currently active." if manager_lock["active"] else "No manager operation lock is active.", details={"lock": manager_lock}))
     findings.append(finding("pass" if shutil.which("docker") else "fail", "docker.available", "docker is available." if shutil.which("docker") else "docker is not available."))
     docker = run_command(["docker", "info"], repo_root, env=runtime_env(repo_root))
     findings.append(finding("pass" if docker.returncode == 0 else "fail", "docker.daemon", f"docker info exit code {docker.returncode}.", details={"output_tail": docker.stdout.splitlines()[-40:]}))
@@ -5310,8 +5523,8 @@ def command_runtime_status(repo_root: Path) -> dict[str, Any]:
     findings.append(finding("pass" if secret_path.is_file() else "warn", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is not initialized yet.", str(secret_path)))
     for service in APP_SERVICES:
         findings.append(finding("pass" if container_running(repo_root, service) else "warn", "runtime.app.running", f"{service} container is {'running' if container_running(repo_root, service) else 'not running'}.", details={"service": service}))
-    findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "warn", "gvmd.socket", f"gvmd socket {'is ready' if gvmd_socket_path(repo_root).is_socket() else 'is not ready'}.", str(gvmd_socket_path(repo_root))))
-    findings.append(finding("pass" if ospd_socket_path(repo_root).is_socket() else "warn", "ospd.socket", f"ospd-openvas socket {'is ready' if ospd_socket_path(repo_root).is_socket() else 'is not ready'}.", str(ospd_socket_path(repo_root))))
+    findings.append(socket_readiness_finding("gvmd.socket", "gvmd", gvmd_socket_path(repo_root)))
+    findings.append(socket_readiness_finding("ospd.socket", "ospd-openvas", ospd_socket_path(repo_root)))
     return make_result("runtime-status", repo_root, "Runtime status collected.", findings, [str(runtime_dir(repo_root))])
 
 
@@ -5455,13 +5668,18 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
         details["steps"]["turbovas-api-test"] = {"exit_code": cargo_test.returncode, "output_tail": output_tail(cargo_test.stdout, 160)}
         findings.append(process_step_finding("pass" if cargo_test.returncode == 0 else "fail", "quality.turbovas-api-test", f"turbovas-api cargo test exit code {cargo_test.returncode}.", cargo_test, cargo_test_command))
 
-    gsa_type = run_command(["bash", "-lc", "cd components/gsa && npm run type-check"], repo_root, env=gsa_quality_env(repo_root), timeout=600)
-    details["steps"]["gsa-type-check"] = {"exit_code": gsa_type.returncode, "output_tail": output_tail(gsa_type.stdout, 120)}
-    findings.append(process_step_finding("pass" if gsa_type.returncode == 0 else "fail", "quality.gsa-type-check", f"GSA type-check exit code {gsa_type.returncode}.", gsa_type, ["bash", "-lc", "cd components/gsa && npm run type-check"]))
+    try:
+        with acquire_runtime_lock(repo_root, GSA_OPERATION_LOCK, "quality-gate GSA checks"):
+            gsa_type = run_command(["bash", "-lc", "cd components/gsa && npm run type-check"], repo_root, env=gsa_quality_env(repo_root), timeout=600)
+            details["steps"]["gsa-type-check"] = {"exit_code": gsa_type.returncode, "output_tail": output_tail(gsa_type.stdout, 120)}
+            findings.append(process_step_finding("pass" if gsa_type.returncode == 0 else "fail", "quality.gsa-type-check", f"GSA type-check exit code {gsa_type.returncode}.", gsa_type, ["bash", "-lc", "cd components/gsa && npm run type-check"]))
 
-    gsa_fast = run_command(["bash", "-lc", "cd components/gsa && npm run test:web-fast"], repo_root, env=gsa_quality_env(repo_root), timeout=900)
-    details["steps"]["gsa-test-web-fast"] = {"exit_code": gsa_fast.returncode, "output_tail": output_tail(gsa_fast.stdout, 160)}
-    findings.append(process_step_finding("pass" if gsa_fast.returncode == 0 else "fail", "quality.gsa-test-web-fast", f"GSA web-fast test exit code {gsa_fast.returncode}.", gsa_fast, ["bash", "-lc", "cd components/gsa && npm run test:web-fast"]))
+            gsa_fast = run_command(["bash", "-lc", "cd components/gsa && npm run test:web-fast"], repo_root, env=gsa_quality_env(repo_root), timeout=900)
+            details["steps"]["gsa-test-web-fast"] = {"exit_code": gsa_fast.returncode, "output_tail": output_tail(gsa_fast.stdout, 160)}
+            findings.append(process_step_finding("pass" if gsa_fast.returncode == 0 else "fail", "quality.gsa-test-web-fast", f"GSA web-fast test exit code {gsa_fast.returncode}.", gsa_fast, ["bash", "-lc", "cd components/gsa && npm run test:web-fast"]))
+    except RuntimeLockTimeout as exc:
+        details["steps"]["gsa-lock"] = {"status": "fail", "holder": exc.metadata}
+        findings.append(runtime_lock_timeout_finding(exc, "quality.gsa-lock"))
 
     if include_runtime:
         for name, command_result in (

@@ -4,6 +4,7 @@
 import importlib.util
 import json
 import os
+import socket
 import sys
 import tempfile
 import unittest
@@ -1112,6 +1113,45 @@ db2:keys=5,expires=0,avg_ttl=0
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         self.assertIn("doctor_non_pass", source)
         self.assertIn("non_pass_findings", source)
+
+    def test_gsa_and_runtime_manager_locks_are_registered(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        self.assertIn("GSA_OPERATION_LOCK", source)
+        self.assertIn("RUNTIME_MANAGER_LOCK", source)
+        self.assertIn("def acquire_runtime_lock", source)
+        self.assertIn("def command_build_node_unlocked", source)
+        self.assertIn("quality-gate GSA checks", source)
+        self.assertIn("def command_runtime_manager_init_unlocked", source)
+        self.assertIn("data-state.runtime-manager-lock", source)
+
+    def test_runtime_lock_status_reports_inactive_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            status = turbovasctl.runtime_lock_status(root, "unit-test")
+            self.assertFalse(status["active"])
+            self.assertTrue(status["path"].endswith("unit-test.lock"))
+
+    def test_unix_socket_status_classifies_missing_regular_ready_and_stale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            missing = root / "missing.sock"
+            self.assertEqual(turbovasctl.unix_socket_status(missing)["state"], "missing")
+
+            regular = root / "regular.sock"
+            regular.write_text("not a socket", encoding="utf-8")
+            self.assertEqual(turbovasctl.unix_socket_status(regular)["state"], "not-socket")
+
+            ready = root / "ready.sock"
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                server.bind(str(ready))
+                server.listen(1)
+                self.assertEqual(turbovasctl.unix_socket_status(ready)["state"], "ready")
+            finally:
+                server.close()
+
+            self.assertEqual(turbovasctl.unix_socket_status(ready)["state"], "stale")
 
     def test_quality_gate_unit_env_ignores_runtime_dir_override(self):
         with tempfile.TemporaryDirectory() as tmp:

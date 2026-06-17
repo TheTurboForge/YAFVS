@@ -176,7 +176,9 @@ const ScopeReportDetailsPage = () => {
   );
 
   const resultsTab = <ScopeReportResultsTab scopeReportId={report.id} />;
-  const metricsTab = <MetricsTab id={report.id} source="scopeReport" />;
+  const metricsTab = (
+    <MetricsTab id={report.id} scopeId={report.scopeId} source="scopeReport" />
+  );
   const hostsTab = <ScopeReportEvidenceTab kind="hosts" report={report} />;
   const portsTab = <ScopeReportEvidenceTab kind="ports" report={report} />;
   const applicationsTab = (

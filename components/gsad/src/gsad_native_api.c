@@ -1,0 +1,297 @@
+/* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+/**
+ * @file gsad_native_api.c
+ * @brief Authenticated same-origin proxy for TurboVAS native API reads.
+ */
+
+#include "gsad_native_api.h"
+
+#include "gsad_connection_info.h"
+#include "gsad_credentials.h"
+#include "gsad_http.h"
+
+#include <errno.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+
+#undef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gsad native api"
+
+#define DEFAULT_NATIVE_API_HOST "turbovas-api"
+#define DEFAULT_NATIVE_API_PORT "9080"
+#define NATIVE_API_MAX_RESPONSE_BYTES (10 * 1024 * 1024)
+
+static gboolean
+is_uuid_segment (const gchar *value, gsize length)
+{
+  if (value == NULL || length != 36)
+    return FALSE;
+
+  for (gsize i = 0; i < length; i++)
+    {
+      gboolean should_be_dash = (i == 8 || i == 13 || i == 18 || i == 23);
+      if (should_be_dash)
+        {
+          if (value[i] != '-')
+            return FALSE;
+        }
+      else if (!g_ascii_isxdigit (value[i]))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+native_api_path_is_allowed (const gchar *path)
+{
+  const gchar *raw_report_prefix = "/api/v1/reports/";
+  const gchar *scope_prefix = "/api/v1/scopes/";
+  const gchar *metrics_suffix = "/metrics";
+
+  if (path == NULL || strchr (path, '?') != NULL)
+    return FALSE;
+
+  if (g_str_has_prefix (path, raw_report_prefix)
+      && g_str_has_suffix (path, metrics_suffix))
+    {
+      const gchar *id = path + strlen (raw_report_prefix);
+      gsize id_len = strlen (path) - strlen (raw_report_prefix)
+                     - strlen (metrics_suffix);
+      return is_uuid_segment (id, id_len);
+    }
+
+  if (g_str_has_prefix (path, scope_prefix)
+      && g_str_has_suffix (path, metrics_suffix))
+    {
+      const gchar *scope_id = path + strlen (scope_prefix);
+      const gchar *reports_sep = strstr (scope_id, "/reports/");
+      if (reports_sep == NULL)
+        return FALSE;
+
+      const gchar *report_id = reports_sep + strlen ("/reports/");
+      gsize scope_id_len = reports_sep - scope_id;
+      gsize report_id_len = strlen (report_id) - strlen (metrics_suffix);
+
+      return is_uuid_segment (scope_id, scope_id_len)
+             && is_uuid_segment (report_id, report_id_len);
+    }
+
+  return FALSE;
+}
+
+static gsad_http_result_t
+send_json_error (gsad_http_connection_t *connection, int status_code,
+                 const gchar *message)
+{
+  gchar *body = g_strdup_printf ("{\"error\":{\"message\":\"%s\"}}\n",
+                                 message);
+  gsad_http_result_t ret = gsad_http_send_response_for_content (
+    connection, body, status_code, NULL, GSAD_CONTENT_TYPE_APP_JSON, NULL, 0);
+  g_free (body);
+  return ret;
+}
+
+static int
+connect_to_native_api (const gchar *host, const gchar *port)
+{
+  struct addrinfo hints;
+  struct addrinfo *result = NULL;
+  int fd = -1;
+
+  memset (&hints, 0, sizeof (hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if (getaddrinfo (host, port, &hints, &result) != 0)
+    return -1;
+
+  for (struct addrinfo *rp = result; rp != NULL; rp = rp->ai_next)
+    {
+      fd = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+      if (fd == -1)
+        continue;
+
+      struct timeval timeout;
+      timeout.tv_sec = 10;
+      timeout.tv_usec = 0;
+      setsockopt (fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof (timeout));
+      setsockopt (fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof (timeout));
+
+      if (connect (fd, rp->ai_addr, rp->ai_addrlen) == 0)
+        break;
+
+      close (fd);
+      fd = -1;
+    }
+
+  freeaddrinfo (result);
+  return fd;
+}
+
+static gboolean
+send_all (int fd, const gchar *data, gsize length)
+{
+  gsize sent = 0;
+
+  while (sent < length)
+    {
+      ssize_t written = send (fd, data + sent, length - sent, 0);
+      if (written <= 0)
+        return FALSE;
+      sent += (gsize) written;
+    }
+
+  return TRUE;
+}
+
+static gchar *
+extract_response_body (GString *raw_response, guint *status_code,
+                       gchar **error_message)
+{
+  gchar *header_end = strstr (raw_response->str, "\r\n\r\n");
+  gchar *status_end = strstr (raw_response->str, "\r\n");
+  int parsed_status = 0;
+
+  if (header_end == NULL || status_end == NULL || status_end > header_end)
+    {
+      *error_message = g_strdup ("Native API returned a malformed response.");
+      return NULL;
+    }
+
+  gchar *status_line = g_strndup (raw_response->str,
+                                  (gsize) (status_end - raw_response->str));
+  if (sscanf (status_line, "HTTP/%*d.%*d %d", &parsed_status) != 1
+      || parsed_status < 100 || parsed_status > 599)
+    {
+      g_free (status_line);
+      *error_message = g_strdup ("Native API returned an invalid status line.");
+      return NULL;
+    }
+  g_free (status_line);
+
+  *status_code = (guint) parsed_status;
+  return g_strdup (header_end + 4);
+}
+
+static gchar *
+fetch_native_api_json (const gchar *path, guint *status_code,
+                       gchar **error_message)
+{
+  const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
+  const gchar *port = g_getenv ("TURBOVAS_NATIVE_API_PORT");
+  int fd;
+  GString *request;
+  GString *response;
+  gchar buffer[8192];
+  gchar *body;
+
+  if (host == NULL || host[0] == 0)
+    host = DEFAULT_NATIVE_API_HOST;
+  if (port == NULL || port[0] == 0)
+    port = DEFAULT_NATIVE_API_PORT;
+
+  fd = connect_to_native_api (host, port);
+  if (fd == -1)
+    {
+      *error_message = g_strdup ("Native API service is unavailable.");
+      return NULL;
+    }
+
+  request = g_string_new (NULL);
+  g_string_printf (request,
+                   "GET %s HTTP/1.1\r\n"
+                   "Host: %s:%s\r\n"
+                   "Accept: application/json\r\n"
+                   "Connection: close\r\n"
+                   "User-Agent: gsad-native-api-proxy\r\n\r\n",
+                   path, host, port);
+
+  if (!send_all (fd, request->str, request->len))
+    {
+      g_string_free (request, TRUE);
+      close (fd);
+      *error_message = g_strdup ("Native API request could not be sent.");
+      return NULL;
+    }
+  g_string_free (request, TRUE);
+
+  response = g_string_new (NULL);
+  while (TRUE)
+    {
+      ssize_t count = recv (fd, buffer, sizeof (buffer), 0);
+      if (count == 0)
+        break;
+      if (count < 0)
+        {
+          g_string_free (response, TRUE);
+          close (fd);
+          *error_message = g_strdup ("Native API response could not be read.");
+          return NULL;
+        }
+
+      if (response->len + (gsize) count > NATIVE_API_MAX_RESPONSE_BYTES)
+        {
+          g_string_free (response, TRUE);
+          close (fd);
+          *error_message = g_strdup ("Native API response is too large.");
+          return NULL;
+        }
+
+      g_string_append_len (response, buffer, count);
+    }
+  close (fd);
+
+  body = extract_response_body (response, status_code, error_message);
+  g_string_free (response, TRUE);
+  return body;
+}
+
+gsad_http_result_t
+gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
+                                 void *handler_data,
+                                 gsad_http_connection_t *connection,
+                                 gsad_connection_info_t *con_info, void *data)
+{
+  gsad_credentials_t *credentials = (gsad_credentials_t *) data;
+  const gchar *path = gsad_connection_info_get_url (con_info);
+  gchar *body = NULL;
+  gchar *error_message = NULL;
+  guint status_code = MHD_HTTP_BAD_GATEWAY;
+  gsad_http_result_t ret;
+
+  (void) handler_next;
+  (void) handler_data;
+
+  if (!native_api_path_is_allowed (path))
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_NOT_FOUND,
+                              "Native API path is not available.");
+    }
+
+  body = fetch_native_api_json (path, &status_code, &error_message);
+  gsad_credentials_free (credentials);
+
+  if (body == NULL)
+    {
+      g_warning ("%s: %s", __func__, error_message);
+      g_free (error_message);
+      return send_json_error (connection, MHD_HTTP_BAD_GATEWAY,
+                              "Native API service is unavailable.");
+    }
+
+  ret = gsad_http_send_response_for_content (connection, body, (int) status_code,
+                                             NULL, GSAD_CONTENT_TYPE_APP_JSON,
+                                             NULL, 0);
+  g_free (body);
+  return ret;
+}

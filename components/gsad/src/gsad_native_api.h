@@ -1,0 +1,21 @@
+/* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+/**
+ * @file gsad_native_api.h
+ * @brief TurboVAS native API proxy handling.
+ */
+
+#ifndef _GSAD_NATIVE_API_H
+#define _GSAD_NATIVE_API_H
+
+#include "gsad_http_handler.h"
+
+gsad_http_result_t
+gsad_http_handle_native_api_get (gsad_http_handler_t *, void *,
+                                 gsad_http_connection_t *,
+                                 gsad_connection_info_t *, void *);
+
+#endif /* _GSAD_NATIVE_API_H */

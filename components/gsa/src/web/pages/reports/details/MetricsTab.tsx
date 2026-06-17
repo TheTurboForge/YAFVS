@@ -5,6 +5,10 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import type {ReportMetrics} from 'gmp/commands/report-metrics';
+import {
+  fetchNativeReportMetrics,
+  fetchNativeScopeReportMetrics,
+} from 'gmp/native-api/report-metrics';
 import ErrorPanel from 'web/components/error/ErrorPanel';
 import Loading from 'web/components/loading/Loading';
 import Section from 'web/components/section/Section';
@@ -20,6 +24,7 @@ import useTranslation from 'web/hooks/useTranslation';
 
 interface MetricsTabProps {
   id: string;
+  scopeId?: string;
   source: 'report' | 'scopeReport';
 }
 
@@ -38,7 +43,7 @@ const authStateLabel = (state: string, translate: (value: string) => string) => 
   }
 };
 
-const MetricsTab = ({id, source}: MetricsTabProps) => {
+const MetricsTab = ({id, scopeId, source}: MetricsTabProps) => {
   const [_] = useTranslation();
   const gmp = useGmp();
   const [metrics, setMetrics] = useState<ReportMetrics>();
@@ -53,16 +58,17 @@ const MetricsTab = ({id, source}: MetricsTabProps) => {
     setIsLoading(true);
     setError(undefined);
     try {
-      const response = source === 'scopeReport'
-        ? await gmp.scopereports.getMetrics(id)
-        : await gmp.report.getMetrics({id});
-      setMetrics(response.data);
+      const response =
+        source === 'scopeReport'
+          ? await fetchNativeScopeReportMetrics(gmp, scopeId ?? '', id)
+          : await fetchNativeReportMetrics(gmp, id);
+      setMetrics(response);
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setIsLoading(false);
     }
-  }, [gmp, id, source]);
+  }, [gmp, id, scopeId, source]);
 
   useEffect(() => {
     void loadMetrics();

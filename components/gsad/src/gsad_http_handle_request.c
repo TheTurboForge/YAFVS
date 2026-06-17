@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -10,6 +11,7 @@
 #include "gsad_http_handler_functions.h"
 #include "gsad_http_method_handler.h"
 #include "gsad_http_url_handler.h"
+#include "gsad_native_api.h"
 #include "gsad_params_mhd.h" /* for params_mhd_add */
 #include "gsad_utils.h"      /* for str_equal */
 #include "validator.h"       /* for gvm_validator_t */
@@ -50,6 +52,7 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
   gsad_http_handler_t *next = NULL;
   gsad_http_handler_t *gmp_get_handler = NULL;
   gsad_http_handler_t *gmp_post_handler = NULL;
+  gsad_http_handler_t *native_api_get_handler = NULL;
   gsad_http_handler_t *system_report_handler = NULL;
 
   gboolean is_jwt_requested = gsad_settings_is_jwt_requested (gsad_settings);
@@ -60,6 +63,8 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
       gmp_get_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       gmp_post_handler =
+        gsad_http_handler_new (gsad_http_handle_setup_credentials);
+      native_api_get_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
@@ -72,6 +77,10 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
                                        gsad_http_handle_setup_credentials);
       gmp_post_handler = gsad_http_handler_new (gsad_http_handle_setup_user);
       gsad_http_handler_add_from_func (gmp_post_handler,
+                                       gsad_http_handle_setup_credentials);
+      native_api_get_handler =
+        gsad_http_handler_new (gsad_http_handle_setup_user);
+      gsad_http_handler_add_from_func (native_api_get_handler,
                                        gsad_http_handle_setup_credentials);
       system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_user);
@@ -86,21 +95,24 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
     "^/gmp$", gsad_http_method_handler_new_with_handlers (gmp_get_handler,
                                                           gmp_post_handler));
   url_handlers = gsad_http_handler_add (url_handlers, gmp_url_handler);
+  next = url_handlers;
+
+  // Create authenticated same-origin handler for allowlisted native API reads.
+  gsad_http_handler_add_from_func (native_api_get_handler,
+                                   gsad_http_handle_native_api_get);
+  gsad_http_handler_t *native_api_url_handler = gsad_http_url_handler_new (
+    "^/api/v1/.+$", gsad_http_method_handler_new_get (native_api_get_handler));
+  next = gsad_http_handler_add (next, native_api_url_handler);
 
   gboolean is_api_only = gsad_settings_is_api_only_enabled (gsad_settings);
-  if (is_api_only)
-    {
-      // API-only mode, no static file handlers.
-      next = url_handlers;
-    }
-  else
+  if (!is_api_only)
     {
       // Create static file handlers for various URL patterns.
       gsad_http_handler_t *image_url_handler =
         gsad_http_url_handler_new ("^/(img|js|css|locales)/.+$",
                                    gsad_http_method_handler_new_get_from_func (
                                      gsad_http_handle_static_file));
-      next = gsad_http_handler_add (url_handlers, image_url_handler);
+      next = gsad_http_handler_add (next, image_url_handler);
 
       gsad_http_handler_t *robots_url_handler = gsad_http_url_handler_new (
         "^/robots\\.txt$", gsad_http_method_handler_new_get_from_func (

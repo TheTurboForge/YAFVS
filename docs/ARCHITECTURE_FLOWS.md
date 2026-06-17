@@ -27,7 +27,8 @@ TurboVAS is moving toward typed HTTP/JSON product APIs for DB-backed report,
 scope, metric, and evidence reads:
 
 ```text
-GSA or runtime helper -> /api/v1 JSON contract -> TurboVAS product query layer -> gvmd/PostgreSQL
+runtime helper -> turbovas-api /api/v1 JSON contract -> TurboVAS product query layer -> gvmd/PostgreSQL
+browser/GSA -> gsad same-origin /api/v1 proxy -> turbovas-api -> gvmd/PostgreSQL
 ```
 
 The first native API work is contract-first. It must not become a REST wrapper
@@ -35,6 +36,10 @@ around GMP/XML. GMP remains compatibility and high-consequence control plumbing
 until each product workflow has a proven native replacement with tests and
 browser/runtime coverage. See `docs/API_CONTRACT.md`,
 `docs/GMP_XML_STRANGLER.md`, and `api/openapi/turbovas-v1.yaml`.
+
+The first browser-facing native read is the raw-report and scope-report Metrics
+tab. `gsad` authenticates the existing operator session, allowlists the metrics
+paths, and proxies to the internal-only Rust sidecar.
 
 ## Scan Flow
 

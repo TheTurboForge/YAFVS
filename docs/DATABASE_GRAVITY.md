@@ -98,4 +98,6 @@ sidecar: scope-report list, result evidence, host evidence, CVE evidence,
 Error Message collections, persisted scope-report metrics, and raw report
 metrics are queried from gvmd/PostgreSQL and returned as typed JSON, while
 GMP/XML remains available for the inherited browser/control path until that
-workflow is deliberately migrated.
+workflow is deliberately migrated. Raw-report and scope-report Metrics are the
+first browser-facing product reads migrated through the authenticated `gsad`
+same-origin native API proxy.

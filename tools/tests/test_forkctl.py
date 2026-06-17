@@ -527,11 +527,37 @@ class TurboVASCtlTests(unittest.TestCase):
         raw_details = (root / "components" / "gsa" / "src" / "web" / "pages" / "reports" / "DetailsContent.tsx").read_text(encoding="utf-8")
         scope_details = (root / "components" / "gsa" / "src" / "web" / "pages" / "scope-reports" / "ScopeReportDetailsPage.tsx").read_text(encoding="utf-8")
         metrics_tab = (root / "components" / "gsa" / "src" / "web" / "pages" / "reports" / "details" / "MetricsTab.tsx").read_text(encoding="utf-8")
+        native_metrics = (root / "components" / "gsa" / "src" / "gmp" / "native-api" / "report-metrics.ts").read_text(encoding="utf-8")
         self.assertIn("MetricsTab", raw_details)
         self.assertIn("MetricsTab", scope_details)
+        self.assertIn("fetchNativeReportMetrics", metrics_tab)
+        self.assertIn("fetchNativeScopeReportMetrics", metrics_tab)
+        self.assertIn("api/v1/reports/", native_metrics)
+        self.assertIn("api/v1/scopes/", native_metrics)
         self.assertIn("Average System CVSS Load", metrics_tab)
         self.assertIn("Authenticated Scan Coverage", metrics_tab)
         self.assertIn("No Credential Path", metrics_tab)
+
+    def test_gsad_native_api_proxy_is_authenticated_and_allowlisted(self):
+        root = Path(__file__).resolve().parents[2]
+        request_router = (root / "components" / "gsad" / "src" / "gsad_http_handle_request.c").read_text(encoding="utf-8")
+        native_api = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
+        cmake = (root / "components" / "gsad" / "src" / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn('"^/api/v1/.+$"', request_router)
+        self.assertIn("gsad_http_handle_setup_user", request_router)
+        self.assertIn("gsad_http_handle_setup_credentials", request_router)
+        self.assertIn("gsad_http_handle_native_api_get", request_router)
+        self.assertIn("next = url_handlers;", request_router)
+        self.assertIn("next = gsad_http_handler_add (next, native_api_url_handler);", request_router)
+        self.assertNotIn("url_handlers = gsad_http_handler_add (url_handlers, native_api_url_handler);", request_router)
+        self.assertIn("gsad_native_api.c", cmake)
+        self.assertIn("DEFAULT_NATIVE_API_HOST \"turbovas-api\"", native_api)
+        self.assertIn("DEFAULT_NATIVE_API_PORT \"9080\"", native_api)
+        self.assertIn("native_api_path_is_allowed", native_api)
+        self.assertIn("/api/v1/reports/", native_api)
+        self.assertIn("/api/v1/scopes/", native_api)
+        self.assertIn("/metrics", native_api)
+        self.assertNotIn("MHD_POSTDATA_KIND", native_api)
 
     def test_runtime_browser_smoke_is_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
@@ -1052,7 +1078,10 @@ db2:keys=5,expires=0,avg_ttl=0
     def test_runtime_browser_smoke_checks_metrics_tabs(self):
         source = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")
         self.assertIn("scope-report.metrics-tab", source)
+        self.assertIn("scope-report.metrics-native-api", source)
         self.assertIn("raw-report.metrics-tab", source)
+        self.assertIn("raw-report.metrics-native-api", source)
+        self.assertIn("/api/v1/", source)
         self.assertIn("CVSS Load", source)
         self.assertIn("Authenticated Scan Coverage", source)
 

@@ -2364,18 +2364,17 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics",
-                "status": "implemented_internal",
-                "replacement_candidates": ["runtime-scope-report-metrics helper (migrated)", "scope-report Metrics tab"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["runtime-scope-report-metrics helper (migrated)", "GSA scope-report Metrics tab (migrated through gsad same-origin proxy)"],
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}/metrics",
-                "status": "implemented_internal",
-                "replacement_candidates": ["runtime-report-metrics helper (migrated)", "raw report Metrics tab"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["runtime-report-metrics helper (migrated)", "GSA raw report Metrics tab (migrated through gsad same-origin proxy)"],
             },
         ],
         "next_replacement_candidates": [
-            {"workflow": "scope-report browser tabs", "current_dependency": "GSA GMP command clients and source-report stitching", "native_target": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results, /hosts, /cves, /errors, and /metrics"},
-            {"workflow": "raw report Metrics tab", "current_dependency": "GSA GMP command clients", "native_target": "/api/v1/reports/{report_id}/metrics"},
+            {"workflow": "remaining scope-report browser tabs", "current_dependency": "GSA GMP command clients and source-report stitching", "native_target": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results, /hosts, /cves, and /errors"},
             {"workflow": "gvm-tools scope/report scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "turbovasctl or native HTTP/JSON client commands"},
         ],
     }

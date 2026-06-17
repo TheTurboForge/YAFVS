@@ -1,4 +1,5 @@
 # Copyright (C) 2009-2021 Greenbone AG
+# Modified by TurboVAS contributors, 2026.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -106,6 +107,7 @@ add_executable(
   gsad_i18n.c
   gsad_logging.c
   gsad_manager.c
+  gsad_native_api.c
   gsad_params.c
   gsad_params_mhd.c
   gsad_session.c

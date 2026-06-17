@@ -239,6 +239,17 @@ async function runForBaseUrl(baseUrl) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   page.setDefaultTimeout(config.timeoutMs);
+  const nativeApiResponses = [];
+  page.on('response', response => {
+    try {
+      const url = new URL(response.url());
+      if (url.pathname.startsWith('/api/v1/')) {
+        nativeApiResponses.push({ path: url.pathname, status: response.status() });
+      }
+    } catch (_) {
+      // Ignore non-URL browser-internal responses.
+    }
+  });
   try {
     await login(page);
     const shellText = await bodyText(page).catch(() => '');
@@ -270,6 +281,8 @@ async function runForBaseUrl(baseUrl) {
       const metricsText = await bodyText(page);
       const hasMetrics = /CVSS Load/i.test(metricsText) && /Authenticated Scan Coverage/i.test(metricsText);
       add(hasMetrics ? 'pass' : 'fail', 'scope-report.metrics-tab', hasMetrics ? 'Scope-report Metrics tab exposes CVSS Load and Authenticated Scan Coverage.' : 'Scope-report Metrics tab is missing expected metric labels.');
+      const nativeScopeMetrics = nativeApiResponses.find(item => /\/api\/v1\/scopes\/[^/]+\/reports\/[^/]+\/metrics$/.test(item.path) && item.status >= 200 && item.status < 300);
+      add(nativeScopeMetrics ? 'pass' : 'fail', 'scope-report.metrics-native-api', nativeScopeMetrics ? 'Scope-report Metrics tab loaded through same-origin native API.' : 'Scope-report Metrics tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/metrics')) });
     } else {
       add('fail', 'scope-report.metrics-tab', 'Could not activate the Metrics tab.');
     }
@@ -305,6 +318,8 @@ async function runForBaseUrl(baseUrl) {
           const rawMetricsText = await bodyText(page);
           const hasRawMetrics = /CVSS Load/i.test(rawMetricsText) && /Authenticated Scan Coverage/i.test(rawMetricsText);
           add(hasRawMetrics ? 'pass' : 'fail', 'raw-report.metrics-tab', hasRawMetrics ? 'Raw-report Metrics tab exposes CVSS Load and Authenticated Scan Coverage.' : 'Raw-report Metrics tab is missing expected metric labels.');
+          const nativeRawMetrics = nativeApiResponses.find(item => /\/api\/v1\/reports\/[^/]+\/metrics$/.test(item.path) && item.status >= 200 && item.status < 300);
+          add(nativeRawMetrics ? 'pass' : 'fail', 'raw-report.metrics-native-api', nativeRawMetrics ? 'Raw-report Metrics tab loaded through same-origin native API.' : 'Raw-report Metrics tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/metrics')) });
         } else {
           add('fail', 'raw-report.metrics-tab', 'Could not activate the raw-report Metrics tab.');
         }

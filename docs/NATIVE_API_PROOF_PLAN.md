@@ -61,11 +61,11 @@ The first endpoint is not complete until it proves:
 - the internal `runtime-native-api-smoke` can load the endpoint without GMP/XML.
 
 Implementation commit `c59140a` proved the internal sidecar for scope-report
-list and Hosts. Follow-up B-117/B-125 slices add scope-report Results, CVEs,
+list and Hosts. Later B-117/B-125 slices added scope-report Results, CVEs,
 Error Messages, persisted scope-report Metrics, and raw report Metrics with the
-same internal-only, PostgreSQL-backed pattern. Browser smoke through a native
-client remains the next proof step, using the authenticated same-origin
-boundary defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+same internal-only, PostgreSQL-backed pattern. The first browser proof now
+routes raw-report and scope-report Metrics through the authenticated
+same-origin `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 
 ## Not In The First Proof
 
@@ -77,7 +77,7 @@ high-consequence inherited control paths until separately designed and reviewed.
 
 After scope-report Results/Hosts/CVEs/Error Messages/Metrics and raw report Metrics work, the next candidates are:
 
-1. authenticated same-origin browser access for one low-risk scope-report read
-   workflow through `gsad`, following `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+1. authenticated same-origin browser access for another low-risk scope-report
+   read workflow through `gsad`, preferably Hosts or CVEs.
 2. raw report list/detail or scope metadata reads, only if they directly unlock
    helper or browser migration away from GMP/XML.

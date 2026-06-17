@@ -51,9 +51,12 @@ boundary remains `gsad`.
 
 ## First Browser Proof
 
-The first browser proof should be read-only and low consequence. A suitable
-candidate is one scope-report detail tab that already has native endpoint
-coverage, such as Hosts, CVEs, Error Messages, Metrics, or Results.
+The first browser proof is read-only and low consequence: raw-report Metrics
+and scope-report Metrics load through authenticated same-origin `gsad` paths
+and then proxy to the Docker-internal `turbovas-api` service. This proves the
+browser can consume typed native JSON for one report-reading workflow without
+exposing the sidecar, adding CORS, or removing the inherited GMP/XML report
+paths.
 
 Acceptance for the first proof:
 
@@ -62,7 +65,8 @@ Acceptance for the first proof:
 - Unauthenticated browser requests receive a clear unauthenticated response
   from `gsad` before reaching the sidecar.
 - Authenticated requests are proxied to `turbovas-api` and return typed JSON
-  matching `api/openapi/turbovas-v1.yaml`.
+  matching `api/openapi/turbovas-v1.yaml`; the current allowlist covers only
+  raw-report metrics and scope-report metrics.
 - Existing GMP/GSA behavior remains available during the migration.
 - Browser smoke validates the routed page or tab as a user-visible workflow.
 

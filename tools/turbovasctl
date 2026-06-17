@@ -226,8 +226,6 @@ NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset(
         "list-scope-reports.gmp.py",
         "list-scopes.gmp.py",
         "list-reports.gmp.py",
-        "report-metrics.gmp.py",
-        "scope-report-metrics.gmp.py",
     }
 )
 NATIVE_TOOLING_SCAN_PREFIXES = (

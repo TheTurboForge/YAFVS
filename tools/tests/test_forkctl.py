@@ -709,6 +709,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("components/python-gvm/gvm/protocols/gmp/requests/v226/_reports.py", details["by_category"]["compatibility_bridge"]["paths"])
         all_paths = {path for category in details["by_category"].values() for path in category["paths"]}
         self.assertNotIn("tools/runtime_metrics.py", all_paths)
+        self.assertNotIn("components/gvm-tools/scripts/report-metrics.gmp.py", all_paths)
+        self.assertNotIn("components/gvm-tools/scripts/scope-report-metrics.gmp.py", all_paths)
         self.assertIn("gvm-tools scope/report scripts", {item["workflow"] for item in details["next_replacement_candidates"]})
         endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/scope-reports", endpoints)

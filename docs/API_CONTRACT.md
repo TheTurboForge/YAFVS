@@ -27,11 +27,24 @@ Scanner control, credential management, feed import, account management, and
 other high-consequence operations stay on the inherited path until separate
 native replacements are designed and proven.
 
+The current browser integration is intentionally same-origin and proxied
+through `gsad`. That keeps the browser proof inside the existing authenticated
+Web UI boundary while TurboVAS proves typed JSON reads. It is not the final
+scriptable API exposure model.
+
+The long-term API target is direct, documented, scriptable HTTP/JSON access for
+operator automation and generated OpenAPI clients. That target must be
+independent of GSA, `gsad`, GMP/XML, `python-gvm`, and `gvm-tools` as required
+product interfaces. Direct access requires a separate authentication, TLS,
+host-binding, audit, and write-safety design before it is exposed beyond the
+internal development network.
+
 ## Common Contract Rules
 
 - Base path: `/api/v1`.
 - Authentication: same-origin operator session through the existing `gsad` web
-  boundary when browser access is implemented. See
+  boundary for the current browser proof. Future direct scriptable API access
+  must use an explicit native API authentication model. See
   `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 - Response body: JSON objects only; no XML payloads in native product APIs.
 - IDs: UUID strings matching the underlying gvmd resource identifiers.
@@ -87,5 +100,7 @@ positive-severity vulnerability metric rows only.
 - Do not expose the first native API sidecar directly on LAN/Tailscale; it is
   Docker-internal and browser access must go through the authenticated
   same-origin boundary in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+- Do not confuse the `gsad` same-origin proxy with the final scriptable API
+  boundary; it is a migration bridge for browser reads.
 - Do not keep `python-gvm` or `gvm-tools` as permanent TurboVAS product
   dependencies once native replacements exist.

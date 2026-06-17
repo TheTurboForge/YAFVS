@@ -13,6 +13,13 @@ Explicit end-state: TurboVAS should remove the need for `python-gvm` and
 tooling paths. They may remain temporarily as compatibility bridges while
 replacement APIs land.
 
+The end-state also includes scriptable access to TurboVAS through typed
+HTTP/JSON and OpenAPI clients. The current authenticated same-origin `gsad`
+proxy is a browser migration bridge, not the final API boundary and not a new
+reason to keep `gsad` in every automation path. Direct scriptable API exposure
+must be designed separately with authentication, TLS, host binding, audit, and
+write-safety controls.
+
 The first live proof is the Docker-internal Rust `turbovas-api` sidecar for
 raw report reads, scope-report collections, and report metrics, currently raw
 report list/detail/result rows, scope-report list, Results, Hosts, Ports,
@@ -45,6 +52,7 @@ defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 | Scope-report evidence tabs | GSA Results, Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates, and Error Messages tabs now use typed native JSON through the authenticated `gsad` proxy | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results`, `/hosts`, `/ports`, `/applications`, `/operating-systems`, `/cves`, `/tls-certificates`, and `/errors` | Browser smoke proves aggregated tabs load through native JSON and no longer render per-source raw-report sections. |
 | Runtime report/scope helpers | Some `turbovasctl` helpers still use `python-gvm`; metric helpers plus report and scope-report summary no longer use legacy XML helper paths | Native API-backed helper calls | `runtime-report-summary`, `runtime-report-metrics`, `runtime-scope-report-metrics`, and `runtime-scope-report-summary` now use the internal native API. Native result rows now carry hostname, NVT family, and description excerpts for future helper/export migration. Raw report `vulnerability_count` now mirrors inherited raw-report summary semantics; `runtime-report-export` and other GMP probes remain temporary inherited paths until their native replacements land and are verified. |
 | gvm-tools product scripts | Imported GMP scripts, plus TurboVAS scope/report scripts | `turbovasctl` or native API client commands | No operator or validation workflow requires `gvm-tools`; remaining scripts are optional compatibility or removed. |
+| Direct scriptable operator API | Temporary automation still uses inherited GMP helpers, `turbovasctl` wrappers, or internal-only native development probes depending on workflow coverage. | Authenticated TLS-protected `/api/v1` access usable by `curl`, generated OpenAPI clients, and TurboVAS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | A native API exposure/authentication design lands, read-only automation migrates first, write/control endpoints are added only after safety review, and required product/operator scripts no longer depend on inherited GMP tooling. |
 
 ## Expansion Rule
 

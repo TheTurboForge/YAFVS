@@ -13,6 +13,13 @@ browser access must be mediated by the existing authenticated web boundary.
 The browser-facing boundary for native API reads is same-origin `gsad`, not a
 host-exposed `turbovas-api` port.
 
+In current TurboVAS documentation, **browser-proxied** means this exact pattern:
+browser JavaScript calls same-origin `/api/v1/...` paths on `gsad`; `gsad`
+checks the existing authenticated operator session, applies a small read-only
+allowlist, and forwards the request to the Docker-internal `turbovas-api`
+service. It does not mean that `turbovas-api` is the final external API
+boundary, and it does not mean that scripts should depend on `gsad` forever.
+
 Intended flow:
 
 ```text
@@ -32,10 +39,42 @@ Rules:
   `turbovas-api` for diagnostics/audit context, but `turbovas-api` must not
   treat user-supplied headers from arbitrary clients as authentication.
 - CORS is not part of the first proof. Cross-origin browser access is out of
-  scope.
+  scope because browser calls stay same-origin through `gsad`.
 - Writes, scan control, credential handling, feed import, account management,
   and scanner/runtime mutation remain on inherited control paths until a
   separate write/API safety design exists.
+
+## Direct Scriptable API Target
+
+The same-origin browser proxy is a transition step, not the long-term API
+goal. The long-term TurboVAS direction is a typed HTTP/JSON API that can be
+called directly by suitable automation tools, scripts, and generated OpenAPI
+clients without requiring GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as
+the product interface.
+
+That direct API needs its own design before exposure: authentication tokens or
+session semantics, TLS, host binding, audit logging, request limits, and write
+safety all need explicit treatment. Until that design lands, direct scriptable
+access should use internal development helpers only, and browser access should
+continue through the authenticated `gsad` boundary.
+
+## CORS
+
+CORS, or Cross-Origin Resource Sharing, is a browser-enforced mechanism for
+deciding whether JavaScript loaded from one origin may call another origin. An
+origin is the tuple of scheme, host, and port, for example
+`https://100.80.139.13:19392`. Servers opt in to cross-origin browser access by
+returning CORS headers such as `Access-Control-Allow-Origin`.
+
+CORS matters only to browsers. Command-line clients, server-side services,
+`curl`, and generated API clients are not protected or enabled by CORS; they
+need normal API authentication, TLS, and authorization controls.
+
+For the current TurboVAS proof, GSA is served by `gsad` and calls `/api/v1/...`
+on that same `gsad` origin. That keeps the browser path same-origin, so no CORS
+headers are needed and no cross-origin API surface is opened. If a future
+browser application is hosted separately from the API, CORS will become an
+explicit security configuration decision, not a default convenience switch.
 
 ## Why Not Expose The Sidecar Directly?
 
@@ -52,11 +91,12 @@ boundary remains `gsad`.
 ## Browser Proof Scope
 
 The browser proof is read-only and low consequence: raw-report Metrics,
-scope-report Metrics, and scope-report Results, Hosts, Ports, CVEs, and Error
-Messages load through authenticated same-origin `gsad` paths and then proxy to the
-Docker-internal `turbovas-api` service. This proves the browser can consume
-typed native JSON for report-reading workflows without exposing the sidecar,
-adding CORS, or removing inherited GMP/XML control paths.
+scope-report Metrics, and scope-report Results, Hosts, Ports, Applications,
+Operating Systems, CVEs, TLS Certificates, and Error Messages load through
+authenticated same-origin `gsad` paths and then proxy to the Docker-internal
+`turbovas-api` service. This proves the browser can consume typed native JSON
+for report-reading workflows without exposing the sidecar, adding CORS, or
+removing inherited GMP/XML control paths prematurely.
 
 Acceptance for the first proof:
 
@@ -66,7 +106,8 @@ Acceptance for the first proof:
   from `gsad` before reaching the sidecar.
 - Authenticated requests are proxied to `turbovas-api` and return typed JSON
   matching `api/openapi/turbovas-v1.yaml`; the current allowlist covers only
-  raw-report metrics and selected scope-report read collections.
+  read-only raw-report, scope, and scope-report collections that have been
+  explicitly migrated.
 - Existing GMP/GSA behavior remains available during the migration.
 - Browser smoke validates the routed page or tab as a user-visible workflow.
 

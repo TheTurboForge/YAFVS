@@ -747,6 +747,22 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
 
+    def test_openapi_tracks_remaining_scope_report_evidence_contracts(self):
+        root = Path(__file__).resolve().parents[2]
+        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
+        plan = (root / "docs" / "NATIVE_API_PROOF_PLAN.md").read_text(encoding="utf-8")
+        for suffix, schema in [
+            ("ports", "PortCollection"),
+            ("applications", "ApplicationCollection"),
+            ("operating-systems", "OperatingSystemCollection"),
+            ("tls-certificates", "TlsCertificateCollection"),
+        ]:
+            path = f"/scopes/{{scope_id}}/reports/{{scope_report_id}}/{suffix}"
+            self.assertIn(path, openapi)
+            self.assertIn(path, plan)
+            self.assertIn(schema, openapi)
+        self.assertIn("not live endpoint promises yet", plan)
+
     def test_redis_reference_summary_separates_scanner_and_generic_paths(self):
         references = [
             {"path": "compose/dev.yaml", "category": "scanner_kb", "markers": ["redis-openvas"]},

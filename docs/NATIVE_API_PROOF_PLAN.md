@@ -82,3 +82,20 @@ After scope-report Results/Hosts/CVEs/Error Messages/Metrics and raw report Metr
    Ports, Applications, Operating Systems, and TLS Certificates.
 2. raw report list/detail or scope metadata reads, only if they directly unlock
    helper or browser migration away from GMP/XML.
+
+## Remaining Evidence Contract Candidates
+
+The OpenAPI baseline now names the four remaining scope-report detail
+collections before implementation:
+
+- `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/ports`
+- `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/applications`
+- `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/operating-systems`
+- `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/tls-certificates`
+
+These are not live endpoint promises yet. Each implementation slice should
+first prove the DB query against `scope_report_sources` and the relevant raw
+report tables, then add sidecar routing, `gsad` same-origin allowlisting, typed
+GSA client code, browser-smoke coverage, and docs updates. If a row shape is
+too weak or too dependent on inherited report XML assumptions, stop at the
+contract and record the gap instead of papering it over in the UI.

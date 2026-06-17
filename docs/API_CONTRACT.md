@@ -19,7 +19,8 @@ The first API phase is read-only and report-focused:
 
 - raw report list, detail, and metrics;
 - scope list and scope detail;
-- scope-report list, detail, results, hosts, CVEs, and metrics.
+- scope-report list, detail, results, hosts, ports, applications, operating
+  systems, CVEs, TLS certificates, error messages, and metrics.
 
 Scanner control, credential management, feed import, account management, and
 other high-consequence operations stay on the inherited path until separate
@@ -57,6 +58,13 @@ scanner control behavior. Browser-facing proof now covers report Metrics and
 scope-report Results, Hosts, CVEs, and Error Messages: GSA calls same-origin
 `/api/v1/...` paths, and `gsad` authenticates and allowlists those reads before
 proxying to the internal sidecar.
+
+The OpenAPI baseline also defines the next contract candidates for
+scope-report Ports, Applications, Operating Systems, and TLS Certificates.
+Those contracts are intentionally contract-first until a focused implementation
+slice proves the corresponding PostgreSQL queries, browser tables, and smoke
+coverage. Do not treat them as live runtime endpoints before
+`runtime-native-api-smoke --json` and browser smoke cover them.
 
 ## Non-Goals For V1
 

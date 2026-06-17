@@ -139,6 +139,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/ports:
+    get:
+      summary: List scope report ports
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report port collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/applications:
+    get:
+      summary: List scope report applications
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report application collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/operating-systems:
+    get:
+      summary: List scope report operating systems
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report operating system collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingSystemCollection'
   /scopes/{scope_id}/reports/{scope_report_id}/cves:
     get:
       summary: List scope report CVEs
@@ -156,6 +207,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CveCollection'
+  /scopes/{scope_id}/reports/{scope_report_id}/tls-certificates:
+    get:
+      summary: List scope report TLS certificates
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report TLS certificate collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TlsCertificateCollection'
   /scopes/{scope_id}/reports/{scope_report_id}/errors:
     get:
       summary: List scope report Error Messages
@@ -320,6 +388,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Host'
+    PortCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+    ApplicationCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+    OperatingSystemCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperatingSystem'
     CveCollection:
       type: object
       required: [page, items]
@@ -330,6 +428,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Cve'
+    TlsCertificateCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TlsCertificate'
     ErrorMessageCollection:
       type: object
       required: [page, items]
@@ -499,6 +607,72 @@ components:
           items:
             type: string
             format: uuid
+    Port:
+      type: object
+      required: [port]
+      properties:
+        port:
+          type: string
+          description: Service endpoint in the inherited report notation, for example 443/tcp.
+        protocol:
+          type: string
+        host_count:
+          type: integer
+        result_count:
+          type: integer
+        vulnerability_count:
+          type: integer
+        max_severity:
+          type: number
+        source_report_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    Application:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        cpe:
+          type: string
+        host_count:
+          type: integer
+        result_count:
+          type: integer
+        vulnerability_count:
+          type: integer
+        max_severity:
+          type: number
+        source_report_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    OperatingSystem:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        cpe:
+          type: string
+        host_count:
+          type: integer
+        result_count:
+          type: integer
+        vulnerability_count:
+          type: integer
+        max_severity:
+          type: number
+        source_report_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
     Cve:
       type: object
       required: [id]
@@ -511,6 +685,37 @@ components:
           type: integer
         max_severity:
           type: number
+        source_report_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    TlsCertificate:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        fingerprint_sha256:
+          type: string
+        subject:
+          type: string
+        issuer:
+          type: string
+        serial:
+          type: string
+        not_before:
+          type: string
+          format: date-time
+        not_after:
+          type: string
+          format: date-time
+        host_count:
+          type: integer
+        port_count:
+          type: integer
+        result_count:
+          type: integer
         source_report_ids:
           type: array
           items:

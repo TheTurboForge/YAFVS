@@ -248,10 +248,12 @@ struct TaskItem {
     comment: String,
     status: String,
     progress: i64,
+    trend: String,
     usage_type: String,
     target: Option<TargetReference>,
     config: Option<TargetReference>,
     scanner: Option<TargetReference>,
+    scanner_type: Option<i32>,
     schedule: Option<TargetReference>,
     report_count: TaskReportCount,
     current_report: Option<TaskReportReference>,
@@ -1650,6 +1652,7 @@ async fn tasks(
             ("report_count", "report_count_total"),
             ("last_report", "last_report_timestamp"),
             ("max_severity", "max_severity"),
+            ("trend", "trend"),
             ("creation_time", "creation_time"),
             ("modification_time", "modification_time"),
         ],
@@ -1707,8 +1710,8 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
     format!(
         r#"WITH report_rollup AS (
              SELECT r.task,
-                    count(*)::bigint AS report_count_total,
-                    count(*) FILTER (WHERE run_status_name(coalesce(r.scan_run_status, 0)) = 'Done')::bigint AS report_count_finished,
+                    count(DISTINCT r.id)::bigint AS report_count_total,
+                    count(DISTINCT r.id) FILTER (WHERE run_status_name(coalesce(r.scan_run_status, 0)) = 'Done')::bigint AS report_count_finished,
                     coalesce(max(res.severity) FILTER (WHERE coalesce(res.severity, 0) > 0), 0)::double precision AS max_severity
                FROM reports r
                LEFT JOIN results res ON res.report = r.id
@@ -1722,6 +1725,10 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
                     coalesce(r.start_time, 0)::bigint AS scan_start,
                     coalesce(r.end_time, 0)::bigint AS scan_end,
                     coalesce(max(res.severity) FILTER (WHERE coalesce(res.severity, 0) > 0), 0)::double precision AS severity,
+                    count(*) FILTER (WHERE coalesce(res.severity, 0) >= 9.0)::bigint AS critical_count,
+                    count(*) FILTER (WHERE coalesce(res.severity, 0) >= 7.0 AND coalesce(res.severity, 0) < 9.0)::bigint AS high_count,
+                    count(*) FILTER (WHERE coalesce(res.severity, 0) >= 4.0 AND coalesce(res.severity, 0) < 7.0)::bigint AS medium_count,
+                    count(*) FILTER (WHERE coalesce(res.severity, 0) > 0 AND coalesce(res.severity, 0) < 4.0)::bigint AS low_count,
                     run_status_name(coalesce(r.scan_run_status, 0)) AS status,
                     row_number() OVER (PARTITION BY r.task ORDER BY coalesce(nullif(r.end_time, 0), nullif(r.start_time, 0), nullif(r.creation_time, 0), 0) DESC, r.id DESC) AS latest_rank,
                     CASE WHEN run_status_name(coalesce(r.scan_run_status, 0)) = 'Done' THEN 1 ELSE 0 END AS is_finished
@@ -1740,6 +1747,9 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
          latest_finished_report AS (
              SELECT * FROM finished_report_rows WHERE finished_rank = 1
          ),
+         second_latest_finished_report AS (
+             SELECT * FROM finished_report_rows WHERE finished_rank = 2
+         ),
          base AS (
              SELECT task.id AS task_pk,
                     task.uuid,
@@ -1749,6 +1759,49 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
                     CASE WHEN run_status_name(coalesce(task.run_status, 0)) = 'Done' THEN 100::bigint
                          WHEN latest_report.report_pk IS NOT NULL THEN coalesce(report_progress(latest_report.report_pk), 0)::bigint
                          ELSE 0::bigint END AS progress,
+                    CASE
+                      WHEN coalesce(report_rollup.report_count_finished, 0) <= 1 THEN ''
+                      WHEN run_status_name(coalesce(task.run_status, 0)) = 'Running' OR target.id IS NULL THEN ''
+                      WHEN latest_finished_report.severity > second_latest_finished_report.severity THEN 'up'
+                      WHEN second_latest_finished_report.severity > latest_finished_report.severity THEN 'down'
+                      WHEN (CASE WHEN latest_finished_report.critical_count > 0 THEN 5
+                                 WHEN latest_finished_report.high_count > 0 THEN 4
+                                 WHEN latest_finished_report.medium_count > 0 THEN 3
+                                 WHEN latest_finished_report.low_count > 0 THEN 2
+                                 ELSE 1 END)
+                         > (CASE WHEN second_latest_finished_report.critical_count > 0 THEN 5
+                                 WHEN second_latest_finished_report.high_count > 0 THEN 4
+                                 WHEN second_latest_finished_report.medium_count > 0 THEN 3
+                                 WHEN second_latest_finished_report.low_count > 0 THEN 2
+                                 ELSE 1 END) THEN 'up'
+                      WHEN (CASE WHEN second_latest_finished_report.critical_count > 0 THEN 5
+                                 WHEN second_latest_finished_report.high_count > 0 THEN 4
+                                 WHEN second_latest_finished_report.medium_count > 0 THEN 3
+                                 WHEN second_latest_finished_report.low_count > 0 THEN 2
+                                 ELSE 1 END)
+                         > (CASE WHEN latest_finished_report.critical_count > 0 THEN 5
+                                 WHEN latest_finished_report.high_count > 0 THEN 4
+                                 WHEN latest_finished_report.medium_count > 0 THEN 3
+                                 WHEN latest_finished_report.low_count > 0 THEN 2
+                                 ELSE 1 END) THEN 'down'
+                      WHEN latest_finished_report.critical_count > 0 THEN
+                        CASE WHEN latest_finished_report.critical_count > second_latest_finished_report.critical_count THEN 'more'
+                             WHEN latest_finished_report.critical_count < second_latest_finished_report.critical_count THEN 'less'
+                             ELSE 'same' END
+                      WHEN latest_finished_report.high_count > 0 THEN
+                        CASE WHEN latest_finished_report.high_count > second_latest_finished_report.high_count THEN 'more'
+                             WHEN latest_finished_report.high_count < second_latest_finished_report.high_count THEN 'less'
+                             ELSE 'same' END
+                      WHEN latest_finished_report.medium_count > 0 THEN
+                        CASE WHEN latest_finished_report.medium_count > second_latest_finished_report.medium_count THEN 'more'
+                             WHEN latest_finished_report.medium_count < second_latest_finished_report.medium_count THEN 'less'
+                             ELSE 'same' END
+                      WHEN latest_finished_report.low_count > 0 THEN
+                        CASE WHEN latest_finished_report.low_count > second_latest_finished_report.low_count THEN 'more'
+                             WHEN latest_finished_report.low_count < second_latest_finished_report.low_count THEN 'less'
+                             ELSE 'same' END
+                      ELSE 'same'
+                    END AS trend,
                     coalesce(task.usage_type, 'scan') AS usage_type,
                     target.uuid AS target_id,
                     target.name AS target_name,
@@ -1756,6 +1809,7 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
                     config.name AS config_name,
                     scanner.uuid AS scanner_id,
                     scanner.name AS scanner_name,
+                    scanner.type AS scanner_type,
                     schedule.uuid AS schedule_id,
                     schedule.name AS schedule_name,
                     coalesce(report_rollup.report_count_total, 0)::bigint AS report_count_total,
@@ -1781,6 +1835,7 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
                LEFT JOIN report_rollup ON report_rollup.task = task.id
                LEFT JOIN latest_report ON latest_report.task = task.id
                LEFT JOIN latest_finished_report ON latest_finished_report.task = task.id
+               LEFT JOIN second_latest_finished_report ON second_latest_finished_report.task = task.id
               WHERE coalesce(task.hidden, 0) = 0
                 AND coalesce(task.usage_type, 'scan') = 'scan'
          ),
@@ -3644,10 +3699,12 @@ fn task_from_row(row: &Row) -> TaskItem {
         comment: row.get("comment"),
         status,
         progress: row.get("progress"),
+        trend: row.get("trend"),
         usage_type: row.get("usage_type"),
         target: target_reference(row.get("target_id"), row.get("target_name")),
         config: target_reference(row.get("config_id"), row.get("config_name")),
         scanner: target_reference(row.get("scanner_id"), row.get("scanner_name")),
+        scanner_type: row.get("scanner_type"),
         schedule: target_reference(row.get("schedule_id"), row.get("schedule_name")),
         report_count: TaskReportCount {
             total: row.get("report_count_total"),

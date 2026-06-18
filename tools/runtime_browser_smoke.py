@@ -282,6 +282,8 @@ async function runForBaseUrl(baseUrl) {
 
     await gotoRoute(page, '/tasks', 'tasks');
     await assertNoForbiddenText(page, 'tasks', [/Resume/i, /Task Wizard/i, /Advanced Task Wizard/i, /Import Task/i, /Delta Report/i]);
+    const nativeTasks = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/tasks$/);
+    add(nativeTasks ? 'pass' : 'fail', 'task.list-native-api', nativeTasks ? 'Task list loaded through same-origin native API.' : 'Task list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/tasks') });
 
     await gotoRoute(page, '/scopes', 'scopes');
     const nativeScopes = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/scopes$/);

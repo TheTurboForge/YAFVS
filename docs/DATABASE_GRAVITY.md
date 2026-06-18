@@ -101,8 +101,8 @@ evidence, CVE evidence, TLS certificate evidence, Error Message collections,
 persisted scope-report metrics, raw report metrics, and scope list/detail reads
 are queried from gvmd/PostgreSQL and returned as typed JSON, while GMP/XML
 remains available for inherited control paths until each workflow is
-deliberately migrated. The raw `/reports` list, `/targets` list, `/scopes`
-list/detail reads, raw-report and scope-report Metrics, plus every current
+deliberately migrated. The raw `/reports` list, `/targets` list, `/tasks` list,
+`/scopes` list/detail reads, raw-report and scope-report Metrics, plus every current
 scope-report evidence tab are now browser-facing product reads through the
 authenticated `gsad` same-origin native API proxy. `runtime-report-summary --json` is now a DB-owned
 export produced through the native API rather than a `python-gvm` XML helper;

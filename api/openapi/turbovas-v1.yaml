@@ -972,7 +972,7 @@ components:
           format: date-time
     Task:
       type: object
-      required: [id, name, status, progress, usage_type, report_count, max_severity]
+      required: [id, name, status, progress, trend, usage_type, report_count, max_severity]
       properties:
         id:
           type: string
@@ -985,6 +985,9 @@ components:
           type: string
         progress:
           type: integer
+        trend:
+          type: string
+          description: Inherited task trend value such as up, down, more, less, same, or empty when unavailable.
         usage_type:
           type: string
         target:
@@ -993,6 +996,10 @@ components:
           $ref: '#/components/schemas/ResourceReference'
         scanner:
           $ref: '#/components/schemas/ResourceReference'
+        scanner_type:
+          type: integer
+          nullable: true
+          description: Inherited scanner type identifier used only for read-only UI metadata.
         schedule:
           $ref: '#/components/schemas/ResourceReference'
         report_count:

@@ -23,14 +23,15 @@ write-safety controls.
 The first live proof is the Docker-internal Rust `turbovas-api` sidecar for
 raw report reads, scope-report collections, target/task reads, and report
 metrics, currently raw report list/detail/result rows/hosts, target/task
-internal reads, the browser-backed target list, scope-report list, Results,
+internal reads, the browser-backed target and task lists, scope-report list, Results,
 Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates, Error
 Messages, scope-report Metrics, and raw report Metrics. It queries PostgreSQL
 directly and is intentionally not
 exposed on a host port. Browser migration now covers the raw `/reports` list,
-raw-report Results/Hosts, raw-report and scope-report Metrics, plus all current
-scope-report evidence tabs through the authenticated same-origin `gsad` proxy
-defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+the `/targets` list, the `/tasks` list, raw-report Results/Hosts, raw-report
+and scope-report Metrics, plus all current scope-report evidence tabs through
+the authenticated same-origin `gsad` proxy defined in
+`docs/NATIVE_API_AUTH_BOUNDARY.md`.
 
 ## Workflow Retirement Classes
 
@@ -50,7 +51,7 @@ defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 | Scope list/detail | GMP scope commands and GSA scope pages | `/api/v1/scopes` and `/api/v1/scopes/{scope_id}` | Scope metadata and membership reads move to typed JSON; writes remain inherited until designed. |
 | Scope-report list/detail | GMP scope-report commands and GSA scope-report pages | `/api/v1/scope-reports` and canonical scoped detail path | GSA list/detail reads use server-backed JSON collections and browser smoke remains green. |
 | Target reads | GSA/GMP target commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/targets` and `/api/v1/targets/{target_id}` | `/targets` now reads its list through typed JSON, including safe credential references already visible in the UI; target detail and all target writes remain inherited until separately migrated. Secret credential material is never exposed. |
-| Task reads | GSA/GMP task commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/tasks` and `/api/v1/tasks/{task_id}` | The native endpoint provides task status, references, report counts, latest report metadata, severity, and timestamps for internal/tooling reads. Browser task-list migration waits on trend/scanner-type and detail-row parity; task writes/start/stop remain inherited. |
+| Task reads | GSA/GMP task commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/tasks` and `/api/v1/tasks/{task_id}` | `/tasks` now reads its list through typed JSON, including task status, progress, trend, scanner type, references, report counts, latest report metadata, severity, and timestamps. Task detail and task writes/start/stop remain inherited until separately migrated. |
 | Scope-report Results | GSA Results tab now uses typed native JSON through the authenticated `gsad` proxy; the inherited gvmd source-report-constrained GMP collection remains available during transition | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results` | Browser smoke proves the native Results tab and raw evidence links while GMP compatibility remains intact. |
 | Scope-report metrics | `runtime-scope-report-metrics` and the GSA Metrics tab now use the native API; the inherited scope-report metrics GMP command remains available during transition | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics` | Runtime and browser smoke continue to prove the native path while GMP compatibility remains intact. |
 | Scope-report evidence tabs | GSA Results, Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates, and Error Messages tabs now use typed native JSON through the authenticated `gsad` proxy | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results`, `/hosts`, `/ports`, `/applications`, `/operating-systems`, `/cves`, `/tls-certificates`, and `/errors` | Browser smoke proves aggregated tabs load through native JSON and no longer render per-source raw-report sections. |

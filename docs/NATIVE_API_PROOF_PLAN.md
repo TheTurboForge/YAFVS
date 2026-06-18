@@ -68,7 +68,8 @@ CVEs, Error Messages, Applications, Operating Systems, TLS Certificates,
 persisted scope-report Metrics, raw report Metrics, and raw report list/detail
 reads plus raw report result/host rows with the same internal-only,
 PostgreSQL-backed pattern. Browser proof work now routes the raw `/reports`
-list, raw-report Results, raw-report Hosts, raw-report and scope-report Metrics, plus scope
+list, raw-report Results, raw-report Hosts, raw-report Ports, raw-report CVEs,
+raw-report Error Messages, raw-report and scope-report Metrics, plus scope
 list/detail and every scope-report evidence tab through the authenticated
 same-origin `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
@@ -85,10 +86,10 @@ high-consequence inherited control paths until separately designed and reviewed.
 
 After scope-report Results/Hosts/Ports/Applications/Operating Systems/CVEs/TLS
 Certificates/Error Messages/Metrics, raw report Metrics, raw report
-list/detail/result/host/port rows, raw report Results/Hosts/Ports browser reads, and scope metadata
-reads, the next candidates are the remaining native raw report tab collections
-or helper/tooling replacements, only if they directly unlock migration away
-from GMP/XML.
+list/detail/result/host/port/CVE/error rows, raw report Results/Hosts/Ports/CVEs/Error
+Messages browser reads, and scope metadata reads, the next candidates are the
+remaining native raw report tab collections or helper/tooling replacements,
+only if they directly unlock migration away from GMP/XML.
 
 ## Completed Evidence Contracts
 

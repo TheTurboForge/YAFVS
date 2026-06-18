@@ -1,53 +1,46 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, expect, test, testing} from '@gsa/testing';
-import {act, rendererWith, screen, within} from 'web/testing';
-import CollectionCounts from 'gmp/collection/collection-counts';
+import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import {rendererWith, screen, within} from 'web/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
-import {getMockReport} from 'web/pages/reports/__fixtures__/MockReport';
 import ErrorsTab from 'web/pages/reports/details/ErrorsTab';
 
 const filter = Filter.fromString('first=1 rows=10');
 
-const {errors: mockReportErrors} = getMockReport();
-const mockErrors = mockReportErrors?.entities ?? [];
-const mockErrorsCounts =
-  mockReportErrors?.counts ??
-  new CollectionCounts({filtered: 0, all: 0, first: 1, rows: 10});
-
-const createGmp = ({
-  getReportErrors = testing.fn().mockResolvedValue({
-    data: mockErrors,
-    meta: {
-      filter,
-      counts: mockErrorsCounts,
-    },
+const createGmp = () => ({
+  buildUrl: testing.fn((path: string, params?: Record<string, unknown>) => {
+    const query = new URLSearchParams();
+    Object.entries(params ?? {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value));
+      }
+    });
+    return `https://turbovas.example/${path}${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`;
   }),
-} = {}) => ({
-  reporterrors: {
-    get: getReportErrors,
-  },
   settings: {
     reloadInterval: 5000,
     reloadIntervalActive: 2000,
     reloadIntervalInactive: 10000,
   },
-  session: createSession({
-    timezone: 'CET',
-    token: 'test-token',
-    username: 'admin',
-  }),
+  session: createSession({token: 'test-token'}),
 });
 
 const reportId = 'report-123';
-const reloadIntervalActive = 2000;
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('ErrorsTab', () => {
   test('should render loading state initially', () => {
+    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
@@ -56,7 +49,26 @@ describe('ErrorsTab', () => {
     expect(screen.getByTestId('loading')).toBeInTheDocument();
   });
 
-  test('should render table with errors', async () => {
+  test('should render native table with errors', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-created_at', filter: ''},
+        items: [
+          {
+            id: 'result-1',
+            host: '192.0.2.10',
+            port: '456/tcp',
+            nvt_oid: '1.3.6.1.4.1.25623.1.0.1',
+            description: 'This is an error.',
+            source_report_id: 'raw-report-1',
+            created_at: '2026-06-18T10:00:00Z',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
@@ -66,134 +78,58 @@ describe('ErrorsTab', () => {
     expect(table).toBeInTheDocument();
 
     const header = within(table).getAllByRole('columnheader');
-    expect(header[0]).toHaveTextContent('Error Message');
+    expect(header[0]).toHaveTextContent('Created');
     expect(header[1]).toHaveTextContent('Host');
-    expect(header[2]).toHaveTextContent('Hostname');
+    expect(header[2]).toHaveTextContent('Port');
     expect(header[3]).toHaveTextContent('NVT');
-    expect(header[4]).toHaveTextContent('Port');
+    expect(header[4]).toHaveTextContent('Description');
+    expect(header[5]).toHaveTextContent('Raw Evidence');
 
-    const rows = within(table).getAllByRole('row');
-    expect(rows[1]).toHaveTextContent('This is another error.');
-    expect(rows[1]).toHaveTextContent('109.876.54.321');
-    expect(rows[1]).toHaveTextContent('NVT2');
-    expect(rows[1]).toHaveTextContent('456/tcp');
-
-    expect(rows[2]).toHaveTextContent('This is an error.');
-    expect(rows[2]).toHaveTextContent('123.456.78.910');
-    expect(rows[2]).toHaveTextContent('NVT1');
-    expect(rows[2]).toHaveTextContent('123/tcp');
-  });
-
-  test('should render empty state when no errors', async () => {
-    const gmp = createGmp({
-      getReportErrors: testing.fn().mockResolvedValue({
-        data: [],
-        meta: {
-          filter,
-          counts: new CollectionCounts({
-            filtered: 0,
-            all: 0,
-            first: 1,
-            rows: 10,
-          }),
-        },
-      }),
-    });
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(<ErrorsTab filter={filter} reportId={reportId} status="Done" />);
-
-    expect(await screen.findByText('No Errors available')).toBeInTheDocument();
-  });
-
-  test('should render error panel on fetch failure', async () => {
-    const gmp = createGmp({
-      getReportErrors: testing
-        .fn()
-        .mockRejectedValue(new Error('Failed to fetch errors')),
-    });
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(<ErrorsTab filter={filter} reportId={reportId} status="Done" />);
-
-    expect(
-      await screen.findByText(/Error while loading Errors for Report/),
-    ).toBeInTheDocument();
-  });
-
-  test('should call API with filter containing report ID', async () => {
-    const getReportErrors = testing.fn().mockResolvedValue({
-      data: mockErrors,
-      meta: {filter, counts: mockErrorsCounts},
-    });
-    const gmp = createGmp({getReportErrors});
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(<ErrorsTab filter={filter} reportId={reportId} status="Done" />);
-
-    await screen.findByRole('table');
-
-    expect(getReportErrors).toHaveBeenCalledWith(
-      expect.objectContaining({
-        report_id: reportId,
-        filter: expect.objectContaining({}),
-      }),
+    expect(screen.getByText('This is an error.')).toBeInTheDocument();
+    expect(screen.getByText('192.0.2.10')).toBeInTheDocument();
+    expect(screen.getByText('456/tcp')).toBeInTheDocument();
+    expect(screen.getByText('result-1').closest('a')).toHaveAttribute(
+      'href',
+      '/report/raw-report-1/result/result-1',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/reports/report-123/errors'),
+      expect.objectContaining({credentials: 'include'}),
     );
   });
 
-  test('should show applied filter', async () => {
+  test('should render empty native error table', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 10, total: 0, sort: '-created_at', filter: ''},
+          items: [],
+        }),
+        ok: true,
+        status: 200,
+      }),
+    );
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
     render(<ErrorsTab filter={filter} reportId={reportId} status="Done" />);
 
-    await screen.findByRole('table');
-
-    expect(screen.getByText(/Applied filter:/)).toBeInTheDocument();
+    expect(await screen.findByTestId('native-raw-report-errors-table')).toBeInTheDocument();
   });
 
-  describe('Errors polling behavior isActive status', () => {
-    test.each([
-      [
-        'should poll errors when task status is active',
-        'Running',
-        reloadIntervalActive + 50,
-        2,
-      ],
-      [
-        'should not poll errors when task status is not active',
-        'Stopped',
-        reloadIntervalActive * 10,
-        1,
-      ],
-    ])('%s', async (_, status, timeToAdvance, expectedCallCount) => {
-      testing.useFakeTimers();
+  test('should render native fetch failure', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({ok: false, status: 500}),
+    );
+    const gmp = createGmp();
+    const {render} = rendererWith({gmp, router: true, capabilities: true});
 
-      const getReportErrors = testing.fn().mockResolvedValue({
-        data: mockErrors,
-        meta: {filter, counts: mockErrorsCounts},
-      });
-      const gmp = createGmp({getReportErrors});
-      const {render} = rendererWith({gmp, router: true, capabilities: true});
+    render(<ErrorsTab filter={filter} reportId={reportId} status="Done" />);
 
-      render(
-        <ErrorsTab
-          filter={filter}
-          reportId={reportId}
-          status={status as 'Running' | 'Stopped'}
-        />,
-      );
-
-      await act(async () => {});
-      expect(getReportErrors).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        await testing.advanceTimersByTimeAsync(timeToAdvance);
-      });
-
-      expect(getReportErrors).toHaveBeenCalledTimes(expectedCallCount);
-
-      testing.useRealTimers();
-    });
+    expect(
+      await screen.findByText(/Native API request failed with status 500/),
+    ).toBeInTheDocument();
   });
 });

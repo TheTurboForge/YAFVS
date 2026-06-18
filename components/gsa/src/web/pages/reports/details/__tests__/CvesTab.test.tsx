@@ -1,55 +1,46 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {rendererWith, screen, within} from 'web/testing';
-import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
-import {getMockReport} from 'web/pages/reports/__fixtures__/MockReport';
 import CvesTab from 'web/pages/reports/details/CvesTab';
 
 const filter = Filter.fromString(
   'apply_overrides=0 levels=hml rows=2 min_qod=70 first=1 sort-reverse=severity',
 );
 
-const {cves: mockReportCves} = getMockReport();
-const mockCves = mockReportCves?.entities ?? [];
-const mockCvesCounts =
-  mockReportCves?.counts ??
-  new CollectionCounts({filtered: 0, all: 0, first: 1, rows: 10});
+const reportId = 'report-123';
 
-const createGmp = ({
-  getReportCves = testing.fn().mockResolvedValue({
-    data: mockCves,
-    meta: {
-      filter,
-      counts: mockCvesCounts,
-    },
+const createGmp = () => ({
+  buildUrl: testing.fn((path: string, params?: Record<string, unknown>) => {
+    const query = new URLSearchParams();
+    Object.entries(params ?? {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value));
+      }
+    });
+    return `https://turbovas.example/${path}${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`;
   }),
-} = {}) => ({
-  reportcves: {
-    get: getReportCves,
-  },
   settings: {
     severityRating: 'CVSSv3',
-    reloadInterval: 5000,
-    reloadIntervalActive: 2000,
-    reloadIntervalInactive: 10000,
   },
-  session: createSession({
-    timezone: 'CET',
-    token: 'test-token',
-    username: 'admin',
-  }),
+  session: createSession({token: 'test-token'}),
 });
 
-const reportId = 'report-123';
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('Report CVEs Tab tests', () => {
   test('should render loading state initially', () => {
+    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
@@ -58,69 +49,77 @@ describe('Report CVEs Tab tests', () => {
     expect(screen.getByTestId('loading')).toBeInTheDocument();
   });
 
-  test('should render Report CVEs Tab', async () => {
+  test('should render native Report CVEs Tab', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 2, total: 1, sort: '-max_severity', filter: ''},
+        items: [
+          {
+            id: 'CVE-2019-1234',
+            affected_system_count: 2,
+            result_count: 3,
+            max_severity: 7.5,
+            source_report_ids: [reportId],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
     render(<CvesTab filter={filter} reportId={reportId} status="Done" />);
 
-    // Verify headers
     const table = await screen.findByRole('table');
     const headers = within(table).getAllByRole('columnheader');
     expect(headers[0]).toHaveTextContent('CVE');
-    expect(headers[1]).toHaveTextContent('Host');
-    expect(headers[2]).toHaveTextContent('NVT');
-    expect(headers[3]).toHaveTextContent('Severity');
+    expect(headers[1]).toHaveTextContent('Max Severity');
+    expect(headers[2]).toHaveTextContent('Affected Systems');
+    expect(headers[3]).toHaveTextContent('Results');
 
-    // Get severity bars and verify row data (sorted ascending with sort-reverse filter, rows=2 → 2 rows displayed)
-    const bars = screen.getAllByTestId('progressbar-box');
-    expect(bars[0]).toHaveAttribute('title', 'Medium');
-    expect(bars[0]).toHaveTextContent('5.0 (Medium)');
-    expect(bars[1]).toHaveAttribute('title', 'Medium');
-    expect(bars[1]).toHaveTextContent('5.0 (Medium)');
-
-    // Verify CVE links
-    const cveLink1 = screen.getByText('CVE-2019-1234');
-    expect(cveLink1.closest('a')).toHaveAttribute('href', '/cve/CVE-2019-1234');
-
-    // Verify NVT links
-    const nvtLink1 = screen.getByText('nvt1');
-    expect(nvtLink1.closest('a')).toHaveAttribute('href', '/nvt/201');
+    const cveLink = screen.getByText('CVE-2019-1234');
+    expect(cveLink.closest('a')).toHaveAttribute('href', '/cve/CVE-2019-1234');
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/reports/report-123/cves'),
+      expect.objectContaining({credentials: 'include'}),
+    );
   });
 
-  test('should render empty state when no CVEs', async () => {
-    const gmp = createGmp({
-      getReportCves: testing.fn().mockResolvedValue({
-        data: [],
-        meta: {
-          filter,
-          counts: new CollectionCounts({
-            filtered: 0,
-            all: 0,
-            first: 1,
-            rows: 10,
-          }),
-        },
+  test('should render empty native CVE table', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 2, total: 0, sort: '-max_severity', filter: ''},
+          items: [],
+        }),
+        ok: true,
+        status: 200,
       }),
-    });
+    );
+    const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
     render(<CvesTab filter={filter} reportId={reportId} status="Done" />);
 
-    expect(await screen.findByText('No CVEs available')).toBeInTheDocument();
+    expect(await screen.findByTestId('native-raw-report-cves-table')).toBeInTheDocument();
   });
 
-  test('should render error panel on fetch failure', async () => {
-    const gmp = createGmp({
-      getReportCves: testing
-        .fn()
-        .mockRejectedValue(new Error('Failed to fetch CVEs')),
-    });
+  test('should render native fetch failure', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({ok: false, status: 500}),
+    );
+    const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
     render(<CvesTab filter={filter} reportId={reportId} status="Done" />);
 
     expect(
-      await screen.findByText(/Error while loading CVEs for Report/),
+      await screen.findByText(/Native API request failed with status 500/),
     ).toBeInTheDocument();
   });
 });

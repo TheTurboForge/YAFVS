@@ -430,6 +430,22 @@ async function runForBaseUrl(baseUrl) {
         } else {
           add('fail', 'raw-report.ports-tab', 'Could not activate the raw-report Ports tab.');
         }
+        if (await clickTab(page, 'CVEs', isRawReportDetailUrl)) {
+          await screenshot(page, 'raw-report-cves-tab');
+          await assertNoAppError(page, 'raw-report-cves-tab.app-error');
+          const nativeRawCves = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports\/[^/]+\/cves$/);
+          add(nativeRawCves ? 'pass' : 'fail', 'raw-report.cves-native-api', nativeRawCves ? 'Raw-report CVEs tab loaded through same-origin native API.' : 'Raw-report CVEs tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/cves')) });
+        } else {
+          add('fail', 'raw-report.cves-tab', 'Could not activate the raw-report CVEs tab.');
+        }
+        if (await clickTab(page, 'Error Messages', isRawReportDetailUrl)) {
+          await screenshot(page, 'raw-report-errors-tab');
+          await assertNoAppError(page, 'raw-report-errors-tab.app-error');
+          const nativeRawErrors = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports\/[^/]+\/errors$/);
+          add(nativeRawErrors ? 'pass' : 'fail', 'raw-report.errors-native-api', nativeRawErrors ? 'Raw-report Error Messages tab loaded through same-origin native API.' : 'Raw-report Error Messages tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/errors')) });
+        } else {
+          add('fail', 'raw-report.errors-tab', 'Could not activate the raw-report Error Messages tab.');
+        }
         if (await clickTab(page, 'Metrics', isRawReportDetailUrl)) {
           await waitForMetricLabels(page);
           await screenshot(page, 'raw-report-metrics-tab');

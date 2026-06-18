@@ -413,6 +413,8 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/reports/:report_id/results", get(report_results))
         .route("/api/v1/reports/:report_id/hosts", get(report_hosts))
         .route("/api/v1/reports/:report_id/ports", get(report_ports))
+        .route("/api/v1/reports/:report_id/cves", get(report_cves))
+        .route("/api/v1/reports/:report_id/errors", get(report_errors))
         .route("/api/v1/scopes", get(scopes))
         .route("/api/v1/scopes/:scope_id", get(scope_detail))
         .route("/api/v1/scope-reports", get(scope_reports))
@@ -630,6 +632,148 @@ async fn report_ports(
     }
     let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
     let items = rows.iter().map(port_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn report_cves(
+    State(state): State<AppState>,
+    Path(report_id): Path<String>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<CveItem>>, ApiError> {
+    parse_uuid(&report_id)?;
+    let params = normalize_collection_query(query, "-max_severity")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("affected_system_count", "affected_system_count"),
+            ("result_count", "result_count"),
+            ("severity", "max_severity"),
+            ("max_severity", "max_severity"),
+        ],
+    )?;
+    let sql = format!(
+        "WITH selected_report AS (\n\
+             SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)\n\
+         ),\n\
+         cve_rows AS (\n\
+             SELECT vr.ref_id AS id,\n\
+                    count(DISTINCT lower(coalesce(nullif(r.host, ''), r.hostname, '')))::bigint AS affected_system_count,\n\
+                    count(DISTINCT r.uuid)::bigint AS result_count,\n\
+                    max(coalesce(r.severity, 0))::double precision AS max_severity,\n\
+                    array_remove(array_agg(DISTINCT sr.uuid), NULL) AS source_report_ids\n\
+               FROM selected_report sr\n\
+               JOIN results r ON r.report = sr.id\n\
+               JOIN vt_refs vr ON vr.vt_oid = r.nvt AND vr.type = 'cve'\n\
+              WHERE coalesce(r.severity, 0) > 0\n\
+                AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''\n\
+              GROUP BY vr.ref_id\n\
+         ),\n\
+         filtered AS (\n\
+             SELECT * FROM cve_rows\n\
+              WHERE ($2 = '' OR lower(id) LIKE '%' || lower($2) || '%')\n\
+         )\n\
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered\n\
+          ORDER BY {sort_sql}, id ASC LIMIT $3 OFFSET $4;"
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(
+            &sql,
+            &[
+                &report_id,
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+            ],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "raw report CVE query failed");
+            ApiError::Database
+        })?;
+    if rows.is_empty() && !raw_report_exists(&client, &report_id).await? {
+        return Err(ApiError::NotFound);
+    }
+    let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
+    let items = rows.iter().map(cve_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn report_errors(
+    State(state): State<AppState>,
+    Path(report_id): Path<String>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<ErrorMessageItem>>, ApiError> {
+    parse_uuid(&report_id)?;
+    let params = normalize_collection_query(query, "-created_at")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("host", "host"),
+            ("port", "port"),
+            ("nvt_oid", "nvt_oid"),
+            ("description", "description"),
+            ("created_at", "created_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        "WITH selected_report AS (\n\
+             SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)\n\
+         ),\n\
+         error_rows AS (\n\
+             SELECT r.uuid AS id,\n\
+                    lower(coalesce(nullif(r.host, ''), r.hostname, '')) AS host,\n\
+                    coalesce(r.port, '') AS port,\n\
+                    coalesce(r.nvt, '') AS nvt_oid,\n\
+                    coalesce(r.description, '') AS description,\n\
+                    sr.uuid AS source_report_id,\n\
+                    coalesce(r.date, 0)::bigint AS created_at_unix\n\
+               FROM selected_report sr\n\
+               JOIN results r ON r.report = sr.id\n\
+              WHERE (r.type = 'Error Message' OR coalesce(r.severity, 0) = -3)\n\
+                AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''\n\
+         ),\n\
+         filtered AS (\n\
+             SELECT * FROM error_rows\n\
+              WHERE ($2 = ''\n\
+                     OR lower(id) LIKE '%' || lower($2) || '%'\n\
+                     OR lower(host) LIKE '%' || lower($2) || '%'\n\
+                     OR lower(port) LIKE '%' || lower($2) || '%'\n\
+                     OR lower(nvt_oid) LIKE '%' || lower($2) || '%'\n\
+                     OR lower(description) LIKE '%' || lower($2) || '%')\n\
+         )\n\
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered\n\
+          ORDER BY {sort_sql}, id ASC LIMIT $3 OFFSET $4;"
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(
+            &sql,
+            &[
+                &report_id,
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+            ],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "raw report error-message query failed");
+            ApiError::Database
+        })?;
+    if rows.is_empty() && !raw_report_exists(&client, &report_id).await? {
+        return Err(ApiError::NotFound);
+    }
+    let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
+    let items = rows.iter().map(error_message_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),
         items,

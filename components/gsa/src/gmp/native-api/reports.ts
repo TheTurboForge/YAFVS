@@ -122,6 +122,34 @@ interface NativeReportPortsPayload {
   items?: NativeReportPortPayload[];
 }
 
+interface NativeReportCvePayload {
+  id: string;
+  affected_system_count: number;
+  result_count: number;
+  max_severity: number;
+  source_report_ids?: string[];
+}
+
+interface NativeReportCvesPayload {
+  page?: Partial<NativeReportPage>;
+  items?: NativeReportCvePayload[];
+}
+
+interface NativeReportErrorPayload {
+  id: string;
+  host: string;
+  port: string;
+  nvt_oid: string;
+  description: string;
+  source_report_id: string;
+  created_at?: string;
+}
+
+interface NativeReportErrorsPayload {
+  page?: Partial<NativeReportPage>;
+  items?: NativeReportErrorPayload[];
+}
+
 type NativeReportDetailPayload = NativeReportItem;
 
 export interface NativeReportQuery {
@@ -200,6 +228,34 @@ export interface NativeReportPortsResponse {
   page: NativeReportPage;
 }
 
+export interface NativeReportCveItem {
+  id: string;
+  affectedSystemCount: number;
+  resultCount: number;
+  maxSeverity: number;
+  sourceReportIds: string[];
+}
+
+export interface NativeReportCvesResponse {
+  items: NativeReportCveItem[];
+  page: NativeReportPage;
+}
+
+export interface NativeReportErrorItem {
+  id: string;
+  host: string;
+  port: string;
+  nvtOid: string;
+  description: string;
+  sourceReportId: string;
+  createdAt?: string;
+}
+
+export interface NativeReportErrorsResponse {
+  items: NativeReportErrorItem[];
+  page: NativeReportPage;
+}
+
 const REPORT_SORT_FIELDS: Record<string, string> = {
   date: 'creation_time',
   creation_time: 'creation_time',
@@ -219,6 +275,27 @@ const REPORT_SORT_FIELDS: Record<string, string> = {
   false_positive: 'false_positive',
 };
 
+const CVE_SORT_FIELDS: Record<string, string> = {
+  affected_system_count: 'affected_system_count',
+  cve: 'id',
+  id: 'id',
+  max_severity: 'max_severity',
+  result_count: 'result_count',
+  severity: 'max_severity',
+};
+
+const ERROR_SORT_FIELDS: Record<string, string> = {
+  created: 'created_at',
+  created_at: 'created_at',
+  description: 'description',
+  error: 'description',
+  host: 'host',
+  id: 'id',
+  nvt: 'nvt_oid',
+  nvt_oid: 'nvt_oid',
+  port: 'port',
+};
+
 const RESULT_SORT_FIELDS: Record<string, string> = {
   created: 'created_at',
   created_at: 'created_at',
@@ -229,6 +306,22 @@ const RESULT_SORT_FIELDS: Record<string, string> = {
   port: 'port',
   qod: 'qod',
   severity: 'severity',
+};
+
+const nativeCveSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending) || 'max_severity';
+  const nativeField = CVE_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
+};
+
+const nativeErrorSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending) || 'created_at';
+  const nativeField = ERROR_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
 };
 
 const HOST_SORT_FIELDS: Record<string, string> = {
@@ -253,6 +346,32 @@ const HOST_SORT_FIELDS: Record<string, string> = {
   start_time: 'start_time',
   total: 'result_count',
   vulnerability_count: 'vulnerability_count',
+};
+
+export const nativeReportCvesQueryFromFilter = (
+  filter?: Filter,
+): NativeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativeCveSortFromFilter(filter),
+    filter: nativeSearchFromFilter(filter),
+  };
+};
+
+export const nativeReportErrorsQueryFromFilter = (
+  filter?: Filter,
+): NativeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativeErrorSortFromFilter(filter),
+    filter: nativeSearchFromFilter(filter),
+  };
 };
 
 const PORT_SORT_FIELDS: Record<string, string> = {
@@ -387,6 +506,31 @@ const nativeReportResultFromPayload = (
   createdAt: stringValue(item.created_at) || undefined,
   sourceReportId: stringValue(item.source_report_id),
   rawEvidenceHref: stringValue(item.raw_evidence_href),
+});
+
+const stringArrayValue = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter(item => typeof item === 'string') : [];
+
+const nativeReportCveFromPayload = (
+  item: NativeReportCvePayload,
+): NativeReportCveItem => ({
+  id: stringValue(item.id),
+  affectedSystemCount: integerValue(item.affected_system_count),
+  resultCount: integerValue(item.result_count),
+  maxSeverity: numberValue(item.max_severity),
+  sourceReportIds: stringArrayValue(item.source_report_ids),
+});
+
+const nativeReportErrorFromPayload = (
+  item: NativeReportErrorPayload,
+): NativeReportErrorItem => ({
+  id: stringValue(item.id),
+  host: stringValue(item.host),
+  port: stringValue(item.port),
+  nvtOid: stringValue(item.nvt_oid),
+  description: stringValue(item.description),
+  sourceReportId: stringValue(item.source_report_id),
+  createdAt: stringValue(item.created_at) || undefined,
 });
 
 const nativeReportHostFromPayload = (
@@ -647,6 +791,64 @@ export const fetchNativeReportPorts = async (
   };
   return {
     items: (payload.items ?? []).map(nativeReportPortFromPayload),
+    page,
+  };
+};
+
+export const fetchNativeReportCves = async (
+  gmp: NativeApiGmp,
+  reportId: string,
+  query: NativeReportQuery,
+): Promise<NativeReportCvesResponse> => {
+  const payload = await fetchNativeJson<NativeReportCvesPayload>(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(reportId)}/cves`,
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  return {
+    items: (payload.items ?? []).map(nativeReportCveFromPayload),
+    page,
+  };
+};
+
+export const fetchNativeReportErrors = async (
+  gmp: NativeApiGmp,
+  reportId: string,
+  query: NativeReportQuery,
+): Promise<NativeReportErrorsResponse> => {
+  const payload = await fetchNativeJson<NativeReportErrorsPayload>(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(reportId)}/errors`,
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  return {
+    items: (payload.items ?? []).map(nativeReportErrorFromPayload),
     page,
   };
 };

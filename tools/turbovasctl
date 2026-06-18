@@ -2631,6 +2631,16 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA raw report Ports tab (migrated through gsad same-origin proxy)", "port evidence reads for raw reports"],
             },
             {
+                "endpoint": "/api/v1/reports/{report_id}/cves",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA raw report CVEs tab (migrated through gsad same-origin proxy)", "CVE evidence reads for raw reports"],
+            },
+            {
+                "endpoint": "/api/v1/reports/{report_id}/errors",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA raw report Error Messages tab (migrated through gsad same-origin proxy)", "scan-fidelity evidence reads for raw reports"],
+            },
+            {
                 "endpoint": "/api/v1/scopes",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA scope list reads (migrated through gsad same-origin proxy)", "gvm-tools scope list scripts"],
@@ -2698,7 +2708,7 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
         ],
         "next_replacement_candidates": [
             {"workflow": "gvm-tools scope/report scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "turbovasctl or native HTTP/JSON client commands"},
-            {"workflow": "remaining raw-report detail tabs", "current_dependency": "GSA/GMP report detail collections", "native_target": "typed native collection endpoints after the native raw-report Results/Hosts tabs prove stable"},
+            {"workflow": "remaining raw-report detail tabs", "current_dependency": "GSA/GMP report detail collections", "native_target": "typed native collection endpoints for Applications, Operating Systems, TLS Certificates, and a decision on Closed CVEs"},
         ],
     }
 
@@ -5524,6 +5534,34 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
                     raw_report_ports,
                     compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../ports?page_size=5"),
                     raw_report_ports_json,
+                )
+            )
+            raw_report_cves = native_api_curl(repo_root, f"/api/v1/reports/{urllib.parse.quote(raw_report_detail_id)}/cves?page_size=5&sort=-max_severity")
+            raw_report_cves_json = parse_json_output(raw_report_cves)
+            details["raw_report_cves"] = summarize_native_api_response(raw_report_cves_json)
+            raw_report_cve_items = raw_report_cves_json.get("items", []) if isinstance(raw_report_cves_json, dict) else []
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if raw_report_cves.returncode == 0 and isinstance(raw_report_cve_items, list) else "fail",
+                    "native-api.raw-report-cves",
+                    f"Native API raw-report CVEs probe exit code {raw_report_cves.returncode}.",
+                    raw_report_cves,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../cves?page_size=5"),
+                    raw_report_cves_json,
+                )
+            )
+            raw_report_errors = native_api_curl(repo_root, f"/api/v1/reports/{urllib.parse.quote(raw_report_detail_id)}/errors?page_size=5&sort=-created_at")
+            raw_report_errors_json = parse_json_output(raw_report_errors)
+            details["raw_report_errors"] = summarize_native_api_response(raw_report_errors_json)
+            raw_report_error_items = raw_report_errors_json.get("items", []) if isinstance(raw_report_errors_json, dict) else []
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if raw_report_errors.returncode == 0 and isinstance(raw_report_error_items, list) else "fail",
+                    "native-api.raw-report-errors",
+                    f"Native API raw-report Error Messages probe exit code {raw_report_errors.returncode}.",
+                    raw_report_errors,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../errors?page_size=5"),
+                    raw_report_errors_json,
                 )
             )
         else:

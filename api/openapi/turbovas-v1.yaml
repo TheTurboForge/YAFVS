@@ -86,6 +86,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortCollection'
+  /reports/{report_id}/cves:
+    get:
+      summary: List raw scan report CVEs
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Raw report CVE collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CveCollection'
+  /reports/{report_id}/errors:
+    get:
+      summary: List raw scan report Error Messages
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Raw report Error Message collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessageCollection'
   /reports/{report_id}/metrics:
     get:
       summary: Read raw report metrics

@@ -4,22 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {useMemo, useState} from 'react';
-import {useTranslation} from 'react-i18next';
-import Filter from 'gmp/models/filter';
-import type ReportOperatingSystem from 'gmp/models/report/os';
-import {isActive, type TaskStatus} from 'gmp/models/task';
-import {isDefined} from 'gmp/utils/identity';
-import Loading from 'web/components/loading/Loading';
-import {
-  NO_RELOAD,
-  USE_DEFAULT_RELOAD_INTERVAL_ACTIVE,
-} from 'web/components/loading/Reload';
-import useGetReportOperatingSystems from 'web/hooks/use-query/report-operating-system';
-import useFilterSortBy from 'web/hooks/useFilterSortBy';
-import OperatingSystemsTable from 'web/pages/reports/details/OperatingSystemsTable';
-import ReportEntitiesContainer from 'web/pages/reports/details/ReportEntitiesContainer';
-import {makeCompareNumber, makeCompareString} from 'web/utils/Sort';
+import type Filter from 'gmp/models/filter';
+import type {TaskStatus} from 'gmp/models/task';
+import NativeInventoryEvidenceTab from 'web/pages/reports/details/NativeInventoryEvidenceTab';
 
 interface OperatingSystemsTabWrapperProps {
   filter?: Filter;
@@ -27,112 +14,15 @@ interface OperatingSystemsTabWrapperProps {
   status: TaskStatus;
 }
 
-type OperatingSystemsSortFunctions = {
-  name: (
-    sortReverse?: boolean,
-  ) => (a: ReportOperatingSystem, b: ReportOperatingSystem) => number;
-  cpe: (
-    sortReverse?: boolean,
-  ) => (a: ReportOperatingSystem, b: ReportOperatingSystem) => number;
-  hosts: (
-    sortReverse?: boolean,
-  ) => (a: ReportOperatingSystem, b: ReportOperatingSystem) => number;
-};
-
-const operatingSystemsSortFunctions: OperatingSystemsSortFunctions = {
-  name: makeCompareString('name'),
-  cpe: makeCompareString('id'),
-  hosts: makeCompareNumber(entity => entity.hosts.count),
-};
-
 const OperatingSystemsTabWrapper = ({
   filter,
   reportId,
-  status,
-}: OperatingSystemsTabWrapperProps) => {
-  const [_] = useTranslation();
-
-  const baseFilter = useMemo(() => {
-    return isDefined(filter) ? filter.copy() : new Filter();
-  }, [filter]);
-
-  const [operatingSystemsFilter, setOperatingSystemsFilter] =
-    useState<Filter>(baseFilter);
-
-  const {data, isLoading, isFetching, isError} = useGetReportOperatingSystems({
-    reportId,
-    filter: operatingSystemsFilter,
-    refetchInterval: isActive(status)
-      ? USE_DEFAULT_RELOAD_INTERVAL_ACTIVE
-      : NO_RELOAD,
-  });
-
-  const updateFilter = (newFilter: Filter) => {
-    setOperatingSystemsFilter(newFilter);
-  };
-
-  const [sortBy, sortDir, handleSortChange] = useFilterSortBy(
-    operatingSystemsFilter,
-    updateFilter,
-  );
-
-  const operatingSystems = data?.entities ?? [];
-
-  if (isError) {
-    return (
-      <div className="error">
-        {_('Error while loading Operating Systems for Report {{reportId}}', {
-          reportId,
-        })}
-      </div>
-    );
-  }
-
-  const {entitiesCounts: operatingSystemsCounts} = data || {};
-
-  const displayedFilter = operatingSystemsFilter;
-
-  if (isLoading && !data) {
-    return <Loading />;
-  }
-
-  return (
-    <ReportEntitiesContainer
-      counts={operatingSystemsCounts}
-      entities={operatingSystems}
-      filter={displayedFilter}
-      sortField={sortBy || 'name'}
-      sortFunctions={operatingSystemsSortFunctions}
-      sortReverse={sortDir === 'asc'}
-    >
-      {({
-        entities,
-        entitiesCounts,
-        sortBy,
-        sortDir,
-        onFirstClick,
-        onLastClick,
-        onNextClick,
-        onPreviousClick,
-      }) => (
-        <OperatingSystemsTable
-          // @ts-expect-error entities are ReportOperatingSystem[], not Model[]
-          entities={entities}
-          entitiesCounts={entitiesCounts}
-          filter={displayedFilter}
-          isUpdating={isFetching}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          toggleDetailsIcon={false}
-          onFirstClick={onFirstClick}
-          onLastClick={onLastClick}
-          onNextClick={onNextClick}
-          onPreviousClick={onPreviousClick}
-          onSortChange={handleSortChange}
-        />
-      )}
-    </ReportEntitiesContainer>
-  );
-};
+}: OperatingSystemsTabWrapperProps) => (
+  <NativeInventoryEvidenceTab
+    kind="operatingSystems"
+    reportFilter={filter}
+    reportId={reportId}
+  />
+);
 
 export default OperatingSystemsTabWrapper;

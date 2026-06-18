@@ -1,84 +1,42 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, expect, test, testing} from '@gsa/testing';
-import {act, rendererWith, screen, within} from 'web/testing';
-import CollectionCounts from 'gmp/collection/collection-counts';
+import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import {rendererWith, screen, within} from 'web/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 import ApplicationsTab from 'web/pages/reports/details/ApplicationsTab';
 
 const filter = Filter.fromString('first=1 rows=10');
-
-const createMockApplication = (overrides = {}) => ({
-  id: 'app-default',
-  name: 'test-application',
-  hosts: {
-    count: 5,
-  },
-  occurrences: {
-    total: 100,
-  },
-  severity: 'high',
-  ...overrides,
-});
-
-const mockApps = [
-  createMockApplication({
-    id: 'app-apache',
-    name: 'Apache HTTP Server',
-    hosts: {count: 10},
-    occurrences: {total: 250},
-    severity: '10.0',
-  }),
-  createMockApplication({
-    id: 'app-nginx',
-    name: 'Nginx',
-    hosts: {count: 3},
-    occurrences: {total: 15},
-    severity: '5.0',
-  }),
-];
-
-const mockAppsCounts = new CollectionCounts({
-  filtered: 2,
-  all: 2,
-  first: 1,
-  rows: 10,
-});
-
-const createGmp = ({
-  getReportApplications = testing.fn().mockResolvedValue({
-    data: mockApps,
-    meta: {
-      filter,
-      counts: mockAppsCounts,
-    },
-  }),
-} = {}) => ({
-  reportapplications: {
-    get: getReportApplications,
-  },
-  settings: {
-    reloadInterval: 5000,
-    reloadIntervalActive: 2000,
-    reloadIntervalInactive: 10000,
-  },
-  session: createSession({
-    timezone: 'CET',
-    token: 'test-token',
-    username: 'admin',
-  }),
-});
-
 const reportId = 'report-123';
+
+const createGmp = () => ({
+  buildUrl: testing.fn((path: string, params?: Record<string, unknown>) => {
+    const query = new URLSearchParams();
+    Object.entries(params ?? {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value));
+      }
+    });
+    return `https://turbovas.example/${path}${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`;
+  }),
+  settings: {severityRating: 'CVSSv3'},
+  session: createSession({token: 'test-token'}),
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('ApplicationsTab', () => {
   test('should render loading state initially', () => {
-    const gmp = createGmp();
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
+    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    const {render} = rendererWith({gmp: createGmp(), router: true});
 
     render(
       <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
@@ -87,174 +45,71 @@ describe('ApplicationsTab', () => {
     expect(screen.getByTestId('loading')).toBeInTheDocument();
   });
 
-  test('should render table with applications', async () => {
-    const gmp = createGmp();
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
+  test('should render native report applications table', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 2, sort: 'name', filter: ''},
+        items: [
+          {
+            name: 'Apache HTTP Server',
+            version: '',
+            cpe: 'cpe:/a:apache:http_server',
+            host_count: 10,
+            result_count: 250,
+            vulnerability_count: 8,
+            max_severity: 10.0,
+            source_report_ids: [reportId],
+          },
+          {
+            name: 'Nginx',
+            version: '',
+            cpe: 'cpe:/a:nginx:nginx',
+            host_count: 3,
+            result_count: 15,
+            vulnerability_count: 2,
+            max_severity: 5.0,
+            source_report_ids: [reportId],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const {render} = rendererWith({gmp: createGmp(), router: true});
 
     render(
       <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
     );
 
-    const table = await screen.findByRole('table');
-    expect(table).toBeInTheDocument();
-
+    const table = await screen.findByTestId('native-raw-report-applications-table');
     const rows = within(table).getAllByRole('row');
-    // sorted by name descending (no sort-reverse, default asc → sortReverse=true)
-    expect(rows[1]).toHaveTextContent('Nginx');
-    expect(rows[1]).toHaveTextContent('3');
-    expect(rows[1]).toHaveTextContent('15');
-
-    expect(rows[2]).toHaveTextContent('Apache HTTP Server');
-    expect(rows[2]).toHaveTextContent('10');
-    expect(rows[2]).toHaveTextContent('250');
+    expect(rows[0]).toHaveTextContent('Application');
+    expect(rows[0]).toHaveTextContent('CPE');
+    expect(rows[0]).toHaveTextContent('Max Severity');
+    expect(rows[1]).toHaveTextContent('Apache HTTP Server');
+    expect(rows[1]).toHaveTextContent('10');
+    expect(rows[1]).toHaveTextContent('250');
+    expect(rows[2]).toHaveTextContent('Nginx');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/reports/report-123/applications'),
+      expect.objectContaining({credentials: 'include'}),
+    );
   });
 
-  test('should render empty state when no applications', async () => {
-    const gmp = createGmp({
-      getReportApplications: testing.fn().mockResolvedValue({
-        data: [],
-        meta: {
-          filter,
-          counts: new CollectionCounts({
-            filtered: 0,
-            all: 0,
-            first: 1,
-            rows: 10,
-          }),
-        },
-      }),
-    });
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
+  test('should render native fetch failure', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({ok: false, status: 500}),
+    );
+    const {render} = rendererWith({gmp: createGmp(), router: true});
 
     render(
       <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
     );
 
     expect(
-      await screen.findByText('No Applications available'),
+      await screen.findByText(/Native API request failed with status 500/),
     ).toBeInTheDocument();
-  });
-
-  test('should render error panel on fetch failure', async () => {
-    const gmp = createGmp({
-      getReportApplications: testing
-        .fn()
-        .mockRejectedValue(new Error('Failed to fetch applications')),
-    });
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(
-      <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
-    );
-
-    expect(
-      await screen.findByText(/Error while loading Applications for Report/),
-    ).toBeInTheDocument();
-  });
-
-  test('should call API with filter containing report ID', async () => {
-    const getReportApplications = testing.fn().mockResolvedValue({
-      data: mockApps,
-      meta: {filter, counts: mockAppsCounts},
-    });
-    const gmp = createGmp({getReportApplications});
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(
-      <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
-    );
-
-    await screen.findByRole('table');
-
-    expect(getReportApplications).toHaveBeenCalledWith(
-      expect.objectContaining({
-        report_id: reportId,
-        filter: expect.objectContaining({}),
-      }),
-    );
-  });
-
-  test('should show applied filter', async () => {
-    const gmp = createGmp();
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(
-      <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
-    );
-
-    await screen.findByRole('table');
-
-    expect(screen.getByText(/Applied filter:/)).toBeInTheDocument();
-  });
-});
-
-const pollingReloadIntervalActive = 100;
-
-const createPollingGmp = ({
-  getReportApplications = testing.fn().mockResolvedValue({
-    data: mockApps,
-    meta: {
-      filter,
-      counts: mockAppsCounts,
-    },
-  }),
-} = {}) => ({
-  reportapplications: {
-    get: getReportApplications,
-  },
-  settings: {
-    reloadInterval: 5000,
-    reloadIntervalActive: pollingReloadIntervalActive,
-    reloadIntervalInactive: 10000,
-  },
-  session: createSession({
-    timezone: 'CET',
-    token: 'test-token',
-    username: 'admin',
-  }),
-});
-
-describe('ApplicationsTab polling behavior', () => {
-  test.each([
-    [
-      'should poll when task status is active',
-      'Running' as const,
-      pollingReloadIntervalActive + 50,
-      2,
-    ],
-    [
-      'should not poll when task status is inactive',
-      'Stopped' as const,
-      pollingReloadIntervalActive * 10,
-      1,
-    ],
-  ])('%s', async (_, status, timeToAdvance, expectedCallCount) => {
-    testing.useFakeTimers();
-
-    const getReportApplications = testing.fn().mockResolvedValue({
-      data: mockApps,
-      meta: {
-        filter,
-        counts: mockAppsCounts,
-      },
-    });
-
-    const gmp = createPollingGmp({getReportApplications});
-    const {render} = rendererWith({gmp, router: true, capabilities: true});
-
-    render(
-      <ApplicationsTab filter={filter} reportId={reportId} status={status} />,
-    );
-
-    await act(async () => {});
-    expect(getReportApplications).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await testing.advanceTimersByTimeAsync(timeToAdvance);
-    });
-
-    expect(getReportApplications).toHaveBeenCalledTimes(expectedCallCount);
-
-    testing.useRealTimers();
   });
 });

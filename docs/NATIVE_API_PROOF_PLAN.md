@@ -99,9 +99,13 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/applications`
 - `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/operating-systems`
 - `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/tls-certificates`
+- `GET /api/v1/reports/{report_id}/applications`
+- `GET /api/v1/reports/{report_id}/operating-systems`
+- `GET /api/v1/reports/{report_id}/tls-certificates`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, and Metrics, these
 endpoints complete native browser coverage for current scope-report evidence
-tabs. Further native API expansion should now move outward to raw report
-detail-page integration or helper/tooling replacements that remove required
-GMP/XML, `python-gvm`, or `gvm-tools` dependence.
+tabs and the high-value raw report evidence tabs. Further native API expansion
+should now decide the Closed CVEs path, then move toward remaining helper/tooling
+replacements and, later, carefully designed write/control paths that remove
+required GMP/XML, `python-gvm`, or `gvm-tools` dependence.

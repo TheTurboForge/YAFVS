@@ -13,6 +13,56 @@ interface NativeApiSession {
   readonly token?: string;
 }
 
+interface NativeReportApplicationPayload {
+  name: string;
+  version?: string;
+  cpe?: string;
+  host_count: number;
+  result_count: number;
+  vulnerability_count: number;
+  max_severity: number;
+  source_report_ids?: string[];
+}
+
+interface NativeReportApplicationsPayload {
+  page?: Partial<NativeReportPage>;
+  items?: NativeReportApplicationPayload[];
+}
+
+interface NativeReportOperatingSystemPayload {
+  name: string;
+  cpe?: string;
+  host_count: number;
+  result_count: number;
+  vulnerability_count: number;
+  max_severity: number;
+  source_report_ids?: string[];
+}
+
+interface NativeReportOperatingSystemsPayload {
+  page?: Partial<NativeReportPage>;
+  items?: NativeReportOperatingSystemPayload[];
+}
+
+interface NativeReportTlsCertificatePayload {
+  id: string;
+  fingerprint_sha256?: string;
+  subject?: string;
+  issuer?: string;
+  serial?: string;
+  not_before?: string;
+  not_after?: string;
+  host_count: number;
+  port_count: number;
+  result_count: number;
+  source_report_ids?: string[];
+}
+
+interface NativeReportTlsCertificatesPayload {
+  page?: Partial<NativeReportPage>;
+  items?: NativeReportTlsCertificatePayload[];
+}
+
 interface NativeApiGmp {
   readonly session: NativeApiSession;
   buildUrl(path: string, params?: UrlParams): string;
@@ -241,6 +291,56 @@ export interface NativeReportCvesResponse {
   page: NativeReportPage;
 }
 
+export interface NativeReportApplicationItem {
+  name: string;
+  version: string;
+  cpe: string;
+  hostCount: number;
+  resultCount: number;
+  vulnerabilityCount: number;
+  maxSeverity: number;
+  sourceReportIds: string[];
+}
+
+export interface NativeReportApplicationsResponse {
+  items: NativeReportApplicationItem[];
+  page: NativeReportPage;
+}
+
+export interface NativeReportOperatingSystemItem {
+  name: string;
+  cpe: string;
+  hostCount: number;
+  resultCount: number;
+  vulnerabilityCount: number;
+  maxSeverity: number;
+  sourceReportIds: string[];
+}
+
+export interface NativeReportOperatingSystemsResponse {
+  items: NativeReportOperatingSystemItem[];
+  page: NativeReportPage;
+}
+
+export interface NativeReportTlsCertificateItem {
+  id: string;
+  fingerprintSha256: string;
+  subject: string;
+  issuer: string;
+  serial: string;
+  notBefore?: string;
+  notAfter?: string;
+  hostCount: number;
+  portCount: number;
+  resultCount: number;
+  sourceReportIds: string[];
+}
+
+export interface NativeReportTlsCertificatesResponse {
+  items: NativeReportTlsCertificateItem[];
+  page: NativeReportPage;
+}
+
 export interface NativeReportErrorItem {
   id: string;
   host: string;
@@ -275,6 +375,45 @@ const REPORT_SORT_FIELDS: Record<string, string> = {
   false_positive: 'false_positive',
 };
 
+const APPLICATION_SORT_FIELDS: Record<string, string> = {
+  cpe: 'cpe',
+  host_count: 'host_count',
+  hosts: 'host_count',
+  max_severity: 'max_severity',
+  name: 'name',
+  occurrences: 'result_count',
+  result_count: 'result_count',
+  severity: 'max_severity',
+  vulnerability_count: 'vulnerability_count',
+};
+
+const OPERATING_SYSTEM_SORT_FIELDS: Record<string, string> = {
+  cpe: 'cpe',
+  host_count: 'host_count',
+  hosts: 'host_count',
+  max_severity: 'max_severity',
+  name: 'name',
+  result_count: 'result_count',
+  severity: 'max_severity',
+  vulnerability_count: 'vulnerability_count',
+};
+
+const TLS_CERTIFICATE_SORT_FIELDS: Record<string, string> = {
+  dn: 'subject',
+  fingerprint_sha256: 'fingerprint_sha256',
+  host_count: 'host_count',
+  id: 'id',
+  issuer: 'issuer',
+  not_after: 'not_after',
+  not_before: 'not_before',
+  notvalidafter: 'not_after',
+  notvalidbefore: 'not_before',
+  port_count: 'port_count',
+  result_count: 'result_count',
+  serial: 'serial',
+  subject: 'subject',
+};
+
 const CVE_SORT_FIELDS: Record<string, string> = {
   affected_system_count: 'affected_system_count',
   cve: 'id',
@@ -282,6 +421,30 @@ const CVE_SORT_FIELDS: Record<string, string> = {
   max_severity: 'max_severity',
   result_count: 'result_count',
   severity: 'max_severity',
+};
+
+const nativeApplicationSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending) || 'name';
+  const nativeField = APPLICATION_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
+};
+
+const nativeOperatingSystemSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending) || 'name';
+  const nativeField = OPERATING_SYSTEM_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
+};
+
+const nativeTlsCertificateSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending) || 'not_after';
+  const nativeField = TLS_CERTIFICATE_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
 };
 
 const ERROR_SORT_FIELDS: Record<string, string> = {
@@ -294,6 +457,45 @@ const ERROR_SORT_FIELDS: Record<string, string> = {
   nvt: 'nvt_oid',
   nvt_oid: 'nvt_oid',
   port: 'port',
+};
+
+export const nativeReportApplicationsQueryFromFilter = (
+  filter?: Filter,
+): NativeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativeApplicationSortFromFilter(filter),
+    filter: nativeSearchFromFilter(filter),
+  };
+};
+
+export const nativeReportOperatingSystemsQueryFromFilter = (
+  filter?: Filter,
+): NativeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativeOperatingSystemSortFromFilter(filter),
+    filter: nativeSearchFromFilter(filter),
+  };
+};
+
+export const nativeReportTlsCertificatesQueryFromFilter = (
+  filter?: Filter,
+): NativeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativeTlsCertificateSortFromFilter(filter),
+    filter: nativeSearchFromFilter(filter),
+  };
 };
 
 const RESULT_SORT_FIELDS: Record<string, string> = {
@@ -506,6 +708,47 @@ const nativeReportResultFromPayload = (
   createdAt: stringValue(item.created_at) || undefined,
   sourceReportId: stringValue(item.source_report_id),
   rawEvidenceHref: stringValue(item.raw_evidence_href),
+});
+
+const nativeReportApplicationFromPayload = (
+  item: NativeReportApplicationPayload,
+): NativeReportApplicationItem => ({
+  name: stringValue(item.name),
+  version: stringValue(item.version),
+  cpe: stringValue(item.cpe),
+  hostCount: integerValue(item.host_count),
+  resultCount: integerValue(item.result_count),
+  vulnerabilityCount: integerValue(item.vulnerability_count),
+  maxSeverity: numberValue(item.max_severity),
+  sourceReportIds: stringArrayValue(item.source_report_ids),
+});
+
+const nativeReportOperatingSystemFromPayload = (
+  item: NativeReportOperatingSystemPayload,
+): NativeReportOperatingSystemItem => ({
+  name: stringValue(item.name),
+  cpe: stringValue(item.cpe),
+  hostCount: integerValue(item.host_count),
+  resultCount: integerValue(item.result_count),
+  vulnerabilityCount: integerValue(item.vulnerability_count),
+  maxSeverity: numberValue(item.max_severity),
+  sourceReportIds: stringArrayValue(item.source_report_ids),
+});
+
+const nativeReportTlsCertificateFromPayload = (
+  item: NativeReportTlsCertificatePayload,
+): NativeReportTlsCertificateItem => ({
+  id: stringValue(item.id),
+  fingerprintSha256: stringValue(item.fingerprint_sha256),
+  subject: stringValue(item.subject),
+  issuer: stringValue(item.issuer),
+  serial: stringValue(item.serial),
+  notBefore: stringValue(item.not_before) || undefined,
+  notAfter: stringValue(item.not_after) || undefined,
+  hostCount: integerValue(item.host_count),
+  portCount: integerValue(item.port_count),
+  resultCount: integerValue(item.result_count),
+  sourceReportIds: stringArrayValue(item.source_report_ids),
 });
 
 const stringArrayValue = (value: unknown): string[] =>
@@ -849,6 +1092,93 @@ export const fetchNativeReportErrors = async (
   };
   return {
     items: (payload.items ?? []).map(nativeReportErrorFromPayload),
+    page,
+  };
+};
+
+export const fetchNativeReportApplications = async (
+  gmp: NativeApiGmp,
+  reportId: string,
+  query: NativeReportQuery,
+): Promise<NativeReportApplicationsResponse> => {
+  const payload = await fetchNativeJson<NativeReportApplicationsPayload>(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(reportId)}/applications`,
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  return {
+    items: (payload.items ?? []).map(nativeReportApplicationFromPayload),
+    page,
+  };
+};
+
+export const fetchNativeReportOperatingSystems = async (
+  gmp: NativeApiGmp,
+  reportId: string,
+  query: NativeReportQuery,
+): Promise<NativeReportOperatingSystemsResponse> => {
+  const payload = await fetchNativeJson<NativeReportOperatingSystemsPayload>(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(reportId)}/operating-systems`,
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  return {
+    items: (payload.items ?? []).map(nativeReportOperatingSystemFromPayload),
+    page,
+  };
+};
+
+export const fetchNativeReportTlsCertificates = async (
+  gmp: NativeApiGmp,
+  reportId: string,
+  query: NativeReportQuery,
+): Promise<NativeReportTlsCertificatesResponse> => {
+  const payload = await fetchNativeJson<NativeReportTlsCertificatesPayload>(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(reportId)}/tls-certificates`,
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  return {
+    items: (payload.items ?? []).map(nativeReportTlsCertificateFromPayload),
     page,
   };
 };

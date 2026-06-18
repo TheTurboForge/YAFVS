@@ -4,126 +4,92 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
-import {screen, rendererWith, within} from 'web/testing';
-import CollectionCounts from 'gmp/collection/collection-counts';
-import {COMPLIANCE} from 'gmp/models/compliance';
+import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import {rendererWith, screen, within} from 'web/testing';
 import Filter from 'gmp/models/filter';
-import ReportOperatingSystem from 'gmp/models/report/os';
 import {createSession} from 'gmp/testing';
-import {SEVERITY_RATING_CVSS_3} from 'gmp/utils/severity';
 import OperatingSystemsTab from 'web/pages/reports/details/OperatingSystemsTab';
 
-const filter = Filter.fromString(
-  'apply_overrides=0 levels=hml rows=2 min_qod=70 first=1 sort=severity',
-);
+const filter = Filter.fromString('rows=2 first=1 sort=severity');
+const reportId = 'report-123';
 
-// Build API-format OS entities (no severity set, matching get_report_operating_systems response)
-const buildApiEntities = () => {
-  const os1 = ReportOperatingSystem.fromElement({
-    best_os_cpe: 'cpe:/foo/bar',
-    best_os_txt: 'Foo OS',
-  });
-  os1.hosts.count = 2;
-  os1.compliance = COMPLIANCE.NO;
-
-  const os2 = ReportOperatingSystem.fromElement({
-    best_os_cpe: 'cpe:/lorem/ipsum',
-    best_os_txt: 'Lorem OS',
-  });
-  os2.hosts.count = 5;
-  os2.compliance = COMPLIANCE.INCOMPLETE;
-
-  return [os1, os2];
-};
-
-const createGmp = (apiEntities, responseFilter = filter) => ({
+const createGmp = () => ({
+  buildUrl: testing.fn((path: string, params?: Record<string, unknown>) => {
+    const query = new URLSearchParams();
+    Object.entries(params ?? {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value));
+      }
+    });
+    return `https://turbovas.example/${path}${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`;
+  }),
+  settings: {severityRating: 'CVSSv3'},
   session: createSession({token: 'test-token'}),
-  settings: {severityRating: SEVERITY_RATING_CVSS_3},
-  reportoperatingsystems: {
-    get: testing.fn().mockResolvedValue({
-      data: apiEntities,
-      meta: {
-        filter: responseFilter,
-        counts: new CollectionCounts({
-          all: apiEntities.length,
-          filtered: apiEntities.length,
-          first: 1,
-          length: apiEntities.length,
-          rows: apiEntities.length,
-        }),
-      },
-    }),
-  },
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('Report Operating Systems Tab tests', () => {
-  test('should render Report Operating Systems Tab', async () => {
-    const apiEntities = buildApiEntities();
-    const gmp = createGmp(apiEntities);
-
-    const {render} = rendererWith({gmp, router: true});
+  test('should render native Report Operating Systems Tab', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 2, total: 2, sort: 'max_severity', filter: ''},
+        items: [
+          {
+            name: 'Foo OS',
+            cpe: 'cpe:/foo/bar',
+            host_count: 2,
+            result_count: 7,
+            vulnerability_count: 3,
+            max_severity: 8.0,
+            source_report_ids: [reportId],
+          },
+          {
+            name: 'Lorem OS',
+            cpe: 'cpe:/lorem/ipsum',
+            host_count: 5,
+            result_count: 11,
+            vulnerability_count: 4,
+            max_severity: 6.0,
+            source_report_ids: [reportId],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const {render} = rendererWith({gmp: createGmp(), router: true});
 
     render(
-      <OperatingSystemsTab filter={filter} reportId="1234" status="Done" />,
+      <OperatingSystemsTab filter={filter} reportId={reportId} status="Done" />,
     );
 
-    // Wait for data to load
-    const dataCell = await screen.findByText('Foo OS');
-
-    expect(dataCell).toBeInTheDocument();
-
-    // Batch row lookups
-    const rows = screen.getAllByRole('row');
-
-    // Verify headers
+    const table = await screen.findByTestId(
+      'native-raw-report-operating-systems-table',
+    );
+    const rows = within(table).getAllByRole('row');
     expect(rows[0]).toHaveTextContent('Operating System');
     expect(rows[0]).toHaveTextContent('CPE');
-    expect(rows[0]).toHaveTextContent('Hosts');
-
-    // Verify Row 1
-    const row1Links = within(rows[1]).getAllByRole('link');
-    const row1Image = within(rows[1]).getByAltText('');
-
-    expect(row1Image).toHaveAttribute('src', '/img/os_unknown.svg');
-    expect(row1Links[0]).toHaveTextContent('Foo OS');
-    expect(row1Links[0]).toHaveAttribute(
-      'href',
-      '/operatingsystems?filter=name%3Dcpe%3A%2Ffoo%2Fbar',
-    );
-    expect(row1Links[1]).toHaveTextContent('cpe:/foo/bar');
-    expect(row1Links[1]).toHaveAttribute(
-      'href',
-      '/operatingsystems?filter=name%3Dcpe%3A%2Ffoo%2Fbar',
-    );
-
-    // Verify Row 2
-    const row2Links = within(rows[2]).getAllByRole('link');
-    const row2Image = within(rows[2]).getByAltText('');
-
-    expect(row2Image).toHaveAttribute('src', '/img/os_unknown.svg');
-    expect(row2Links[0]).toHaveTextContent('Lorem OS');
-    expect(row2Links[0]).toHaveAttribute(
-      'href',
-      '/operatingsystems?filter=name%3Dcpe%3A%2Florem%2Fipsum',
-    );
-    expect(row2Links[1]).toHaveTextContent('cpe:/lorem/ipsum');
-    expect(row2Links[1]).toHaveAttribute(
-      'href',
-      '/operatingsystems?filter=name%3Dcpe%3A%2Florem%2Fipsum',
+    expect(rows[0]).toHaveTextContent('Max Severity');
+    expect(rows[1]).toHaveTextContent('Foo OS');
+    expect(rows[1]).toHaveTextContent('cpe:/foo/bar');
+    expect(rows[2]).toHaveTextContent('Lorem OS');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/reports/report-123/operating-systems'),
+      expect.objectContaining({credentials: 'include'}),
     );
   });
 
-  test('should show loading state before data arrives', async () => {
-    const gmp = createGmp(buildApiEntities());
-    // Replace with a promise that never resolves to keep the loading state
-    gmp.reportoperatingsystems.get = testing
-      .fn()
-      .mockReturnValue(new Promise(() => {}));
-
-    const {render} = rendererWith({gmp, router: true});
+  test('should show loading state before data arrives', () => {
+    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    const {render} = rendererWith({gmp: createGmp(), router: true});
     render(
-      <OperatingSystemsTab filter={filter} reportId="1234" status="Done" />,
+      <OperatingSystemsTab filter={filter} reportId={reportId} status="Done" />,
     );
 
     expect(screen.getByTestId('loading')).toBeInTheDocument();

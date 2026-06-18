@@ -430,6 +430,22 @@ async function runForBaseUrl(baseUrl) {
         } else {
           add('fail', 'raw-report.ports-tab', 'Could not activate the raw-report Ports tab.');
         }
+        if (await clickTab(page, 'Applications', isRawReportDetailUrl)) {
+          await screenshot(page, 'raw-report-applications-tab');
+          await assertNoAppError(page, 'raw-report-applications-tab.app-error');
+          const nativeRawApplications = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports\/[^/]+\/applications$/);
+          add(nativeRawApplications ? 'pass' : 'fail', 'raw-report.applications-native-api', nativeRawApplications ? 'Raw-report Applications tab loaded through same-origin native API.' : 'Raw-report Applications tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/applications')) });
+        } else {
+          add('fail', 'raw-report.applications-tab', 'Could not activate the raw-report Applications tab.');
+        }
+        if (await clickTab(page, 'Operating Systems', isRawReportDetailUrl)) {
+          await screenshot(page, 'raw-report-operating-systems-tab');
+          await assertNoAppError(page, 'raw-report-operating-systems-tab.app-error');
+          const nativeRawOperatingSystems = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports\/[^/]+\/operating-systems$/);
+          add(nativeRawOperatingSystems ? 'pass' : 'fail', 'raw-report.operating-systems-native-api', nativeRawOperatingSystems ? 'Raw-report Operating Systems tab loaded through same-origin native API.' : 'Raw-report Operating Systems tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/operating-systems')) });
+        } else {
+          add('fail', 'raw-report.operating-systems-tab', 'Could not activate the raw-report Operating Systems tab.');
+        }
         if (await clickTab(page, 'CVEs', isRawReportDetailUrl)) {
           await screenshot(page, 'raw-report-cves-tab');
           await assertNoAppError(page, 'raw-report-cves-tab.app-error');
@@ -437,6 +453,14 @@ async function runForBaseUrl(baseUrl) {
           add(nativeRawCves ? 'pass' : 'fail', 'raw-report.cves-native-api', nativeRawCves ? 'Raw-report CVEs tab loaded through same-origin native API.' : 'Raw-report CVEs tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/cves')) });
         } else {
           add('fail', 'raw-report.cves-tab', 'Could not activate the raw-report CVEs tab.');
+        }
+        if (await clickTab(page, 'TLS Certificates', isRawReportDetailUrl)) {
+          await screenshot(page, 'raw-report-tls-certificates-tab');
+          await assertNoAppError(page, 'raw-report-tls-certificates-tab.app-error');
+          const nativeRawTlsCertificates = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports\/[^/]+\/tls-certificates$/);
+          add(nativeRawTlsCertificates ? 'pass' : 'fail', 'raw-report.tls-certificates-native-api', nativeRawTlsCertificates ? 'Raw-report TLS Certificates tab loaded through same-origin native API.' : 'Raw-report TLS Certificates tab did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path.includes('/tls-certificates')) });
+        } else {
+          add('fail', 'raw-report.tls-certificates-tab', 'Could not activate the raw-report TLS Certificates tab.');
         }
         if (await clickTab(page, 'Error Messages', isRawReportDetailUrl)) {
           await screenshot(page, 'raw-report-errors-tab');

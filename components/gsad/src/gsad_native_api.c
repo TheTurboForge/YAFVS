@@ -63,7 +63,10 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *results_suffix = "/results";
   const gchar *hosts_suffix = "/hosts";
   const gchar *ports_suffix = "/ports";
+  const gchar *applications_suffix = "/applications";
+  const gchar *operating_systems_suffix = "/operating-systems";
   const gchar *cves_suffix = "/cves";
+  const gchar *tls_certificates_suffix = "/tls-certificates";
   const gchar *errors_suffix = "/errors";
   const gchar *scope_collection_suffixes[] = { "/metrics",
                                                "/results",
@@ -139,6 +142,33 @@ native_api_path_is_allowed (const gchar *path)
       const gchar *id = path + strlen (raw_report_prefix);
       gsize id_len = strlen (path) - strlen (raw_report_prefix)
                      - strlen (ports_suffix);
+      return is_uuid_segment (id, id_len);
+    }
+
+  if (g_str_has_prefix (path, raw_report_prefix)
+      && g_str_has_suffix (path, applications_suffix))
+    {
+      const gchar *id = path + strlen (raw_report_prefix);
+      gsize id_len = strlen (path) - strlen (raw_report_prefix)
+                     - strlen (applications_suffix);
+      return is_uuid_segment (id, id_len);
+    }
+
+  if (g_str_has_prefix (path, raw_report_prefix)
+      && g_str_has_suffix (path, operating_systems_suffix))
+    {
+      const gchar *id = path + strlen (raw_report_prefix);
+      gsize id_len = strlen (path) - strlen (raw_report_prefix)
+                     - strlen (operating_systems_suffix);
+      return is_uuid_segment (id, id_len);
+    }
+
+  if (g_str_has_prefix (path, raw_report_prefix)
+      && g_str_has_suffix (path, tls_certificates_suffix))
+    {
+      const gchar *id = path + strlen (raw_report_prefix);
+      gsize id_len = strlen (path) - strlen (raw_report_prefix)
+                     - strlen (tls_certificates_suffix);
       return is_uuid_segment (id, id_len);
     }
 

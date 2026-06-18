@@ -279,10 +279,6 @@ NATIVE_TOOLING_MARKERS = (
 NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset(
     {
         "generate-scope-report.gmp.py",
-        "list-scope-report-results.gmp.py",
-        "list-scope-reports.gmp.py",
-        "list-scopes.gmp.py",
-        "list-reports.gmp.py",
     }
 )
 NATIVE_TOOLING_SCAN_PREFIXES = (
@@ -2608,7 +2604,7 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "gvm-tools list-reports scripts"],
+                "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}",
@@ -2658,7 +2654,7 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             {
                 "endpoint": "/api/v1/scopes",
                 "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["GSA scope list reads (migrated through gsad same-origin proxy)", "gvm-tools scope list scripts"],
+                "replacement_candidates": ["GSA scope list reads (migrated through gsad same-origin proxy)", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}",
@@ -2668,7 +2664,7 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             {
                 "endpoint": "/api/v1/scope-reports",
                 "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["runtime-scope-report-summary helper (migrated)", "GSA scope-report list reads (migrated through gsad same-origin proxy)", "gvm-tools list-scope-reports script"],
+                "replacement_candidates": ["runtime-scope-report-summary helper (migrated)", "GSA scope-report list reads (migrated through gsad same-origin proxy)", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts",
@@ -2722,7 +2718,7 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             },
         ],
         "next_replacement_candidates": [
-            {"workflow": "gvm-tools scope/report scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "turbovasctl or native HTTP/JSON client commands"},
+            {"workflow": "remaining gvm-tools write/control scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "native write/control API after separate safety design"},
             {"workflow": "raw-report Closed CVEs decision", "current_dependency": "GSA/GMP report detail collections", "native_target": "decide whether Closed CVEs are migrated as-is, folded into CVEs, or removed/retired"},
         ],
     }
@@ -5308,6 +5304,43 @@ def native_api_curl(repo_root: Path, path: str) -> subprocess.CompletedProcess[s
     )
 
 
+def validate_native_api_request_path(path: str) -> str:
+    parsed = urllib.parse.urlsplit(path)
+    if parsed.scheme or parsed.netloc:
+        raise ValueError("native API path must be relative, not an absolute URL")
+    if parsed.fragment:
+        raise ValueError("native API path must not contain a fragment")
+    if parsed.path != "/api/v1" and not parsed.path.startswith("/api/v1/"):
+        raise ValueError("native API path must start with /api/v1/")
+    return urllib.parse.urlunsplit(("", "", parsed.path, parsed.query, ""))
+
+
+def command_native_api_request(repo_root: Path, path: str) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    try:
+        request_path = validate_native_api_request_path(path)
+    except ValueError as exc:
+        findings.append(finding("fail", "native-api-request.path", str(exc), details={"path": path}))
+        return make_result("native-api-request", repo_root, "Native API request rejected before runtime access.", findings)
+
+    response = native_api_curl(repo_root, request_path)
+    parsed = parse_json_output(response)
+    ok = response.returncode == 0 and isinstance(parsed, dict)
+    findings.append(
+        native_api_probe_finding(
+            "pass" if ok else "fail",
+            "native-api-request.get",
+            f"Native API GET {request_path} returned JSON." if ok else f"Native API GET {request_path} failed or returned non-JSON output.",
+            response,
+            parsed,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", f"http://127.0.0.1:9080{request_path}"),
+        )
+    )
+    result = make_result("native-api-request", repo_root, "Native API request completed." if ok else "Native API request failed.", findings)
+    result["details"] = {"path": request_path, "response": parsed if isinstance(parsed, dict) else None}
+    return result
+
+
 def parse_json_output(result: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:
     try:
         parsed = json.loads(result.stdout)
@@ -6547,6 +6580,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status", parents=[common], help="show repository status")
     inventory = subparsers.add_parser("inventory", parents=[common], help="show expected component inventory")
     inventory.add_argument("--scope", help="limit inventory to a path under the repository")
+    native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform an internal read-only TurboVAS native API request")
+    native_api_request.add_argument("--path", required=True, help="validated /api/v1/... path plus optional query string")
     subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
     subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
@@ -6640,6 +6675,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_status(repo_root)
     elif args.command == "inventory":
         result = command_inventory(repo_root, args.scope)
+    elif args.command == "native-api-request":
+        result = command_native_api_request(repo_root, args.path)
     elif args.command == "native-tooling-state":
         result = command_native_tooling_state(repo_root)
     elif args.command == "rust-migration-state":

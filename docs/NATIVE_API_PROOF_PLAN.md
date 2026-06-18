@@ -76,6 +76,11 @@ same-origin `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.
 
+Internal read-only scripting can use `just native-api-request --json --path
+'/api/v1/...'` for DB-backed report and scope reads. This removes the need for
+the covered inherited read-only GMP scripts while keeping write/control
+operations on inherited paths until a separate native write design exists.
+
 ## Not In The First Proof
 
 Do not implement writes, scan start/stop, credential handling, feed operations,

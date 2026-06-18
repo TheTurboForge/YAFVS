@@ -401,8 +401,8 @@ class TurboVASCtlTests(unittest.TestCase):
         gsad = (root / "components" / "gsad" / "src" / "gsad_gmp.c").read_text(encoding="utf-8")
         gsa_scopes = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
         python_scopes = (root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp" / "requests" / "v226" / "_scopes.py").read_text(encoding="utf-8")
-        gvm_tools_list = (root / "components" / "gvm-tools" / "scripts" / "list-scope-reports.gmp.py").read_text(encoding="utf-8")
         gmp_schema = (root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
+        native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         self.assertIn("data->filter = g_strdup (attribute);", gvmd_gmp)
         self.assertIn("scope_report_count_filtered", gvmd_gmp)
         self.assertIn('<scope_reports start=\\"%i\\" max=\\"%i\\">%s', gvmd_gmp)
@@ -416,8 +416,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("response.set<ScopeReport[], EntitiesMeta>", gsa_scopes)
         self.assertIn("filter_string: str | None = None", python_scopes)
         self.assertIn('cmd.set_attribute("filter", filter_string)', python_scopes)
-        self.assertIn("DEFAULT_FILTER = \"first=1 rows=25 sort-reverse=created\"", gvm_tools_list)
-        self.assertIn("filter_string=parsed_args.filter", gvm_tools_list)
+        self.assertIn("def command_native_api_request", native_tooling)
+        self.assertFalse((root / "components" / "gvm-tools" / "scripts" / "list-scope-reports.gmp.py").exists())
         self.assertIn("<name>get_scope_reports</name>", gmp_schema)
         self.assertIn("Filter term to use for paging, sorting, and searching scope reports", gmp_schema)
 
@@ -624,12 +624,13 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
         self.assertIn("def command_native_tooling_state", source)
+        self.assertIn("def command_native_api_request", source)
         self.assertIn("def command_rust_migration_state", source)
         self.assertIn("def command_branding_state", source)
         self.assertIn("def command_runtime_log_review", source)
@@ -720,13 +721,17 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertGreater(details["by_category"]["product_workflow"]["count"], 0)
         self.assertGreater(details["by_category"]["compatibility_bridge"]["count"], 0)
         self.assertNotIn("tools/runtime_report.py", details["by_category"]["required_runtime"]["paths"])
-        self.assertIn("components/gvm-tools/scripts/list-scope-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
+        self.assertNotIn("components/gvm-tools/scripts/list-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
+        self.assertNotIn("components/gvm-tools/scripts/list-scopes.gmp.py", details["by_category"]["product_workflow"]["paths"])
+        self.assertNotIn("components/gvm-tools/scripts/list-scope-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
+        self.assertNotIn("components/gvm-tools/scripts/list-scope-report-results.gmp.py", details["by_category"]["product_workflow"]["paths"])
+        self.assertIn("components/gvm-tools/scripts/generate-scope-report.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertIn("components/python-gvm/gvm/protocols/gmp/requests/v226/_reports.py", details["by_category"]["compatibility_bridge"]["paths"])
         all_paths = {path for category in details["by_category"].values() for path in category["paths"]}
         self.assertNotIn("tools/runtime_metrics.py", all_paths)
         self.assertNotIn("components/gvm-tools/scripts/report-metrics.gmp.py", all_paths)
         self.assertNotIn("components/gvm-tools/scripts/scope-report-metrics.gmp.py", all_paths)
-        self.assertIn("gvm-tools scope/report scripts", {item["workflow"] for item in details["next_replacement_candidates"]})
+        self.assertIn("remaining gvm-tools write/control scripts", {item["workflow"] for item in details["next_replacement_candidates"]})
         endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/reports", endpoints)
         self.assertIn("/api/v1/reports/{report_id}", endpoints)
@@ -755,6 +760,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(scope_report_candidates["status"], "implemented_internal_and_browser_proxied")
         self.assertIn("runtime-scope-report-summary helper (migrated)", scope_report_candidates["replacement_candidates"])
         self.assertIn("GSA scope-report list reads (migrated through gsad same-origin proxy)", scope_report_candidates["replacement_candidates"])
+
+    def test_native_api_request_validates_relative_api_paths(self):
+        self.assertEqual(turbovasctl.validate_native_api_request_path("/api/v1/reports?page_size=1"), "/api/v1/reports?page_size=1")
+        self.assertEqual(turbovasctl.validate_native_api_request_path("/api/v1"), "/api/v1")
+        for bad_path in ("https://example.invalid/api/v1/reports", "//example.invalid/api/v1/reports", "/gmp", "/api/v2/reports", "/api/v1/reports#frag"):
+            with self.assertRaises(ValueError):
+                turbovasctl.validate_native_api_request_path(bad_path)
 
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
@@ -819,7 +831,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_scope.py")[0], "required_runtime")
         self.assertEqual(turbovasctl.native_tooling_category("tools/tests/test_turbovasctl.py")[0], "required_test")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/scopes.ts")[0], "product_workflow")
-        self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "product_workflow")
+        self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "candidate_for_removal")
+        self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/generate-scope-report.gmp.py")[0], "product_workflow")
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
 
@@ -1199,6 +1212,13 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("quality-gate GSA checks", source)
         self.assertIn("def command_runtime_manager_init_unlocked", source)
         self.assertIn("data-state.runtime-manager-lock", source)
+
+    def test_gsa_web_fast_script_is_one_shot(self):
+        package_path = Path(__file__).resolve().parents[2] / "components" / "gsa" / "package.json"
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        script = package["scripts"]["test:web-fast"]
+        self.assertIn("vitest run", script)
+        self.assertNotRegex(script, r"^vitest\s+--")
 
     def test_runtime_lock_status_reports_inactive_lock(self):
         with tempfile.TemporaryDirectory() as tmp:

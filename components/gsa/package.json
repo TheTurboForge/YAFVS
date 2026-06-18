@@ -17,7 +17,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "test:web-fast": "vitest --pool=vmForks --project web --project store",
+    "test:web-fast": "vitest run --pool=vmForks --project web --project store",
     "test:coverage": "vitest run --coverage",
     "dev": "vite",
     "start": "npm run dev",

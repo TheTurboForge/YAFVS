@@ -15,6 +15,9 @@ inventory *args:
 native-tooling-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tooling-state "$@"
 
+native-api-request *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-request "$@"
+
 rust-migration-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl rust-migration-state "$@"
 

@@ -177,6 +177,72 @@ struct ScopeItem {
 }
 
 #[derive(Debug, Serialize)]
+struct TargetReference {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PortListReference {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct TargetItem {
+    id: String,
+    name: String,
+    comment: String,
+    hosts: Vec<String>,
+    exclude_hosts: Vec<String>,
+    max_hosts: i64,
+    alive_tests: Vec<String>,
+    allow_simultaneous_ips: bool,
+    reverse_lookup_only: bool,
+    reverse_lookup_unify: bool,
+    port_list: Option<PortListReference>,
+    task_count: i64,
+    tasks: Vec<TargetReference>,
+    creation_time: Option<String>,
+    modification_time: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct TaskReportCount {
+    total: i64,
+    finished: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct TaskReportReference {
+    id: String,
+    timestamp: Option<String>,
+    scan_start: Option<String>,
+    scan_end: Option<String>,
+    severity: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct TaskItem {
+    id: String,
+    name: String,
+    comment: String,
+    status: String,
+    progress: i64,
+    usage_type: String,
+    target: Option<TargetReference>,
+    config: Option<TargetReference>,
+    scanner: Option<TargetReference>,
+    schedule: Option<TargetReference>,
+    report_count: TaskReportCount,
+    current_report: Option<TaskReportReference>,
+    last_report: Option<TaskReportReference>,
+    max_severity: f64,
+    creation_time: Option<String>,
+    modification_time: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct SeverityCounts {
     high: i64,
     medium: i64,
@@ -429,6 +495,10 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/reports/:report_id/errors", get(report_errors))
         .route("/api/v1/scopes", get(scopes))
         .route("/api/v1/scopes/:scope_id", get(scope_detail))
+        .route("/api/v1/targets", get(targets))
+        .route("/api/v1/targets/:target_id", get(target_detail))
+        .route("/api/v1/tasks", get(tasks))
+        .route("/api/v1/tasks/:task_id", get(task_detail))
         .route("/api/v1/scope-reports", get(scope_reports))
         .route("/api/v1/reports/:report_id/metrics", get(report_metrics))
         .route(
@@ -1386,6 +1456,274 @@ async fn report_hosts(
         page: params.page_info(total),
         items,
     }))
+}
+
+async fn targets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<TargetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "name")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "uuid"),
+            ("name", "name"),
+            ("port_list", "port_list_name"),
+            ("task_count", "task_count"),
+            ("max_hosts", "host_entry_count"),
+            ("creation_time", "creation_time"),
+            ("modification_time", "modification_time"),
+        ],
+    )?;
+    let sql = target_sql(
+        "($1 = ''\n\
+            OR lower(uuid) = lower($1)\n\
+            OR lower(name) LIKE '%' || lower($1) || '%'\n\
+            OR lower(comment) LIKE '%' || lower($1) || '%'\n\
+            OR lower(coalesce(port_list_name, '')) LIKE '%' || lower($1) || '%'\n\
+            OR lower(hosts) LIKE '%' || lower($1) || '%')",
+        &sort_sql,
+        "LIMIT $2 OFFSET $3",
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "target list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(target_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn target_detail(
+    State(state): State<AppState>,
+    Path(target_id): Path<String>,
+) -> Result<Json<TargetItem>, ApiError> {
+    parse_uuid(&target_id)?;
+    let sql = target_sql("lower(uuid) = lower($1)", "name ASC", "");
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(&sql, &[&target_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "target detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(target_from_row(&row)))
+}
+
+fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> String {
+    format!(
+        r#"WITH base AS (
+             SELECT t.id AS target_pk,
+                    t.uuid,
+                    t.name,
+                    coalesce(t.comment, '') AS comment,
+                    coalesce(t.hosts, '') AS hosts,
+                    coalesce(t.exclude_hosts, '') AS exclude_hosts,
+                    coalesce(t.alive_test, 0)::bigint AS alive_test,
+                    coalesce(t.allow_simultaneous_ips, 0)::int AS allow_simultaneous_ips,
+                    coalesce(t.reverse_lookup_only, 0)::int AS reverse_lookup_only,
+                    coalesce(t.reverse_lookup_unify, 0)::int AS reverse_lookup_unify,
+                    pl.uuid AS port_list_id,
+                    pl.name AS port_list_name,
+                    coalesce(t.creation_time, 0)::bigint AS creation_time,
+                    coalesce(t.modification_time, 0)::bigint AS modification_time,
+                    CASE WHEN coalesce(t.hosts, '') = '' THEN 0::bigint
+                         ELSE cardinality(string_to_array(t.hosts, ','))::bigint END AS host_entry_count,
+                    count(task.id)::bigint AS task_count,
+                    coalesce(array_agg(task.uuid ORDER BY task.name) FILTER (WHERE task.id IS NOT NULL), ARRAY[]::text[]) AS task_ids,
+                    coalesce(array_agg(task.name ORDER BY task.name) FILTER (WHERE task.id IS NOT NULL), ARRAY[]::text[]) AS task_names
+               FROM targets t
+               LEFT JOIN port_lists pl ON pl.id = t.port_list
+               LEFT JOIN tasks task
+                 ON task.target = t.id
+                AND coalesce(task.hidden, 0) = 0
+                AND coalesce(task.usage_type, 'scan') = 'scan'
+              GROUP BY t.id, t.uuid, t.name, t.comment, t.hosts, t.exclude_hosts,
+                       t.alive_test, t.allow_simultaneous_ips, t.reverse_lookup_only,
+                       t.reverse_lookup_unify, pl.uuid, pl.name,
+                       t.creation_time, t.modification_time
+         ),
+         filtered AS (
+             SELECT * FROM base WHERE {filtered_predicate}
+         )
+         SELECT count(*) OVER()::bigint AS total, *
+           FROM filtered
+          ORDER BY {sort_sql}, name ASC {limit_clause};"#
+    )
+}
+
+async fn tasks(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<TaskItem>>, ApiError> {
+    let params = normalize_collection_query(query, "name")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "uuid"),
+            ("name", "name"),
+            ("status", "status"),
+            ("progress", "progress"),
+            ("target", "target_name"),
+            ("config", "config_name"),
+            ("scanner", "scanner_name"),
+            ("schedule", "schedule_name"),
+            ("report_count", "report_count_total"),
+            ("last_report", "last_report_timestamp"),
+            ("max_severity", "max_severity"),
+            ("creation_time", "creation_time"),
+            ("modification_time", "modification_time"),
+        ],
+    )?;
+    let sql = task_sql(
+        "($1 = ''\n\
+            OR lower(uuid) = lower($1)\n\
+            OR lower(name) LIKE '%' || lower($1) || '%'\n\
+            OR lower(comment) LIKE '%' || lower($1) || '%'\n\
+            OR lower(status) LIKE '%' || lower($1) || '%'\n\
+            OR lower(coalesce(target_name, '')) LIKE '%' || lower($1) || '%'\n\
+            OR lower(coalesce(config_name, '')) LIKE '%' || lower($1) || '%'\n\
+            OR lower(coalesce(scanner_name, '')) LIKE '%' || lower($1) || '%')",
+        &sort_sql,
+        "LIMIT $2 OFFSET $3",
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "task list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(task_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn task_detail(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> Result<Json<TaskItem>, ApiError> {
+    parse_uuid(&task_id)?;
+    let sql = task_sql("lower(uuid) = lower($1)", "name ASC", "");
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(&sql, &[&task_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "task detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(task_from_row(&row)))
+}
+
+fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> String {
+    format!(
+        r#"WITH report_rollup AS (
+             SELECT r.task,
+                    count(*)::bigint AS report_count_total,
+                    count(*) FILTER (WHERE run_status_name(coalesce(r.scan_run_status, 0)) = 'Done')::bigint AS report_count_finished,
+                    coalesce(max(res.severity) FILTER (WHERE coalesce(res.severity, 0) > 0), 0)::double precision AS max_severity
+               FROM reports r
+               LEFT JOIN results res ON res.report = r.id
+              GROUP BY r.task
+         ),
+         report_rows AS (
+             SELECT r.task,
+                    r.id AS report_pk,
+                    r.uuid,
+                    coalesce(r.creation_time, 0)::bigint AS timestamp,
+                    coalesce(r.start_time, 0)::bigint AS scan_start,
+                    coalesce(r.end_time, 0)::bigint AS scan_end,
+                    coalesce(max(res.severity) FILTER (WHERE coalesce(res.severity, 0) > 0), 0)::double precision AS severity,
+                    run_status_name(coalesce(r.scan_run_status, 0)) AS status,
+                    row_number() OVER (PARTITION BY r.task ORDER BY coalesce(nullif(r.end_time, 0), nullif(r.start_time, 0), nullif(r.creation_time, 0), 0) DESC, r.id DESC) AS latest_rank,
+                    CASE WHEN run_status_name(coalesce(r.scan_run_status, 0)) = 'Done' THEN 1 ELSE 0 END AS is_finished
+               FROM reports r
+               LEFT JOIN results res ON res.report = r.id
+              GROUP BY r.task, r.id, r.uuid, r.creation_time, r.start_time, r.end_time, r.scan_run_status
+         ),
+         finished_report_rows AS (
+             SELECT *, row_number() OVER (PARTITION BY task ORDER BY coalesce(nullif(scan_end, 0), nullif(scan_start, 0), nullif(timestamp, 0), 0) DESC, report_pk DESC) AS finished_rank
+               FROM report_rows
+              WHERE is_finished = 1
+         ),
+         latest_report AS (
+             SELECT * FROM report_rows WHERE latest_rank = 1
+         ),
+         latest_finished_report AS (
+             SELECT * FROM finished_report_rows WHERE finished_rank = 1
+         ),
+         base AS (
+             SELECT task.id AS task_pk,
+                    task.uuid,
+                    task.name,
+                    coalesce(task.comment, '') AS comment,
+                    run_status_name(coalesce(task.run_status, 0)) AS status,
+                    CASE WHEN run_status_name(coalesce(task.run_status, 0)) = 'Done' THEN 100::bigint
+                         WHEN latest_report.report_pk IS NOT NULL THEN coalesce(report_progress(latest_report.report_pk), 0)::bigint
+                         ELSE 0::bigint END AS progress,
+                    coalesce(task.usage_type, 'scan') AS usage_type,
+                    target.uuid AS target_id,
+                    target.name AS target_name,
+                    config.uuid AS config_id,
+                    config.name AS config_name,
+                    scanner.uuid AS scanner_id,
+                    scanner.name AS scanner_name,
+                    schedule.uuid AS schedule_id,
+                    schedule.name AS schedule_name,
+                    coalesce(report_rollup.report_count_total, 0)::bigint AS report_count_total,
+                    coalesce(report_rollup.report_count_finished, 0)::bigint AS report_count_finished,
+                    latest_report.uuid AS current_report_id,
+                    latest_report.timestamp AS current_report_timestamp,
+                    latest_report.scan_start AS current_report_scan_start,
+                    latest_report.scan_end AS current_report_scan_end,
+                    latest_report.severity AS current_report_severity,
+                    latest_finished_report.uuid AS last_report_id,
+                    latest_finished_report.timestamp AS last_report_timestamp,
+                    latest_finished_report.scan_start AS last_report_scan_start,
+                    latest_finished_report.scan_end AS last_report_scan_end,
+                    latest_finished_report.severity AS last_report_severity,
+                    coalesce(report_rollup.max_severity, 0)::double precision AS max_severity,
+                    coalesce(task.creation_time, 0)::bigint AS creation_time,
+                    coalesce(task.modification_time, 0)::bigint AS modification_time
+               FROM tasks task
+               LEFT JOIN targets target ON target.id = task.target
+               LEFT JOIN configs config ON config.id = task.config
+               LEFT JOIN scanners scanner ON scanner.id = task.scanner
+               LEFT JOIN schedules schedule ON schedule.id = task.schedule
+               LEFT JOIN report_rollup ON report_rollup.task = task.id
+               LEFT JOIN latest_report ON latest_report.task = task.id
+               LEFT JOIN latest_finished_report ON latest_finished_report.task = task.id
+              WHERE coalesce(task.hidden, 0) = 0
+                AND coalesce(task.usage_type, 'scan') = 'scan'
+         ),
+         filtered AS (
+             SELECT * FROM base WHERE {filtered_predicate}
+         )
+         SELECT count(*) OVER()::bigint AS total, *
+           FROM filtered
+          ORDER BY {sort_sql}, name ASC {limit_clause};"#
+    )
 }
 
 async fn scopes(
@@ -3053,6 +3391,146 @@ fn report_reference(id: Option<String>, name: Option<String>) -> Option<ReportRe
     let id = id?;
     let name = name.unwrap_or_else(|| id.clone());
     Some(ReportReference { id, name })
+}
+
+fn target_reference(id: Option<String>, name: Option<String>) -> Option<TargetReference> {
+    let id = id?;
+    let name = name.unwrap_or_else(|| id.clone());
+    Some(TargetReference { id, name })
+}
+
+fn port_list_reference(id: Option<String>, name: Option<String>) -> Option<PortListReference> {
+    let id = id?;
+    let name = name.unwrap_or_else(|| id.clone());
+    Some(PortListReference { id, name })
+}
+
+fn csv_values(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn alive_test_labels(value: i64) -> Vec<String> {
+    let label = match value {
+        0 => "Scan Config Default",
+        1 => "ICMP Ping",
+        2 => "TCP-ACK Service Ping",
+        3 => "TCP-SYN Service Ping",
+        4 => "ARP Ping",
+        5 => "Consider Alive",
+        _ => "Unknown",
+    };
+    vec![label.to_string()]
+}
+
+fn boolean_int(value: i32) -> bool {
+    value != 0
+}
+
+fn target_task_references(row: &Row) -> Vec<TargetReference> {
+    let ids: Vec<String> = row.get("task_ids");
+    let names: Vec<String> = row.get("task_names");
+    ids.into_iter()
+        .enumerate()
+        .map(|(index, id)| TargetReference {
+            name: names.get(index).cloned().unwrap_or_else(|| id.clone()),
+            id,
+        })
+        .collect()
+}
+
+fn target_from_row(row: &Row) -> TargetItem {
+    let hosts = csv_values(&row.get::<_, String>("hosts"));
+    TargetItem {
+        id: row.get("uuid"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        max_hosts: row.get("host_entry_count"),
+        hosts,
+        exclude_hosts: csv_values(&row.get::<_, String>("exclude_hosts")),
+        alive_tests: alive_test_labels(row.get("alive_test")),
+        allow_simultaneous_ips: boolean_int(row.get("allow_simultaneous_ips")),
+        reverse_lookup_only: boolean_int(row.get("reverse_lookup_only")),
+        reverse_lookup_unify: boolean_int(row.get("reverse_lookup_unify")),
+        port_list: port_list_reference(row.get("port_list_id"), row.get("port_list_name")),
+        task_count: row.get("task_count"),
+        tasks: target_task_references(row),
+        creation_time: unix_ts_to_rfc3339(row.get("creation_time")),
+        modification_time: unix_ts_to_rfc3339(row.get("modification_time")),
+    }
+}
+
+fn task_report_reference(
+    row: &Row,
+    id_field: &str,
+    timestamp_field: &str,
+    scan_start_field: &str,
+    scan_end_field: &str,
+    severity_field: &str,
+) -> Option<TaskReportReference> {
+    let id: Option<String> = row.get(id_field);
+    id.map(|id| TaskReportReference {
+        id,
+        timestamp: unix_ts_to_rfc3339(row.get(timestamp_field)),
+        scan_start: unix_ts_to_rfc3339(row.get(scan_start_field)),
+        scan_end: unix_ts_to_rfc3339(row.get(scan_end_field)),
+        severity: row.get(severity_field),
+    })
+}
+
+fn task_has_active_current_report(status: &str) -> bool {
+    matches!(
+        status,
+        "Requested" | "Queued" | "Running" | "Processing" | "Stop Requested"
+    )
+}
+
+fn task_from_row(row: &Row) -> TaskItem {
+    let status: String = row.get("status");
+    let current_report = if task_has_active_current_report(&status) {
+        task_report_reference(
+            row,
+            "current_report_id",
+            "current_report_timestamp",
+            "current_report_scan_start",
+            "current_report_scan_end",
+            "current_report_severity",
+        )
+    } else {
+        None
+    };
+    TaskItem {
+        id: row.get("uuid"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        status,
+        progress: row.get("progress"),
+        usage_type: row.get("usage_type"),
+        target: target_reference(row.get("target_id"), row.get("target_name")),
+        config: target_reference(row.get("config_id"), row.get("config_name")),
+        scanner: target_reference(row.get("scanner_id"), row.get("scanner_name")),
+        schedule: target_reference(row.get("schedule_id"), row.get("schedule_name")),
+        report_count: TaskReportCount {
+            total: row.get("report_count_total"),
+            finished: row.get("report_count_finished"),
+        },
+        current_report,
+        last_report: task_report_reference(
+            row,
+            "last_report_id",
+            "last_report_timestamp",
+            "last_report_scan_start",
+            "last_report_scan_end",
+            "last_report_severity",
+        ),
+        max_severity: row.get("max_severity"),
+        creation_time: unix_ts_to_rfc3339(row.get("creation_time")),
+        modification_time: unix_ts_to_rfc3339(row.get("modification_time")),
+    }
 }
 
 fn report_from_row(row: &Row) -> ReportItem {

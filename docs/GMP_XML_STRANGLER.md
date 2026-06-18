@@ -21,12 +21,13 @@ must be designed separately with authentication, TLS, host binding, audit, and
 write-safety controls.
 
 The first live proof is the Docker-internal Rust `turbovas-api` sidecar for
-raw report reads, scope-report collections, and report metrics, currently raw
-report list/detail/result rows/hosts, scope-report list, Results, Hosts, Ports,
-Applications, Operating Systems, CVEs, TLS Certificates, Error Messages,
-scope-report Metrics, and raw report Metrics. It queries PostgreSQL directly and is
-intentionally not exposed on a host port. Browser migration now covers the raw
-`/reports` list, raw-report Results/Hosts, raw-report and scope-report Metrics, plus all current
+raw report reads, scope-report collections, target/task reads, and report
+metrics, currently raw report list/detail/result rows/hosts, target list/detail,
+task list/detail, scope-report list, Results, Hosts, Ports, Applications,
+Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
+and raw report Metrics. It queries PostgreSQL directly and is intentionally not
+exposed on a host port. Browser migration now covers the raw `/reports` list,
+raw-report Results/Hosts, raw-report and scope-report Metrics, plus all current
 scope-report evidence tabs through the authenticated same-origin `gsad` proxy
 defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 
@@ -46,12 +47,14 @@ defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 | Raw report list/detail/evidence tabs | GSA GMP commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/reports`, `/api/v1/reports/{report_id}`, `/api/v1/reports/{report_id}/results`, `/hosts`, `/ports`, `/applications`, `/operating-systems`, `/cves`, `/tls-certificates`, and `/errors` | `/reports` now reads its list through typed JSON. Raw detail summary plus raw report Results, Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates, and Error Messages tab reads use native JSON through the authenticated `gsad` proxy. Closed CVEs remain a product decision: migrate as-is, fold into CVEs, or remove/retire. |
 | Raw report metrics | `runtime-report-metrics` and the GSA Metrics tab now use the native API; the inherited `get_report_metrics` GMP command remains available during transition | `/api/v1/reports/{report_id}/metrics` | Runtime and browser smoke continue to prove the native path while GMP compatibility remains intact. |
 | Scope list/detail | GMP scope commands and GSA scope pages | `/api/v1/scopes` and `/api/v1/scopes/{scope_id}` | Scope metadata and membership reads move to typed JSON; writes remain inherited until designed. |
-| Scope-report list/detail | GMP scope-report commands and GSA scope-report pages | `/api/v1/scopes/reports` and canonical scoped detail path | GSA list/detail reads use server-backed JSON collections and browser smoke remains green. |
+| Scope-report list/detail | GMP scope-report commands and GSA scope-report pages | `/api/v1/scope-reports` and canonical scoped detail path | GSA list/detail reads use server-backed JSON collections and browser smoke remains green. |
+| Target reads | GSA/GMP target commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/targets` and `/api/v1/targets/{target_id}` | The native endpoint provides target metadata, host membership, port-list reference, task references, and timestamps without exposing credential secrets. Browser migration waits on safe credential-label parity. |
+| Task reads | GSA/GMP task commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/tasks` and `/api/v1/tasks/{task_id}` | The native endpoint provides task status, references, report counts, latest report metadata, severity, and timestamps while task writes/start/stop remain inherited. |
 | Scope-report Results | GSA Results tab now uses typed native JSON through the authenticated `gsad` proxy; the inherited gvmd source-report-constrained GMP collection remains available during transition | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results` | Browser smoke proves the native Results tab and raw evidence links while GMP compatibility remains intact. |
 | Scope-report metrics | `runtime-scope-report-metrics` and the GSA Metrics tab now use the native API; the inherited scope-report metrics GMP command remains available during transition | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics` | Runtime and browser smoke continue to prove the native path while GMP compatibility remains intact. |
 | Scope-report evidence tabs | GSA Results, Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates, and Error Messages tabs now use typed native JSON through the authenticated `gsad` proxy | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results`, `/hosts`, `/ports`, `/applications`, `/operating-systems`, `/cves`, `/tls-certificates`, and `/errors` | Browser smoke proves aggregated tabs load through native JSON and no longer render per-source raw-report sections. |
 | Runtime report/scope helpers | Some `turbovasctl` helpers still use inherited control paths; raw report summary/export and scope-report summary/metrics no longer use legacy XML helper scripts | Native API-backed helper calls | `runtime-report-summary`, `runtime-report-export`, `runtime-report-metrics`, `runtime-scope-report-metrics`, and `runtime-scope-report-summary` now use the internal native API. Native result rows carry hostname, NVT family, and description excerpts, and the old `tools/runtime_report.py` XML helper has been removed. Raw report `vulnerability_count` mirrors inherited raw-report summary semantics. |
-| Read-only report/scope automation | Imported GMP scripts, plus TurboVAS scope/report list scripts | `just native-api-request --json --path '/api/v1/...'` | Raw report, scope, scope-report, and scope-report result listing now have a DB-backed native GET path. The obsolete read-only `gvm-tools` scripts are removed. |
+| Read-only report/scope/target/task automation | Imported GMP scripts, plus TurboVAS scope/report list scripts | `tools/turbovasctl native-api-request --json --path '/api/v1/...'` or `just native-api-request -- --json --path '/api/v1/...'` | Raw report, scope, scope-report, target, task, and scope-report result listing now have a DB-backed native GET path. The obsolete read-only `gvm-tools` scripts are removed where equivalent native reads exist. |
 | gvm-tools write/control scripts | Imported GMP scripts for generation or scanner/control workflows | Future native write/control APIs after safety design | Write/control scripts remain compatibility-only until the corresponding native APIs are explicitly designed and proven. |
 | Direct scriptable operator API | Temporary automation still uses inherited GMP helpers, `turbovasctl` wrappers, or internal-only native development probes depending on workflow coverage. | Authenticated TLS-protected `/api/v1` access usable by `curl`, generated OpenAPI clients, and TurboVAS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | A native API exposure/authentication design lands, read-only automation migrates first, write/control endpoints are added only after safety review, and required product/operator scripts no longer depend on inherited GMP tooling. |
 

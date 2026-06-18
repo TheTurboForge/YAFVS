@@ -95,7 +95,7 @@ GMP/XML payloads. Contract-first API work must keep raw reports inspectable as
 evidence and must not create a second hidden truth store for report data.
 
 The first native API proof implements that direction as an internal Rust
-sidecar: raw report list/detail/result rows, scope-report list, result
+sidecar: raw report list/detail/result rows, target/task read summaries, scope-report list, result
 evidence, host evidence, port evidence, application evidence, operating-system
 evidence, CVE evidence, TLS certificate evidence, Error Message collections,
 persisted scope-report metrics, raw report metrics, and scope list/detail reads

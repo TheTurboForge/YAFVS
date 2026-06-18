@@ -57,6 +57,10 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *raw_reports_path = "/api/v1/reports";
   const gchar *raw_report_prefix = "/api/v1/reports/";
   const gchar *scopes_path = "/api/v1/scopes";
+  const gchar *targets_path = "/api/v1/targets";
+  const gchar *target_prefix = "/api/v1/targets/";
+  const gchar *tasks_path = "/api/v1/tasks";
+  const gchar *task_prefix = "/api/v1/tasks/";
   const gchar *scope_reports_path = "/api/v1/scope-reports";
   const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *metrics_suffix = "/metrics";
@@ -88,8 +92,26 @@ native_api_path_is_allowed (const gchar *path)
   if (g_strcmp0 (path, scopes_path) == 0)
     return TRUE;
 
+  if (g_strcmp0 (path, targets_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, tasks_path) == 0)
+    return TRUE;
+
   if (g_strcmp0 (path, scope_reports_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, target_prefix))
+    {
+      const gchar *id = path + strlen (target_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, task_prefix))
+    {
+      const gchar *id = path + strlen (task_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
 
   if (g_str_has_prefix (path, raw_report_prefix)
       && g_str_has_suffix (path, metrics_suffix))

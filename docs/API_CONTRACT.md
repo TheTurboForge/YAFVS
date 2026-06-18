@@ -21,12 +21,15 @@ The first API phase is read-only and report-focused:
 - raw report list, detail, result rows, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics;
 - scope list and scope detail;
+- target list and target detail summary reads;
+- task list and task detail summary reads;
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
 
-Scanner control, credential management, feed import, account management, and
-other high-consequence operations stay on the inherited path until separate
-native replacements are designed and proven.
+Scanner control, target/task writes, credential management, feed import,
+account management, and other high-consequence operations stay on the inherited
+path until separate native replacements are designed and proven. Native target
+reads intentionally do not expose credential secret material.
 
 The current browser integration is intentionally same-origin and proxied
 through `gsad`. That keeps the browser proof inside the existing authenticated
@@ -64,17 +67,19 @@ source of truth for the first native API shape until a live implementation
 lands. Future endpoint work must update the OpenAPI contract and the GMP/XML
 strangler map in the same slice.
 
-Internal read-only automation can use `just native-api-request --json --path
+Internal read-only automation can use `tools/turbovasctl native-api-request
+--json --path '/api/v1/...'` or `just native-api-request -- --json --path
 '/api/v1/...'` to call the Docker-internal native API. This replaces covered
-read-only GMP scripts for report and scope listing workflows; it is not the
-final externally exposed scriptable API boundary.
+read-only GMP scripts for report, scope, target, and task listing workflows; it
+is not the final externally exposed scriptable API boundary.
 
 The first runtime implementation proof is scoped in
 `docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
 for raw report list/detail/result rows/hosts/ports/applications/operating
-systems/CVEs/TLS certificates/errors, scope list/detail, scope-report list,
-Results, Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates,
-Error Messages, scope-report Metrics, and raw report Metrics because those read
+systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
+task list/detail, scope-report list, Results, Hosts, Ports, Applications,
+Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
+and raw report Metrics because those read
 paths validate DB-backed evidence, scope membership, provenance, and report
 reading without changing scanner control behavior. Browser-facing proof now
 covers the raw `/reports` list, `/scopes` list/detail reads, raw report Results,
@@ -88,6 +93,16 @@ allowlists those reads before proxying to the internal sidecar.
 detail/result-row endpoints instead of `python-gvm`.
 `runtime-native-api-smoke --json` and browser smoke cover the live runtime
 endpoints.
+
+Native target rows include target identity, host and exclude-host membership,
+alive-test labels, reverse-DNS flags, port-list reference, task references, and
+timestamps. They deliberately omit credential secret values and defer richer
+credential-label parity to a later safe metadata design.
+
+Native task rows include task identity, status/progress, target/config/scanner
+and schedule references, report counts, current/latest report references,
+maximum severity, and timestamps. Task creation, modification, deletion,
+start/stop, and other scanner-control actions remain on the inherited path.
 
 Native raw and scope-report result rows include host, optional hostname,
 port, NVT OID/name/family, severity, QoD, creation time, source report ID,

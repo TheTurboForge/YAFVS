@@ -2662,6 +2662,26 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA scope detail reads (migrated through gsad same-origin proxy)", "scope membership read helpers"],
             },
             {
+                "endpoint": "/api/v1/targets",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA target list reads", "read-only target automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/targets/{target_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA target detail reads", "read-only target automation"],
+            },
+            {
+                "endpoint": "/api/v1/tasks",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA task list reads", "read-only task automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/tasks/{task_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA task detail reads", "read-only task automation"],
+            },
+            {
                 "endpoint": "/api/v1/scope-reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["runtime-scope-report-summary helper (migrated)", "GSA scope-report list reads (migrated through gsad same-origin proxy)", "native-api-request helper"],
@@ -5510,6 +5530,78 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             findings.append(finding("fail", "native-api.scope-detail", "Scope list did not include a scope id for the detail probe."))
     else:
         findings.append(finding("warn", "native-api.scope-detail", "No scopes exist yet, so the scope detail probe was skipped."))
+
+    targets = native_api_curl(repo_root, "/api/v1/targets?page_size=1&sort=name")
+    targets_json = parse_json_output(targets)
+    details["targets"] = summarize_native_api_response(targets_json)
+    target_items = targets_json.get("items", []) if isinstance(targets_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if targets.returncode == 0 and isinstance(target_items, list) else "fail",
+            "native-api.targets",
+            f"Native API target list probe exit code {targets.returncode}.",
+            targets,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets?page_size=1"),
+            targets_json,
+        )
+    )
+    if target_items:
+        first_target = target_items[0]
+        target_detail_id = first_target.get("id") if isinstance(first_target, dict) else None
+        if target_detail_id:
+            target_detail = native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_detail_id)}")
+            target_detail_json = parse_json_output(target_detail)
+            details["target_detail"] = summarize_native_api_response(target_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if target_detail.returncode == 0 and isinstance(target_detail_json, dict) and target_detail_json.get("id") == target_detail_id else "fail",
+                    "native-api.target-detail",
+                    f"Native API target detail probe exit code {target_detail.returncode}.",
+                    target_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets/..."),
+                    target_detail_json,
+                )
+            )
+        else:
+            findings.append(finding("fail", "native-api.target-detail", "Target list did not include a target id for the detail probe."))
+    else:
+        findings.append(finding("warn", "native-api.target-detail", "No targets exist yet, so the target detail probe was skipped."))
+
+    tasks = native_api_curl(repo_root, "/api/v1/tasks?page_size=1&sort=name")
+    tasks_json = parse_json_output(tasks)
+    details["tasks"] = summarize_native_api_response(tasks_json)
+    task_items = tasks_json.get("items", []) if isinstance(tasks_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if tasks.returncode == 0 and isinstance(task_items, list) else "fail",
+            "native-api.tasks",
+            f"Native API task list probe exit code {tasks.returncode}.",
+            tasks,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks?page_size=1"),
+            tasks_json,
+        )
+    )
+    if task_items:
+        first_task = task_items[0]
+        task_detail_id = first_task.get("id") if isinstance(first_task, dict) else None
+        if task_detail_id:
+            task_detail = native_api_curl(repo_root, f"/api/v1/tasks/{urllib.parse.quote(task_detail_id)}")
+            task_detail_json = parse_json_output(task_detail)
+            details["task_detail"] = summarize_native_api_response(task_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if task_detail.returncode == 0 and isinstance(task_detail_json, dict) and task_detail_json.get("id") == task_detail_id else "fail",
+                    "native-api.task-detail",
+                    f"Native API task detail probe exit code {task_detail.returncode}.",
+                    task_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks/..."),
+                    task_detail_json,
+                )
+            )
+        else:
+            findings.append(finding("fail", "native-api.task-detail", "Task list did not include a task id for the detail probe."))
+    else:
+        findings.append(finding("warn", "native-api.task-detail", "No tasks exist yet, so the task detail probe was skipped."))
 
     raw_reports = native_api_curl(repo_root, "/api/v1/reports?page_size=1&sort=-creation_time")
     raw_reports_json = parse_json_output(raw_reports)

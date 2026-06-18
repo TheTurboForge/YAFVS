@@ -7,9 +7,9 @@ TurboVAS proves the native HTTP/JSON direction with narrow read-only workflows
 before implementing broader endpoint coverage. The first proof started with
 scope-report Hosts and now also covers all scope-report evidence tabs,
 persisted scope-report Metrics, raw report Metrics, raw report list/detail,
-raw report result and host rows, and scope list/detail
+raw report evidence rows, scope list/detail, and target/task read-summary
 reads. Scanner
-control, feed state, credentials, writes, and account management remain out of
+control, feed state, credential secrets, writes, and account management remain out of
 scope for this proof.
 
 ## First Proof Candidate
@@ -66,19 +66,20 @@ Implementation commit `c59140a` proved the internal sidecar for scope-report
 list and Hosts. Later B-117/B-125 slices added scope-report Results, Ports,
 CVEs, Error Messages, Applications, Operating Systems, TLS Certificates,
 persisted scope-report Metrics, raw report Metrics, and raw report list/detail
-reads plus raw report result/host rows with the same internal-only,
-PostgreSQL-backed pattern. Browser proof work now routes the raw `/reports`
-list, raw-report Results, raw-report Hosts, raw-report Ports, raw-report CVEs,
-raw-report Error Messages, raw-report and scope-report Metrics, plus scope
-list/detail and every scope-report evidence tab through the authenticated
+reads plus raw report evidence rows, scope list/detail, and target/task
+read-summary endpoints with the same internal-only, PostgreSQL-backed pattern.
+Browser proof work now routes the raw `/reports` list, raw-report Results,
+raw-report Hosts, raw-report Ports, raw-report CVEs, raw-report Error Messages,
+raw-report and scope-report Metrics, plus scope list/detail and every scope-report evidence tab through the authenticated
 same-origin `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.
 
-Internal read-only scripting can use `just native-api-request --json --path
-'/api/v1/...'` for DB-backed report and scope reads. This removes the need for
-the covered inherited read-only GMP scripts while keeping write/control
+Internal read-only scripting can use `tools/turbovasctl native-api-request
+--json --path '/api/v1/...'` or `just native-api-request -- --json --path
+'/api/v1/...'` for DB-backed report, scope, target, and task reads. This removes
+the need for covered inherited read-only GMP scripts while keeping write/control
 operations on inherited paths until a separate native write design exists.
 
 ## Not In The First Proof
@@ -89,12 +90,11 @@ high-consequence inherited control paths until separately designed and reviewed.
 
 ## Next Proofs
 
-After scope-report Results/Hosts/Ports/Applications/Operating Systems/CVEs/TLS
-Certificates/Error Messages/Metrics, raw report Metrics, raw report
-list/detail/result/host/port/CVE/error rows, raw report Results/Hosts/Ports/CVEs/Error
-Messages browser reads, and scope metadata reads, the next candidates are the
-remaining native raw report tab collections or helper/tooling replacements,
-only if they directly unlock migration away from GMP/XML.
+After scope-report and raw-report evidence reads, scope metadata reads, and
+target/task read-summary endpoints, the next candidates are native browser reads
+for Tasks, a safe target credential-label parity decision before target browser
+migration, the Closed CVEs decision, and helper/tooling replacements that
+directly unlock migration away from GMP/XML.
 
 ## Completed Evidence Contracts
 
@@ -107,6 +107,10 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/reports/{report_id}/applications`
 - `GET /api/v1/reports/{report_id}/operating-systems`
 - `GET /api/v1/reports/{report_id}/tls-certificates`
+- `GET /api/v1/targets`
+- `GET /api/v1/targets/{target_id}`
+- `GET /api/v1/tasks`
+- `GET /api/v1/tasks/{task_id}`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, and Metrics, these
 endpoints complete native browser coverage for current scope-report evidence

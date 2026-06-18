@@ -205,7 +205,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Scope'
-  /scopes/reports:
+  /targets:
+    get:
+      summary: List scan targets
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Target collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetCollection'
+  /targets/{target_id}:
+    get:
+      summary: Read one scan target summary
+      parameters:
+        - $ref: '#/components/parameters/TargetId'
+      responses:
+        '200':
+          description: Target detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Target'
+  /tasks:
+    get:
+      summary: List scan tasks
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Task collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCollection'
+  /tasks/{task_id}:
+    get:
+      summary: Read one scan task summary
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+  /scope-reports:
     get:
       summary: List generated scope reports
       parameters:
@@ -436,6 +490,20 @@ components:
       schema:
         type: string
         format: uuid
+    TargetId:
+      name: target_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     Error:
       type: object
@@ -496,6 +564,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScopeReport'
+    TargetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Target'
+    TaskCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
     ResultCollection:
       type: object
       required: [page, items]
@@ -802,6 +890,124 @@ components:
         modification_time:
           type: string
           format: date-time
+    Target:
+      type: object
+      required: [id, name, hosts, exclude_hosts, alive_tests, allow_simultaneous_ips, task_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        hosts:
+          type: array
+          items:
+            type: string
+        exclude_hosts:
+          type: array
+          items:
+            type: string
+        max_hosts:
+          type: integer
+          description: Count of configured host entries; CIDR/range expansion is not performed by this endpoint.
+        alive_tests:
+          type: array
+          items:
+            type: string
+        allow_simultaneous_ips:
+          type: boolean
+        reverse_lookup_only:
+          type: boolean
+        reverse_lookup_unify:
+          type: boolean
+        port_list:
+          $ref: '#/components/schemas/ResourceReference'
+        task_count:
+          type: integer
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceReference'
+        creation_time:
+          type: string
+          format: date-time
+        modification_time:
+          type: string
+          format: date-time
+    Task:
+      type: object
+      required: [id, name, status, progress, usage_type, report_count, max_severity]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        status:
+          type: string
+        progress:
+          type: integer
+        usage_type:
+          type: string
+        target:
+          $ref: '#/components/schemas/ResourceReference'
+        config:
+          $ref: '#/components/schemas/ResourceReference'
+        scanner:
+          $ref: '#/components/schemas/ResourceReference'
+        schedule:
+          $ref: '#/components/schemas/ResourceReference'
+        report_count:
+          type: object
+          required: [total, finished]
+          properties:
+            total:
+              type: integer
+            finished:
+              type: integer
+        current_report:
+          $ref: '#/components/schemas/TaskReportReference'
+        last_report:
+          $ref: '#/components/schemas/TaskReportReference'
+        max_severity:
+          type: number
+        creation_time:
+          type: string
+          format: date-time
+        modification_time:
+          type: string
+          format: date-time
+    ResourceReference:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    TaskReportReference:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        scan_start:
+          type: string
+          format: date-time
+        scan_end:
+          type: string
+          format: date-time
+        severity:
+          type: number
     SeverityCounts:
       type: object
       required: [high, medium, low, log, false_positive]

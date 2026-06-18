@@ -16,13 +16,13 @@ use scannerlib::{
 };
 
 use crate::config::{Config, ScannerType};
+mod endpoints;
 pub mod orchestrator;
 pub mod redis;
-mod endpoints;
-pub use endpoints::VTEndpoints as Endpoints;
 use crate::database::sqlite::DataBase;
 use crate::json_stream;
 use crate::vts::orchestrator::WorkerError;
+pub use endpoints::VTEndpoints as Endpoints;
 //use crate::vts::sql::SqlPluginStorage;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

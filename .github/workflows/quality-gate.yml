@@ -18,6 +18,8 @@ jobs:
     name: Source quality gate
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
 
     steps:
       - name: Check out repository

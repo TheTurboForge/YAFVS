@@ -345,15 +345,27 @@ struct TlsCertificateItem {
 struct ResultItem {
     id: String,
     host: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_asset_id: Option<String>,
     hostname: Option<String>,
     port: String,
     nvt_oid: String,
     name: String,
     nvt_family: Option<String>,
     description_excerpt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    solution_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    solution: Option<String>,
     severity: f64,
     qod: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scan_nvt_version: Option<String>,
     created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    report: Option<ReportReference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    task: Option<ReportReference>,
     source_report_id: String,
     raw_evidence_href: String,
 }
@@ -495,6 +507,7 @@ async fn main() -> Result<(), ApiError> {
     };
     let app = Router::new()
         .route("/healthz", get(healthz))
+        .route("/api/v1/results", get(results))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -1241,6 +1254,95 @@ async fn report_detail(
         })?
         .ok_or(ApiError::NotFound)?;
     Ok(Json(report_from_row(&row)))
+}
+
+async fn results(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<ResultItem>>, ApiError> {
+    let params = normalize_collection_query(query, "-severity")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("host", "host"),
+            ("hostname", "hostname"),
+            ("port", "port"),
+            ("nvt_oid", "nvt_oid"),
+            ("nvt", "nvt_oid"),
+            ("name", "name"),
+            ("vulnerability", "name"),
+            ("severity", "severity"),
+            ("qod", "qod"),
+            ("solution_type", "solution_type"),
+            ("created", "created_at_unix"),
+            ("created_at", "created_at_unix"),
+            ("report", "source_report_name"),
+            ("task", "task_name"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH result_rows AS (
+             SELECT r.uuid AS id,
+                    lower(coalesce(nullif(r.host, ''), r.hostname, '')) AS host,
+                    h.uuid AS host_asset_id,
+                    nullif(r.hostname, '') AS hostname,
+                    coalesce(r.port, '') AS port,
+                    coalesce(r.nvt, '') AS nvt_oid,
+                    coalesce(n.name, r.nvt, '') AS name,
+                    nullif(n.family, '') AS nvt_family,
+                    nullif(left(coalesce(r.description, ''), 240), '') AS description_excerpt,
+                    nullif(n.solution_type, '') AS solution_type,
+                    nullif(n.solution, '') AS solution,
+                    coalesce(r.severity, 0)::double precision AS severity,
+                    coalesce(r.qod, 0)::bigint AS qod,
+                    nullif(r.nvt_version, '') AS scan_nvt_version,
+                    coalesce(r.date, 0)::bigint AS created_at_unix,
+                    rep.uuid AS source_report_id,
+                    coalesce(nullif(t.name, ''), rep.uuid) AS source_report_name,
+                    t.uuid AS task_id,
+                    t.name AS task_name
+               FROM results r
+               JOIN reports rep ON rep.id = r.report
+               LEFT JOIN tasks t ON t.id = coalesce(r.task, rep.task)
+               LEFT JOIN hosts h ON lower(h.name) = lower(coalesce(nullif(r.host, ''), r.hostname, ''))
+               LEFT JOIN nvts n ON n.oid = r.nvt
+              WHERE coalesce(r.severity, 0) != -3.0
+                AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''
+                AND (t.id IS NULL OR coalesce(t.usage_type, 'scan') = 'scan')
+         ),
+         filtered AS (
+             SELECT * FROM result_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(host) LIKE '%' || lower($1) || '%'
+                     OR lower(coalesce(hostname, '')) LIKE '%' || lower($1) || '%'
+                     OR lower(port) LIKE '%' || lower($1) || '%'
+                     OR lower(nvt_oid) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(coalesce(task_name, '')) LIKE '%' || lower($1) || '%'
+                     OR lower(source_report_name) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, created_at_unix DESC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "result list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(result_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
 }
 
 async fn report_results(
@@ -3515,6 +3617,10 @@ fn report_reference(id: Option<String>, name: Option<String>) -> Option<ReportRe
     Some(ReportReference { id, name })
 }
 
+fn optional_row_string(row: &Row, name: &str) -> Option<String> {
+    row.try_get::<_, Option<String>>(name).ok().flatten()
+}
+
 fn target_reference(id: Option<String>, name: Option<String>) -> Option<TargetReference> {
     let id = id?;
     let name = name.unwrap_or_else(|| id.clone());
@@ -3941,15 +4047,27 @@ fn result_from_row(row: &Row) -> ResultItem {
         raw_evidence_href: format!("/report/{source_report_id}/result/{id}"),
         id,
         host: row.get("host"),
+        host_asset_id: optional_row_string(row, "host_asset_id"),
         hostname: row.get("hostname"),
         port: row.get("port"),
         nvt_oid: row.get("nvt_oid"),
         name: row.get("name"),
         nvt_family: row.get("nvt_family"),
         description_excerpt: row.get("description_excerpt"),
+        solution_type: optional_row_string(row, "solution_type"),
+        solution: optional_row_string(row, "solution"),
         severity: row.get("severity"),
         qod: row.get("qod"),
+        scan_nvt_version: optional_row_string(row, "scan_nvt_version"),
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        report: report_reference(
+            optional_row_string(row, "source_report_id"),
+            optional_row_string(row, "source_report_name"),
+        ),
+        task: report_reference(
+            optional_row_string(row, "task_id"),
+            optional_row_string(row, "task_name"),
+        ),
         source_report_id,
     }
 }

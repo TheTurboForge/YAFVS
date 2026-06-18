@@ -56,6 +56,7 @@ native_api_path_is_allowed (const gchar *path)
 {
   const gchar *raw_reports_path = "/api/v1/reports";
   const gchar *raw_report_prefix = "/api/v1/reports/";
+  const gchar *results_path = "/api/v1/results";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *targets_path = "/api/v1/targets";
   const gchar *target_prefix = "/api/v1/targets/";
@@ -87,6 +88,9 @@ native_api_path_is_allowed (const gchar *path)
     return FALSE;
 
   if (g_strcmp0 (path, raw_reports_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, results_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, scopes_path) == 0)

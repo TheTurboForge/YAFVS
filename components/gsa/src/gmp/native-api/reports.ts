@@ -6,6 +6,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import type Filter from 'gmp/models/filter';
 import Report from 'gmp/models/report';
+import Result from 'gmp/models/result';
 import type {UrlParams} from 'gmp/http/utils';
 
 interface NativeApiSession {
@@ -116,15 +117,21 @@ interface NativeReportCollectionPayload {
 interface NativeReportResultPayload {
   id: string;
   host: string;
+  host_asset_id?: string;
   hostname?: string;
   port: string;
   nvt_oid: string;
   name: string;
   nvt_family?: string;
   description_excerpt?: string;
+  solution_type?: string;
+  solution?: string;
   severity: number;
   qod: number;
+  scan_nvt_version?: string;
   created_at?: string;
+  report?: NativeReportReference;
+  task?: NativeReportReference;
   source_report_id: string;
   raw_evidence_href: string;
 }
@@ -237,6 +244,12 @@ export interface NativeReportResultItem {
 
 export interface NativeReportResultsResponse {
   items: NativeReportResultItem[];
+  page: NativeReportPage;
+}
+
+export interface NativeResultsResponse {
+  results: Result[];
+  counts: CollectionCounts;
   page: NativeReportPage;
 }
 
@@ -710,6 +723,58 @@ const nativeReportResultFromPayload = (
   rawEvidenceHref: stringValue(item.raw_evidence_href),
 });
 
+const nativeResultToModel = (item: NativeReportResultPayload): Result => {
+  const solutionType = stringValue(item.solution_type);
+  const solutionText = stringValue(item.solution);
+  const element = {
+    _id: stringValue(item.id),
+    name: stringValue(item.name),
+    creation_time: item.created_at,
+    host: {
+      __text: stringValue(item.host),
+      hostname: stringValue(item.hostname),
+      asset: stringValue(item.host_asset_id)
+        ? {_asset_id: stringValue(item.host_asset_id)}
+        : undefined,
+    },
+    port: stringValue(item.port),
+    nvt: {
+      _oid: stringValue(item.nvt_oid),
+      type: 'nvt',
+      name: stringValue(item.name),
+      family: stringValue(item.nvt_family),
+      solution:
+        solutionType || solutionText
+          ? {
+              _type: solutionType,
+              __text: solutionText,
+            }
+          : undefined,
+    },
+    report: item.report
+      ? {
+          _id: stringValue(item.report.id),
+          name: stringValue(item.report.name),
+        }
+      : {
+          _id: stringValue(item.source_report_id),
+        },
+    task: item.task
+      ? {
+          _id: stringValue(item.task.id),
+          name: stringValue(item.task.name),
+        }
+      : undefined,
+    severity: numberValue(item.severity),
+    qod: {value: integerValue(item.qod)},
+    scan_nvt_version: stringValue(item.scan_nvt_version),
+    description: stringValue(item.description_excerpt),
+  };
+  return Result.fromElement(
+    element as unknown as Parameters<typeof Result.fromElement>[0],
+  );
+};
+
 const nativeReportApplicationFromPayload = (
   item: NativeReportApplicationPayload,
 ): NativeReportApplicationItem => ({
@@ -947,6 +1012,36 @@ export const fetchNativeReports = async (
   return {
     reports,
     counts: nativeCounts(page, reports.length),
+    page,
+  };
+};
+
+export const fetchNativeResults = async (
+  gmp: NativeApiGmp,
+  query: NativeReportQuery,
+): Promise<NativeResultsResponse> => {
+  const payload = await fetchNativeJson<NativeReportResultsPayload>(
+    gmp,
+    'api/v1/results',
+    {
+      token: gmp.session.token,
+      page: query.page,
+      page_size: query.pageSize,
+      sort: query.sort,
+      filter: query.filter,
+    },
+  );
+  const page = {
+    page: integerValue(payload.page?.page, 1),
+    page_size: integerValue(payload.page?.page_size, query.pageSize),
+    total: integerValue(payload.page?.total),
+    sort: stringValue(payload.page?.sort),
+    filter: stringValue(payload.page?.filter),
+  };
+  const results = (payload.items ?? []).map(nativeResultToModel);
+  return {
+    results,
+    counts: nativeCounts(page, results.length),
     page,
   };
 };

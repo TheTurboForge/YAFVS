@@ -11,6 +11,21 @@ servers:
 security:
   - operatorSession: []
 paths:
+  /results:
+    get:
+      summary: List top-level scan results
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Result collection across raw scan reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultCollection'
   /reports:
     get:
       summary: List raw scan reports
@@ -1071,6 +1086,9 @@ components:
           type: string
         host:
           type: string
+        host_asset_id:
+          type: string
+          format: uuid
         hostname:
           type: string
         port:
@@ -1083,13 +1101,23 @@ components:
           type: string
         description_excerpt:
           type: string
+        solution_type:
+          type: string
+        solution:
+          type: string
         severity:
           type: number
         qod:
           type: integer
+        scan_nvt_version:
+          type: string
         created_at:
           type: string
           format: date-time
+        report:
+          $ref: '#/components/schemas/ReportReference'
+        task:
+          $ref: '#/components/schemas/ReportReference'
         source_report_id:
           type: string
           format: uuid

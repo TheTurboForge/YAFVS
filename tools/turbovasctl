@@ -2602,6 +2602,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
         "by_category": by_category,
         "implemented_native_endpoints": [
             {
+                "endpoint": "/api/v1/results",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level Results list (migrated through gsad same-origin proxy)", "read-only result automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],

@@ -294,6 +294,10 @@ async function runForBaseUrl(baseUrl) {
     const nativeRawReports = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/reports$/);
     add(nativeRawReports ? 'pass' : 'fail', 'raw-report.list-native-api', nativeRawReports ? 'Raw-report list loaded through same-origin native API.' : 'Raw-report list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/reports') });
 
+    await gotoRoute(page, '/results', 'results');
+    const nativeResults = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/results$/);
+    add(nativeResults ? 'pass' : 'fail', 'result.list-native-api', nativeResults ? 'Top-level Results list loaded through same-origin native API.' : 'Top-level Results list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/results') });
+
     await gotoRoute(page, '/targets', 'targets');
     const nativeTargets = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/targets$/);
     add(nativeTargets ? 'pass' : 'fail', 'target.list-native-api', nativeTargets ? 'Target list loaded through same-origin native API.' : 'Target list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/targets') });

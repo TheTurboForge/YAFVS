@@ -72,7 +72,7 @@ Browser proof work now routes the raw `/reports` list, raw-report Results,
 raw-report Hosts, raw-report Ports, raw-report CVEs, raw-report Error Messages,
 raw-report and scope-report Metrics, plus scope list/detail, target/task list
 reads, top-level asset/security-info lists including Hosts, TLS Certificates,
-Operating Systems, and Scanners, and every scope-report evidence tab through the authenticated same-origin
+Operating Systems, Scanners, and Filters, and every scope-report evidence tab through the authenticated same-origin
 `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
 native raw report detail/result-row endpoints; the remaining heavy raw report
@@ -119,6 +119,8 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/tasks`
 - `GET /api/v1/tasks/{task_id}`
 - `GET /api/v1/scanners`
+- `GET /api/v1/filters`
+- `GET /api/v1/filters/{filter_id}`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, Metrics, and the
 Security Information CVE catalog, these

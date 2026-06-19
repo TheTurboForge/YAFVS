@@ -1,0 +1,108 @@
+/* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import {fetchNativeFilter, fetchNativeFilters} from 'gmp/native-api/filters';
+
+const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  session: {jwt, token},
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
+
+describe('native API filters', () => {
+  test('fetches top-level filters as inherited Filter models', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'f8df35ce-e8a2-4c27-90a6-76b29a1e1b41',
+            name: 'High Severity Reports',
+            comment: 'operator filter',
+            filter_type: 'report',
+            term: 'severity>7.0 rows=10',
+            alert_count: 1,
+            alerts: [],
+            created_at: '2026-06-18T18:00:00Z',
+            modified_at: '2026-06-18T20:00:00Z',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    const response = await fetchNativeFilters(gmp, {
+      page: 1,
+      pageSize: 25,
+      sort: 'name',
+      filter: '',
+    });
+
+    const filter = response.filters[0];
+    expect(response.counts.filtered).toEqual(1);
+    expect(filter.id).toEqual('f8df35ce-e8a2-4c27-90a6-76b29a1e1b41');
+    expect(filter.name).toEqual('High Severity Reports');
+    expect(filter.comment).toEqual('operator filter');
+    expect(filter.filter_type).toEqual('report');
+    expect(filter.toFilterString()).toEqual('severity>7.0 rows=10');
+    expect(filter.isInUse()).toEqual(true);
+    expect(filter.isWritable()).toEqual(true);
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/filters', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'name',
+      filter: '',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/filters',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('fetches filter details with alert backlinks', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'f8df35ce-e8a2-4c27-90a6-76b29a1e1b41',
+        name: 'High Severity Reports',
+        filter_type: 'report',
+        term: 'severity>7.0',
+        alerts: [
+          {
+            id: 'a9483e36-b9e4-43df-9ddc-d28ec1df9c23',
+            name: 'Notify SecOps',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    const filter = await fetchNativeFilter(
+      gmp,
+      'f8df35ce-e8a2-4c27-90a6-76b29a1e1b41',
+    );
+
+    expect(filter.id).toEqual('f8df35ce-e8a2-4c27-90a6-76b29a1e1b41');
+    expect(filter.alerts).toHaveLength(1);
+    expect(filter.alerts[0].id).toEqual('a9483e36-b9e4-43df-9ddc-d28ec1df9c23');
+    expect(filter.alerts[0].name).toEqual('Notify SecOps');
+  });
+});

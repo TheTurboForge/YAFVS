@@ -2661,6 +2661,16 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA top-level Scanners list (migrated through gsad same-origin proxy)", "read-only scanner metadata automation", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/filters",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level Filters list (migrated through gsad same-origin proxy)", "read-only filter metadata automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/filters/{filter_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Filter detail (migrated through gsad same-origin proxy)", "read-only filter metadata automation"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -5823,6 +5833,40 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             scanners_json,
         )
     )
+
+    filters = native_api_curl(repo_root, "/api/v1/filters?page_size=1&sort=name")
+    filters_json = parse_json_output(filters)
+    details["filters"] = summarize_native_api_response(filters_json)
+    filter_items = filters_json.get("items", []) if isinstance(filters_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if filters.returncode == 0 and isinstance(filter_items, list) else "fail",
+            "native-api.filters",
+            f"Native API top-level Filters probe exit code {filters.returncode}.",
+            filters,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/filters?page_size=1"),
+            filters_json,
+        )
+    )
+    if filter_items:
+        first_filter = filter_items[0]
+        filter_detail_id = first_filter.get("id") if isinstance(first_filter, dict) else None
+        if filter_detail_id:
+            filter_detail = native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_detail_id)}")
+            filter_detail_json = parse_json_output(filter_detail)
+            details["filter_detail"] = summarize_native_api_response(filter_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if filter_detail.returncode == 0 and isinstance(filter_detail_json, dict) and filter_detail_json.get("id") == filter_detail_id else "fail",
+                    "native-api.filter-detail",
+                    f"Native API filter detail probe exit code {filter_detail.returncode}.",
+                    filter_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/filters/..."),
+                    filter_detail_json,
+                )
+            )
+    else:
+        findings.append(finding("warn", "native-api.filter-detail", "No filters exist yet, so the filter detail probe was skipped."))
 
     if raw_report_items:
         first_raw_report = raw_report_items[0]

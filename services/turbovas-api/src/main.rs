@@ -463,6 +463,25 @@ struct ScannerAssetItem {
 }
 
 #[derive(Serialize)]
+struct FilterAlertReference {
+    id: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct FilterAssetItem {
+    id: String,
+    name: String,
+    comment: String,
+    filter_type: String,
+    term: String,
+    alert_count: i64,
+    alerts: Vec<FilterAlertReference>,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+}
+
+#[derive(Serialize)]
 struct HostIdentifierItem {
     id: String,
     name: String,
@@ -655,6 +674,8 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/hosts", get(host_assets))
         .route("/api/v1/tls-certificates", get(tls_certificate_assets))
         .route("/api/v1/scanners", get(scanner_assets))
+        .route("/api/v1/filters", get(filter_assets))
+        .route("/api/v1/filters/:filter_id", get(filter_asset_detail))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -1083,6 +1104,150 @@ async fn scanner_assets(
         page: params.page_info(total),
         items,
     }))
+}
+
+async fn filter_assets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<FilterAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "name")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("term", "term"),
+            ("type", "filter_type"),
+            ("filter_type", "filter_type"),
+            ("alert_count", "alert_count"),
+            ("alerts", "alert_count"),
+            ("created", "created_at_unix"),
+            ("modified", "modified_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH filter_rows AS (
+             SELECT f.uuid AS id,
+                    coalesce(f.name, '') AS name,
+                    coalesce(f.comment, '') AS comment,
+                    coalesce(f.type, '') AS filter_type,
+                    coalesce(f.term, '') AS term,
+                    coalesce(f.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(f.modification_time, 0)::bigint AS modified_at_unix,
+                    (
+                      SELECT count(DISTINCT alert_id)::bigint
+                        FROM (
+                          SELECT a.id AS alert_id
+                            FROM alerts a
+                           WHERE a.filter = f.id
+                          UNION
+                          SELECT acd.alert AS alert_id
+                            FROM alert_condition_data acd
+                           WHERE acd.name = 'filter_id'
+                             AND acd.data = f.uuid
+                        ) alert_refs
+                    ) AS alert_count
+               FROM filters f
+         ),
+         filtered AS (
+             SELECT * FROM filter_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(comment) LIKE '%' || lower($1) || '%'
+                     OR lower(filter_type) LIKE '%' || lower($1) || '%'
+                     OR lower(term) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "filter asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows
+        .iter()
+        .map(|row| filter_asset_from_row(row, Vec::new()))
+        .collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn filter_asset_detail(
+    State(state): State<AppState>,
+    Path(filter_id): Path<String>,
+) -> Result<Json<FilterAssetItem>, ApiError> {
+    parse_uuid(&filter_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            r#"SELECT f.id AS internal_id,
+                      f.uuid AS id,
+                      coalesce(f.name, '') AS name,
+                      coalesce(f.comment, '') AS comment,
+                      coalesce(f.type, '') AS filter_type,
+                      coalesce(f.term, '') AS term,
+                      coalesce(f.creation_time, 0)::bigint AS created_at_unix,
+                      coalesce(f.modification_time, 0)::bigint AS modified_at_unix,
+                      (
+                        SELECT count(DISTINCT alert_id)::bigint
+                          FROM (
+                            SELECT a.id AS alert_id
+                              FROM alerts a
+                             WHERE a.filter = f.id
+                            UNION
+                            SELECT acd.alert AS alert_id
+                              FROM alert_condition_data acd
+                             WHERE acd.name = 'filter_id'
+                               AND acd.data = f.uuid
+                          ) alert_refs
+                      ) AS alert_count
+                 FROM filters f
+                WHERE f.uuid = $1
+                LIMIT 1;"#,
+            &[&filter_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "filter asset detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    let alerts = client
+        .query(
+            r#"SELECT DISTINCT a.uuid AS id,
+                      coalesce(a.name, '') AS name
+                 FROM alerts a
+                WHERE a.filter = $1
+                UNION
+               SELECT DISTINCT a.uuid AS id,
+                      coalesce(a.name, '') AS name
+                 FROM alert_condition_data acd
+                 JOIN alerts a ON a.id = acd.alert
+                WHERE acd.name = 'filter_id'
+                  AND acd.data = $2
+                ORDER BY name ASC, id ASC;"#,
+            &[&row.get::<_, i32>("internal_id"), &filter_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "filter alert backlink query failed");
+            ApiError::Database
+        })?
+        .iter()
+        .map(filter_alert_from_row)
+        .collect();
+    Ok(Json(filter_asset_from_row(&row, alerts)))
 }
 
 async fn vulnerabilities(
@@ -5055,6 +5220,27 @@ fn scanner_asset_from_row(row: &Row) -> ScannerAssetItem {
         }),
         relay_host: row.get("relay_host"),
         relay_port: row.get("relay_port"),
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn filter_alert_from_row(row: &Row) -> FilterAlertReference {
+    FilterAlertReference {
+        id: row.get("id"),
+        name: row.get("name"),
+    }
+}
+
+fn filter_asset_from_row(row: &Row, alerts: Vec<FilterAlertReference>) -> FilterAssetItem {
+    FilterAssetItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        filter_type: row.get("filter_type"),
+        term: row.get("term"),
+        alert_count: row.get("alert_count"),
+        alerts,
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }

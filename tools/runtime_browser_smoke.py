@@ -272,7 +272,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)
@@ -341,6 +341,18 @@ async function runForBaseUrl(baseUrl) {
     await gotoRoute(page, '/scanners', 'scanners');
     const nativeScanners = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/scanners$/);
     add(nativeScanners ? 'pass' : 'fail', 'scanner.list-native-api', nativeScanners ? 'Top-level Scanners list loaded through same-origin native API.' : 'Top-level Scanners list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/scanners') });
+
+    await gotoRoute(page, '/filters', 'filters');
+    const nativeFilters = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/filters$/);
+    add(nativeFilters ? 'pass' : 'fail', 'filter.list-native-api', nativeFilters ? 'Top-level Filters list loaded through same-origin native API.' : 'Top-level Filters list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/filters') });
+    const filterDetailId = await waitForNativeItemId(page, nativeApiResponses, '/api/v1/filters');
+    add(filterDetailId ? 'pass' : 'warn', 'filter.detail-id', filterDetailId ? 'Found a filter id from the native list response.' : 'No filter id was available from the native list response.', { id: filterDetailId });
+    if (filterDetailId) {
+      await gotoRoute(page, `/filter/${filterDetailId}`, 'filter-detail');
+      await assertNoAppError(page, 'filter-detail.app-error');
+      const nativeFilterDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/filters\/[^/]+$/);
+      add(nativeFilterDetail ? 'pass' : 'fail', 'filter.detail-native-api', nativeFilterDetail ? 'Filter detail loaded through same-origin native API.' : 'Filter detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/filters\/[^/]+$/.test(item.path)) });
+    }
 
     await gotoRoute(page, '/targets', 'targets');
     const nativeTargets = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/targets$/);

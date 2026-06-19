@@ -26,6 +26,8 @@ The first API phase is read-only and report-focused:
 - top-level asset/security metadata lists for results, vulnerabilities, CVE
   catalog entries, operating systems, hosts, TLS certificates, and scanner
   metadata.
+- saved filter list and detail reads, including filter term metadata and alert
+  backlinks, inside authenticated operator access only.
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
 
@@ -114,6 +116,11 @@ Native scanner metadata rows include scanner identity, host/socket, port,
 inherited scanner type, safe credential references, relay metadata, and
 timestamps. They do not expose credential secret values or scanner CA material,
 and all scanner control actions remain on the inherited path.
+
+Native saved filter rows include filter identity, type, term, timestamps, and
+alert backlink references. Filter terms can reveal operator search logic,
+resource naming, and workflow shape, so these endpoints stay inside the
+authenticated operator boundary and are not catalog/public data.
 
 Native Security Information CVE catalog rows include the CVE identifier,
 description, CVSS vector, severity, vulnerable product strings, optional EPSS

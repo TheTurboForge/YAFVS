@@ -161,6 +161,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScannerAssetCollection'
+  /filters:
+    get:
+      summary: List saved filters
+      description: Read-only saved-filter metadata backed by gvmd/PostgreSQL. Filter terms are operator configuration data and remain available only through authenticated operator access.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Saved filter collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterAssetCollection'
+  /filters/{filter_id}:
+    get:
+      summary: Read one saved filter
+      parameters:
+        - $ref: '#/components/parameters/FilterId'
+      responses:
+        '200':
+          description: Saved filter detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterAsset'
   /reports:
     get:
       summary: List raw scan reports
@@ -668,6 +696,13 @@ components:
       schema:
         type: string
         format: uuid
+    FilterId:
+      name: filter_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     Error:
       type: object
@@ -878,6 +913,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScannerAsset'
+    FilterAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterAsset'
     CveCollection:
       type: object
       required: [page, items]
@@ -1524,6 +1569,43 @@ components:
           type: string
         relay_port:
           type: integer
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    FilterAlertReference:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    FilterAsset:
+      type: object
+      required: [id, name, filter_type, term, alert_count, alerts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        filter_type:
+          type: string
+        term:
+          type: string
+          description: Saved filter term. This can reveal operator search logic and remains authenticated operator data.
+        alert_count:
+          type: integer
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterAlertReference'
         created_at:
           type: string
           format: date-time

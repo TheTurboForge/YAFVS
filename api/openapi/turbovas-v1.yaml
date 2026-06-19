@@ -41,6 +41,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VulnerabilityCollection'
+  /operating-systems:
+    get:
+      summary: List top-level operating-system assets
+      description: Inherited asset view backed by gvmd/PostgreSQL operating-system evidence, distinct from report operating-system evidence tabs.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Operating-system asset collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingSystemAssetCollection'
   /reports:
     get:
       summary: List raw scan reports
@@ -684,6 +700,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OperatingSystem'
+    OperatingSystemAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperatingSystemAsset'
     CveCollection:
       type: object
       required: [page, items]
@@ -1171,6 +1197,39 @@ components:
           type: integer
         host_count:
           type: integer
+    OperatingSystemAsset:
+      type: object
+      required: [id, name, hosts, all_hosts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Operating-system CPE or inherited operating-system identifier.
+        title:
+          type: string
+        latest_severity:
+          type: number
+          nullable: true
+        highest_severity:
+          type: number
+          nullable: true
+        average_severity:
+          type: number
+          nullable: true
+        hosts:
+          type: integer
+          description: Hosts where this operating system is the current best OS.
+        all_hosts:
+          type: integer
+          description: Hosts with any recorded association to this operating system.
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
     ReportHost:
       type: object
       required: [host, ports_count, applications_count, authentication_state, result_count, vulnerability_count, severity, max_severity, source_report_id]

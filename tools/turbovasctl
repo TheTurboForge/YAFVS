@@ -2612,6 +2612,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA top-level Vulnerabilities list (migrated through gsad same-origin proxy)", "read-only vulnerability automation", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/operating-systems",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level Operating Systems list (migrated through gsad same-origin proxy)", "read-only operating-system asset automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -5640,6 +5645,21 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             vulnerabilities,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/vulnerabilities?page_size=1"),
             vulnerabilities_json,
+        )
+    )
+
+    operating_systems = native_api_curl(repo_root, "/api/v1/operating-systems?page_size=1&sort=-latest_severity")
+    operating_systems_json = parse_json_output(operating_systems)
+    details["operating_systems"] = summarize_native_api_response(operating_systems_json)
+    operating_system_items = operating_systems_json.get("items", []) if isinstance(operating_systems_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if operating_systems.returncode == 0 and isinstance(operating_system_items, list) else "fail",
+            "native-api.operating-systems",
+            f"Native API top-level Operating Systems probe exit code {operating_systems.returncode}.",
+            operating_systems,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/operating-systems?page_size=1"),
+            operating_systems_json,
         )
     )
 

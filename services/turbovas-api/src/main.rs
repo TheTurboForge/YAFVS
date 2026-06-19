@@ -382,6 +382,20 @@ struct VulnerabilityItem {
     host_count: i64,
 }
 
+#[derive(Serialize)]
+struct OperatingSystemAssetItem {
+    id: String,
+    name: String,
+    title: String,
+    latest_severity: Option<f64>,
+    highest_severity: Option<f64>,
+    average_severity: Option<f64>,
+    hosts: i64,
+    all_hosts: i64,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct ReportHostItem {
     host: String,
@@ -521,6 +535,7 @@ async fn main() -> Result<(), ApiError> {
         .route("/healthz", get(healthz))
         .route("/api/v1/results", get(results))
         .route("/api/v1/vulnerabilities", get(vulnerabilities))
+        .route("/api/v1/operating-systems", get(operating_system_assets))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -747,6 +762,107 @@ async fn vulnerabilities(
         .map(|row| row.get::<_, i64>("total"))
         .unwrap_or(0);
     let items = rows.iter().map(vulnerability_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn operating_system_assets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<OperatingSystemAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "-latest_severity")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("title", "title"),
+            ("latest_severity", "latest_severity"),
+            ("highest_severity", "highest_severity"),
+            ("average_severity", "average_severity"),
+            ("hosts", "hosts"),
+            ("all_hosts", "all_hosts"),
+            ("modified", "modified_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH latest_best_os AS (
+             SELECT DISTINCT ON (hd.host)
+                    hd.host, hd.value AS cpe
+               FROM host_details hd
+              WHERE hd.name = 'best_os_cpe'
+              ORDER BY hd.host, hd.id DESC
+         ),
+         latest_host_severity AS (
+             SELECT DISTINCT ON (hms.host)
+                    hms.host,
+                    round(CAST(hms.severity AS numeric), 1)::double precision AS severity
+               FROM host_max_severities hms
+              ORDER BY hms.host, hms.creation_time DESC
+         ),
+         os_rows AS (
+             SELECT oss.uuid AS id,
+                    oss.name AS name,
+                    coalesce(cpe_title(oss.name), '') AS title,
+                    (
+                      SELECT lhs.severity
+                        FROM host_oss ho_latest
+                        LEFT JOIN latest_host_severity lhs ON lhs.host = ho_latest.host
+                       WHERE ho_latest.os = oss.id
+                       ORDER BY ho_latest.creation_time DESC
+                       LIMIT 1
+                    ) AS latest_severity,
+                    (
+                      SELECT max(lhs.severity)
+                        FROM host_oss ho_highest
+                        LEFT JOIN latest_host_severity lhs ON lhs.host = ho_highest.host
+                       WHERE ho_highest.os = oss.id
+                    ) AS highest_severity,
+                    (
+                      SELECT round(CAST(avg(lhs.severity) AS numeric), 2)::double precision
+                        FROM host_oss ho_average
+                        LEFT JOIN latest_host_severity lhs ON lhs.host = ho_average.host
+                       WHERE ho_average.os = oss.id
+                    ) AS average_severity,
+                    (
+                      SELECT count(DISTINCT lbo.host)::bigint
+                        FROM latest_best_os lbo
+                       WHERE lbo.cpe = oss.name
+                    ) AS hosts,
+                    (
+                      SELECT count(DISTINCT ho_all.host)::bigint
+                        FROM host_oss ho_all
+                       WHERE ho_all.os = oss.id
+                    ) AS all_hosts,
+                    coalesce(oss.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(oss.modification_time, 0)::bigint AS modified_at_unix
+               FROM oss
+         ),
+         filtered AS (
+             SELECT * FROM os_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(title) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "operating system asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(operating_system_asset_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),
         items,
@@ -3653,6 +3769,21 @@ fn vulnerability_from_row(row: &Row) -> VulnerabilityItem {
         qod: row.get("qod"),
         result_count: row.get("result_count"),
         host_count: row.get("host_count"),
+    }
+}
+
+fn operating_system_asset_from_row(row: &Row) -> OperatingSystemAssetItem {
+    OperatingSystemAssetItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        title: row.get("title"),
+        latest_severity: row.get("latest_severity"),
+        highest_severity: row.get("highest_severity"),
+        average_severity: row.get("average_severity"),
+        hosts: row.get("hosts"),
+        all_hosts: row.get("all_hosts"),
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }
 }
 

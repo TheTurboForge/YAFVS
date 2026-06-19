@@ -314,6 +314,10 @@ async function runForBaseUrl(baseUrl) {
     const nativeTlsCertificates = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/tls-certificates$/);
     add(nativeTlsCertificates ? 'pass' : 'fail', 'tls-certificate.list-native-api', nativeTlsCertificates ? 'Top-level TLS Certificates list loaded through same-origin native API.' : 'Top-level TLS Certificates list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/tls-certificates') });
 
+    await gotoRoute(page, '/scanners', 'scanners');
+    const nativeScanners = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/scanners$/);
+    add(nativeScanners ? 'pass' : 'fail', 'scanner.list-native-api', nativeScanners ? 'Top-level Scanners list loaded through same-origin native API.' : 'Top-level Scanners list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/scanners') });
+
     await gotoRoute(page, '/targets', 'targets');
     const nativeTargets = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/targets$/);
     add(nativeTargets ? 'pass' : 'fail', 'target.list-native-api', nativeTargets ? 'Target list loaded through same-origin native API.' : 'Target list did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/targets') });

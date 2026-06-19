@@ -397,6 +397,28 @@ struct OperatingSystemAssetItem {
 }
 
 #[derive(Serialize)]
+struct ScannerAssetCredential {
+    id: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct ScannerAssetItem {
+    id: String,
+    name: String,
+    comment: String,
+    host: String,
+    port: i64,
+    scanner_type: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    credential: Option<ScannerAssetCredential>,
+    relay_host: Option<String>,
+    relay_port: i64,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+}
+
+#[derive(Serialize)]
 struct HostIdentifierItem {
     id: String,
     name: String,
@@ -584,6 +606,7 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/operating-systems", get(operating_system_assets))
         .route("/api/v1/hosts", get(host_assets))
         .route("/api/v1/tls-certificates", get(tls_certificate_assets))
+        .route("/api/v1/scanners", get(scanner_assets))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -941,6 +964,73 @@ async fn tls_certificate_assets(
         .map(|row| row.get::<_, i64>("total"))
         .unwrap_or(0);
     let items = rows.iter().map(tls_certificate_asset_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn scanner_assets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<ScannerAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "name")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("host", "host"),
+            ("port", "port"),
+            ("type", "scanner_type"),
+            ("scanner_type", "scanner_type"),
+            ("credential", "credential_name"),
+            ("modified", "modified_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH scanner_rows AS (
+             SELECT s.uuid AS id,
+                    coalesce(s.name, '') AS name,
+                    coalesce(s.comment, '') AS comment,
+                    coalesce(s.host, '') AS host,
+                    coalesce(s.port, 0)::bigint AS port,
+                    coalesce(s.type, 0)::bigint AS scanner_type,
+                    nullif(c.uuid, '') AS credential_id,
+                    nullif(c.name, '') AS credential_name,
+                    nullif(s.relay_host, '') AS relay_host,
+                    coalesce(s.relay_port, 0)::bigint AS relay_port,
+                    coalesce(s.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(s.modification_time, 0)::bigint AS modified_at_unix
+               FROM scanners s
+               LEFT JOIN credentials c ON c.id = s.credential
+         ),
+         filtered AS (
+             SELECT * FROM scanner_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(comment) LIKE '%' || lower($1) || '%'
+                     OR lower(host) LIKE '%' || lower($1) || '%'
+                     OR lower(coalesce(credential_name, '')) LIKE '%' || lower($1) || '%'
+                     OR lower(coalesce(relay_host, '')) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scanner asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(scanner_asset_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),
         items,
@@ -4579,6 +4669,27 @@ fn tls_certificate_asset_from_row(row: &Row) -> TlsCertificateAssetItem {
         source_port_count: row.get("source_port_count"),
         source_count,
         in_use: source_count > 0,
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn scanner_asset_from_row(row: &Row) -> ScannerAssetItem {
+    let credential_id: Option<String> = row.get("credential_id");
+    let credential_name: Option<String> = row.get("credential_name");
+    ScannerAssetItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        host: row.get("host"),
+        port: row.get("port"),
+        scanner_type: row.get("scanner_type"),
+        credential: credential_id.map(|id| ScannerAssetCredential {
+            id,
+            name: credential_name.unwrap_or_default(),
+        }),
+        relay_host: row.get("relay_host"),
+        relay_port: row.get("relay_port"),
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }

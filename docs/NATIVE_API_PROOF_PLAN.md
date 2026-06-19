@@ -8,7 +8,7 @@ before implementing broader endpoint coverage. The first proof started with
 scope-report Hosts and now also covers all scope-report evidence tabs,
 persisted scope-report Metrics, raw report Metrics, raw report list/detail,
 raw report evidence rows, scope list/detail, target list reads, task list reads,
-and target/task read-summary reads. Scanner
+target/task read-summary reads, and scanner metadata list reads. Scanner
 control, feed state, credential secrets, writes, and account management remain out of
 scope for this proof.
 
@@ -71,7 +71,8 @@ read-summary endpoints with the same internal-only, PostgreSQL-backed pattern.
 Browser proof work now routes the raw `/reports` list, raw-report Results,
 raw-report Hosts, raw-report Ports, raw-report CVEs, raw-report Error Messages,
 raw-report and scope-report Metrics, plus scope list/detail, target/task list
-reads, and every scope-report evidence tab through the authenticated same-origin
+reads, top-level asset/security-info lists including Hosts, TLS Certificates,
+Operating Systems, and Scanners, and every scope-report evidence tab through the authenticated same-origin
 `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
 native raw report detail/result-row endpoints; the remaining heavy raw report
@@ -113,6 +114,7 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/targets/{target_id}`
 - `GET /api/v1/tasks`
 - `GET /api/v1/tasks/{task_id}`
+- `GET /api/v1/scanners`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, and Metrics, these
 endpoints complete native browser coverage for current scope-report evidence
@@ -120,8 +122,10 @@ tabs and the high-value raw report evidence tabs. Target list reads are also
 browser-proxied through the authenticated `gsad` same-origin boundary, including
 credential metadata that the inherited UI already displayed. Task list reads are
 also browser-proxied with the read-only table metadata required by the current
-operator view. Target-detail and task-detail reads remain internal native
-endpoints until their browser parity gaps are closed. Further native API
-expansion should now decide the Closed CVEs path, then move toward remaining
-helper/tooling replacements and, later, carefully designed write/control paths
-that remove required GMP/XML, `python-gvm`, or `gvm-tools` dependence.
+operator view. Scanner metadata list reads are browser-proxied, but scanner
+details and scanner writes remain inherited. Target-detail and task-detail reads
+remain internal native endpoints until their browser parity gaps are closed.
+Further native API expansion should now decide the Closed CVEs path, then move
+toward remaining helper/tooling replacements and, later, carefully designed
+write/control paths that remove required GMP/XML, `python-gvm`, or `gvm-tools`
+dependence.

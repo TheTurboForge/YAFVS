@@ -89,6 +89,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TlsCertificateAssetCollection'
+  /scanners:
+    get:
+      summary: List scanner metadata
+      description: Read-only scanner list metadata backed by gvmd/PostgreSQL. Credential secrets, scanner CA material, and control operations are intentionally excluded.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scanner metadata collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetCollection'
   /reports:
     get:
       summary: List raw scan reports
@@ -762,6 +778,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TlsCertificateAsset'
+    ScannerAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScannerAsset'
     CveCollection:
       type: object
       required: [page, items]
@@ -1368,6 +1394,46 @@ components:
           type: integer
         in_use:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    ScannerCredentialReference:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    ScannerAsset:
+      type: object
+      required: [id, name, host, port, scanner_type, relay_port]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        host:
+          type: string
+          description: Scanner host or Unix socket path. Credential data is not exposed by this read endpoint.
+        port:
+          type: integer
+        scanner_type:
+          type: integer
+          description: Inherited scanner type identifier used only for read-only UI metadata.
+        credential:
+          $ref: '#/components/schemas/ScannerCredentialReference'
+        relay_host:
+          type: string
+        relay_port:
+          type: integer
         created_at:
           type: string
           format: date-time

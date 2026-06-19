@@ -23,13 +23,15 @@ The first API phase is read-only and report-focused:
 - scope list and scope detail;
 - target list and target detail summary reads;
 - task list and task detail summary reads;
+- top-level asset/security metadata lists for results, vulnerabilities,
+  operating systems, hosts, TLS certificates, and scanner metadata.
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
 
 Scanner control, target/task writes, credential management, feed import,
 account management, and other high-consequence operations stay on the inherited
 path until separate native replacements are designed and proven. Native target
-reads intentionally do not expose credential secret material.
+and scanner reads intentionally do not expose credential secret material.
 
 The current browser integration is intentionally same-origin and proxied
 through `gsad`. That keeps the browser proof inside the existing authenticated
@@ -77,7 +79,7 @@ The first runtime implementation proof is scoped in
 `docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
 for raw report list/detail/result rows/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
-task list/detail, scope-report list, Results, Hosts, Ports, Applications,
+task list/detail, scanner metadata list, scope-report list, Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
 and raw report Metrics because those read
 paths validate DB-backed evidence, scope membership, provenance, and report
@@ -104,6 +106,11 @@ Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,
 maximum severity, and timestamps. Task creation, modification, deletion,
 start/stop, and other scanner-control actions remain on the inherited path.
+
+Native scanner metadata rows include scanner identity, host/socket, port,
+inherited scanner type, safe credential references, relay metadata, and
+timestamps. They do not expose credential secret values or scanner CA material,
+and all scanner control actions remain on the inherited path.
 
 Native raw and scope-report result rows include host, optional hostname,
 port, NVT OID/name/family, severity, QoD, creation time, source report ID,

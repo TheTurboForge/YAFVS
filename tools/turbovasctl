@@ -2622,6 +2622,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA top-level Hosts list (migrated through gsad same-origin proxy)", "read-only host asset automation", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/tls-certificates",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level TLS Certificates list (migrated through gsad same-origin proxy)", "read-only TLS certificate asset automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -5680,6 +5685,21 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             hosts,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/hosts?page_size=1"),
             hosts_json,
+        )
+    )
+
+    tls_certificates = native_api_curl(repo_root, "/api/v1/tls-certificates?page_size=1&sort=-last_seen")
+    tls_certificates_json = parse_json_output(tls_certificates)
+    details["tls_certificates"] = summarize_native_api_response(tls_certificates_json)
+    tls_certificate_items = tls_certificates_json.get("items", []) if isinstance(tls_certificates_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if tls_certificates.returncode == 0 and isinstance(tls_certificate_items, list) else "fail",
+            "native-api.tls-certificates",
+            f"Native API top-level TLS Certificates probe exit code {tls_certificates.returncode}.",
+            tls_certificates,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tls-certificates?page_size=1"),
+            tls_certificates_json,
         )
     )
 

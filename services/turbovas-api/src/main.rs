@@ -421,6 +421,27 @@ struct HostAssetItem {
     modified_at: Option<String>,
 }
 
+#[derive(Serialize)]
+struct TlsCertificateAssetItem {
+    id: String,
+    name: String,
+    comment: String,
+    subject_dn: String,
+    issuer_dn: String,
+    serial: String,
+    md5_fingerprint: String,
+    sha256_fingerprint: String,
+    activation_time: Option<String>,
+    expiration_time: Option<String>,
+    last_seen: Option<String>,
+    source_host_count: i64,
+    source_port_count: i64,
+    source_count: i64,
+    in_use: bool,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct ReportHostItem {
     host: String,
@@ -562,6 +583,7 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/vulnerabilities", get(vulnerabilities))
         .route("/api/v1/operating-systems", get(operating_system_assets))
         .route("/api/v1/hosts", get(host_assets))
+        .route("/api/v1/tls-certificates", get(tls_certificate_assets))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -836,6 +858,89 @@ async fn host_assets(
         .map(|row| row.get::<_, i64>("total"))
         .unwrap_or(0);
     let items = rows.iter().map(host_asset_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn tls_certificate_assets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<TlsCertificateAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "-last_seen")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("subject_dn", "subject_dn"),
+            ("subject", "subject_dn"),
+            ("issuer_dn", "issuer_dn"),
+            ("serial", "serial"),
+            ("activates", "activation_time_unix"),
+            ("activation_time", "activation_time_unix"),
+            ("not_before", "activation_time_unix"),
+            ("expires", "expiration_time_unix"),
+            ("expiration_time", "expiration_time_unix"),
+            ("not_after", "expiration_time_unix"),
+            ("last_seen", "last_seen_unix"),
+            ("modified", "modified_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH tls_rows AS (
+             SELECT c.uuid AS id,
+                    coalesce(nullif(c.subject_dn, ''), c.uuid) AS name,
+                    coalesce(c.comment, '') AS comment,
+                    coalesce(c.subject_dn, '') AS subject_dn,
+                    coalesce(c.issuer_dn, '') AS issuer_dn,
+                    coalesce(c.serial, '') AS serial,
+                    coalesce(c.md5_fingerprint, '') AS md5_fingerprint,
+                    coalesce(c.sha256_fingerprint, '') AS sha256_fingerprint,
+                    coalesce(c.activation_time, 0)::bigint AS activation_time_unix,
+                    coalesce(c.expiration_time, 0)::bigint AS expiration_time_unix,
+                    coalesce(max(src.timestamp), 0)::bigint AS last_seen_unix,
+                    count(DISTINCT lower(loc.host_ip))::bigint AS source_host_count,
+                    count(DISTINCT loc.port)::bigint AS source_port_count,
+                    count(DISTINCT src.uuid)::bigint AS source_count,
+                    coalesce(c.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(c.modification_time, 0)::bigint AS modified_at_unix
+               FROM tls_certificates c
+               LEFT JOIN tls_certificate_sources src ON src.tls_certificate = c.id
+               LEFT JOIN tls_certificate_locations loc ON loc.id = src.location
+              GROUP BY c.id, c.uuid, c.subject_dn, c.comment, c.issuer_dn,
+                       c.serial, c.md5_fingerprint, c.sha256_fingerprint,
+                       c.activation_time, c.expiration_time,
+                       c.creation_time, c.modification_time
+         ),
+         filtered AS (
+             SELECT * FROM tls_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(subject_dn) LIKE '%' || lower($1) || '%'
+                     OR lower(issuer_dn) LIKE '%' || lower($1) || '%'
+                     OR lower(serial) LIKE '%' || lower($1) || '%'
+                     OR lower(md5_fingerprint) LIKE '%' || lower($1) || '%'
+                     OR lower(sha256_fingerprint) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, subject_dn ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "TLS certificate asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(tls_certificate_asset_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),
         items,
@@ -4453,6 +4558,29 @@ fn cve_from_row(row: &Row) -> CveItem {
         result_count: row.get(3),
         max_severity: row.get(4),
         source_report_ids: row.get(5),
+    }
+}
+
+fn tls_certificate_asset_from_row(row: &Row) -> TlsCertificateAssetItem {
+    let source_count = row.get("source_count");
+    TlsCertificateAssetItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        subject_dn: row.get("subject_dn"),
+        issuer_dn: row.get("issuer_dn"),
+        serial: row.get("serial"),
+        md5_fingerprint: row.get("md5_fingerprint"),
+        sha256_fingerprint: row.get("sha256_fingerprint"),
+        activation_time: unix_ts_to_rfc3339(row.get("activation_time_unix")),
+        expiration_time: unix_ts_to_rfc3339(row.get("expiration_time_unix")),
+        last_seen: unix_ts_to_rfc3339(row.get("last_seen_unix")),
+        source_host_count: row.get("source_host_count"),
+        source_port_count: row.get("source_port_count"),
+        source_count,
+        in_use: source_count > 0,
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }
 }
 

@@ -73,6 +73,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostAssetCollection'
+  /tls-certificates:
+    get:
+      summary: List top-level TLS certificate assets
+      description: Inherited TLS certificate asset view backed by gvmd/PostgreSQL certificate, source, and location tables.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: TLS certificate asset collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TlsCertificateAssetCollection'
   /reports:
     get:
       summary: List raw scan reports
@@ -736,6 +752,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HostAsset'
+    TlsCertificateAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TlsCertificateAsset'
     CveCollection:
       type: object
       required: [page, items]
@@ -1298,6 +1324,50 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HostAssetIdentifier'
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    TlsCertificateAsset:
+      type: object
+      required: [id, name, subject_dn, serial, source_count, in_use]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        subject_dn:
+          type: string
+        issuer_dn:
+          type: string
+        serial:
+          type: string
+        md5_fingerprint:
+          type: string
+        sha256_fingerprint:
+          type: string
+        activation_time:
+          type: string
+          format: date-time
+        expiration_time:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        source_host_count:
+          type: integer
+        source_port_count:
+          type: integer
+        source_count:
+          type: integer
+        in_use:
+          type: boolean
         created_at:
           type: string
           format: date-time

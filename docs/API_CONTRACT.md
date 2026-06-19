@@ -28,6 +28,8 @@ The first API phase is read-only and report-focused:
   metadata.
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
+- port-list list and detail reads, including port ranges and target backlinks,
+  inside authenticated operator access only.
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
 
@@ -82,8 +84,9 @@ The first runtime implementation proof is scoped in
 `docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
 for raw report list/detail/result rows/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
-task list/detail, scanner metadata list, Security Information CVE catalog
-list/detail, Security Information CPE catalog list/detail, scope-report list,
+task list/detail, scanner metadata list, saved filter list/detail, port-list
+list/detail, Security Information CVE catalog list/detail, Security
+Information CPE catalog list/detail, scope-report list,
 Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
 and raw report Metrics because those read
@@ -121,6 +124,12 @@ Native saved filter rows include filter identity, type, term, timestamps, and
 alert backlink references. Filter terms can reveal operator search logic,
 resource naming, and workflow shape, so these endpoints stay inside the
 authenticated operator boundary and are not catalog/public data.
+
+Native port-list rows include port-list identity, comment, port counts, concrete
+port ranges, target backlink references, predefined/deprecated flags, and
+timestamps. Port lists are operator scanner configuration, so these endpoints
+stay inside the authenticated operator boundary. Create, modify, import, export,
+and delete actions remain inherited until native write semantics are designed.
 
 Native Security Information CVE catalog rows include the CVE identifier,
 description, CVSS vector, severity, vulnerable product strings, optional EPSS

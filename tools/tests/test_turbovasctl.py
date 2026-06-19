@@ -754,6 +754,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/reports/{report_id}", endpoints)
         self.assertIn("/api/v1/reports/{report_id}/results", endpoints)
         self.assertIn("/api/v1/reports/{report_id}/ports", endpoints)
+        self.assertIn("/api/v1/port-lists", endpoints)
+        self.assertIn("/api/v1/port-lists/{port_list_id}", endpoints)
         self.assertIn("/api/v1/scopes", endpoints)
         self.assertIn("/api/v1/scopes/{scope_id}", endpoints)
         self.assertIn("/api/v1/scope-reports", endpoints)

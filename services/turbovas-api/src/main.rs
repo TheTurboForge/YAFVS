@@ -482,6 +482,42 @@ struct FilterAssetItem {
 }
 
 #[derive(Serialize)]
+struct PortRangeItem {
+    id: String,
+    protocol: String,
+    start: i64,
+    end: i64,
+    comment: String,
+}
+
+#[derive(Serialize)]
+struct PortCountItem {
+    all: i64,
+    tcp: i64,
+    udp: i64,
+}
+
+#[derive(Serialize)]
+struct PortListTargetReference {
+    id: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct PortListAssetItem {
+    id: String,
+    name: String,
+    comment: String,
+    port_count: PortCountItem,
+    port_ranges: Vec<PortRangeItem>,
+    targets: Vec<PortListTargetReference>,
+    predefined: bool,
+    deprecated: bool,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+}
+
+#[derive(Serialize)]
 struct HostIdentifierItem {
     id: String,
     name: String,
@@ -676,6 +712,11 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/scanners", get(scanner_assets))
         .route("/api/v1/filters", get(filter_assets))
         .route("/api/v1/filters/:filter_id", get(filter_asset_detail))
+        .route("/api/v1/port-lists", get(port_list_assets))
+        .route(
+            "/api/v1/port-lists/:port_list_id",
+            get(port_list_asset_detail),
+        )
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -1248,6 +1289,170 @@ async fn filter_asset_detail(
         .map(filter_alert_from_row)
         .collect();
     Ok(Json(filter_asset_from_row(&row, alerts)))
+}
+
+async fn port_list_assets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<PortListAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "name")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("total", "port_count_all"),
+            ("tcp", "port_count_tcp"),
+            ("udp", "port_count_udp"),
+            ("predefined", "predefined_int"),
+            ("created", "created_at_unix"),
+            ("modified", "modified_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH port_list_rows AS (
+             SELECT pl.id AS internal_id,
+                    pl.uuid AS id,
+                    coalesce(pl.name, '') AS name,
+                    coalesce(pl.comment, '') AS comment,
+                    coalesce(pl.predefined, 0)::integer AS predefined_int,
+                    0::integer AS deprecated_int,
+                    coalesce(pl.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(pl.modification_time, 0)::bigint AS modified_at_unix,
+                    coalesce((
+                      SELECT sum((CASE WHEN pr."end" IS NULL THEN pr.start ELSE pr."end" END) - pr.start + 1)::bigint
+                        FROM port_ranges pr
+                       WHERE pr.port_list = pl.id
+                    ), 0)::bigint AS port_count_all,
+                    coalesce((
+                      SELECT sum((CASE WHEN pr."end" IS NULL THEN pr.start ELSE pr."end" END) - pr.start + 1)::bigint
+                        FROM port_ranges pr
+                       WHERE pr.port_list = pl.id
+                         AND pr.type = 0
+                    ), 0)::bigint AS port_count_tcp,
+                    coalesce((
+                      SELECT sum((CASE WHEN pr."end" IS NULL THEN pr.start ELSE pr."end" END) - pr.start + 1)::bigint
+                        FROM port_ranges pr
+                       WHERE pr.port_list = pl.id
+                         AND pr.type = 1
+                    ), 0)::bigint AS port_count_udp
+               FROM port_lists pl
+         ),
+         filtered AS (
+             SELECT * FROM port_list_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(comment) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "port list asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows
+        .iter()
+        .map(|row| port_list_asset_from_row(row, Vec::new(), Vec::new()))
+        .collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn port_list_asset_detail(
+    State(state): State<AppState>,
+    Path(port_list_id): Path<String>,
+) -> Result<Json<PortListAssetItem>, ApiError> {
+    parse_uuid(&port_list_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            r#"SELECT pl.id AS internal_id,
+                      pl.uuid AS id,
+                      coalesce(pl.name, '') AS name,
+                      coalesce(pl.comment, '') AS comment,
+                      coalesce(pl.predefined, 0)::integer AS predefined_int,
+                      0::integer AS deprecated_int,
+                      coalesce(pl.creation_time, 0)::bigint AS created_at_unix,
+                      coalesce(pl.modification_time, 0)::bigint AS modified_at_unix,
+                      coalesce((
+                        SELECT sum((CASE WHEN pr."end" IS NULL THEN pr.start ELSE pr."end" END) - pr.start + 1)::bigint
+                          FROM port_ranges pr
+                         WHERE pr.port_list = pl.id
+                      ), 0)::bigint AS port_count_all,
+                      coalesce((
+                        SELECT sum((CASE WHEN pr."end" IS NULL THEN pr.start ELSE pr."end" END) - pr.start + 1)::bigint
+                          FROM port_ranges pr
+                         WHERE pr.port_list = pl.id
+                           AND pr.type = 0
+                      ), 0)::bigint AS port_count_tcp,
+                      coalesce((
+                        SELECT sum((CASE WHEN pr."end" IS NULL THEN pr.start ELSE pr."end" END) - pr.start + 1)::bigint
+                          FROM port_ranges pr
+                         WHERE pr.port_list = pl.id
+                           AND pr.type = 1
+                      ), 0)::bigint AS port_count_udp
+                 FROM port_lists pl
+                WHERE pl.uuid = $1
+                LIMIT 1;"#,
+            &[&port_list_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "port list asset detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    let internal_id: i32 = row.get("internal_id");
+    let ranges = client
+        .query(
+            r#"SELECT pr.uuid AS id,
+                      CASE WHEN pr.type = 1 THEN 'udp' ELSE 'tcp' END AS protocol,
+                      coalesce(pr.start, 0)::bigint AS start,
+                      coalesce(pr."end", pr.start, 0)::bigint AS "end",
+                      coalesce(pr.comment, '') AS comment
+                 FROM port_ranges pr
+                WHERE pr.port_list = $1
+                ORDER BY pr.type ASC, pr.start ASC, pr."end" ASC, pr.uuid ASC;"#,
+            &[&internal_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "port list range query failed");
+            ApiError::Database
+        })?
+        .iter()
+        .map(port_range_from_row)
+        .collect();
+    let targets = client
+        .query(
+            r#"SELECT t.uuid AS id,
+                      coalesce(t.name, '') AS name
+                 FROM targets t
+                WHERE t.port_list = $1
+                ORDER BY name ASC, id ASC;"#,
+            &[&internal_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "port list target backlink query failed");
+            ApiError::Database
+        })?
+        .iter()
+        .map(port_list_target_from_row)
+        .collect();
+    Ok(Json(port_list_asset_from_row(&row, ranges, targets)))
 }
 
 async fn vulnerabilities(
@@ -5241,6 +5446,46 @@ fn filter_asset_from_row(row: &Row, alerts: Vec<FilterAlertReference>) -> Filter
         term: row.get("term"),
         alert_count: row.get("alert_count"),
         alerts,
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn port_range_from_row(row: &Row) -> PortRangeItem {
+    PortRangeItem {
+        id: row.get("id"),
+        protocol: row.get("protocol"),
+        start: row.get("start"),
+        end: row.get("end"),
+        comment: row.get("comment"),
+    }
+}
+
+fn port_list_target_from_row(row: &Row) -> PortListTargetReference {
+    PortListTargetReference {
+        id: row.get("id"),
+        name: row.get("name"),
+    }
+}
+
+fn port_list_asset_from_row(
+    row: &Row,
+    port_ranges: Vec<PortRangeItem>,
+    targets: Vec<PortListTargetReference>,
+) -> PortListAssetItem {
+    PortListAssetItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        port_count: PortCountItem {
+            all: row.get("port_count_all"),
+            tcp: row.get("port_count_tcp"),
+            udp: row.get("port_count_udp"),
+        },
+        port_ranges,
+        targets,
+        predefined: row.get::<_, i32>("predefined_int") != 0,
+        deprecated: row.get::<_, i32>("deprecated_int") != 0,
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }

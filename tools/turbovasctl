@@ -2671,6 +2671,16 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA Filter detail (migrated through gsad same-origin proxy)", "read-only filter metadata automation"],
             },
             {
+                "endpoint": "/api/v1/port-lists",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level Port Lists list (migrated through gsad same-origin proxy)", "read-only port-list automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/port-lists/{port_list_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Port List detail (migrated through gsad same-origin proxy)", "read-only port-list automation"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -5867,6 +5877,40 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             )
     else:
         findings.append(finding("warn", "native-api.filter-detail", "No filters exist yet, so the filter detail probe was skipped."))
+
+    port_lists = native_api_curl(repo_root, "/api/v1/port-lists?page_size=1&sort=name")
+    port_lists_json = parse_json_output(port_lists)
+    details["port_lists"] = summarize_native_api_response(port_lists_json)
+    port_list_items = port_lists_json.get("items", []) if isinstance(port_lists_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if port_lists.returncode == 0 and isinstance(port_list_items, list) else "fail",
+            "native-api.port-lists",
+            f"Native API top-level Port Lists probe exit code {port_lists.returncode}.",
+            port_lists,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/port-lists?page_size=1"),
+            port_lists_json,
+        )
+    )
+    if port_list_items:
+        first_port_list = port_list_items[0]
+        port_list_detail_id = first_port_list.get("id") if isinstance(first_port_list, dict) else None
+        if port_list_detail_id:
+            port_list_detail = native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_detail_id)}")
+            port_list_detail_json = parse_json_output(port_list_detail)
+            details["port_list_detail"] = summarize_native_api_response(port_list_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if port_list_detail.returncode == 0 and isinstance(port_list_detail_json, dict) and port_list_detail_json.get("id") == port_list_detail_id else "fail",
+                    "native-api.port-list-detail",
+                    f"Native API port-list detail probe exit code {port_list_detail.returncode}.",
+                    port_list_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/port-lists/..."),
+                    port_list_detail_json,
+                )
+            )
+    else:
+        findings.append(finding("warn", "native-api.port-list-detail", "No port lists exist yet, so the port-list detail probe was skipped."))
 
     if raw_report_items:
         first_raw_report = raw_report_items[0]

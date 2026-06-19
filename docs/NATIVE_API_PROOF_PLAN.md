@@ -121,6 +121,8 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/scanners`
 - `GET /api/v1/filters`
 - `GET /api/v1/filters/{filter_id}`
+- `GET /api/v1/port-lists`
+- `GET /api/v1/port-lists/{port_list_id}`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, Metrics, and the
 Security Information CVE catalog, these
@@ -132,6 +134,8 @@ also browser-proxied with the read-only table metadata required by the current
 operator view. Scanner metadata list reads are browser-proxied, but scanner
 details and scanner writes remain inherited. Target-detail and task-detail reads
 remain internal native endpoints until their browser parity gaps are closed.
+Port-list list/detail reads are browser-proxied, including port ranges and target
+backlinks; port-list writes and import/export actions remain inherited.
 Further native API expansion should now decide the Closed CVEs path, then move
 toward remaining helper/tooling replacements and, later, carefully designed
 write/control paths that remove required GMP/XML, `python-gvm`, or `gvm-tools`

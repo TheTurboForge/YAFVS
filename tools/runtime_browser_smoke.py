@@ -272,7 +272,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)
@@ -352,6 +352,18 @@ async function runForBaseUrl(baseUrl) {
       await assertNoAppError(page, 'filter-detail.app-error');
       const nativeFilterDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/filters\/[^/]+$/);
       add(nativeFilterDetail ? 'pass' : 'fail', 'filter.detail-native-api', nativeFilterDetail ? 'Filter detail loaded through same-origin native API.' : 'Filter detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/filters\/[^/]+$/.test(item.path)) });
+    }
+
+    await gotoRoute(page, '/port-lists', 'port-lists');
+    const nativePortLists = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/port-lists$/);
+    add(nativePortLists ? 'pass' : 'fail', 'port-list.list-native-api', nativePortLists ? 'Top-level Port Lists loaded through same-origin native API.' : 'Top-level Port Lists did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/port-lists') });
+    const portListDetailId = await waitForNativeItemId(page, nativeApiResponses, '/api/v1/port-lists');
+    add(portListDetailId ? 'pass' : 'warn', 'port-list.detail-id', portListDetailId ? 'Found a port-list id from the native list response.' : 'No port-list id was available from the native list response.', { id: portListDetailId });
+    if (portListDetailId) {
+      await gotoRoute(page, `/port-list/${portListDetailId}`, 'port-list-detail');
+      await assertNoAppError(page, 'port-list-detail.app-error');
+      const nativePortListDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/port-lists\/[^/]+$/);
+      add(nativePortListDetail ? 'pass' : 'fail', 'port-list.detail-native-api', nativePortListDetail ? 'Port List detail loaded through same-origin native API.' : 'Port List detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/port-lists\/[^/]+$/.test(item.path)) });
     }
 
     await gotoRoute(page, '/targets', 'targets');

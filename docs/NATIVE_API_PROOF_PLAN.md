@@ -123,6 +123,8 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/filters/{filter_id}`
 - `GET /api/v1/port-lists`
 - `GET /api/v1/port-lists/{port_list_id}`
+- `GET /api/v1/schedules`
+- `GET /api/v1/schedules/{schedule_id}`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, Metrics, and the
 Security Information CVE catalog, these
@@ -135,7 +137,9 @@ operator view. Scanner metadata list reads are browser-proxied, but scanner
 details and scanner writes remain inherited. Target-detail and task-detail reads
 remain internal native endpoints until their browser parity gaps are closed.
 Port-list list/detail reads are browser-proxied, including port ranges and target
-backlinks; port-list writes and import/export actions remain inherited.
+backlinks; port-list writes and import/export actions remain inherited. Schedule
+list/detail reads are browser-proxied with iCalendar recurrence data and task
+backlinks; schedule writes, clone, export, and delete actions remain inherited.
 Further native API expansion should now decide the Closed CVEs path, then move
 toward remaining helper/tooling replacements and, later, carefully designed
 write/control paths that remove required GMP/XML, `python-gvm`, or `gvm-tools`

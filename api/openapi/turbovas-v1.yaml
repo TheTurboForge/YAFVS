@@ -217,6 +217,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortListAsset'
+  /schedules:
+    get:
+      summary: List schedules
+      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Schedule collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleAssetCollection'
+  /schedules/{schedule_id}:
+    get:
+      summary: Read one schedule
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      responses:
+        '200':
+          description: Schedule detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleAsset'
   /reports:
     get:
       summary: List raw scan reports
@@ -738,6 +766,13 @@ components:
       schema:
         type: string
         format: uuid
+    ScheduleId:
+      name: schedule_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     Error:
       type: object
@@ -968,6 +1003,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PortListAsset'
+    ScheduleAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleAsset'
     CveCollection:
       type: object
       required: [page, items]
@@ -1716,6 +1761,47 @@ components:
           type: boolean
         deprecated:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    ScheduleTaskReference:
+      type: object
+      required: [id, name, usage_type]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        usage_type:
+          type: string
+    ScheduleAsset:
+      type: object
+      required: [id, name, icalendar, timezone, task_count, tasks]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        icalendar:
+          type: string
+        timezone:
+          type: string
+        timezone_abbrev:
+          type: string
+          nullable: true
+        task_count:
+          type: integer
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleTaskReference'
         created_at:
           type: string
           format: date-time

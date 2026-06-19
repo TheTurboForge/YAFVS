@@ -29,6 +29,8 @@ The first API phase is read-only and report-focused:
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
 - port-list list and detail reads, including port ranges and target backlinks,
+- schedule list and detail reads, including iCalendar recurrence data and task
+  backlinks,
   inside authenticated operator access only.
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
@@ -130,6 +132,12 @@ port ranges, target backlink references, predefined/deprecated flags, and
 timestamps. Port lists are operator scanner configuration, so these endpoints
 stay inside the authenticated operator boundary. Create, modify, import, export,
 and delete actions remain inherited until native write semantics are designed.
+
+Native schedule rows include schedule identity, comments, iCalendar recurrence
+data, timezone, task backlink references, and timestamps. Schedules are operator
+automation metadata, so these endpoints stay inside the authenticated operator
+boundary. Create, modify, clone, export, and delete actions remain inherited
+until native write semantics are designed.
 
 Native Security Information CVE catalog rows include the CVE identifier,
 description, CVSS vector, severity, vulnerable product strings, optional EPSS

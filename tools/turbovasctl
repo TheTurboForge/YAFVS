@@ -2681,6 +2681,16 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA Port List detail (migrated through gsad same-origin proxy)", "read-only port-list automation"],
             },
             {
+                "endpoint": "/api/v1/schedules",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level Schedules list (migrated through gsad same-origin proxy)", "read-only schedule automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/schedules/{schedule_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Schedule detail (migrated through gsad same-origin proxy)", "read-only schedule automation"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -5911,6 +5921,40 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             )
     else:
         findings.append(finding("warn", "native-api.port-list-detail", "No port lists exist yet, so the port-list detail probe was skipped."))
+
+    schedules = native_api_curl(repo_root, "/api/v1/schedules?page_size=1&sort=name")
+    schedules_json = parse_json_output(schedules)
+    details["schedules"] = summarize_native_api_response(schedules_json)
+    schedule_items = schedules_json.get("items", []) if isinstance(schedules_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if schedules.returncode == 0 and isinstance(schedule_items, list) else "fail",
+            "native-api.schedules",
+            f"Native API top-level Schedules probe exit code {schedules.returncode}.",
+            schedules,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/schedules?page_size=1"),
+            schedules_json,
+        )
+    )
+    if schedule_items:
+        first_schedule = schedule_items[0]
+        schedule_detail_id = first_schedule.get("id") if isinstance(first_schedule, dict) else None
+        if schedule_detail_id:
+            schedule_detail = native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_detail_id)}")
+            schedule_detail_json = parse_json_output(schedule_detail)
+            details["schedule_detail"] = summarize_native_api_response(schedule_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if schedule_detail.returncode == 0 and isinstance(schedule_detail_json, dict) and schedule_detail_json.get("id") == schedule_detail_id else "fail",
+                    "native-api.schedule-detail",
+                    f"Native API schedule detail probe exit code {schedule_detail.returncode}.",
+                    schedule_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/schedules/..."),
+                    schedule_detail_json,
+                )
+            )
+    else:
+        findings.append(finding("warn", "native-api.schedule-detail", "No schedules exist yet, so the schedule detail probe was skipped."))
 
     if raw_report_items:
         first_raw_report = raw_report_items[0]

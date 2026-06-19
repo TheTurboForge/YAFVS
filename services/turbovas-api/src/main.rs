@@ -441,6 +441,27 @@ struct OperatingSystemAssetItem {
 }
 
 #[derive(Serialize)]
+struct ScheduleTaskReference {
+    id: String,
+    name: String,
+    usage_type: String,
+}
+
+#[derive(Serialize)]
+struct ScheduleAssetItem {
+    id: String,
+    name: String,
+    comment: String,
+    icalendar: String,
+    timezone: String,
+    timezone_abbrev: Option<String>,
+    task_count: i64,
+    tasks: Vec<ScheduleTaskReference>,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+}
+
+#[derive(Serialize)]
 struct ScannerAssetCredential {
     id: String,
     name: String,
@@ -717,6 +738,8 @@ async fn main() -> Result<(), ApiError> {
             "/api/v1/port-lists/:port_list_id",
             get(port_list_asset_detail),
         )
+        .route("/api/v1/schedules", get(schedule_assets))
+        .route("/api/v1/schedules/:schedule_id", get(schedule_asset_detail))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))
@@ -1453,6 +1476,140 @@ async fn port_list_asset_detail(
         .map(port_list_target_from_row)
         .collect();
     Ok(Json(port_list_asset_from_row(&row, ranges, targets)))
+}
+
+async fn schedule_assets(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<ScheduleAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, "name")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("first_run", "first_run_unix"),
+            ("next_run", "next_run_unix"),
+            ("period", "period_seconds"),
+            ("duration", "duration_seconds"),
+            ("tasks", "task_count"),
+            ("created", "created_at_unix"),
+            ("modified", "modified_at_unix"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH schedule_rows AS (
+             SELECT s.id AS internal_id,
+                    s.uuid AS id,
+                    coalesce(s.name, '') AS name,
+                    coalesce(s.comment, '') AS comment,
+                    coalesce(s.icalendar, '') AS icalendar,
+                    coalesce(s.timezone, 'UTC') AS timezone,
+                    coalesce(s.first_time, 0)::bigint AS first_run_unix,
+                    coalesce(next_time_ical(s.icalendar, m_now()::bigint, coalesce(s.timezone, 'UTC')), 0)::bigint AS next_run_unix,
+                    coalesce(s.period, 0)::bigint AS period_seconds,
+                    coalesce(s.duration, 0)::bigint AS duration_seconds,
+                    coalesce(s.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(s.modification_time, 0)::bigint AS modified_at_unix,
+                    coalesce((
+                      SELECT count(*)::bigint
+                        FROM tasks t
+                       WHERE t.schedule = s.id
+                         AND t.hidden = 0
+                    ), 0)::bigint AS task_count
+               FROM schedules s
+         ),
+         filtered AS (
+             SELECT * FROM schedule_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(comment) LIKE '%' || lower($1) || '%'
+                     OR lower(timezone) LIKE '%' || lower($1) || '%')
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "schedule asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows
+        .iter()
+        .map(|row| schedule_asset_from_row(row, Vec::new()))
+        .collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn schedule_asset_detail(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+) -> Result<Json<ScheduleAssetItem>, ApiError> {
+    parse_uuid(&schedule_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            r#"SELECT s.id AS internal_id,
+                      s.uuid AS id,
+                      coalesce(s.name, '') AS name,
+                      coalesce(s.comment, '') AS comment,
+                      coalesce(s.icalendar, '') AS icalendar,
+                      coalesce(s.timezone, 'UTC') AS timezone,
+                      coalesce(s.first_time, 0)::bigint AS first_run_unix,
+                      coalesce(next_time_ical(s.icalendar, m_now()::bigint, coalesce(s.timezone, 'UTC')), 0)::bigint AS next_run_unix,
+                      coalesce(s.period, 0)::bigint AS period_seconds,
+                      coalesce(s.duration, 0)::bigint AS duration_seconds,
+                      coalesce(s.creation_time, 0)::bigint AS created_at_unix,
+                      coalesce(s.modification_time, 0)::bigint AS modified_at_unix,
+                      coalesce((
+                        SELECT count(*)::bigint
+                          FROM tasks t
+                         WHERE t.schedule = s.id
+                           AND t.hidden = 0
+                      ), 0)::bigint AS task_count
+                 FROM schedules s
+                WHERE s.uuid = $1
+                LIMIT 1;"#,
+            &[&schedule_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "schedule asset detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    let internal_id: i32 = row.get("internal_id");
+    let tasks = client
+        .query(
+            r#"SELECT t.uuid AS id,
+                      coalesce(t.name, '') AS name,
+                      coalesce(t.usage_type, 'scan') AS usage_type
+                 FROM tasks t
+                WHERE t.schedule = $1
+                  AND t.hidden = 0
+                ORDER BY name ASC, id ASC;"#,
+            &[&internal_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "schedule task backlink query failed");
+            ApiError::Database
+        })?
+        .iter()
+        .map(schedule_task_from_row)
+        .collect();
+    Ok(Json(schedule_asset_from_row(&row, tasks)))
 }
 
 async fn vulnerabilities(
@@ -5486,6 +5643,29 @@ fn port_list_asset_from_row(
         targets,
         predefined: row.get::<_, i32>("predefined_int") != 0,
         deprecated: row.get::<_, i32>("deprecated_int") != 0,
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn schedule_task_from_row(row: &Row) -> ScheduleTaskReference {
+    ScheduleTaskReference {
+        id: row.get("id"),
+        name: row.get("name"),
+        usage_type: row.get("usage_type"),
+    }
+}
+
+fn schedule_asset_from_row(row: &Row, tasks: Vec<ScheduleTaskReference>) -> ScheduleAssetItem {
+    ScheduleAssetItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        icalendar: row.get("icalendar"),
+        timezone: row.get("timezone"),
+        timezone_abbrev: None,
+        task_count: row.get("task_count"),
+        tasks,
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }

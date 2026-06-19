@@ -22,10 +22,10 @@ write-safety controls.
 
 The first live proof is the Docker-internal Rust `turbovas-api` sidecar for
 raw report reads, scope-report collections, target/task reads, scanner metadata,
-saved filters, port lists, and report metrics, currently raw report list/detail/result rows/hosts,
+saved filters, port lists, schedules, and report metrics, currently raw report list/detail/result rows/hosts,
 target/task internal reads, the browser-backed target and task lists, top-level
 Results, Vulnerabilities, Operating Systems, Hosts, TLS Certificates, and
-Scanners, Filters, and Port Lists lists, scope-report list, Results, Hosts, Ports, Applications,
+Scanners, Filters, Port Lists, and Schedules lists, scope-report list, Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
 and raw report Metrics. It queries PostgreSQL
 directly and is intentionally not
@@ -59,6 +59,7 @@ the authenticated same-origin `gsad` proxy defined in
 | Scanner metadata reads | GSA/GMP scanner list commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/scanners` | `/scanners` now reads its list through typed JSON, exposing only scanner metadata and safe credential references. Scanner details and all scanner-control actions remain inherited until separately designed. |
 | Saved filter reads | GSA/GMP filter list/detail commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/filters` and `/api/v1/filters/{filter_id}` | `/filters` and filter detail reads now use typed JSON through the authenticated `gsad` proxy. Filter writes and export/import actions remain inherited until native write semantics are designed. Filter terms remain authenticated operator data, not public catalog data. |
 | Port-list reads | GSA/GMP port-list list/detail commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/port-lists` and `/api/v1/port-lists/{port_list_id}` | `/port-lists` and port-list detail reads now use typed JSON through the authenticated `gsad` proxy. Port-list writes, import/export, and delete actions remain inherited until native write semantics are designed. |
+| Schedule reads | GSA/GMP schedule list/detail commands -> gsad -> gvmd XML -> PostgreSQL | `/api/v1/schedules` and `/api/v1/schedules/{schedule_id}` | `/schedules` and schedule detail reads now use typed JSON through the authenticated `gsad` proxy. The native payload keeps iCalendar recurrence data and task backlinks while schedule writes, clone, export, and delete remain inherited until native write semantics are designed. |
 | Scope-report Results | GSA Results tab now uses typed native JSON through the authenticated `gsad` proxy; the inherited gvmd source-report-constrained GMP collection remains available during transition | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results` | Browser smoke proves the native Results tab and raw evidence links while GMP compatibility remains intact. |
 | Scope-report metrics | `runtime-scope-report-metrics` and the GSA Metrics tab now use the native API; the inherited scope-report metrics GMP command remains available during transition | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics` | Runtime and browser smoke continue to prove the native path while GMP compatibility remains intact. |
 | Scope-report evidence tabs | GSA Results, Hosts, Ports, Applications, Operating Systems, CVEs, TLS Certificates, and Error Messages tabs now use typed native JSON through the authenticated `gsad` proxy | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results`, `/hosts`, `/ports`, `/applications`, `/operating-systems`, `/cves`, `/tls-certificates`, and `/errors` | Browser smoke proves aggregated tabs load through native JSON and no longer render per-source raw-report sections. |

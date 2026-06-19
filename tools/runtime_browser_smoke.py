@@ -272,7 +272,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)
@@ -364,6 +364,18 @@ async function runForBaseUrl(baseUrl) {
       await assertNoAppError(page, 'port-list-detail.app-error');
       const nativePortListDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/port-lists\/[^/]+$/);
       add(nativePortListDetail ? 'pass' : 'fail', 'port-list.detail-native-api', nativePortListDetail ? 'Port List detail loaded through same-origin native API.' : 'Port List detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/port-lists\/[^/]+$/.test(item.path)) });
+    }
+
+    await gotoRoute(page, '/schedules', 'schedules');
+    const nativeSchedules = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/schedules$/);
+    add(nativeSchedules ? 'pass' : 'fail', 'schedule.list-native-api', nativeSchedules ? 'Top-level Schedules loaded through same-origin native API.' : 'Top-level Schedules did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/schedules') });
+    const scheduleDetailId = await waitForNativeItemId(page, nativeApiResponses, '/api/v1/schedules');
+    add(scheduleDetailId ? 'pass' : 'warn', 'schedule.detail-id', scheduleDetailId ? 'Found a schedule id from the native list response.' : 'No schedule id was available from the native list response.', { id: scheduleDetailId });
+    if (scheduleDetailId) {
+      await gotoRoute(page, `/schedule/${scheduleDetailId}`, 'schedule-detail');
+      await assertNoAppError(page, 'schedule-detail.app-error');
+      const nativeScheduleDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/schedules\/[^/]+$/);
+      add(nativeScheduleDetail ? 'pass' : 'fail', 'schedule.detail-native-api', nativeScheduleDetail ? 'Schedule detail loaded through same-origin native API.' : 'Schedule detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/schedules\/[^/]+$/.test(item.path)) });
     }
 
     await gotoRoute(page, '/targets', 'targets');

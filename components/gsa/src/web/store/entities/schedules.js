@@ -1,9 +1,15 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {createAll} from 'web/store/entities/utils/main';
+import {
+  fetchNativeSchedule,
+  fetchNativeSchedules,
+  nativeSchedulesQueryFromFilter,
+} from 'gmp/native-api/schedules';
 
 const {
   loadAllEntities,
@@ -15,12 +21,62 @@ const {
   selector,
 } = createAll('schedule');
 
+const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
+  if (!canUseNativeApi(gmp)) {
+    return loadEntities(gmp)(filter)(dispatch, getState);
+  }
+
+  const rootState = getState();
+  const state = selector(rootState);
+
+  if (state.isLoadingEntities(filter)) {
+    return Promise.resolve();
+  }
+
+  dispatch(entitiesLoadingActions.request(filter));
+
+  return fetchNativeSchedules(gmp, nativeSchedulesQueryFromFilter(filter)).then(
+    response =>
+      dispatch(
+        entitiesLoadingActions.success(
+          response.schedules,
+          filter,
+          filter,
+          response.counts,
+        ),
+      ),
+    error => dispatch(entitiesLoadingActions.error(error, filter)),
+  );
+};
+
+const nativeLoadEntity = gmp => id => (dispatch, getState) => {
+  if (!canUseNativeApi(gmp)) {
+    return loadEntity(gmp)(id)(dispatch, getState);
+  }
+
+  const rootState = getState();
+  const state = selector(rootState);
+
+  if (state.isLoadingEntity(id)) {
+    return Promise.resolve();
+  }
+
+  dispatch(entityLoadingActions.request(id));
+
+  return fetchNativeSchedule(gmp, id).then(
+    schedule => dispatch(entityLoadingActions.success(id, schedule)),
+    error => dispatch(entityLoadingActions.error(id, error)),
+  );
+};
+
 export {
   loadAllEntities,
   entitiesLoadingActions,
   entityLoadingActions,
-  loadEntities,
-  loadEntity,
+  nativeLoadEntities as loadEntities,
+  nativeLoadEntity as loadEntity,
   reducer,
   selector,
 };

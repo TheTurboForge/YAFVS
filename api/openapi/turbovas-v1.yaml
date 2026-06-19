@@ -245,6 +245,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScheduleAsset'
+  /report-formats:
+    get:
+      summary: List report formats
+      description: Read-only report-format metadata backed by gvmd/PostgreSQL. Create, modify, import, export, verify, and delete operations remain on inherited compatibility paths while native write semantics are designed.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Report-format collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportFormatAssetCollection'
+  /report-formats/{report_format_id}:
+    get:
+      summary: Read one report format
+      parameters:
+        - $ref: '#/components/parameters/ReportFormatId'
+      responses:
+        '200':
+          description: Report-format detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportFormatAsset'
   /reports:
     get:
       summary: List raw scan reports
@@ -773,6 +801,13 @@ components:
       schema:
         type: string
         format: uuid
+    ReportFormatId:
+      name: report_format_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     Error:
       type: object
@@ -1013,6 +1048,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScheduleAsset'
+    ReportFormatAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFormatAsset'
     CveCollection:
       type: object
       required: [page, items]
@@ -1802,6 +1847,98 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScheduleTaskReference'
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    ReportFormatReference:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    ReportFormatParamOption:
+      type: object
+      properties:
+        value:
+          type: string
+    ReportFormatParam:
+      type: object
+      required: [name, type, value, default, options]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        value:
+          type: string
+        default:
+          type: string
+        min:
+          type: integer
+          nullable: true
+        max:
+          type: integer
+          nullable: true
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFormatParamOption'
+    ReportFormatAsset:
+      type: object
+      required: [id, name, trust, active, predefined, configurable, deprecated, alert_count, report_config_count, alerts, report_configs, params]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        extension:
+          type: string
+        content_type:
+          type: string
+        report_type:
+          type: string
+        trust:
+          type: string
+          enum: [yes, no, unknown]
+        trust_time:
+          type: string
+          format: date-time
+          nullable: true
+        active:
+          type: boolean
+        predefined:
+          type: boolean
+        configurable:
+          type: boolean
+        deprecated:
+          type: boolean
+        alert_count:
+          type: integer
+        report_config_count:
+          type: integer
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFormatReference'
+        report_configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFormatReference'
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFormatParam'
         created_at:
           type: string
           format: date-time

@@ -79,7 +79,8 @@ strangler map in the same slice.
 Internal read-only automation can use `tools/turbovasctl native-api-request
 --json --path '/api/v1/...'` or `just native-api-request -- --json --path
 '/api/v1/...'` to call the Docker-internal native API. This replaces covered
-read-only GMP scripts for report, scope, target, and task listing workflows; it
+read-only GMP scripts for report, scope, target, task, and selected asset
+listing workflows; it
 is not the final externally exposed scriptable API boundary.
 
 The first runtime implementation proof is scoped in
@@ -87,7 +88,7 @@ The first runtime implementation proof is scoped in
 for raw report list/detail/result rows/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
 task list/detail, scanner metadata list, saved filter list/detail, port-list
-list/detail, Security Information CVE catalog list/detail, Security
+list/detail, schedule list/detail, report-format list/detail, Security Information CVE catalog list/detail, Security
 Information CPE catalog list/detail, scope-report list,
 Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
@@ -138,6 +139,13 @@ data, timezone, task backlink references, and timestamps. Schedules are operator
 automation metadata, so these endpoints stay inside the authenticated operator
 boundary. Create, modify, clone, export, and delete actions remain inherited
 until native write semantics are designed.
+
+Native report-format rows include report-format identity, summary/description,
+extension/content type, trust state, active/predefined/configurable/deprecated
+flags, alert/report-config backlinks, parameters, and timestamps. Report formats
+are scanner output configuration, so these endpoints stay inside the
+authenticated operator boundary. Import/export/verification, edits, and deletion
+remain inherited until native write semantics are designed.
 
 Native Security Information CVE catalog rows include the CVE identifier,
 description, CVSS vector, severity, vulnerable product strings, optional EPSS

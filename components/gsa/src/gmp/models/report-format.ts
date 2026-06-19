@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * SPDX-FileCopyrightText: 2026 TurboVAS contributors
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -71,6 +72,7 @@ interface ReportFormatElement extends ModelElement {
   };
   configurable?: YesNo;
   content_type?: string;
+  deprecated?: boolean;
   extension?: string;
   invisible_alerts?: number;
   invisible_report_configs?: number;
@@ -96,6 +98,7 @@ interface ReportFormatProperties extends ModelProperties {
   alerts?: Model[];
   configurable?: boolean;
   content_type?: string;
+  deprecated?: boolean;
   extension?: string;
   invisible_alerts?: number;
   invisible_report_configs?: number;
@@ -202,6 +205,7 @@ class ReportFormat extends Model {
   readonly alerts: Model[];
   readonly configurable?: boolean;
   readonly content_type?: string;
+  readonly deprecated?: boolean;
   readonly extension?: string;
   readonly invisible_alerts?: number;
   readonly invisible_report_configs?: number;
@@ -216,6 +220,7 @@ class ReportFormat extends Model {
     configurable,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     content_type,
+    deprecated,
     extension,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     invisible_alerts,
@@ -235,6 +240,7 @@ class ReportFormat extends Model {
     this.alerts = alerts;
     this.configurable = configurable;
     this.content_type = content_type;
+    this.deprecated = deprecated;
     this.extension = extension;
     this.invisible_alerts = invisible_alerts;
     this.invisible_report_configs = invisible_report_configs;
@@ -284,6 +290,9 @@ class ReportFormat extends Model {
       : undefined;
     ret.configurable = isDefined(element.configurable)
       ? parseBoolean(element.configurable)
+      : undefined;
+    ret.deprecated = isDefined(element.deprecated)
+      ? element.deprecated === true
       : undefined;
     ret.predefined = isDefined(element.predefined)
       ? parseBoolean(element.predefined)

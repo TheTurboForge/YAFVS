@@ -125,6 +125,8 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/port-lists/{port_list_id}`
 - `GET /api/v1/schedules`
 - `GET /api/v1/schedules/{schedule_id}`
+- `GET /api/v1/report-formats`
+- `GET /api/v1/report-formats/{report_format_id}`
 
 Together with Results, Hosts, Ports, CVEs, Error Messages, Metrics, and the
 Security Information CVE catalog, these

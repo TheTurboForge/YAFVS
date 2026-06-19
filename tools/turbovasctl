@@ -2691,6 +2691,16 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA Schedule detail (migrated through gsad same-origin proxy)", "read-only schedule automation"],
             },
             {
+                "endpoint": "/api/v1/report-formats",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA top-level Report Formats list (migrated through gsad same-origin proxy)", "read-only report-format automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/report-formats/{report_format_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Report Format detail (migrated through gsad same-origin proxy)", "read-only report-format automation"],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -5955,6 +5965,40 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             )
     else:
         findings.append(finding("warn", "native-api.schedule-detail", "No schedules exist yet, so the schedule detail probe was skipped."))
+
+    report_formats = native_api_curl(repo_root, "/api/v1/report-formats?page_size=1&sort=name")
+    report_formats_json = parse_json_output(report_formats)
+    details["report_formats"] = summarize_native_api_response(report_formats_json)
+    report_format_items = report_formats_json.get("items", []) if isinstance(report_formats_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if report_formats.returncode == 0 and isinstance(report_format_items, list) else "fail",
+            "native-api.report-formats",
+            f"Native API top-level Report Formats probe exit code {report_formats.returncode}.",
+            report_formats,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-formats?page_size=1"),
+            report_formats_json,
+        )
+    )
+    if report_format_items:
+        first_report_format = report_format_items[0]
+        report_format_detail_id = first_report_format.get("id") if isinstance(first_report_format, dict) else None
+        if report_format_detail_id:
+            report_format_detail = native_api_curl(repo_root, f"/api/v1/report-formats/{urllib.parse.quote(report_format_detail_id)}")
+            report_format_detail_json = parse_json_output(report_format_detail)
+            details["report_format_detail"] = summarize_native_api_response(report_format_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if report_format_detail.returncode == 0 and isinstance(report_format_detail_json, dict) and report_format_detail_json.get("id") == report_format_detail_id else "fail",
+                    "native-api.report-format-detail",
+                    f"Native API report-format detail probe exit code {report_format_detail.returncode}.",
+                    report_format_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-formats/..."),
+                    report_format_detail_json,
+                )
+            )
+    else:
+        findings.append(finding("warn", "native-api.report-format-detail", "No report formats exist yet, so the report-format detail probe was skipped."))
 
     if raw_report_items:
         first_raw_report = raw_report_items[0]

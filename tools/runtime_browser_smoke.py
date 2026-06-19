@@ -272,7 +272,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)
@@ -376,6 +376,18 @@ async function runForBaseUrl(baseUrl) {
       await assertNoAppError(page, 'schedule-detail.app-error');
       const nativeScheduleDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/schedules\/[^/]+$/);
       add(nativeScheduleDetail ? 'pass' : 'fail', 'schedule.detail-native-api', nativeScheduleDetail ? 'Schedule detail loaded through same-origin native API.' : 'Schedule detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/schedules\/[^/]+$/.test(item.path)) });
+    }
+
+    await gotoRoute(page, '/reportformats', 'report-formats');
+    const nativeReportFormats = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/report-formats$/);
+    add(nativeReportFormats ? 'pass' : 'fail', 'report-format.list-native-api', nativeReportFormats ? 'Top-level Report Formats loaded through same-origin native API.' : 'Top-level Report Formats did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => item.path === '/api/v1/report-formats') });
+    const reportFormatDetailId = await waitForNativeItemId(page, nativeApiResponses, '/api/v1/report-formats');
+    add(reportFormatDetailId ? 'pass' : 'warn', 'report-format.detail-id', reportFormatDetailId ? 'Found a report-format id from the native list response.' : 'No report-format id was available from the native list response.', { id: reportFormatDetailId });
+    if (reportFormatDetailId) {
+      await gotoRoute(page, `/report-format/${reportFormatDetailId}`, 'report-format-detail');
+      await assertNoAppError(page, 'report-format-detail.app-error');
+      const nativeReportFormatDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/report-formats\/[^/]+$/);
+      add(nativeReportFormatDetail ? 'pass' : 'fail', 'report-format.detail-native-api', nativeReportFormatDetail ? 'Report Format detail loaded through same-origin native API.' : 'Report Format detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/report-formats\/[^/]+$/.test(item.path)) });
     }
 
     await gotoRoute(page, '/targets', 'targets');

@@ -2838,7 +2838,6 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
         ],
         "next_replacement_candidates": [
             {"workflow": "remaining gvm-tools write/control scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "native write/control API after separate safety design"},
-            {"workflow": "raw-report Closed CVEs decision", "current_dependency": "GSA/GMP report detail collections", "native_target": "decide whether Closed CVEs are migrated as-is, folded into CVEs, or removed/retired"},
         ],
     }
 

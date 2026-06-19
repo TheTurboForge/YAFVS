@@ -15,7 +15,6 @@ describe('ReportReport tests', () => {
   test('should use defaults', () => {
     const report = new ReportReport();
     expect(report.applications).toBeUndefined();
-    expect(report.closedCves).toBeUndefined();
     expect(report.cves).toBeUndefined();
     expect(report.errors).toBeUndefined();
     expect(report.filter).toBeUndefined();
@@ -39,7 +38,6 @@ describe('ReportReport tests', () => {
     const filter = new Filter();
     const emptyCollection = emptyCollectionList(filter);
     expect(report.applications).toEqual(emptyCollection);
-    expect(report.closedCves).toEqual(emptyCollection);
     expect(report.cves).toEqual(emptyCollection);
     expect(report.errors).toEqual(emptyCollection);
     expect(report.filter).toBeDefined();
@@ -358,45 +356,6 @@ describe('ReportReport tests', () => {
     expect(report.cves?.entities[0].source?.name).toEqual('1.2.3');
     expect(report.cves?.entities[0].source?.description).toEqual('Foo');
     expect(report.cves?.entities[0].severity).toEqual(4.5);
-  });
-
-  test('should parse closed CVEs', () => {
-    const report = ReportReport.fromElement({
-      closed_cves: {
-        count: 123,
-      },
-      host: [
-        {
-          ip: '1.1.1.1',
-          detail: [
-            {
-              name: 'hostname',
-              value: 'foo.bar',
-            },
-            {
-              name: 'Closed CVE',
-              value: 'CVE-2000-1234',
-              source: {
-                name: '201',
-                description: 'This is a description',
-              },
-              extra: 10.0,
-            },
-          ],
-        },
-      ],
-    });
-    expect(report.closedCves).toBeDefined();
-    expect(report.closedCves?.counts?.all).toEqual(123);
-    expect(report.closedCves?.counts?.filtered).toEqual(1);
-    expect(report.closedCves?.counts?.rows).toEqual(1);
-    expect(report.closedCves?.counts?.length).toEqual(1);
-    expect(report.closedCves?.entities.length).toEqual(1);
-    expect(report.closedCves?.entities[0].id).toEqual(
-      'CVE-2000-1234-1.1.1.1-201',
-    );
-    expect(report.closedCves?.entities[0].host.ip).toEqual('1.1.1.1');
-    expect(report.closedCves?.entities[0].cveId).toEqual('CVE-2000-1234');
   });
 
   test('should parse errors', () => {

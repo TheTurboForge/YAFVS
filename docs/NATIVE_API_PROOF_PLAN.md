@@ -96,8 +96,8 @@ After scope-report and raw-report evidence reads, scope metadata reads, and
 target/task read-summary endpoints, `/targets` list reads now use typed JSON
 with safe credential-reference parity, and `/tasks` list reads use typed JSON
 with report-count, trend, scanner-type, and last-report parity. The next
-candidates are target/task detail migration, the Closed CVEs decision, and
-helper/tooling replacements that directly unlock migration away from GMP/XML.
+candidates are target/task detail migration and helper/tooling replacements
+that directly unlock migration away from GMP/XML.
 
 ## Completed Evidence Contracts
 
@@ -142,7 +142,6 @@ Port-list list/detail reads are browser-proxied, including port ranges and targe
 backlinks; port-list writes and import/export actions remain inherited. Schedule
 list/detail reads are browser-proxied with iCalendar recurrence data and task
 backlinks; schedule writes, clone, export, and delete actions remain inherited.
-Further native API expansion should now decide the Closed CVEs path, then move
-toward remaining helper/tooling replacements and, later, carefully designed
-write/control paths that remove required GMP/XML, `python-gvm`, or `gvm-tools`
-dependence.
+Further native API expansion should now move toward remaining helper/tooling
+replacements and, later, carefully designed write/control paths that remove
+required GMP/XML, `python-gvm`, or `gvm-tools` dependence.

@@ -18,7 +18,6 @@ import useDownload from 'web/components/form/useDownload';
 import PageTitle from 'web/components/layout/PageTitle';
 import DialogNotification from 'web/components/notification/DialogNotification';
 import useDialogNotification from 'web/components/notification/useDialogNotification';
-import useGetReportClosedCves from 'web/hooks/use-query/report-closed-cves';
 import useGetReportCves from 'web/hooks/use-query/report-cves';
 import useGetReportTlsCertificates from 'web/hooks/use-query/report-tls-certificates';
 import {
@@ -51,7 +50,6 @@ interface SortingState {
   hosts: SortState;
   os: SortState;
   cves: SortState;
-  closedcves: SortState;
   tlscerts: SortState;
   errors: SortState;
 }
@@ -110,7 +108,6 @@ const initialSorting: SortingState = {
   hosts: {sortField: 'severity', sortReverse: true},
   os: {sortField: 'severity', sortReverse: true},
   cves: {sortField: 'severity', sortReverse: true},
-  closedcves: {sortField: 'severity', sortReverse: true},
   tlscerts: {sortField: 'dn', sortReverse: false},
   errors: {sortField: 'error', sortReverse: false},
 };
@@ -183,11 +180,6 @@ const ReportDetailsPage = () => {
     filter: reportFilter,
   });
 
-  const {data: reportClosedCvesData} = useGetReportClosedCves({
-    reportId,
-    filter: reportFilter,
-  });
-
   // Filters list for Powerfilter dropdown
   const {data: filtersData, isLoading: isLoadingFilters} =
     useGetResultsFilters();
@@ -245,7 +237,6 @@ const ReportDetailsPage = () => {
   const applicationsCounts = report?.applications?.counts;
   const operatingSystemsCounts = report?.operatingsystems?.counts;
   const cvesCounts = reportCvesData?.entitiesCounts;
-  const closedCvesCounts = reportClosedCvesData?.entitiesCounts;
   const tlsCertificatesCounts =
     reportTlsCertificatesData?.entitiesCounts ??
     report?.tlsCertificates?.counts;
@@ -512,7 +503,6 @@ const ReportDetailsPage = () => {
         {({edit}) => (
           <Page
             applicationsCounts={applicationsCounts}
-            closedCvesCounts={closedCvesCounts}
             cvesCounts={cvesCounts}
             entity={entity}
             errorsCounts={errorsCounts}

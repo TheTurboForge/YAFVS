@@ -35,7 +35,6 @@ import EntityTags from 'web/entity/Tags';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import ApplicationsTab from 'web/pages/reports/details/ApplicationsTab';
-import ClosedCvesTab from 'web/pages/reports/details/ClosedCvesTab';
 import CvesTab from 'web/pages/reports/details/CvesTab';
 import DetailsToolbar from 'web/pages/reports/details/DetailsToolbar';
 import ErrorsTab from 'web/pages/reports/details/ErrorsTab';
@@ -69,7 +68,6 @@ interface SortingData {
   errors: SortingEntry;
   hosts: SortingEntry;
   os: SortingEntry;
-  closedcves: SortingEntry;
   tlscerts: SortingEntry;
 }
 
@@ -81,7 +79,6 @@ interface TabDefinition {
 
 interface PageContentProps {
   applicationsCounts?: CollectionCounts;
-  closedCvesCounts?: CollectionCounts;
   cvesCounts?: CollectionCounts;
   entity?: Report;
   errorsCounts?: CollectionCounts;
@@ -161,7 +158,6 @@ const HeaderContainer = styled.div`
 
 const PageContent = ({
   applicationsCounts,
-  closedCvesCounts,
   cvesCounts,
   entity,
   errorsCounts,
@@ -380,23 +376,6 @@ const PageContent = ({
           activeFilter,
           thresholdConfig,
           <CvesTab filter={activeFilter} reportId={reportId} status={status} />,
-        ),
-    },
-    {
-      key: 'closedcves',
-      renderTab: () => (
-        <TabTitle counts={closedCvesCounts} title={_('Closed CVEs')} />
-      ),
-      renderPanel: () =>
-        renderWithThreshold(
-          _('Closed CVEs'),
-          activeFilter,
-          thresholdConfig,
-          <ClosedCvesTab
-            filter={activeFilter}
-            reportId={reportId}
-            status={status}
-          />,
         ),
     },
     {

@@ -240,7 +240,7 @@ interface ReportHostDetailElement {
     name?: string;
   };
   value?: string | number;
-  extra?: number; // only for closed cves. contains severity
+  extra?: number;
 }
 
 export interface ReportHostElement {
@@ -305,28 +305,8 @@ interface ErrorsReportElement {
   errors?: ErrorsElement;
 }
 
-interface ClosedCvesReportElement {
-  host?: ReportHostElement | ReportHostElement[];
-  closed_cves?: CountElement;
-}
-
 interface CvesReportElement {
   results?: ReportResultsElement;
-}
-
-export interface ReportClosedCve {
-  id: string;
-  cveId: string;
-  host: {
-    ip?: string;
-    id?: string;
-    name?: string;
-  };
-  source?: {
-    description?: string;
-    name?: string;
-  };
-  severity?: number;
 }
 
 export interface ReportActiveCve {
@@ -370,15 +350,6 @@ interface CvesEndpointContainer extends CveEndpointContainer {
 
 export interface CvesEndpointData {
   cves?: CvesEndpointContainer;
-  [key: string]: unknown;
-}
-
-interface ClosedCvesEndpointContainer extends CveEndpointContainer {
-  closed_cve?: CveEndpointElement | CveEndpointElement[];
-}
-
-export interface ClosedCvesEndpointData {
-  closed_cves?: ClosedCvesEndpointContainer;
   [key: string]: unknown;
 }
 
@@ -864,91 +835,6 @@ export const parseErrors = (
   };
 };
 
-export const parseClosedCves = (
-  report: ClosedCvesReportElement,
-  filter: Filter,
-): CollectionList<ReportClosedCve> => {
-  const {host: hosts, closed_cves: closedCves} = report;
-
-  if (!isDefined(closedCves)) {
-    return emptyCollectionList(filter);
-  }
-
-  // count doesn't fit to our counting of cves. we split the db rows with a csv
-  // list of cves into several cves.
-  // const {count: full_count} = closed_cves;
-
-  let cvesArray: ReportClosedCve[] = [];
-
-  forEach(hosts, host => {
-    let hostname: string | undefined;
-    const hostCves: Record<string, ReportClosedCve> = {};
-
-    forEach(host.detail, detail => {
-      const {name, value = '', extra, source} = detail;
-
-      if (isDefined(name)) {
-        if (name.startsWith('Closed CVE')) {
-          const cveHost = {
-            ip: host.ip,
-            id: isDefined(host.asset) ? host.asset._asset_id : undefined,
-          };
-          const severity = parseSeverity(extra);
-          (value as string).split(',').forEach(val => {
-            const cveId = val.trim();
-            const cve: ReportClosedCve = {
-              id: `${cveId}-${host.ip}-${source?.name}`,
-              cveId,
-              host: cveHost,
-              source,
-              severity,
-            };
-
-            const existingCve = hostCves[cveId];
-            if (
-              isDefined(existingCve) &&
-              isDefined(existingCve.severity) &&
-              (!isDefined(cve.severity) || existingCve.severity > cve.severity)
-            ) {
-              // always use highest severity
-              cve.severity = existingCve.severity;
-            }
-
-            hostCves[cveId] = cve;
-          });
-        } else if (name === 'hostname') {
-          // collect hostname
-          hostname = value as string | undefined;
-        }
-      }
-    });
-
-    if (isDefined(hostname)) {
-      for (const cve of Object.values(hostCves)) {
-        cve.host.name = hostname;
-      }
-    }
-
-    cvesArray = cvesArray.concat(Object.values(hostCves));
-  });
-
-  const {length: filteredCount} = cvesArray;
-
-  const counts = new CollectionCounts({
-    all: closedCves.count,
-    filtered: filteredCount,
-    first: 1,
-    length: filteredCount,
-    rows: filteredCount,
-  });
-
-  return {
-    counts,
-    entities: cvesArray,
-    filter,
-  };
-};
-
 export const parseCves = (
   report: CvesReportElement,
   filter: Filter,
@@ -1022,8 +908,8 @@ export const parseCves = (
 const parseCveEndpointElements = (
   elements: CveEndpointElement | CveEndpointElement[] | undefined,
   idField: 'name' | 'cve',
-): ReportClosedCve[] => {
-  const entities: ReportClosedCve[] = [];
+): ReportActiveCve[] => {
+  const entities: ReportActiveCve[] = [];
 
   forEach(elements, el => {
     const cveId = el[idField];
@@ -1047,10 +933,10 @@ const parseCveEndpointElements = (
 };
 
 const buildCveCollectionList = (
-  entities: ReportClosedCve[],
+  entities: ReportActiveCve[],
   container: CveEndpointContainer,
   filter: Filter,
-): CollectionList<ReportClosedCve> => {
+): CollectionList<ReportActiveCve> => {
   const {length: filteredCount} = entities;
 
   return {
@@ -1079,22 +965,4 @@ export const parseCvesFromEndpoint = (
   const entities = parseCveEndpointElements(cvesContainer.cve, 'name');
 
   return buildCveCollectionList(entities, cvesContainer, filter);
-};
-
-export const parseClosedCvesFromEndpoint = (
-  data: ClosedCvesEndpointData,
-  filter: Filter,
-): CollectionList<ReportClosedCve> => {
-  const {closed_cves: closedCvesContainer} = data;
-
-  if (!isDefined(closedCvesContainer)) {
-    return emptyCollectionList(filter);
-  }
-
-  const entities = parseCveEndpointElements(
-    closedCvesContainer.closed_cve,
-    'cve',
-  );
-
-  return buildCveCollectionList(entities, closedCvesContainer, filter);
 };

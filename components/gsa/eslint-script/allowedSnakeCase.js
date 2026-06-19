@@ -67,7 +67,6 @@ const allowedSnakeCase = [
   'change_privacy_password',
   'change_task',
   'client_address',
-  'closed_cves',
   'closed_note',
   'closed_time',
   'collection_count_parse_func',

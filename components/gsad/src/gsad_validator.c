@@ -133,7 +133,6 @@ gsad_init_validator ()
                      "|(get_port_lists)"
                      "|(get_report)"
                      "|(get_report_applications)"
-                     "|(get_report_closed_cves)"
                      "|(get_report_cves)"
                      "|(get_report_errors)"
                      "|(get_report_hosts)"
@@ -417,7 +416,7 @@ gsad_init_validator ()
                      "^([[:alnum:]_-]|%[%CcDFMmNTtUu])+$");
   gvm_validator_add (validator, "report_section",
                      "^(summary|results|hosts|ports"
-                     "|closed_cves|os|apps|errors"
+                     "|os|apps|errors"
                      "|topology|ssl_certs|cves)$");
   gvm_validator_add (validator, "resource_type", "(?s)^.*$");
   gvm_validator_add (validator, "param:name", "^(.*){0,400}$");

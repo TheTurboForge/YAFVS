@@ -774,21 +774,6 @@ resource_count (const char *type, const get_data_t *get)
         }
       return 0;
     }
-  else if (strcmp (type, "report_closed_cve") == 0)
-    {
-      report_t report;
-      const gchar *report_uuid = get_data_get_extra (get, "report_id");
-      if (!str_blank (report_uuid))
-        {
-          if (find_report_with_permission (report_uuid, &report, "get_reports"))
-            return 0;
-          if (report != 0)
-            {
-              return report_closed_cve_count (report);
-            }
-        }
-      return 0;
-    }
   else if (strcmp (type, "report_cve") == 0)
     {
       report_t report;

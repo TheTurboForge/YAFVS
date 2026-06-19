@@ -13108,10 +13108,6 @@ print_report_xml_start (report_t report, task_t task,
              report_host_count (report));
 
       PRINT (out,
-             "<closed_cves><count>%i</count></closed_cves>",
-             report_closed_cve_count (report));
-
-      PRINT (out,
              "<cves><count>%i</count></cves>",
              report_cves_count (report, get));
 

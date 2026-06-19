@@ -22,7 +22,6 @@
 #include "manage_get.h"
 #include "manage_integration_configs.h"
 #include "manage_report_applications.h"
-#include "manage_report_closed_cves.h"
 #include "manage_report_cves.h"
 #include "manage_report_vulns.h"
 #include "manage_report_errors.h"

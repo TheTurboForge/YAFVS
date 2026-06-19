@@ -31,7 +31,6 @@ const manualUrl = 'test/';
 
 const defaultSorting = {
   apps: {sortField: 'severity', sortReverse: true},
-  closedcves: {sortField: 'severity', sortReverse: true},
   cves: {sortField: 'severity', sortReverse: true},
   errors: {sortField: 'error', sortReverse: true},
   hosts: {sortField: 'severity', sortReverse: true},
@@ -124,7 +123,6 @@ const createMockProps = (overrides: Record<string, unknown> = {}) => {
     applicationsCounts: new CollectionCounts({all: 4, filtered: 4}),
     operatingSystemsCounts: new CollectionCounts({all: 2, filtered: 2}),
     cvesCounts: new CollectionCounts({all: 2, filtered: 2}),
-    closedCvesCounts: new CollectionCounts({all: 2, filtered: 2}),
     tlsCertificatesCounts: new CollectionCounts({all: 2, filtered: 2}),
     errorsCounts: new CollectionCounts({all: 2, filtered: 2}),
     showError: testing.fn(),
@@ -176,7 +174,6 @@ const containerEntity = Report.fromElement({
       comment: '',
       target: {_id: '159'},
     },
-    closed_cves: {count: 0},
     vulns: {count: 0},
     apps: {count: 0},
     os: {count: 0},
@@ -203,7 +200,6 @@ const zeroCounts = {
   applicationsCounts: new CollectionCounts({all: 0, filtered: 0}),
   operatingSystemsCounts: new CollectionCounts({all: 0, filtered: 0}),
   cvesCounts: new CollectionCounts({all: 0, filtered: 0}),
-  closedCvesCounts: new CollectionCounts({all: 0, filtered: 0}),
   tlsCertificatesCounts: new CollectionCounts({all: 0, filtered: 0}),
   errorsCounts: new CollectionCounts({all: 0, filtered: 0}),
 };
@@ -235,7 +231,7 @@ describe('DetailsContent', () => {
       // When entity is present, the component does NOT return the ErrorPanel early.
       // Instead it renders the full report view (tabs, toolbar, etc.)
       const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
     });
   });
 
@@ -384,7 +380,7 @@ describe('DetailsContent', () => {
   });
 
   describe('Tabs', () => {
-    test('should render all 12 tabs with correct names', () => {
+    test('should render all 11 tabs with correct names', () => {
       const props = createMockProps();
 
       const {render} = setupRenderer();
@@ -392,7 +388,7 @@ describe('DetailsContent', () => {
 
       const tablist = screen.getByRole('tablist');
       const tabs = within(tablist).getAllByRole('tab');
-      expect(tabs).toHaveLength(12);
+      expect(tabs).toHaveLength(11);
 
       within(tablist).getByRole('tab', {name: /^information/i});
       within(tablist).getByRole('tab', {name: /^results/i});
@@ -402,7 +398,6 @@ describe('DetailsContent', () => {
       within(tablist).getByRole('tab', {name: /^applications/i});
       within(tablist).getByRole('tab', {name: /^operating systems/i});
       within(tablist).getByRole('tab', {name: /^cves/i});
-      within(tablist).getByRole('tab', {name: /^closed cves/i});
       within(tablist).getByRole('tab', {name: /^tls certificates/i});
       within(tablist).getByRole('tab', {name: /^error messages/i});
       within(tablist).getByRole('tab', {name: /^user tags/i});
@@ -432,9 +427,6 @@ describe('DetailsContent', () => {
       ).toHaveTextContent('2 of 2');
       expect(
         within(tablist).getByRole('tab', {name: /^cves/i}),
-      ).toHaveTextContent('2 of 2');
-      expect(
-        within(tablist).getByRole('tab', {name: /^closed cves/i}),
       ).toHaveTextContent('2 of 2');
       expect(
         within(tablist).getByRole('tab', {name: /^tls certificates/i}),
@@ -579,19 +571,6 @@ describe('DetailsContent', () => {
       );
     });
 
-    test('should render ThresholdPanel for Closed CVEs tab when threshold exceeded', () => {
-      const props = createMockProps();
-
-      const {render} = setupRenderer({reportResultsThreshold: 1});
-      render(<DetailsContent {...props} />);
-
-      fireEvent.click(screen.getByRole('tab', {name: /^Closed CVEs/}));
-
-      screen.getByText(
-        /The Closed CVEs cannot be displayed in order to maintain the performance within the browser's capabilities/,
-      );
-    });
-
     test('should render ThresholdPanel for TLS Certificates tab when threshold exceeded', () => {
       const props = createMockProps();
 
@@ -649,7 +628,7 @@ describe('DetailsContent', () => {
 
       screen.getByText('Report:');
       const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
     });
   });
 
@@ -742,7 +721,7 @@ describe('DetailsContent', () => {
 
       // Tabs
       const tablist = screen.getByRole('tablist');
-      expect(within(tablist).getAllByRole('tab')).toHaveLength(12);
+      expect(within(tablist).getAllByRole('tab')).toHaveLength(11);
 
       // Powerfilter
       within(screen.getPowerFilter()).getByTitle('Loaded filter');

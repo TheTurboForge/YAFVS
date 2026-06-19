@@ -15,7 +15,6 @@ import type ReportHost from 'gmp/models/report/host';
 import type ReportOperatingSystem from 'gmp/models/report/os';
 import {
   parseApps,
-  parseClosedCves,
   parseCves,
   parseErrors,
   parseHosts,
@@ -32,7 +31,6 @@ import {
   type ReportHostElement,
   type ErrorsElement,
   type ReportError,
-  type ReportClosedCve,
 } from 'gmp/models/report/parser';
 import type ReportPort from 'gmp/models/report/port';
 import ReportTask from 'gmp/models/report/task';
@@ -69,7 +67,6 @@ export interface ReportReportTaskElement {
 export interface ReportReportElement extends ModelElement {
   _type?: ReportType;
   apps?: CountElement;
-  closed_cves?: CountElement;
   errors?: ErrorsElement;
   filters?: ReportFiltersElement;
   gmp?: {
@@ -139,7 +136,6 @@ interface ReportResultCounts {
 
 interface ReportReportProperties extends ModelProperties {
   applications?: CollectionList<ReportApp>;
-  closedCves?: CollectionList<ReportClosedCve>;
   cves?: CollectionList<ReportActiveCve>;
   errors?: CollectionList<ReportError>;
   filter?: Filter;
@@ -164,7 +160,6 @@ class ReportReport extends Model {
   static readonly entityType = 'report';
 
   readonly applications?: CollectionList<ReportApp>;
-  readonly closedCves?: CollectionList<ReportClosedCve>;
   readonly cves?: CollectionList<ReportActiveCve>;
   readonly errors?: CollectionList<ReportError>;
   readonly filter?: Filter;
@@ -186,7 +181,6 @@ class ReportReport extends Model {
 
   constructor({
     applications,
-    closedCves,
     cves,
     errors,
     filter,
@@ -216,7 +210,6 @@ class ReportReport extends Model {
     super(properties);
 
     this.applications = applications;
-    this.closedCves = closedCves;
     this.cves = cves;
     this.errors = errors;
     this.filter = filter;
@@ -271,7 +264,6 @@ class ReportReport extends Model {
     copy.operatingsystems = parseOperatingSystems(element, filter);
     copy.ports = parsePorts(element, filter);
     copy.cves = parseCves(element, filter);
-    copy.closedCves = parseClosedCves(element, filter);
     copy.errors = parseErrors(element, filter);
     copy.vulns = isDefined(element.vulns)
       ? new CollectionCounts({

@@ -130,6 +130,31 @@ async function firstHref(page, matcher) {
   return hrefs.find(href => matcher.test(href)) || null;
 }
 
+async function firstExpandedRowDetailHref(page, matcher) {
+  const tableCount = await page.getByTestId('entities-table').count().catch(() => 0);
+  if (!tableCount) return { href: null, reason: 'no-entities-table' };
+  const toggleCount = await page.getByTestId('row-details-toggle').count().catch(() => 0);
+  if (!toggleCount) return { href: null, reason: 'no-row-details-toggle' };
+
+  const toggle = page.getByTestId('row-details-toggle').first();
+  try {
+    await toggle.scrollIntoViewIfNeeded({ timeout: config.timeoutMs });
+    await toggle.click({ timeout: config.timeoutMs });
+  } catch (error) {
+    return { href: null, reason: 'row-details-toggle-click-failed', error: String(error) };
+  }
+
+  await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+  await page.waitForTimeout(300);
+  const href = await firstHref(page, matcher);
+  if (href) return { href, reason: 'expanded-row' };
+
+  const detailHrefs = await page.getByTestId('details-link')
+    .evaluateAll(anchors => anchors.map(anchor => anchor.getAttribute('href')).filter(Boolean))
+    .catch(() => []);
+  return { href: null, reason: detailHrefs.length ? 'details-link-mismatch' : 'no-details-link-after-expand', detailHrefs: detailHrefs.slice(0, 10) };
+}
+
 async function assertNativeSuccess(pathPattern, check) {
   const match = network.find(item => pathPattern.test(item.path) && item.status >= 200 && item.status < 300);
   add(match ? 'pass' : 'fail', check, match ? 'Expected native API response was observed.' : 'Expected native API response was not observed.', { pattern: String(pathPattern), responses: network.filter(item => pathPattern.test(item.path)).slice(-10) });
@@ -139,16 +164,23 @@ async function checkTopLevelRoute(page, route, check, nativePattern, detailPatte
   await gotoRoute(page, route, check);
   if (nativePattern) await assertNativeSuccess(nativePattern, `${check}.native-api`);
   if (!detailPattern) return;
-  const detailHref = await firstHref(page, detailPattern);
+  let detailHref = await firstHref(page, detailPattern);
+  let linkSource = 'visible-page-link';
+  let expandedDetails = null;
   if (!detailHref) {
-    add('warn', `${check}.detail-link`, 'No detail link was available from live data.', { route, detailPattern: String(detailPattern) });
+    expandedDetails = await firstExpandedRowDetailHref(page, detailPattern);
+    detailHref = expandedDetails.href;
+    linkSource = expandedDetails.reason;
+  }
+  if (!detailHref) {
+    add('warn', `${check}.detail-link`, 'No matching detail link was available from live data after checking visible and expanded row links.', { route, detailPattern: String(detailPattern), expandedDetails });
     return;
   }
   await page.goto(new URL(detailHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
   await screenshot(page, `${check}-detail`);
   const pathname = new URL(page.url()).pathname;
   const expected = detailPattern.test(pathname);
-  add(expected ? 'pass' : 'fail', `${check}.detail-route`, expected ? 'Detail link landed on the intended route class.' : 'Detail link landed on an unexpected route.', { href: detailHref, pathname });
+  add(expected ? 'pass' : 'fail', `${check}.detail-route`, expected ? 'Detail link landed on the intended route class.' : 'Detail link landed on an unexpected route.', { href: detailHref, pathname, linkSource });
   await assertNoAppError(page, `${check}.detail-app-error`);
   await assertNotUnexpectedTasks(page, `${check}.detail-not-tasks`);
 }

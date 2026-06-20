@@ -131,6 +131,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *host_prefix = "/api/v1/hosts/";
   const gchar *tls_certificates_path = "/api/v1/tls-certificates";
+  const gchar *tls_certificate_prefix = "/api/v1/tls-certificates/";
   const gchar *scanners_path = "/api/v1/scanners";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
   const gchar *filters_path = "/api/v1/filters";
@@ -234,6 +235,12 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, tls_certificates_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, tls_certificate_prefix))
+    {
+      const gchar *id = path + strlen (tls_certificate_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
 
   if (g_strcmp0 (path, scanners_path) == 0)
     return TRUE;

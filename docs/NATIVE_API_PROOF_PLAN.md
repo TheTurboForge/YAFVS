@@ -82,10 +82,11 @@ Host detail Information fields now read native metadata through the authenticate
 creation, delete identifier, User Tags, and GMP-only `details=1` behavior. The
 native metadata uses `hosts.uuid`, bounded safe identifier/source metadata, host
 OS associations, and latest whitelisted host details.
-Internal TLS Certificate detail metadata/source provenance is available for
-automation and smoke coverage only; the GSA detail route and certificate export
-behavior remain inherited until separate typed browser/detail and file-transfer
-contracts exist.
+TLS Certificate detail Information fields now read native metadata through the
+authenticated `gsad` proxy while inherited GMP context still owns certificate
+download bytes, User Tags, export, delete, and retained actions. The native
+detail remains read-only metadata/source provenance and intentionally excludes
+stored certificate bytes and file-transfer semantics.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.

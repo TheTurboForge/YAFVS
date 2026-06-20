@@ -51,6 +51,10 @@ interface NativeTlsCertificatesPayload {
   items?: NativeTlsCertificatePayload[];
 }
 
+export interface NativeTlsCertificateResponse {
+  tlsCertificate: TlsCertificate;
+}
+
 export interface NativeTlsCertificatesQuery {
   page: number;
   pageSize: number;
@@ -190,5 +194,19 @@ export const fetchNativeTlsCertificates = async (
     tlsCertificates,
     counts: nativeCounts(page, tlsCertificates.length),
     page,
+  };
+};
+
+export const fetchNativeTlsCertificate = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeTlsCertificateResponse> => {
+  const payload = await fetchNativeJson<NativeTlsCertificatePayload>(
+    gmp,
+    `api/v1/tls-certificates/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    tlsCertificate: nativeTlsCertificateToModel(payload),
   };
 };

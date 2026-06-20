@@ -171,6 +171,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NvtCatalogCollection'
+  /nvts/{nvt_id}:
+    get:
+      summary: Read one Security Information NVT catalog entry
+      description: Catalog-detail metadata backed by NVT feed metadata already imported into gvmd/PostgreSQL. This endpoint uses NVT numeric dotted OIDs and intentionally excludes preferences, selector/config expansion, export, feed-control, scanner-control, and write semantics.
+      parameters:
+        - $ref: '#/components/parameters/NvtId'
+      responses:
+        '200':
+          description: NVT catalog detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NvtCatalogDetail'
   /operating-systems:
     get:
       summary: List top-level operating-system assets
@@ -960,6 +973,14 @@ components:
       schema:
         type: string
         pattern: '^cpe:.+'
+    NvtId:
+      name: nvt_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^([0-9]+\.)+[0-9]+$'
+        maxLength: 128
     ScopeId:
       name: scope_id
       in: path
@@ -2978,6 +2999,24 @@ components:
         updated_at:
           type: string
           format: date-time
+    NvtCatalogDetail:
+      allOf:
+        - $ref: '#/components/schemas/NvtCatalogItem'
+        - type: object
+          required: [comment, summary, insight, affected, impact, detection]
+          properties:
+            comment:
+              type: string
+            summary:
+              type: string
+            insight:
+              type: string
+            affected:
+              type: string
+            impact:
+              type: string
+            detection:
+              type: string
     NvtEpss:
       type: object
       required: [score, percentile, cve, severity]

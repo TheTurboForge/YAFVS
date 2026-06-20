@@ -959,7 +959,8 @@ class TurboVASCtlTests(unittest.TestCase):
         for suffix in ("applications", "operating-systems", "tls-certificates"):
             self.assertIn(f"/scopes/{{scope_id}}/reports/{{scope_report_id}}/{suffix}", plan)
         self.assertIn("Completed Evidence Contracts", plan)
-        self.assertIn("live internal and browser-proxied endpoints", plan)
+        self.assertIn("live internal endpoints", plan)
+        self.assertIn("Browser-proxied coverage is noted below", plan)
         self.assertIn("complete native browser coverage for current scope-report evidence", plan)
         self.assertNotIn("not live endpoint promises yet", plan)
 

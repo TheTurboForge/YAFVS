@@ -104,7 +104,8 @@ that directly unlock migration away from GMP/XML.
 ## Completed Evidence Contracts
 
 The OpenAPI baseline names these scope-report detail collection contracts, and
-they are now live internal and browser-proxied endpoints:
+they are now live internal endpoints. Browser-proxied coverage is noted below
+where it exists:
 
 - `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/applications`
 - `GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/operating-systems`
@@ -135,6 +136,8 @@ they are now live internal and browser-proxied endpoints:
 - `GET /api/v1/schedules/{schedule_id}`
 - `GET /api/v1/report-formats`
 - `GET /api/v1/report-formats/{report_format_id}`
+- `GET /api/v1/nvts`
+- `GET /api/v1/nvts/{nvt_id}` catalog metadata only
 - `GET /api/v1/cert-bund-advisories`
 - `GET /api/v1/cert-bund-advisories/{advisory_id}` catalog metadata only
 - `GET /api/v1/dfn-cert-advisories`

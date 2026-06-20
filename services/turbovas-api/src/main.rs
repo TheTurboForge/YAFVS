@@ -491,6 +491,18 @@ struct NvtCatalogItem {
 }
 
 #[derive(Debug, Serialize)]
+struct NvtCatalogDetail {
+    #[serde(flatten)]
+    catalog: NvtCatalogItem,
+    comment: String,
+    summary: String,
+    insight: String,
+    affected: String,
+    impact: String,
+    detection: String,
+}
+
+#[derive(Debug, Serialize)]
 struct TlsCertificateItem {
     id: String,
     fingerprint_sha256: String,
@@ -1074,6 +1086,7 @@ async fn main() -> Result<(), ApiError> {
             get(dfn_cert_advisory_detail),
         )
         .route("/api/v1/nvts", get(nvt_catalog))
+        .route("/api/v1/nvts/:nvt_id", get(nvt_catalog_detail))
         .route("/api/v1/operating-systems", get(operating_system_assets))
         .route("/api/v1/hosts", get(host_assets))
         .route("/api/v1/tls-certificates", get(tls_certificate_assets))
@@ -3589,6 +3602,88 @@ fn nvt_filter_parts(raw: &str) -> (&'static str, String) {
         }
     }
     ("search", raw.to_string())
+}
+
+async fn nvt_catalog_detail(
+    State(state): State<AppState>,
+    Path(nvt_id): Path<String>,
+) -> Result<Json<NvtCatalogDetail>, ApiError> {
+    validate_nvt_oid(&nvt_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            r#"WITH nvt_row AS (
+             SELECT n.oid AS id,
+                    n.oid AS oid,
+                    coalesce(n.name, '') AS name,
+                    coalesce(n.comment, '') AS comment,
+                    coalesce(n.summary, '') AS summary,
+                    coalesce(n.insight, '') AS insight,
+                    coalesce(n.affected, '') AS affected,
+                    coalesce(n.impact, '') AS impact,
+                    coalesce(n.detection, '') AS detection,
+                    coalesce(n.family, '') AS family,
+                    coalesce(n.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(n.modification_time, 0)::bigint AS modified_at_unix,
+                    CASE
+                      WHEN coalesce(n.cvss_base, '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+                      THEN n.cvss_base::double precision
+                      ELSE 0::double precision
+                    END AS severity,
+                    coalesce(n.qod, 0)::bigint AS qod,
+                    coalesce(n.qod_type, '') AS qod_type,
+                    coalesce(n.solution_type, '') AS solution_type,
+                    coalesce(n.solution_method, '') AS solution_method,
+                    coalesce(n.solution, '') AS solution,
+                    coalesce(n.tag, '') AS tags,
+                    n.cve AS cve_text,
+                    n.epss_score::double precision AS epss_score,
+                    n.epss_percentile::double precision AS epss_percentile,
+                    coalesce(n.epss_cve, '') AS epss_cve,
+                    n.epss_severity::double precision AS epss_severity,
+                    n.max_epss_score::double precision AS max_epss_score,
+                    n.max_epss_percentile::double precision AS max_epss_percentile,
+                    coalesce(n.max_epss_cve, '') AS max_epss_cve,
+                    n.max_epss_severity::double precision AS max_epss_severity
+               FROM nvts n
+              WHERE n.oid = $1
+         ),
+         row_with_refs AS (
+             SELECT p.*,
+                    CASE
+                      WHEN cardinality(coalesce(refs.cves, ARRAY[]::text[])) > 0
+                      THEN refs.cves
+                      WHEN coalesce(p.cve_text, '') <> ''
+                      THEN regexp_split_to_array(p.cve_text, '\\s*,\\s*')
+                      ELSE ARRAY[]::text[]
+                    END AS cves,
+                    coalesce(refs.cert_refs, ARRAY[]::text[]) AS cert_refs,
+                    coalesce(refs.xrefs, ARRAY[]::text[]) AS xrefs
+               FROM nvt_row p
+               LEFT JOIN LATERAL (
+                   SELECT array_agg(vr.ref_id::text ORDER BY vr.ref_id)
+                            FILTER (WHERE vr.ref_id IS NOT NULL
+                                    AND lower(vr.type) IN ('cve', 'cve_id')) AS cves,
+                          array_agg(lower(vr.type) || ':' || vr.ref_id::text ORDER BY lower(vr.type), vr.ref_id)
+                            FILTER (WHERE vr.ref_id IS NOT NULL
+                                    AND lower(vr.type) IN ('dfn-cert', 'cert-bund')) AS cert_refs,
+                          array_agg(lower(vr.type) || ':' || vr.ref_id::text ORDER BY lower(vr.type), vr.ref_id)
+                            FILTER (WHERE vr.ref_id IS NOT NULL
+                                    AND lower(vr.type) NOT IN ('cve', 'cve_id', 'dfn-cert', 'cert-bund')) AS xrefs
+                     FROM vt_refs vr
+                    WHERE vr.vt_oid = p.oid
+               ) refs ON true
+         )
+         SELECT *, cardinality(cves)::bigint AS cve_refs FROM row_with_refs;"#,
+            &[&nvt_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "NVT catalog detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(nvt_catalog_detail_from_row(&row)))
 }
 
 async fn operating_system_assets(
@@ -6869,6 +6964,21 @@ fn validate_advisory_id(value: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
+fn validate_nvt_oid(value: &str) -> Result<(), ApiError> {
+    if value.is_empty()
+        || value.len() > 128
+        || value.split('.').count() < 2
+        || !value
+            .split('.')
+            .all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return Err(ApiError::BadRequest(
+            "path id must be a numeric dotted NVT OID".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn report_reference(id: Option<String>, name: Option<String>) -> Option<ReportReference> {
     let id = id?;
     let name = name.unwrap_or_else(|| id.clone());
@@ -7420,6 +7530,18 @@ fn nvt_catalog_from_row(row: &Row) -> NvtCatalogItem {
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
         updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn nvt_catalog_detail_from_row(row: &Row) -> NvtCatalogDetail {
+    NvtCatalogDetail {
+        catalog: nvt_catalog_from_row(row),
+        comment: row.get("comment"),
+        summary: row.get("summary"),
+        insight: row.get("insight"),
+        affected: row.get("affected"),
+        impact: row.get("impact"),
+        detection: row.get("detection"),
     }
 }
 
@@ -8012,6 +8134,20 @@ mod tests {
         assert!(validate_advisory_id("").is_err());
         assert!(validate_advisory_id("CB-K14/0001?download=true").is_err());
         assert!(validate_advisory_id("CB-K14/0001;drop").is_err());
+    }
+
+    #[test]
+    fn nvt_oid_validator_requires_bounded_numeric_dotted_oid() {
+        assert!(validate_nvt_oid("1.3.6.1.4.1.25623.1.0.100001").is_ok());
+        assert!(validate_nvt_oid("").is_err());
+        assert!(validate_nvt_oid("1").is_err());
+        assert!(validate_nvt_oid("1.3.6.").is_err());
+        assert!(validate_nvt_oid("1.3..6").is_err());
+        assert!(validate_nvt_oid("1.3.6.a").is_err());
+        assert!(validate_nvt_oid("1.3.6/1").is_err());
+        assert!(validate_nvt_oid("1.3.6?download=true").is_err());
+        assert!(validate_nvt_oid("1.3.6;drop").is_err());
+        assert!(validate_nvt_oid(&format!("1.{}", "2".repeat(128))).is_err());
     }
 
     #[test]

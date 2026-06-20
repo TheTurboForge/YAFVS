@@ -26,13 +26,14 @@ The first API phase is read-only and report-focused:
 - top-level asset/security metadata lists for results, vulnerabilities, CVE,
   CPE, and NVT catalog entries, operating systems, hosts, TLS certificates,
   and scanner metadata; browser-proxied detail Information metadata is
-  available for operating systems, hosts, TLS certificates, and scanners.
+  available for operating systems, hosts, TLS certificates, scanners, and scan
+  configs.
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
 - tag list and detail metadata reads, including resource type/count and value,
   inside authenticated operator access only.
-- scan-config list and metadata-detail reads, including family/NVT counts,
-  growth flags and predefined/deprecated state, inside
+- scan-config list and browser-proxied metadata-detail reads, including
+  family/NVT counts, growth flags and predefined/deprecated state, inside
   authenticated operator access only.
 - Security Information CERT-Bund and DFN-CERT advisory list reads plus
   internal catalog-detail metadata reads from imported PostgreSQL state.

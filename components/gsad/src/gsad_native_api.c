@@ -135,6 +135,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *scanners_path = "/api/v1/scanners";
   const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
+  const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *filters_path = "/api/v1/filters";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *tags_path = "/api/v1/tags";
@@ -254,6 +255,12 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, scan_configs_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, scan_config_prefix))
+    {
+      const gchar *id = path + strlen (scan_config_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
 
   if (g_strcmp0 (path, filters_path) == 0)
     return TRUE;

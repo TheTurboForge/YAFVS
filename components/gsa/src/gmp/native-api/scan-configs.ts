@@ -73,6 +73,10 @@ export interface NativeScanConfigsResponse {
   page: NativePage;
 }
 
+export interface NativeScanConfigResponse {
+  scanConfig: ScanConfig;
+}
+
 const SCAN_CONFIG_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   families_total: 'families_total',
@@ -245,5 +249,19 @@ export const fetchNativeScanConfigs = async (
     scanConfigs,
     counts: nativeCounts(page, scanConfigs.length),
     page,
+  };
+};
+
+export const fetchNativeScanConfig = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeScanConfigResponse> => {
+  const payload = await fetchNativeJson<NativeScanConfigPayload>(
+    gmp,
+    `api/v1/scan-configs/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    scanConfig: nativeScanConfigToModel(payload),
   };
 };

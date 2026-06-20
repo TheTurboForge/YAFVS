@@ -87,6 +87,14 @@ authenticated `gsad` proxy while inherited GMP context still owns certificate
 download bytes, User Tags, export, delete, and retained actions. The native
 detail remains read-only metadata/source provenance and intentionally excludes
 stored certificate bytes and file-transfer semantics.
+Scanner detail Information fields now read native metadata through the
+authenticated `gsad` proxy while inherited GMP context still owns verify,
+export/download, credential/certificate download context, User Tags, delete,
+clone, edit, and scanner-control behavior.
+Scan Config detail Information fields now read native metadata through the
+authenticated `gsad` proxy while inherited GMP context still owns preferences,
+family/NVT expansion, scanner reference context, task backlinks, User Tags,
+import/export, edit/delete actions, and writes.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.

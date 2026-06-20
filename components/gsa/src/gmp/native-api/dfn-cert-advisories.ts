@@ -58,6 +58,10 @@ export interface NativeDfnCertAdvisoriesResponse {
   page: NativePage;
 }
 
+export interface NativeDfnCertAdvisoryResponse {
+  dfncert: DfnCertAdv;
+}
+
 const DFN_CERT_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   title: 'title',
@@ -190,5 +194,19 @@ export const fetchNativeDfnCertAdvisories = async (
     dfncerts,
     counts: nativeCounts(page, dfncerts.length),
     page,
+  };
+};
+
+export const fetchNativeDfnCertAdvisory = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeDfnCertAdvisoryResponse> => {
+  const payload = await fetchNativeJson<NativeDfnCertAdvisoryPayload>(
+    gmp,
+    `api/v1/dfn-cert-advisories/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    dfncert: nativeDfnCertAdvisoryToModel(payload),
   };
 };

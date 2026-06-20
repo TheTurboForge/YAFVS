@@ -58,6 +58,10 @@ export interface NativeCertBundAdvisoriesResponse {
   page: NativePage;
 }
 
+export interface NativeCertBundAdvisoryResponse {
+  certbund: CertBundAdv;
+}
+
 const CERT_BUND_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   title: 'title',
@@ -195,5 +199,19 @@ export const fetchNativeCertBundAdvisories = async (
     certbunds,
     counts: nativeCounts(page, certbunds.length),
     page,
+  };
+};
+
+export const fetchNativeCertBundAdvisory = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeCertBundAdvisoryResponse> => {
+  const payload = await fetchNativeJson<NativeCertBundAdvisoryPayload>(
+    gmp,
+    `api/v1/cert-bund-advisories/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    certbund: nativeCertBundAdvisoryToModel(payload),
   };
 };

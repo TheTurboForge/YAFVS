@@ -145,6 +145,80 @@ is_nvt_oid_segment (const gchar *value, gsize length)
 }
 
 static gboolean
+is_advisory_id_char (gchar value)
+{
+  return g_ascii_isalnum (value) || value == '-' || value == '_' || value == '.'
+         || value == ':' || value == '/';
+}
+
+static gint
+hex_value (gchar value)
+{
+  if (value >= '0' && value <= '9')
+    return value - '0';
+  if (value >= 'a' && value <= 'f')
+    return value - 'a' + 10;
+  if (value >= 'A' && value <= 'F')
+    return value - 'A' + 10;
+  return -1;
+}
+
+static gboolean
+is_advisory_id_segment (const gchar *value, gsize length)
+{
+  gsize decoded_length = 0;
+  gsize segment_length = 0;
+  gboolean segment_all_dots = TRUE;
+
+  if (value == NULL || length == 0 || length > 768)
+    return FALSE;
+
+  for (gsize i = 0; i < length; i++)
+    {
+      gchar decoded = value[i];
+
+      if (decoded == '%')
+        {
+          gint high;
+          gint low;
+
+          if (i + 2 >= length)
+            return FALSE;
+
+          high = hex_value (value[i + 1]);
+          low = hex_value (value[i + 2]);
+          if (high < 0 || low < 0)
+            return FALSE;
+
+          decoded = (gchar) ((high << 4) | low);
+          i += 2;
+        }
+
+      if (!is_advisory_id_char (decoded))
+        return FALSE;
+
+      decoded_length++;
+      if (decoded_length > 256)
+        return FALSE;
+
+      if (decoded == '/')
+        {
+          if (segment_length == 0 || segment_all_dots)
+            return FALSE;
+          segment_length = 0;
+          segment_all_dots = TRUE;
+          continue;
+        }
+
+      segment_length++;
+      if (decoded != '.')
+        segment_all_dots = FALSE;
+    }
+
+  return segment_length > 0 && !segment_all_dots;
+}
+
+static gboolean
 native_api_path_is_allowed (const gchar *path)
 {
   const gchar *raw_reports_path = "/api/v1/reports";
@@ -156,7 +230,9 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *cves_path = "/api/v1/cves";
   const gchar *cve_prefix = "/api/v1/cves/";
   const gchar *cert_bund_advisories_path = "/api/v1/cert-bund-advisories";
+  const gchar *cert_bund_advisory_prefix = "/api/v1/cert-bund-advisories/";
   const gchar *dfn_cert_advisories_path = "/api/v1/dfn-cert-advisories";
+  const gchar *dfn_cert_advisory_prefix = "/api/v1/dfn-cert-advisories/";
   const gchar *nvts_path = "/api/v1/nvts";
   const gchar *nvt_prefix = "/api/v1/nvts/";
   const gchar *operating_systems_path = "/api/v1/operating-systems";
@@ -245,8 +321,20 @@ native_api_path_is_allowed (const gchar *path)
   if (g_strcmp0 (path, cert_bund_advisories_path) == 0)
     return TRUE;
 
+  if (g_str_has_prefix (path, cert_bund_advisory_prefix))
+    {
+      const gchar *id = path + strlen (cert_bund_advisory_prefix);
+      return is_advisory_id_segment (id, strlen (id));
+    }
+
   if (g_strcmp0 (path, dfn_cert_advisories_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, dfn_cert_advisory_prefix))
+    {
+      const gchar *id = path + strlen (dfn_cert_advisory_prefix);
+      return is_advisory_id_segment (id, strlen (id));
+    }
 
   if (g_strcmp0 (path, nvts_path) == 0)
     return TRUE;

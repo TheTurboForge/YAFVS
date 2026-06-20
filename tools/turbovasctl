@@ -2641,6 +2641,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA Security Information CPE detail (migrated through gsad same-origin proxy)", "read-only CPE catalog automation"],
             },
             {
+                "endpoint": "/api/v1/nvts",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Security Information NVT list (migrated through gsad same-origin proxy)", "read-only NVT catalog automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/cert-bund-advisories",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Security Information CERT-Bund advisory list (migrated through gsad same-origin proxy)", "read-only CERT-Bund advisory automation", "native-api-request helper"],
@@ -5833,6 +5838,21 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             findings.append(finding("fail", "native-api.cpe-detail", "CPE catalog list did not include a CPE id for the detail probe."))
     else:
         findings.append(finding("warn", "native-api.cpe-detail", "No CPEs exist yet, so the CPE detail probe was skipped."))
+
+    nvts = native_api_curl(repo_root, "/api/v1/nvts?page_size=1&sort=-created")
+    nvts_json = parse_json_output(nvts)
+    details["nvts"] = summarize_native_api_response(nvts_json)
+    nvt_items = nvts_json.get("items", []) if isinstance(nvts_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if nvts.returncode == 0 and isinstance(nvt_items, list) else "fail",
+            "native-api.nvts",
+            f"Native API Security Information NVT catalog probe exit code {nvts.returncode}.",
+            nvts,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/nvts?page_size=1"),
+            nvts_json,
+        )
+    )
 
     dfn_cert_advisories = native_api_curl(repo_root, "/api/v1/dfn-cert-advisories?page_size=1&sort=-created")
     dfn_cert_advisories_json = parse_json_output(dfn_cert_advisories)

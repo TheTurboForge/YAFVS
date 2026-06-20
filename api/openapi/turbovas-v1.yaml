@@ -129,6 +129,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DfnCertAdvisoryCollection'
+  /nvts:
+    get:
+      summary: List Security Information NVTs
+      description: Searchable NVT catalog backed by gvmd/PostgreSQL feed metadata. This list contract is intentionally separate from rich NVT detail, preferences, and export behavior, which remain inherited until a separate typed contract is designed.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: NVT catalog collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NvtCatalogCollection'
   /operating-systems:
     get:
       summary: List top-level operating-system assets
@@ -1029,6 +1045,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CertBundAdvisory'
+    NvtCatalogCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NvtCatalogItem'
     ReportHostCollection:
       type: object
       required: [page, items]
@@ -2508,6 +2534,72 @@ components:
         updated_at:
           type: string
           format: date-time
+    NvtCatalogItem:
+      type: object
+      required: [id, oid, name, family, severity, qod, qod_type, solution_type, solution_method, solution, tags, cve_refs, cves, cert_refs, xrefs]
+      properties:
+        id:
+          type: string
+        oid:
+          type: string
+        name:
+          type: string
+        family:
+          type: string
+        severity:
+          type: number
+        qod:
+          type: integer
+        qod_type:
+          type: string
+        solution_type:
+          type: string
+        solution_method:
+          type: string
+        solution:
+          type: string
+        tags:
+          type: string
+        cve_refs:
+          type: integer
+        cves:
+          type: array
+          items:
+            type: string
+            pattern: '^CVE-[0-9]{4}-[0-9]{4,}$'
+        cert_refs:
+          type: array
+          items:
+            type: string
+        xrefs:
+          type: array
+          items:
+            type: string
+        max_epss:
+          $ref: '#/components/schemas/NvtEpss'
+        max_severity:
+          $ref: '#/components/schemas/NvtEpss'
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    NvtEpss:
+      type: object
+      required: [score, percentile, cve, severity]
+      properties:
+        score:
+          type: number
+        percentile:
+          type: number
+        cve:
+          type: string
+        severity:
+          type: number
     TlsCertificate:
       type: object
       required: [id]

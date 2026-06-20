@@ -269,6 +269,7 @@ function focusedRouteCatalog() {
     { label: 'vulnerabilities', path: '/vulnerabilities', nativePath: '/api/v1/vulnerabilities', nativeCheck: 'vulnerability.list-native-api', nativePass: 'Top-level Vulnerabilities list loaded through same-origin native API.', nativeFail: 'Top-level Vulnerabilities list did not produce a successful same-origin native API response.' },
     { label: 'cves', path: '/cves', nativePath: '/api/v1/cves', nativeCheck: 'cve.list-native-api', nativePass: 'Security Information CVE list loaded through same-origin native API.', nativeFail: 'Security Information CVE list did not produce a successful same-origin native API response.' },
     { label: 'cpes', path: '/cpes', nativePath: '/api/v1/cpes', nativeCheck: 'cpe.list-native-api', nativePass: 'Security Information CPE list loaded through same-origin native API.', nativeFail: 'Security Information CPE list did not produce a successful same-origin native API response.' },
+    { label: 'nvts', path: '/nvts', nativePath: '/api/v1/nvts', nativeCheck: 'nvt.list-native-api', nativePass: 'Security Information NVT list loaded through same-origin native API.', nativeFail: 'Security Information NVT list did not produce a successful same-origin native API response.', aliases: ['nvt'] },
     { label: 'operating-systems', path: '/operating-systems', nativePath: '/api/v1/operating-systems', nativeCheck: 'operating-system.list-native-api', nativePass: 'Top-level Operating Systems list loaded through same-origin native API.', nativeFail: 'Top-level Operating Systems list did not produce a successful same-origin native API response.' },
     { label: 'hosts', path: '/hosts', nativePath: '/api/v1/hosts', nativeCheck: 'host.list-native-api', nativePass: 'Top-level Hosts list loaded through same-origin native API.', nativeFail: 'Top-level Hosts list did not produce a successful same-origin native API response.' },
     { label: 'tls-certificates', path: '/tls-certificates', nativePath: '/api/v1/tls-certificates', nativeCheck: 'tls-certificate.list-native-api', nativePass: 'Top-level TLS Certificates list loaded through same-origin native API.', nativeFail: 'Top-level TLS Certificates list did not produce a successful same-origin native API response.' },
@@ -367,7 +368,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats', '/api/v1/report-configs', '/api/v1/cert-bund-advisories', '/api/v1/dfn-cert-advisories'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/nvts', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats', '/api/v1/report-configs', '/api/v1/cert-bund-advisories', '/api/v1/dfn-cert-advisories'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)

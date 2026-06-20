@@ -125,6 +125,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *cve_prefix = "/api/v1/cves/";
   const gchar *cert_bund_advisories_path = "/api/v1/cert-bund-advisories";
   const gchar *dfn_cert_advisories_path = "/api/v1/dfn-cert-advisories";
+  const gchar *nvts_path = "/api/v1/nvts";
   const gchar *operating_systems_path = "/api/v1/operating-systems";
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *tls_certificates_path = "/api/v1/tls-certificates";
@@ -200,6 +201,9 @@ native_api_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, dfn_cert_advisories_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, nvts_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, operating_systems_path) == 0)

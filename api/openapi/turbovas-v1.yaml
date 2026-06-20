@@ -287,6 +287,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScannerAssetCollection'
+  /scanners/{scanner_id}:
+    get:
+      summary: Read one scanner metadata record
+      description: Read-only scanner metadata backed by gvmd/PostgreSQL. Credential secrets, scanner CA material, live scanner status, verify/control operations, export/download behavior, and writes are intentionally excluded.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      responses:
+        '200':
+          description: Scanner metadata detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAsset'
   /filters:
     get:
       summary: List saved filters
@@ -1036,6 +1049,13 @@ components:
         format: uuid
     TlsCertificateId:
       name: certificate_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ScannerId:
+      name: scanner_id
       in: path
       required: true
       schema:

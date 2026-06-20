@@ -1027,6 +1027,27 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/tls-certificates/{certificate_id}', native_tooling)
         self.assertIn('native-api.tls-certificate-detail', native_tooling)
 
+    def test_scanner_asset_detail_contract_is_internal_metadata_only(self):
+        root = Path(__file__).resolve().parents[2]
+        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
+        api_source = (root / "services" / "turbovas-api" / "src" / "main.rs").read_text(encoding="utf-8")
+        native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
+        scanner_detail_source = api_source.split("async fn scanner_asset_detail", 1)[1].split("fn scan_config_asset_from_row", 1)[0]
+
+        self.assertIn('/api/v1/scanners/:scanner_id', api_source)
+        self.assertIn('let scanner_id = parse_uuid(&scanner_id)?.to_string();', api_source)
+        self.assertIn('WHERE s.uuid = $1', scanner_detail_source)
+        self.assertIn('LEFT JOIN credentials c ON c.id = s.credential', scanner_detail_source)
+        self.assertIn('nullif(c.uuid, \'\') AS credential_id', scanner_detail_source)
+        self.assertIn('nullif(c.name, \'\') AS credential_name', scanner_detail_source)
+        self.assertNotIn('ca_pub', scanner_detail_source)
+        self.assertNotIn('credential_value', scanner_detail_source)
+        self.assertNotIn('password', scanner_detail_source)
+        self.assertIn('/scanners/{scanner_id}:', openapi)
+        self.assertIn("#/components/parameters/ScannerId", openapi)
+        self.assertIn('/api/v1/scanners/{scanner_id}', native_tooling)
+        self.assertIn('native-api.scanner-detail', native_tooling)
+
     def test_redis_reference_summary_separates_scanner_and_generic_paths(self):
         references = [
             {"path": "compose/dev.yaml", "category": "scanner_kb", "markers": ["redis-openvas"]},

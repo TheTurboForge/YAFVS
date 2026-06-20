@@ -2955,6 +2955,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA top-level Scanners list (migrated through gsad same-origin proxy)", "read-only scanner metadata automation", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/scanners/{scanner_id}",
+                "status": "implemented_internal",
+                "replacement_candidates": ["read-only scanner metadata automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/scan-configs",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Scan Configs list (migrated through gsad same-origin proxy)", "read-only scan-config metadata automation", "native-api-request helper"],
@@ -6410,6 +6415,28 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             scanners_json,
         )
     )
+    if scanner_items:
+        first_scanner = scanner_items[0]
+        scanner_detail_id = first_scanner.get("id") if isinstance(first_scanner, dict) else None
+        if scanner_detail_id:
+            scanner_detail_path = f"/api/v1/scanners/{urllib.parse.quote(str(scanner_detail_id), safe='')}"
+            scanner_detail = native_api_curl(repo_root, scanner_detail_path)
+            scanner_detail_json = parse_json_output(scanner_detail)
+            details["scanner_detail"] = summarize_native_api_response(scanner_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if scanner_detail.returncode == 0 and isinstance(scanner_detail_json, dict) and scanner_detail_json.get("id") == scanner_detail_id else "fail",
+                    "native-api.scanner-detail",
+                    f"Native API top-level Scanner detail probe exit code {scanner_detail.returncode}.",
+                    scanner_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scanners/..."),
+                    scanner_detail_json,
+                )
+            )
+        else:
+            findings.append(finding("fail", "native-api.scanner-detail", "Scanners list did not include a scanner id for the detail probe."))
+    else:
+        findings.append(finding("warn", "native-api.scanner-detail", "No Scanners exist yet, so the detail probe was skipped."))
 
     filters = native_api_curl(repo_root, "/api/v1/filters?page_size=1&sort=name")
     filters_json = parse_json_output(filters)

@@ -1183,6 +1183,7 @@ async fn main() -> Result<(), ApiError> {
             get(tls_certificate_asset_detail),
         )
         .route("/api/v1/scanners", get(scanner_assets))
+        .route("/api/v1/scanners/:scanner_id", get(scanner_asset_detail))
         .route("/api/v1/scan-configs", get(scan_config_assets))
         .route(
             "/api/v1/scan-configs/:scan_config_id",
@@ -1907,6 +1908,41 @@ async fn scanner_assets(
         page: params.page_info(total),
         items,
     }))
+}
+
+async fn scanner_asset_detail(
+    State(state): State<AppState>,
+    Path(scanner_id): Path<String>,
+) -> Result<Json<ScannerAssetItem>, ApiError> {
+    let scanner_id = parse_uuid(&scanner_id)?.to_string();
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            r#"SELECT s.uuid AS id,
+                      coalesce(s.name, '') AS name,
+                      coalesce(s.comment, '') AS comment,
+                      coalesce(s.host, '') AS host,
+                      coalesce(s.port, 0)::bigint AS port,
+                      coalesce(s.type, 0)::bigint AS scanner_type,
+                      nullif(c.uuid, '') AS credential_id,
+                      nullif(c.name, '') AS credential_name,
+                      nullif(s.relay_host, '') AS relay_host,
+                      coalesce(s.relay_port, 0)::bigint AS relay_port,
+                      coalesce(s.creation_time, 0)::bigint AS created_at_unix,
+                      coalesce(s.modification_time, 0)::bigint AS modified_at_unix
+                 FROM scanners s
+            LEFT JOIN credentials c ON c.id = s.credential
+                WHERE s.uuid = $1
+                LIMIT 1;"#,
+            &[&scanner_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scanner asset detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(scanner_asset_from_row(&row)))
 }
 
 fn scan_config_asset_from_row(row: &Row) -> ScanConfigAssetItem {

@@ -6,18 +6,19 @@
 import React from 'react';
 import SeverityBar from 'web/components/bar/SeverityBar';
 import DateTime from 'web/components/date/DateTime';
-import DetailsLink from 'web/components/link/DetailsLink';
 import Link from 'web/components/link/Link';
 import Qod from 'web/components/qod/Qod';
 import TableData from 'web/components/table/TableData';
 import TableRow from 'web/components/table/TableRow';
 import EntitiesActions from 'web/entities/EntitiesActions';
+import RowDetailsToggle from 'web/entities/RowDetailsToggle';
 import PropTypes from 'web/utils/PropTypes';
 
 const Row = ({
   actionsComponent: ActionsComponent = EntitiesActions,
   entity,
   links = true,
+  onToggleDetailsClick,
   ...props
 }) => {
   const {results = {}, hosts = {}} = entity;
@@ -25,9 +26,9 @@ const Row = ({
     <TableRow>
       <TableData>
         <span>
-          <DetailsLink id={entity.id} textOnly={!links} type="nvt">
+          <RowDetailsToggle name={entity.id} onClick={onToggleDetailsClick}>
             {entity.name}
-          </DetailsLink>
+          </RowDetailsToggle>
         </span>
       </TableData>
       <TableData>
@@ -59,6 +60,7 @@ Row.propTypes = {
   actionsComponent: PropTypes.component,
   entity: PropTypes.object.isRequired,
   links: PropTypes.bool,
+  onToggleDetailsClick: PropTypes.func.isRequired,
 };
 
 export default Row;

@@ -11,6 +11,8 @@ import TableRow from 'web/components/table/TableRow';
 import createEntitiesFooter from 'web/entities/createEntitiesFooter';
 import createEntitiesTable from 'web/entities/createEntitiesTable';
 import withEntitiesHeader from 'web/entities/withEntitiesHeader';
+import withRowDetails from 'web/entities/withRowDetails';
+import VulnerabilityDetails from 'web/pages/vulns/Details';
 import VulnsRow from 'web/pages/vulns/Row';
 import PropTypes from 'web/utils/PropTypes';
 
@@ -112,7 +114,7 @@ export const VulnsTable = createEntitiesTable({
   header: VulnsHeader,
   footer: Footer,
   row: VulnsRow,
-  toggleDetailsIcon: false,
+  rowDetails: withRowDetails('nvt', 8)(VulnerabilityDetails),
 });
 
 export default VulnsTable;

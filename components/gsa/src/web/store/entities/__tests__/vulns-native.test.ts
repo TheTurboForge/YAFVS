@@ -72,4 +72,38 @@ describe('native API vulnerabilities list', () => {
       },
     );
   });
+
+  test('maps native page offsets into inherited pagination counts', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 2, page_size: 25, total: 533, sort: '-severity', filter: ''},
+        items: [
+          {
+            id: '1.3.6.1.4.1.25623.1.0.900026',
+            name: 'Second page vulnerability',
+            severity: 8.1,
+            qod: 90,
+            result_count: 1,
+            host_count: 1,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+
+    const response = await fetchNativeVulnerabilities(createGmp(), {
+      page: 2,
+      pageSize: 25,
+      sort: '-severity',
+      filter: '',
+    });
+
+    expect(response.counts.first).toEqual(26);
+    expect(response.counts.last).toEqual(26);
+    expect(response.counts.filtered).toEqual(533);
+    expect(response.counts.hasPrevious()).toEqual(true);
+    expect(response.counts.hasNext()).toEqual(true);
+  });
 });

@@ -115,6 +115,7 @@ export const nativeCvesQueryFromFilter = (filter?: Filter): NativeCvesQuery => {
 
 const nativeCounts = (page: NativePage, length: number): CollectionCounts =>
   new CollectionCounts({
+    first: page.total > 0 ? (page.page - 1) * page.page_size + 1 : 0,
     all: page.total,
     filtered: page.total,
     length,

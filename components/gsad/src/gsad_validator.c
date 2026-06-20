@@ -381,6 +381,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "optional_number", "^[0-9]*$");
   gvm_validator_add (validator, "oid", "^([0-9.]{1,80}|CVE-[-0-9]{1,14})$");
   gvm_validator_add (validator, "page", "^[_[:alnum:] ]+$");
+  gvm_validator_add (validator, "page_size", "^[0-9]+$");
   gvm_validator_add (validator, "package_format", "^(pem|key|rpm|deb|exe)$");
   gvm_validator_add (validator, "password", "^.*$");
   gvm_validator_add (validator, "password:value", "(?s)^.*$");
@@ -445,6 +446,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "type", "^(assets)$");
   gvm_validator_add (validator, "search_phrase",
                      "^[[:alnum:][:punct:] äöüÄÖÜß]*$");
+  gvm_validator_add (validator, "sort", "^-?[_[:alpha:]][_[:alnum:]]*$");
   gvm_validator_add (validator, "sort_field", "^[_[:alnum:] ]+$");
   gvm_validator_add (validator, "sort_order", "^(ascending|descending)$");
   gvm_validator_add (validator, "sort_stat", "^[_[:alnum:] ]+$");

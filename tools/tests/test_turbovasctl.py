@@ -582,6 +582,7 @@ class TurboVASCtlTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         request_router = (root / "components" / "gsad" / "src" / "gsad_http_handle_request.c").read_text(encoding="utf-8")
         native_api = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
+        validator = (root / "components" / "gsad" / "src" / "gsad_validator.c").read_text(encoding="utf-8")
         cmake = (root / "components" / "gsad" / "src" / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn('"^/api/v1/.+$"', request_router)
         self.assertIn("gsad_http_handle_setup_user", request_router)
@@ -614,6 +615,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('append_query_param (target, params, "page_size")', native_api)
         self.assertIn('append_query_param (target, params, "sort")', native_api)
         self.assertIn('append_query_param (target, params, "filter")', native_api)
+        self.assertIn('gvm_validator_add (validator, "page_size", "^[0-9]+$");', validator)
+        self.assertIn('gvm_validator_add (validator, "sort", "^-?[_[:alpha:]][_[:alnum:]]*$");', validator)
         self.assertNotIn('append_query_param (target, params, "token")', native_api)
         self.assertNotIn("MHD_POSTDATA_KIND", native_api)
 

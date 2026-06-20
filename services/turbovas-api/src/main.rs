@@ -436,6 +436,21 @@ struct DfnCertAdvisoryItem {
 }
 
 #[derive(Debug, Serialize)]
+struct CertBundAdvisoryItem {
+    id: String,
+    name: String,
+    comment: String,
+    title: String,
+    summary: String,
+    severity: f64,
+    cve_refs: i64,
+    cves: Vec<String>,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct TlsCertificateItem {
     id: String,
     fingerprint_sha256: String,
@@ -885,6 +900,7 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/cpes/*cpe_id", get(cpe_catalog_detail))
         .route("/api/v1/cves", get(cve_catalog))
         .route("/api/v1/cves/:cve_id", get(cve_catalog_detail))
+        .route("/api/v1/cert-bund-advisories", get(cert_bund_advisories))
         .route("/api/v1/dfn-cert-advisories", get(dfn_cert_advisories))
         .route("/api/v1/operating-systems", get(operating_system_assets))
         .route("/api/v1/hosts", get(host_assets))
@@ -2648,6 +2664,76 @@ async fn dfn_cert_advisories(
         .map(|row| row.get::<_, i64>("total"))
         .unwrap_or(0);
     let items = rows.iter().map(dfn_cert_advisory_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn cert_bund_advisories(
+    State(state): State<AppState>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<CertBundAdvisoryItem>>, ApiError> {
+    let params = normalize_collection_query(query, "-created")?;
+    let sort_sql = sort_clause(
+        &params.sort,
+        &[
+            ("id", "id"),
+            ("name", "name"),
+            ("title", "title"),
+            ("summary", "summary"),
+            ("created", "created_at_unix"),
+            ("modified", "modified_at_unix"),
+            ("cves", "cve_refs"),
+            ("severity", "severity"),
+        ],
+    )?;
+    let sql = format!(
+        r#"WITH advisory_rows AS (
+             SELECT d.uuid AS id,
+                    d.name AS name,
+                    coalesce(d.comment, '') AS comment,
+                    coalesce(d.title, '') AS title,
+                    coalesce(d.summary, '') AS summary,
+                    coalesce(d.severity, 0)::double precision AS severity,
+                    coalesce(d.cve_refs, 0)::bigint AS cve_refs,
+                    coalesce(d.creation_time, 0)::bigint AS created_at_unix,
+                    coalesce(d.modification_time, 0)::bigint AS modified_at_unix,
+                    coalesce(array_agg(dc.cve_name::text ORDER BY dc.cve_name)
+                      FILTER (WHERE dc.cve_name IS NOT NULL), ARRAY[]::text[]) AS cves
+               FROM cert.cert_bund_advs d
+               LEFT JOIN cert.cert_bund_cves dc ON dc.adv_id = d.id
+              GROUP BY d.uuid, d.name, d.comment, d.title, d.summary,
+                       d.severity, d.cve_refs, d.creation_time,
+                       d.modification_time
+         ),
+         filtered AS (
+             SELECT * FROM advisory_rows
+              WHERE ($1 = ''
+                     OR lower(id) LIKE '%' || lower($1) || '%'
+                     OR lower(name) LIKE '%' || lower($1) || '%'
+                     OR lower(title) LIKE '%' || lower($1) || '%'
+                     OR lower(summary) LIKE '%' || lower($1) || '%'
+                     OR EXISTS (
+                         SELECT 1 FROM unnest(cves) AS cve_name
+                          WHERE lower(cve_name) LIKE '%' || lower($1) || '%'))
+         )
+         SELECT count(*) OVER()::bigint AS total, * FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "CERT-Bund advisory list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(cert_bund_advisory_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),
         items,
@@ -6417,6 +6503,22 @@ fn catalog_cpe_from_row(
 
 fn dfn_cert_advisory_from_row(row: &Row) -> DfnCertAdvisoryItem {
     DfnCertAdvisoryItem {
+        id: row.get("id"),
+        name: row.get("name"),
+        comment: row.get("comment"),
+        title: row.get("title"),
+        summary: row.get("summary"),
+        severity: row.get("severity"),
+        cve_refs: row.get("cve_refs"),
+        cves: row.get("cves"),
+        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
+        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn cert_bund_advisory_from_row(row: &Row) -> CertBundAdvisoryItem {
+    CertBundAdvisoryItem {
         id: row.get("id"),
         name: row.get("name"),
         comment: row.get("comment"),

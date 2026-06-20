@@ -592,6 +592,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/ports", native_api)
         self.assertIn("/cves", native_api)
         self.assertIn("/cpes", native_api)
+        self.assertIn("/api/v1/cert-bund-advisories", native_api)
         self.assertIn("/api/v1/dfn-cert-advisories", native_api)
         self.assertIn("/errors", native_api)
         self.assertIn("native_api_request_target", native_api)
@@ -611,7 +612,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("runtime-browser-smoke", source)
         self.assertIn("raw-report.list-native-api", browser_smoke)
         self.assertIn("scope.list-native-api", browser_smoke)
+        self.assertIn("cert-bund-advisory.list-native-api", browser_smoke)
         self.assertIn("Raw-report list loaded through same-origin native API", browser_smoke)
+        self.assertIn("browser_smoke.add_argument(\"--route\"", source)
+        self.assertIn('args.extend(["--route", route])', source)
         self.assertIn("runtime-browser-smoke *args:", justfile)
         self.assertIn('tools/turbovasctl runtime-browser-smoke "$@"', justfile)
 
@@ -781,6 +785,7 @@ class TurboVASCtlTests(unittest.TestCase):
         endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/cpes", endpoints)
         self.assertIn("/api/v1/cpes/{cpe_id}", endpoints)
+        self.assertIn("/api/v1/cert-bund-advisories", endpoints)
         self.assertIn("/api/v1/dfn-cert-advisories", endpoints)
         self.assertIn("/api/v1/reports", endpoints)
         self.assertIn("/api/v1/reports/{report_id}", endpoints)

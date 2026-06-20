@@ -2641,6 +2641,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA Security Information CPE detail (migrated through gsad same-origin proxy)", "read-only CPE catalog automation"],
             },
             {
+                "endpoint": "/api/v1/cert-bund-advisories",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Security Information CERT-Bund advisory list (migrated through gsad same-origin proxy)", "read-only CERT-Bund advisory automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/dfn-cert-advisories",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Security Information DFN-CERT advisory list (migrated through gsad same-origin proxy)", "read-only DFN-CERT advisory automation", "native-api-request helper"],
@@ -5844,6 +5849,21 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
         )
     )
 
+    cert_bund_advisories = native_api_curl(repo_root, "/api/v1/cert-bund-advisories?page_size=1&sort=-created")
+    cert_bund_advisories_json = parse_json_output(cert_bund_advisories)
+    details["cert_bund_advisories"] = summarize_native_api_response(cert_bund_advisories_json)
+    cert_bund_items = cert_bund_advisories_json.get("items", []) if isinstance(cert_bund_advisories_json, dict) else []
+    findings.append(
+        native_api_probe_finding(
+            "pass" if cert_bund_advisories.returncode == 0 and isinstance(cert_bund_items, list) else "fail",
+            "native-api.cert-bund-advisories",
+            f"Native API Security Information CERT-Bund advisory list probe exit code {cert_bund_advisories.returncode}.",
+            cert_bund_advisories,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cert-bund-advisories?page_size=1"),
+            cert_bund_advisories_json,
+        )
+    )
+
     operating_systems = native_api_curl(repo_root, "/api/v1/operating-systems?page_size=1&sort=-latest_severity")
     operating_systems_json = parse_json_output(operating_systems)
     details["operating_systems"] = summarize_native_api_response(operating_systems_json)
@@ -6458,7 +6478,7 @@ def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
 
 
-def command_runtime_browser_smoke(repo_root: Path) -> dict[str, Any]:
+def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = None) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     probe = runtime_browser_smoke_probe_path(repo_root)
@@ -6544,6 +6564,8 @@ def command_runtime_browser_smoke(repo_root: Path) -> dict[str, Any]:
         args.extend(["--scope-report-path", scope_report_path])
     if expect_result_row:
         args.append("--expect-result-row")
+    for route in routes or []:
+        args.extend(["--route", route])
     for base_url in base_urls:
         args.extend(["--base-url", base_url])
     result = run_command(args, repo_root, env=runtime_env(repo_root), timeout=420)
@@ -7334,7 +7356,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
     subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
-    subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
+    browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
+    browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
     subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
     subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
     subparsers.add_parser("runtime-rbac-smoke", parents=[common], help="verify all authenticated users share operator privileges")
@@ -7469,7 +7492,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "runtime-webui-smoke":
         result = command_runtime_webui_smoke(repo_root)
     elif args.command == "runtime-browser-smoke":
-        result = command_runtime_browser_smoke(repo_root)
+        result = command_runtime_browser_smoke(repo_root, args.route)
     elif args.command == "runtime-browser-regression":
         result = command_runtime_browser_regression(repo_root)
     elif args.command == "runtime-credential-smoke":

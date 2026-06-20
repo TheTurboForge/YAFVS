@@ -1,4 +1,6 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
+ * SPDX-FileCopyrightText: 2026 TurboVAS contributors
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -89,6 +91,7 @@ interface RevisionHistory {
 interface CertBundAdvProperties extends ModelProperties {
   additionalInformation?: AdditionalInformation[];
   categories?: string[];
+  cve_refs?: number;
   cves?: string[];
   description?: string[];
   effect?: string;
@@ -110,6 +113,7 @@ class CertBundAdv extends Model {
 
   readonly additionalInformation: AdditionalInformation[];
   readonly categories: string[];
+  readonly cve_refs?: number;
   readonly cves: string[];
   readonly description: string[];
   readonly effect?: string;
@@ -128,6 +132,7 @@ class CertBundAdv extends Model {
   constructor({
     additionalInformation = [],
     categories = [],
+    cve_refs,
     cves = [],
     description = [],
     effect,
@@ -148,6 +153,7 @@ class CertBundAdv extends Model {
 
     this.additionalInformation = additionalInformation;
     this.categories = categories;
+    this.cve_refs = cve_refs;
     this.cves = cves;
     this.description = description;
     this.effect = effect;
@@ -172,6 +178,7 @@ class CertBundAdv extends Model {
     const {cert_bund_adv: certBundAdv} = element;
     const ret = super.parseElement(element) as CertBundAdvProperties;
 
+    ret.cve_refs = certBundAdv?.cve_refs;
     ret.severity = parseSeverity(certBundAdv?.severity);
 
     const additionalInformation: AdditionalInformation[] = [];

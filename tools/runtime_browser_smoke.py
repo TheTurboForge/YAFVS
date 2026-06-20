@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from typing import Any
 
 
 DEFAULT_TIMEOUT_MS = 30_000
+ROUTES_ENV = "TURBOVAS_BROWSER_SMOKE_ROUTES"
 PLAYWRIGHT_NODE_PATHS = (
     "/home/turboforge/.local/nodejs/node-v22.22.3-linux-x64/lib/node_modules",
     "/home/turboforge/.local/share/turbovas-tools/playwright/node_modules",
@@ -153,6 +155,7 @@ async function login(page) {
   const loggedIn = !/username|password/i.test(text) || /tasks|scans|reports/i.test(text);
   add(loggedIn ? 'pass' : 'fail', 'browser.login', loggedIn ? 'Development operator login completed.' : 'Development operator login did not reach the application shell.', { url: page.url() });
   await screenshot(page, 'login-after-submit');
+  return loggedIn;
 }
 
 async function assertNoForbiddenText(page, routeName, forbidden) {
@@ -259,6 +262,98 @@ async function assertNoPerSourceEvidenceSections(page, check) {
   add(found ? 'fail' : 'pass', check, found ? 'Tab still renders per-source raw-report evidence sections.' : 'Tab renders as one aggregated scope-report collection.', { url: page.url() });
 }
 
+function focusedRouteCatalog() {
+  const specs = [
+    { label: 'reports', path: '/reports', nativePath: '/api/v1/reports', nativeCheck: 'raw-report.list-native-api', nativePass: 'Raw-report list loaded through same-origin native API.', nativeFail: 'Raw-report list did not produce a successful same-origin native API response.', forbidden: [/Delta Report/i, /Import Report/i], aliases: ['raw-reports'] },
+    { label: 'results', path: '/results', nativePath: '/api/v1/results', nativeCheck: 'result.list-native-api', nativePass: 'Top-level Results list loaded through same-origin native API.', nativeFail: 'Top-level Results list did not produce a successful same-origin native API response.' },
+    { label: 'vulnerabilities', path: '/vulnerabilities', nativePath: '/api/v1/vulnerabilities', nativeCheck: 'vulnerability.list-native-api', nativePass: 'Top-level Vulnerabilities list loaded through same-origin native API.', nativeFail: 'Top-level Vulnerabilities list did not produce a successful same-origin native API response.' },
+    { label: 'cves', path: '/cves', nativePath: '/api/v1/cves', nativeCheck: 'cve.list-native-api', nativePass: 'Security Information CVE list loaded through same-origin native API.', nativeFail: 'Security Information CVE list did not produce a successful same-origin native API response.' },
+    { label: 'cpes', path: '/cpes', nativePath: '/api/v1/cpes', nativeCheck: 'cpe.list-native-api', nativePass: 'Security Information CPE list loaded through same-origin native API.', nativeFail: 'Security Information CPE list did not produce a successful same-origin native API response.' },
+    { label: 'operating-systems', path: '/operating-systems', nativePath: '/api/v1/operating-systems', nativeCheck: 'operating-system.list-native-api', nativePass: 'Top-level Operating Systems list loaded through same-origin native API.', nativeFail: 'Top-level Operating Systems list did not produce a successful same-origin native API response.' },
+    { label: 'hosts', path: '/hosts', nativePath: '/api/v1/hosts', nativeCheck: 'host.list-native-api', nativePass: 'Top-level Hosts list loaded through same-origin native API.', nativeFail: 'Top-level Hosts list did not produce a successful same-origin native API response.' },
+    { label: 'tls-certificates', path: '/tls-certificates', nativePath: '/api/v1/tls-certificates', nativeCheck: 'tls-certificate.list-native-api', nativePass: 'Top-level TLS Certificates list loaded through same-origin native API.', nativeFail: 'Top-level TLS Certificates list did not produce a successful same-origin native API response.' },
+    { label: 'scanners', path: '/scanners', nativePath: '/api/v1/scanners', nativeCheck: 'scanner.list-native-api', nativePass: 'Top-level Scanners list loaded through same-origin native API.', nativeFail: 'Top-level Scanners list did not produce a successful same-origin native API response.' },
+    { label: 'filters', path: '/filters', nativePath: '/api/v1/filters', nativeCheck: 'filter.list-native-api', nativePass: 'Top-level Filters list loaded through same-origin native API.', nativeFail: 'Top-level Filters list did not produce a successful same-origin native API response.' },
+    { label: 'port-lists', path: '/port-lists', nativePath: '/api/v1/port-lists', nativeCheck: 'port-list.list-native-api', nativePass: 'Top-level Port Lists loaded through same-origin native API.', nativeFail: 'Top-level Port Lists did not produce a successful same-origin native API response.' },
+    { label: 'schedules', path: '/schedules', nativePath: '/api/v1/schedules', nativeCheck: 'schedule.list-native-api', nativePass: 'Top-level Schedules loaded through same-origin native API.', nativeFail: 'Top-level Schedules did not produce a successful same-origin native API response.' },
+    { label: 'report-formats', path: '/reportformats', nativePath: '/api/v1/report-formats', nativeCheck: 'report-format.list-native-api', nativePass: 'Top-level Report Formats loaded through same-origin native API.', nativeFail: 'Top-level Report Formats did not produce a successful same-origin native API response.', aliases: ['reportformats'] },
+    { label: 'report-configs', path: '/reportconfigs', nativePath: '/api/v1/report-configs', nativeCheck: 'report-config.list-native-api', nativePass: 'Top-level Report Configs loaded through same-origin native API.', nativeFail: 'Top-level Report Configs did not produce a successful same-origin native API response.', aliases: ['reportconfigs'] },
+    { label: 'targets', path: '/targets', nativePath: '/api/v1/targets', nativeCheck: 'target.list-native-api', nativePass: 'Target list loaded through same-origin native API.', nativeFail: 'Target list did not produce a successful same-origin native API response.' },
+    { label: 'tasks', path: '/tasks', nativePath: '/api/v1/tasks', nativeCheck: 'task.list-native-api', nativePass: 'Task list loaded through same-origin native API.', nativeFail: 'Task list did not produce a successful same-origin native API response.', forbidden: [/Resume/i, /Task Wizard/i, /Advanced Task Wizard/i, /Import Task/i, /Delta Report/i] },
+    { label: 'scopes', path: '/scopes', nativePath: '/api/v1/scopes', nativeCheck: 'scope.list-native-api', nativePass: 'Scope list loaded through same-origin native API.', nativeFail: 'Scope list did not produce a successful same-origin native API response.' },
+    { label: 'scope-reports', path: '/scopes/reports', nativePath: '/api/v1/scope-reports', nativeCheck: 'scope-report.list-native-api', nativePass: 'Scope-report list loaded through same-origin native API.', nativeFail: 'Scope-report list did not produce a successful same-origin native API response.', aliases: ['scopes/reports'] },
+    { label: 'cert-bund-advisories', path: '/cert-bund-advisories', nativePath: '/api/v1/cert-bund-advisories', nativeCheck: 'cert-bund-advisory.list-native-api', nativePass: 'CERT-Bund Advisory list loaded through same-origin native API.', nativeFail: 'CERT-Bund Advisory list did not produce a successful same-origin native API response.', aliases: ['certbunds', 'cert-bund'] },
+    { label: 'dfn-cert-advisories', path: '/dfn-cert-advisories', nativePath: '/api/v1/dfn-cert-advisories', nativeCheck: 'dfn-cert-advisory.list-native-api', nativePass: 'DFN-CERT Advisory list loaded through same-origin native API.', nativeFail: 'DFN-CERT Advisory list did not produce a successful same-origin native API response.', aliases: ['dfncerts', 'dfn-cert'] },
+  ];
+  const catalog = new Map();
+  for (const spec of specs) {
+    for (const alias of [spec.label, spec.path, ...(spec.aliases || [])]) {
+      catalog.set(alias.toLowerCase().replace(/^\/+/, ''), spec);
+      catalog.set(alias.toLowerCase(), spec);
+    }
+  }
+  return catalog;
+}
+
+function routeLabelFromPath(value) {
+  const pathname = value.split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
+  return (pathname || 'root').replace(/[^A-Za-z0-9_-]+/g, '-');
+}
+
+function focusedRouteSpecs() {
+  const catalog = focusedRouteCatalog();
+  const seen = new Set();
+  const specs = [];
+  for (const rawValue of config.focusRoutes || []) {
+    const raw = String(rawValue || '').trim();
+    if (!raw) continue;
+    let pathOrLabel = raw;
+    try {
+      if (/^https?:\/\//i.test(raw)) {
+        const parsed = new URL(raw);
+        pathOrLabel = `${parsed.pathname}${parsed.search}`;
+      }
+    } catch (_) {
+      pathOrLabel = raw;
+    }
+    const key = pathOrLabel.toLowerCase().replace(/^\/+/, '');
+    const catalogSpec = catalog.get(pathOrLabel.toLowerCase()) || catalog.get(key);
+    const spec = catalogSpec || {
+      label: routeLabelFromPath(pathOrLabel),
+      path: pathOrLabel.startsWith('/') ? pathOrLabel : `/${pathOrLabel}`,
+      nativePath: null,
+      nativeCheck: null,
+      nativePass: null,
+      nativeFail: null,
+    };
+    const dedupeKey = `${spec.label}:${spec.path}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    specs.push(spec);
+  }
+  return specs;
+}
+
+async function validateFocusedRoute(page, nativeApiResponses, spec) {
+  const startIndex = nativeApiResponses.length;
+  await gotoRoute(page, spec.path, spec.label);
+  if (spec.forbidden) {
+    await assertNoForbiddenText(page, spec.label, spec.forbidden);
+  }
+  const observed = nativeApiResponses.slice(startIndex).filter(item => item.path.startsWith('/api/v1/'));
+  if (!spec.nativePath) {
+    add('pass', `focused-route.${spec.label}`, 'Focused browser route loaded without a GSA application error.', { path: spec.path, observed_native_api_responses: observed });
+    return;
+  }
+  const nativeResponse = await waitForNativeApiResponse(page, nativeApiResponses, new RegExp(`^${escapeRegExp(spec.nativePath)}$`));
+  add(
+    nativeResponse ? 'pass' : 'fail',
+    spec.nativeCheck,
+    nativeResponse ? spec.nativePass : spec.nativeFail,
+    { path: spec.path, responses: nativeApiResponses.filter(item => item.path === spec.nativePath), observed_native_api_responses: observed },
+  );
+}
+
 async function runForBaseUrl(baseUrl) {
   config.baseUrl = baseUrl;
   const browser = await chromium.launch({ headless: true });
@@ -272,7 +367,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/targets', '/api/v1/tasks', '/api/v1/filters', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats', '/api/v1/report-configs', '/api/v1/cert-bund-advisories', '/api/v1/dfn-cert-advisories'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)
@@ -285,9 +380,21 @@ async function runForBaseUrl(baseUrl) {
     }
   });
   try {
-    await login(page);
+    const loggedIn = await login(page);
     const shellText = await bodyText(page).catch(() => '');
     add(/TurboVAS/i.test(shellText) ? 'pass' : 'fail', 'browser.branding', /TurboVAS/i.test(shellText) ? 'Application shell exposes TurboVAS branding.' : 'Application shell does not expose TurboVAS branding.');
+    if (!loggedIn) {
+      return;
+    }
+
+    const focusedRoutes = focusedRouteSpecs();
+    if (focusedRoutes.length) {
+      add('pass', 'browser-smoke.route-focus', 'Focused browser route mode is active.', { routes: focusedRoutes.map(spec => ({ label: spec.label, path: spec.path, native_path: spec.nativePath || null })) });
+      for (const route of focusedRoutes) {
+        await validateFocusedRoute(page, nativeApiResponses, route);
+      }
+      return;
+    }
 
     await gotoRoute(page, '/reports', 'reports');
     await assertNoForbiddenText(page, 'reports', [/Delta Report/i, /Import Report/i]);
@@ -673,6 +780,13 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     return str(path)
 
 
+def split_route_values(values: list[str]) -> list[str]:
+    routes: list[str] = []
+    for value in values:
+        routes.extend(part for part in re.split(r"[,\s]+", value.strip()) if part)
+    return routes
+
+
 def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
     artifact_dir = Path(args.artifact_dir).expanduser().resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -688,6 +802,7 @@ def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
     script_path = artifact_dir / "browser-smoke.cjs"
     config_path = artifact_dir / "browser-smoke-config.json"
     script_path.write_text(BROWSER_SCRIPT, encoding="utf-8")
+    focus_routes = split_route_values([os.environ.get(ROUTES_ENV, ""), *(args.route or [])])
     config_path.write_text(
         json.dumps(
             {
@@ -697,6 +812,7 @@ def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
                 "timeoutMs": args.timeout_ms,
                 "scopeReportPath": args.scope_report_path,
                 "expectResultRow": args.expect_result_row,
+                "focusRoutes": focus_routes,
             },
             indent=2,
             sort_keys=True,
@@ -745,6 +861,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--password-file", required=True)
     parser.add_argument("--artifact-dir", required=True)
     parser.add_argument("--timeout-ms", type=int, default=DEFAULT_TIMEOUT_MS)
+    parser.add_argument("--route", action="append", help=f"focus the browser smoke on one route label or path; may be repeated, or set {ROUTES_ENV}=route1,route2")
     parser.add_argument("--scope-report-path", help="preferred canonical scope-report detail path to exercise")
     parser.add_argument("--expect-result-row", action="store_true", help="fail if the selected scope report has no visible Results row")
     return parser

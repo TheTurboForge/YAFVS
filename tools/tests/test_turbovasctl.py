@@ -593,6 +593,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/cves", native_api)
         self.assertIn("/cpes", native_api)
         self.assertIn("/api/v1/nvts", native_api)
+        self.assertIn('operating_system_prefix = "/api/v1/operating-systems/"', native_api)
+        self.assertIn('path + strlen (operating_system_prefix)', native_api)
         self.assertIn("/api/v1/cert-bund-advisories", native_api)
         self.assertIn("/api/v1/dfn-cert-advisories", native_api)
         self.assertIn("/errors", native_api)

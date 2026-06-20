@@ -6,6 +6,7 @@
 
 import {createAll} from 'web/store/entities/utils/main';
 import {
+  fetchNativeOperatingSystem,
   fetchNativeOperatingSystems,
   nativeOperatingSystemsQueryFromFilter,
 } from 'gmp/native-api/operating-systems';
@@ -21,6 +22,19 @@ const {
 } = createAll('operatingsystem');
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const mergeNativeInformation = (inherited, native) =>
+  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
+    name: native.name,
+    creationTime: native.creationTime,
+    modificationTime: native.modificationTime,
+    averageSeverity: native.averageSeverity,
+    highestSeverity: native.highestSeverity,
+    latestSeverity: native.latestSeverity,
+    title: native.title,
+    hosts: native.hosts,
+    allHosts: native.allHosts,
+  });
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   if (!canUseNativeApi(gmp)) {
@@ -53,10 +67,42 @@ const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   );
 };
 
+const nativeLoadEntity = gmp => id => (dispatch, getState) => {
+  if (!canUseNativeApi(gmp)) {
+    return loadEntity(gmp)(id)(dispatch, getState);
+  }
+
+  const rootState = getState();
+  const state = selector(rootState);
+
+  if (state.isLoadingEntity(id)) {
+    return Promise.resolve();
+  }
+
+  dispatch(entityLoadingActions.request(id));
+
+  return Promise.all([
+    gmp.operatingsystem.get({id}),
+    fetchNativeOperatingSystem(gmp, id),
+  ]).then(
+    ([inheritedResponse, nativeResponse]) =>
+      dispatch(
+        entityLoadingActions.success(
+          id,
+          mergeNativeInformation(
+            inheritedResponse.data,
+            nativeResponse.operatingSystem,
+          ),
+        ),
+      ),
+    error => dispatch(entityLoadingActions.error(id, error)),
+  );
+};
+
 export {
   loadAllEntities,
   nativeLoadEntities as loadEntities,
-  loadEntity,
+  nativeLoadEntity as loadEntity,
   reducer,
   selector,
   entitiesLoadingActions,

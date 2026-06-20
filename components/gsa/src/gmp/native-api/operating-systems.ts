@@ -57,6 +57,10 @@ export interface NativeOperatingSystemsResponse {
   page: NativePage;
 }
 
+export interface NativeOperatingSystemResponse {
+  operatingSystem: OperatingSystem;
+}
+
 const OPERATING_SYSTEM_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   title: 'title',
@@ -196,5 +200,19 @@ export const fetchNativeOperatingSystems = async (
     operatingSystems,
     counts: nativeCounts(page, operatingSystems.length),
     page,
+  };
+};
+
+export const fetchNativeOperatingSystem = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeOperatingSystemResponse> => {
+  const payload = await fetchNativeJson<NativeOperatingSystemPayload>(
+    gmp,
+    `api/v1/operating-systems/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    operatingSystem: nativeOperatingSystemToModel(payload),
   };
 };

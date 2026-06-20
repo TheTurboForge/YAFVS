@@ -127,6 +127,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *dfn_cert_advisories_path = "/api/v1/dfn-cert-advisories";
   const gchar *nvts_path = "/api/v1/nvts";
   const gchar *operating_systems_path = "/api/v1/operating-systems";
+  const gchar *operating_system_prefix = "/api/v1/operating-systems/";
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *tls_certificates_path = "/api/v1/tls-certificates";
   const gchar *scanners_path = "/api/v1/scanners";
@@ -213,6 +214,12 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, operating_systems_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, operating_system_prefix))
+    {
+      const gchar *id = path + strlen (operating_system_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
 
   if (g_strcmp0 (path, hosts_path) == 0)
     return TRUE;

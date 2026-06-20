@@ -4,7 +4,12 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {fetchNativeOperatingSystems} from 'gmp/native-api/operating-systems';
+import {
+  fetchNativeOperatingSystem,
+  fetchNativeOperatingSystems,
+} from 'gmp/native-api/operating-systems';
+import OperatingSystem from 'gmp/models/os';
+import {loadEntity} from 'web/store/entities/operatingsystems';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -77,5 +82,110 @@ describe('native API operating systems list', () => {
         },
       },
     );
+  });
+
+  test('fetches one operating system from the native detail endpoint', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'f3a25f89-2b6c-4e58-92b2-942c686f9342',
+        name: 'cpe:/o:example:linux:1.0',
+        title: 'Example Linux 1.0',
+        latest_severity: 7.5,
+        highest_severity: 9.1,
+        average_severity: 4.25,
+        hosts: 2,
+        all_hosts: 3,
+        created_at: '2026-06-18T18:00:00Z',
+        modified_at: '2026-06-18T20:00:00Z',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    const response = await fetchNativeOperatingSystem(
+      gmp,
+      'f3a25f89-2b6c-4e58-92b2-942c686f9342',
+    );
+
+    const os = response.operatingSystem;
+    expect(os.id).toEqual('f3a25f89-2b6c-4e58-92b2-942c686f9342');
+    expect(os.name).toEqual('cpe:/o:example:linux:1.0');
+    expect(os.latestSeverity).toEqual(7.5);
+    expect(os.allHosts).toEqual(3);
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/operating-systems/f3a25f89-2b6c-4e58-92b2-942c686f9342',
+      {token: 'test-token'},
+    );
+  });
+
+  test('loads native Information fields without replacing inherited detail context', async () => {
+    const id = 'f3a25f89-2b6c-4e58-92b2-942c686f9342';
+    const inherited = OperatingSystem.fromElement({
+      _id: id,
+      name: 'cpe:/o:old:linux',
+      writable: 1,
+      user_tags: {
+        tag: [{_id: 'tag-1', name: 'Critical OS', value: 'true'}],
+      },
+      os: {
+        installs: 1,
+        all_installs: 1,
+        latest_severity: {value: 1.0},
+        highest_severity: {value: 2.0},
+        average_severity: {value: 1.5},
+      },
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        name: 'cpe:/o:example:linux:1.0',
+        title: 'Example Linux 1.0',
+        latest_severity: 7.5,
+        highest_severity: 9.1,
+        average_severity: 4.25,
+        hosts: 2,
+        all_hosts: 3,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp({jwt: 'jwt-token'}),
+      operatingsystem: {
+        get: testing.fn().mockResolvedValue({data: inherited}),
+      },
+    };
+    const actions: Array<{type: string; data?: OperatingSystem}> = [];
+    const dispatch = testing.fn(action => {
+      actions.push(action);
+      return action;
+    });
+    const getState = () => ({
+      entities: {
+        operatingsystem: {
+          byId: {},
+          errors: {},
+          isLoading: {},
+        },
+      },
+    });
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    const success = actions.find(
+      action => action.type === 'ENTITY_LOADING_SUCCESS',
+    );
+    const os = success?.data;
+    expect(gmp.operatingsystem.get).toHaveBeenCalledWith({id});
+    expect(os).toBeInstanceOf(OperatingSystem);
+    expect(os?.name).toEqual('cpe:/o:example:linux:1.0');
+    expect(os?.latestSeverity).toEqual(7.5);
+    expect(os?.hosts).toEqual(2);
+    expect(os?.isWritable()).toEqual(true);
+    expect(os?.userTags?.length).toEqual(1);
+    expect(os?.userTags?.[0].name).toEqual('Critical OS');
   });
 });

@@ -2935,6 +2935,11 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "replacement_candidates": ["GSA top-level Hosts list (migrated through gsad same-origin proxy)", "read-only host asset automation", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/hosts/{host_id}",
+                "status": "implemented_internal",
+                "replacement_candidates": ["GSA top-level Host detail migration", "read-only host asset automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/tls-certificates",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level TLS Certificates list (migrated through gsad same-origin proxy)", "read-only TLS certificate asset automation", "native-api-request helper"],
@@ -6330,6 +6335,29 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             hosts_json,
         )
     )
+    if host_items:
+        first_host = host_items[0]
+        host_detail_id = first_host.get("id") if isinstance(first_host, dict) else None
+        if host_detail_id:
+            host_detail_path = f"/api/v1/hosts/{urllib.parse.quote(str(host_detail_id), safe='')}"
+            host_detail = native_api_curl(repo_root, host_detail_path)
+            host_detail_json = parse_json_output(host_detail)
+            details["host_detail"] = summarize_native_api_response(host_detail_json)
+            host_detail_asset = host_detail_json.get("asset", {}) if isinstance(host_detail_json, dict) else {}
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if host_detail.returncode == 0 and isinstance(host_detail_asset, dict) and host_detail_asset.get("id") == host_detail_id else "fail",
+                    "native-api.host-detail",
+                    f"Native API top-level Host detail probe exit code {host_detail.returncode}.",
+                    host_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/hosts/..."),
+                    host_detail_json,
+                )
+            )
+        else:
+            findings.append(finding("fail", "native-api.host-detail", "Hosts list did not include a host id for the detail probe."))
+    else:
+        findings.append(finding("warn", "native-api.host-detail", "No Hosts exist yet, so the detail probe was skipped."))
 
     tls_certificates = native_api_curl(repo_root, "/api/v1/tls-certificates?page_size=1&sort=-last_seen")
     tls_certificates_json = parse_json_output(tls_certificates)

@@ -229,6 +229,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostAssetCollection'
+  /hosts/{host_id}:
+    get:
+      summary: Read one top-level host asset
+      description: Read-only host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, and whitelisted host detail state. This endpoint intentionally excludes host writes, delete-identifier behavior, XML export, target creation, user tags, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history.
+      parameters:
+        - $ref: '#/components/parameters/HostId'
+      responses:
+        '200':
+          description: Host asset detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostAssetDetail'
   /tls-certificates:
     get:
       summary: List top-level TLS certificate assets
@@ -1014,6 +1027,13 @@ components:
       schema:
         type: string
         format: uuid
+    HostId:
+      name: host_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     TlsCertificateId:
       name: certificate_id
       in: path
@@ -1343,6 +1363,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HostAsset'
+    HostAssetDetail:
+      type: object
+      required: [asset, identifiers, operating_systems, details]
+      properties:
+        asset:
+          $ref: '#/components/schemas/HostAsset'
+        identifiers:
+          type: array
+          description: Safe host identifiers from gvmd asset state. Credential/privacy-sensitive identifier names are intentionally excluded.
+          items:
+            $ref: '#/components/schemas/HostAssetDetailIdentifier'
+        operating_systems:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostAssetOperatingSystem'
+        details:
+          type: array
+          description: Latest whitelisted host detail rows only: best_os_cpe, best_os_txt, and traceroute.
+          items:
+            $ref: '#/components/schemas/HostAssetDetailMetadata'
     TlsCertificateAssetCollection:
       type: object
       required: [page, items]
@@ -2087,6 +2127,91 @@ components:
           type: string
         source_data:
           type: string
+    HostAssetDetailIdentifier:
+      type: object
+      required: [id, name, value, source_type, source_id, source_data, source_data_truncated]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        value:
+          type: string
+        source_type:
+          type: string
+        source_id:
+          type: string
+        source_data:
+          type: string
+          maxLength: 512
+        source_data_truncated:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    HostAssetOperatingSystem:
+      type: object
+      required: [id, name, operating_system_id, operating_system_name, source_type, source_id, source_data, source_data_truncated]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Host-to-operating-system association UUID.
+        name:
+          type: string
+        comment:
+          type: string
+        operating_system_id:
+          type: string
+          format: uuid
+        operating_system_name:
+          type: string
+        title:
+          type: string
+        source_type:
+          type: string
+        source_id:
+          type: string
+        source_data:
+          type: string
+          maxLength: 512
+        source_data_truncated:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    HostAssetDetailMetadata:
+      type: object
+      required: [name, value, value_truncated, source_type, source_id, detail_source_type, detail_source_name, detail_source_description, detail_source_description_truncated]
+      properties:
+        name:
+          type: string
+          enum: [best_os_cpe, best_os_txt, traceroute]
+        value:
+          type: string
+          maxLength: 4096
+        value_truncated:
+          type: boolean
+        source_type:
+          type: string
+        source_id:
+          type: string
+        detail_source_type:
+          type: string
+        detail_source_name:
+          type: string
+        detail_source_description:
+          type: string
+          maxLength: 1024
+        detail_source_description_truncated:
+          type: boolean
     HostAsset:
       type: object
       required: [id, name, severity, identifiers]

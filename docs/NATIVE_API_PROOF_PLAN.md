@@ -77,6 +77,11 @@ Operating Systems, Scanners, Scan Configs, Filters, Tags, Overrides, and Report 
 Internal Operating System detail metadata is available for automation and smoke
 coverage only; the GSA detail route remains inherited until a separate browser
 migration slice.
+Internal Host detail metadata is available for automation and smoke coverage
+only. It uses `hosts.uuid`, bounded safe identifier/source metadata, host OS
+associations, and latest whitelisted host details; the GSA detail route and
+GMP-only `details=1` behavior remain inherited until a separate browser
+migration slice.
 Internal TLS Certificate detail metadata/source provenance is available for
 automation and smoke coverage only; the GSA detail route and certificate export
 behavior remain inherited until separate typed browser/detail and file-transfer
@@ -88,7 +93,7 @@ detail tabs stay inherited follow-ups.
 Internal read-only scripting can use `tools/turbovasctl native-api-request
 --json --path '/api/v1/...'` or `just native-api-request --json --path
 '/api/v1/...'` for DB-backed report, scope, target, task, scan-config
-metadata, tag metadata, override metadata, and report-config reads. This
+metadata, host asset metadata, tag metadata, override metadata, and report-config reads. This
 removes the need for covered inherited read-only GMP scripts while keeping
 write/control operations on inherited paths until a separate native write design
 exists.

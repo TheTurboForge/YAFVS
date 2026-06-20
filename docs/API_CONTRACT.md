@@ -25,7 +25,8 @@ The first API phase is read-only and report-focused:
 - task list and task detail summary reads;
 - top-level asset/security metadata lists for results, vulnerabilities, CVE,
   CPE, and NVT catalog entries, operating systems, hosts, TLS certificates,
-  and scanner metadata.
+  and scanner metadata; internal detail metadata is available for operating
+  systems, hosts, and TLS certificates.
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
 - tag list and detail metadata reads, including resource type/count and value,
@@ -92,8 +93,8 @@ Internal read-only automation can use `tools/turbovasctl native-api-request
 --json --path '/api/v1/...'` or `just native-api-request --json --path
 '/api/v1/...'` to call the Docker-internal native API. This replaces covered
 read-only GMP scripts for report, scope, target, task, scan-config metadata,
-override metadata, tag metadata, and selected asset listing/detail workflows; it is not the final
-externally exposed scriptable API boundary.
+override metadata, tag metadata, and selected asset listing/detail workflows; it
+is not the final externally exposed scriptable API boundary.
 
 The first runtime implementation proof is scoped in
 `docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
@@ -101,10 +102,11 @@ for raw report list/detail/result rows/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
 task list/detail, scanner metadata list, saved filter list/detail, override
 list/detail metadata, tag list/detail metadata, operating-system asset
-list/detail metadata, scan-config metadata list/detail, port-list list/detail, schedule list/detail, report-config
-list/detail, report-format list/detail, Security Information CVE catalog list/detail,
-Security Information CPE catalog list/detail, Security Information CERT-Bund and
-DFN-CERT advisory catalog list/detail metadata, scope-report list,
+list/detail metadata, host asset list/detail metadata, scan-config metadata
+list/detail, port-list list/detail, schedule list/detail, report-config
+list/detail, report-format list/detail, Security Information CVE catalog
+list/detail, Security Information CPE catalog list/detail, Security Information
+CERT-Bund and DFN-CERT advisory catalog list/detail metadata, scope-report list,
 Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
 and raw report Metrics because those read
@@ -144,6 +146,16 @@ associated host count, and timestamps from gvmd/PostgreSQL asset tables. The
 detail endpoint returns the same bounded metadata for one OS asset by UUID;
 delete, export, and other asset writes remain inherited until native write
 semantics are designed.
+
+Native host asset detail rows use the `hosts.uuid` identity and return the
+existing host asset summary plus bounded safe metadata from `host_identifiers`,
+`host_oss`/`oss`, and latest whitelisted `host_details` names only:
+`best_os_cpe`, `best_os_txt`, and `traceroute`. The detail endpoint validates
+and canonicalizes UUID path IDs before parameterized PostgreSQL queries. It
+intentionally excludes host create/save/delete, delete-identifier behavior, XML
+export, target creation from host, User Tags, credential/privacy-sensitive
+identifiers, raw `report_host_details` expansion, report/result/port/application
+history, GMP-only `details=1` semantics, and all writes.
 
 Native TLS certificate asset rows include the `tls_certificates.uuid` identity,
 subject and issuer distinguished names, serial and fingerprints, activation,

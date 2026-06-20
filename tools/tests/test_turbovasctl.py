@@ -979,6 +979,30 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('"status": "implemented_internal"', native_tooling)
         self.assertIn('native-api.operating-system-detail', native_tooling)
 
+    def test_host_asset_detail_contract_is_internal_bounded_and_safe_metadata_only(self):
+        root = Path(__file__).resolve().parents[2]
+        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
+        api_source = (root / "services" / "turbovas-api" / "src" / "main.rs").read_text(encoding="utf-8")
+        native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
+
+        self.assertIn('/api/v1/hosts/:host_id', api_source)
+        self.assertIn('parse_uuid(&host_id)?;', api_source)
+        self.assertIn('WHERE h.uuid = $1', api_source)
+        self.assertIn("JOIN host_identifiers hi ON hi.host = h.id", api_source)
+        self.assertIn("AND hi.name IN ('ip', 'hostname', 'DNS-via-TargetDefinition', 'MAC', 'OS')", api_source)
+        self.assertIn("JOIN host_oss ho ON ho.host = h.id", api_source)
+        self.assertIn("JOIN oss ON oss.id = ho.os", api_source)
+        self.assertIn("AND hd.name IN ('best_os_cpe', 'best_os_txt', 'traceroute')", api_source)
+        self.assertIn("left(coalesce(hi.source_data, ''), 512)", api_source)
+        self.assertIn("left(coalesce(hd.value, ''), 4096)", api_source)
+        self.assertIn('/hosts/{host_id}:', openapi)
+        self.assertIn("#/components/parameters/HostId", openapi)
+        self.assertIn('HostAssetDetail', openapi)
+        self.assertIn('HostAssetOperatingSystem', openapi)
+        self.assertIn('HostAssetDetailMetadata', openapi)
+        self.assertIn('/api/v1/hosts/{host_id}', native_tooling)
+        self.assertIn('native-api.host-detail', native_tooling)
+
     def test_tls_certificate_asset_detail_contract_is_internal_and_source_only(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")

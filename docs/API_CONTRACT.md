@@ -77,14 +77,11 @@ lands. Future endpoint work must update the OpenAPI contract and the GMP/XML
 strangler map in the same slice.
 
 Internal read-only automation can use `tools/turbovasctl native-api-request
---json --path '/api/v1/...'` or `just native-api-request -- --json --path
+--json --path '/api/v1/...'` or `just native-api-request --json --path
 '/api/v1/...'` to call the Docker-internal native API. This replaces covered
 read-only GMP scripts for report, scope, target, task, and selected asset
 listing workflows; it
 is not the final externally exposed scriptable API boundary.
-The `just` form intentionally requires the literal `--` separator so the
-forwarded `--json` and `--path` options are not mistaken for `just` flags.
-
 The first runtime implementation proof is scoped in
 `docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
 for raw report list/detail/result rows/hosts/ports/applications/operating

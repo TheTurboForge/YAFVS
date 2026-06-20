@@ -79,13 +79,10 @@ native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.
 
 Internal read-only scripting can use `tools/turbovasctl native-api-request
---json --path '/api/v1/...'` or `just native-api-request -- --json --path
+--json --path '/api/v1/...'` or `just native-api-request --json --path
 '/api/v1/...'` for DB-backed report, scope, target, task, and report-config reads. This removes
 the need for covered inherited read-only GMP scripts while keeping write/control
 operations on inherited paths until a separate native write design exists.
-The `just` wrapper intentionally requires the literal `--` separator so the
-forwarded native API flags are not confused with `just` options.
-
 ## Not In The First Proof
 
 Do not implement writes, scan start/stop, credential handling, feed operations,

@@ -2896,8 +2896,8 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             },
             {
                 "endpoint": "/api/v1/nvts/{nvt_id}",
-                "status": "implemented_internal",
-                "replacement_candidates": ["read-only NVT catalog-detail automation"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Security Information NVT detail Information fields (migrated through gsad same-origin proxy)", "read-only NVT catalog-detail automation", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/cert-bund-advisories",

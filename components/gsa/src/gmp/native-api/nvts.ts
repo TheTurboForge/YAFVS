@@ -37,6 +37,7 @@ interface NativeNvtPayload {
   id: string;
   oid?: string;
   name?: string;
+  comment?: string;
   family?: string;
   severity?: number;
   qod?: number;
@@ -44,6 +45,11 @@ interface NativeNvtPayload {
   solution_type?: string;
   solution_method?: string;
   solution?: string;
+  summary?: string;
+  insight?: string;
+  affected?: string;
+  impact?: string;
+  detection?: string;
   tags?: string;
   cve_refs?: number;
   cves?: string[];
@@ -72,6 +78,10 @@ export interface NativeNvtsResponse {
   nvts: Nvt[];
   counts: CollectionCounts;
   page: NativePage;
+}
+
+export interface NativeNvtResponse {
+  nvt: Nvt;
 }
 
 const NVT_SORT_FIELDS: Record<string, string> = {
@@ -196,6 +206,24 @@ const epssFromNative = (value?: NativeNvtEpssPayload) =>
       }
     : undefined;
 
+const detailTagsFromNative = (item: NativeNvtPayload): string => {
+  const parts = [stringValue(item.tags)].filter(part => part !== '');
+  const detailTags = [
+    ['summary', item.summary],
+    ['insight', item.insight],
+    ['affected', item.affected],
+    ['impact', item.impact],
+    ['vuldetect', item.detection],
+  ];
+  for (const [key, value] of detailTags) {
+    const stringified = stringValue(value);
+    if (stringified !== '') {
+      parts.push(`${key}=${stringified}`);
+    }
+  }
+  return parts.join('|');
+};
+
 const nativeNvtToModel = (item: NativeNvtPayload): Nvt => {
   const oid = stringValue(item.oid || item.id);
   const cves = item.cves ?? [];
@@ -209,6 +237,7 @@ const nativeNvtToModel = (item: NativeNvtPayload): Nvt => {
   return Nvt.fromElement({
     _id: oid,
     name: stringValue(item.name || oid),
+    comment: stringValue(item.comment),
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
     update_time: stringValue(item.updated_at || item.modified_at),
@@ -217,7 +246,7 @@ const nativeNvtToModel = (item: NativeNvtPayload): Nvt => {
       name: stringValue(item.name || oid),
       family: stringValue(item.family),
       cvss_base: numberValue(item.severity),
-      tags: stringValue(item.tags),
+      tags: detailTagsFromNative(item),
       qod: {
         value: numberValue(item.qod),
         type: stringValue(item.qod_type),
@@ -263,5 +292,19 @@ export const fetchNativeNvts = async (
     nvts,
     counts: nativeCounts(page, nvts.length),
     page,
+  };
+};
+
+export const fetchNativeNvt = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeNvtResponse> => {
+  const payload = await fetchNativeJson<NativeNvtPayload>(
+    gmp,
+    `api/v1/nvts/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    nvt: nativeNvtToModel(payload),
   };
 };

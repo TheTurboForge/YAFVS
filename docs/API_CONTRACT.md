@@ -26,8 +26,8 @@ The first API phase is read-only and report-focused:
 - top-level asset/security metadata lists for results, vulnerabilities, CVE,
   CPE, and NVT catalog entries, operating systems, hosts, TLS certificates,
   and scanner metadata; browser-proxied detail Information metadata is
-  available for operating systems, hosts, TLS certificates, scanners, and scan
-  configs.
+  available for NVTs, operating systems, hosts, TLS certificates, scanners, and
+  scan configs.
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
 - tag list and detail metadata reads, including resource type/count and value,
@@ -37,7 +37,7 @@ The first API phase is read-only and report-focused:
   authenticated operator access only.
 - Security Information CERT-Bund and DFN-CERT advisory list reads plus
   internal catalog-detail metadata reads from imported PostgreSQL state.
-- Security Information NVT list reads plus internal catalog-detail metadata
+- Security Information NVT list and browser-proxied catalog-detail metadata
   reads from imported PostgreSQL state.
 - override list and detail metadata reads, including NVT identity, active state,
   task/result links, and severity override values, inside authenticated operator
@@ -242,11 +242,11 @@ completed scans.
 Native Security Information NVT catalog rows use `nvts.oid` as the identifier
 and include the NVT name, family, severity, QoD, solution metadata, tags, CVE,
 CERT, and other reference IDs, optional EPSS metadata, and timestamps from NVT
-feed metadata imported into PostgreSQL. The internal detail endpoint adds only
-text fields directly stored on `nvts`, such as comment, summary, insight,
-affected, impact, and detection. It intentionally excludes NVT preferences,
-scan-config selector expansion, export, feed-control, scanner-control, and write
-semantics.
+feed metadata imported into PostgreSQL. The browser-proxied detail endpoint
+adds only text fields directly stored on `nvts`, such as comment, summary,
+insight, affected, impact, and detection. It intentionally excludes NVT
+preferences, scan-config selector expansion, export, feed-control,
+scanner-control, and write semantics.
 
 Native Security Information CERT-Bund and DFN-CERT advisory catalog rows include
 the advisory identifier, title, summary, severity, CVE reference count, CVE

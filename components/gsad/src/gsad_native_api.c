@@ -113,6 +113,38 @@ is_cpe_id_segment (const gchar *value, gsize length)
 }
 
 static gboolean
+is_nvt_oid_segment (const gchar *value, gsize length)
+{
+  gboolean saw_dot = FALSE;
+  gboolean previous_dot = FALSE;
+
+  if (value == NULL || length < 3 || length > 128)
+    return FALSE;
+
+  for (gsize i = 0; i < length; i++)
+    {
+      if (g_ascii_isdigit (value[i]))
+        {
+          previous_dot = FALSE;
+          continue;
+        }
+
+      if (value[i] == '.')
+        {
+          if (i == 0 || previous_dot)
+            return FALSE;
+          saw_dot = TRUE;
+          previous_dot = TRUE;
+          continue;
+        }
+
+      return FALSE;
+    }
+
+  return saw_dot && !previous_dot;
+}
+
+static gboolean
 native_api_path_is_allowed (const gchar *path)
 {
   const gchar *raw_reports_path = "/api/v1/reports";
@@ -126,6 +158,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *cert_bund_advisories_path = "/api/v1/cert-bund-advisories";
   const gchar *dfn_cert_advisories_path = "/api/v1/dfn-cert-advisories";
   const gchar *nvts_path = "/api/v1/nvts";
+  const gchar *nvt_prefix = "/api/v1/nvts/";
   const gchar *operating_systems_path = "/api/v1/operating-systems";
   const gchar *operating_system_prefix = "/api/v1/operating-systems/";
   const gchar *hosts_path = "/api/v1/hosts";
@@ -216,6 +249,12 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, nvts_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, nvt_prefix))
+    {
+      const gchar *id = path + strlen (nvt_prefix);
+      return is_nvt_oid_segment (id, strlen (id));
+    }
 
   if (g_strcmp0 (path, operating_systems_path) == 0)
     return TRUE;

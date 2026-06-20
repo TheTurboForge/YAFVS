@@ -136,6 +136,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *tags_path = "/api/v1/tags";
   const gchar *tag_prefix = "/api/v1/tags/";
+  const gchar *tag_resources_suffix = "/resources";
   const gchar *overrides_path = "/api/v1/overrides";
   const gchar *override_prefix = "/api/v1/overrides/";
   const gchar *port_lists_path = "/api/v1/port-lists";
@@ -244,6 +245,15 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, tags_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, tag_prefix)
+      && g_str_has_suffix (path, tag_resources_suffix))
+    {
+      const gchar *id = path + strlen (tag_prefix);
+      gsize id_len = strlen (path) - strlen (tag_prefix)
+                     - strlen (tag_resources_suffix);
+      return is_uuid_segment (id, id_len);
+    }
 
   if (g_str_has_prefix (path, tag_prefix))
     {

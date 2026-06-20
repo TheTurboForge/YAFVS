@@ -4,7 +4,11 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {fetchNativeTag, fetchNativeTags} from 'gmp/native-api/tags';
+import {
+  fetchNativeTag,
+  fetchNativeTagResources,
+  fetchNativeTags,
+} from 'gmp/native-api/tags';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -105,5 +109,46 @@ describe('native API tags', () => {
     expect(tag.resourceType).toEqual('target');
     expect(tag.resourceCount).toEqual(1);
     expect(tag.value).toEqual('staging');
+  });
+
+  test('fetches assigned tag resources as generic models', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        tag_id: '6d4dddf0-92a4-427f-b65d-bb9f9627aa01',
+        resource_type: 'task',
+        page: {page: 1, page_size: 40, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'task-1',
+            type: 'task',
+            name: 'Nightly scan',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    const resources = await fetchNativeTagResources(
+      gmp,
+      '6d4dddf0-92a4-427f-b65d-bb9f9627aa01',
+      'task',
+      40,
+    );
+
+    expect(resources[0].id).toEqual('task-1');
+    expect(resources[0].name).toEqual('Nightly scan');
+    expect(resources[0].entityType).toEqual('task');
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/6d4dddf0-92a4-427f-b65d-bb9f9627aa01/resources',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: 40,
+        sort: 'name',
+      },
+    );
   });
 });

@@ -174,9 +174,11 @@ authenticated operator boundary and are not catalog/public data.
 Native tag rows include tag identity, owner, comment, resource type, inherited
 resource count, active state, value, permissions, and timestamps. Tag metadata
 is operator labeling data, so these endpoints stay inside the authenticated
-operator boundary. Assigned-resource expansion and tag create, modify, clone,
-enable/disable, export, and delete actions remain inherited until native
-resource/write semantics are designed.
+operator boundary. Native assigned-resource expansion is limited to read-only
+strict-whitelist references for the current tag detail Assigned Items tab. Tag
+create, modify, clone, enable/disable, export, delete, unsupported resource
+types, and tag write semantics remain inherited until native write semantics
+are designed.
 
 Native scan-config rows include config identity, owner, comment, family/NVT
 counts, growth flags, predefined/deprecated state, in-use state, and

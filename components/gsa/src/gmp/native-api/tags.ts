@@ -6,8 +6,9 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import type {UrlParams} from 'gmp/http/utils';
 import type QueryFilter from 'gmp/models/filter';
+import Model from 'gmp/models/model';
 import Tag from 'gmp/models/tag';
-import type {ApiType} from 'gmp/utils/entity-type';
+import type {ApiType, EntityType} from 'gmp/utils/entity-type';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -31,7 +32,7 @@ interface NativeTagOwnerPayload {
   name?: string;
 }
 
-interface NativeTagResourcesPayload {
+interface NativeTagResourcesSummaryPayload {
   type?: string;
   count?: {
     total?: number;
@@ -45,7 +46,7 @@ interface NativeTagPayload {
   owner?: NativeTagOwnerPayload;
   resource_type?: string;
   resource_count?: number;
-  resources?: NativeTagResourcesPayload;
+  resources?: NativeTagResourcesSummaryPayload;
   active?: boolean;
   value?: string | number | null;
   writable?: boolean;
@@ -60,6 +61,19 @@ interface NativeTagPayload {
 interface NativeTagsPayload {
   page?: Partial<NativePage>;
   items?: NativeTagPayload[];
+}
+
+interface NativeTagResourcePayload {
+  id: string;
+  type?: string;
+  name?: string;
+}
+
+interface NativeTagResourceCollectionPayload {
+  tag_id?: string;
+  resource_type?: string;
+  page?: Partial<NativePage>;
+  items?: NativeTagResourcePayload[];
 }
 
 export interface NativeTagsQuery {
@@ -245,4 +259,31 @@ export const fetchNativeTag = async (
     {token: gmp.session.token},
   );
   return nativeTagToModel(payload);
+};
+
+export const fetchNativeTagResources = async (
+  gmp: NativeApiGmp,
+  id: string,
+  resourceType: EntityType,
+  pageSize: number,
+): Promise<Model[]> => {
+  const payload = await fetchNativeJson<NativeTagResourceCollectionPayload>(
+    gmp,
+    `api/v1/tags/${encodeURIComponent(id)}/resources`,
+    {
+      token: gmp.session.token,
+      page: 1,
+      page_size: pageSize,
+      sort: 'name',
+    },
+  );
+  return (payload.items ?? []).map(item =>
+    Model.fromElement(
+      {
+        _id: stringValue(item.id),
+        name: stringValue(item.name),
+      },
+      resourceType,
+    ),
+  );
 };

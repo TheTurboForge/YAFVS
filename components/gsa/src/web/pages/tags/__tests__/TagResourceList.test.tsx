@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {rendererWith, screen} from 'web/testing';
 import EverythingCapabilities from 'gmp/capabilities/everything';
 import CollectionCounts from 'gmp/collection/collection-counts';
@@ -11,6 +11,10 @@ import Filter from 'gmp/models/filter';
 import Tag from 'gmp/models/tag';
 import Task from 'gmp/models/task';
 import TagResourceList from 'web/pages/tags/TagResourceList';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 const createTag = (id = 'tag-1') =>
   new Tag({
@@ -109,5 +113,69 @@ describe('ResourceList tests', () => {
     await screen.findByText('Test Task');
 
     expect(getTasks).toHaveBeenCalled();
+  });
+
+  test('should use native tag resources for supported resource types', async () => {
+    const tag = createTag();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        tag_id: 'tag-1',
+        resource_type: 'task',
+        page: {page: 1, page_size: 40, total: 1, sort: 'name', filter: ''},
+        items: [{id: 'task-native', type: 'task', name: 'Native Task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const getTasks = testing.fn();
+    const gmp = {
+      buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+      session: {jwt: 'jwt-token', token: 'test-token'},
+      tasks: {
+        get: getTasks,
+      },
+    };
+
+    const {render} = rendererWith({gmp, capabilities: true});
+    render(<TagResourceList entity={tag} />);
+
+    await screen.findByText('Native Task');
+
+    expect(getTasks).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tags/tag-1/resources', {
+      token: 'test-token',
+      page: 1,
+      page_size: 40,
+      sort: 'name',
+    });
+  });
+
+  test('should keep unsupported resource types on inherited commands', async () => {
+    const tag = new Tag({
+      id: 'tag-1',
+      name: 'Scanner Tag',
+      resourceType: 'scanner',
+      resourceCount: 1,
+    });
+    const getScanners = testing.fn().mockResolvedValue({
+      data: [new Task({id: 'scanner-1', name: 'Inherited Scanner'})],
+      meta: {filter: Filter.fromString(), counts: new CollectionCounts()},
+    });
+    const gmp = {
+      buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+      session: {jwt: 'jwt-token', token: 'test-token'},
+      scanners: {
+        get: getScanners,
+      },
+    };
+
+    const {render} = rendererWith({gmp, capabilities: true});
+    render(<TagResourceList entity={tag} />);
+
+    await screen.findByText('Inherited Scanner');
+
+    expect(getScanners).toHaveBeenCalled();
+    expect(gmp.buildUrl).not.toHaveBeenCalled();
   });
 });

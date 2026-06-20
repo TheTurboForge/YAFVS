@@ -175,9 +175,11 @@ list/detail metadata reads are browser-proxied, including NVT identity, active
 state, task/result links, and severity override values; override create, modify,
 clone, export, delete, trashcan mutation, and result-specific expansion remain
 inherited. Tag list/detail metadata reads are browser-proxied, including
-resource type/count, active state, and value; assigned-resource expansion and
-tag create, modify, clone, enable/disable, export, and delete actions remain
-inherited. Scan-config list reads are browser-proxied, and scan-config metadata
+resource type/count, active state, and value; tag assigned-resource expansion is
+browser-proxied only for read-only strict-whitelist id/type/name references;
+tag create, modify, clone, enable/disable, export, delete, unsupported resource
+types, and writes remain inherited. Scan-config list reads are browser-proxied,
+and scan-config metadata
 detail exists for internal automation; rich detail tabs, scanner/NVT
 preferences, selector/family expansion, import/export, and writes remain
 inherited. Schedule

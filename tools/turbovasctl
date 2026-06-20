@@ -2991,8 +2991,8 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             },
             {
                 "endpoint": "/api/v1/tags/{tag_id}/resources",
-                "status": "implemented_internal",
-                "replacement_candidates": ["read-only tag assigned-resource references", "native-api-request helper"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Tag assigned-items tab (migrated through gsad same-origin proxy)", "read-only tag assigned-resource references", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/overrides",

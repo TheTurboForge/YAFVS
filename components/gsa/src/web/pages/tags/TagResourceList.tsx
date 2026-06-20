@@ -8,6 +8,7 @@ import styled from 'styled-components';
 import Filter from 'gmp/models/filter';
 import type Model from 'gmp/models/model';
 import type Tag from 'gmp/models/tag';
+import {fetchNativeTagResources} from 'gmp/native-api/tags';
 import {
   type EntityType,
   type NormalizeType,
@@ -33,6 +34,31 @@ interface ResourceListProps {
 }
 
 const MAX_RESOURCES = 40;
+
+const NATIVE_TAG_RESOURCE_TYPES = new Set<EntityType>([
+  'certbund',
+  'cpe',
+  'cve',
+  'dfncert',
+  'host',
+  'nvt',
+  'operatingsystem',
+  'portlist',
+  'reportconfig',
+  'reportformat',
+  'scanconfig',
+  'target',
+  'task',
+  'tlscertificate',
+]);
+
+const canUseNativeTagResources = (
+  gmp: {buildUrl?: unknown},
+  resourceType?: EntityType,
+) =>
+  typeof gmp?.buildUrl === 'function' &&
+  isDefined(resourceType) &&
+  NATIVE_TAG_RESOURCE_TYPES.has(resourceType);
 
 const Spacer = styled.div`
   height: 12px;
@@ -70,20 +96,32 @@ const TagResourceList = ({entity}: ResourceListProps) => {
       return;
     }
 
-    const filter = Filter.fromString(
-      'tag_id="' + id + '" rows=' + MAX_RESOURCES,
-    );
-    const entitiesCommand = gmp[pluralizeType(resourceType)];
-
-    if (!isDefined(entitiesCommand)) {
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
 
     const loadResources = async () => {
       try {
+        if (canUseNativeTagResources(gmp, resourceType as EntityType)) {
+          setResources(
+            await fetchNativeTagResources(
+              gmp,
+              id as string,
+              resourceType as EntityType,
+              MAX_RESOURCES,
+            ),
+          );
+          return;
+        }
+
+        const filter = Filter.fromString(
+          'tag_id="' + id + '" rows=' + MAX_RESOURCES,
+        );
+        const entitiesCommand = gmp[pluralizeType(resourceType)];
+
+        if (!isDefined(entitiesCommand)) {
+          setResources([]);
+          return;
+        }
+
         const response: {data: Model[]} = await entitiesCommand.get({filter});
         setResources(response.data);
       } finally {

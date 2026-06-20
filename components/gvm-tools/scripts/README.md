@@ -551,24 +551,6 @@ where status is "All", "Requested", "Queued", "Interrupted", "Running", "Stop Re
 - There are no reports generated before at least one scan task has been started.
 
 
-## `list-scan-configs.gmp.py`
-
-Lists all scan configs.
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-scan-configs.gmp.py`
-
-## `list-tags.gmp.py`
-
-Lists all tags currently configured.
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-tags.gmp.py`
-
-Returns Tag name, uuid, Modified Date, Value, Type, and Count of ressources assigned to tag.
-
 ## `list-users.gmp.py`
 
 Lists all users

@@ -2928,8 +2928,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/cert-bund-advisories/{advisory_id}",
-                "status": "implemented_internal",
-                "replacement_candidates": ["read-only CERT-Bund advisory catalog-detail automation"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": [
+                    "GSA Security Information CERT-Bund advisory detail metadata overlay (migrated through gsad same-origin proxy)",
+                    "read-only CERT-Bund advisory catalog-detail automation",
+                    "native-api-request helper",
+                ],
             },
             {
                 "endpoint": "/api/v1/dfn-cert-advisories",
@@ -2938,8 +2942,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/dfn-cert-advisories/{advisory_id}",
-                "status": "implemented_internal",
-                "replacement_candidates": ["read-only DFN-CERT advisory catalog-detail automation"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": [
+                    "GSA Security Information DFN-CERT advisory detail metadata overlay (migrated through gsad same-origin proxy)",
+                    "read-only DFN-CERT advisory catalog-detail automation",
+                    "native-api-request helper",
+                ],
             },
             {
                 "endpoint": "/api/v1/operating-systems",

@@ -25,8 +25,8 @@ The first API phase is read-only and report-focused:
 - task list and task detail summary reads;
 - top-level asset/security metadata lists for results, vulnerabilities, CVE,
   CPE, and NVT catalog entries, operating systems, hosts, TLS certificates,
-  and scanner metadata; internal detail metadata is available for operating
-  systems, hosts, and TLS certificates.
+  and scanner metadata; browser-proxied detail Information metadata is
+  available for operating systems, hosts, TLS certificates, and scanners.
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
 - tag list and detail metadata reads, including resource type/count and value,
@@ -100,7 +100,7 @@ The first runtime implementation proof is scoped in
 `docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
 for raw report list/detail/result rows/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
-task list/detail, scanner metadata list, saved filter list/detail, override
+task list/detail, scanner metadata list/detail Information, saved filter list/detail, override
 list/detail metadata, tag list/detail metadata, operating-system asset
 list/detail metadata, host asset list/detail metadata, scan-config metadata
 list/detail, port-list list/detail, schedule list/detail, report-config
@@ -137,8 +137,11 @@ start/stop, and other scanner-control actions remain on the inherited path.
 
 Native scanner metadata rows include scanner identity, host/socket, port,
 inherited scanner type, safe credential references, relay metadata, and
-timestamps. They do not expose credential secret values or scanner CA material,
-and all scanner control actions remain on the inherited path.
+timestamps. Scanner detail Information overlays this read-only metadata in GSA
+while inherited GMP context keeps User Tags, CA/certificate data, credential
+download context, verify/export/download/delete/clone/edit actions, and scanner
+control behavior. Native scanner reads do not expose credential secret values or
+scanner CA material.
 
 Native operating-system asset rows include the `oss.uuid` identity, CPE/name,
 title, latest/highest/average host severity, current best-OS host count, all

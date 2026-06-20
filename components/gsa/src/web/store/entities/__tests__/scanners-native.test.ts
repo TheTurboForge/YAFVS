@@ -4,9 +4,15 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {fetchNativeScanners} from 'gmp/native-api/scanners';
+import Credential, {type CredentialElement} from 'gmp/models/credential';
+import Scanner from 'gmp/models/scanner';
+import {fetchNativeScanner, fetchNativeScanners} from 'gmp/native-api/scanners';
+import {loadEntity} from 'web/store/entities/scanners';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
   session: {jwt, token},
 });
@@ -61,7 +67,9 @@ describe('native API scanners list', () => {
     expect(scanner.hasUnixSocket()).toEqual(true);
     expect(scanner.port).toEqual(0);
     expect(scanner.scannerType).toEqual('2');
-    expect(scanner.credential?.id).toEqual('6d799e1f-a81b-4b33-8090-5d4b0ed8ec77');
+    expect(scanner.credential?.id).toEqual(
+      '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
+    );
     expect(scanner.credential?.name).toEqual('Scanner credential');
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/scanners', {
       token: 'test-token',
@@ -80,5 +88,155 @@ describe('native API scanners list', () => {
         },
       },
     );
+  });
+});
+
+describe('native API scanner detail', () => {
+  test('fetches one scanner from the native detail endpoint', async () => {
+    const id = '08b69003-5fc2-4037-a479-93b440211c73';
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        name: 'OpenVAS Default',
+        comment: 'detail metadata only',
+        host: '/runtime/run/ospd/ospd-openvas.sock',
+        port: 0,
+        scanner_type: 2,
+        credential: {
+          id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
+          name: 'Scanner credential',
+        },
+        created_at: '2026-06-18T18:00:00Z',
+        modified_at: '2026-06-18T20:00:00Z',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    const response = await fetchNativeScanner(gmp, id);
+
+    const scanner = response.scanner;
+    expect(scanner.id).toEqual(id);
+    expect(scanner.name).toEqual('OpenVAS Default');
+    expect(scanner.comment).toEqual('detail metadata only');
+    expect(scanner.hasUnixSocket()).toEqual(true);
+    expect(scanner.scannerType).toEqual('2');
+    expect(scanner.credential?.name).toEqual('Scanner credential');
+    expect(gmp.buildUrl).toHaveBeenCalledWith(`api/v1/scanners/${id}`, {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://turbovas.example/api/v1/scanners/${id}`,
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('loads inherited detail context before overlaying native Information fields', async () => {
+    const id = '08b69003-5fc2-4037-a479-93b440211c73';
+    const calls: string[] = [];
+    const inherited = Scanner.fromElement({
+      _id: id,
+      name: 'Inherited Scanner',
+      comment: 'inherited comment',
+      type: 2,
+      host: 'inherited.example',
+      port: 9390,
+      writable: 1,
+      ca_pub: 'retained CA certificate',
+      credential: {
+        _id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
+        name: 'Inherited credential',
+        certificate_info: {
+          issuer: 'Inherited Issuer',
+        },
+      } as CredentialElement,
+      tasks: {
+        task: [{_id: 'task-1', name: 'Retained task', usage_type: 'scan'}],
+      },
+      configs: {
+        config: [{_id: 'config-1', name: 'Retained config'}],
+      },
+      user_tags: {
+        tag: [{_id: 'tag-1', name: 'Retained tag', value: 'true'}],
+      },
+    });
+    const fetchMock = testing.fn().mockImplementation(() => {
+      calls.push('native');
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue({
+          id,
+          name: 'Native Scanner',
+          comment: 'native comment',
+          host: '/runtime/run/ospd/ospd-openvas.sock',
+          port: 0,
+          scanner_type: 2,
+          credential: {
+            id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
+            name: 'Native credential',
+          },
+          created_at: '2026-06-18T18:00:00Z',
+          modified_at: '2026-06-18T20:00:00Z',
+        }),
+        ok: true,
+        status: 200,
+      });
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp({jwt: 'jwt-token'}),
+      scanner: {
+        get: testing.fn().mockImplementation(() => {
+          calls.push('gmp');
+          return Promise.resolve({data: inherited});
+        }),
+      },
+    };
+    const actions: Array<{type: string; data?: Scanner}> = [];
+    const dispatch = testing.fn(action => {
+      actions.push(action);
+      return action;
+    });
+    const getState = () => ({
+      entities: {
+        scanner: {
+          byId: {},
+          errors: {},
+          isLoading: {},
+        },
+      },
+    });
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    const success = actions.find(
+      action => action.type === 'ENTITY_LOADING_SUCCESS',
+    );
+    const scanner = success?.data;
+    expect(calls).toEqual(['gmp', 'native']);
+    expect(gmp.scanner.get).toHaveBeenCalledWith({id});
+    expect(scanner).toBeInstanceOf(Scanner);
+    expect(scanner?.name).toEqual('Native Scanner');
+    expect(scanner?.comment).toEqual('native comment');
+    expect(scanner?.host).toEqual('/runtime/run/ospd/ospd-openvas.sock');
+    expect(scanner?.port).toEqual(0);
+    expect(scanner?.scannerType).toEqual('2');
+    expect(scanner?.credential).toBeInstanceOf(Credential);
+    expect(scanner?.credential?.name).toEqual('Native credential');
+    expect(scanner?.credential?.certificateInfo?.issuer).toEqual(
+      'Inherited Issuer',
+    );
+    expect(scanner?.caPub?.certificate).toEqual('retained CA certificate');
+    expect(scanner?.tasks?.[0].name).toEqual('Retained task');
+    expect(scanner?.configs?.[0].name).toEqual('Retained config');
+    expect(scanner?.userTags?.[0].name).toEqual('Retained tag');
+    expect(scanner?.isWritable()).toEqual(true);
   });
 });

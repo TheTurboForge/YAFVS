@@ -2956,8 +2956,8 @@ def summarize_native_tooling(items: list[dict[str, Any]]) -> dict[str, Any]:
             },
             {
                 "endpoint": "/api/v1/scanners/{scanner_id}",
-                "status": "implemented_internal",
-                "replacement_candidates": ["read-only scanner metadata automation", "native-api-request helper"],
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Scanner detail Information fields (migrated through gsad same-origin proxy)", "read-only scanner metadata automation", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/scan-configs",

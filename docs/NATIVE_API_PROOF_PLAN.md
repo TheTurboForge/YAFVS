@@ -8,9 +8,9 @@ before implementing broader endpoint coverage. The first proof started with
 scope-report Hosts and now also covers all scope-report evidence tabs,
 persisted scope-report Metrics, raw report Metrics, raw report list/detail,
 raw report evidence rows, scope list/detail, target list reads, task list reads,
-target/task read-summary reads, and scanner metadata list reads. Scanner
-control, feed state, credential secrets, writes, and account management remain out of
-scope for this proof.
+target/task read-summary reads, and scanner metadata list/detail Information
+reads. Scanner control, feed state, credential secrets, writes, and account
+management remain out of scope for this proof.
 
 ## First Proof Candidate
 
@@ -139,6 +139,7 @@ where it exists:
 - `GET /api/v1/tasks`
 - `GET /api/v1/tasks/{task_id}`
 - `GET /api/v1/scanners`
+- `GET /api/v1/scanners/{scanner_id}` metadata only
 - `GET /api/v1/scan-configs`
 - `GET /api/v1/scan-configs/{scan_config_id}` metadata only
 - `GET /api/v1/filters`
@@ -167,9 +168,11 @@ tabs and the high-value raw report evidence tabs. Target list reads are also
 browser-proxied through the authenticated `gsad` same-origin boundary, including
 credential metadata that the inherited UI already displayed. Task list reads are
 also browser-proxied with the read-only table metadata required by the current
-operator view. Scanner metadata list reads are browser-proxied, but scanner
-details and scanner writes remain inherited. Target-detail and task-detail reads
-remain internal native endpoints until their browser parity gaps are closed.
+operator view. Scanner metadata list and detail Information reads are
+browser-proxied, while verify/export/download, credential/certificate download
+context, User Tags, and scanner writes remain inherited. Target-detail and
+task-detail reads remain internal native endpoints until their browser parity
+gaps are closed.
 Port-list list/detail reads are browser-proxied, including port ranges and target
 backlinks; port-list writes and import/export actions remain inherited. Override
 list/detail metadata reads are browser-proxied, including NVT identity, active

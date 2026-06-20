@@ -6,6 +6,7 @@
 
 import {createAll} from 'web/store/entities/utils/main';
 import {
+  fetchNativeScanner,
   fetchNativeScanners,
   nativeScannersQueryFromFilter,
 } from 'gmp/native-api/scanners';
@@ -21,6 +22,43 @@ const {
 } = createAll('scanner');
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const mergeNativeCredentialReference = (
+  inheritedCredential,
+  nativeCredential,
+) => {
+  if (nativeCredential === undefined) {
+    return inheritedCredential;
+  }
+
+  if (inheritedCredential === undefined) {
+    return nativeCredential;
+  }
+
+  return Object.assign(
+    Object.create(Object.getPrototypeOf(inheritedCredential)),
+    inheritedCredential,
+    {
+      id: nativeCredential.id,
+      name: nativeCredential.name,
+    },
+  );
+};
+
+const mergeNativeInformation = (inherited, native) =>
+  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
+    name: native.name,
+    comment: native.comment,
+    creationTime: native.creationTime,
+    modificationTime: native.modificationTime,
+    host: native.host,
+    port: native.port,
+    scannerType: native.scannerType,
+    credential: mergeNativeCredentialReference(
+      inherited.credential,
+      native.credential,
+    ),
+  });
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   if (!canUseNativeApi(gmp)) {
@@ -50,10 +88,42 @@ const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   );
 };
 
+const nativeLoadEntity = gmp => id => (dispatch, getState) => {
+  if (!canUseNativeApi(gmp)) {
+    return loadEntity(gmp)(id)(dispatch, getState);
+  }
+
+  const rootState = getState();
+  const state = selector(rootState);
+
+  if (state.isLoadingEntity(id)) {
+    return Promise.resolve();
+  }
+
+  dispatch(entityLoadingActions.request(id));
+
+  return gmp.scanner
+    .get({id})
+    .then(inheritedResponse =>
+      fetchNativeScanner(gmp, id).then(nativeResponse =>
+        dispatch(
+          entityLoadingActions.success(
+            id,
+            mergeNativeInformation(
+              inheritedResponse.data,
+              nativeResponse.scanner,
+            ),
+          ),
+        ),
+      ),
+    )
+    .catch(error => dispatch(entityLoadingActions.error(id, error)));
+};
+
 export {
   loadAllEntities,
   nativeLoadEntities as loadEntities,
-  loadEntity,
+  nativeLoadEntity as loadEntity,
   reducer,
   selector,
   entitiesLoadingActions,

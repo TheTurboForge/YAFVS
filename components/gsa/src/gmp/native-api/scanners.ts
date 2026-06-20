@@ -63,6 +63,10 @@ export interface NativeScannersResponse {
   page: NativePage;
 }
 
+export interface NativeScannerResponse {
+  scanner: Scanner;
+}
+
 const SCANNER_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   host: 'host',
@@ -186,5 +190,19 @@ export const fetchNativeScanners = async (
     scanners,
     counts: nativeCounts(page, scanners.length),
     page,
+  };
+};
+
+export const fetchNativeScanner = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeScannerResponse> => {
+  const payload = await fetchNativeJson<NativeScannerPayload>(
+    gmp,
+    `api/v1/scanners/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return {
+    scanner: nativeScannerToModel(payload),
   };
 };

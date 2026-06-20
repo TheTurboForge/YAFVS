@@ -5,7 +5,6 @@
 
 import React from 'react';
 import Filter, {CERTBUND_FILTER_FILTER} from 'gmp/models/filter';
-import DashboardControls from 'web/components/dashboard/Controls';
 import {CertBundAdvIcon} from 'web/components/icon';
 import ManualIcon from 'web/components/icon/ManualIcon';
 import PageTitle from 'web/components/layout/PageTitle';
@@ -13,9 +12,6 @@ import EntitiesPage from 'web/entities/EntitiesPage';
 import withEntitiesContainer from 'web/entities/withEntitiesContainer';
 import useTranslation from 'web/hooks/useTranslation';
 import CertBundFilterDialog from 'web/pages/certbund/CertBundFilterDialog';
-import CertBundDashboard, {
-  CERTBUND_DASHBOARD_ID,
-} from 'web/pages/certbund/dashboard';
 import CertBundTable from 'web/pages/certbund/Table';
 import {
   loadEntities,
@@ -42,15 +38,6 @@ const Page = ({filter, onFilterChanged, ...props}) => {
       <PageTitle title={_('CERT-Bund Advisories')} />
       <EntitiesPage
         {...props}
-        dashboard={() => (
-          <CertBundDashboard
-            filter={filter}
-            onFilterChanged={onFilterChanged}
-          />
-        )}
-        dashboardControls={() => (
-          <DashboardControls dashboardId={CERTBUND_DASHBOARD_ID} />
-        )}
         filter={filter}
         filterEditDialog={CertBundFilterDialog}
         filtersFilter={CERTBUND_FILTER_FILTER}

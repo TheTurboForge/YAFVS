@@ -5,7 +5,6 @@
 
 import React from 'react';
 import Filter, {CVES_FILTER_FILTER} from 'gmp/models/filter';
-import DashboardControls from 'web/components/dashboard/Controls';
 import {CveIcon} from 'web/components/icon';
 import ManualIcon from 'web/components/icon/ManualIcon';
 import PageTitle from 'web/components/layout/PageTitle';
@@ -13,7 +12,6 @@ import EntitiesPage from 'web/entities/EntitiesPage';
 import withEntitiesContainer from 'web/entities/withEntitiesContainer';
 import useTranslation from 'web/hooks/useTranslation';
 import CveFilterDialog from 'web/pages/cves/CveFilterDialog';
-import CvesDashboard, {CVES_DASHBOARD_ID} from 'web/pages/cves/dashboard';
 import CvesTable from 'web/pages/cves/Table';
 import {
   loadEntities,
@@ -36,12 +34,6 @@ const Page = ({filter, onFilterChanged, ...props}) => {
       <EntitiesPage
         {...props}
         createFilterType="info"
-        dashboard={() => (
-          <CvesDashboard filter={filter} onFilterChanged={onFilterChanged} />
-        )}
-        dashboardControls={() => (
-          <DashboardControls dashboardId={CVES_DASHBOARD_ID} />
-        )}
         filter={filter}
         filterEditDialog={CveFilterDialog}
         filtersFilter={CVES_FILTER_FILTER}

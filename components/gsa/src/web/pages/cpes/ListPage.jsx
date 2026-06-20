@@ -5,7 +5,6 @@
 
 import React from 'react';
 import Filter, {CPES_FILTER_FILTER} from 'gmp/models/filter';
-import DashboardControls from 'web/components/dashboard/Controls';
 import {CpeLogoIcon} from 'web/components/icon';
 import ManualIcon from 'web/components/icon/ManualIcon';
 import PageTitle from 'web/components/layout/PageTitle';
@@ -13,7 +12,6 @@ import EntitiesPage from 'web/entities/EntitiesPage';
 import withEntitiesContainer from 'web/entities/withEntitiesContainer';
 import useTranslation from 'web/hooks/useTranslation';
 import CpeFilterDialog from 'web/pages/cpes/CpeFilterDialog';
-import CpesDashboard, {CPES_DASHBOARD_ID} from 'web/pages/cpes/dashboard';
 import CpesTable from 'web/pages/cpes/Table';
 import {
   loadEntities,
@@ -35,12 +33,6 @@ const Page = ({filter, onFilterChanged, ...props}) => {
       <PageTitle title={_('CPEs')} />
       <EntitiesPage
         {...props}
-        dashboard={() => (
-          <CpesDashboard filter={filter} onFilterChanged={onFilterChanged} />
-        )}
-        dashboardControls={() => (
-          <DashboardControls dashboardId={CPES_DASHBOARD_ID} />
-        )}
         filter={filter}
         filterEditDialog={CpeFilterDialog}
         filtersFilter={CPES_FILTER_FILTER}

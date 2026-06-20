@@ -156,7 +156,6 @@ describe('CpesPage tests', () => {
 
     await wait();
 
-    const display = screen.getAllByTestId('grid-item');
     const powerFilter = within(screen.queryPowerFilter());
     const inputs = powerFilter.queryTextInputs();
     const select = powerFilter.getByTestId('powerfilter-select');
@@ -175,15 +174,11 @@ describe('CpesPage tests', () => {
     expect(screen.getAllByTitle('Edit Filter')[0]).toBeInTheDocument();
     expect(select).toHaveValue('--');
     expect(select).toHaveAttribute('title', 'Loaded filter');
-
-    // Dashboard
     expect(
-      screen.getAllByTitle('Add new Dashboard Display')[0],
-    ).toBeInTheDocument();
-    expect(screen.getAllByTitle('Reset to Defaults')[0]).toBeInTheDocument();
-    expect(display[0]).toHaveTextContent('CPEs by Severity Class (Total: 0)');
-    expect(display[1]).toHaveTextContent('CPEs by Creation Time');
-    expect(display[2]).toHaveTextContent('CPEs by CVSS (Total: 0)');
+      screen.queryByTitle('Add new Dashboard Display'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Reset to Defaults')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
 
     // Table
     const table = screen.queryTable();

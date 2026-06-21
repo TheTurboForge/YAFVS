@@ -33,6 +33,19 @@ interface NativeScopeReportSeverityCounts {
   false_positive?: number;
 }
 
+interface NativeScopeReportSourceItem {
+  id?: string;
+  source_report_id?: string;
+  source_report_name?: string;
+  target_id?: string;
+  target_name?: string;
+  task_id?: string;
+  task_name?: string;
+  scan_end?: string;
+  selected?: boolean;
+  reason?: string;
+}
+
 interface NativeScopeReportItem {
   id?: string;
   name?: string;
@@ -52,6 +65,7 @@ interface NativeScopeReportItem {
   excluded_candidate_host_count?: number;
   creation_time?: string;
   modification_time?: string;
+  sources?: NativeScopeReportSourceItem[];
 }
 
 interface NativeScopeReportPage {
@@ -116,6 +130,34 @@ const protectionValue = (value: unknown): ProtectionRequirement => {
   }
 };
 
+const booleanValue = (value: unknown, fallback = false): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  if (typeof value === 'string') {
+    return ['1', 'true', 'yes'].includes(value.toLowerCase());
+  }
+  return fallback;
+};
+
+const nativeScopeReportSourceToModel = (
+  source: NativeScopeReportSourceItem,
+) => ({
+  id: optionalStringValue(source.id),
+  sourceReportId: optionalStringValue(source.source_report_id),
+  sourceReportName: optionalStringValue(source.source_report_name),
+  targetId: optionalStringValue(source.target_id),
+  targetName: optionalStringValue(source.target_name),
+  taskId: optionalStringValue(source.task_id),
+  taskName: optionalStringValue(source.task_name),
+  scanEnd: optionalStringValue(source.scan_end),
+  selected: booleanValue(source.selected, true),
+  reason: optionalStringValue(source.reason),
+});
+
 const protectionLabel = (value: unknown): string => {
   switch (protectionValue(value)) {
     case 'high':
@@ -154,9 +196,36 @@ export const nativeScopeReportToModel = (
     scopeName: stringValue(scope.name),
     protectionRequirement: protectionValue(item.protection_requirement),
     protectionRequirementLabel: protectionLabel(item.protection_requirement),
-    sources: [],
+    sources: (item.sources ?? []).map(nativeScopeReportSourceToModel),
     topResults: [],
   };
+};
+
+export const fetchNativeScopeReport = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<ScopeReport> => {
+  const headers: HeadersInit = {Accept: 'application/json'};
+  if (gmp.session.jwt) {
+    headers.Authorization = `Bearer ${gmp.session.jwt}`;
+  }
+
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/scope-reports/${encodeURIComponent(id)}`, {
+      token: gmp.session.token,
+    }),
+    {
+      credentials: 'include',
+      headers,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return nativeScopeReportToModel(
+    (await response.json()) as NativeScopeReportItem,
+  );
 };
 
 export const fetchNativeScopeReports = async (

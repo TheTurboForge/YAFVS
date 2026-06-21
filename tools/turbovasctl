@@ -363,6 +363,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/tasks",
         "/api/v1/tasks/{}",
         "/api/v1/scope-reports",
+        "/api/v1/scope-reports/{}",
         "/api/v1/scopes/{}/reports/{}/results",
         "/api/v1/scopes/{}/reports/{}/hosts",
         "/api/v1/scopes/{}/reports/{}/ports",
@@ -3834,6 +3835,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["runtime-scope-report-summary helper (migrated)", "GSA scope-report list reads (migrated through gsad same-origin proxy)", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/scope-reports/{scope_report_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA scope-report detail summary and source reads (migrated through gsad same-origin proxy)", "read-only scope-report automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA scope-report Hosts tab (migrated through gsad same-origin proxy)", "host evidence reads for scope reports"],
@@ -6910,6 +6916,37 @@ def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
     scope_report_items = scope_reports_json.get("items", []) if isinstance(scope_reports_json, dict) else []
     selected_scope_report = scope_report_items[0] if scope_report_items else None
     selected_scope = selected_scope_report.get("scope") if isinstance(selected_scope_report, dict) else None
+    if isinstance(selected_scope_report, dict) and selected_scope_report.get("id"):
+        scope_report_path = f"/api/v1/scope-reports/{urllib.parse.quote(str(selected_scope_report['id']))}"
+        scope_report_direct = direct_native_api_curl(
+            repo_root,
+            scope_report_path,
+            token=env[TURBOVAS_API_BEARER_TOKEN_ENV],
+            env=env,
+        )
+        scope_report_direct_json, scope_report_direct_status = parse_json_output_with_http_status(scope_report_direct)
+        scope_report_direct_ok = (
+            scope_report_direct.returncode == 0
+            and scope_report_direct_status == 200
+            and isinstance(scope_report_direct_json, dict)
+            and scope_report_direct_json.get("id") == selected_scope_report.get("id")
+            and isinstance(scope_report_direct_json.get("sources"), list)
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if scope_report_direct_ok else "fail",
+                "native-api-direct.scope-report-detail",
+                "Direct native API reads scope-report detail metadata and evidence sources."
+                if scope_report_direct_ok
+                else "Direct native API scope-report detail read failed or returned an unexpected payload.",
+                scope_report_direct,
+                direct_native_api_display_command(scope_report_path, token=env[TURBOVAS_API_BEARER_TOKEN_ENV], env=env),
+                scope_report_direct_json,
+                {"http_status": scope_report_direct_status, **summarize_native_api_response(scope_report_direct_json)},
+            )
+        )
+    else:
+        findings.append(finding("warn", "native-api-direct.scope-report-detail", "No scope report exists yet, so the direct scope-report detail probe was skipped."))
     if (
         isinstance(selected_scope_report, dict)
         and isinstance(selected_scope, dict)
@@ -7483,6 +7520,28 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             reports_json,
         )
     )
+    if report_items:
+        first_scope_report = report_items[0]
+        scope_report_detail_id = first_scope_report.get("id") if isinstance(first_scope_report, dict) else None
+        if scope_report_detail_id:
+            scope_report_detail = native_api_curl(repo_root, f"/api/v1/scope-reports/{urllib.parse.quote(scope_report_detail_id)}")
+            scope_report_detail_json = parse_json_output(scope_report_detail)
+            scope_report_sources = scope_report_detail_json.get("sources") if isinstance(scope_report_detail_json, dict) else None
+            details["scope_report_detail"] = summarize_native_api_response(scope_report_detail_json)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if scope_report_detail.returncode == 0 and isinstance(scope_report_detail_json, dict) and scope_report_detail_json.get("id") == scope_report_detail_id and isinstance(scope_report_sources, list) else "fail",
+                    "native-api.scope-report-detail",
+                    f"Native API scope-report detail probe exit code {scope_report_detail.returncode}.",
+                    scope_report_detail,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports/..."),
+                    scope_report_detail_json,
+                )
+            )
+        else:
+            findings.append(finding("fail", "native-api.scope-report-detail", "Scope Reports list did not include a scope report id for the detail probe."))
+    else:
+        findings.append(finding("warn", "native-api.scope-report-detail", "No scope reports exist yet, so the scope-report detail probe was skipped."))
 
     scopes = native_api_curl(repo_root, "/api/v1/scopes?page_size=1&sort=name")
     scopes_json = parse_json_output(scopes)

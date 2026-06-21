@@ -963,6 +963,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScopeReportCollection'
+  /scope-reports/{scope_report_id}:
+    get:
+      x-turbovas-direct: true
+      summary: Read one generated scope report
+      parameters:
+        - $ref: '#/components/parameters/ScopeReportId'
+      responses:
+        '200':
+          description: Scope report detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeReport'
   /scopes/{scope_id}/reports/{scope_report_id}:
     get:
       summary: Read one scope report
@@ -2067,6 +2080,34 @@ components:
         modification_time:
           type: string
           format: date-time
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeReportSource'
+    ScopeReportSource:
+      type: object
+      required: [id, source_report_id, target_id, target_name, task_id, task_name, selected]
+      properties:
+        id:
+          type: string
+        source_report_id:
+          type: string
+          format: uuid
+        target_id:
+          type: string
+          format: uuid
+        target_name:
+          type: string
+        task_id:
+          type: string
+          format: uuid
+        task_name:
+          type: string
+        scan_end:
+          type: string
+          format: date-time
+        selected:
+          type: boolean
     ScopeReportRetentionPlan:
       type: object
       required: [id, name, scope, policy, summary, sources]

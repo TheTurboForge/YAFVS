@@ -235,6 +235,25 @@ struct ScopeReportItem {
 }
 
 #[derive(Debug, Serialize)]
+struct ScopeReportDetail {
+    #[serde(flatten)]
+    report: ScopeReportItem,
+    sources: Vec<ScopeReportSourceItem>,
+}
+
+#[derive(Debug, Serialize)]
+struct ScopeReportSourceItem {
+    id: String,
+    source_report_id: String,
+    target_id: String,
+    target_name: String,
+    task_id: String,
+    task_name: String,
+    scan_end: Option<String>,
+    selected: bool,
+}
+
+#[derive(Debug, Serialize)]
 struct ScopeReportRetentionPolicyPreview {
     mode: String,
     destructive_actions: bool,
@@ -1471,6 +1490,10 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/tasks", get(tasks))
         .route("/api/v1/tasks/:task_id", get(task_detail))
         .route("/api/v1/scope-reports", get(scope_reports))
+        .route(
+            "/api/v1/scope-reports/:scope_report_id",
+            get(scope_report_detail),
+        )
         .route("/api/v1/reports/:report_id/metrics", get(report_metrics))
         .route(
             "/api/v1/scopes/:scope_id/reports/:scope_report_id/results",
@@ -1690,6 +1713,7 @@ fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "scopes", _]
             | ["", "api", "v1", "targets", _]
             | ["", "api", "v1", "tasks", _]
+            | ["", "api", "v1", "scope-reports", _]
             | ["", "api", "v1", "tags", _, "resources"]
             | ["", "api", "v1", "tags", "resource-names", _]
             | ["", "api", "v1", "scan-configs", _, "families"]
@@ -7763,6 +7787,120 @@ async fn scope_reports(
     }))
 }
 
+async fn scope_report_detail(
+    State(state): State<AppState>,
+    Path(scope_report_id): Path<String>,
+) -> Result<Json<ScopeReportDetail>, ApiError> {
+    parse_uuid(&scope_report_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            "WITH selected_scope_report AS (\n\
+               SELECT sr.id, sr.scope, sr.uuid, sr.scope_uuid, sr.scope_name, sr.protection_requirement,\n\
+                      sr.source_report_count::bigint, sr.source_target_count::bigint,\n\
+                      sr.member_host_count::bigint, sr.evidence_host_count::bigint,\n\
+                      sr.missing_host_count::bigint, sr.result_count::bigint,\n\
+                      sr.vulnerability_count::bigint, sr.max_severity::double precision,\n\
+                      sr.latest_evidence_time::bigint, sr.excluded_candidate_host_count::bigint,\n\
+                      sr.creation_time::bigint, sr.modification_time::bigint,\n\
+                      coalesce(s.is_global, 0)::int AS is_global\n\
+                 FROM scope_reports sr\n\
+                 JOIN scopes s ON s.id = sr.scope\n\
+                WHERE lower(sr.uuid) = lower($1)\n\
+             ),\n\
+             selected_hosts AS (\n\
+                 SELECT f.id AS scope_report_id, lower(rh.host) AS host_key\n\
+                   FROM selected_scope_report f\n\
+                   JOIN scope_report_sources srs ON srs.scope_report = f.id\n\
+                   JOIN report_hosts rh ON rh.report = srs.source_report\n\
+                  WHERE f.is_global = 1 AND coalesce(rh.host, '') <> ''\n\
+                  GROUP BY f.id, lower(rh.host)\n\
+                 UNION\n\
+                 SELECT f.id AS scope_report_id, lower(h.name) AS host_key\n\
+                   FROM selected_scope_report f\n\
+                   JOIN scope_hosts sh ON sh.scope = f.scope AND f.is_global = 0\n\
+                   JOIN hosts h ON h.id = sh.host\n\
+                  WHERE coalesce(h.name, '') <> ''\n\
+                  GROUP BY f.id, lower(h.name)\n\
+             ),\n\
+             ranked_results AS (\n\
+                 SELECT f.id AS scope_report_id,\n\
+                        lower(coalesce(nullif(r.host, ''), r.hostname, '')) AS host_key,\n\
+                        coalesce(r.nvt, '') AS nvt_oid,\n\
+                        coalesce(r.port, '') AS port,\n\
+                        coalesce(r.severity, 0)::double precision AS severity,\n\
+                        row_number () OVER (\n\
+                          PARTITION BY f.id, lower(coalesce(nullif(r.host, ''), r.hostname, '')),\n\
+                                       coalesce(r.nvt, ''), coalesce(r.port, '')\n\
+                          ORDER BY coalesce(r.severity, 0) DESC, coalesce(r.date, 0) DESC, r.id DESC\n\
+                        ) AS rn\n\
+                   FROM selected_scope_report f\n\
+                   JOIN scope_report_sources srs ON srs.scope_report = f.id\n\
+                   JOIN results r ON r.report = srs.source_report\n\
+                   JOIN selected_hosts sh ON sh.scope_report_id = f.id\n\
+                                          AND sh.host_key = lower(coalesce(nullif(r.host, ''), r.hostname, ''))\n\
+                  WHERE coalesce(r.severity, 0) != -3.0\n\
+                    AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''\n\
+             ),\n\
+             severity_counts AS (\n\
+                 SELECT scope_report_id,\n\
+                        count(*) FILTER (WHERE severity >= 7.0)::bigint AS severity_high,\n\
+                        count(*) FILTER (WHERE severity >= 4.0 AND severity < 7.0)::bigint AS severity_medium,\n\
+                        count(*) FILTER (WHERE severity > 0.0 AND severity < 4.0)::bigint AS severity_low,\n\
+                        count(*) FILTER (WHERE severity = 0.0)::bigint AS severity_log,\n\
+                        count(*) FILTER (WHERE severity = -1.0)::bigint AS severity_false_positive\n\
+                   FROM ranked_results\n\
+                  WHERE rn = 1\n\
+                  GROUP BY scope_report_id\n\
+             )\n\
+             SELECT 1::bigint AS total,\n\
+                    f.uuid, f.scope_uuid, f.scope_name, f.protection_requirement,\n\
+                    f.source_report_count, f.source_target_count, f.member_host_count,\n\
+                    f.evidence_host_count, f.missing_host_count, f.result_count,\n\
+                    f.vulnerability_count, f.max_severity, f.latest_evidence_time,\n\
+                    f.excluded_candidate_host_count, f.creation_time, f.modification_time,\n\
+                    coalesce(sc.severity_high, 0)::bigint,\n\
+                    coalesce(sc.severity_medium, 0)::bigint,\n\
+                    coalesce(sc.severity_low, 0)::bigint,\n\
+                    coalesce(sc.severity_log, 0)::bigint,\n\
+                    coalesce(sc.severity_false_positive, 0)::bigint\n\
+               FROM selected_scope_report f\n\
+               LEFT JOIN severity_counts sc ON sc.scope_report_id = f.id;",
+            &[&scope_report_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scope report detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    let sources = client
+        .query(
+            "SELECT srs.id::bigint AS id,\n\
+                    coalesce(srs.source_report_uuid, '') AS source_report_id,\n\
+                    coalesce(srs.target_uuid, '') AS target_id,\n\
+                    coalesce(srs.target_name, '') AS target_name,\n\
+                    coalesce(srs.task_uuid, '') AS task_id,\n\
+                    coalesce(srs.task_name, '') AS task_name,\n\
+                    srs.scan_end::bigint AS scan_end\n\
+               FROM scope_report_sources srs\n\
+               JOIN scope_reports sr ON sr.id = srs.scope_report\n\
+              WHERE lower(sr.uuid) = lower($1)\n\
+              ORDER BY lower(coalesce(srs.target_name, '')), srs.target_uuid, srs.source_report_uuid;",
+            &[&scope_report_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scope report source query failed");
+            ApiError::Database
+        })?;
+
+    Ok(Json(ScopeReportDetail {
+        report: scope_report_from_row(&row),
+        sources: sources.iter().map(scope_report_source_from_row).collect(),
+    }))
+}
+
 async fn scope_report_hosts(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
@@ -9146,6 +9284,20 @@ fn scope_report_from_row(row: &Row) -> ScopeReportItem {
     }
 }
 
+fn scope_report_source_from_row(row: &Row) -> ScopeReportSourceItem {
+    let id: i64 = row.get("id");
+    ScopeReportSourceItem {
+        id: id.to_string(),
+        source_report_id: row.get("source_report_id"),
+        target_id: row.get("target_id"),
+        target_name: row.get("target_name"),
+        task_id: row.get("task_id"),
+        task_name: row.get("task_name"),
+        scan_end: unix_ts_to_rfc3339(row.get("scan_end")),
+        selected: true,
+    }
+}
+
 fn scope_report_retention_source_from_row(row: &Row) -> ScopeReportRetentionSource {
     let kept_as_latest: bool = row.get("kept_as_latest");
     ScopeReportRetentionSource {
@@ -10512,6 +10664,9 @@ FEED_COMMIT = "not part of the public contract";
         assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes///"));
         assert!(direct_api_v1_path_is_allowed(
             "/api/v1/scopes/scope-id/reports/report-id/metrics"
+        ));
+        assert!(direct_api_v1_path_is_allowed(
+            "/api/v1/scope-reports/scope-report-id"
         ));
         assert!(!direct_api_v1_path_is_allowed(
             "/api/v1/scopes/scope-id/reports/report-id/retention-plan"

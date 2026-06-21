@@ -6,6 +6,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {useNavigate, useParams} from 'react-router';
 import type {ScopeReport} from 'gmp/commands/scopes';
+import {fetchNativeScopeReport} from 'gmp/native-api/scope-reports';
 import {TASK_STATUS} from 'gmp/models/task';
 import SeverityBar from 'web/components/bar/SeverityBar';
 import StatusBar from 'web/components/bar/StatusBar';
@@ -55,8 +56,7 @@ const ScopeReportDetailsPage = () => {
     setLoading(true);
     setError(undefined);
     try {
-      const response = await gmp.scopereports.getOne(id);
-      setReport(response.data);
+      setReport(await fetchNativeScopeReport(gmp, id));
     } catch (err) {
       setError(String(err));
     } finally {

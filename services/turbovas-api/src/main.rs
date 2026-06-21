@@ -43,11 +43,6 @@ struct AppState {
     pool: Pool,
 }
 
-#[derive(Clone)]
-struct DirectApiAuth {
-    token: String,
-}
-
 const DIRECT_API_BIND_ENV: &str = "TURBOVAS_API_DIRECT_BIND";
 const DIRECT_API_BEARER_TOKEN_ENV: &str = "TURBOVAS_API_BEARER_TOKEN";
 const FEED_METADATA_ROOT_ENV: &str = "TURBOVAS_FEED_METADATA_DIR";

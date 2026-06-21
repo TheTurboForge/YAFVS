@@ -1126,6 +1126,87 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["missing_rust_direct_allowlist"], ["/api/v1/targets"])
         self.assertEqual(summary["unexpected_rust_direct_allowlist"], ["/api/v1/feeds"])
 
+    def test_native_tooling_state_tracks_openapi_contract_alignment(self):
+        root = Path(__file__).resolve().parents[2]
+        result = turbovasctl.command_native_tooling_state(root)
+        details = result["details"]
+        contract = details["openapi_contract"]
+        findings = {item["check"]: item for item in result["findings"]}
+
+        self.assertEqual(contract["alignment_status"], "pass")
+        self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
+        self.assertEqual(contract["operation_count"], 73)
+        self.assertEqual(contract["missing_operation_ids"], [])
+        self.assertEqual(contract["duplicate_operation_ids"], [])
+        self.assertEqual(contract["nondeterministic_operation_ids"], [])
+        self.assertEqual(contract["allowed_turbovas_operation_fields"], ["x-turbovas-direct"])
+        self.assertEqual(contract["unexpected_turbovas_operation_fields"], [])
+        self.assertEqual(contract["missing_shared_error_responses"], [])
+        self.assertEqual(contract["invalid_shared_error_responses"], [])
+        self.assertEqual(contract["operations_missing_error_responses"], [])
+        self.assertIn("getResultsByResultId", contract["operation_ids"])
+        self.assertIn("getScopesByScopeIdReportsByScopeReportIdRetentionPlan", contract["operation_ids"])
+
+    def test_openapi_operation_id_generator_is_stable_and_collision_free(self):
+        root = Path(__file__).resolve().parents[2]
+        operations = turbovasctl.openapi_contract_operations(root)
+        operation_ids = [
+            turbovasctl.openapi_contract_operation_id(item["method"], item["path"])
+            for item in operations
+        ]
+
+        self.assertEqual(len(operation_ids), 73)
+        self.assertEqual(len(operation_ids), len(set(operation_ids)))
+        self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/reports/{report_id}/results"), "getReportsByReportIdResults")
+        self.assertEqual(
+            turbovasctl.openapi_contract_operation_id("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"),
+            "getScopesByScopeIdReportsByScopeReportIdRetentionPlan",
+        )
+
+    def test_native_tooling_state_reports_openapi_contract_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi.parent.mkdir(parents=True)
+            openapi.write_text(
+                "openapi: 3.1.0\n"
+                "paths:\n"
+                "  /reports:\n"
+                "    get:\n"
+                "      operationId: customReports\n"
+                "      x-turbovas-direct: true\n"
+                "      x-turbovas-surprise: true\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Reports\n"
+                "        '400':\n"
+                "          $ref: '#/components/responses/BadRequest'\n"
+                "components:\n"
+                "  responses:\n"
+                "    BadRequest:\n"
+                "      content:\n"
+                "        application/json:\n"
+                "          schema:\n"
+                "            $ref: '#/components/schemas/Other'\n"
+                "  schemas:\n"
+                "    Error:\n"
+                "      type: object\n",
+                encoding="utf-8",
+            )
+            summary = turbovasctl.native_api_openapi_contract_summary(root)
+
+        self.assertEqual(summary["alignment_status"], "warn")
+        self.assertEqual(summary["operation_count"], 1)
+        self.assertEqual(summary["missing_operation_ids"], [])
+        self.assertEqual(summary["duplicate_operation_ids"], [])
+        self.assertEqual(summary["nondeterministic_operation_ids"][0]["operation"], "GET /reports")
+        self.assertEqual(summary["nondeterministic_operation_ids"][0]["expected"], "getReports")
+        self.assertEqual(summary["unexpected_turbovas_operation_fields"], [{"operation": "GET /reports", "fields": ["x-turbovas-surprise"]}])
+        self.assertIn("Unauthorized", summary["missing_shared_error_responses"])
+        self.assertEqual(summary["invalid_shared_error_responses"], [{"response": "BadRequest", "actual": "#/components/schemas/Other", "expected": "#/components/schemas/Error"}])
+        missing_statuses = {item["status"] for item in summary["operations_missing_error_responses"]}
+        self.assertEqual(missing_statuses, {"401", "405", "413", "500"})
+
     def test_security_policy_marks_native_api_contract_surfaces_sensitive(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_security_policy_check(root)
@@ -1224,29 +1305,20 @@ class TurboVASCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         contract = (root / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
         boundary = (root / "docs" / "NATIVE_API_AUTH_BOUNDARY.md").read_text(encoding="utf-8")
-        self.assertIn(
-            """/feeds:
-    get:
-      summary: List feed inventory metadata
-      description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This allowlisted direct-listener endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
-      x-turbovas-direct: true""",
-            openapi,
-        )
-        self.assertIn(
-            """/tags/resource-names/{resource_type}:
-    get:
-      summary: List tag-dialog resource names
-      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule id-name, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
-      x-turbovas-direct: true
-      parameters:
-        - name: resource_type
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]""",
-            openapi,
-        )
+        operations = {(item["method"], item["path"]): item for item in turbovasctl.openapi_contract_operations(root)}
+        feeds = operations[("get", "/feeds")]
+        tag_resource_names = operations[("get", "/tags/resource-names/{resource_type}")]
+
+        self.assertEqual(feeds["operation_id"], "getFeeds")
+        self.assertIn("x-turbovas-direct", feeds["x_turbovas_fields"])
+        self.assertEqual(feeds["responses"]["400"], "#/components/responses/BadRequest")
+        self.assertEqual(tag_resource_names["operation_id"], "getTagsResourceNamesByResourceType")
+        self.assertIn("x-turbovas-direct", tag_resource_names["x_turbovas_fields"])
+        self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
+        self.assertIn("summary: List feed inventory metadata", openapi)
+        self.assertIn("does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content", openapi)
+        self.assertIn("summary: List tag-dialog resource names", openapi)
+        self.assertIn("enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]", openapi)
         self.assertIn("redacted id/name resource-name lookup", openapi)
         self.assertIn("/api/v1/feeds", contract)
         self.assertIn("tag-dialog resource-name lookups", contract)

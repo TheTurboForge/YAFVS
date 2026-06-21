@@ -300,6 +300,24 @@ NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset(
     }
 )
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
+OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
+OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset({"x-turbovas-direct"})
+OPENAPI_SHARED_ERROR_RESPONSES = {
+    "BadRequest": "#/components/schemas/Error",
+    "Unauthorized": "#/components/schemas/Error",
+    "NotFound": "#/components/schemas/Error",
+    "MethodNotAllowed": "#/components/schemas/Error",
+    "RequestTooLarge": "#/components/schemas/Error",
+    "InternalError": "#/components/schemas/Error",
+}
+OPENAPI_COMMON_ERROR_RESPONSE_REFS = {
+    "400": "BadRequest",
+    "401": "Unauthorized",
+    "405": "MethodNotAllowed",
+    "413": "RequestTooLarge",
+    "500": "InternalError",
+}
+OPENAPI_PARAMETERIZED_ERROR_RESPONSE_REFS = {"404": "NotFound"}
 DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
     {
         "/api/v1/results",
@@ -3575,6 +3593,217 @@ def openapi_direct_endpoint_templates(repo_root: Path | None) -> list[str]:
     return sorted(templates)
 
 
+def openapi_contract_lines(repo_root: Path | None) -> list[str]:
+    if repo_root is None:
+        return []
+    path = repo_root / "api" / "openapi" / "turbovas-v1.yaml"
+    try:
+        return path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+
+
+def openapi_identifier_words(value: str) -> list[str]:
+    return [part.lower() for part in re.split(r"[^A-Za-z0-9]+", value) if part]
+
+
+def openapi_camel_piece(value: str) -> str:
+    return value[:1].upper() + value[1:]
+
+
+def openapi_contract_operation_id(method: str, path: str) -> str:
+    parts = [method.lower()]
+    for segment in path.strip("/").split("/"):
+        if segment.startswith("{") and segment.endswith("}"):
+            parts.append("by")
+            parts.extend(openapi_identifier_words(segment[1:-1]))
+        else:
+            parts.extend(openapi_identifier_words(segment))
+    return parts[0] + "".join(openapi_camel_piece(part) for part in parts[1:])
+
+
+def openapi_operation_label(operation: dict[str, Any]) -> str:
+    return f"{str(operation.get('method', '')).upper()} {operation.get('path', '')}"
+
+
+def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
+    lines = openapi_contract_lines(repo_root)
+    operations: list[dict[str, Any]] = []
+    current_path: str | None = None
+    current: dict[str, Any] | None = None
+    in_responses = False
+    current_status: str | None = None
+
+    def finish_current() -> None:
+        nonlocal current, in_responses, current_status
+        if current is not None:
+            operations.append(current)
+        current = None
+        in_responses = False
+        current_status = None
+
+    for line in lines:
+        path_match = re.match(r"^  (/[^:]+):$", line)
+        if path_match:
+            finish_current()
+            current_path = path_match.group(1)
+            continue
+        if line == "components:" or (line and not line.startswith(" ")):
+            finish_current()
+            current_path = None
+            continue
+        method_match = re.match(r"^    ([a-z]+):$", line)
+        if current_path and method_match and method_match.group(1) in OPENAPI_HTTP_METHODS:
+            finish_current()
+            current = {
+                "method": method_match.group(1),
+                "path": current_path,
+                "operation_id": None,
+                "x_turbovas_fields": [],
+                "responses": {},
+            }
+            continue
+        if current is None:
+            continue
+
+        operation_id_match = re.match(r"^      operationId:\s*([^#\s]+)\s*$", line)
+        if operation_id_match:
+            current["operation_id"] = operation_id_match.group(1)
+            continue
+        turbovas_field_match = re.match(r"^      (x-turbovas-[A-Za-z0-9_-]+):", line)
+        if turbovas_field_match:
+            current["x_turbovas_fields"].append(turbovas_field_match.group(1))
+            continue
+        if line == "      responses:":
+            in_responses = True
+            current_status = None
+            continue
+        if in_responses and line.startswith("      ") and not line.startswith("        "):
+            in_responses = False
+            current_status = None
+        if not in_responses:
+            continue
+        status_match = re.match(r"^        '?([0-9A-Za-z]+)'?:$", line)
+        if status_match:
+            current_status = status_match.group(1)
+            current["responses"].setdefault(current_status, None)
+            continue
+        response_ref_match = re.match(r"^          \$ref: ['\"]([^'\"]+)['\"]$", line)
+        if response_ref_match and current_status:
+            current["responses"][current_status] = response_ref_match.group(1)
+
+    finish_current()
+    return operations
+
+
+def openapi_components_response_refs(repo_root: Path | None) -> dict[str, str | None]:
+    lines = openapi_contract_lines(repo_root)
+    in_components = False
+    in_responses = False
+    current_response: str | None = None
+    refs: dict[str, str | None] = {}
+    for line in lines:
+        if line == "components:":
+            in_components = True
+            in_responses = False
+            current_response = None
+            continue
+        if in_components and line and not line.startswith(" "):
+            break
+        if not in_components:
+            continue
+        top_key_match = re.match(r"^  ([A-Za-z][A-Za-z0-9_-]*):$", line)
+        if top_key_match:
+            in_responses = top_key_match.group(1) == "responses"
+            current_response = None
+            continue
+        if not in_responses:
+            continue
+        response_match = re.match(r"^    ([A-Za-z][A-Za-z0-9]*):$", line)
+        if response_match:
+            current_response = response_match.group(1)
+            refs.setdefault(current_response, None)
+            continue
+        ref_match = re.match(r"^\s+\$ref: ['\"]([^'\"]+)['\"]$", line)
+        if ref_match and current_response:
+            refs[current_response] = ref_match.group(1)
+    return refs
+
+
+def openapi_required_error_response_refs(path: str) -> dict[str, str]:
+    required = dict(OPENAPI_COMMON_ERROR_RESPONSE_REFS)
+    if "{" in path:
+        required.update(OPENAPI_PARAMETERIZED_ERROR_RESPONSE_REFS)
+    return required
+
+
+def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any]:
+    operations = openapi_contract_operations(repo_root)
+    operation_ids = [item["operation_id"] for item in operations if isinstance(item.get("operation_id"), str) and item["operation_id"]]
+    duplicate_ids = sorted({operation_id for operation_id in operation_ids if operation_ids.count(operation_id) > 1})
+    missing_operation_ids = [openapi_operation_label(item) for item in operations if not item.get("operation_id")]
+    nondeterministic_operation_ids = [
+        {
+            "operation": openapi_operation_label(item),
+            "actual": item.get("operation_id"),
+            "expected": openapi_contract_operation_id(str(item.get("method", "")), str(item.get("path", ""))),
+        }
+        for item in operations
+        if item.get("operation_id") and item.get("operation_id") != openapi_contract_operation_id(str(item.get("method", "")), str(item.get("path", "")))
+    ]
+    unexpected_turbovas_fields = [
+        {"operation": openapi_operation_label(item), "fields": sorted(set(item.get("x_turbovas_fields", [])) - OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS)}
+        for item in operations
+        if sorted(set(item.get("x_turbovas_fields", [])) - OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS)
+    ]
+
+    shared_response_refs = openapi_components_response_refs(repo_root)
+    missing_shared_responses = sorted(set(OPENAPI_SHARED_ERROR_RESPONSES) - set(shared_response_refs))
+    invalid_shared_responses = [
+        {"response": name, "actual": shared_response_refs.get(name), "expected": expected}
+        for name, expected in sorted(OPENAPI_SHARED_ERROR_RESPONSES.items())
+        if name in shared_response_refs and shared_response_refs.get(name) != expected
+    ]
+    operations_missing_error_responses = []
+    for item in operations:
+        responses = item.get("responses", {}) if isinstance(item.get("responses"), dict) else {}
+        for status, response_name in sorted(openapi_required_error_response_refs(str(item.get("path", ""))).items()):
+            expected_ref = f"#/components/responses/{response_name}"
+            if responses.get(status) != expected_ref:
+                operations_missing_error_responses.append(
+                    {
+                        "operation": openapi_operation_label(item),
+                        "status": status,
+                        "actual": responses.get(status),
+                        "expected": expected_ref,
+                    }
+                )
+
+    drift = (
+        missing_operation_ids
+        or duplicate_ids
+        or nondeterministic_operation_ids
+        or unexpected_turbovas_fields
+        or missing_shared_responses
+        or invalid_shared_responses
+        or operations_missing_error_responses
+    )
+    return {
+        "alignment_status": "pass" if not drift else "warn",
+        "operation_count": len(operations),
+        "operation_ids": sorted(operation_ids),
+        "missing_operation_ids": missing_operation_ids,
+        "duplicate_operation_ids": duplicate_ids,
+        "nondeterministic_operation_ids": nondeterministic_operation_ids,
+        "allowed_turbovas_operation_fields": sorted(OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS),
+        "unexpected_turbovas_operation_fields": unexpected_turbovas_fields,
+        "shared_error_responses": shared_response_refs,
+        "missing_shared_error_responses": missing_shared_responses,
+        "invalid_shared_error_responses": invalid_shared_responses,
+        "operations_missing_error_responses": operations_missing_error_responses,
+    }
+
+
 def rust_source_function_body(source: str, name: str) -> str:
     match = re.search(rf"\bfn\s+{re.escape(name)}\s*\([^)]*\)\s*(?:->[^{{]+)?{{", source)
     if match is None:
@@ -4192,6 +4421,18 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "missing_rust_direct_allowlist_count": len(direct_contract.get("missing_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
         "unexpected_rust_direct_allowlist_count": len(direct_contract.get("unexpected_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
     }
+    openapi_contract = summary.get("openapi_contract", {})
+    compact_openapi_contract = {
+        "alignment_status": openapi_contract.get("alignment_status", "unknown") if isinstance(openapi_contract, dict) else "unknown",
+        "operation_count": openapi_contract.get("operation_count", 0) if isinstance(openapi_contract, dict) else 0,
+        "missing_operation_id_count": len(openapi_contract.get("missing_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
+        "duplicate_operation_id_count": len(openapi_contract.get("duplicate_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
+        "nondeterministic_operation_id_count": len(openapi_contract.get("nondeterministic_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
+        "unexpected_turbovas_operation_field_count": len(openapi_contract.get("unexpected_turbovas_operation_fields", [])) if isinstance(openapi_contract, dict) else 0,
+        "missing_shared_error_response_count": len(openapi_contract.get("missing_shared_error_responses", [])) if isinstance(openapi_contract, dict) else 0,
+        "invalid_shared_error_response_count": len(openapi_contract.get("invalid_shared_error_responses", [])) if isinstance(openapi_contract, dict) else 0,
+        "operations_missing_error_response_count": len(openapi_contract.get("operations_missing_error_responses", [])) if isinstance(openapi_contract, dict) else 0,
+    }
     return {
         "total_items": summary.get("total_items", 0),
         "by_category": by_category,
@@ -4200,6 +4441,7 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "implemented_native_endpoint_count": len(summary.get("implemented_native_endpoints", [])),
         "implemented_native_endpoints_by_status": endpoint_statuses,
         "direct_api_contract": compact_direct_contract,
+        "openapi_contract": compact_openapi_contract,
         "next_replacement_candidates": summary.get("next_replacement_candidates", []),
     }
 
@@ -4212,6 +4454,7 @@ def compact_native_tooling_finding_details(summary: dict[str, Any]) -> dict[str,
         "implemented_native_endpoint_count": compact["implemented_native_endpoint_count"],
         "implemented_native_endpoints_by_status": compact["implemented_native_endpoints_by_status"],
         "direct_api_contract": compact["direct_api_contract"],
+        "openapi_contract": compact["openapi_contract"],
     }
 
 
@@ -4219,9 +4462,12 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False) -> dict
     items = native_tooling_inventory(repo_root)
     summary = summarize_native_tooling(items, repo_root)
     annotate_native_tooling_direct_api(summary, repo_root)
+    summary["openapi_contract"] = native_api_openapi_contract_summary(repo_root)
     unknown_count = summary["by_category"]["unknown"]["count"]
     direct_contract = summary.get("direct_api_contract", {})
     direct_alignment_status = direct_contract.get("alignment_status", "warn") if isinstance(direct_contract, dict) else "warn"
+    openapi_contract = summary.get("openapi_contract", {})
+    openapi_alignment_status = openapi_contract.get("alignment_status", "warn") if isinstance(openapi_contract, dict) else "warn"
     finding_details = compact_native_tooling_finding_details(summary) if compact else summary
     findings = [
         finding("pass", "native-tooling.inventory", f"Classified {len(items)} inherited tooling dependency surface(s).", details=finding_details),
@@ -4232,6 +4478,14 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False) -> dict
             if direct_alignment_status == "pass"
             else "Native API endpoint inventory, Rust routes, Rust direct allowlist, or OpenAPI direct markers differ.",
             details=direct_contract,
+        ),
+        finding(
+            "pass" if openapi_alignment_status == "pass" else "warn",
+            "native-tooling.openapi-contract",
+            "Native API OpenAPI operations have deterministic operation IDs and shared Error responses."
+            if openapi_alignment_status == "pass"
+            else "Native API OpenAPI operation IDs, x-turbovas fields, or shared Error responses need attention.",
+            details=openapi_contract,
         ),
         finding("warn" if unknown_count else "pass", "native-tooling.unknown", f"{unknown_count} inherited tooling surface(s) are outside the current classification map." if unknown_count else "No inherited tooling surfaces were left unclassified.", details={"paths": summary["by_category"]["unknown"]["paths"]}),
         finding("pass", "native-tooling.end-state", "End-state remains full removal of required python-gvm and gvm-tools dependence after native API replacements land."),

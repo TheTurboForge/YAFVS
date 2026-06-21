@@ -16,6 +16,7 @@ security:
 paths:
   /results:
     get:
+      operationId: getResults
       x-turbovas-direct: true
       summary: List top-level scan results
       parameters:
@@ -30,8 +31,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResultCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /results/{result_id}:
     get:
+      operationId: getResultsByResultId
       x-turbovas-direct: true
       summary: Read one scan result metadata row
       description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text needed by the Information tab; inherited paths still own overrides, user tags, EPSS/CVE context, exports, actions, and create-override workflows until native parity is explicitly proven.
@@ -44,8 +56,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Result'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /vulnerabilities:
     get:
+      operationId: getVulnerabilities
       x-turbovas-direct: true
       summary: List top-level vulnerabilities from scan results
       parameters:
@@ -60,8 +85,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VulnerabilityCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cves:
     get:
+      operationId: getCves
       x-turbovas-direct: true
       summary: List Security Information CVEs
       description: Searchable CVE intelligence catalog backed by SCAP feed metadata in gvmd/PostgreSQL. This is distinct from observed report CVEs and vulnerability findings.
@@ -77,8 +113,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogCveCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cves/{cve_id}:
     get:
+      operationId: getCvesByCveId
       x-turbovas-direct: true
       summary: Read one Security Information CVE
       parameters:
@@ -90,8 +137,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogCve'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cpes:
     get:
+      operationId: getCpes
       x-turbovas-direct: true
       summary: List Security Information CPEs
       description: Searchable CPE intelligence catalog backed by SCAP feed metadata in gvmd/PostgreSQL. This is distinct from observed operating-system and application evidence in raw and scope reports.
@@ -107,8 +167,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogCpeCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cpes/{cpe_id}:
     get:
+      operationId: getCpesByCpeId
       x-turbovas-direct: true
       summary: Read one Security Information CPE
       parameters:
@@ -120,8 +191,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogCpe'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cert-bund-advisories:
     get:
+      operationId: getCertBundAdvisories
       x-turbovas-direct: true
       summary: List Security Information CERT-Bund advisories
       description: Searchable CERT-Bund advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL. Rich advisory detail remains inherited from feed XML/XSLT.
@@ -137,8 +221,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CertBundAdvisoryCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cert-bund-advisories/{cert_bund_advisory_id}:
     get:
+      operationId: getCertBundAdvisoriesByCertBundAdvisoryId
       x-turbovas-direct: true
       summary: Read one Security Information CERT-Bund advisory catalog entry
       description: Catalog-detail metadata backed by CERT feed metadata already imported into gvmd/PostgreSQL. This endpoint intentionally does not reconstruct XML-only rich advisory fields such as revision history, platform, risk, reference URLs, or description blocks.
@@ -151,8 +246,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CertBundAdvisory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /dfn-cert-advisories:
     get:
+      operationId: getDfnCertAdvisories
       x-turbovas-direct: true
       summary: List Security Information DFN-CERT advisories
       description: Searchable DFN-CERT advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL. Rich advisory detail remains inherited from feed XML/XSLT.
@@ -168,8 +276,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DfnCertAdvisoryCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /dfn-cert-advisories/{dfn_cert_advisory_id}:
     get:
+      operationId: getDfnCertAdvisoriesByDfnCertAdvisoryId
       x-turbovas-direct: true
       summary: Read one Security Information DFN-CERT advisory catalog entry
       description: Catalog-detail metadata backed by CERT feed metadata already imported into gvmd/PostgreSQL. This endpoint intentionally does not reconstruct XML-only rich advisory fields such as advisory links or additional feed links.
@@ -182,8 +301,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DfnCertAdvisory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /nvts:
     get:
+      operationId: getNvts
       x-turbovas-direct: true
       summary: List Security Information NVTs
       description: Searchable NVT catalog backed by gvmd/PostgreSQL feed metadata. This list contract is intentionally separate from rich NVT detail, preferences, and export behavior, which remain inherited until a separate typed contract is designed.
@@ -199,8 +331,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NvtCatalogCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /nvts/{nvt_id}:
     get:
+      operationId: getNvtsByNvtId
       x-turbovas-direct: true
       summary: Read one Security Information NVT catalog entry
       description: Catalog-detail metadata backed by NVT feed metadata already imported into gvmd/PostgreSQL. This endpoint uses NVT numeric dotted OIDs and intentionally excludes preferences, selector/config expansion, export, feed-control, scanner-control, and write semantics.
@@ -213,8 +356,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NvtCatalogDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /operating-systems:
     get:
+      operationId: getOperatingSystems
       x-turbovas-direct: true
       summary: List top-level operating-system assets
       description: Inherited asset view backed by gvmd/PostgreSQL operating-system evidence, distinct from report operating-system evidence tabs.
@@ -230,8 +386,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatingSystemAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /operating-systems/{os_id}:
     get:
+      operationId: getOperatingSystemsByOsId
       x-turbovas-direct: true
       summary: Read one top-level operating-system asset
       description: Read-only asset metadata backed by gvmd/PostgreSQL `oss` records, associated host operating-system evidence, host details, and host severity state. This endpoint does not expose export, delete, scanner-control, feed-control, or write behavior.
@@ -244,8 +411,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatingSystemAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /hosts:
     get:
+      operationId: getHosts
       x-turbovas-direct: true
       summary: List top-level host assets
       description: Inherited host asset view backed by gvmd/PostgreSQL host identifiers, details, and severity state.
@@ -261,8 +441,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /hosts/{host_id}:
     get:
+      operationId: getHostsByHostId
       x-turbovas-direct: true
       summary: Read one top-level host asset
       description: Read-only host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, and whitelisted host detail state. This endpoint intentionally excludes host writes, delete-identifier behavior, XML export, target creation, user tags, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history.
@@ -275,8 +466,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tls-certificates:
     get:
+      operationId: getTlsCertificates
       x-turbovas-direct: true
       summary: List top-level TLS certificate assets
       description: Inherited TLS certificate asset view backed by gvmd/PostgreSQL certificate, source, and location tables.
@@ -292,8 +496,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TlsCertificateAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tls-certificates/{certificate_id}:
     get:
+      operationId: getTlsCertificatesByCertificateId
       x-turbovas-direct: true
       summary: Read one top-level TLS certificate asset
       description: Read-only TLS certificate asset metadata and source provenance backed by gvmd/PostgreSQL certificate, source, location, and origin tables. Certificate bytes, export, delete, scanner-control, feed-control, and write behavior are intentionally excluded.
@@ -306,8 +521,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TlsCertificateAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scanners:
     get:
+      operationId: getScanners
       x-turbovas-direct: true
       summary: List scanner metadata
       description: Read-only scanner list metadata backed by gvmd/PostgreSQL. Credential secrets, scanner CA material, and control operations are intentionally excluded.
@@ -323,8 +551,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScannerAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scanners/{scanner_id}:
     get:
+      operationId: getScannersByScannerId
       x-turbovas-direct: true
       summary: Read one scanner metadata record
       description: Read-only scanner metadata backed by gvmd/PostgreSQL. Credential secrets, scanner CA material, live scanner status, verify/control operations, export/download behavior, and writes are intentionally excluded.
@@ -337,8 +576,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScannerAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /filters:
     get:
+      operationId: getFilters
       x-turbovas-direct: true
       summary: List saved filters
       description: Read-only saved-filter metadata backed by gvmd/PostgreSQL. Filter terms are operator configuration data and remain available only through authenticated operator access.
@@ -355,8 +607,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /filters/{filter_id}:
     get:
+      operationId: getFiltersByFilterId
       x-turbovas-direct: true
       summary: Read one saved filter
       parameters:
@@ -368,8 +631,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /feeds:
     get:
+      operationId: getFeeds
       summary: List feed inventory metadata
       description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This allowlisted direct-listener endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
       x-turbovas-direct: true
@@ -380,8 +656,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FeedInventory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /alerts:
     get:
+      operationId: getAlerts
       x-turbovas-direct: true
       summary: List redacted alert metadata
       description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, export/test actions, and all alert mutations.
@@ -397,8 +684,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tags:
     get:
+      operationId: getTags
       x-turbovas-direct: true
       summary: List tags
       description: Read-only tag metadata backed by gvmd/PostgreSQL. Tag create, modify, clone, enable/disable, export, delete, and assigned-resource expansion remain on inherited compatibility paths while native write/resource semantics are designed.
@@ -414,8 +712,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TagAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tags/resource-names/{resource_type}:
     get:
+      operationId: getTagsResourceNamesByResourceType
       summary: List tag-dialog resource names
       description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule id-name, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
       x-turbovas-direct: true
@@ -437,8 +746,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TagResourceNameCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tags/{tag_id}:
     get:
+      operationId: getTagsByTagId
       x-turbovas-direct: true
       summary: Read one tag
       parameters:
@@ -450,8 +772,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TagAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tags/{tag_id}/resources:
     get:
+      operationId: getTagsByTagIdResources
       x-turbovas-direct: true
       summary: List assigned tag resource references
       description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Tag mutation, trash resources, credentials, users, permissions, filters, alerts, schedules, scanners, overrides, reports, and results remain on inherited compatibility paths while native semantics are designed.
@@ -468,8 +803,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TagResourceCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /overrides:
     get:
+      operationId: getOverrides
       x-turbovas-direct: true
       summary: List overrides
       description: Read-only override metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, delete, trashcan mutation, and result-specific override expansion remain on inherited compatibility paths while native write semantics are designed.
@@ -485,8 +833,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OverrideAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /overrides/{override_id}:
     get:
+      operationId: getOverridesByOverrideId
       x-turbovas-direct: true
       summary: Read one override
       parameters:
@@ -498,8 +857,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OverrideAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /port-lists:
     get:
+      operationId: getPortLists
       x-turbovas-direct: true
       summary: List port lists
       description: Read-only port-list metadata backed by gvmd/PostgreSQL. Create, modify, import, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
@@ -515,8 +887,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortListAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /port-lists/{port_list_id}:
     get:
+      operationId: getPortListsByPortListId
       x-turbovas-direct: true
       summary: Read one port list
       parameters:
@@ -528,8 +911,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortListAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /schedules:
     get:
+      operationId: getSchedules
       x-turbovas-direct: true
       summary: List schedules
       description: Read-only schedule metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
@@ -545,8 +941,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScheduleAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /schedules/{schedule_id}:
     get:
+      operationId: getSchedulesByScheduleId
       x-turbovas-direct: true
       summary: Read one schedule
       parameters:
@@ -558,8 +965,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScheduleAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs:
     get:
+      operationId: getScanConfigs
       x-turbovas-direct: true
       summary: List scan configs
       description: Read-only scan-config metadata backed by gvmd/PostgreSQL. Preference values, NVT selector expansion, family edit payloads, import/export, scanner control, and create/modify/delete operations remain on inherited compatibility paths while native write/resource semantics are designed.
@@ -582,8 +1002,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScanConfigAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs/{scan_config_id}:
     get:
+      operationId: getScanConfigsByScanConfigId
       x-turbovas-direct: true
       summary: Read one scan config metadata record
       description: Metadata-only detail for automation and proof probes. Preferences, import/export, scanner control, and write operations remain on inherited compatibility paths while native contracts are designed.
@@ -596,8 +1027,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScanConfigAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs/{scan_config_id}/families:
     get:
+      operationId: getScanConfigsByScanConfigIdFamilies
       x-turbovas-direct: true
       summary: Read scan config NVT family selection summary
       description: Read-only expansion of the NVT Families detail tab. Scanner preferences, NVT preferences, selector edit payloads, import/export, and writes remain on inherited compatibility paths.
@@ -610,8 +1054,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScanConfigFamilies'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /report-configs:
     get:
+      operationId: getReportConfigs
       x-turbovas-direct: true
       summary: List report configs
       description: Read-only report-config metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
@@ -627,8 +1084,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportConfigAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /report-configs/{report_config_id}:
     get:
+      operationId: getReportConfigsByReportConfigId
       x-turbovas-direct: true
       summary: Read one report config
       parameters:
@@ -640,8 +1108,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportConfigAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /report-formats:
     get:
+      operationId: getReportFormats
       x-turbovas-direct: true
       summary: List report formats
       description: Read-only report-format metadata backed by gvmd/PostgreSQL. Create, modify, import, export, verify, and delete operations remain on inherited compatibility paths while native write semantics are designed.
@@ -657,8 +1138,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportFormatAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /report-formats/{report_format_id}:
     get:
+      operationId: getReportFormatsByReportFormatId
       x-turbovas-direct: true
       summary: Read one report format
       parameters:
@@ -670,8 +1162,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportFormatAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /trashcan/summary:
     get:
+      operationId: getTrashcanSummary
       x-turbovas-direct: true
       summary: Summarize Trashcan item counts
       description: Counts-only read of base Trashcan resources backed by gvmd/PostgreSQL. The endpoint returns all supported resource types, including zero-count rows, and intentionally excludes row payloads, identifiers, names, comments, credential data, target hosts, scanner fields, scan-config preferences, alert method data, results_trash, and child trash tables. The endpoint is read-only and may be reached through the internal/browser proxy path or the opt-in bearer-auth direct listener.
@@ -682,8 +1187,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TrashcanSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports:
     get:
+      operationId: getReports
       x-turbovas-direct: true
       summary: List raw scan reports
       parameters:
@@ -698,8 +1214,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}:
     get:
+      operationId: getReportsByReportId
       x-turbovas-direct: true
       summary: Read one raw scan report summary
       parameters:
@@ -711,8 +1238,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Report'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/results:
     get:
+      operationId: getReportsByReportIdResults
       x-turbovas-direct: true
       summary: List raw scan report results
       parameters:
@@ -728,8 +1268,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResultCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/hosts:
     get:
+      operationId: getReportsByReportIdHosts
       x-turbovas-direct: true
       summary: List raw scan report hosts
       parameters:
@@ -745,8 +1298,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportHostCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/ports:
     get:
+      operationId: getReportsByReportIdPorts
       x-turbovas-direct: true
       summary: List raw scan report ports
       parameters:
@@ -762,8 +1328,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/applications:
     get:
+      operationId: getReportsByReportIdApplications
       x-turbovas-direct: true
       summary: List raw scan report applications
       parameters:
@@ -779,8 +1358,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/operating-systems:
     get:
+      operationId: getReportsByReportIdOperatingSystems
       x-turbovas-direct: true
       summary: List raw scan report operating systems
       parameters:
@@ -796,8 +1388,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatingSystemCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/cves:
     get:
+      operationId: getReportsByReportIdCves
       x-turbovas-direct: true
       summary: List raw scan report CVEs
       parameters:
@@ -813,8 +1418,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CveCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/tls-certificates:
     get:
+      operationId: getReportsByReportIdTlsCertificates
       x-turbovas-direct: true
       summary: List raw scan report TLS certificates
       parameters:
@@ -830,8 +1448,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TlsCertificateCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/errors:
     get:
+      operationId: getReportsByReportIdErrors
       x-turbovas-direct: true
       summary: List raw scan report Error Messages
       parameters:
@@ -847,8 +1478,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessageCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/metrics:
     get:
+      operationId: getReportsByReportIdMetrics
       x-turbovas-direct: true
       summary: Read raw report metrics
       parameters:
@@ -860,8 +1504,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportMetrics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes:
     get:
+      operationId: getScopes
       x-turbovas-direct: true
       summary: List scopes
       parameters:
@@ -876,8 +1533,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScopeCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}:
     get:
+      operationId: getScopesByScopeId
       x-turbovas-direct: true
       summary: Read one scope
       parameters:
@@ -889,8 +1557,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Scope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /targets:
     get:
+      operationId: getTargets
       x-turbovas-direct: true
       summary: List scan targets
       parameters:
@@ -905,8 +1586,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TargetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /targets/{target_id}:
     get:
+      operationId: getTargetsByTargetId
       x-turbovas-direct: true
       summary: Read one scan target summary
       parameters:
@@ -918,8 +1610,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Target'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tasks:
     get:
+      operationId: getTasks
       x-turbovas-direct: true
       summary: List scan tasks
       parameters:
@@ -934,8 +1639,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tasks/{task_id}:
     get:
+      operationId: getTasksByTaskId
       x-turbovas-direct: true
       summary: Read one scan task summary
       parameters:
@@ -947,8 +1663,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scope-reports:
     get:
+      operationId: getScopeReports
       x-turbovas-direct: true
       summary: List generated scope reports
       parameters:
@@ -963,8 +1692,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScopeReportCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scope-reports/{scope_report_id}:
     get:
+      operationId: getScopeReportsByScopeReportId
       x-turbovas-direct: true
       summary: Read one generated scope report
       parameters:
@@ -976,8 +1716,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScopeReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportId
       summary: Read one scope report
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -989,8 +1742,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScopeReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/results:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdResults
       x-turbovas-direct: true
       summary: List deduplicated scope report results
       parameters:
@@ -1007,8 +1773,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResultCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/hosts:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdHosts
       x-turbovas-direct: true
       summary: List scope report hosts
       parameters:
@@ -1025,8 +1804,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/ports:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdPorts
       x-turbovas-direct: true
       summary: List scope report ports
       parameters:
@@ -1043,8 +1835,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/applications:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdApplications
       x-turbovas-direct: true
       summary: List scope report applications
       parameters:
@@ -1061,8 +1866,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/operating-systems:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdOperatingSystems
       x-turbovas-direct: true
       summary: List scope report operating systems
       parameters:
@@ -1079,8 +1897,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatingSystemCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/cves:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdCves
       x-turbovas-direct: true
       summary: List scope report CVEs
       parameters:
@@ -1097,8 +1928,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CveCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/tls-certificates:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdTlsCertificates
       x-turbovas-direct: true
       summary: List scope report TLS certificates
       parameters:
@@ -1115,8 +1959,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TlsCertificateCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/errors:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdErrors
       x-turbovas-direct: true
       summary: List scope report Error Messages
       parameters:
@@ -1133,8 +1990,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessageCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/metrics:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdMetrics
       x-turbovas-direct: true
       summary: Read scope report metrics
       parameters:
@@ -1147,8 +2017,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportMetrics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/retention-plan:
     get:
+      operationId: getScopesByScopeIdReportsByScopeReportIdRetentionPlan
       summary: Preview non-destructive scope report retention state
       description: Read-only dry-run scaffold for future tiered raw-report detail retention. It does not compact, delete, or mutate report evidence.
       parameters:
@@ -1161,6 +2044,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScopeReportRetentionPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     operatorSession:
@@ -1172,6 +2067,43 @@ components:
       type: http
       scheme: bearer
       description: Bearer token for the opt-in direct native API development listener.
+  responses:
+    BadRequest:
+      description: Request parameters, path values, or request shape are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication is missing, invalid, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested native API resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    MethodNotAllowed:
+      description: The endpoint supports only the documented HTTP method.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RequestTooLarge:
+      description: The direct native API request exceeded the accepted size limits.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: The native API could not complete the request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
   parameters:
     Page:
       name: page

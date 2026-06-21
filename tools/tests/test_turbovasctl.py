@@ -2173,6 +2173,58 @@ db2:keys=5,expires=0,avg_ttl=0
             text = override.read_text(encoding="utf-8")
             self.assertIn('"127.0.0.1:19080:9081"', text)
 
+    def test_direct_native_api_config_shape_validation(self):
+        valid = {
+            turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+            turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
+        }
+        self.assertEqual(turbovasctl.native_api_direct_config_errors(valid), ())
+        ipv6 = dict(valid)
+        ipv6[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV] = "[::1]"
+        ipv6[turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV] = "[::]:9081"
+        self.assertEqual(turbovasctl.native_api_direct_config_errors(ipv6), ())
+
+        cases = [
+            (turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV, "http://127.0.0.1"),
+            (turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV, "127.0.0.1,100.80.139.13"),
+            (turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV, "::1"),
+            (turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV, "0"),
+            (turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV, "65536"),
+            (turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV, "19 080"),
+            (turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0"),
+            (turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0:not-a-port"),
+        ]
+        for env_name, value in cases:
+            with self.subTest(env_name=env_name, value=value):
+                env = dict(valid)
+                env[env_name] = value
+                self.assertTrue(turbovasctl.native_api_direct_config_errors(env))
+
+    def test_native_api_request_direct_rejects_malformed_config_before_curl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original_host = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV)
+            original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            try:
+                turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV] = "http://127.0.0.1"
+                turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = "0123456789abcdef0123456789abcdef"
+                with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                    result = turbovasctl.command_native_api_request(root, "/api/v1/reports?page_size=1", direct=True)
+                    curl.assert_not_called()
+            finally:
+                if original_host is None:
+                    turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV] = original_host
+                if original_token is None:
+                    turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+        self.assertEqual(result["status"], "fail")
+        finding_by_check = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(finding_by_check["native-api-request.direct-config-shape"]["status"], "fail")
+
     def test_direct_api_bearer_token_strength_contract(self):
         self.assertTrue(turbovasctl.direct_api_bearer_token_is_acceptable("0123456789abcdef0123456789abcdef"))
         for token in ("short-token", "0123456789abcdef 123456789abcdef", "0123456789abcdef0123456789abcde\n"):

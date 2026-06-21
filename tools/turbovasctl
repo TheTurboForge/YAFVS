@@ -1325,6 +1325,92 @@ def native_api_direct_port(env: dict[str, str]) -> str:
     return env.get(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT).strip() or TURBOVAS_API_DIRECT_DEFAULT_PORT
 
 
+def validate_native_api_direct_host_value(value: str, *, env_name: str) -> str:
+    host = value.strip()
+    if not host:
+        raise ValueError(f"{env_name} must not be empty")
+    if any(ord(char) < 33 or char.isspace() for char in host):
+        raise ValueError(f"{env_name} must not contain whitespace or control characters")
+    if any(char in host for char in "/\\?#@,"):
+        raise ValueError(f"{env_name} must be a host name or address, not a URL or host list")
+    if host.startswith("["):
+        if not re.fullmatch(r"\[[0-9A-Fa-f:.]+\]", host):
+            raise ValueError(f"{env_name} must contain a bracketed IPv6 address like [::1]")
+    elif ":" in host:
+        raise ValueError(f"{env_name} must bracket IPv6 addresses, for example [::1]")
+    elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]*", host):
+        raise ValueError(f"{env_name} must contain only host-safe ASCII characters")
+    return host
+
+
+def validate_native_api_direct_port_value(value: str, *, env_name: str) -> str:
+    port = value.strip()
+    if not port:
+        raise ValueError(f"{env_name} must not be empty")
+    if not port.isdigit():
+        raise ValueError(f"{env_name} must be a decimal TCP port")
+    number = int(port)
+    if not 1 <= number <= 65535:
+        raise ValueError(f"{env_name} must be between 1 and 65535")
+    return str(number)
+
+
+def validate_native_api_direct_bind_value(value: str, *, env_name: str) -> str:
+    bind = value.strip()
+    if not bind:
+        raise ValueError(f"{env_name} must not be empty")
+    if bind.startswith("["):
+        host_end = bind.find("]")
+        if host_end == -1 or len(bind) <= host_end + 2 or bind[host_end + 1] != ":":
+            raise ValueError(f"{env_name} must be host:port or [ipv6]:port")
+        host = bind[: host_end + 1]
+        port = bind[host_end + 2 :]
+    else:
+        if bind.count(":") != 1:
+            raise ValueError(f"{env_name} must be host:port or [ipv6]:port")
+        host, port = bind.rsplit(":", 1)
+    return f"{validate_native_api_direct_host_value(host, env_name=env_name)}:{validate_native_api_direct_port_value(port, env_name=env_name)}"
+
+
+def native_api_direct_config_errors(env: dict[str, str]) -> tuple[str, ...]:
+    errors: list[str] = []
+    for value, env_name, validator in (
+        (native_api_direct_host(env), TURBOVAS_API_DIRECT_HOST_ENV, validate_native_api_direct_host_value),
+        (native_api_direct_port(env), TURBOVAS_API_DIRECT_PORT_ENV, validate_native_api_direct_port_value),
+    ):
+        try:
+            validator(value, env_name=env_name)
+        except ValueError as exc:
+            errors.append(str(exc))
+    direct_bind = env.get(TURBOVAS_API_DIRECT_BIND_ENV)
+    if direct_bind:
+        try:
+            validate_native_api_direct_bind_value(direct_bind, env_name=TURBOVAS_API_DIRECT_BIND_ENV)
+        except ValueError as exc:
+            errors.append(str(exc))
+    return tuple(errors)
+
+
+def native_api_direct_config_shape_finding(env: dict[str, str], *, check: str) -> dict[str, Any]:
+    errors = native_api_direct_config_errors(env)
+    return finding(
+        "fail" if errors else "pass",
+        check,
+        "Direct native API host, port, and bind settings have a valid local shape."
+        if not errors
+        else "Direct native API host, port, or bind settings are malformed.",
+        details={
+            "host_env": TURBOVAS_API_DIRECT_HOST_ENV,
+            "host": native_api_direct_host(env),
+            "port_env": TURBOVAS_API_DIRECT_PORT_ENV,
+            "port": native_api_direct_port(env),
+            "bind_env": TURBOVAS_API_DIRECT_BIND_ENV,
+            "bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+            "errors": list(errors),
+        },
+    )
+
+
 def native_api_direct_port_binding(env: dict[str, str]) -> str:
     return f"{native_api_direct_host(env)}:{native_api_direct_port(env)}:{TURBOVAS_API_DIRECT_CONTAINER_PORT}"
 
@@ -1481,6 +1567,9 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
     )
     configured_env = [name for name in direct_env_names if env.get(name)]
     running_bindings = current_native_api_direct_published_bindings(repo_root)
+
+    if configured:
+        findings.append(native_api_direct_config_shape_finding(env, check="production.native-api-direct.config-shape"))
 
     if configured:
         configured_host = native_api_direct_host(env)
@@ -6835,6 +6924,7 @@ def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
     findings.extend(ensure_build_runtime_dirs(repo_root))
     token_from_env = bool(os.environ.get(TURBOVAS_API_BEARER_TOKEN_ENV))
     env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-api-direct.config-shape"))
     host = native_api_direct_host(env)
     wildcard_host = host_is_wildcard(host)
     findings.append(
@@ -7314,6 +7404,9 @@ def command_native_api_request(repo_root: Path, path: str, *, direct: bool = Fal
 
     if direct:
         env = native_api_direct_runtime_env(repo_root)
+        findings.append(native_api_direct_config_shape_finding(env, check="native-api-request.direct-config-shape"))
+        if aggregate_status(findings) == "fail":
+            return make_result("native-api-request", repo_root, "Direct native API request rejected before runtime access.", findings)
         token = env[TURBOVAS_API_BEARER_TOKEN_ENV]
         if not direct_api_bearer_token_is_acceptable(token):
             findings.append(

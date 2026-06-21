@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   changeInputValue,
   fireEvent,
@@ -16,17 +17,35 @@ import Response from 'gmp/http/response';
 import ResourceName from 'gmp/models/resource-name';
 import TagDialog, {SELECT_MAX_RESOURCES} from 'web/pages/tags/TagDialog';
 
+interface CreateGmpOptions {
+  getResourceNamesResponse?: Response<ResourceName[]>;
+  getResourceNames?: ReturnType<typeof testing.fn>;
+  buildUrl?: (path: string, params?: unknown) => string;
+  session?: {
+    jwt?: string;
+    token?: string;
+  };
+}
+
 const createGmp = ({
   getResourceNamesResponse = new Response([
     new ResourceName({id: '123', name: 'Task', type: 'task'}),
   ]),
   getResourceNames = testing.fn().mockResolvedValue(getResourceNamesResponse),
-} = {}) => ({
+  buildUrl,
+  session,
+}: CreateGmpOptions = {}) => ({
   settings: {},
+  ...(buildUrl === undefined ? {} : {buildUrl}),
+  ...(session === undefined ? {} : {session}),
   resourcenames: {
     getAll: getResourceNames,
     get: getResourceNames,
   },
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('TagDialog tests', () => {
@@ -208,6 +227,121 @@ describe('TagDialog tests', () => {
       comment: '',
       name: 'default:unnamed',
       resourceIds: ['123'],
+      resourceType: 'task',
+      value: '',
+    });
+  });
+
+  test('should use native resource-name lookup for supported resource types', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+        items: [{id: 'task-native', type: 'task', name: 'Native Task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const getResourceNames = testing.fn();
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const {render} = rendererWith({
+      gmp: createGmp({
+        buildUrl,
+        getResourceNames,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
+    });
+
+    render(<TagDialog resourceType="task" resourceTypes={['task']} />);
+
+    await wait();
+
+    expect(getResourceNames).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/resource-names/task',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: SELECT_MAX_RESOURCES,
+        sort: 'name',
+        filter: '',
+      },
+    );
+  });
+
+  test('should keep unsupported resource-name lookups on inherited GMP', async () => {
+    const getResourceNames = testing.fn().mockResolvedValue(
+      new Response([new ResourceName({id: 'report-1', name: 'Report', type: 'report'})]),
+    );
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const {render} = rendererWith({
+      gmp: createGmp({
+        buildUrl,
+        getResourceNames,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
+    });
+
+    render(<TagDialog resourceType="report" resourceTypes={['report']} />);
+
+    await wait();
+
+    expect(getResourceNames).toHaveBeenCalledWith({resourceType: 'report'});
+    expect(buildUrl).not.toHaveBeenCalled();
+  });
+
+  test('should use native exact-id lookup when adding supported resources by id', async () => {
+    const onSave = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+        items: [{id: 'task-native', type: 'task', name: 'Native Task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const getResourceNames = testing.fn();
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const {render} = rendererWith({
+      gmp: createGmp({
+        buildUrl,
+        getResourceNames,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
+    });
+    render(<TagDialog resourceType="task" resourceTypes={['task']} onSave={onSave} />);
+
+    const resourceIdTextField = screen.getByLabelText('Add Resource by ID');
+    changeInputValue(resourceIdTextField, 'task-native');
+    await wait();
+    fireEvent.keyDown(resourceIdTextField, {key: 'Enter'});
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+
+    expect(getResourceNames).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenLastCalledWith(
+      'api/v1/tags/resource-names/task',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: SELECT_MAX_RESOURCES,
+        sort: 'name',
+        filter: 'uuid=task-native',
+      },
+    );
+    expect(onSave).toHaveBeenCalledWith({
+      id: undefined,
+      active: true,
+      comment: '',
+      name: 'default:unnamed',
+      resourceIds: ['task-native'],
       resourceType: 'task',
       value: '',
     });

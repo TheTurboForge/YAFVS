@@ -3025,6 +3025,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA top-level Tags list (migrated through gsad same-origin proxy)", "read-only tag metadata automation", "native-api-request helper"],
             },
             {
+                "endpoint": "/api/v1/tags/resource-names/{resource_type}",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["GSA Tag dialog resource-name lookup for native-safe resource types (migrated through gsad same-origin proxy)", "read-only tag resource-name automation", "native-api-request helper"],
+            },
+            {
                 "endpoint": "/api/v1/tags/{tag_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Tag detail metadata (migrated through gsad same-origin proxy)", "read-only tag metadata automation"],
@@ -6653,6 +6658,20 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             tags,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags?page_size=1"),
             tags_json,
+        )
+    )
+    tag_resource_names = native_api_curl(repo_root, "/api/v1/tags/resource-names/task?page_size=1&sort=name")
+    tag_resource_names_json = parse_json_output(tag_resource_names)
+    tag_resource_name_items = tag_resource_names_json.get("items", []) if isinstance(tag_resource_names_json, dict) else []
+    details["tag_resource_names"] = summarize_native_api_response(tag_resource_names_json)
+    findings.append(
+        native_api_probe_finding(
+            "pass" if tag_resource_names.returncode == 0 and isinstance(tag_resource_name_items, list) else "fail",
+            "native-api.tag-resource-names",
+            f"Native API Tag resource-name probe exit code {tag_resource_names.returncode}.",
+            tag_resource_names,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/task?page_size=1"),
+            tag_resource_names_json,
         )
     )
     if tag_items:

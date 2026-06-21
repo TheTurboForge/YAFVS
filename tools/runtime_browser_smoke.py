@@ -302,6 +302,43 @@ async function assertNoPerSourceEvidenceSections(page, check) {
   add(found ? 'fail' : 'pass', check, found ? 'Tab still renders per-source raw-report evidence sections.' : 'Tab renders as one aggregated scope-report collection.', { url: page.url() });
 }
 
+async function fetchNativeJsonWithBrowserToken(page, path) {
+  return await page.evaluate(async requestPath => {
+    const token = window.localStorage.getItem('token') || '';
+    const separator = requestPath.includes('?') ? '&' : '?';
+    const response = await fetch(`${requestPath}${separator}token=${encodeURIComponent(token)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const text = await response.text();
+    let body = null;
+    try {
+      body = JSON.parse(text);
+    } catch (_) {
+      // Preserve a short sample for diagnostics when a response is not JSON.
+    }
+    return { status: response.status, body, textSample: text.slice(0, 120) };
+  }, path);
+}
+
+async function assertTagResourceNameProxy(page) {
+  const taskNames = await fetchNativeJsonWithBrowserToken(page, '/api/v1/tags/resource-names/task?page_size=2&sort=name');
+  const taskItems = Array.isArray(taskNames.body?.items) ? taskNames.body.items : null;
+  add(
+    taskNames.status === 200 && taskItems !== null ? 'pass' : 'fail',
+    'tag.resource-names-native-api',
+    taskNames.status === 200 && taskItems !== null ? 'Tag resource-name lookup loaded through same-origin native API.' : 'Tag resource-name lookup did not return a JSON item collection through same-origin native API.',
+    { status: taskNames.status, total: taskNames.body?.page?.total ?? null, item_count: taskItems?.length ?? null, sample: taskItems?.[0] ?? taskNames.textSample },
+  );
+
+  const denied = await fetchNativeJsonWithBrowserToken(page, '/api/v1/tags/resource-names/credential?page_size=1');
+  add(
+    [400, 404].includes(denied.status) ? 'pass' : 'fail',
+    'tag.resource-names-credential-blocked',
+    [400, 404].includes(denied.status) ? 'Credential resource-name lookup remains unavailable through the same-origin native proxy.' : 'Credential resource-name lookup unexpectedly returned through the same-origin native proxy.',
+    { status: denied.status, message: denied.body?.error?.message || denied.textSample },
+  );
+}
+
 function focusedRouteCatalog() {
   const specs = [
     { label: 'reports', path: '/reports', nativePath: '/api/v1/reports', nativeCheck: 'raw-report.list-native-api', nativePass: 'Raw-report list loaded through same-origin native API.', nativeFail: 'Raw-report list did not produce a successful same-origin native API response.', forbidden: [/Delta Report/i, /Import Report/i], aliases: ['raw-reports'] },
@@ -397,6 +434,9 @@ async function validateFocusedRoute(page, nativeApiResponses, spec) {
     nativeResponse ? spec.nativePass : spec.nativeFail,
     { path: spec.path, responses: nativeApiResponses.filter(item => item.path === spec.nativePath), observed_native_api_responses: observed },
   );
+  if (spec.label === 'tags') {
+    await assertTagResourceNameProxy(page);
+  }
 }
 
 async function runForBaseUrl(baseUrl) {

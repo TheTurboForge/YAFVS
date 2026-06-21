@@ -357,6 +357,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TagAssetCollection'
+  /tags/resource-names/{resource_type}:
+    get:
+      summary: List tag-dialog resource names
+      description: Read-only resource-name lookup for the Tag dialog, limited to the same native-safe asset and security-information resource types used by tag assigned-resource expansion. Credentials, users, scanners, schedules, alerts, filters, overrides, reports, results, and all write/control surfaces remain on inherited compatibility paths.
+      parameters:
+        - name: resource_type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, config, target, task, tls_certificate]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Tag-dialog resource-name references
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagResourceNameCollection'
   /tags/{tag_id}:
     get:
       summary: Read one tag
@@ -1533,6 +1555,16 @@ components:
           format: uuid
         resource_type:
           type: string
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TagResourceReference'
+    TagResourceNameCollection:
+      type: object
+      required: [page, items]
+      properties:
         page:
           $ref: '#/components/schemas/PageInfo'
         items:

@@ -869,6 +869,15 @@ struct TagResourceItem {
     name: String,
 }
 
+#[derive(Debug)]
+struct TagResourceSqlSpec {
+    table: &'static str,
+    join_on: &'static str,
+    id_expr: &'static str,
+    name_expr: &'static str,
+    extra_where: &'static str,
+}
+
 #[derive(Serialize)]
 struct TagResourceCollection {
     tag_id: String,
@@ -1242,6 +1251,10 @@ async fn main() -> Result<(), ApiError> {
         .route("/api/v1/filters", get(filter_assets))
         .route("/api/v1/filters/:filter_id", get(filter_asset_detail))
         .route("/api/v1/tags", get(tag_assets))
+        .route(
+            "/api/v1/tags/resource-names/:resource_type",
+            get(tag_resource_names),
+        )
         .route("/api/v1/tags/:tag_id/resources", get(tag_asset_resources))
         .route("/api/v1/tags/:tag_id", get(tag_asset_detail))
         .route("/api/v1/overrides", get(override_assets))
@@ -2647,6 +2660,43 @@ async fn tag_asset_resources(
     Ok(Json(TagResourceCollection {
         tag_id,
         resource_type,
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+async fn tag_resource_names(
+    State(state): State<AppState>,
+    Path(resource_type): Path<String>,
+    Query(query): Query<CollectionQuery>,
+) -> Result<Json<Collection<TagResourceItem>>, ApiError> {
+    let resource_type = normalize_tag_resource_type(resource_type);
+    let params = normalize_collection_query(query, "name")?;
+    if params.page_size > 200 {
+        return Err(ApiError::BadRequest(
+            "page_size must be between 1 and 200".to_string(),
+        ));
+    }
+    let sort_sql = sort_clause(&params.sort, &[("id", "id"), ("name", "name")])?;
+    let (filter, exact_id_filter) = tag_resource_name_filter(&params.filter);
+    let sql = tag_resource_name_collection_sql(&resource_type, &sort_sql)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(
+            &sql,
+            &[&filter, &exact_id_filter, &params.page_size, &params.offset],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, %resource_type, "tag resource-name query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let items = rows.iter().map(tag_resource_from_row).collect();
+    Ok(Json(Collection {
         page: params.page_info(total),
         items,
     }))
@@ -8627,116 +8677,141 @@ fn tag_resource_from_row(row: &Row) -> TagResourceItem {
     }
 }
 
-fn tag_resource_collection_sql(resource_type: &str, sort_sql: &str) -> Result<String, ApiError> {
-    let (table, join_on, id_expr, name_expr, extra_where) = match resource_type {
-        "target" => (
-            "targets",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "task" => (
-            "tasks",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "coalesce(r.usage_type, 'scan') = 'scan' AND coalesce(r.hidden, 0) = 0",
-        ),
-        "host" => (
-            "hosts",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "os" => (
-            "oss",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "tls_certificate" => (
-            "tls_certificates",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), nullif(r.subject_dn, ''), r.uuid)",
-            "",
-        ),
-        "port_list" => (
-            "port_lists",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "config" => (
-            "configs",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "coalesce(r.usage_type, 'scan') = 'scan'",
-        ),
-        "report_config" => (
-            "report_configs",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "report_format" => (
-            "report_formats",
-            "r.id = tr.resource",
-            "r.uuid",
-            "coalesce(nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "nvt" => (
-            "nvts",
-            "r.id = tr.resource OR r.oid = tr.resource_uuid OR r.uuid = tr.resource_uuid",
-            "r.oid",
-            "coalesce(nullif(r.name, ''), r.oid)",
-            "",
-        ),
-        "cve" => (
-            "scap.cves",
-            "r.id = tr.resource OR r.uuid = tr.resource_uuid OR lower(r.name) = lower(tr.resource_uuid)",
-            "r.name",
-            "r.name",
-            "",
-        ),
-        "cpe" => (
-            "scap.cpes",
-            "r.id = tr.resource OR r.uuid = tr.resource_uuid OR r.name = tr.resource_uuid",
-            "r.uuid",
-            "coalesce(nullif(r.title, ''), nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "cert_bund_adv" => (
-            "cert.cert_bund_advs",
-            "r.id = tr.resource OR r.uuid = tr.resource_uuid OR r.name = tr.resource_uuid",
-            "r.uuid",
-            "coalesce(nullif(r.title, ''), nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        "dfn_cert_adv" => (
-            "cert.dfn_cert_advs",
-            "r.id = tr.resource OR r.uuid = tr.resource_uuid OR r.name = tr.resource_uuid",
-            "r.uuid",
-            "coalesce(nullif(r.title, ''), nullif(r.name, ''), r.uuid)",
-            "",
-        ),
-        _ => {
-            return Err(ApiError::BadRequest(format!(
-                "unsupported tag resource type: {resource_type}"
-            )));
+fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiError> {
+    match resource_type {
+        "target" => Ok(TagResourceSqlSpec {
+            table: "targets",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "task" => Ok(TagResourceSqlSpec {
+            table: "tasks",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "coalesce(r.usage_type, 'scan') = 'scan' AND coalesce(r.hidden, 0) = 0",
+        }),
+        "host" => Ok(TagResourceSqlSpec {
+            table: "hosts",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "os" => Ok(TagResourceSqlSpec {
+            table: "oss",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "tls_certificate" => Ok(TagResourceSqlSpec {
+            table: "tls_certificates",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), nullif(r.subject_dn, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "port_list" => Ok(TagResourceSqlSpec {
+            table: "port_lists",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "config" => Ok(TagResourceSqlSpec {
+            table: "configs",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "coalesce(r.usage_type, 'scan') = 'scan'",
+        }),
+        "report_config" => Ok(TagResourceSqlSpec {
+            table: "report_configs",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "report_format" => Ok(TagResourceSqlSpec {
+            table: "report_formats",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "nvt" => Ok(TagResourceSqlSpec {
+            table: "nvts",
+            join_on: "r.id = tr.resource OR r.oid = tr.resource_uuid OR r.uuid = tr.resource_uuid",
+            id_expr: "r.oid",
+            name_expr: "coalesce(nullif(r.name, ''), r.oid)",
+            extra_where: "",
+        }),
+        "cve" => Ok(TagResourceSqlSpec {
+            table: "scap.cves",
+            join_on: "r.id = tr.resource OR r.uuid = tr.resource_uuid OR lower(r.name) = lower(tr.resource_uuid)",
+            id_expr: "r.name",
+            name_expr: "r.name",
+            extra_where: "",
+        }),
+        "cpe" => Ok(TagResourceSqlSpec {
+            table: "scap.cpes",
+            join_on: "r.id = tr.resource OR r.uuid = tr.resource_uuid OR r.name = tr.resource_uuid",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.title, ''), nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "cert_bund_adv" => Ok(TagResourceSqlSpec {
+            table: "cert.cert_bund_advs",
+            join_on: "r.id = tr.resource OR r.uuid = tr.resource_uuid OR r.name = tr.resource_uuid",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.title, ''), nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "dfn_cert_adv" => Ok(TagResourceSqlSpec {
+            table: "cert.dfn_cert_advs",
+            join_on: "r.id = tr.resource OR r.uuid = tr.resource_uuid OR r.name = tr.resource_uuid",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.title, ''), nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        _ => Err(ApiError::BadRequest(format!(
+            "unsupported tag resource type: {resource_type}"
+        ))),
+    }
+}
+
+fn strip_wrapping_quotes(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.len() >= 2
+        && ((trimmed.starts_with('"') && trimmed.ends_with('"'))
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\'')))
+    {
+        trimmed[1..trimmed.len() - 1].trim().to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn tag_resource_name_filter(filter: &str) -> (String, bool) {
+    let trimmed = filter.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    for prefix in ["uuid=", "id="] {
+        if lower.starts_with(prefix) {
+            return (strip_wrapping_quotes(&trimmed[prefix.len()..]), true);
         }
-    };
-    let extra_where = if extra_where.is_empty() {
+    }
+    (trimmed.to_string(), false)
+}
+
+fn tag_resource_collection_sql(resource_type: &str, sort_sql: &str) -> Result<String, ApiError> {
+    let spec = tag_resource_sql_spec(resource_type)?;
+    let extra_where = if spec.extra_where.is_empty() {
         String::new()
     } else {
-        format!("\n                AND {extra_where}")
+        format!("\n                AND {}", spec.extra_where)
     };
 
     Ok(format!(
@@ -8760,6 +8835,46 @@ fn tag_resource_collection_sql(resource_type: &str, sort_sql: &str) -> Result<St
            FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC
           LIMIT $3 OFFSET $4;"#,
+        table = spec.table,
+        join_on = spec.join_on,
+        id_expr = spec.id_expr,
+        name_expr = spec.name_expr,
+    ))
+}
+
+fn tag_resource_name_collection_sql(
+    resource_type: &str,
+    sort_sql: &str,
+) -> Result<String, ApiError> {
+    let spec = tag_resource_sql_spec(resource_type)?;
+    let extra_where = if spec.extra_where.is_empty() {
+        String::new()
+    } else {
+        format!("\n              WHERE {}", spec.extra_where)
+    };
+
+    Ok(format!(
+        r#"WITH resource_rows AS (
+             SELECT DISTINCT ({id_expr})::text AS id,
+                    '{resource_type}'::text AS resource_type,
+                    ({name_expr})::text AS name
+               FROM {table} r{extra_where}
+         ),
+         filtered AS (
+             SELECT * FROM resource_rows
+              WHERE (($2 AND lower(id) = lower($1))
+                     OR (NOT $2
+                         AND ($1 = ''
+                              OR lower(id) LIKE '%' || lower($1) || '%'
+                              OR lower(name) LIKE '%' || lower($1) || '%')))
+         )
+         SELECT count(*) OVER()::bigint AS total, id, resource_type, name
+           FROM filtered
+          ORDER BY {sort_sql}, name ASC, id ASC
+          LIMIT $3 OFFSET $4;"#,
+        table = spec.table,
+        id_expr = spec.id_expr,
+        name_expr = spec.name_expr,
     ))
 }
 
@@ -9231,6 +9346,50 @@ mod tests {
         assert!(tag_resource_collection_sql("scanner", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("report", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("result", &sort_sql).is_err());
+    }
+
+    #[test]
+    fn tag_resource_name_sql_is_strictly_whitelisted() {
+        let sort_sql = sort_clause("name", &[("id", "id"), ("name", "name")]).unwrap();
+        let sql = tag_resource_name_collection_sql("task", &sort_sql).unwrap();
+        assert!(sql.contains("FROM tasks r"));
+        assert!(sql.contains("coalesce(r.usage_type, 'scan') = 'scan'"));
+        assert!(sql.contains("coalesce(r.hidden, 0) = 0"));
+        assert!(tag_resource_name_collection_sql("credential", &sort_sql).is_err());
+        assert!(tag_resource_name_collection_sql("user", &sort_sql).is_err());
+        assert!(tag_resource_name_collection_sql("scanner", &sort_sql).is_err());
+        assert!(tag_resource_name_collection_sql("schedule", &sort_sql).is_err());
+        assert!(tag_resource_name_collection_sql("report", &sort_sql).is_err());
+        assert!(tag_resource_name_collection_sql("result", &sort_sql).is_err());
+    }
+
+    #[test]
+    fn tag_resource_name_sql_supports_info_catalogs_by_reference() {
+        let sort_sql = sort_clause("id", &[("id", "id"), ("name", "name")]).unwrap();
+        let cve_sql = tag_resource_name_collection_sql("cve", &sort_sql).unwrap();
+        assert!(cve_sql.contains("FROM scap.cves r"));
+        assert!(cve_sql.contains("r.name"));
+        let nvt_sql = tag_resource_name_collection_sql("nvt", &sort_sql).unwrap();
+        assert!(nvt_sql.contains("FROM nvts r"));
+        assert!(nvt_sql.contains("r.oid"));
+        let cert_sql = tag_resource_name_collection_sql("cert_bund_adv", &sort_sql).unwrap();
+        assert!(cert_sql.contains("FROM cert.cert_bund_advs r"));
+    }
+
+    #[test]
+    fn tag_resource_name_filter_supports_exact_id_syntax() {
+        assert_eq!(
+            tag_resource_name_filter("uuid=12345678-1234-1234-1234-123456789abc"),
+            ("12345678-1234-1234-1234-123456789abc".to_string(), true)
+        );
+        assert_eq!(
+            tag_resource_name_filter("id='CVE-2026-0001'"),
+            ("CVE-2026-0001".to_string(), true)
+        );
+        assert_eq!(
+            tag_resource_name_filter("nightly"),
+            ("nightly".to_string(), false)
+        );
     }
 
     #[test]

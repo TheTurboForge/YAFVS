@@ -7,8 +7,13 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import type {UrlParams} from 'gmp/http/utils';
 import type QueryFilter from 'gmp/models/filter';
 import Model from 'gmp/models/model';
+import ResourceName from 'gmp/models/resource-name';
 import Tag from 'gmp/models/tag';
-import type {ApiType, EntityType} from 'gmp/utils/entity-type';
+import {
+  resourceType as nativeResourceType,
+  type ApiType,
+  type EntityType,
+} from 'gmp/utils/entity-type';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -76,6 +81,11 @@ interface NativeTagResourceCollectionPayload {
   items?: NativeTagResourcePayload[];
 }
 
+interface NativeTagResourceNamesPayload {
+  page?: Partial<NativePage>;
+  items?: NativeTagResourcePayload[];
+}
+
 export interface NativeTagsQuery {
   page: number;
   pageSize: number;
@@ -104,6 +114,23 @@ const TAG_SORT_FIELDS: Record<string, string> = {
   modified: 'modified',
 };
 
+const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([
+  'cert_bund_adv',
+  'cpe',
+  'cve',
+  'dfn_cert_adv',
+  'host',
+  'nvt',
+  'os',
+  'port_list',
+  'report_config',
+  'report_format',
+  'config',
+  'target',
+  'task',
+  'tls_certificate',
+]);
+
 const stringValue = (value: unknown): string =>
   typeof value === 'string' ? value : '';
 
@@ -113,6 +140,22 @@ const integerValue = (value: unknown, fallback = 0): number => {
 };
 
 const yesNoValue = (value?: boolean): 0 | 1 => (value === true ? 1 : 0);
+
+const nativeTagResourceNameType = (
+  resourceType?: EntityType,
+): string | undefined => {
+  const type = nativeResourceType(resourceType);
+  return type !== undefined && NATIVE_TAG_RESOURCE_NAME_TYPES.has(type)
+    ? type
+    : undefined;
+};
+
+export const canUseNativeTagResourceNames = (
+  gmp: {buildUrl?: unknown},
+  resourceType?: EntityType,
+): boolean =>
+  typeof gmp?.buildUrl === 'function' &&
+  nativeTagResourceNameType(resourceType) !== undefined;
 
 const nativeSortFromFilter = (filter?: QueryFilter): string => {
   const reverse = filter?.get('sort-reverse');
@@ -285,5 +328,37 @@ export const fetchNativeTagResources = async (
       },
       resourceType,
     ),
+  );
+};
+
+export const fetchNativeTagResourceNames = async (
+  gmp: NativeApiGmp,
+  resourceType: EntityType,
+  pageSize: number,
+  filter = '',
+): Promise<ResourceName[]> => {
+  const type = nativeTagResourceNameType(resourceType);
+  if (type === undefined) {
+    throw new Error(`Unsupported native tag resource-name type ${resourceType}`);
+  }
+
+  const payload = await fetchNativeJson<NativeTagResourceNamesPayload>(
+    gmp,
+    `api/v1/tags/resource-names/${encodeURIComponent(type)}`,
+    {
+      token: gmp.session.token,
+      page: 1,
+      page_size: pageSize,
+      sort: 'name',
+      filter,
+    },
+  );
+  return (payload.items ?? []).map(
+    item =>
+      new ResourceName({
+        id: stringValue(item.id),
+        name: stringValue(item.name),
+        type: resourceType,
+      }),
   );
 };

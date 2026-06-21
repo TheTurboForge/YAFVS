@@ -219,6 +219,27 @@ is_advisory_id_segment (const gchar *value, gsize length)
 }
 
 static gboolean
+is_tag_resource_type_segment (const gchar *value, gsize length)
+{
+  static const gchar *allowed_types[] = {
+    "cert_bund_adv", "cpe",           "cve",          "dfn_cert_adv",
+    "host",          "nvt",           "os",           "port_list",
+    "report_config", "report_format", "config",       "target",
+    "task",          "tls_certificate"
+  };
+
+  if (value == NULL || length == 0 || length > 32)
+    return FALSE;
+
+  for (gsize i = 0; i < G_N_ELEMENTS (allowed_types); i++)
+    if (strlen (allowed_types[i]) == length
+        && strncmp (allowed_types[i], value, length) == 0)
+      return TRUE;
+
+  return FALSE;
+}
+
+static gboolean
 native_api_path_is_allowed (const gchar *path)
 {
   const gchar *raw_reports_path = "/api/v1/reports";
@@ -249,6 +270,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *filters_path = "/api/v1/filters";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *tags_path = "/api/v1/tags";
+  const gchar *tag_resource_names_prefix = "/api/v1/tags/resource-names/";
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *tag_resources_suffix = "/resources";
   const gchar *overrides_path = "/api/v1/overrides";
@@ -413,6 +435,13 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, tags_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, tag_resource_names_prefix))
+    {
+      const gchar *resource_type = path + strlen (tag_resource_names_prefix);
+      return is_tag_resource_type_segment (resource_type,
+                                           strlen (resource_type));
+    }
 
   if (g_str_has_prefix (path, tag_prefix)
       && g_str_has_suffix (path, tag_resources_suffix))

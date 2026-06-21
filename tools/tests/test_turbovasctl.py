@@ -731,6 +731,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scan-configs/{scan_config_id}", source)
         self.assertIn("/api/v1/trashcan/summary", source)
         self.assertIn("/api/v1/tags", source)
+        self.assertIn("/api/v1/tags/resource-names/{resource_type}", source)
+        self.assertIn("native-api.tag-resource-names", source)
         self.assertIn("/api/v1/tags/{tag_id}", source)
         self.assertIn("/api/v1/tags/{tag_id}/resources", source)
         self.assertIn("/api/v1/overrides", source)
@@ -867,6 +869,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scan-configs/{scan_config_id}", endpoints)
         self.assertIn("/api/v1/scan-configs/{scan_config_id}/families", endpoints)
         self.assertIn("/api/v1/tags", endpoints)
+        self.assertIn("/api/v1/tags/resource-names/{resource_type}", endpoints)
         self.assertIn("/api/v1/tags/{tag_id}", endpoints)
         self.assertIn("/api/v1/tags/{tag_id}/resources", endpoints)
         self.assertIn("/api/v1/overrides", endpoints)
@@ -920,6 +923,8 @@ class TurboVASCtlTests(unittest.TestCase):
         trashcan_summary = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/trashcan/summary")
         api_source = (root / "services" / "turbovas-api" / "src" / "main.rs").read_text(encoding="utf-8")
         proxy_source = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
+        self.assertIn('/api/v1/tags/resource-names/', proxy_source)
+        self.assertIn('is_tag_resource_type_segment', proxy_source)
         if "/api/v1/trashcan/summary" in api_source or "/api/v1/trashcan/summary" in proxy_source:
             self.assertEqual(trashcan_summary["status"], "implemented_internal_and_browser_proxied")
         else:

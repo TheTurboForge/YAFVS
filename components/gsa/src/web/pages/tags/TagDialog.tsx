@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,6 +7,10 @@
 import {useCallback, useEffect, useState} from 'react';
 import styled from 'styled-components';
 import {parseBoolean} from 'gmp/parser';
+import {
+  canUseNativeTagResourceNames,
+  fetchNativeTagResourceNames,
+} from 'gmp/native-api/tags';
 import {map} from 'gmp/utils/array';
 import {typeName, type EntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
@@ -95,16 +100,42 @@ const TagDialog = ({
   name = name ?? _('default:unnamed');
   resourceCount = resourceCount ?? 0;
 
+  const loadResourceNames = useCallback(
+    async (type?: EntityType, filter = ''): Promise<ResourceOption[]> => {
+      if (!isDefined(type)) {
+        return [];
+      }
+
+      if (canUseNativeTagResourceNames(gmp, type)) {
+        try {
+          return await fetchNativeTagResourceNames(
+            gmp,
+            type,
+            SELECT_MAX_RESOURCES,
+            filter,
+          );
+        } catch {
+          // Fall back to the inherited GMP command when the native proxy is not
+          // available for this session or deployment.
+        }
+      }
+
+      const response = isEmpty(filter)
+        ? await gmp.resourcenames.getAll({resourceType: type})
+        : await gmp.resourcenames.get({resourceType: type, filter});
+      return response.data;
+    },
+    [gmp],
+  );
+
   const loadResourcesByType = useCallback(
     (type: EntityType) => {
       if (!isDefined(type)) {
         return;
       }
       setIsLoading(true);
-      gmp.resourcenames
-        .getAll({resourceType: type})
-        .then(response => {
-          const data: ResourceOption[] = response.data;
+      loadResourceNames(type)
+        .then(data => {
           setResourceOptions(data);
           setIsLoading(false);
         })
@@ -113,7 +144,7 @@ const TagDialog = ({
           throw err;
         });
     },
-    [gmp],
+    [loadResourceNames],
   );
 
   useEffect(() => {
@@ -150,12 +181,9 @@ const TagDialog = ({
       return;
     }
 
-    const response = await gmp.resourcenames.get({
-      resourceType,
-      filter: 'uuid=' + id,
-    });
+    const resources = await loadResourceNames(resourceType, 'uuid=' + id);
 
-    if (response.data.length === 0) {
+    if (resources.length === 0) {
       setResourceIdError(
         _('UUID not found. Please check the UUID and try again.'),
       );

@@ -52,7 +52,12 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   feed import/update/download/mirroring, account management, target/task writes,
   alert delivery, and destructive mutations stay inherited until native
   write/control designs are separately reviewed. Read-only feed inventory
-  metadata is allowed only as a classified scriptable read endpoint.
+  metadata at `/api/v1/feeds` is allowed only as a classified scriptable read
+  endpoint.
+- Read-only tag-dialog resource-name lookups, including alert, are also
+  allowlisted scriptable reads. They expose only id/type/name lookup data;
+  alert delivery, method/event/condition payloads, and alert mutations remain
+  inherited.
 - Do not expose arbitrary GMP command forwarding through `/api/v1`.
 - Treat `X-Request-Id` as correlation metadata only. It is not authentication,
   authorization, operator identity, or a trusted audit principal.
@@ -72,9 +77,10 @@ tools/turbovasctl native-api-request --direct --json --request-id 'operator-chec
 ```
 
 The direct smoke proves health access, missing-token rejection, wrong-token
-rejection, valid-token JSON access, valid-token non-GET rejection, and
-internal-only endpoint denial for the retention preview when a scope report is
-available, plus continued internal native API smoke.
+rejection, valid-token JSON access, valid-token non-GET rejection, direct feed
+inventory access, tag-dialog alert resource-name lookup, and internal-only
+endpoint denial for the retention preview when a scope report is available,
+plus continued internal native API smoke.
 `native-api-request --request-id` sends a safe `X-Request-Id` value for
 correlation; it is not an authentication or audit identity.
 

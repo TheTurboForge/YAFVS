@@ -521,14 +521,6 @@ Lists all credentials configured with name and uuid.
 
 Returns Credential uuid, Name, Type, & if insecure use is allowed
 
-## `list-feeds.gmp.py`
-
-Lists feeds and their status.
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-feeds.gmp.py`
-
 ## `list-users.gmp.py`
 
 Lists all users

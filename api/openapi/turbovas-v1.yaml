@@ -348,7 +348,7 @@ paths:
   /feeds:
     get:
       summary: List feed inventory metadata
-      description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
+      description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This allowlisted direct-listener endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
       x-turbovas-direct: true
       responses:
         '200':
@@ -392,14 +392,15 @@ paths:
   /tags/resource-names/{resource_type}:
     get:
       summary: List tag-dialog resource names
-      description: Read-only resource-name lookup for the Tag dialog, limited to the same native-safe asset and security-information resource types used by tag assigned-resource expansion. Credentials, users, scanners, schedules, alerts, filters, overrides, reports, results, and all write/control surfaces remain on inherited compatibility paths.
+      description: Read-only resource-name lookup for the Tag dialog, limited to the same native-safe asset and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, scanners, schedules, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
+      x-turbovas-direct: true
       parameters:
         - name: resource_type
           in: path
           required: true
           schema:
             type: string
-            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, config, target, task, tls_certificate]
+            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, config, target, task, tls_certificate, alert]
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'

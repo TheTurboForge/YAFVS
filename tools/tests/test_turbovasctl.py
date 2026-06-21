@@ -1038,6 +1038,43 @@ class TurboVASCtlTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 turbovasctl.validate_native_api_request_path(bad_path)
 
+    def test_openapi_tracks_direct_feed_and_alert_tag_lookup_contracts(self):
+        root = Path(__file__).resolve().parents[2]
+        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
+        contract = (root / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
+        boundary = (root / "docs" / "NATIVE_API_AUTH_BOUNDARY.md").read_text(encoding="utf-8")
+        self.assertIn(
+            """/feeds:
+    get:
+      summary: List feed inventory metadata
+      description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This allowlisted direct-listener endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
+      x-turbovas-direct: true""",
+            openapi,
+        )
+        self.assertIn(
+            """/tags/resource-names/{resource_type}:
+    get:
+      summary: List tag-dialog resource names
+      description: Read-only resource-name lookup for the Tag dialog, limited to the same native-safe asset and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, scanners, schedules, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
+      x-turbovas-direct: true
+      parameters:
+        - name: resource_type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, config, target, task, tls_certificate, alert]""",
+            openapi,
+        )
+        self.assertIn("redacted id/name resource-name lookup", openapi)
+        self.assertIn("/api/v1/feeds", contract)
+        self.assertIn("tag-dialog resource-name lookups", contract)
+        self.assertIn("including alert", contract)
+        self.assertIn("/api/v1/feeds", boundary)
+        self.assertIn("tag-dialog resource-name lookups, including alert", boundary)
+        self.assertIn("direct feed", boundary)
+        self.assertIn("inventory access", boundary)
+
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")

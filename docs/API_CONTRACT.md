@@ -31,10 +31,12 @@ The first API phase is read-only and report-focused:
   scan configs.
 - saved filter list and detail reads, including filter term metadata and alert
   backlinks, inside authenticated operator access only.
-- read-only runtime feed inventory metadata and sync-status reads from fixed
-  allowlisted feed metadata and lock files; no feed sync/import/update,
-  mirroring, bundling, redistribution, or scanner control.
+- read-only runtime feed inventory metadata and sync-status reads from
+  `/api/v1/feeds` backed by fixed allowlisted runtime feed metadata and lock
+  files; no feed sync/import/update, mirroring, bundling, redistribution, or
+  scanner control.
 - tag list and detail metadata reads, including resource type/count and value,
+  plus tag-dialog resource-name lookups for supported types including alert,
   inside authenticated operator access only.
 - scan-config list and browser-proxied metadata-detail reads, including
   family/NVT counts, growth flags and predefined/deprecated state, inside
@@ -104,8 +106,8 @@ Read-only automation can use `tools/turbovasctl native-api-request --json --path
 '/api/v1/...'` for the internal development path, or add `--direct` to call the
 opt-in direct bearer listener. This replaces covered read-only GMP scripts for
 report, scope, target, task, scan-config metadata, override metadata, tag
-metadata, runtime feed inventory metadata, and selected asset listing/detail
-workflows.
+metadata and tag-dialog resource-name lookups, runtime feed inventory metadata
+(`/api/v1/feeds`), and selected asset listing/detail workflows.
 Direct probes may add `--request-id 'operator-check-1'` to send a bounded safe
 `X-Request-Id` correlation value.
 

@@ -151,13 +151,6 @@ assert GMP_SPEC.loader is not None
 sys.modules["runtime_gmp_smoke"] = runtime_gmp_smoke
 GMP_SPEC.loader.exec_module(runtime_gmp_smoke)
 
-FEED_OBJECTS_PATH = Path(__file__).resolve().parents[1] / "runtime_feed_objects.py"
-FEED_OBJECTS_SPEC = importlib.util.spec_from_loader("runtime_feed_objects", SourceFileLoader("runtime_feed_objects", str(FEED_OBJECTS_PATH)))
-runtime_feed_objects = importlib.util.module_from_spec(FEED_OBJECTS_SPEC)
-assert FEED_OBJECTS_SPEC.loader is not None
-sys.modules["runtime_feed_objects"] = runtime_feed_objects
-FEED_OBJECTS_SPEC.loader.exec_module(runtime_feed_objects)
-
 FULL_TEST_SCAN_PATH = Path(__file__).resolve().parents[1] / "runtime_full_test_scan.py"
 FULL_TEST_SCAN_SPEC = importlib.util.spec_from_loader("runtime_full_test_scan", SourceFileLoader("runtime_full_test_scan", str(FULL_TEST_SCAN_PATH)))
 runtime_full_test_scan = importlib.util.module_from_spec(FULL_TEST_SCAN_SPEC)
@@ -2355,7 +2348,6 @@ db2:keys=5,expires=0,avg_ttl=0
             root.mkdir()
             self.assertEqual(turbovasctl.scanner_redis_socket_path(root), Path(tmp) / "TurboVAS-runtime" / "run" / "redis-openvas" / "redis.sock")
             self.assertEqual(turbovasctl.openvas_runtime_config_path(root), root / "build" / "prefix" / "etc" / "openvas" / "openvas.conf")
-            self.assertEqual(turbovasctl.runtime_feed_objects_probe_path(root), root / "tools" / "runtime_feed_objects.py")
             self.assertEqual(turbovasctl.runtime_full_test_scan_probe_path(root), root / "tools" / "runtime_full_test_scan.py")
             self.assertEqual(turbovasctl.full_test_scan_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "full-test-scan")
 
@@ -2835,23 +2827,45 @@ db2:keys=5,expires=0,avg_ttl=0
         element = ET.fromstring("<get_version_response><version>22.8</version></get_version_response>")
         self.assertEqual(runtime_gmp_smoke.parse_version(element), "22.8")
 
-    def test_runtime_feed_objects_detect_expected_ids(self):
-        configs = (
-            "<get_configs_response>"
-            f"<config id=\"{runtime_feed_objects.FULL_AND_FAST_SCAN_CONFIG_ID}\"><name>Full and fast</name></config>"
-            "</get_configs_response>"
+    def test_native_feed_object_verification_uses_detail_endpoints(self):
+        calls = []
+        original_native_api_curl = turbovasctl.native_api_curl
+
+        def fake_native_api_curl(_root, path, **_kwargs):
+            calls.append(path)
+            if path == f"/api/v1/scan-configs/{turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID}":
+                payload = {"id": turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}
+                return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+            if path == f"/api/v1/port-lists/{turbovasctl.IANA_TCP_UDP_PORT_LIST_ID}":
+                payload = {"id": turbovasctl.IANA_TCP_UDP_PORT_LIST_ID, "name": "All IANA assigned TCP and UDP"}
+                return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+            return turbovasctl.subprocess.CompletedProcess([], 22, "", "unexpected path")
+
+        try:
+            turbovasctl.native_api_curl = fake_native_api_curl
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "TurboVAS"
+                root.mkdir()
+                findings = turbovasctl.native_required_feed_object_findings(root)
+        finally:
+            turbovasctl.native_api_curl = original_native_api_curl
+
+        self.assertEqual([item["status"] for item in findings], ["pass", "pass"])
+        self.assertEqual(
+            calls,
+            [
+                f"/api/v1/scan-configs/{turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID}",
+                f"/api/v1/port-lists/{turbovasctl.IANA_TCP_UDP_PORT_LIST_ID}",
+            ],
         )
-        port_lists = (
-            "<get_port_lists_response>"
-            f"<port_list id=\"{runtime_feed_objects.IANA_TCP_UDP_PORT_LIST_ID}\"><name>All IANA assigned TCP and UDP</name></port_list>"
-            "</get_port_lists_response>"
-        )
-        config_rows = runtime_feed_objects.object_rows(configs, "config")
-        port_list_rows = runtime_feed_objects.object_rows(port_lists, "port_list")
-        self.assertTrue(runtime_feed_objects.expected_present(config_rows, runtime_feed_objects.FULL_AND_FAST_SCAN_CONFIG_ID))
-        self.assertTrue(runtime_feed_objects.expected_present(port_list_rows, runtime_feed_objects.IANA_TCP_UDP_PORT_LIST_ID))
-        self.assertEqual(config_rows[0]["name"], "Full and fast")
-        self.assertEqual(port_list_rows[0]["name"], "All IANA assigned TCP and UDP")
+        self.assertEqual(findings[0]["details"]["response_summary"]["expected_id"], turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
+
+    def test_runtime_feed_import_uses_native_object_verification(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        self.assertIn("feed-objects.native-scan-config", source)
+        self.assertIn("feed-objects.native-port-list", source)
+        self.assertNotIn("feed-objects.gmp", source)
+        self.assertNotIn("runtime_feed_objects_probe_path", source)
 
     def test_full_test_scan_constants_are_fixed_to_authorized_lan(self):
         self.assertEqual(runtime_full_test_scan.AUTHORIZED_TARGET_CIDR, "192.168.178.0/24")

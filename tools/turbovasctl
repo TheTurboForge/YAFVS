@@ -2032,10 +2032,6 @@ def openvas_runtime_config_path(repo_root: Path) -> Path:
     return repo_root / "build" / "prefix" / "etc" / "openvas" / "openvas.conf"
 
 
-def runtime_feed_objects_probe_path(repo_root: Path) -> Path:
-    return repo_root / "tools" / "runtime_feed_objects.py"
-
-
 def runtime_full_test_scan_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_full_test_scan.py"
 
@@ -5280,6 +5276,43 @@ def command_runtime_feed_keyring_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-feed-keyring-init", repo_root, "Shared feed signature keyring initialization completed.", findings, [str(home), str(key_path)])
 
 
+def native_required_feed_object_findings(repo_root: Path) -> list[dict[str, Any]]:
+    checks = (
+        (
+            "feed-objects.native-scan-config",
+            "Required Full and Fast scan config is available through the native API.",
+            "Required Full and Fast scan config was not available through the native API.",
+            f"/api/v1/scan-configs/{urllib.parse.quote(FULL_AND_FAST_SCAN_CONFIG_ID)}",
+            FULL_AND_FAST_SCAN_CONFIG_ID,
+        ),
+        (
+            "feed-objects.native-port-list",
+            "Required IANA TCP/UDP port list is available through the native API.",
+            "Required IANA TCP/UDP port list was not available through the native API.",
+            f"/api/v1/port-lists/{urllib.parse.quote(IANA_TCP_UDP_PORT_LIST_ID)}",
+            IANA_TCP_UDP_PORT_LIST_ID,
+        ),
+    )
+    findings: list[dict[str, Any]] = []
+    for check, pass_message, fail_message, path, expected_id in checks:
+        response = native_api_curl(repo_root, path)
+        parsed = parse_json_output(response)
+        observed_id = str(parsed.get("id") or "") if isinstance(parsed, dict) else ""
+        ok = response.returncode == 0 and observed_id == expected_id
+        findings.append(
+            native_api_probe_finding(
+                "pass" if ok else "fail",
+                check,
+                pass_message if ok else fail_message,
+                response,
+                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", f"http://127.0.0.1:9080{path}"),
+                parsed if isinstance(parsed, dict) else None,
+                {"expected_id": expected_id, "observed_id": observed_id, **summarize_native_api_response(parsed)},
+            )
+        )
+    return findings
+
+
 def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     feed_state = command_feed_state(repo_root)
@@ -5396,27 +5429,14 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     gvmd_ready = wait_for_socket(gvmd_socket_path(repo_root), timeout_seconds=180)
     findings.append(finding("pass" if gvmd_ready else "fail", "gvmd.socket-wait", "gvmd socket became ready after feed import restart." if gvmd_ready else "gvmd socket did not become ready after feed import restart.", str(gvmd_socket_path(repo_root))))
 
-    probe_findings: list[dict[str, Any]] = []
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    python = venv_python(repo_root, "python-gvm")
-    probe = runtime_feed_objects_probe_path(repo_root)
-    probe_findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
-    probe_findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
-    probe_findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
-    probe_findings.append(finding("pass" if probe.is_file() else "fail", "feed-objects.probe", "Runtime feed object probe exists." if probe.is_file() else "Runtime feed object probe is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
-    findings.extend(probe_findings)
-    if aggregate_status(probe_findings) == "fail":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import completed but GMP feed object verification could not start.", findings, [str(runtime_dir(repo_root))])
-
-    verify = run_command([str(python), str(probe), "--socket", str(gvmd_socket_path(repo_root)), "--username", DEV_ADMIN_USER, "--password-file", str(secret_path)], repo_root, env=build_env(repo_root), timeout=120)
-    try:
-        parsed = json.loads(verify.stdout)
-    except json.JSONDecodeError:
-        parsed = None
-    verify_status = parsed.get("status") if parsed else None
-    password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
-    findings.append(finding("pass" if verify.returncode == 0 and verify_status == "pass" else "fail", "feed-objects.gmp", f"GMP feed object verification exit code {verify.returncode}.", details={"probe": parsed, "output_tail": output_tail(verify.stdout, 80, [password])}))
-    return make_result("runtime-feed-import-init", repo_root, "Runtime feed import and verification completed.", findings, [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))])
+    native_ready = container_running(repo_root, "turbovas-api")
+    findings.append(finding("pass" if native_ready else "fail", "native-api.container", "turbovas-api is running for native feed object verification." if native_ready else "turbovas-api is not running; native feed object verification cannot start."))
+    if native_ready:
+        findings.extend(native_required_feed_object_findings(repo_root))
+    summary = "Runtime feed import and native verification completed."
+    if aggregate_status(findings) == "fail":
+        summary = "Feed import completed but native feed object verification failed."
+    return make_result("runtime-feed-import-init", repo_root, summary, findings, [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))])
 
 
 def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:

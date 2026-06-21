@@ -923,6 +923,24 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/cpes", endpoints)
         self.assertIn("/api/v1/cpes/{cpe_id}", endpoints)
         self.assertIn("/api/v1/nvts", endpoints)
+
+    def test_native_tooling_state_compact_omits_large_inventories(self):
+        root = Path(__file__).resolve().parents[2]
+        full = turbovasctl.command_native_tooling_state(root)
+        compact = turbovasctl.command_native_tooling_state(root, compact=True)
+        details = compact["details"]
+        self.assertEqual(compact["status"], "pass")
+        self.assertEqual(details["total_items"], full["details"]["total_items"])
+        self.assertNotIn("items", details)
+        self.assertNotIn("implemented_native_endpoints", details)
+        self.assertIn("implemented_native_endpoint_count", details)
+        self.assertIn("candidate_for_removal_paths", details)
+        inventory_details = compact["findings"][0]["details"]
+        self.assertNotIn("candidate_for_removal_paths", inventory_details)
+        self.assertNotIn("next_replacement_candidates", inventory_details)
+        self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
+        details = full["details"]
+        endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/cert-bund-advisories", endpoints)
         self.assertIn("/api/v1/cert-bund-advisories/{advisory_id}", endpoints)
         self.assertIn("/api/v1/dfn-cert-advisories", endpoints)

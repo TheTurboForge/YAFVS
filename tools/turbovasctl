@@ -3610,17 +3610,49 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
     }
 
 
-def command_native_tooling_state(repo_root: Path) -> dict[str, Any]:
+def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    endpoint_statuses: dict[str, int] = {}
+    for endpoint in summary.get("implemented_native_endpoints", []):
+        status = str(endpoint.get("status", "unknown")) if isinstance(endpoint, dict) else "unknown"
+        endpoint_statuses[status] = endpoint_statuses.get(status, 0) + 1
+    by_category = {
+        category: {"count": category_summary.get("count", 0)}
+        for category, category_summary in summary.get("by_category", {}).items()
+        if isinstance(category_summary, dict)
+    }
+    return {
+        "total_items": summary.get("total_items", 0),
+        "by_category": by_category,
+        "candidate_for_removal_paths": summary.get("by_category", {}).get("candidate_for_removal", {}).get("paths", []),
+        "unknown_paths": summary.get("by_category", {}).get("unknown", {}).get("paths", []),
+        "implemented_native_endpoint_count": len(summary.get("implemented_native_endpoints", [])),
+        "implemented_native_endpoints_by_status": endpoint_statuses,
+        "next_replacement_candidates": summary.get("next_replacement_candidates", []),
+    }
+
+
+def compact_native_tooling_finding_details(summary: dict[str, Any]) -> dict[str, Any]:
+    compact = compact_native_tooling_summary(summary)
+    return {
+        "total_items": compact["total_items"],
+        "by_category": compact["by_category"],
+        "implemented_native_endpoint_count": compact["implemented_native_endpoint_count"],
+        "implemented_native_endpoints_by_status": compact["implemented_native_endpoints_by_status"],
+    }
+
+
+def command_native_tooling_state(repo_root: Path, compact: bool = False) -> dict[str, Any]:
     items = native_tooling_inventory(repo_root)
     summary = summarize_native_tooling(items, repo_root)
     unknown_count = summary["by_category"]["unknown"]["count"]
+    finding_details = compact_native_tooling_finding_details(summary) if compact else summary
     findings = [
-        finding("pass", "native-tooling.inventory", f"Classified {len(items)} inherited tooling dependency surface(s).", details=summary),
+        finding("pass", "native-tooling.inventory", f"Classified {len(items)} inherited tooling dependency surface(s).", details=finding_details),
         finding("warn" if unknown_count else "pass", "native-tooling.unknown", f"{unknown_count} inherited tooling surface(s) are outside the current classification map." if unknown_count else "No inherited tooling surfaces were left unclassified.", details={"paths": summary["by_category"]["unknown"]["paths"]}),
         finding("pass", "native-tooling.end-state", "End-state remains full removal of required python-gvm and gvm-tools dependence after native API replacements land."),
     ]
     result = make_result("native-tooling-state", repo_root, "Inherited GMP/python-gvm/gvm-tools dependency state collected.", findings)
-    result["details"] = {"items": items, **summary}
+    result["details"] = compact_native_tooling_summary(summary) if compact else {"items": items, **summary}
     return result
 
 
@@ -8694,7 +8726,8 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform a read-only TurboVAS native API request")
     native_api_request.add_argument("--path", required=True, help="validated /api/v1/... path plus optional query string")
     native_api_request.add_argument("--direct", action="store_true", help="call the opt-in direct native API listener with bearer auth")
-    subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
+    native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
+    native_tooling_state.add_argument("--compact", action="store_true", help="omit full item and endpoint inventories from JSON output")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
     subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     subparsers.add_parser("branding-state", parents=[common], help="inventory visible branding and upstream-identity surfaces")
@@ -8795,7 +8828,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "native-api-request":
         result = command_native_api_request(repo_root, args.path, direct=args.direct)
     elif args.command == "native-tooling-state":
-        result = command_native_tooling_state(repo_root)
+        result = command_native_tooling_state(repo_root, compact=args.compact)
     elif args.command == "rust-migration-state":
         result = command_rust_migration_state(repo_root)
     elif args.command == "doctor":

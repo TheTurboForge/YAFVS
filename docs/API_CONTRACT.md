@@ -317,3 +317,6 @@ positive-severity vulnerability metric rows only.
   boundary; it is a migration bridge for browser reads.
 - Do not keep `python-gvm` or `gvm-tools` as permanent TurboVAS product
   dependencies once native replacements exist.
+- Do not retain inherited read-only `gvm-tools` list wrappers after a native
+  metadata endpoint covers the retained safe contract; for Alerts, the retained
+  contract is redacted metadata only, not method/event/condition payload data.

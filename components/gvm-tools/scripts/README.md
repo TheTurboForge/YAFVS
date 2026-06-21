@@ -513,14 +513,6 @@ Requests the report specified and exports it as a pdf formatted report locally.
 
 **Note**: the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
 
-## `list-alerts.gmp.py`
-
-Lists all alerts configured with name and uuid.
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-alerts.gmp.py`
-
 ## `list-credentials.gmp.py`
 
 Lists all credentials configured with name and uuid.

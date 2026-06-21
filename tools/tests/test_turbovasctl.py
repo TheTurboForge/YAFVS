@@ -904,6 +904,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "components/gvm-tools/scripts/export-certificates.gmp.py",
             "components/gvm-tools/scripts/export-hosts-csv.gmp.py",
             "components/gvm-tools/scripts/export-operatingsystems-csv.gmp.py",
+            "components/gvm-tools/scripts/list-alerts.gmp.py",
             "components/gvm-tools/scripts/list-hosts.gmp.py",
             "components/gvm-tools/scripts/list-filters.gmp.py",
             "components/gvm-tools/scripts/list-portlists.gmp.py",

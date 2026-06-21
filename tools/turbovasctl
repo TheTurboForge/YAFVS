@@ -1199,6 +1199,11 @@ def gsad_port_bindings(repo_root: Path) -> tuple[str, ...]:
     return tuple(f"{host}:{GSAD_PORT}:{GSAD_CONTAINER_PORT}" for host in gsad_hosts(repo_root))
 
 
+def host_is_wildcard(host: str) -> bool:
+    normalized = host.strip().lower().strip("[]")
+    return normalized in {"0.0.0.0", "::"}
+
+
 def host_is_loopback(host: str) -> bool:
     normalized = host.strip().lower().strip("[]")
     return normalized in {"localhost", "::1"} or normalized.startswith("127.")
@@ -1232,6 +1237,179 @@ def current_gsad_published_hosts(repo_root: Path) -> tuple[str, ...]:
         hosts.append(host)
         seen.add(host)
     return tuple(hosts)
+
+
+def current_native_api_direct_published_bindings(repo_root: Path) -> tuple[dict[str, str], ...]:
+    cid = container_id(repo_root, "turbovas-api")
+    if not cid:
+        return ()
+    result = run_command(["docker", "inspect", "-f", "{{json .NetworkSettings.Ports}}", cid], repo_root, env=runtime_env(repo_root))
+    if result.returncode != 0 or not result.stdout.strip():
+        return ()
+    try:
+        ports = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return ()
+    bindings = ports.get(f"{TURBOVAS_API_DIRECT_CONTAINER_PORT}/tcp") or []
+    published: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            continue
+        host = str(binding.get("HostIp") or "0.0.0.0").strip()
+        host_port = str(binding.get("HostPort") or "").strip()
+        if not host_port or (host, host_port) in seen:
+            continue
+        published.append({"host": host, "host_port": host_port, "container_port": TURBOVAS_API_DIRECT_CONTAINER_PORT})
+        seen.add((host, host_port))
+    return tuple(published)
+
+
+def running_service_env_has_key(repo_root: Path, service: str, key: str) -> bool:
+    cid = container_id(repo_root, service)
+    if not cid:
+        return False
+    result = run_command(["docker", "inspect", "-f", "{{json .Config.Env}}", cid], repo_root, env=runtime_env(repo_root))
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+    try:
+        values = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(values, list):
+        return False
+    return env_values_have_nonempty_key(values, key)
+
+
+def env_values_have_nonempty_key(values: Iterable[Any], key: str) -> bool:
+    prefix = f"{key}="
+    return any(isinstance(value, str) and value.startswith(prefix) and bool(value[len(prefix) :].strip()) for value in values)
+
+
+def native_api_direct_token_sources(repo_root: Path, env: dict[str, str]) -> tuple[tuple[str, ...], Path, bool]:
+    sources: list[str] = []
+    if env.get(TURBOVAS_API_BEARER_TOKEN_ENV):
+        sources.append("environment")
+    secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    secret_present = False
+    try:
+        secret_present = secret_path.is_file() and bool(secret_path.read_text(encoding="utf-8").strip())
+    except OSError:
+        pass
+    if running_service_env_has_key(repo_root, "turbovas-api", TURBOVAS_API_BEARER_TOKEN_ENV):
+        sources.append("running-container-env")
+    return tuple(sources), secret_path, secret_present
+
+
+def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    env = runtime_env(repo_root) if env is None else env
+    findings: list[dict[str, Any]] = []
+    configured = native_api_direct_requested(env)
+    direct_env_names = (
+        TURBOVAS_API_DIRECT_ENV,
+        TURBOVAS_API_DIRECT_HOST_ENV,
+        TURBOVAS_API_DIRECT_PORT_ENV,
+        TURBOVAS_API_DIRECT_BIND_ENV,
+    )
+    configured_env = [name for name in direct_env_names if env.get(name)]
+    running_bindings = current_native_api_direct_published_bindings(repo_root)
+
+    if configured:
+        configured_host = native_api_direct_host(env)
+        if host_is_wildcard(configured_host):
+            configured_status = "fail"
+            configured_message = "Direct native API host publication is configured for a broad wildcard binding."
+        elif not host_is_loopback(configured_host):
+            configured_status = "warn"
+            configured_message = "Direct native API host publication is configured for explicit non-loopback access; review the operator network before production exposure."
+        else:
+            configured_status = "pass"
+            configured_message = "Direct native API host publication is configured for loopback access."
+        findings.append(
+            finding(
+                configured_status,
+                "production.native-api-direct.configured-binding",
+                configured_message,
+                details={
+                    "enabled": True,
+                    "host": configured_host,
+                    "host_port": native_api_direct_port(env),
+                    "host_binding": native_api_direct_port_binding(env),
+                    "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+                    "configured_env": configured_env,
+                },
+            )
+        )
+    else:
+        findings.append(
+            finding(
+                "pass",
+                "production.native-api-direct.configured-binding",
+                "Direct native API host publication is not configured; internal-only native API remains the default.",
+                details={"enabled": False, "configured_env": configured_env},
+            )
+        )
+
+    broad_running = [binding for binding in running_bindings if host_is_wildcard(binding.get("host", ""))]
+    external_running = [binding for binding in running_bindings if not host_is_wildcard(binding.get("host", "")) and not host_is_loopback(binding.get("host", ""))]
+    if broad_running:
+        running_status = "fail"
+        running_message = "A running direct native API listener is published on a broad wildcard host binding."
+    elif external_running:
+        running_status = "warn"
+        running_message = "A running direct native API listener is published on explicit non-loopback host binding."
+    elif running_bindings:
+        running_status = "pass"
+        running_message = "Any running direct native API listener is published only on loopback host binding."
+    else:
+        running_status = "pass"
+        running_message = "No running direct native API host publication was detected."
+    findings.append(
+        finding(
+            running_status,
+            "production.native-api-direct.running-binding",
+            running_message,
+            details={"published_bindings": list(running_bindings)},
+        )
+    )
+
+    token_sources, secret_path, secret_present = native_api_direct_token_sources(repo_root, env)
+    exposure_enabled = configured or bool(running_bindings)
+    auth_details = {
+        "exposure_enabled": exposure_enabled,
+        "token_sources": list(token_sources),
+        "bearer_token_env": TURBOVAS_API_BEARER_TOKEN_ENV,
+        "runtime_secret": str(secret_path),
+        "runtime_secret_present": secret_present,
+    }
+    if not exposure_enabled:
+        findings.append(
+            finding(
+                "pass",
+                "production.native-api-direct.auth-boundary",
+                "Direct native API host exposure is disabled; no direct bearer boundary is needed for the internal-only default.",
+                details=auth_details,
+            )
+        )
+    elif token_sources:
+        findings.append(
+            finding(
+                "pass",
+                "production.native-api-direct.auth-boundary",
+                "Direct native API exposure has an explicit bearer-token auth boundary configured.",
+                details=auth_details,
+            )
+        )
+    else:
+        findings.append(
+            finding(
+                "fail",
+                "production.native-api-direct.auth-boundary",
+                "Direct native API exposure appears enabled without TURBOVAS_API_BEARER_TOKEN in the requested environment or running container; do not expose /api/v1 without the explicit B-130 auth boundary.",
+                details=auth_details,
+            )
+        )
+    return findings
 
 
 def gsad_binding_transition_findings(repo_root: Path) -> list[dict[str, Any]]:
@@ -4457,6 +4635,8 @@ def command_production_posture_check(repo_root: Path) -> dict[str, Any]:
         port_message = "GSA host binding is loopback-only by default."
     findings.append(finding(port_status, "production.gsad-binding", port_message, details={"hosts": list(hosts), "bindings": list(gsad_port_bindings(repo_root))}))
 
+    findings.extend(direct_native_api_posture_findings(repo_root, runtime_env(repo_root)))
+
     compose = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
     findings.append(finding("pass" if compose.returncode == 0 else "fail", "production.compose-config", f"Compose config validation exit code {compose.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": compose.stdout.splitlines()[-40:]}))
 
@@ -5995,7 +6175,7 @@ def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
     token_from_env = bool(os.environ.get(TURBOVAS_API_BEARER_TOKEN_ENV))
     env = native_api_direct_runtime_env(repo_root)
     host = native_api_direct_host(env)
-    wildcard_host = host.strip().lower().strip("[]") in {"0.0.0.0", "::"}
+    wildcard_host = host_is_wildcard(host)
     findings.append(
         finding(
             "fail" if wildcard_host else "pass",

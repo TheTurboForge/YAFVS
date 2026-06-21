@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import React, {useState} from 'react';
+import {fetchNativeTasks} from 'gmp/native-api/tasks';
 import {
   ANY,
   MANUAL,
@@ -31,6 +33,41 @@ import {
   LOW_VALUE,
   getSeverityLevelBoundaries,
 } from 'web/utils/severity';
+
+const NATIVE_TASK_PAGE_SIZE = 200;
+
+const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const fetchAllTasks = async gmp => {
+  if (!canUseNativeApi(gmp)) {
+    const response = await gmp.tasks.getAll();
+    return response.data;
+  }
+
+  const tasks = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (tasks.length < total) {
+    const response = await fetchNativeTasks(gmp, {
+      page,
+      pageSize: NATIVE_TASK_PAGE_SIZE,
+      sort: 'name',
+      filter: '',
+    });
+
+    tasks.push(...response.tasks);
+    total = response.counts.filtered;
+
+    if (response.tasks.length === 0) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return tasks;
+};
 
 const OverrideComponent = ({
   children,
@@ -95,7 +132,7 @@ const OverrideComponent = ({
   const [initialProps, setInitialProps] = useState({});
 
   const loadTasks = () => {
-    gmp.tasks.getAll().then(response => setTasks(response.data));
+    fetchAllTasks(gmp).then(setTasks);
   };
 
   const closeOverrideDialog = () => {

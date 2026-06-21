@@ -498,7 +498,7 @@ Requests the report specified and exports it as a csv formatted report locally.
 ### Example
 `$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket export-csv-report.gmp.py *report_uuid* ./output.csv`
 
-- Get the *report_uuid* with list-reports.gmp.py or find it in the UI. If the output is not specified it will be named *report_uuid.csv*
+- Get the *report_uuid* from the UI or a native read such as `tools/turbovasctl native-api-request --json --path '/api/v1/reports?page_size=25'`. If the output is not specified it will be named *report_uuid.csv*
 - Note the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
 
 ## `export-pdf-report.gmp.py`
@@ -509,7 +509,7 @@ Requests the report specified and exports it as a pdf formatted report locally.
 
 `$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket export-pdf-report.gmp.py *report_uuid* ./output.pdf`
 
-- Get the *report_uuid* with list-reports.gmp.py or find it in the UI. If the output is not specified it will be named *report_uuid.pdf*
+- Get the *report_uuid* from the UI or a native read such as `tools/turbovasctl native-api-request --json --path '/api/v1/reports?page_size=25'`. If the output is not specified it will be named *report_uuid.pdf*
 
 **Note**: the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
 
@@ -528,20 +528,6 @@ Lists feeds and their status.
 ### Example
 
 `$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-feeds.gmp.py`
-
-## `list-reports.gmp.py`
-
-Lists all reports that have specified status
-
-### Example
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-reports.gmp.py *Status*`
-
-where status is "All", "Requested", "Queued", "Interrupted", "Running", "Stop Requested", "Stopped", or "Done"
-
-- Case matters, so "Done" or "Stopped" will work while "done" or "stopped" will not.
-- Script now shows, in percentage, how far the scan/report is.
-- There are no reports generated before at least one scan task has been started.
-
 
 ## `list-users.gmp.py`
 

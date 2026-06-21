@@ -73,8 +73,10 @@ listener for read-only scriptable proof work.
 Browser proof work now routes the raw `/reports` list, raw-report Results,
 raw-report Hosts, raw-report Ports, raw-report CVEs, raw-report Error Messages,
 raw-report and scope-report Metrics, plus scope list/detail, target/task list
-reads, top-level asset/security-info lists including Hosts, TLS Certificates,
-Operating Systems, Scanners, Scan Configs, Filters, Tags, Overrides, and Report Configs, NVT detail Information fields, and every scope-report evidence tab through the authenticated same-origin
+reads, top-level result detail metadata/explanatory fields, top-level
+asset/security-info lists including Hosts, TLS Certificates, Operating Systems,
+Scanners, Scan Configs, Filters, Tags, Overrides, and Report Configs, NVT
+detail Information fields, and every scope-report evidence tab through the authenticated same-origin
 `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 NVT detail Information fields now read native catalog metadata through the
 authenticated `gsad` proxy while inherited GMP context still owns preferences,

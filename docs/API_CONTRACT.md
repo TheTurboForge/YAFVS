@@ -296,10 +296,11 @@ raw evidence link, and a bounded description excerpt. These fields are enough
 for summary views and report-export artifacts without asking GSA or runtime
 helpers to stitch raw XML report payloads together client-side.
 `GET /api/v1/results/{result_id}` returns the same basic metadata for one raw
-result row so the GSA result detail page can overlay native read-only metadata
-after loading the inherited GMP detail context. The native detail intentionally
-does not replace inherited overrides, tags, EPSS/CVE context, export, actions,
-create-override, or rich NVT/result detail surfaces.
+result row plus result description and NVT explanatory fields for the existing
+Information view. The GSA result detail page tries this native detail first and
+falls back to inherited GMP when the native read fails. The native detail
+intentionally does not replace inherited overrides, tags, EPSS/CVE context,
+export, actions, or create-override surfaces.
 `runtime-report-export --json` and the raw report Results tab now read native
 raw-report detail/result-row endpoints, then write or render their familiar
 JSON/table views. The

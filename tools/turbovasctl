@@ -8435,10 +8435,18 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
                 if raw_result_detail_id:
                     raw_result_detail = native_api_curl(repo_root, f"/api/v1/results/{urllib.parse.quote(raw_result_detail_id)}")
                     raw_result_detail_json = parse_json_output(raw_result_detail)
-                    details["raw_result_detail"] = summarize_native_api_response(raw_result_detail_json)
+                    detail_text_fields = [
+                        key
+                        for key in ("description", "summary", "insight", "affected", "impact", "detection")
+                        if isinstance(raw_result_detail_json, dict) and raw_result_detail_json.get(key)
+                    ]
+                    raw_result_detail_summary = summarize_native_api_response(raw_result_detail_json)
+                    raw_result_detail_summary["descriptive_fields"] = detail_text_fields
+                    details["raw_result_detail"] = raw_result_detail_summary
+                    raw_result_detail_ok = raw_result_detail.returncode == 0 and isinstance(raw_result_detail_json, dict) and raw_result_detail_json.get("id") == raw_result_detail_id
                     findings.append(
                         native_api_probe_finding(
-                            "pass" if raw_result_detail.returncode == 0 and isinstance(raw_result_detail_json, dict) and raw_result_detail_json.get("id") == raw_result_detail_id else "fail",
+                            "pass" if raw_result_detail_ok else "fail",
                             "native-api.raw-result-detail",
                             f"Native API raw-result detail probe exit code {raw_result_detail.returncode}.",
                             raw_result_detail,
@@ -8446,6 +8454,17 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
                             raw_result_detail_json,
                         )
                     )
+                    if raw_result_detail_ok:
+                        findings.append(
+                            finding(
+                                "pass" if detail_text_fields else "warn",
+                                "native-api.raw-result-detail-descriptive-fields",
+                                "Native API raw-result detail includes descriptive result/NVT fields."
+                                if detail_text_fields
+                                else "Native API raw-result detail returned metadata only; the selected live row may not have descriptive fields.",
+                                details={"result_id": raw_result_detail_id, "fields": detail_text_fields},
+                            )
+                        )
             else:
                 findings.append(finding("warn", "native-api.raw-result-detail", "Raw report Results probe returned no rows, so the result detail probe was skipped."))
             raw_report_hosts = native_api_curl(repo_root, f"/api/v1/reports/{urllib.parse.quote(raw_report_detail_id)}/hosts?page_size=5&sort=host")

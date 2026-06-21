@@ -1313,6 +1313,10 @@ paths:
     get:
       operationId: getReports
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: raw-report-list-read
+      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan reports
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -1340,6 +1344,10 @@ paths:
     get:
       operationId: getReportsByReportId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: raw-report-detail-summary-read
+      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: Read one raw scan report summary
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -1827,6 +1835,10 @@ paths:
     get:
       operationId: getScopeReports
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scope-report-list-read
+      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
       summary: List generated scope reports
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -1854,6 +1866,10 @@ paths:
     get:
       operationId: getScopeReportsByScopeReportId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scope-report-detail-summary-read
+      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
       summary: Read one generated scope report
       parameters:
         - $ref: '#/components/parameters/ScopeReportId'

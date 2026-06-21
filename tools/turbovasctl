@@ -333,8 +333,10 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "operating-system-asset-list-read",
         "raw-report-application-evidence-read",
         "raw-report-cve-evidence-read",
+        "raw-report-detail-summary-read",
         "raw-report-error-message-evidence-read",
         "raw-report-host-evidence-read",
+        "raw-report-list-read",
         "raw-report-metrics-read",
         "raw-report-operating-system-evidence-read",
         "raw-report-port-evidence-read",
@@ -347,8 +349,10 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scanner-metadata-list-read",
         "scope-report-application-evidence-read",
         "scope-report-cve-evidence-read",
+        "scope-report-detail-summary-read",
         "scope-report-error-message-evidence-read",
         "scope-report-host-evidence-read",
+        "scope-report-list-read",
         "scope-report-metrics-read",
         "scope-report-operating-system-evidence-read",
         "scope-report-port-evidence-read",
@@ -415,6 +419,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/tags/{tag_id}"): "direct-read",
     ("get", "/tags/{tag_id}/resources"): "direct-read",
     ("get", "/trashcan/summary"): "direct-read",
+    ("get", "/reports"): "direct-read",
+    ("get", "/reports/{report_id}"): "direct-read",
     ("get", "/reports/{report_id}/results"): "direct-read",
     ("get", "/reports/{report_id}/hosts"): "direct-read",
     ("get", "/reports/{report_id}/ports"): "direct-read",
@@ -424,6 +430,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/reports/{report_id}/tls-certificates"): "direct-read",
     ("get", "/reports/{report_id}/errors"): "direct-read",
     ("get", "/reports/{report_id}/metrics"): "direct-read",
+    ("get", "/scope-reports"): "direct-read",
+    ("get", "/scope-reports/{scope_report_id}"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/results"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/hosts"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/ports"): "direct-read",
@@ -576,6 +584,16 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "trashcan-count-summary-read",
     },
+    ("get", "/reports"): {
+        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "raw-report-list-read",
+    },
+    ("get", "/reports/{report_id}"): {
+        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "raw-report-detail-summary-read",
+    },
     ("get", "/reports/{report_id}/results"): {
         "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
@@ -620,6 +638,16 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-metrics-read",
+    },
+    ("get", "/scope-reports"): {
+        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "scope-report-list-read",
+    },
+    ("get", "/scope-reports/{scope_report_id}"): {
+        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "scope-report-detail-summary-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/results"): {
         "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
@@ -4457,10 +4485,19 @@ def rust_direct_scope_report_section_templates(function_body: str) -> list[str]:
 def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[str]:
     if repo_root is None:
         return []
-    path = repo_root / "services" / "turbovas-api" / "src" / "main.rs"
-    try:
-        source = path.read_text(encoding="utf-8")
-    except OSError:
+    source = ""
+    for relative_path in (
+        "services/turbovas-api/src/direct_api.rs",
+        "services/turbovas-api/src/main.rs",
+    ):
+        try:
+            candidate = (repo_root / relative_path).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if rust_source_function_body(candidate, "direct_api_v1_path_is_allowed"):
+            source = candidate
+            break
+    if not source:
         return []
 
     function_body = rust_source_function_body(source, "direct_api_v1_path_is_allowed")

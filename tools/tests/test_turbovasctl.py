@@ -819,6 +819,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-request "$@"', justfile)
         self.assertNotIn('elif [ "${1:-}" != "" ] && [ "${1#-}" != "$1" ]; then', justfile)
 
+    def test_native_api_rust_test_recipe_serializes_filters(self):
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertIn('native-api-rust-test *filters:', justfile)
+        self.assertIn('cargo test --manifest-path services/turbovas-api/Cargo.toml --locked;', justfile)
+        self.assertIn('for filter in "$@"; do', justfile)
+        self.assertIn('cargo test --manifest-path services/turbovas-api/Cargo.toml --locked "$filter";', justfile)
+
     def test_native_api_smoke_summarizes_large_responses(self):
         payload = {
             "summary": {"alive_system_count": 4, "vulnerability_count": 2},

@@ -18,6 +18,17 @@ native-tooling-state *args:
 native-api-request *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-request "$@"
 
+native-api-rust-test *filters:
+    @set -- {{filters}}; \
+      if [ "${1:-}" = "--" ]; then shift; fi; \
+      if [ "$#" -eq 0 ]; then \
+        cargo test --manifest-path services/turbovas-api/Cargo.toml --locked; \
+      else \
+        for filter in "$@"; do \
+          cargo test --manifest-path services/turbovas-api/Cargo.toml --locked "$filter"; \
+        done; \
+      fi
+
 rust-migration-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl rust-migration-state "$@"
 

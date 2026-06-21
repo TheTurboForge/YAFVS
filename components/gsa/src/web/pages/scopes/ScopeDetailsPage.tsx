@@ -6,7 +6,9 @@
 import {useCallback, useEffect, useState} from 'react';
 import {useNavigate, useParams} from 'react-router';
 import type {ProtectionRequirement, Scope} from 'gmp/commands/scopes';
+import {fetchNativeHosts} from 'gmp/native-api/hosts';
 import {fetchNativeScope} from 'gmp/native-api/scopes';
+import {fetchNativeTargets} from 'gmp/native-api/targets';
 import Button from 'web/components/form/Button';
 import MultiSelect from 'web/components/form/MultiSelect';
 import Select from 'web/components/form/Select';
@@ -43,6 +45,11 @@ interface EntityOptionSource {
 interface EntityListCommand {
   get: (params: {filter: string}) => Promise<{data: EntityOptionSource[]}>;
 }
+
+const NATIVE_SELECTOR_PAGE_SIZE = 1000;
+
+const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
+  typeof gmp?.buildUrl === 'function';
 
 const entityLabel = (entity: EntityOptionSource): string => {
   const name = entity.name || entity.hostname || entity.ip || entity.id || '';
@@ -82,6 +89,78 @@ const addUnique = (values: string[], value?: string): string[] => {
   return [...values, value];
 };
 
+const loadNativeTargets = async (
+  gmp: ReturnType<typeof useGmp>,
+): Promise<EntityOptionSource[]> => {
+  const targets: EntityOptionSource[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (targets.length < total) {
+    const response = await fetchNativeTargets(gmp, {
+      page,
+      pageSize: NATIVE_SELECTOR_PAGE_SIZE,
+      sort: 'name',
+      filter: '',
+    });
+    targets.push(...(response.targets as unknown as EntityOptionSource[]));
+    total = response.counts.filtered;
+    if (response.targets.length === 0) {
+      break;
+    }
+    page += 1;
+  }
+
+  return targets;
+};
+
+const loadNativeHosts = async (
+  gmp: ReturnType<typeof useGmp>,
+): Promise<EntityOptionSource[]> => {
+  const hosts: EntityOptionSource[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (hosts.length < total) {
+    const response = await fetchNativeHosts(gmp, {
+      page,
+      pageSize: NATIVE_SELECTOR_PAGE_SIZE,
+      sort: 'name',
+      filter: '',
+    });
+    hosts.push(...(response.hosts as unknown as EntityOptionSource[]));
+    total = response.counts.filtered;
+    if (response.hosts.length === 0) {
+      break;
+    }
+    page += 1;
+  }
+
+  return hosts;
+};
+
+const loadTargetOptions = async (
+  gmp: ReturnType<typeof useGmp>,
+): Promise<EntityOptionSource[]> => {
+  if (canUseNativeApi(gmp)) {
+    return loadNativeTargets(gmp);
+  }
+  const targetsCommand = gmp.targets as unknown as EntityListCommand;
+  const response = await targetsCommand.get({filter: 'rows=-1'});
+  return response.data;
+};
+
+const loadHostOptions = async (
+  gmp: ReturnType<typeof useGmp>,
+): Promise<EntityOptionSource[]> => {
+  if (canUseNativeApi(gmp)) {
+    return loadNativeHosts(gmp);
+  }
+  const hostsCommand = (gmp as unknown as {hosts: EntityListCommand}).hosts;
+  const response = await hostsCommand.get({filter: 'rows=-1'});
+  return response.data;
+};
+
 const ScopeDetailsPage = () => {
   const [_] = useTranslation();
   const gmp = useGmp();
@@ -106,12 +185,10 @@ const ScopeDetailsPage = () => {
     setLoading(true);
     setError(undefined);
     try {
-      const targetsCommand = gmp.targets as unknown as EntityListCommand;
-      const hostsCommand = (gmp as unknown as {hosts: EntityListCommand}).hosts;
-      const [scopeData, targetsResponse, hostsResponse] = await Promise.all([
+      const [scopeData, targets, hosts] = await Promise.all([
         fetchNativeScope(gmp, id),
-        targetsCommand.get({filter: 'rows=-1'}),
-        hostsCommand.get({filter: 'rows=-1'}),
+        loadTargetOptions(gmp),
+        loadHostOptions(gmp),
       ]);
       if (scopeData) {
         setScope(scopeData);
@@ -124,14 +201,14 @@ const ScopeDetailsPage = () => {
         setHostIds(currentHostIds);
         setTargetItems(
           mergeSelectedItems(
-            entityItems(targetsResponse.data),
+            entityItems(targets),
             currentTargetIds,
             scopeData.targets,
           ),
         );
         setHostItems(
           mergeSelectedItems(
-            entityItems(hostsResponse.data),
+            entityItems(hosts),
             currentHostIds,
             scopeData.hosts,
           ),

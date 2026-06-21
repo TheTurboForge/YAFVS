@@ -382,6 +382,7 @@ NATIVE_TOOLING_SCAN_PREFIXES = (
     "components/python-gvm/",
     "components/gvm-tools/",
 )
+GSA_NATIVE_API_CLIENT_PREFIX = "components/gsa/src/gmp/native-api/"
 NATIVE_TOOLING_SCAN_FILES = {"README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md", "BUILDING.md"}
 ALERT_ALLOWED_PAYLOAD_KEYS = frozenset(
     {
@@ -3389,6 +3390,8 @@ def native_tooling_markers(path: Path) -> list[str]:
 
 def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
     path = Path(relative_path)
+    if relative_path.startswith(GSA_NATIVE_API_CLIENT_PREFIX):
+        return None
     if relative_path == "tools/turbovasctl" or (relative_path.startswith("tools/runtime_") and relative_path.endswith(".py")):
         return "required_runtime", "TurboVAS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
     if relative_path.startswith("tools/tests/"):
@@ -3410,6 +3413,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
 
 
 def native_tooling_scan_candidate(relative_path: str) -> bool:
+    if relative_path.startswith(GSA_NATIVE_API_CLIENT_PREFIX):
+        return False
     return relative_path in NATIVE_TOOLING_SCAN_FILES or any(relative_path.startswith(prefix) for prefix in NATIVE_TOOLING_SCAN_PREFIXES)
 
 

@@ -1782,7 +1782,20 @@ fn bearer_token_matches(headers: &HeaderMap, expected: &str) -> bool {
     let Some(token) = parts.next() else {
         return false;
     };
-    scheme.eq_ignore_ascii_case("Bearer") && token == expected
+    scheme.eq_ignore_ascii_case("Bearer") && constant_time_str_eq(token, expected)
+}
+
+fn constant_time_str_eq(candidate: &str, expected: &str) -> bool {
+    let candidate = candidate.as_bytes();
+    let expected = expected.as_bytes();
+    let max_len = candidate.len().max(expected.len());
+    let mut diff = candidate.len() ^ expected.len();
+    for index in 0..max_len {
+        let candidate_byte = candidate.get(index).copied().unwrap_or(0);
+        let expected_byte = expected.get(index).copied().unwrap_or(0);
+        diff |= usize::from(candidate_byte ^ expected_byte);
+    }
+    diff == 0
 }
 
 fn request_id_header_name() -> HeaderName {
@@ -10640,6 +10653,15 @@ FEED_COMMIT = "not part of the public contract";
             "bearer secret-token".parse().unwrap(),
         );
         assert!(bearer_token_matches(&headers, "secret-token"));
+    }
+
+    #[test]
+    fn constant_time_string_compare_matches_only_equal_bytes() {
+        assert!(constant_time_str_eq("secret-token", "secret-token"));
+        assert!(!constant_time_str_eq("secret-token", "secret-tokem"));
+        assert!(!constant_time_str_eq("secret-token", "secret-token-extra"));
+        assert!(!constant_time_str_eq("secret-token-extra", "secret-token"));
+        assert!(!constant_time_str_eq("", "secret-token"));
     }
 
     #[test]

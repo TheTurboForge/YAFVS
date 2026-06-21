@@ -710,6 +710,10 @@ paths:
     get:
       operationId: getTags
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: tag-metadata-read
+      x-turbovas-inherited-still-owns: tag-write-control
       summary: List tags
       description: Read-only tag metadata backed by gvmd/PostgreSQL. Tag create, modify, clone, enable/disable, export, delete, and assigned-resource expansion remain on inherited compatibility paths while native write/resource semantics are designed.
       parameters:
@@ -778,6 +782,10 @@ paths:
     get:
       operationId: getTagsByTagId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: tag-metadata-read
+      x-turbovas-inherited-still-owns: tag-write-control
       summary: Read one tag
       parameters:
         - $ref: '#/components/parameters/TagId'
@@ -804,6 +812,10 @@ paths:
     get:
       operationId: getTagsByTagIdResources
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: tag-resource-reference-read
+      x-turbovas-inherited-still-owns: tag-write-control
       summary: List assigned tag resource references
       description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Tag mutation, trash resources, credentials, users, permissions, filters, alerts, schedules, scanners, overrides, reports, and results remain on inherited compatibility paths while native semantics are designed.
       parameters:

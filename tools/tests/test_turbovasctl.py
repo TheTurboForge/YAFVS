@@ -3186,6 +3186,47 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertIn(str(override), command)
             text = override.read_text(encoding="utf-8")
             self.assertIn('"127.0.0.1:19080:9081"', text)
+            self.assertNotIn(turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, text)
+            self.assertNotIn("volumes:", text)
+
+            file_env = turbovasctl.runtime_env(root)
+            file_env.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+            file_env.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+            file_env[turbovasctl.TURBOVAS_API_DIRECT_ENV] = "1"
+            command = turbovasctl.compose_command(root, "config", env=file_env)
+            self.assertIn(str(override), command)
+            text = override.read_text(encoding="utf-8")
+            secret_path = turbovasctl.runtime_secret_path(root, turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET)
+            self.assertIn(turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, text)
+            self.assertIn(str(secret_path), text)
+            self.assertIn(turbovasctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE, text)
+            self.assertIn("read_only: true", text)
+            self.assertNotIn(secret_path.read_text(encoding="utf-8").strip(), text)
+
+    def test_direct_native_api_runtime_env_uses_token_file_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_token_file = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+            try:
+                turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+                env = turbovasctl.native_api_direct_runtime_env(root)
+            finally:
+                if original_token is None:
+                    turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                if original_token_file is None:
+                    turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
+
+            self.assertNotIn(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV, env)
+            self.assertEqual(env[turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV], turbovasctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE)
+            token = turbovasctl.native_api_direct_bearer_token(root, env)
+            self.assertTrue(turbovasctl.direct_api_bearer_token_is_acceptable(token))
 
     def test_direct_native_api_config_shape_validation(self):
         valid = {
@@ -3320,13 +3361,18 @@ db2:keys=5,expires=0,avg_ttl=0
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=running), unittest.mock.patch.object(turbovasctl, "running_service_env_has_key", return_value=True):
+            def running_env_value(_root, _service, key):
+                if key == turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV:
+                    return turbovasctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE
+                return None
+
+            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=running), unittest.mock.patch.object(turbovasctl, "running_service_env_value", side_effect=running_env_value):
                 findings = turbovasctl.direct_native_api_posture_findings(root, {})
 
         by_check = {item["check"]: item for item in findings}
         self.assertEqual(by_check["production.native-api-direct.running-binding"]["status"], "warn")
         self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "pass")
-        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["details"]["token_sources"], ["running-container-env"])
+        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["details"]["token_sources"], ["running-container-token-file"])
 
     def test_direct_native_api_posture_never_reports_bearer_token_value(self):
         env = {

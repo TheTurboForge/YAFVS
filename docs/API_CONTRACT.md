@@ -71,7 +71,9 @@ separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
 - Base path: `/api/v1`.
 - Authentication: same-origin operator session through the existing `gsad` web
   boundary for browser reads, or bearer token through the opt-in direct native
-  API listener. See `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+  API listener. The development helper uses a read-only runtime token file by
+  default instead of passing generated bearer tokens through the container
+  environment. See `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 - Direct v1 method boundary: the opt-in direct listener accepts only read-only
   `GET` requests under `/api/v1` and returns JSON `405 method_not_allowed` for
   valid-token non-GET requests until native write/control APIs are separately

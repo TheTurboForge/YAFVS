@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::env;
+use std::{env, fs};
 
 use axum::{
     extract::{Request, State},
@@ -20,6 +20,7 @@ use crate::{
 
 const DIRECT_API_BIND_ENV: &str = "TURBOVAS_API_DIRECT_BIND";
 const DIRECT_API_BEARER_TOKEN_ENV: &str = "TURBOVAS_API_BEARER_TOKEN";
+const DIRECT_API_BEARER_TOKEN_FILE_ENV: &str = "TURBOVAS_API_BEARER_TOKEN_FILE";
 
 fn env_string(name: &str) -> Option<String> {
     env::var(name)
@@ -32,11 +33,37 @@ pub(crate) fn direct_api_config() -> Result<Option<(String, DirectApiAuth)>, Api
     let Some(bind) = env_string(DIRECT_API_BIND_ENV) else {
         return Ok(None);
     };
-    let token = env_string(DIRECT_API_BEARER_TOKEN_ENV).ok_or(ApiError::Config)?;
+    let token = direct_api_bearer_token()?;
     if !direct_api_bearer_token_is_acceptable(&token) {
         return Err(ApiError::Config);
     }
     Ok(Some((bind, DirectApiAuth { token })))
+}
+
+fn direct_api_bearer_token() -> Result<String, ApiError> {
+    direct_api_bearer_token_from_sources(
+        env_string(DIRECT_API_BEARER_TOKEN_FILE_ENV),
+        env_string(DIRECT_API_BEARER_TOKEN_ENV),
+    )
+}
+
+fn direct_api_bearer_token_from_sources(
+    token_file: Option<String>,
+    token_env: Option<String>,
+) -> Result<String, ApiError> {
+    if let Some(path) = token_file {
+        return fs::read_to_string(path)
+            .map(|value| value.trim().to_string())
+            .map_err(|_| ApiError::Config)
+            .and_then(|value| {
+                if value.is_empty() {
+                    Err(ApiError::Config)
+                } else {
+                    Ok(value)
+                }
+            });
+    }
+    token_env.ok_or(ApiError::Config)
 }
 
 pub(crate) async fn require_direct_api_auth(
@@ -186,4 +213,53 @@ fn direct_api_wildcard_tail_is_allowed(tail: &str) -> bool {
         && tail
             .split('/')
             .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn token_file(name: &str, value: &str) -> String {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before unix epoch")
+            .as_nanos();
+        let path = env::temp_dir().join(format!("turbovas-direct-token-{name}-{nonce}"));
+        fs::write(&path, value).expect("write direct token fixture");
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn direct_api_bearer_token_prefers_file_source() {
+        let path = token_file("preferred", "file-token-0123456789abcdef0123456789abcdef\n");
+        let token = direct_api_bearer_token_from_sources(
+            Some(path.clone()),
+            Some("env-token-0123456789abcdef0123456789abcdef".to_string()),
+        )
+        .expect("file token should load");
+        fs::remove_file(path).ok();
+        assert_eq!(token, "file-token-0123456789abcdef0123456789abcdef");
+    }
+
+    #[test]
+    fn direct_api_bearer_token_keeps_environment_fallback() {
+        let token = direct_api_bearer_token_from_sources(
+            None,
+            Some("env-token-0123456789abcdef0123456789abcdef".to_string()),
+        )
+        .expect("environment token should load");
+        assert_eq!(token, "env-token-0123456789abcdef0123456789abcdef");
+    }
+
+    #[test]
+    fn direct_api_bearer_token_rejects_empty_file_source() {
+        let path = token_file("empty", "\n");
+        let result = direct_api_bearer_token_from_sources(
+            Some(path.clone()),
+            Some("env-token-0123456789abcdef0123456789abcdef".to_string()),
+        );
+        fs::remove_file(path).ok();
+        assert!(matches!(result, Err(ApiError::Config)));
+    }
 }

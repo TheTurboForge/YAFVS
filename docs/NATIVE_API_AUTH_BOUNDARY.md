@@ -20,8 +20,10 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - The internal listener remains the default app-network path for `gsad` and
   runtime helpers.
 - Direct host exposure is opt-in. The development helper publishes
-  `127.0.0.1:19080` only when direct mode is requested and configures a bearer
-  token from `TURBOVAS_API_BEARER_TOKEN` or an ignored runtime secret.
+  `127.0.0.1:19080` only when direct mode is requested. By default it creates
+  an ignored runtime secret and passes it to the service as a read-only token
+  file through `TURBOVAS_API_BEARER_TOKEN_FILE`; `TURBOVAS_API_BEARER_TOKEN`
+  remains an explicit environment-token override/fallback for development.
 - Direct bearer tokens must satisfy the local strength contract enforced by the
   service and helper: at least 32 printable non-whitespace ASCII characters.
   Generated runtime secrets use this stronger shape by default; weak configured
@@ -55,7 +57,9 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 
 - Do not expose a wildcard direct host binding through the development helper.
 - Do not log, print, or commit bearer tokens. Runtime-generated tokens live under
-  the ignored runtime `secrets/` directory.
+  the ignored runtime `secrets/` directory and are mounted read-only into the
+  direct API container for the opt-in helper. Do not pass generated runtime
+  tokens through container environment variables.
 - Keep direct v1 access read-only. Scanner control, credentials, feed sync,
   feed import/update/download/mirroring, account management, target/task writes,
   alert delivery, and destructive mutations stay inherited until native
@@ -102,7 +106,8 @@ When direct host or port overrides are used, call the exact host and port that
 the helper validated. Do not put bearer tokens in command history examples,
 logs, screenshots, or committed configuration.
 
-The direct smoke proves health access, missing-token rejection, wrong-token
+The direct smoke proves file-backed runtime-secret use by default, health
+access, missing-token rejection, wrong-token
 rejection, generated, safe client-supplied, and unsafe client-replaced
 `X-Request-Id` response headers, valid-token JSON access without browser CORS
 access headers, valid-token non-GET rejection, request-body,

@@ -85,6 +85,10 @@ enables and validates an opt-in bearer-auth direct listener, defaulting to
 loopback. That direct mode is for read-only `/api/v1` development proof work;
 it is not production deployment guidance and does not authorize scanner control,
 credential, feed, account, or destructive write endpoints.
+The helper creates an ignored runtime bearer-token secret and mounts it into the
+direct API container as a read-only token file. Explicit
+`TURBOVAS_API_BEARER_TOKEN` values still work as a development override, but
+generated runtime secrets are not passed through the container environment.
 Direct host and port overrides are intentionally narrow: use
 `TURBOVAS_API_DIRECT_HOST` for one host name, IPv4 address, or bracketed IPv6
 address such as `[::1]`, `TURBOVAS_API_DIRECT_PORT` for one TCP port, and

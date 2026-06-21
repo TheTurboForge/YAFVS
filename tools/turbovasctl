@@ -2707,6 +2707,21 @@ def read_or_create_runtime_secret(repo_root: Path, name: str, default: str | Non
     return secret, True
 
 
+def write_runtime_secret(repo_root: Path, name: str, secret: str) -> Path:
+    path = runtime_secret_path(repo_root, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(secret + "\n", encoding="utf-8")
+    tmp.chmod(0o600)
+    tmp.replace(path)
+    path.chmod(0o600)
+    return path
+
+
+def rotate_runtime_secret(repo_root: Path, name: str) -> Path:
+    return write_runtime_secret(repo_root, name, secrets.token_urlsafe(32))
+
+
 def gvmd_db_args(repo_root: Path) -> list[str]:
     return [
         f"--database={postgres_database(repo_root)}",
@@ -8724,6 +8739,53 @@ def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-native-api-rebuild", repo_root, "Native API sidecar rebuild attempted.", findings, artifacts)
 
 
+def command_runtime_native_api_direct_token(repo_root: Path, *, rotate: bool) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    if rotate:
+        rotate_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+        findings.append(
+            finding(
+                "pass",
+                "native-api-direct-token.rotate",
+                "Direct native API runtime bearer token was rotated without printing the secret value.",
+                str(secret_path),
+            )
+        )
+    try:
+        token = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
+    except OSError:
+        token = ""
+    token_exists = bool(token)
+    token_ok = direct_api_bearer_token_is_acceptable(token) if token_exists else False
+    findings.append(
+        finding(
+            "pass" if token_exists and token_ok else "warn",
+            "native-api-direct-token.runtime-secret",
+            "Direct native API runtime bearer token file exists and satisfies the local strength contract."
+            if token_exists and token_ok
+            else "Direct native API runtime bearer token file is missing or does not satisfy the local strength contract.",
+            str(secret_path),
+            {
+                "exists": token_exists,
+                "acceptable": token_ok,
+                "secret_path": str(secret_path),
+                "token_value_reported": False,
+            },
+        )
+    )
+    if rotate:
+        findings.append(
+            finding(
+                "pass",
+                "native-api-direct-token.reload-required",
+                "Restart turbovas-api or rerun runtime-native-api-direct-smoke before expecting a running direct listener to accept the rotated token.",
+            )
+        )
+    summary = "Direct native API runtime bearer token rotated." if rotate else "Direct native API runtime bearer token inspected."
+    return make_result("runtime-native-api-direct-token", repo_root, summary, findings)
+
+
 def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -11735,6 +11797,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
     subparsers.add_parser("runtime-native-api-direct-smoke", parents=[common], help="verify the opt-in direct bearer-auth native API listener")
+    direct_token = subparsers.add_parser("runtime-native-api-direct-token", parents=[common], help="inspect or rotate the opt-in direct native API runtime bearer token")
+    direct_token.add_argument("--rotate", action="store_true", help="rotate the ignored runtime bearer token without printing it")
     subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal TurboVAS native API sidecar")
     subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
@@ -11878,6 +11942,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_native_api_smoke(repo_root)
     elif args.command == "runtime-native-api-direct-smoke":
         result = command_runtime_native_api_direct_smoke(repo_root)
+    elif args.command == "runtime-native-api-direct-token":
+        result = command_runtime_native_api_direct_token(repo_root, rotate=args.rotate)
     elif args.command == "runtime-native-api-rebuild":
         result = command_runtime_native_api_rebuild(repo_root)
     elif args.command == "runtime-webui-smoke":

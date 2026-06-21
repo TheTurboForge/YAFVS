@@ -63,6 +63,8 @@ Useful development checks include:
 - `just runtime-app-smoke`
 - `just runtime-native-api-smoke --json`
 - `just runtime-native-api-direct-smoke --json`
+- `just runtime-native-api-direct-token --json`
+- `just runtime-native-api-direct-token --json --rotate`
 - `just runtime-webui-smoke --json`
 - `just runtime-browser-smoke --json`
 - `just runtime-browser-regression --json`
@@ -89,6 +91,10 @@ The helper creates an ignored runtime bearer-token secret and mounts it into the
 direct API container as a read-only token file. Explicit
 `TURBOVAS_API_BEARER_TOKEN` values still work as a development override, but
 generated runtime secrets are not passed through the container environment.
+Use `just runtime-native-api-direct-token --json --rotate` to rotate only this
+ignored development runtime secret without printing it; rerun the direct smoke
+or restart `turbovas-api` before expecting a running direct listener to accept
+the rotated token.
 Direct host and port overrides are intentionally narrow: use
 `TURBOVAS_API_DIRECT_HOST` for one host name, IPv4 address, or bracketed IPv6
 address such as `[::1]`, `TURBOVAS_API_DIRECT_PORT` for one TCP port, and

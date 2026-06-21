@@ -84,9 +84,16 @@ Use these command surfaces:
 ```sh
 just runtime-native-api-smoke --json
 just runtime-native-api-direct-smoke --json
+just runtime-native-api-direct-token --json
+just runtime-native-api-direct-token --json --rotate
 tools/turbovasctl native-api-request --direct --json --path '/api/v1/reports?page_size=1'
 tools/turbovasctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
 ```
+
+`runtime-native-api-direct-token --rotate` rotates only the ignored development
+runtime bearer-token secret and never prints the token value. Restart
+`turbovas-api` or rerun `runtime-native-api-direct-smoke` before expecting a
+running direct listener to accept the rotated token.
 
 Raw `curl` clients use the same bearer boundary. For the default development
 listener, first run the direct smoke so the ignored runtime secret exists, then

@@ -3345,6 +3345,30 @@ db2:keys=5,expires=0,avg_ttl=0
             with self.subTest(token=token):
                 self.assertFalse(turbovasctl.direct_api_bearer_token_is_acceptable(token))
 
+    def test_runtime_direct_token_rotation_never_reports_secret_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            before_path = turbovasctl.write_runtime_secret(
+                root,
+                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                "old-token-0123456789abcdef0123456789abcdef",
+            )
+            before = before_path.read_text(encoding="utf-8").strip()
+
+            result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=True)
+            after = before_path.read_text(encoding="utf-8").strip()
+
+        rendered = json.dumps(result, sort_keys=True)
+        self.assertEqual(result["status"], "pass")
+        self.assertNotEqual(before, after)
+        self.assertTrue(turbovasctl.direct_api_bearer_token_is_acceptable(after))
+        self.assertNotIn(before, rendered)
+        self.assertNotIn(after, rendered)
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["native-api-direct-token.runtime-secret"]["details"]["token_value_reported"], False)
+        self.assertIn("rerun runtime-native-api-direct-smoke", checks["native-api-direct-token.reload-required"]["message"])
+
     def test_env_values_have_nonempty_key_rejects_empty_compose_values(self):
         self.assertFalse(turbovasctl.env_values_have_nonempty_key([], "TOKEN"))
         self.assertFalse(turbovasctl.env_values_have_nonempty_key(["TOKEN"], "TOKEN"))

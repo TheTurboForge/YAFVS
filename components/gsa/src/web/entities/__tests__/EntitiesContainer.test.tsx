@@ -8,6 +8,7 @@ import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   rendererWith,
   screen,
+  getSelectItemElementsForSelect,
   waitFor,
   userEvent,
   fireEvent,
@@ -69,6 +70,7 @@ interface CreateGmpOptions {
   exportByFilter?: ReturnType<typeof testing.fn>;
   currentSettings?: ReturnType<typeof testing.fn>;
   getAllTags?: ReturnType<typeof testing.fn>;
+  getTag?: ReturnType<typeof testing.fn>;
   buildUrl?: ReturnType<typeof testing.fn>;
   session?: ReturnType<typeof createSession> & {token?: string};
 }
@@ -105,6 +107,7 @@ const createGmp = ({
   exportByFilter = testing.fn().mockResolvedValue({data: {id: '123'}}),
   currentSettings = testing.fn().mockResolvedValue(currentSettingsResponse),
   getAllTags = testing.fn().mockResolvedValue({data: []}),
+  getTag = testing.fn().mockResolvedValue({data: {id: '1'}}),
   buildUrl,
   session = createSession(),
 }: CreateGmpOptions = {}) => ({
@@ -113,6 +116,7 @@ const createGmp = ({
     exportByFilter,
   },
   tags: {getAll: getAllTags},
+  tag: {get: getTag},
   user: {currentSettings},
   session,
 });
@@ -191,5 +195,64 @@ describe('EntitiesContainer', () => {
       credentials: 'include',
       headers: {Accept: 'application/json'},
     });
+  });
+
+  test('should load selected tag detail through the native API when available', async () => {
+    const getAllTags = testing.fn();
+    const getTag = testing.fn();
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const fetchMock = testing.fn((url: string) => {
+      if (url.endsWith('/api/v1/tags')) {
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue({
+            page: {page: 1, page_size: 25, total: 2, sort: 'name', filter: ''},
+            items: [
+              {id: '1', name: 'Native tag 1', resource_type: 'port_list'},
+              {id: '2', name: 'Native tag 2', resource_type: 'port_list'},
+            ],
+          }),
+          ok: true,
+          status: 200,
+        });
+      }
+      if (url.endsWith('/api/v1/tags/2')) {
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue({
+            id: '2',
+            name: 'Native tag 2',
+            resource_type: 'port_list',
+            value: 'native-value',
+            comment: 'native-comment',
+          }),
+          ok: true,
+          status: 200,
+        });
+      }
+      return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({
+      buildUrl,
+      getAllTags,
+      getTag,
+      session: {...createSession(), token: 'test-token'},
+    });
+    const tagButton = setupTagBulk(gmp);
+
+    fireEvent.click(tagButton);
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[1]);
+    await wait();
+
+    expect(getAllTags).not.toHaveBeenCalled();
+    expect(getTag).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/tags/2', {
+      token: 'test-token',
+    });
+    expect(screen.getByText('native-value')).toBeInTheDocument();
+    expect(screen.getByText('native-comment')).toBeInTheDocument();
   });
 });

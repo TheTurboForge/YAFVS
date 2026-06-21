@@ -5,7 +5,14 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {screen, within, rendererWith, fireEvent, wait} from 'web/testing';
+import {
+  getSelectItemElementsForSelect,
+  screen,
+  within,
+  rendererWith,
+  fireEvent,
+  wait,
+} from 'web/testing';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import Tag from 'gmp/models/tag';
@@ -124,6 +131,80 @@ describe('BulkTags tests', () => {
       credentials: 'include',
       headers: {Accept: 'application/json'},
     });
+  });
+
+  test('should load selected tag detail through the native API when available', async () => {
+    const entities = [new Task({id: '1'}), new Task({id: '2'})];
+    const entitiesCounts = new CollectionCounts({filtered: 2, all: 2});
+    const filter = Filter.fromString('');
+    const selectedEntities = [];
+    const onClose = testing.fn();
+    const getAllTags = testing.fn();
+    const getTag = testing.fn();
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const fetchMock = testing.fn((url: string) => {
+      if (url.endsWith('/api/v1/tags')) {
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue({
+            page: {page: 1, page_size: 25, total: 2, sort: 'name', filter: ''},
+            items: [
+              {id: '1', name: 'Native tag 1', resource_type: 'task'},
+              {id: '2', name: 'Native tag 2', resource_type: 'task'},
+            ],
+          }),
+          ok: true,
+          status: 200,
+        });
+      }
+      if (url.endsWith('/api/v1/tags/2')) {
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue({
+            id: '2',
+            name: 'Native tag 2',
+            resource_type: 'task',
+            value: 'native-value',
+            comment: 'native-comment',
+          }),
+          ok: true,
+          status: 200,
+        });
+      }
+      return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      buildUrl,
+      session: {token: 'test-token'},
+      tags: {getAll: getAllTags},
+      tag: {get: getTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={selectedEntities}
+        selectionType={SelectionType.SELECTION_PAGE_CONTENTS}
+        onClose={onClose}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[1]);
+    await wait();
+
+    expect(getAllTags).not.toHaveBeenCalled();
+    expect(getTag).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/tags/2', {
+      token: 'test-token',
+    });
+    expect(screen.getByText('native-value')).toBeInTheDocument();
+    expect(screen.getByText('native-comment')).toBeInTheDocument();
   });
 
   test('should allow to tag tasks with a new tag', async () => {

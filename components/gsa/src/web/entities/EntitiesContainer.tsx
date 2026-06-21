@@ -20,6 +20,7 @@ import Filter, {RESET_FILTER} from 'gmp/models/filter';
 import type Model from 'gmp/models/model';
 import type Tag from 'gmp/models/tag';
 import {
+  fetchNativeTag,
   fetchNativeTags,
   nativeTagsQueryFromFilter,
 } from 'gmp/native-api/tags';
@@ -54,6 +55,22 @@ type NavigateFunction = (args: {pathname: string; search?: string}) => void;
 
 const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
   typeof gmp?.buildUrl === 'function';
+
+const tagIdFromResponse = (data: unknown): string =>
+  typeof data === 'string'
+    ? data
+    : String((data as {id?: string | number})?.id ?? '');
+
+const loadTag = (gmp: Gmp, data: unknown): Promise<Tag> => {
+  const id = tagIdFromResponse(data);
+  if (canUseNativeApi(gmp) && id.length > 0) {
+    return fetchNativeTag(gmp, id);
+  }
+  const params = (typeof data === 'string' ? {id: data} : data) as Parameters<
+    typeof gmp.tag.get
+  >[0];
+  return gmp.tag.get(params).then(response => response.data);
+};
 
 export interface EntitiesContainerRenderProps<TModel extends Model = Model> {
   createFilterType: EntityType;
@@ -458,12 +475,12 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
 
     return gmp.tag
       .create(data)
-      .then(response => gmp.tag.get(response.data))
-      .then(response => {
+      .then(response => loadTag(gmp, response.data))
+      .then(tag => {
         this.closeTagDialog();
         this.setState({
-          tag: response.data,
-          tags: [...tags, response.data],
+          tag,
+          tags: [...tags, tag],
         });
       });
   }
@@ -471,9 +488,9 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
   async handleTagChange(id: string) {
     const {gmp} = this.props;
 
-    const response = await gmp.tag.get({id});
+    const tag = await loadTag(gmp, id);
     this.setState({
-      tag: response.data,
+      tag,
     });
   }
 

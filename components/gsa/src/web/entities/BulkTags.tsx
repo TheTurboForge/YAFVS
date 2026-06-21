@@ -10,6 +10,7 @@ import Filter from 'gmp/models/filter';
 import type Model from 'gmp/models/model';
 import Tag from 'gmp/models/tag';
 import {
+  fetchNativeTag,
   fetchNativeTags,
   nativeTagsQueryFromFilter,
 } from 'gmp/native-api/tags';
@@ -35,6 +36,22 @@ const getEntityIds = <TEntity extends Model>(entityArray: TEntity[] = []) =>
 
 const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
   typeof gmp?.buildUrl === 'function';
+
+const tagIdFromResponse = (data: unknown): string =>
+  typeof data === 'string'
+    ? data
+    : String((data as {id?: string | number})?.id ?? '');
+
+const loadTag = (gmp: ReturnType<typeof useGmp>, data: unknown) => {
+  const id = tagIdFromResponse(data);
+  if (canUseNativeApi(gmp) && id.length > 0) {
+    return fetchNativeTag(gmp, id);
+  }
+  const params = (typeof data === 'string' ? {id: data} : data) as Parameters<
+    typeof gmp.tag.get
+  >[0];
+  return gmp.tag.get(params).then(resp => resp.data);
+};
 
 const getMultiTagEntitiesCount = <TEntity extends Model>(
   pageEntities: TEntity[],
@@ -122,11 +139,11 @@ const BulkTags = <TEntity extends Model>({
           resourceType: data.resourceType as EntityType,
           value: data.value as string,
         })
-        .then(response => gmp.tag.get(response.data))
-        .then(response => {
-          const newTags = [...tags, response.data];
+        .then(response => loadTag(gmp, response.data))
+        .then(tag => {
+          const newTags = [...tags, tag];
           setTags(newTags);
-          setTag(response.data);
+          setTag(tag);
         })
         .then(closeTagDialog)
         .catch(setError);
@@ -140,14 +157,13 @@ const BulkTags = <TEntity extends Model>({
 
   const handleTagChange = useCallback(
     (id: string) => {
-      return gmp.tag
-        .get({id})
-        .then(resp => {
-          setTag(resp.data);
+      return loadTag(gmp, id)
+        .then(tag => {
+          setTag(tag);
         })
         .catch(setError);
     },
-    [gmp.tag],
+    [gmp],
   );
 
   const handleCloseTagsDialog = useCallback(() => {

@@ -18,6 +18,9 @@ as the primary scanner administration boundary.
 - Is a first-login or password-rotation bootstrap in place instead of relying
   on the development `admin` / `admin` account?
 - Is GSA exposed only to authorized operator networks?
+- If direct native API access is enabled, is it bound only to an authorized
+  operator network, protected by a non-default bearer token or stronger auth,
+  and explicitly limited to reviewed endpoints?
 - Is TLS configured with trusted certificates for the deployment context?
 - Are runtime secrets stored outside git and outside public artifacts?
 - Are feed terms understood for the chosen feed handling model?

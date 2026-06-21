@@ -62,6 +62,7 @@ Useful development checks include:
 - `just production-posture-check --json`
 - `just runtime-app-smoke`
 - `just runtime-native-api-smoke --json`
+- `just runtime-native-api-direct-smoke --json`
 - `just runtime-webui-smoke --json`
 - `just runtime-browser-smoke --json`
 - `just runtime-browser-regression --json`
@@ -76,6 +77,13 @@ Useful development checks include:
 
 See `../BUILDING.md` and `../docker/runtime/README.md` for build and runtime
 command details.
+
+The native HTTP/JSON API is internal by default for browser/runtime migration.
+For development automation, `just runtime-native-api-direct-smoke --json`
+enables and validates an opt-in bearer-auth direct listener, defaulting to
+loopback. That direct mode is for read-only `/api/v1` development proof work;
+it is not production deployment guidance and does not authorize scanner control,
+credential, feed, account, or destructive write endpoints.
 
 ## Targets, Tasks, And Raw Evidence
 

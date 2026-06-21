@@ -701,7 +701,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -716,6 +716,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_performance_snapshot", source)
         self.assertIn("def command_runtime_redis_state", source)
         self.assertIn("def command_runtime_native_api_smoke", source)
+        self.assertIn("def command_runtime_native_api_direct_smoke", source)
         self.assertIn("def command_runtime_native_api_rebuild", source)
         self.assertIn("native-api.scope-report-hosts", source)
         self.assertIn("native-api.scope-report-ports", source)
@@ -1792,6 +1793,9 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(turbovasctl.APP_PORTS["gsad"], "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392")
         self.assertNotIn("turbovas-api", turbovasctl.APP_PORTS)
         self.assertEqual(turbovasctl.TURBOVAS_API_CONTAINER_PORT, "9080")
+        self.assertEqual(turbovasctl.TURBOVAS_API_DIRECT_CONTAINER_PORT, "9081")
+        self.assertEqual(turbovasctl.TURBOVAS_API_DIRECT_DEFAULT_HOST, "127.0.0.1")
+        self.assertEqual(turbovasctl.TURBOVAS_API_DIRECT_DEFAULT_PORT, "19080")
         self.assertEqual(turbovasctl.DEV_ADMIN_USER, "admin")
         self.assertEqual(turbovasctl.DEV_ADMIN_PASSWORD, "admin")
 
@@ -1957,6 +1961,39 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertIn("ports: !override", text)
             self.assertIn('"192.168.178.42:19392:9392"', text)
             self.assertIn('"100.80.139.13:19392:9392"', text)
+
+    def test_direct_native_api_override_is_explicit_opt_in(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "compose").mkdir()
+            (root / "compose" / "dev.yaml").write_text("services: {}\n", encoding="utf-8")
+            token_only_env = turbovasctl.runtime_env(root)
+            token_only_env[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = "secret-token"
+            self.assertFalse(turbovasctl.native_api_direct_requested(token_only_env))
+
+            direct_env = dict(token_only_env)
+            direct_env[turbovasctl.TURBOVAS_API_DIRECT_ENV] = "1"
+            command = turbovasctl.compose_command(root, "config", env=direct_env)
+            override = turbovasctl.native_api_direct_ports_override_file(root)
+            self.assertIn(str(override), command)
+            text = override.read_text(encoding="utf-8")
+            self.assertIn('"127.0.0.1:19080:9081"', text)
+
+    def test_direct_native_api_display_command_redacts_token(self):
+        env = {
+            turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+        }
+        command = turbovasctl.direct_native_api_display_command("/api/v1/reports?page_size=1", token="secret-token", env=env)
+        rendered = " ".join(command)
+        self.assertIn("Authorization: Bearer <redacted>", rendered)
+        self.assertNotIn("secret-token", rendered)
+
+    def test_direct_native_api_http_status_parser_keeps_json_error_body(self):
+        completed = turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"unauthorized"}}\n401', "")
+        parsed, status = turbovasctl.parse_json_output_with_http_status(completed)
+        self.assertEqual(status, 401)
+        self.assertEqual(parsed["error"]["code"], "unauthorized")
 
     def test_scanner_redis_paths_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -67,7 +67,9 @@ list and Hosts. Later B-117/B-125 slices added scope-report Results, Ports,
 CVEs, Error Messages, Applications, Operating Systems, TLS Certificates,
 persisted scope-report Metrics, raw report Metrics, and raw report list/detail
 reads plus raw report evidence rows, scope list/detail, and target/task
-read-summary endpoints with the same internal-only, PostgreSQL-backed pattern.
+read-summary endpoints with the same PostgreSQL-backed pattern. The sidecar
+remains internal by default and now has an opt-in bearer-auth direct development
+listener for read-only scriptable proof work.
 Browser proof work now routes the raw `/reports` list, raw-report Results,
 raw-report Hosts, raw-report Ports, raw-report CVEs, raw-report Error Messages,
 raw-report and scope-report Metrics, plus scope list/detail, target/task list
@@ -103,13 +105,16 @@ import/export, edit/delete actions, and writes.
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.
 
-Internal read-only scripting can use `tools/turbovasctl native-api-request
---json --path '/api/v1/...'` or `just native-api-request --json --path
-'/api/v1/...'` for DB-backed report, scope, target, task, scan-config
-metadata, host asset metadata, tag metadata, override metadata, and report-config reads. This
-removes the need for covered inherited read-only GMP scripts while keeping
-write/control operations on inherited paths until a separate native write design
-exists.
+Read-only scripting can use `tools/turbovasctl native-api-request --json --path
+'/api/v1/...'` or `just native-api-request --json --path '/api/v1/...'` from
+inside the development runtime boundary. Opt-in direct development access uses
+`tools/turbovasctl native-api-request --direct --json --path '/api/v1/...'`
+after `just runtime-native-api-direct-smoke --json` has created the bearer-auth
+listener and ignored runtime secret. These paths cover DB-backed report, scope,
+target, task, scan-config metadata, host asset metadata, tag metadata, override
+metadata, and report-config reads. This removes the need for covered inherited
+read-only GMP scripts while keeping write/control operations on inherited paths
+until a separate native write design exists.
 
 ## Not In The First Proof
 
@@ -209,5 +214,6 @@ does not store. Trashcan Contents reads can use
 Trashcan data and restore/delete/empty mutations remain inherited because
 credential/target/scanner trash tables contain secret-adjacent payloads.
 Further native API expansion should now move toward remaining helper/tooling
-replacements and, later, carefully designed write/control paths that remove
-required GMP/XML, `python-gvm`, or `gvm-tools` dependence.
+replacements and direct read-only automation, then carefully designed
+write/control paths that remove required GMP/XML, `python-gvm`, or `gvm-tools`
+dependence without weakening scanner-control or secret boundaries.

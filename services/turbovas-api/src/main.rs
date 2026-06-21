@@ -6,8 +6,9 @@ use std::{env, net::SocketAddr};
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{Path, Query, Request, State},
+    http::{HeaderMap, StatusCode, header},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
 };
@@ -22,6 +23,14 @@ use uuid::Uuid;
 struct AppState {
     pool: Pool,
 }
+
+#[derive(Clone)]
+struct DirectApiAuth {
+    token: String,
+}
+
+const DIRECT_API_BIND_ENV: &str = "TURBOVAS_API_DIRECT_BIND";
+const DIRECT_API_BEARER_TOKEN_ENV: &str = "TURBOVAS_API_BEARER_TOKEN";
 
 #[derive(Debug, Deserialize)]
 struct CollectionQuery {
@@ -1179,6 +1188,8 @@ struct MetricsPayload {
 
 #[derive(Debug, thiserror::Error)]
 enum ApiError {
+    #[error("unauthorized")]
+    Unauthorized,
     #[error("{0}")]
     BadRequest(String),
     #[error("resource not found")]
@@ -1192,6 +1203,7 @@ enum ApiError {
 impl ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Database | Self::Config => StatusCode::INTERNAL_SERVER_ERROR,
@@ -1200,6 +1212,7 @@ impl ApiError {
 
     fn code(&self) -> &'static str {
         match self {
+            Self::Unauthorized => "unauthorized",
             Self::BadRequest(_) => "bad_request",
             Self::NotFound => "not_found",
             Self::Database => "database_error",
@@ -1209,6 +1222,7 @@ impl ApiError {
 
     fn public_message(&self) -> String {
         match self {
+            Self::Unauthorized => "A valid bearer token is required.".to_string(),
             Self::BadRequest(message) => message.clone(),
             Self::NotFound => "The requested resource was not found.".to_string(),
             Self::Database => "The database query failed.".to_string(),
@@ -1240,6 +1254,7 @@ async fn main() -> Result<(), ApiError> {
     let state = AppState {
         pool: create_pool()?,
     };
+    let direct_api = direct_api_config()?;
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/results", get(results))
@@ -1383,16 +1398,83 @@ async fn main() -> Result<(), ApiError> {
         )
         .with_state(state);
 
-    let bind = env::var("TURBOVAS_API_BIND").unwrap_or_else(|_| "0.0.0.0:9080".to_string());
-    let listener = tokio::net::TcpListener::bind(&bind)
+    let bind = env_string("TURBOVAS_API_BIND").unwrap_or_else(|| "0.0.0.0:9080".to_string());
+    let internal_listener = tokio::net::TcpListener::bind(&bind)
         .await
         .map_err(|_| ApiError::Config)?;
-    let addr: SocketAddr = listener.local_addr().map_err(|_| ApiError::Config)?;
-    tracing::info!(%addr, "starting turbovas-api");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
+    let internal_addr: SocketAddr = internal_listener
+        .local_addr()
+        .map_err(|_| ApiError::Config)?;
+    tracing::info!(addr = %internal_addr, "starting turbovas-api internal listener");
+
+    if let Some((direct_bind, auth)) = direct_api {
+        let direct_listener = tokio::net::TcpListener::bind(&direct_bind)
+            .await
+            .map_err(|_| ApiError::Config)?;
+        let direct_addr: SocketAddr = direct_listener.local_addr().map_err(|_| ApiError::Config)?;
+        tracing::info!(addr = %direct_addr, "starting turbovas-api direct authenticated listener");
+        let direct_app = app.clone().route_layer(middleware::from_fn_with_state(
+            auth,
+            require_direct_api_auth,
+        ));
+        tokio::try_join!(
+            axum::serve(internal_listener, app).with_graceful_shutdown(shutdown_signal()),
+            axum::serve(direct_listener, direct_app).with_graceful_shutdown(shutdown_signal()),
+        )
+        .map(|_| ())
         .map_err(|_| ApiError::Config)
+    } else {
+        axum::serve(internal_listener, app)
+            .with_graceful_shutdown(shutdown_signal())
+            .await
+            .map_err(|_| ApiError::Config)
+    }
+}
+
+fn env_string(name: &str) -> Option<String> {
+    env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn direct_api_config() -> Result<Option<(String, DirectApiAuth)>, ApiError> {
+    let Some(bind) = env_string(DIRECT_API_BIND_ENV) else {
+        return Ok(None);
+    };
+    let token = env_string(DIRECT_API_BEARER_TOKEN_ENV).ok_or(ApiError::Config)?;
+    Ok(Some((bind, DirectApiAuth { token })))
+}
+
+async fn require_direct_api_auth(
+    State(auth): State<DirectApiAuth>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if !request.uri().path().starts_with("/api/v1/") && request.uri().path() != "/api/v1" {
+        return next.run(request).await;
+    }
+    if bearer_token_matches(request.headers(), &auth.token) {
+        return next.run(request).await;
+    }
+    ApiError::Unauthorized.into_response()
+}
+
+fn bearer_token_matches(headers: &HeaderMap, expected: &str) -> bool {
+    let Some(value) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    let mut parts = value.splitn(2, ' ');
+    let Some(scheme) = parts.next() else {
+        return false;
+    };
+    let Some(token) = parts.next() else {
+        return false;
+    };
+    scheme.eq_ignore_ascii_case("Bearer") && token == expected
 }
 
 async fn shutdown_signal() {
@@ -9671,5 +9753,33 @@ mod tests {
     fn unix_timestamp_formats_as_rfc3339() {
         assert_eq!(unix_ts_to_rfc3339(0), None);
         assert_eq!(unix_ts_to_rfc3339(1).unwrap(), "1970-01-01T00:00:01Z");
+    }
+
+    #[test]
+    fn bearer_auth_accepts_only_matching_bearer_token() {
+        let mut headers = HeaderMap::new();
+        assert!(!bearer_token_matches(&headers, "secret-token"));
+
+        headers.insert(header::AUTHORIZATION, "Bearer wrong-token".parse().unwrap());
+        assert!(!bearer_token_matches(&headers, "secret-token"));
+
+        headers.insert(header::AUTHORIZATION, "Basic secret-token".parse().unwrap());
+        assert!(!bearer_token_matches(&headers, "secret-token"));
+
+        headers.insert(
+            header::AUTHORIZATION,
+            "bearer secret-token".parse().unwrap(),
+        );
+        assert!(bearer_token_matches(&headers, "secret-token"));
+    }
+
+    #[test]
+    fn unauthorized_error_is_json_contract_shape() {
+        assert_eq!(
+            ApiError::Unauthorized.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(ApiError::Unauthorized.code(), "unauthorized");
+        assert!(!ApiError::Unauthorized.public_message().contains("secret"));
     }
 }

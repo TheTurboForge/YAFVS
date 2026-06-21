@@ -45,6 +45,25 @@ Checks to consider:
 - explicit review before adding new XML/GMP product payloads where a DB-backed
   typed contract would be cleaner.
 
+### Direct Native API Listener
+
+`turbovas-api` is internal by default. Development direct access is an explicit
+opt-in boundary: a separate bearer-auth listener can expose read-only `/api/v1`
+paths, defaulting to loopback. `/healthz` is intentionally unauthenticated for
+service checks; `/api/v1/...` must reject missing or wrong bearer tokens.
+
+This direct path is a product direction, not a production security claim. Do not
+add scanner control, credentials, feed operations, account writes, destructive
+writes, or broad host exposure here without a separate design and validation
+packet.
+
+Checks to consider:
+
+- `runtime-native-api-direct-smoke --json` for missing/wrong/valid bearer-token
+  behavior and internal-smoke compatibility;
+- OpenAPI and API contract review for new direct endpoints;
+- production posture review before any non-development exposure.
+
 ### `gvmd` To PostgreSQL
 
 PostgreSQL is the product system of record for users, tasks, targets, raw

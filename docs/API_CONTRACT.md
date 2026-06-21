@@ -4,10 +4,11 @@
 # TurboVAS HTTP/JSON API Contract
 
 TurboVAS is adding typed HTTP/JSON product APIs under `/api/v1` for DB-backed
-operator workflows. Several read-only report and scope endpoints are already
-live through the internal Rust sidecar and authenticated `gsad` proxy; the
-inherited GSA, gsad, gvmd, GMP/XML, `python-gvm`, and `gvm-tools` paths remain
-temporary compatibility and control plumbing during the strangler migration.
+operator workflows. Several read-only endpoints are already live through the
+Rust sidecar, the authenticated `gsad` browser proxy, and an opt-in direct
+bearer-token development listener. The inherited GSA, `gsad`, `gvmd`, GMP/XML,
+`python-gvm`, and `gvm-tools` paths remain temporary compatibility and control
+plumbing during the strangler migration.
 
 The goal is not to wrap GMP/XML in REST. New TurboVAS product reads should be
 sourced from gvmd/PostgreSQL-owned state and should keep GMP/XML contained as a
@@ -54,25 +55,18 @@ account management, and other high-consequence operations stay on the inherited
 path until separate native replacements are designed and proven. Native target
 and scanner reads intentionally do not expose credential secret material.
 
-The current browser integration is intentionally same-origin and proxied
-through `gsad`. That keeps the browser proof inside the existing authenticated
-Web UI boundary while TurboVAS proves typed JSON reads. It is not the final
-scriptable API exposure model.
-
-The long-term API target is direct, documented, scriptable HTTP/JSON access for
-operator automation and generated OpenAPI clients. That target must be
-independent of GSA, `gsad`, GMP/XML, `python-gvm`, and `gvm-tools` as required
-product interfaces. Direct access requires a separate authentication, TLS,
-host-binding, audit, and write-safety design before it is exposed beyond the
-internal development network.
+The browser integration remains same-origin and proxied through `gsad` while GSA
+reads migrate. Direct scriptable access is now a first-class development path:
+the direct listener is opt-in, bearer-token protected, read-only for v1, and
+bound explicitly by the runtime helper. Production exposure still needs the
+separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
 
 ## Common Contract Rules
 
 - Base path: `/api/v1`.
 - Authentication: same-origin operator session through the existing `gsad` web
-  boundary for the current browser proof. Future direct scriptable API access
-  must use an explicit native API authentication model. See
-  `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+  boundary for browser reads, or bearer token through the opt-in direct native
+  API listener. See `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 - Response body: JSON objects only; no XML payloads in native product APIs.
 - IDs: UUID strings matching the underlying gvmd resource identifiers.
 - Timestamps: RFC 3339 UTC strings.
@@ -90,16 +84,16 @@ source of truth for the first native API shape until a live implementation
 lands. Future endpoint work must update the OpenAPI contract and the GMP/XML
 strangler map in the same slice.
 
-Internal read-only automation can use `tools/turbovasctl native-api-request
---json --path '/api/v1/...'` or `just native-api-request --json --path
-'/api/v1/...'` to call the Docker-internal native API. This replaces covered
-read-only GMP scripts for report, scope, target, task, scan-config metadata,
-override metadata, tag metadata, and selected asset listing/detail workflows; it
-is not the final externally exposed scriptable API boundary.
+Read-only automation can use `tools/turbovasctl native-api-request --json --path
+'/api/v1/...'` for the internal development path, or add `--direct` to call the
+opt-in direct bearer listener. This replaces covered read-only GMP scripts for
+report, scope, target, task, scan-config metadata, override metadata, tag
+metadata, and selected asset listing/detail workflows.
 
 The first runtime implementation proof is scoped in
-`docs/NATIVE_API_PROOF_PLAN.md`. It starts with an internal-only Rust sidecar
-for raw report list/detail/result rows/result metadata/hosts/ports/applications/operating
+`docs/NATIVE_API_PROOF_PLAN.md`. It started with an internal Rust sidecar and now
+adds opt-in direct read access for the same safe GET contracts. Current coverage
+includes raw report list/detail/result rows/result metadata/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
 task list/detail, scanner metadata list/detail Information, saved filter list/detail, override
 list/detail metadata, tag list/detail metadata, operating-system asset
@@ -310,11 +304,10 @@ positive-severity vulnerability metric rows only.
 - Do not invent a second source of truth for report results.
 - Do not start scans, sync feeds, or mutate scanner state through this first
   read API.
-- Do not expose the first native API sidecar directly on LAN/Tailscale; it is
-  Docker-internal and browser access must go through the authenticated
-  same-origin boundary in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
+- Do not expose direct native API access without bearer authentication and an
+  explicit host binding.
 - Do not confuse the `gsad` same-origin proxy with the final scriptable API
-  boundary; it is a migration bridge for browser reads.
+  boundary; it remains a migration bridge for browser reads.
 - Do not keep `python-gvm` or `gvm-tools` as permanent TurboVAS product
   dependencies once native replacements exist.
 - Do not retain inherited read-only `gvm-tools` list wrappers after a native

@@ -14,13 +14,14 @@ tooling paths. They may remain temporarily as compatibility bridges while
 replacement APIs land.
 
 The end-state also includes scriptable access to TurboVAS through typed
-HTTP/JSON and OpenAPI clients. The current authenticated same-origin `gsad`
-proxy is a browser migration bridge, not the final API boundary and not a new
-reason to keep `gsad` in every automation path. Direct scriptable API exposure
-must be designed separately with authentication, TLS, host binding, audit, and
-write-safety controls.
+HTTP/JSON and OpenAPI clients. The authenticated same-origin `gsad` proxy is a
+browser migration bridge, not the final API boundary and not a new reason to
+keep `gsad` in every automation path. Direct scriptable API work is now active:
+the first slice is an opt-in read-only bearer-auth development listener. TLS,
+production host binding, audit, rate limits, and write-safety controls remain
+separate hardening work before production exposure.
 
-The first live proof is the Docker-internal Rust `turbovas-api` sidecar for
+The first live proof is the Rust `turbovas-api` sidecar for
 raw report reads, scope-report collections, target/task reads, scanner metadata,
 saved filters, tags, scan configs, overrides, port lists, schedules, report formats, and report metrics, currently raw report list/detail/result rows/hosts,
 target/task internal reads, the browser-backed target and task lists, top-level
@@ -28,8 +29,8 @@ Results, Vulnerabilities, Operating Systems, Hosts, TLS Certificates, and
 Scanners, Scan Configs, Filters, Tags, Overrides, Port Lists, and Schedules lists, scope-report list, Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
 and raw report Metrics. It queries PostgreSQL
-directly and is intentionally not
-exposed on a host port. Browser migration now covers the raw `/reports` list,
+directly. It is internal by default and has an opt-in bearer-auth direct
+development listener for read-only scriptable access. Browser migration now covers the raw `/reports` list,
 the `/targets` list, the `/tasks` list, raw-report Results/Hosts, raw-report
 and scope-report Metrics, plus all current scope-report evidence tabs through
 the authenticated same-origin `gsad` proxy defined in
@@ -77,7 +78,7 @@ the authenticated same-origin `gsad` proxy defined in
 | Runtime report/scope helpers | Some `turbovasctl` helpers still use inherited control paths; raw report summary/export and scope-report summary/metrics no longer use legacy XML helper scripts | Native API-backed helper calls | `runtime-report-summary`, `runtime-report-export`, `runtime-report-metrics`, `runtime-scope-report-metrics`, and `runtime-scope-report-summary` now use the internal native API. Native result rows carry hostname, NVT family, and description excerpts, and the old `tools/runtime_report.py` XML helper has been removed. Raw report `vulnerability_count` mirrors inherited raw-report summary semantics. |
 | Read-only report/scope/target/task/config/tag/override/alert automation | Imported GMP scripts, plus TurboVAS scope/report list scripts | `tools/turbovasctl native-api-request --json --path '/api/v1/...'` or `just native-api-request --json --path '/api/v1/...'` | Raw report, scope, scope-report, target, task, scan-config metadata, tag metadata, override metadata, report-config, redacted alert metadata, and scope-report result listing now have a DB-backed native GET path. The obsolete read-only `gvm-tools` scripts are removed where equivalent native reads exist; alert method/event/condition payloads remain intentionally excluded from the native metadata contract. |
 | gvm-tools write/control scripts | Imported GMP scripts for generation or scanner/control workflows | Future native write/control APIs after safety design | Write/control scripts remain compatibility-only until the corresponding native APIs are explicitly designed and proven. |
-| Direct scriptable operator API | Temporary automation still uses inherited GMP helpers, `turbovasctl` wrappers, or internal-only native development probes depending on workflow coverage. | Authenticated TLS-protected `/api/v1` access usable by `curl`, generated OpenAPI clients, and TurboVAS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | A native API exposure/authentication design lands, read-only automation migrates first, write/control endpoints are added only after safety review, and required product/operator scripts no longer depend on inherited GMP tooling. |
+| Direct scriptable operator API | Temporary automation still uses inherited GMP helpers, `turbovasctl` wrappers, or internal native probes depending on workflow coverage. | Authenticated `/api/v1` access usable by `curl`, generated OpenAPI clients, and TurboVAS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | First read-only bearer-auth direct development listener lands; next migrate read-only automation to `native-api-request --direct`, add production TLS/host-binding/audit hardening, and add write/control endpoints only after safety review. |
 
 ## Expansion Rule
 

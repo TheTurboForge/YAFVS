@@ -19,7 +19,8 @@ The experimental `app` profile adds inherited application services:
 - `ospd-openvas`, wired to the built OpenVAS scanner binary, scanner Redis Unix socket, and runtime OSP socket path
 - `notus-scanner`, wired to the runtime Notus feed copy and Mosquitto
 - `gsad`, exposed on `127.0.0.1:19392` by default for local HTTPS UI/API smoke checks
-- `turbovas-api`, an internal-only Rust proof service for DB-backed typed HTTP/JSON reads
+- `turbovas-api`, a Rust proof service for DB-backed typed HTTP/JSON reads;
+  internal by default, with an opt-in bearer-auth direct development listener
 
 Persistent state is stored outside the repository by default, normally in the
 sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
@@ -33,8 +34,10 @@ for multiple addresses before startup. The generated GSA `config.js` uses the
 browser's current host so each configured URL can talk back to the same `gsad`
 endpoint. TurboVAS no longer starts the inherited generic Redis service in the
 development runtime. The scanner Redis service does not expose a host TCP port.
-The first native API sidecar is not published on any host port; smoke checks
-reach it from inside the Docker network. Source,
+The native API sidecar is not published on any host port by default; smoke
+checks reach it from inside the Docker network. Direct development access is an
+explicit opt-in mode that publishes a separate bearer-auth listener, defaulting
+to `127.0.0.1:19080`. Source,
 `build/`, and `build/prefix` are bind-mounted for fast development feedback
 instead of forcing container rebuilds after small source changes. App containers
 also mount the checkout at
@@ -68,6 +71,7 @@ Use the root `justfile` command surface:
 - `just runtime-feed-import-init`
 - `just runtime-app-smoke`
 - `just runtime-native-api-smoke`
+- `just runtime-native-api-direct-smoke`
 - `just runtime-webui-smoke`
 - `just runtime-browser-smoke`
 - `just runtime-credential-smoke`
@@ -114,9 +118,16 @@ small `python-gvm` probe and calls `get_version` without printing secrets.
 
 `runtime-native-api-smoke` verifies the internal `turbovas-api` sidecar by
 querying `/healthz`, `/api/v1/scope-reports`, and the first scope report's
-DB-backed Results, Hosts, CVEs, Error Messages, and Metrics collections from inside the
-Docker network. It does not expose a host port and does not use GMP/XML for the
-tested read path.
+DB-backed Results, Hosts, CVEs, Error Messages, and Metrics collections from
+inside the Docker network. It does not publish a host port and does not use
+GMP/XML for the tested read path.
+
+`runtime-native-api-direct-smoke` enables the opt-in direct development listener
+for `turbovas-api`, defaulting to `127.0.0.1:19080`, verifies that `/healthz`
+is reachable without a token, verifies that `/api/v1/...` rejects missing or
+wrong bearer tokens, verifies a valid bearer token, and reruns the internal
+native API smoke. The helper creates or reuses the ignored runtime secret
+`native-api-bearer-token`; it does not make direct API exposure the default.
 
 `runtime-scope-report-metrics` now uses this internal native API path for scope
 report metrics. `runtime-report-metrics` still uses the inherited GMP/XML helper
@@ -152,8 +163,10 @@ The current app profile reaches inherited manager-scanner connectivity:
 - `notus-scanner` starts against the runtime Notus feed copy.
 - `OpenVAS Default` is registered and verified by `gvmd` against the OSPD socket.
 - `gsad` serves the staged GSA web UI and responds on the configured HTTPS host binding.
-- `turbovas-api` is available inside the Docker network as the first DB-first
-  native API proof; it is not exposed directly to LAN/Tailscale.
+- `turbovas-api` is available inside the Docker network as the DB-first native
+  API proof. Direct API development access is available only through the
+  explicit bearer-auth direct mode, which defaults to loopback and is not a
+  production exposure model.
 
 Full feed population, feed import, scan execution, and production packaging
 remain guarded development surfaces rather than production deployment behavior.

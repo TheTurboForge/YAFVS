@@ -29,6 +29,7 @@ scope, metric, and evidence reads:
 ```text
 runtime helper -> turbovas-api /api/v1 JSON contract -> TurboVAS product query layer -> gvmd/PostgreSQL
 browser/GSA -> gsad same-origin /api/v1 proxy -> turbovas-api -> gvmd/PostgreSQL
+operator script -> opt-in bearer-auth direct /api/v1 listener -> turbovas-api -> gvmd/PostgreSQL
 ```
 
 The first native API work is contract-first. It must not become a REST wrapper
@@ -37,10 +38,11 @@ until each product workflow has a proven native replacement with tests and
 browser/runtime coverage. See `docs/API_CONTRACT.md`,
 `docs/GMP_XML_STRANGLER.md`, and `api/openapi/turbovas-v1.yaml`.
 
-The first browser-facing native reads are raw-report/scope-report Metrics and
-scope-report Results, Hosts, Ports, CVEs, and Error Messages. `gsad` authenticates the
-existing operator session, allowlists only those read paths, forwards safe
-collection query parameters, and proxies to the internal-only Rust sidecar.
+Browser-facing native reads use the authenticated same-origin `gsad` proxy while
+GSA migrates from GMP/XML. Direct scriptable API work is also active now: the
+first direct mode is a separate opt-in bearer-auth development listener for
+read-only `/api/v1` paths. Production exposure still requires its own TLS,
+host-binding, audit, rate-limit, and authorization hardening.
 
 ## Scan Flow
 

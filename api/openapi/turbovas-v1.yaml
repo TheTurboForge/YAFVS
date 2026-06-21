@@ -8,8 +8,11 @@ info:
   description: Read-only contract baseline for DB-backed TurboVAS product workflows.
 servers:
   - url: /api/v1
+  - url: http://127.0.0.1:19080/api/v1
+    description: Opt-in development direct API listener; requires bearer authentication.
 security:
   - operatorSession: []
+  - bearerAuth: []
 paths:
   /results:
     get:
@@ -616,7 +619,7 @@ paths:
   /trashcan/summary:
     get:
       summary: Summarize Trashcan item counts
-      description: Counts-only read of base Trashcan resources backed by gvmd/PostgreSQL. The endpoint returns all supported resource types, including zero-count rows, and intentionally excludes row payloads, identifiers, names, comments, credential data, target hosts, scanner fields, scan-config preferences, alert method data, results_trash, and child trash tables. The native sidecar remains Docker-internal and read-only.
+      description: Counts-only read of base Trashcan resources backed by gvmd/PostgreSQL. The endpoint returns all supported resource types, including zero-count rows, and intentionally excludes row payloads, identifiers, names, comments, credential data, target hosts, scanner fields, scan-config preferences, alert method data, results_trash, and child trash tables. The endpoint is read-only and may be reached through the internal/browser proxy path or the opt-in bearer-auth direct listener.
       responses:
         '200':
           description: Trashcan resource counts
@@ -1069,7 +1072,11 @@ components:
       type: apiKey
       in: cookie
       name: turbovas_session
-      description: Placeholder for the authenticated same-origin operator session.
+      description: Authenticated same-origin operator session used by the GSA/gsad browser proxy.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token for the opt-in direct native API development listener.
   parameters:
     Page:
       name: page

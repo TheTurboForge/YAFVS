@@ -180,6 +180,9 @@ runtime-app-smoke *args:
 runtime-native-api-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-smoke "$@"
 
+runtime-native-api-direct-smoke *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-direct-smoke "$@"
+
 runtime-native-api-rebuild *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-rebuild "$@"
 

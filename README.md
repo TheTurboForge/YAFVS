@@ -119,6 +119,7 @@ TurboVAS provides a small root command surface for repository health checks:
 - `just runtime-app-up`: start experimental inherited application services.
 - `just runtime-app-smoke`: run experimental application service smoke checks.
 - `just runtime-native-api-smoke`: verify the internal DB-backed TurboVAS native API sidecar.
+- `just runtime-native-api-direct-smoke`: verify opt-in bearer-auth direct native API development access.
 - `just runtime-webui-smoke`: verify the staged GSA web UI over `gsad`.
 - `just runtime-browser-smoke`: verify raw-report and scope-report workflows through a headless browser.
 - `just runtime-browser-regression`: run deeper browser route, link, and pagination regression checks.

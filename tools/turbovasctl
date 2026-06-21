@@ -196,6 +196,15 @@ GSAD_PORT = "19392"
 GSAD_CONTAINER_PORT = "9392"
 APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
 TURBOVAS_API_CONTAINER_PORT = "9080"
+TURBOVAS_API_DIRECT_CONTAINER_PORT = "9081"
+TURBOVAS_API_DIRECT_DEFAULT_HOST = "127.0.0.1"
+TURBOVAS_API_DIRECT_DEFAULT_PORT = "19080"
+TURBOVAS_API_DIRECT_ENV = "TURBOVAS_API_DIRECT"
+TURBOVAS_API_DIRECT_HOST_ENV = "TURBOVAS_API_DIRECT_HOST"
+TURBOVAS_API_DIRECT_PORT_ENV = "TURBOVAS_API_DIRECT_PORT"
+TURBOVAS_API_DIRECT_BIND_ENV = "TURBOVAS_API_DIRECT_BIND"
+TURBOVAS_API_BEARER_TOKEN_ENV = "TURBOVAS_API_BEARER_TOKEN"
+TURBOVAS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
 POSTGRES_DEFAULTS = {
     "user": "turbovas",
     "password": "turbovas-dev",
@@ -961,6 +970,37 @@ def runtime_lock_timeout_finding(exc: RuntimeLockTimeout, check: str) -> dict[st
     )
 
 
+def direct_native_api_curl(repo_root: Path, path: str, *, token: str | None, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    command = ["curl", "-sS", "--max-time", "10", "-w", "\n%{http_code}"]
+    if token is not None:
+        command.extend(["-H", f"Authorization: Bearer {token}"])
+    command.append(f"{native_api_direct_base_url(env)}{path}")
+    return run_command(command, repo_root, env=env, timeout=30)
+
+
+def direct_native_api_display_command(path: str, *, token: str | None, env: dict[str, str]) -> list[str]:
+    command = ["curl", "-sS", "--max-time", "10", "-w", "\\n%{http_code}"]
+    if token is not None:
+        command.extend(["-H", "Authorization: Bearer <redacted>"])
+    command.append(f"{native_api_direct_base_url(env)}{path}")
+    return command
+
+
+def parse_json_output_with_http_status(result: subprocess.CompletedProcess[str]) -> tuple[dict[str, Any] | None, int | None]:
+    body, separator, status_text = result.stdout.rstrip().rpartition("\n")
+    if not separator:
+        return parse_json_output(result), None
+    try:
+        status_code = int(status_text)
+    except ValueError:
+        return parse_json_output(result), None
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        return None, status_code
+    return (parsed if isinstance(parsed, dict) else None), status_code
+
+
 def feed_cache_root(repo_root: Path) -> Path:
     return runtime_path(repo_root, "feed-cache", "community", FEED_RELEASE)
 
@@ -1088,12 +1128,59 @@ def split_gsad_hosts(value: str | None) -> tuple[str, ...]:
     return tuple(hosts)
 
 
+def env_truthy(value: str | None) -> bool:
+    return bool(value) and value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def gsad_hosts(repo_root: Path) -> tuple[str, ...]:
     env = runtime_env(repo_root)
+    return gsad_hosts_from_env(env)
+
+
+def gsad_hosts_from_env(env: dict[str, str]) -> tuple[str, ...]:
     hosts = split_gsad_hosts(env.get(GSAD_HOSTS_ENV))
     if hosts:
         return hosts
     return split_gsad_hosts(env.get(GSAD_HOST_ENV)) or (DEFAULT_GSAD_HOST,)
+
+
+def native_api_direct_requested(env: dict[str, str]) -> bool:
+    return env_truthy(env.get(TURBOVAS_API_DIRECT_ENV)) or any(
+        env.get(name)
+        for name in (
+            TURBOVAS_API_DIRECT_HOST_ENV,
+            TURBOVAS_API_DIRECT_PORT_ENV,
+            TURBOVAS_API_DIRECT_BIND_ENV,
+        )
+    )
+
+
+def native_api_direct_host(env: dict[str, str]) -> str:
+    return env.get(TURBOVAS_API_DIRECT_HOST_ENV, TURBOVAS_API_DIRECT_DEFAULT_HOST).strip() or TURBOVAS_API_DIRECT_DEFAULT_HOST
+
+
+def native_api_direct_port(env: dict[str, str]) -> str:
+    return env.get(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT).strip() or TURBOVAS_API_DIRECT_DEFAULT_PORT
+
+
+def native_api_direct_port_binding(env: dict[str, str]) -> str:
+    return f"{native_api_direct_host(env)}:{native_api_direct_port(env)}:{TURBOVAS_API_DIRECT_CONTAINER_PORT}"
+
+
+def native_api_direct_base_url(env: dict[str, str]) -> str:
+    return f"http://{native_api_direct_host(env)}:{native_api_direct_port(env)}"
+
+
+def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
+    env = runtime_env(repo_root)
+    env[TURBOVAS_API_DIRECT_ENV] = "1"
+    env.setdefault(TURBOVAS_API_DIRECT_HOST_ENV, TURBOVAS_API_DIRECT_DEFAULT_HOST)
+    env.setdefault(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT)
+    env.setdefault(TURBOVAS_API_DIRECT_BIND_ENV, f"0.0.0.0:{TURBOVAS_API_DIRECT_CONTAINER_PORT}")
+    if not env.get(TURBOVAS_API_BEARER_TOKEN_ENV):
+        token, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+        env[TURBOVAS_API_BEARER_TOKEN_ENV] = token
+    return env
 
 
 def gsad_host(repo_root: Path) -> str:
@@ -1177,9 +1264,10 @@ def gsad_ports_override_file(repo_root: Path) -> Path:
     return repo_root / "build" / "compose" / "gsad-ports.override.yaml"
 
 
-def ensure_gsad_ports_override(repo_root: Path) -> Path | None:
-    hosts = gsad_hosts(repo_root)
-    if len(hosts) <= 1 and not runtime_env(repo_root).get(GSAD_HOSTS_ENV):
+def ensure_gsad_ports_override(repo_root: Path, env: dict[str, str] | None = None) -> Path | None:
+    env = runtime_env(repo_root) if env is None else env
+    hosts = gsad_hosts_from_env(env)
+    if len(hosts) <= 1 and not env.get(GSAD_HOSTS_ENV):
         return None
     path = gsad_ports_override_file(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1189,6 +1277,26 @@ def ensure_gsad_ports_override(repo_root: Path) -> Path | None:
         "  gsad:\n"
         "    ports: !override\n"
         f"{bindings}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def native_api_direct_ports_override_file(repo_root: Path) -> Path:
+    return repo_root / "build" / "compose" / "turbovas-api-direct.override.yaml"
+
+
+def ensure_native_api_direct_ports_override(repo_root: Path, env: dict[str, str] | None = None) -> Path | None:
+    env = runtime_env(repo_root) if env is None else env
+    if not native_api_direct_requested(env):
+        return None
+    path = native_api_direct_ports_override_file(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "services:\n"
+        "  turbovas-api:\n"
+        "    ports:\n"
+        f"      - {json.dumps(native_api_direct_port_binding(env))}\n",
         encoding="utf-8",
     )
     return path
@@ -1932,11 +2040,15 @@ def compose_file(repo_root: Path) -> Path:
     return repo_root / "compose" / "dev.yaml"
 
 
-def compose_command(repo_root: Path, *args: str) -> list[str]:
+def compose_command(repo_root: Path, *args: str, env: dict[str, str] | None = None) -> list[str]:
     command = ["docker", "compose", "-f", str(compose_file(repo_root))]
-    gsad_override = ensure_gsad_ports_override(repo_root)
+    env = runtime_env(repo_root) if env is None else env
+    gsad_override = ensure_gsad_ports_override(repo_root, env)
     if gsad_override is not None:
         command.extend(["-f", str(gsad_override)])
+    direct_api_override = ensure_native_api_direct_ports_override(repo_root, env)
+    if direct_api_override is not None:
+        command.extend(["-f", str(direct_api_override)])
     command.extend(args)
     return command
 
@@ -5875,6 +5987,87 @@ def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-native-api-rebuild", repo_root, "Native API sidecar rebuild attempted.", findings, artifacts)
 
 
+def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
+    artifact_dir = native_api_artifact_dir(repo_root)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    findings = ensure_runtime_dirs(repo_root)
+    findings.extend(ensure_build_runtime_dirs(repo_root))
+    token_from_env = bool(os.environ.get(TURBOVAS_API_BEARER_TOKEN_ENV))
+    env = native_api_direct_runtime_env(repo_root)
+    host = native_api_direct_host(env)
+    wildcard_host = host.strip().lower().strip("[]") in {"0.0.0.0", "::"}
+    findings.append(
+        finding(
+            "fail" if wildcard_host else "pass",
+            "native-api-direct.host-binding",
+            "Direct native API host binding is explicit."
+            if not wildcard_host
+            else "Direct native API host binding must not use a wildcard host in this development helper.",
+            details={
+                "host": host,
+                "host_port": native_api_direct_port(env),
+                "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+                "token_source": "environment" if token_from_env else "runtime-secret",
+            },
+        )
+    )
+    config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
+    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose direct native API config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
+    if aggregate_status(findings) == "fail":
+        result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped at prerequisites.", findings, [str(artifact_dir)])
+        result["details"] = {"base_url": native_api_direct_base_url(env)}
+        write_json_artifact(artifact_dir, "native-api-direct-smoke-failed.json", result)
+        return result
+
+    build = run_command(compose_command(repo_root, "build", "turbovas-api", env=env), repo_root, env=env, timeout=1200)
+    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "turbovas-api", env=env)))
+    if build.returncode != 0:
+        result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because image build failed.", findings, [str(artifact_dir)])
+        result["details"] = {"base_url": native_api_direct_base_url(env)}
+        write_json_artifact(artifact_dir, "native-api-direct-smoke-failed.json", result)
+        return result
+
+    up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api", env=env), repo_root, env=env, timeout=300)
+    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-direct-up", f"docker compose direct turbovas-api up exit code {up.returncode}.", up, compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api", env=env)))
+    if up.returncode != 0:
+        result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because turbovas-api restart failed.", findings, [str(artifact_dir)])
+        result["details"] = {"base_url": native_api_direct_base_url(env)}
+        write_json_artifact(artifact_dir, "native-api-direct-smoke-failed.json", result)
+        return result
+
+    health = direct_native_api_curl(repo_root, "/healthz", token=None, env=env)
+    health_json, health_status = parse_json_output_with_http_status(health)
+    health_ok = health.returncode == 0 and health_status == 200 and isinstance(health_json, dict) and health_json.get("status") == "ok"
+    findings.append(native_api_probe_finding("pass" if health_ok else "fail", "native-api-direct.healthz", "Direct native API health endpoint is reachable without bearer auth." if health_ok else "Direct native API health endpoint failed.", health, direct_native_api_display_command("/healthz", token=None, env=env), health_json, {"http_status": health_status, **summarize_native_api_response(health_json)}))
+
+    missing = direct_native_api_curl(repo_root, "/api/v1/reports?page_size=1", token=None, env=env)
+    missing_json, missing_status = parse_json_output_with_http_status(missing)
+    missing_ok = missing.returncode == 0 and missing_status == 401 and isinstance(missing_json, dict) and missing_json.get("error", {}).get("code") == "unauthorized"
+    findings.append(native_api_probe_finding("pass" if missing_ok else "fail", "native-api-direct.missing-token", "Direct native API rejects missing bearer token with JSON 401." if missing_ok else "Direct native API did not reject a missing bearer token correctly.", missing, direct_native_api_display_command("/api/v1/reports?page_size=1", token=None, env=env), missing_json, {"http_status": missing_status, **summarize_native_api_response(missing_json)}))
+
+    wrong = direct_native_api_curl(repo_root, "/api/v1/reports?page_size=1", token="wrong-token", env=env)
+    wrong_json, wrong_status = parse_json_output_with_http_status(wrong)
+    wrong_ok = wrong.returncode == 0 and wrong_status == 401 and isinstance(wrong_json, dict) and wrong_json.get("error", {}).get("code") == "unauthorized"
+    findings.append(native_api_probe_finding("pass" if wrong_ok else "fail", "native-api-direct.wrong-token", "Direct native API rejects wrong bearer token with JSON 401." if wrong_ok else "Direct native API did not reject a wrong bearer token correctly.", wrong, direct_native_api_display_command("/api/v1/reports?page_size=1", token="wrong-token", env=env), wrong_json, {"http_status": wrong_status, **summarize_native_api_response(wrong_json)}))
+
+    valid = direct_native_api_curl(repo_root, "/api/v1/reports?page_size=1", token=env[TURBOVAS_API_BEARER_TOKEN_ENV], env=env)
+    valid_json, valid_status = parse_json_output_with_http_status(valid)
+    valid_ok = valid.returncode == 0 and valid_status == 200 and isinstance(valid_json, dict) and isinstance(valid_json.get("items"), list)
+    findings.append(native_api_probe_finding("pass" if valid_ok else "fail", "native-api-direct.valid-token", "Direct native API accepts the configured bearer token and returns JSON." if valid_ok else "Direct native API did not return JSON for the configured bearer token.", valid, direct_native_api_display_command("/api/v1/reports?page_size=1", token=env[TURBOVAS_API_BEARER_TOKEN_ENV], env=env), valid_json, {"http_status": valid_status, **summarize_native_api_response(valid_json)}))
+
+    internal = command_runtime_native_api_smoke(repo_root)
+    findings.append(finding(internal["status"], "native-api.internal-smoke", internal["summary"], details={"status": internal["status"], "artifacts": internal.get("artifacts", [])}))
+    result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke checks completed.", findings, [str(artifact_dir), *internal.get("artifacts", [])])
+    result["details"] = {
+        "base_url": native_api_direct_base_url(env),
+        "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+        "token_source": "environment" if token_from_env else "runtime-secret",
+        "direct_request_example": f"tools/turbovasctl native-api-request --direct --json --path '/api/v1/reports?page_size=1'",
+    }
+    write_json_artifact(artifact_dir, "native-api-direct-smoke.json" if result["status"] != "fail" else "native-api-direct-smoke-failed.json", result)
+    return result
+
+
 def command_runtime_app_down(repo_root: Path) -> dict[str, Any]:
     stop = run_command(compose_command(repo_root, "--profile", "app", "stop", *APP_SERVICES), repo_root, env=runtime_env(repo_root))
     remove = run_command(compose_command(repo_root, "--profile", "app", "rm", "-f", *APP_SERVICES), repo_root, env=runtime_env(repo_root))
@@ -5998,13 +6191,36 @@ def validate_native_api_request_path(path: str) -> str:
     return urllib.parse.urlunsplit(("", "", parsed.path, parsed.query, ""))
 
 
-def command_native_api_request(repo_root: Path, path: str) -> dict[str, Any]:
+def command_native_api_request(repo_root: Path, path: str, *, direct: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     try:
         request_path = validate_native_api_request_path(path)
     except ValueError as exc:
         findings.append(finding("fail", "native-api-request.path", str(exc), details={"path": path}))
         return make_result("native-api-request", repo_root, "Native API request rejected before runtime access.", findings)
+
+    if direct:
+        env = native_api_direct_runtime_env(repo_root)
+        token = env[TURBOVAS_API_BEARER_TOKEN_ENV]
+        response = direct_native_api_curl(repo_root, request_path, token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        ok = response.returncode == 0 and http_status == 200 and isinstance(parsed, dict)
+        findings.append(
+            native_api_probe_finding(
+                "pass" if ok else "fail",
+                "native-api-request.direct-get",
+                f"Direct native API GET {request_path} returned authenticated JSON."
+                if ok
+                else f"Direct native API GET {request_path} failed or returned non-JSON output.",
+                response,
+                direct_native_api_display_command(request_path, token=token, env=env),
+                parsed,
+                {"http_status": http_status, **summarize_native_api_response(parsed)},
+            )
+        )
+        result = make_result("native-api-request", repo_root, "Direct native API request completed." if ok else "Direct native API request failed.", findings)
+        result["details"] = {"path": request_path, "direct": True, "http_status": http_status, "response": parsed if isinstance(parsed, dict) else None}
+        return result
 
     response = native_api_curl(repo_root, request_path)
     parsed = parse_json_output(response)
@@ -8295,8 +8511,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status", parents=[common], help="show repository status")
     inventory = subparsers.add_parser("inventory", parents=[common], help="show expected component inventory")
     inventory.add_argument("--scope", help="limit inventory to a path under the repository")
-    native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform an internal read-only TurboVAS native API request")
+    native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform a read-only TurboVAS native API request")
     native_api_request.add_argument("--path", required=True, help="validated /api/v1/... path plus optional query string")
+    native_api_request.add_argument("--direct", action="store_true", help="call the opt-in direct native API listener with bearer auth")
     subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
     subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
@@ -8367,6 +8584,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
+    subparsers.add_parser("runtime-native-api-direct-smoke", parents=[common], help="verify the opt-in direct bearer-auth native API listener")
     subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal TurboVAS native API sidecar")
     subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
@@ -8395,7 +8613,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "inventory":
         result = command_inventory(repo_root, args.scope)
     elif args.command == "native-api-request":
-        result = command_native_api_request(repo_root, args.path)
+        result = command_native_api_request(repo_root, args.path, direct=args.direct)
     elif args.command == "native-tooling-state":
         result = command_native_tooling_state(repo_root)
     elif args.command == "rust-migration-state":
@@ -8504,6 +8722,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_app_smoke(repo_root)
     elif args.command == "runtime-native-api-smoke":
         result = command_runtime_native_api_smoke(repo_root)
+    elif args.command == "runtime-native-api-direct-smoke":
+        result = command_runtime_native_api_direct_smoke(repo_root)
     elif args.command == "runtime-native-api-rebuild":
         result = command_runtime_native_api_rebuild(repo_root)
     elif args.command == "runtime-webui-smoke":

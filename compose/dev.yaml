@@ -343,7 +343,10 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-turbovas}:${POSTGRES_PASSWORD:-turbovas-dev}@postgres:5432/${POSTGRES_DB:-turbovas}
       RUST_LOG: ${TURBOVAS_API_LOG:-info}
       TURBOVAS_API_BIND: 0.0.0.0:9080
-    # Intentionally no host port: the first native API proof is Docker-internal only.
+      TURBOVAS_API_DIRECT_BIND: ${TURBOVAS_API_DIRECT_BIND:-}
+      TURBOVAS_API_BEARER_TOKEN: ${TURBOVAS_API_BEARER_TOKEN:-}
+    # No host port by default. Direct API exposure is added only by the
+    # generated opt-in direct-API override used by turbovasctl.
 
 networks:
   default:

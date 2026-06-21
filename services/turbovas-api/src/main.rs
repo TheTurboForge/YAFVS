@@ -12,11 +12,11 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use serde::Serialize;
-use tokio_postgres::{Config as PgConfig, NoTls, Row};
+use tokio_postgres::Row;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
+mod app_state;
 mod auth;
 mod collections;
 mod direct_api;
@@ -29,6 +29,7 @@ mod request_ids;
 mod request_shapes;
 mod row_helpers;
 
+use app_state::{AppState, create_pool, healthz};
 use auth::*;
 use collections::*;
 use direct_api::{direct_api_config, require_direct_api_auth};
@@ -40,17 +41,6 @@ use query::*;
 use request_ids::*;
 use request_shapes::*;
 use row_helpers::*;
-
-#[derive(Clone)]
-struct AppState {
-    pool: Pool,
-}
-
-#[derive(Debug, Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    database: &'static str,
-}
 
 #[derive(Debug, Serialize)]
 struct ScopeSummary {
@@ -1415,34 +1405,6 @@ fn env_string(name: &str) -> Option<String> {
 
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
-}
-
-fn create_pool() -> Result<Pool, ApiError> {
-    let database_url = env::var("DATABASE_URL").map_err(|_| ApiError::Config)?;
-    let pg_config: PgConfig = database_url.parse().map_err(|_| ApiError::Config)?;
-    let manager = Manager::from_config(
-        pg_config,
-        NoTls,
-        ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        },
-    );
-    Pool::builder(manager)
-        .max_size(8)
-        .build()
-        .map_err(|_| ApiError::Config)
-}
-
-async fn healthz(State(state): State<AppState>) -> Result<Json<HealthResponse>, ApiError> {
-    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
-    client
-        .query_one("SELECT 1;", &[])
-        .await
-        .map_err(|_| ApiError::Database)?;
-    Ok(Json(HealthResponse {
-        status: "ok",
-        database: "ok",
-    }))
 }
 
 async fn reports(

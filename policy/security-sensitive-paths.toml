@@ -84,6 +84,13 @@ title = "Native HTTP/JSON API and DB-backed product data"
 risk = "Native APIs must not become an untyped REST wrapper over GMP/XML or leak product data semantics."
 paths = [
   "api/openapi/",
+  "services/turbovas-api/",
+  "components/gsad/src/gsad_native_api.c",
+  "components/gsad/src/gsad_http_handle_request.c",
+  "components/gsad/src/gsad_validator.c",
+  "components/gsa/src/gmp/native-api/",
+  "compose/dev.yaml",
+  "tools/turbovasctl",
   "docs/API_CONTRACT.md",
   "docs/GMP_XML_STRANGLER.md",
   "docs/DATABASE_GRAVITY.md",

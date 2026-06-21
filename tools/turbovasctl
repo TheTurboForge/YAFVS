@@ -3575,7 +3575,111 @@ def openapi_direct_endpoint_templates(repo_root: Path | None) -> list[str]:
     return sorted(templates)
 
 
+def rust_source_function_body(source: str, name: str) -> str:
+    match = re.search(rf"\bfn\s+{re.escape(name)}\s*\([^)]*\)\s*(?:->[^{{]+)?{{", source)
+    if match is None:
+        return ""
+    start = source.find("{", match.start())
+    depth = 0
+    for index in range(start, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start + 1 : index]
+    return ""
+
+
+def rust_route_to_endpoint_template(route: str) -> str:
+    parts = []
+    for segment in route.split("/"):
+        if segment.startswith(":") or segment.startswith("*"):
+            name = segment[1:] or "id"
+            parts.append(f"{{{name}}}")
+        else:
+            parts.append(segment)
+    return "/".join(parts)
+
+
+def rust_native_api_route_templates(repo_root: Path | None) -> list[str]:
+    if repo_root is None:
+        return []
+    path = repo_root / "services" / "turbovas-api" / "src" / "main.rs"
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    routes = {
+        rust_route_to_endpoint_template(match.group(1))
+        for match in re.finditer(r'\.route\(\s*"(/api/v1[^"]*)"', source)
+    }
+    return sorted(routes)
+
+
+def rust_match_pattern_to_endpoint(segment_source: str) -> str | None:
+    tokens = [token.strip() for token in segment_source.split(",")]
+    if len(tokens) < 4 or tokens[:3] != ['""', '"api"', '"v1"']:
+        return None
+    parts: list[str] = ["", "api", "v1"]
+    for token in tokens[3:]:
+        token = token.strip()
+        if not token:
+            continue
+        if token == "_" or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
+            parts.append("{}")
+            continue
+        quoted = re.fullmatch(r'"([^"]+)"', token)
+        if quoted:
+            parts.append(quoted.group(1))
+            continue
+        return None
+    return "/".join(parts)
+
+
+def rust_direct_scope_report_section_templates(function_body: str) -> list[str]:
+    match = re.search(r"matches!\s*\(\s*\*section\s*,(?P<body>.*?)\)\s*&&", function_body, re.DOTALL)
+    if match is None:
+        return []
+    return sorted(
+        f"/api/v1/scopes/{{}}/reports/{{}}/{section}"
+        for section in re.findall(r'"([^"]+)"', match.group("body"))
+    )
+
+
+def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[str]:
+    if repo_root is None:
+        return []
+    path = repo_root / "services" / "turbovas-api" / "src" / "main.rs"
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    function_body = rust_source_function_body(source, "direct_api_v1_path_is_allowed")
+    templates: set[str] = set()
+    for match in re.finditer(r"\[([^\]]+)\]", function_body):
+        pattern_source = match.group(1)
+        if "section" in pattern_source:
+            continue
+        endpoint = rust_match_pattern_to_endpoint(pattern_source)
+        if endpoint and endpoint.startswith("/api/v1"):
+            templates.add(endpoint)
+    templates.update(rust_direct_scope_report_section_templates(function_body))
+
+    wildcard_body = rust_source_function_body(source, "direct_api_wildcard_detail_path_is_allowed")
+    for prefix in re.findall(r'"(/api/v1/[^"]+/)"', wildcard_body):
+        templates.add(f"{prefix.rstrip('/')}/{{}}")
+    return sorted(templates)
+
+
 def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[dict[str, Any]]) -> dict[str, Any]:
+    inventory = sorted(
+        item["endpoint"]
+        for item in endpoints
+        if isinstance(item.get("endpoint"), str) and item["endpoint"].startswith("/api/v1")
+    )
     scriptable = sorted(
         item["endpoint"]
         for item in endpoints
@@ -3587,20 +3691,40 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
         if item.get("direct_access") == "internal_only" and isinstance(item.get("endpoint"), str)
     )
     openapi_marked = openapi_direct_endpoint_templates(repo_root)
+    rust_routes = rust_native_api_route_templates(repo_root)
+    rust_direct_allowed = rust_direct_api_allowed_endpoint_templates(repo_root)
+    inventory_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in inventory}
     scriptable_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in scriptable}
     openapi_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_marked}
+    rust_route_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in rust_routes}
+    rust_direct_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in rust_direct_allowed}
     missing = [scriptable_by_normalized[key] for key in sorted(set(scriptable_by_normalized) - set(openapi_by_normalized))]
     unexpected = [openapi_by_normalized[key] for key in sorted(set(openapi_by_normalized) - set(scriptable_by_normalized))]
+    missing_rust_routes = [inventory_by_normalized[key] for key in sorted(set(inventory_by_normalized) - set(rust_route_by_normalized))]
+    untracked_rust_routes = [rust_route_by_normalized[key] for key in sorted(set(rust_route_by_normalized) - set(inventory_by_normalized))]
+    missing_rust_direct = [scriptable_by_normalized[key] for key in sorted(set(scriptable_by_normalized) - set(rust_direct_by_normalized))]
+    unexpected_rust_direct = [rust_direct_by_normalized[key] for key in sorted(set(rust_direct_by_normalized) - set(scriptable_by_normalized))]
+    drift = missing or unexpected or missing_rust_routes or untracked_rust_routes or missing_rust_direct or unexpected_rust_direct
     return {
-        "alignment_status": "pass" if not missing and not unexpected else "warn",
+        "alignment_status": "pass" if not drift else "warn",
+        "inventory_endpoint_count": len(inventory),
         "scriptable_read_count": len(scriptable),
         "internal_only_count": len(internal_only),
         "openapi_marked_direct_count": len(openapi_marked),
+        "rust_route_count": len(rust_routes),
+        "rust_direct_allowlist_count": len(rust_direct_allowed),
+        "inventory_endpoints": inventory,
         "scriptable_read_endpoints": scriptable,
         "internal_only_endpoints": internal_only,
         "openapi_marked_direct_endpoints": openapi_marked,
+        "rust_route_endpoints": rust_routes,
+        "rust_direct_allowlist_endpoints": rust_direct_allowed,
         "missing_openapi_direct_markers": missing,
         "unexpected_openapi_direct_markers": unexpected,
+        "missing_rust_routes": missing_rust_routes,
+        "untracked_rust_routes": untracked_rust_routes,
+        "missing_rust_direct_allowlist": missing_rust_direct,
+        "unexpected_rust_direct_allowlist": unexpected_rust_direct,
     }
 
 
@@ -4059,8 +4183,14 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "scriptable_read_count": direct_contract.get("scriptable_read_count", 0) if isinstance(direct_contract, dict) else 0,
         "internal_only_count": direct_contract.get("internal_only_count", 0) if isinstance(direct_contract, dict) else 0,
         "openapi_marked_direct_count": direct_contract.get("openapi_marked_direct_count", 0) if isinstance(direct_contract, dict) else 0,
+        "rust_route_count": direct_contract.get("rust_route_count", 0) if isinstance(direct_contract, dict) else 0,
+        "rust_direct_allowlist_count": direct_contract.get("rust_direct_allowlist_count", 0) if isinstance(direct_contract, dict) else 0,
         "missing_openapi_direct_marker_count": len(direct_contract.get("missing_openapi_direct_markers", [])) if isinstance(direct_contract, dict) else 0,
         "unexpected_openapi_direct_marker_count": len(direct_contract.get("unexpected_openapi_direct_markers", [])) if isinstance(direct_contract, dict) else 0,
+        "missing_rust_route_count": len(direct_contract.get("missing_rust_routes", [])) if isinstance(direct_contract, dict) else 0,
+        "untracked_rust_route_count": len(direct_contract.get("untracked_rust_routes", [])) if isinstance(direct_contract, dict) else 0,
+        "missing_rust_direct_allowlist_count": len(direct_contract.get("missing_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
+        "unexpected_rust_direct_allowlist_count": len(direct_contract.get("unexpected_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
     }
     return {
         "total_items": summary.get("total_items", 0),
@@ -4098,9 +4228,9 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False) -> dict
         finding(
             "pass" if direct_alignment_status == "pass" else "warn",
             "native-tooling.direct-api-contract",
-            "Direct scriptable native API endpoints are aligned with OpenAPI x-turbovas-direct markers."
+            "Native API endpoint inventory is aligned with Rust routes, Rust direct allowlist, and OpenAPI direct markers."
             if direct_alignment_status == "pass"
-            else "Direct scriptable native API endpoint inventory and OpenAPI markers differ.",
+            else "Native API endpoint inventory, Rust routes, Rust direct allowlist, or OpenAPI direct markers differ.",
             details=direct_contract,
         ),
         finding("warn" if unknown_count else "pass", "native-tooling.unknown", f"{unknown_count} inherited tooling surface(s) are outside the current classification map." if unknown_count else "No inherited tooling surfaces were left unclassified.", details={"paths": summary["by_category"]["unknown"]["paths"]}),

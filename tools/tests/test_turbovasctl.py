@@ -1061,6 +1061,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(findings["native-tooling.direct-api-contract"]["status"], "pass")
         self.assertEqual(contract["missing_openapi_direct_markers"], [])
         self.assertEqual(contract["unexpected_openapi_direct_markers"], [])
+        self.assertEqual(contract["missing_rust_routes"], [])
+        self.assertEqual(contract["untracked_rust_routes"], [])
+        self.assertEqual(contract["missing_rust_direct_allowlist"], [])
+        self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(endpoints["/api/v1/reports"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/reports/{report_id}/results"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/scope-reports/{scope_report_id}"]["direct_access"], "scriptable_read")
@@ -1074,10 +1078,18 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["openapi_marked_direct_endpoints"],
         )
+        self.assertIn("/api/v1/reports", contract["rust_route_endpoints"])
+        self.assertIn("/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan", contract["rust_route_endpoints"])
+        self.assertIn("/api/v1/reports", contract["rust_direct_allowlist_endpoints"])
+        self.assertNotIn(
+            "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+            contract["rust_direct_allowlist_endpoints"],
+        )
 
     def test_native_tooling_state_reports_direct_api_contract_drift(self):
         endpoints = [
             {"endpoint": "/api/v1/reports", "direct_access": "scriptable_read"},
+            {"endpoint": "/api/v1/targets", "direct_access": "scriptable_read"},
             {"endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan", "direct_access": "internal_only"},
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -1091,11 +1103,45 @@ class TurboVASCtlTests(unittest.TestCase):
                 "      x-turbovas-direct: true\n",
                 encoding="utf-8",
             )
+            api_source = root / "services" / "turbovas-api" / "src" / "main.rs"
+            api_source.parent.mkdir(parents=True)
+            api_source.write_text(
+                'fn router() { Router::new()\n'
+                '    .route("/api/v1/reports", get(reports))\n'
+                '    .route("/api/v1/orphans", get(orphans)); }\n'
+                'fn direct_api_v1_path_is_allowed(path: &str) -> bool {\n'
+                '    let parts = path.split(\'/\').collect::<Vec<_>>();\n'
+                '    matches!(parts.as_slice(), ["", "api", "v1", "reports"] | ["", "api", "v1", "feeds"] if direct_api_segments_are_nonempty(&parts))\n'
+                '}\n'
+                'fn direct_api_wildcard_detail_path_is_allowed(_path: &str) -> bool { false }\n',
+                encoding="utf-8",
+            )
             summary = turbovasctl.native_api_direct_contract_summary(root, endpoints)
 
         self.assertEqual(summary["alignment_status"], "warn")
-        self.assertEqual(summary["missing_openapi_direct_markers"], ["/api/v1/reports"])
+        self.assertEqual(summary["missing_openapi_direct_markers"], ["/api/v1/reports", "/api/v1/targets"])
         self.assertEqual(summary["unexpected_openapi_direct_markers"], ["/api/v1/feeds"])
+        self.assertEqual(summary["missing_rust_routes"], ["/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan", "/api/v1/targets"])
+        self.assertEqual(summary["untracked_rust_routes"], ["/api/v1/orphans"])
+        self.assertEqual(summary["missing_rust_direct_allowlist"], ["/api/v1/targets"])
+        self.assertEqual(summary["unexpected_rust_direct_allowlist"], ["/api/v1/feeds"])
+
+    def test_security_policy_marks_native_api_contract_surfaces_sensitive(self):
+        root = Path(__file__).resolve().parents[2]
+        result = turbovasctl.command_security_policy_check(root)
+        native_api_area = next(area for area in result["details"]["areas"] if area["id"] == "native-api")
+
+        for expected_path in (
+            "api/openapi/",
+            "services/turbovas-api/",
+            "components/gsad/src/gsad_native_api.c",
+            "components/gsad/src/gsad_http_handle_request.c",
+            "components/gsad/src/gsad_validator.c",
+            "components/gsa/src/gmp/native-api/",
+            "compose/dev.yaml",
+            "tools/turbovasctl",
+        ):
+            self.assertIn(expected_path, native_api_area["paths"])
 
     def test_certbund_report_rows_expand_one_result_per_cert_ref(self):
         rows = turbovasctl.certbund_report_rows(

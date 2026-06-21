@@ -98,6 +98,20 @@ responses/logs:
 tools/turbovasctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
 ```
 
+For raw `curl` probes, keep the bearer token in shell memory and read it from
+the ignored runtime secret written by the direct smoke. Do not echo the token,
+commit it, paste it into logs, or run this with shell xtrace enabled:
+
+```sh
+TOKEN="$(tr -d '\n' < ../TurboVAS-runtime/secrets/native-api-bearer-token)"
+curl --fail-with-body -sS \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H 'Accept: application/json' \
+  -H 'X-Request-Id: operator-check-1' \
+  'http://127.0.0.1:19080/api/v1/reports?page_size=1'
+unset TOKEN
+```
+
 ## Targets, Tasks, And Raw Evidence
 
 Targets and tasks are technical evidence-collection mechanics.

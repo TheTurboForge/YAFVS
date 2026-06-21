@@ -84,6 +84,24 @@ tools/turbovasctl native-api-request --direct --json --path '/api/v1/reports?pag
 tools/turbovasctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
 ```
 
+Raw `curl` clients use the same bearer boundary. For the default development
+listener, first run the direct smoke so the ignored runtime secret exists, then
+read the token into shell memory without printing it:
+
+```sh
+TOKEN="$(tr -d '\n' < ../TurboVAS-runtime/secrets/native-api-bearer-token)"
+curl --fail-with-body -sS \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H 'Accept: application/json' \
+  -H 'X-Request-Id: operator-check-1' \
+  'http://127.0.0.1:19080/api/v1/reports?page_size=1'
+unset TOKEN
+```
+
+When direct host or port overrides are used, call the exact host and port that
+the helper validated. Do not put bearer tokens in command history examples,
+logs, screenshots, or committed configuration.
+
 The direct smoke proves health access, missing-token rejection, wrong-token
 rejection, generated, safe client-supplied, and unsafe client-replaced
 `X-Request-Id` response headers, valid-token JSON access without browser CORS

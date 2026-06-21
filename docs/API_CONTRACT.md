@@ -125,6 +125,12 @@ metadata and tag-dialog resource-name lookups, runtime feed inventory metadata
 `runtime-certbund-report`, and selected asset listing/detail workflows.
 Direct probes may add `--request-id 'operator-check-1'` to send a bounded safe
 `X-Request-Id` correlation value.
+Raw `curl` and generated clients use the same contract: send
+`Authorization: Bearer <token>`, `Accept: application/json`, and optionally a
+bounded `X-Request-Id`; expect JSON bodies for API responses and no browser CORS
+access headers from the direct listener. Development `curl` examples should read
+the token from the ignored runtime secret into shell memory and unset it after
+the probe rather than printing or persisting the token.
 The direct helper validates direct listener env shape locally before access:
 `TURBOVAS_API_DIRECT_HOST` is a single host name, IPv4 address, or bracketed
 IPv6 address, `TURBOVAS_API_DIRECT_PORT` is a decimal TCP port, and

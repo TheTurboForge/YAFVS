@@ -330,6 +330,15 @@ async function assertTagResourceNameProxy(page) {
     { status: taskNames.status, total: taskNames.body?.page?.total ?? null, item_count: taskItems?.length ?? null, sample: taskItems?.[0] ?? taskNames.textSample },
   );
 
+  const alertNames = await fetchNativeJsonWithBrowserToken(page, '/api/v1/tags/resource-names/alert?page_size=2&sort=name');
+  const alertItems = Array.isArray(alertNames.body?.items) ? alertNames.body.items : null;
+  add(
+    alertNames.status === 200 && alertItems !== null ? 'pass' : 'fail',
+    'tag.resource-names-alert-native-api',
+    alertNames.status === 200 && alertItems !== null ? 'Alert resource-name lookup loaded through same-origin native API.' : 'Alert resource-name lookup did not return a JSON item collection through same-origin native API.',
+    { status: alertNames.status, total: alertNames.body?.page?.total ?? null, item_count: alertItems?.length ?? null, sample: alertItems?.[0] ?? alertNames.textSample },
+  );
+
   const denied = await fetchNativeJsonWithBrowserToken(page, '/api/v1/tags/resource-names/credential?page_size=1');
   add(
     [400, 404].includes(denied.status) ? 'pass' : 'fail',

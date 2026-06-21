@@ -6857,6 +6857,20 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             tag_resource_names_json,
         )
     )
+    alert_tag_resource_names = native_api_curl(repo_root, "/api/v1/tags/resource-names/alert?page_size=1&sort=name")
+    alert_tag_resource_names_json = parse_json_output(alert_tag_resource_names)
+    alert_tag_resource_name_items = alert_tag_resource_names_json.get("items", []) if isinstance(alert_tag_resource_names_json, dict) else []
+    details["tag_resource_names_alert"] = summarize_native_api_response(alert_tag_resource_names_json)
+    findings.append(
+        native_api_probe_finding(
+            "pass" if alert_tag_resource_names.returncode == 0 and isinstance(alert_tag_resource_name_items, list) else "fail",
+            "native-api.tag-resource-names.alert",
+            f"Native API Tag alert resource-name probe exit code {alert_tag_resource_names.returncode}.",
+            alert_tag_resource_names,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/alert?page_size=1"),
+            alert_tag_resource_names_json,
+        )
+    )
     if tag_items:
         first_tag = tag_items[0]
         tag_detail_id = first_tag.get("id") if isinstance(first_tag, dict) else None

@@ -736,6 +736,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/tags", source)
         self.assertIn("/api/v1/tags/resource-names/{resource_type}", source)
         self.assertIn("native-api.tag-resource-names", source)
+        self.assertIn("native-api.tag-resource-names.alert", source)
+        self.assertIn("/api/v1/tags/resource-names/alert", source)
         self.assertIn("/api/v1/tags/{tag_id}", source)
         self.assertIn("/api/v1/tags/{tag_id}/resources", source)
         self.assertIn("/api/v1/overrides", source)

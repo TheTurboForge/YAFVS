@@ -8862,6 +8862,13 @@ fn tag_resource_from_row(row: &Row) -> TagResourceItem {
 
 fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiError> {
     match resource_type {
+        "alert" => Ok(TagResourceSqlSpec {
+            table: "alerts",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
         "target" => Ok(TagResourceSqlSpec {
             table: "targets",
             join_on: "r.id = tr.resource",
@@ -9538,6 +9545,11 @@ mod tests {
         assert!(sql.contains("JOIN targets r ON r.id = tr.resource"));
         assert!(sql.contains("AND tr.resource_type = 'target'"));
         assert!(sql.contains("AND tr.resource_location = 0"));
+        let alert_sql = tag_resource_collection_sql("alert", &sort_sql).unwrap();
+        assert!(alert_sql.contains("JOIN alerts r ON r.id = tr.resource"));
+        assert!(!alert_sql.contains("alert_method_data"));
+        assert!(!alert_sql.contains("alert_event_data"));
+        assert!(!alert_sql.contains("alert_condition_data"));
         assert!(tag_resource_collection_sql("credential", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("scanner", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("report", &sort_sql).is_err());
@@ -9551,6 +9563,11 @@ mod tests {
         assert!(sql.contains("FROM tasks r"));
         assert!(sql.contains("coalesce(r.usage_type, 'scan') = 'scan'"));
         assert!(sql.contains("coalesce(r.hidden, 0) = 0"));
+        let alert_sql = tag_resource_name_collection_sql("alert", &sort_sql).unwrap();
+        assert!(alert_sql.contains("FROM alerts r"));
+        assert!(!alert_sql.contains("alert_method_data"));
+        assert!(!alert_sql.contains("alert_event_data"));
+        assert!(!alert_sql.contains("alert_condition_data"));
         assert!(tag_resource_name_collection_sql("credential", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("user", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("scanner", &sort_sql).is_err());

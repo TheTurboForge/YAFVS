@@ -115,6 +115,7 @@ const TAG_SORT_FIELDS: Record<string, string> = {
 };
 
 const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([
+  'alert',
   'cert_bund_adv',
   'cpe',
   'cve',

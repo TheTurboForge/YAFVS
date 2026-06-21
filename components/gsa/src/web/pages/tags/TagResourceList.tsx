@@ -37,6 +37,7 @@ interface ResourceListProps {
 const MAX_RESOURCES = 40;
 
 const NATIVE_TAG_RESOURCE_TYPES = new Set<EntityType>([
+  'alert',
   'certbund',
   'cpe',
   'cve',

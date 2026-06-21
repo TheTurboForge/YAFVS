@@ -236,7 +236,7 @@ describe('TagDialog tests', () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
-        items: [{id: 'task-native', type: 'task', name: 'Native Task'}],
+        items: [{id: 'alert-native', type: 'alert', name: 'Native Alert'}],
       }),
       ok: true,
       status: 200,
@@ -254,13 +254,13 @@ describe('TagDialog tests', () => {
       }),
     });
 
-    render(<TagDialog resourceType="task" resourceTypes={['task']} />);
+    render(<TagDialog resourceType="alert" resourceTypes={['alert']} />);
 
     await wait();
 
     expect(getResourceNames).not.toHaveBeenCalled();
     expect(buildUrl).toHaveBeenCalledWith(
-      'api/v1/tags/resource-names/task',
+      'api/v1/tags/resource-names/alert',
       {
         token: 'test-token',
         page: 1,

@@ -121,7 +121,8 @@ Read-only automation can use `tools/turbovasctl native-api-request --json --path
 opt-in direct bearer listener. This replaces covered read-only GMP scripts for
 report, scope, target, task, scan-config metadata, override metadata, tag
 metadata and tag-dialog resource-name lookups, runtime feed inventory metadata
-(`/api/v1/feeds`), and selected asset listing/detail workflows.
+(`/api/v1/feeds`), native CERT-Bund report generation through
+`runtime-certbund-report`, and selected asset listing/detail workflows.
 Direct probes may add `--request-id 'operator-check-1'` to send a bounded safe
 `X-Request-Id` correlation value.
 The direct helper validates direct listener env shape locally before access:

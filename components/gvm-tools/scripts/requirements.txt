@@ -1,4 +1,5 @@
-# required for monthly-report and monthly-report2 and certbund-report
+# Modified by TurboVAS contributors, 2026.
+# required for monthly-report and monthly-report2
 terminaltables
 # required for create-cve-report-from-json
 cpe

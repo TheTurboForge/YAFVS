@@ -72,6 +72,7 @@ Useful development checks include:
 - `just feed-state --json`
 - `just runtime-scope-smoke --json`
 - `just runtime-scope-report-summary --json`
+- `just runtime-certbund-report --json`
 - `just runtime-report-metrics --json`
 - `just runtime-scope-report-metrics --json`
 

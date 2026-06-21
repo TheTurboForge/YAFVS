@@ -908,6 +908,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("components/gvm-tools/scripts/scope-report-metrics.gmp.py", all_paths)
         for removed_wrapper in (
             "components/gvm-tools/scripts/application-detection.gmp.py",
+            "components/gvm-tools/scripts/certbund-report.gmp.py",
             "components/gvm-tools/scripts/export-certificates.gmp.py",
             "components/gvm-tools/scripts/export-hosts-csv.gmp.py",
             "components/gvm-tools/scripts/export-operatingsystems-csv.gmp.py",

@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {DEFAULT_FILTER_SETTINGS} from 'gmp/commands/user';
+import {fetchNativeFilter} from 'gmp/native-api/filters';
 import {isDefined} from 'gmp/utils/identity';
 import {getUserSettingsDefaultFilter} from 'web/store/usersettings/defaultfilters/selectors';
 
@@ -38,6 +40,13 @@ export const defaultFilterLoadingActions = {
   }),
 };
 
+const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const loadFilter = (gmp, filterId) =>
+  canUseNativeApi(gmp)
+    ? fetchNativeFilter(gmp, String(filterId))
+    : gmp.filter.get({id: filterId}).then(resp => resp.data);
+
 export const loadUserSettingsDefaultFilter =
   gmp => entityType => (dispatch, getState) => {
     const rootState = getState();
@@ -60,14 +69,14 @@ export const loadUserSettingsDefaultFilter =
       })
       .then(filterId =>
         isDefined(filterId) && filterId !== 0
-          ? gmp.filter.get({id: filterId})
+          ? loadFilter(gmp, filterId)
           : null,
       )
-      .then(resp => {
-        if (resp === null) {
+      .then(filter => {
+        if (filter === null) {
           dispatch(defaultFilterLoadingActions.success(entityType, null));
         } else {
-          dispatch(defaultFilterLoadingActions.success(entityType, resp.data));
+          dispatch(defaultFilterLoadingActions.success(entityType, filter));
         }
       })
       .catch(err => {

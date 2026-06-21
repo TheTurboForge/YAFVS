@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {useCallback} from 'react';
+import {fetchNativeFilter} from 'gmp/native-api/filters';
 import Filter from 'gmp/models/filter';
 import {type EntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
@@ -33,6 +35,9 @@ interface UseFilterDialogReturn {
 
 export type UseFilterDialogSave = [() => Promise<void>] & UseFilterDialogReturn;
 
+const canUseNativeApi = (gmp: ReturnType<typeof useGmp>) =>
+  typeof gmp.buildUrl === 'function';
+
 const useFilterDialogSave = (
   createFilterType: EntityType,
   {onClose, onFilterChanged, onFilterCreated}: UseFilterDialogSaveProps,
@@ -58,11 +63,12 @@ const useFilterDialogSave = (
         .then(response => {
           const {data} = response;
           // load new filter
-          return gmp.filter.get({id: data.id});
+          if (canUseNativeApi(gmp)) {
+            return fetchNativeFilter(gmp, String(data.id));
+          }
+          return gmp.filter.get({id: data.id}).then(response => response.data);
         })
-        .then(response => {
-          const {data: f} = response;
-
+        .then(f => {
           if (isDefined(onFilterCreated)) {
             onFilterCreated(f);
           }

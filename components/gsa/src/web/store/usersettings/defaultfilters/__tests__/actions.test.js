@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {DEFAULT_FILTER_SETTINGS} from 'gmp/commands/user';
 import Filter from 'gmp/models/filter';
 import {
@@ -66,6 +67,10 @@ const createState = (type, state) => ({
       [type]: state,
     },
   },
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('loadUserSettingsDefaultFilter tests', () => {
@@ -221,6 +226,74 @@ describe('loadUserSettingsDefaultFilter tests', () => {
         DEFAULT_FILTER_SETTINGS[entityType],
       );
       expect(getFilter).toHaveBeenCalledWith({id: 'foo'});
+    });
+  });
+
+  test('should dispatch success from native filter details when available', () => {
+    const entityType = 'task';
+    const getSetting = testing.fn().mockResolvedValue({
+      data: {
+        value: 'foo',
+      },
+    });
+    const getFilter = testing.fn();
+    const buildUrl = testing.fn(
+      path => `https://turbovas.example/${String(path)}`,
+    );
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'foo',
+        name: 'Default Task Filter',
+        filter_type: 'task',
+        term: 'rows=10',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      buildUrl,
+      session: {jwt: 'jwt-token', token: 'session-token'},
+      user: {
+        getSetting,
+      },
+      filter: {
+        get: getFilter,
+      },
+    };
+    const state = createState(entityType, {
+      isLoading: false,
+    });
+
+    const dispatch = testing.fn();
+    const getState = testing.fn().mockReturnValue(state);
+
+    return loadUserSettingsDefaultFilter(gmp)(entityType)(
+      dispatch,
+      getState,
+    ).then(() => {
+      expect(dispatch).toHaveBeenCalledTimes(2);
+      expect(dispatch).toHaveBeenNthCalledWith(
+        2,
+        defaultFilterLoadingActions.success(
+          entityType,
+          expect.objectContaining({id: 'foo'}),
+        ),
+      );
+      expect(getFilter).not.toHaveBeenCalled();
+      expect(buildUrl).toHaveBeenCalledWith('api/v1/filters/foo', {
+        token: 'session-token',
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://turbovas.example/api/v1/filters/foo',
+        {
+          credentials: 'include',
+          headers: {
+            Accept: 'application/json',
+            Authorization: 'Bearer jwt-token',
+          },
+        },
+      );
     });
   });
 

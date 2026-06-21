@@ -440,6 +440,24 @@ const CVE_SORT_FIELDS: Record<string, string> = {
   severity: 'max_severity',
 };
 
+const nativeMappedSortFromFilter = (
+  filter: Filter | undefined,
+  fields: Record<string, string>,
+  fallback: string,
+): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  const rawField = stringValue(reverse ?? ascending);
+  if (rawField === '') {
+    return fallback;
+  }
+  const nativeField = fields[rawField];
+  if (nativeField === undefined) {
+    return fallback;
+  }
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
+};
+
 const nativeApplicationSortFromFilter = (filter?: Filter): string => {
   const reverse = filter?.get('sort-reverse');
   const ascending = filter?.get('sort');
@@ -457,11 +475,11 @@ const nativeOperatingSystemSortFromFilter = (filter?: Filter): string => {
 };
 
 const nativeTlsCertificateSortFromFilter = (filter?: Filter): string => {
-  const reverse = filter?.get('sort-reverse');
-  const ascending = filter?.get('sort');
-  const rawField = stringValue(reverse ?? ascending) || 'not_after';
-  const nativeField = TLS_CERTIFICATE_SORT_FIELDS[rawField] ?? rawField;
-  return reverse !== undefined ? `-${nativeField}` : nativeField;
+  return nativeMappedSortFromFilter(
+    filter,
+    TLS_CERTIFICATE_SORT_FIELDS,
+    '-not_after',
+  );
 };
 
 const ERROR_SORT_FIELDS: Record<string, string> = {
@@ -536,11 +554,7 @@ const nativeCveSortFromFilter = (filter?: Filter): string => {
 };
 
 const nativeErrorSortFromFilter = (filter?: Filter): string => {
-  const reverse = filter?.get('sort-reverse');
-  const ascending = filter?.get('sort');
-  const rawField = stringValue(reverse ?? ascending) || 'created_at';
-  const nativeField = ERROR_SORT_FIELDS[rawField] ?? rawField;
-  return reverse !== undefined ? `-${nativeField}` : nativeField;
+  return nativeMappedSortFromFilter(filter, ERROR_SORT_FIELDS, '-created_at');
 };
 
 const HOST_SORT_FIELDS: Record<string, string> = {

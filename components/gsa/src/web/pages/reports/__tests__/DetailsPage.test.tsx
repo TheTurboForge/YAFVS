@@ -65,6 +65,36 @@ const nativeResultFiltersPayload = {
   ],
 };
 
+const nativeReportCvesPayload = {
+  page: {page: 1, page_size: 1, total: 7, sort: '-max_severity', filter: ''},
+  items: [
+    {
+      id: 'CVE-2026-0001',
+      affected_system_count: 1,
+      result_count: 1,
+      max_severity: 7.5,
+      source_report_ids: [reportId],
+    },
+  ],
+};
+
+const nativeReportTlsCertificatesPayload = {
+  page: {page: 1, page_size: 1, total: 5, sort: '-not_after', filter: ''},
+  items: [
+    {
+      id: 'cert-1',
+      fingerprint_sha256: 'abc123',
+      subject: 'CN=subject.example',
+      issuer: 'CN=issuer.example',
+      serial: '00B49C541FF5A8E1D9',
+      host_count: 1,
+      port_count: 1,
+      result_count: 1,
+      source_report_ids: [reportId],
+    },
+  ],
+};
+
 const emptyCollectionResponse: CollectionResponse = {
   data: [],
   meta: {
@@ -174,13 +204,23 @@ const createGmp = () => ({
 const createFetchMock = () =>
   testing.fn().mockImplementation((url: string) =>
     Promise.resolve({
-      json: testing
-        .fn()
-        .mockResolvedValue(
-          url.includes('/api/v1/filters')
-            ? nativeResultFiltersPayload
-            : nativeReportPayload,
-        ),
+      json: testing.fn().mockResolvedValue(
+        (() => {
+          if (url.includes('/api/v1/filters')) {
+            return nativeResultFiltersPayload;
+          }
+          if (url.includes('/api/v1/reports/') && url.includes('/cves')) {
+            return nativeReportCvesPayload;
+          }
+          if (
+            url.includes('/api/v1/reports/') &&
+            url.includes('/tls-certificates')
+          ) {
+            return nativeReportTlsCertificatesPayload;
+          }
+          return nativeReportPayload;
+        })(),
+      ),
       ok: true,
       status: 200,
     }),
@@ -311,6 +351,35 @@ describe('DetailsPage', () => {
         'https://turbovas.example/api/v1/filters',
         expect.objectContaining({credentials: 'include'}),
       );
+    });
+
+    test('should preload CVE and TLS Certificate counts through the native API', async () => {
+      const gmp = createGmp();
+      const {render} = setupRenderer(gmp);
+      renderPage(render);
+
+      await screen.findByRole('heading', {name: /Report:/});
+
+      await waitFor(() => {
+        expect(gmp.buildUrl).toHaveBeenCalledWith(
+          `api/v1/reports/${reportId}/cves`,
+          expect.objectContaining({
+            token: 'test-token',
+            page: 1,
+            page_size: 1,
+          }),
+        );
+        expect(gmp.buildUrl).toHaveBeenCalledWith(
+          `api/v1/reports/${reportId}/tls-certificates`,
+          expect.objectContaining({
+            token: 'test-token',
+            page: 1,
+            page_size: 1,
+          }),
+        );
+      });
+      expect(gmp.reportcves.get).not.toHaveBeenCalled();
+      expect(gmp.reporttlscertificates.get).not.toHaveBeenCalled();
     });
   });
 

@@ -345,6 +345,21 @@ services:
       TURBOVAS_API_BIND: 0.0.0.0:9080
       TURBOVAS_API_DIRECT_BIND: ${TURBOVAS_API_DIRECT_BIND:-}
       TURBOVAS_API_BEARER_TOKEN: ${TURBOVAS_API_BEARER_TOKEN:-}
+      TURBOVAS_FEED_METADATA_DIR: /runtime/feeds
+      TURBOVAS_FEED_LOCK_DIR: /runtime/run
+    volumes:
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds
+        target: /runtime/feeds
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/feed-update.lock
+        target: /runtime/run/feed-update.lock
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd/feed-update.lock
+        target: /runtime/run/ospd/feed-update.lock
+        read_only: true
     # No host port by default. Direct API exposure is added only by the
     # generated opt-in direct-API override used by turbovasctl.
 

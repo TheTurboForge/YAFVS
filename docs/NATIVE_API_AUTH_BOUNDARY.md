@@ -47,9 +47,11 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - Do not expose a wildcard direct host binding through the development helper.
 - Do not log, print, or commit bearer tokens. Runtime-generated tokens live under
   the ignored runtime `secrets/` directory.
-- Keep direct v1 access read-only. Scanner control, credentials, feeds, account
-  management, target/task writes, alert delivery, and destructive mutations stay
-  inherited until native write/control designs are separately reviewed.
+- Keep direct v1 access read-only. Scanner control, credentials, feed sync,
+  feed import/update/download/mirroring, account management, target/task writes,
+  alert delivery, and destructive mutations stay inherited until native
+  write/control designs are separately reviewed. Read-only feed inventory
+  metadata is allowed only as a classified scriptable read endpoint.
 - Do not expose arbitrary GMP command forwarding through `/api/v1`.
 - Treat `X-Request-Id` as correlation metadata only. It is not authentication,
   authorization, operator identity, or a trusted audit principal.

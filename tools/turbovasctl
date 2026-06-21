@@ -2272,6 +2272,14 @@ def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
             status = "fail"
             message = f"Runtime directory is not writable: {path}: {error}"
         findings.append(finding(status, "runtime.dir", message, str(path)))
+    for lock_rel in ("run/feed-update.lock", "run/ospd/feed-update.lock"):
+        path = root / lock_rel
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch(exist_ok=True)
+            findings.append(finding("pass", "runtime.feed-lock", f"Runtime feed lock file exists: {path}", str(path)))
+        except OSError as error:
+            findings.append(finding("fail", "runtime.feed-lock", f"Runtime feed lock file is not usable: {path}: {error}", str(path)))
     return findings
 
 
@@ -3393,6 +3401,15 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/filters/{filter_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Filter detail (migrated through gsad same-origin proxy)", "read-only filter metadata automation"],
+            },
+            {
+                "endpoint": "/api/v1/feeds",
+                "status": "implemented_internal_and_scriptable_read",
+                "replacement_candidates": ["list-feeds.gmp.py after parity validation", "read-only feed inventory automation", "native-api-request helper"],
+                "notes": [
+                    "Metadata/status inventory only; no feed sync, import, update, download, mirroring, bundling, or scanner control.",
+                    "Reads fixed runtime feed metadata and lock files only; no request-controlled paths.",
+                ],
             },
             {
                 "endpoint": "/api/v1/alerts",
@@ -6579,7 +6596,10 @@ def summarize_native_item(item: Any) -> dict[str, Any]:
     keys = (
         "id",
         "name",
+        "type",
+        "version",
         "status",
+        "sync_status",
         "host",
         "port",
         "nvt_oid",
@@ -6761,6 +6781,45 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             health,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/healthz"),
             health_json,
+        )
+    )
+
+    feeds = native_api_curl(repo_root, "/api/v1/feeds")
+    feeds_json = parse_json_output(feeds)
+    details["feeds"] = summarize_native_api_response(feeds_json)
+    feed_items = feeds_json.get("items", []) if isinstance(feeds_json, dict) else []
+    expected_feed_types = {"NVT", "SCAP", "CERT", "GVMD_DATA"}
+    feed_item_types = {
+        item.get("type")
+        for item in feed_items
+        if isinstance(item, dict) and isinstance(item.get("type"), str)
+    }
+    feeds_ok = (
+        feeds.returncode == 0
+        and isinstance(feed_items, list)
+        and feed_item_types == expected_feed_types
+        and all(
+            isinstance(item, dict)
+            and isinstance(item.get("name"), str)
+            and isinstance(item.get("version"), str)
+            and item.get("status") in {"Up-to-date...", "Update in progress...", "Unknown"}
+            and item.get("sync_status") in {"up_to_date", "syncing", "unknown"}
+            and item.get("metadata_source") == "runtime_feed_copy"
+            and item.get("status_source") in {"runtime_feed_lock", "unavailable"}
+            for item in feed_items
+        )
+    )
+    findings.append(
+        native_api_probe_finding(
+            "pass" if feeds_ok else "fail",
+            "native-api.feeds",
+            "Native API feed inventory probe returned fixed feed metadata/status rows."
+            if feeds_ok
+            else "Native API feed inventory probe failed or returned unexpected payload data.",
+            feeds,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/feeds"),
+            feeds_json,
+            {"expected_types": sorted(expected_feed_types), "observed_types": sorted(str(item) for item in feed_item_types), **summarize_native_api_response(feeds_json)},
         )
     )
 

@@ -345,6 +345,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterAsset'
+  /feeds:
+    get:
+      summary: List feed inventory metadata
+      description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
+      x-turbovas-direct: true
+      responses:
+        '200':
+          description: Feed inventory metadata collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedInventory'
   /alerts:
     get:
       summary: List redacted alert metadata
@@ -1592,6 +1604,46 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AlertAsset'
+    FeedInventory:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeedItem'
+    FeedCurrentlySyncing:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: Timestamp text read from the inherited feed lock file when a sync/update lock is active.
+    FeedItem:
+      type: object
+      required: [name, version, type, status, sync_status, metadata_source, status_source]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        type:
+          type: string
+          enum: [NVT, SCAP, CERT, GVMD_DATA]
+        status:
+          type: string
+          enum: [Up-to-date..., Update in progress..., Unknown]
+          description: Compatibility status string for the inherited list-feeds table contract.
+        sync_status:
+          type: string
+          enum: [up_to_date, syncing, unknown]
+        currently_syncing:
+          $ref: '#/components/schemas/FeedCurrentlySyncing'
+        metadata_source:
+          type: string
+          enum: [runtime_feed_copy]
+        status_source:
+          type: string
+          enum: [runtime_feed_lock, unavailable]
     TagAssetCollection:
       type: object
       required: [page, items]

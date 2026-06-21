@@ -99,6 +99,38 @@ describe('native API report formats', () => {
             name: 'Default config',
           },
         ],
+        params: [
+          {
+            name: 'StringParam',
+            type: 'string',
+            value: 'ABC',
+            default: 'DEF',
+            min: 0,
+            max: 100,
+            options: [],
+          },
+          {
+            name: 'SelectionParam',
+            type: 'selection',
+            value: 'opt1',
+            default: 'opt2',
+            options: [{value: 'opt1'}, {value: 'opt2'}],
+          },
+          {
+            name: 'MultiParam',
+            type: 'multi_selection',
+            value: '["one"]',
+            default: '[]',
+            options: [{value: 'one'}, {value: 'two'}],
+          },
+          {
+            name: 'FormatListParam',
+            type: 'report_format_list',
+            value: 'a994b278-1f62-11e1-96ac-406186ea4fc5,c402cc3e-b531-11e1-9163-406186ea4fc5',
+            default: 'a994b278-1f62-11e1-96ac-406186ea4fc5',
+            options: [],
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -116,5 +148,23 @@ describe('native API report formats', () => {
     expect(format.alerts[0].name).toEqual('Send report');
     expect(format.report_configs).toHaveLength(1);
     expect(format.report_configs[0].name).toEqual('Default config');
+    expect(format.params).toHaveLength(4);
+    expect(format.params[0].name).toEqual('StringParam');
+    expect(format.params[0].type).toEqual('string');
+    expect(format.params[0].value).toEqual('ABC');
+    expect(format.params[0].default).toEqual('DEF');
+    expect(format.params[1].options).toEqual([
+      {name: 'opt1', value: 'opt1'},
+      {name: 'opt2', value: 'opt2'},
+    ]);
+    expect(format.params[2].value).toEqual(['one']);
+    expect(format.params[3].type).toEqual('report_format_list');
+    expect(format.params[3].value).toEqual([
+      'a994b278-1f62-11e1-96ac-406186ea4fc5',
+      'c402cc3e-b531-11e1-9163-406186ea4fc5',
+    ]);
+    expect(format.params[3].default).toEqual([
+      'a994b278-1f62-11e1-96ac-406186ea4fc5',
+    ]);
   });
 });

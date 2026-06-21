@@ -48,8 +48,20 @@ interface NativeReportFormatPayload {
   deprecated?: boolean;
   alerts?: NativeReferencePayload[];
   report_configs?: NativeReferencePayload[];
+  params?: NativeReportFormatParamPayload[];
   created_at?: string;
   modified_at?: string;
+}
+
+interface NativeReportFormatParamPayload {
+  name: string;
+  type?: string;
+  param_type?: string;
+  value?: string;
+  default?: string;
+  min?: number | null;
+  max?: number | null;
+  options?: {value: string}[];
 }
 
 interface NativeReportFormatsPayload {
@@ -156,6 +168,50 @@ const referenceElement = (reference: NativeReferencePayload) => ({
   name: stringValue(reference.name),
 });
 
+const csvReferenceElements = (value?: string) =>
+  stringValue(value)
+    .split(',')
+    .map(reference => reference.trim())
+    .filter(reference => reference.length > 0)
+    .map(reference => ({_id: reference}));
+
+const nativeReportFormatParamToElement = (
+  param: NativeReportFormatParamPayload,
+) => {
+  const paramType = stringValue(param.type ?? param.param_type, 'string');
+  const type = {
+    __text: paramType,
+    min: param.min ?? undefined,
+    max: param.max ?? undefined,
+  };
+  if (paramType === 'report_format_list') {
+    return {
+      name: stringValue(param.name),
+      type,
+      value: {report_format: csvReferenceElements(param.value)},
+      default: {report_format: csvReferenceElements(param.default)},
+      options: {option: []},
+    };
+  }
+
+  const value = stringValue(
+    param.value,
+    paramType === 'multi_selection' ? '[]' : '',
+  );
+  const defaultValue = stringValue(
+    param.default,
+    paramType === 'multi_selection' ? '[]' : '',
+  );
+
+  return {
+    name: stringValue(param.name),
+    type,
+    value: {__text: value},
+    default: defaultValue,
+    options: {option: (param.options ?? []).map(option => option.value)},
+  };
+};
+
 const nativeReportFormatToModel = (
   item: NativeReportFormatPayload,
 ): ReportFormat =>
@@ -182,6 +238,7 @@ const nativeReportFormatToModel = (
     report_configs: {
       report_config: (item.report_configs ?? []).map(referenceElement),
     },
+    param: (item.params ?? []).map(nativeReportFormatParamToElement),
   });
 
 const normalizePage = (

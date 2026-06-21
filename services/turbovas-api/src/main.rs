@@ -816,6 +816,7 @@ struct ReportFormatParamOption {
 #[derive(Serialize)]
 struct ReportFormatParamItem {
     name: String,
+    #[serde(rename = "type")]
     param_type: String,
     value: String,
     default: String,

@@ -1,10 +1,12 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import React from 'react';
 import _ from 'gmp/locale';
+import {fetchNativeReportFormat} from 'gmp/native-api/report-formats';
 import {parseBoolean} from 'gmp/parser';
 import {map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
@@ -25,6 +27,15 @@ import TableHeader from 'web/components/table/TableHeader';
 import TableRow from 'web/components/table/TableRow';
 import PropTypes from 'web/utils/PropTypes';
 import withGmp from 'web/utils/withGmp';
+
+const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const fetchReportFormat = (gmp, id) => {
+  if (canUseNativeApi(gmp)) {
+    return fetchNativeReportFormat(gmp, id);
+  }
+  return gmp.reportformat.get({id}).then(response => response.data);
+};
 
 const Param = ({
   data,
@@ -164,8 +175,8 @@ class Dialog extends React.Component {
   handleReportFormatChange(value, name) {
     const {onValueChange, gmp} = this.props;
 
-    gmp.reportformat.get({id: value}).then(response => {
-      const originalParamInfo = response.data.params;
+    fetchReportFormat(gmp, value).then(reportFormat => {
+      const originalParamInfo = reportFormat.params;
       const params = {};
       const paramsUsingDefault = {};
 

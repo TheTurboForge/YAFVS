@@ -12,6 +12,7 @@ import FeedStatusCommand, {
   type FeedStatusElement,
 } from 'gmp/commands/feed-status';
 import {
+  createPlainResponse,
   createResponse,
   createHttp,
   createHttpError,
@@ -20,31 +21,31 @@ import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
 import logger from 'gmp/log';
 
+const createNativeFeedResponse = (items: Array<Record<string, unknown>>) =>
+  createPlainResponse(JSON.stringify({items}));
+
 describe('FeedStatusCommand tests', () => {
   test('should return feed information', async () => {
     testing.setSystemTime(new Date('2019-06-26T14:00:00Z'));
 
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed: {
-            type: 'NVT',
-            name: 'foo',
-            version: 201906251319,
-            description: 'bar',
-            currently_syncing: {timestamp: 'baz'},
-          },
-        },
+    const response = createNativeFeedResponse([
+      {
+        type: 'NVT',
+        name: 'foo',
+        version: '201906251319',
+        description: 'bar',
+        currently_syncing: {timestamp: 'baz'},
       },
-    });
+    ]);
 
     const fakeHttp = createHttp(response);
 
     const cmd = new FeedStatusCommand(fakeHttp);
     const resp = await cmd.readFeedInformation();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      url: 'http://example.test/api/v1/feeds',
       args: {
-        cmd: 'get_feeds',
+        token: undefined,
       },
     });
     const {data} = resp;
@@ -60,29 +61,23 @@ describe('FeedStatusCommand tests', () => {
   });
 
   test('should return isSyncing true when feeds are currently syncing', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [
-            {
-              type: 'NVT',
-              description: 'NVT Feed',
-              name: 'NVT Feed',
-              currently_syncing: {
-                timestamp: '202502170647',
-              },
-              version: 202502170647,
-            },
-            {
-              type: 'SCAP',
-              description: 'SCAP Feed',
-              name: 'SCAP Feed',
-              version: 202502170647,
-            },
-          ],
+    const response = createNativeFeedResponse([
+      {
+        type: 'NVT',
+        description: 'NVT Feed',
+        name: 'NVT Feed',
+        currently_syncing: {
+          timestamp: '202502170647',
         },
+        version: '202502170647',
       },
-    });
+      {
+        type: 'SCAP',
+        description: 'SCAP Feed',
+        name: 'SCAP Feed',
+        version: '202502170647',
+      },
+    ]);
 
     const fakeHttp = createHttp(response);
     const cmd = new FeedStatusCommand(fakeHttp);
@@ -92,29 +87,23 @@ describe('FeedStatusCommand tests', () => {
   });
 
   test('should return isSyncing true when feed sync has an issue', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [
-            {
-              type: 'OTHER',
-              version: 202502170647,
-              description: 'Other Feed',
-              name: 'Other Feed',
-              sync_not_available: {
-                error: 'Sync not available',
-              },
-            },
-            {
-              type: 'NVT',
-              version: 202502170647,
-              description: 'NVT Feed',
-              name: 'NVT Feed',
-            },
-          ],
+    const response = createNativeFeedResponse([
+      {
+        type: 'OTHER',
+        version: '202502170647',
+        description: 'Other Feed',
+        name: 'Other Feed',
+        sync_not_available: {
+          error: 'Sync not available',
         },
       },
-    });
+      {
+        type: 'NVT',
+        version: '202502170647',
+        description: 'NVT Feed',
+        name: 'NVT Feed',
+      },
+    ]);
 
     const fakeHttp = createHttp(response);
     const cmd = new FeedStatusCommand(fakeHttp);
@@ -124,26 +113,20 @@ describe('FeedStatusCommand tests', () => {
   });
 
   test('should return isSyncing false when feeds are not syncing and are present', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [
-            {
-              type: 'NVT',
-              description: 'NVT Feed',
-              name: 'NVT Feed',
-              version: 202502170647,
-            },
-            {
-              type: 'SCAP',
-              description: 'SCAP Feed',
-              name: 'SCAP Feed',
-              version: 202502170647,
-            },
-          ],
-        },
+    const response = createNativeFeedResponse([
+      {
+        type: 'NVT',
+        description: 'NVT Feed',
+        name: 'NVT Feed',
+        version: '202502170647',
       },
-    });
+      {
+        type: 'SCAP',
+        description: 'SCAP Feed',
+        name: 'SCAP Feed',
+        version: '202502170647',
+      },
+    ]);
 
     const fakeHttp = createHttp(response);
     const cmd = new FeedStatusCommand(fakeHttp);
@@ -202,26 +185,20 @@ describe('FeedStatusCommand tests', () => {
   });
 
   test('should return true if NVT feed is the enterprise feed', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [
-            {
-              type: NVT_FEED,
-              description: 'Enterprise NVT Feed',
-              name: FEED_ENTERPRISE,
-              version: 202502170647,
-            },
-            {
-              type: 'SCAP',
-              description: 'Enterprise SCAP Feed',
-              name: 'Some Other Feed',
-              version: 202502170647,
-            },
-          ],
-        },
+    const response = createNativeFeedResponse([
+      {
+        type: NVT_FEED,
+        description: 'Enterprise NVT Feed',
+        name: FEED_ENTERPRISE,
+        version: '202502170647',
       },
-    });
+      {
+        type: 'SCAP',
+        description: 'Enterprise SCAP Feed',
+        name: 'Some Other Feed',
+        version: '202502170647',
+      },
+    ]);
 
     const fakeHttp = createHttp(response);
     const feedStatus = new FeedStatusCommand(fakeHttp);
@@ -232,26 +209,20 @@ describe('FeedStatusCommand tests', () => {
   });
 
   test('should return false if NVT feed is not the enterprise feed', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [
-            {
-              type: NVT_FEED,
-              name: FEED_COMMUNITY,
-              description: 'Community NVT Feed',
-              version: 202502170647,
-            },
-            {
-              type: 'SCAP',
-              name: FEED_COMMUNITY,
-              description: 'Community SCAP Feed',
-              version: 202502170647,
-            },
-          ],
-        },
+    const response = createNativeFeedResponse([
+      {
+        type: NVT_FEED,
+        name: FEED_COMMUNITY,
+        description: 'Community NVT Feed',
+        version: '202502170647',
       },
-    });
+      {
+        type: 'SCAP',
+        name: FEED_COMMUNITY,
+        description: 'Community SCAP Feed',
+        version: '202502170647',
+      },
+    ]);
 
     const fakeHttp = createHttp(response);
     const feedStatus = new FeedStatusCommand(fakeHttp);

@@ -909,6 +909,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "components/gvm-tools/scripts/export-hosts-csv.gmp.py",
             "components/gvm-tools/scripts/export-operatingsystems-csv.gmp.py",
             "components/gvm-tools/scripts/list-alerts.gmp.py",
+            "components/gvm-tools/scripts/list-feeds.gmp.py",
             "components/gvm-tools/scripts/list-hosts.gmp.py",
             "components/gvm-tools/scripts/list-filters.gmp.py",
             "components/gvm-tools/scripts/list-portlists.gmp.py",
@@ -956,6 +957,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scan-configs", endpoints)
         self.assertIn("/api/v1/scan-configs/{scan_config_id}", endpoints)
         self.assertIn("/api/v1/scan-configs/{scan_config_id}/families", endpoints)
+        self.assertIn("/api/v1/feeds", endpoints)
         self.assertIn("/api/v1/alerts", endpoints)
         self.assertNotIn("/api/v1/alerts/{alert_id}", endpoints)
         self.assertIn("/api/v1/tags", endpoints)
@@ -1022,6 +1024,10 @@ class TurboVASCtlTests(unittest.TestCase):
         else:
             self.assertEqual(alerts["status"], "planned_internal_and_browser_proxied")
         self.assertIn("Metadata list only; no alert detail endpoint in this tooling slice.", alerts["notes"])
+        feeds = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/feeds")
+        self.assertEqual(feeds["status"], "implemented_internal_browser_proxied_and_scriptable_read")
+        self.assertIn("GSA Feed Status reads now use this same-origin native endpoint.", feeds["notes"])
+        self.assertIn("/api/v1/feeds", proxy_source)
         trashcan_summary = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/trashcan/summary")
         self.assertIn('/api/v1/tags/resource-names/', proxy_source)
         self.assertIn('is_tag_resource_type_segment', proxy_source)

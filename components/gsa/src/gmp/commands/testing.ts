@@ -116,6 +116,9 @@ export const createHttp = <TData = Element, TMeta extends Meta = Meta>(
   options: Partial<HttpOptions> = {},
 ) =>
   ({
+    apiProtocol: 'http',
+    apiServer: 'example.test',
+    getParams: testing.fn().mockReturnValue({token: undefined}),
     request: testing.fn().mockResolvedValue(response),
     ...options,
   }) as unknown as Http;
@@ -125,6 +128,9 @@ export const createHttpError = (
   options: Partial<HttpOptions> = {},
 ) =>
   ({
+    apiProtocol: 'http',
+    apiServer: 'example.test',
+    getParams: testing.fn().mockReturnValue({token: undefined}),
     request: testing.fn().mockRejectedValue(error),
     ...options,
   }) as unknown as Http;
@@ -132,6 +138,9 @@ export const createHttpError = (
 export const createHttpMany = (responses: Element[] | Response[]) => {
   let i = 0;
   return {
+    apiProtocol: 'http',
+    apiServer: 'example.test',
+    getParams: testing.fn().mockReturnValue({token: undefined}),
     request: testing
       .fn()
       .mockImplementation(() => Promise.resolve(responses[i++])),

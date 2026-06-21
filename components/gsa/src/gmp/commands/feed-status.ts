@@ -8,6 +8,7 @@ import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
+import {buildServerUrl} from 'gmp/http/utils';
 import _ from 'gmp/locale';
 import logger from 'gmp/log';
 import date from 'gmp/models/date';
@@ -27,10 +28,10 @@ export interface Feed {
 }
 
 interface FeedElement {
-  description: string;
+  description?: string;
   name: string;
   type: string;
-  version: number;
+  version: number | string;
   status?: string;
   currently_syncing?: {
     timestamp?: string;
@@ -38,6 +39,10 @@ interface FeedElement {
   sync_not_available?: {
     error?: string;
   };
+}
+
+interface NativeFeedInventory {
+  items?: FeedElement[];
 }
 
 export interface FeedStatusElement extends XmlResponseData {
@@ -60,7 +65,7 @@ export const GVMD_DATA_FEED = 'GVMD_DATA';
 export const FEED_COMMUNITY = 'Greenbone Community Feed';
 export const FEED_ENTERPRISE = 'Enterprise Feed';
 
-const convertVersion = (version: number) =>
+const convertVersion = (version: number | string) =>
   `${version}`.slice(0, 8) + 'T' + `${version}`.slice(8, 12);
 
 export function createFeed(feed: FeedElement): Feed {
@@ -70,7 +75,7 @@ export function createFeed(feed: FeedElement): Feed {
   return {
     feedType: feed.type,
     name: feed.name,
-    description: feed.description,
+    description: feed.description ?? '',
     status: feed.status,
     currentlySyncing: isDefined(feed.currently_syncing),
     syncNotAvailableError: feed.sync_not_available?.error,
@@ -117,10 +122,17 @@ class FeedStatusCommand extends HttpCommand {
   }
 
   async readFeedInformation() {
-    const response = await this.httpGetWithTransform();
-    const envelope = response.data as FeedStatusElement;
-    const {get_feeds_response: feedsResponse} = envelope.get_feeds;
-    const feeds = map(feedsResponse.feed, feed => createFeed(feed));
+    const url = buildServerUrl(
+      this.http.apiServer,
+      'api/v1/feeds',
+      this.http.apiProtocol,
+    );
+    const response = await this.http.request<string>('get', {
+      url,
+      args: this.http.getParams(),
+    });
+    const payload = JSON.parse(response.data) as NativeFeedInventory;
+    const feeds = map(payload.items ?? [], feed => createFeed(feed));
     return response.setData(feeds);
   }
 

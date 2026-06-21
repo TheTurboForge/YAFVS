@@ -3404,10 +3404,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/feeds",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "replacement_candidates": ["read-only feed inventory automation", "native-api-request helper"],
                 "notes": [
                     "Retires the inherited read-only list-feeds.gmp.py wrapper.",
+                    "GSA Feed Status reads now use this same-origin native endpoint.",
                     "Metadata/status inventory only; no feed sync, import, update, download, mirroring, bundling, or scanner control.",
                     "Reads fixed runtime feed metadata and lock files only; no request-controlled paths.",
                 ],

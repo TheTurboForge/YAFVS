@@ -19,6 +19,7 @@ import TaskCommand, {
 import {
   createActionResultResponse,
   createHttp,
+  createPlainResponse,
   createResponse,
 } from 'gmp/commands/testing';
 import type Http from 'gmp/http/http';
@@ -54,14 +55,11 @@ describe('TaskCommand tests', () => {
       xhr,
       'Failure to receive response from manager daemon.',
     );
-    const feedStatusResponse = createResponse({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [],
-        },
-      },
-    });
+    const feedStatusResponse = createPlainResponse(JSON.stringify({items: []}));
     const fakeHttp = {
+      apiProtocol: 'http',
+      apiServer: 'example.test',
+      getParams: testing.fn().mockReturnValue({token: undefined}),
       request: testing
         .fn()
         .mockResolvedValueOnce(feedStatusResponse)
@@ -404,26 +402,23 @@ describe('TaskCommand tests', () => {
   });
 
   test('should throw an error if feed is currently syncing', async () => {
-    const response = createResponse({
-      get_feeds: {
-        get_feeds_response: {
-          feed: [
-            {
-              type: 'NVT',
-              currently_syncing: true,
-              sync_not_available: false,
-              version: 202502170647,
-            },
-            {
-              type: 'SCAP',
-              currently_syncing: false,
-              sync_not_available: false,
-              version: 202502170647,
-            },
-          ],
-        },
-      },
-    });
+    const response = createPlainResponse(
+      JSON.stringify({
+        items: [
+          {
+            type: 'NVT',
+            currently_syncing: {timestamp: '202502170647'},
+            sync_not_available: false,
+            version: '202502170647',
+          },
+          {
+            type: 'SCAP',
+            sync_not_available: false,
+            version: '202502170647',
+          },
+        ],
+      }),
+    );
     const fakeHttp = createHttp(response);
 
     const taskCmd = new TaskCommand(fakeHttp);

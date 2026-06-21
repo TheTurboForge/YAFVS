@@ -247,6 +247,151 @@ const REPORT_CONFIG_SORT_FIELDS: &[(&str, &str)] = &[
     ("created", "created_at_unix"),
     ("modified", "modified_at_unix"),
 ];
+const HOST_ASSET_DEFAULT_SORT: &str = "-severity";
+const HOST_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("hostname", "hostname"),
+    ("ip", "ip"),
+    ("os", "best_os_cpe"),
+    ("severity", "severity"),
+    ("modified", "modified_at_unix"),
+];
+const TLS_CERTIFICATE_ASSET_DEFAULT_SORT: &str = "-last_seen";
+const TLS_CERTIFICATE_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("subject_dn", "subject_dn"),
+    ("subject", "subject_dn"),
+    ("issuer_dn", "issuer_dn"),
+    ("serial", "serial"),
+    ("activates", "activation_time_unix"),
+    ("activation_time", "activation_time_unix"),
+    ("not_before", "activation_time_unix"),
+    ("expires", "expiration_time_unix"),
+    ("expiration_time", "expiration_time_unix"),
+    ("not_after", "expiration_time_unix"),
+    ("last_seen", "last_seen_unix"),
+    ("modified", "modified_at_unix"),
+];
+const SCANNER_ASSET_DEFAULT_SORT: &str = "name";
+const SCANNER_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("host", "host"),
+    ("port", "port"),
+    ("type", "scanner_type"),
+    ("scanner_type", "scanner_type"),
+    ("credential", "credential_name"),
+    ("modified", "modified_at_unix"),
+];
+const SCAN_CONFIG_ASSET_DEFAULT_SORT: &str = "name";
+const SCAN_CONFIG_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("families_total", "family_count"),
+    ("family_count", "family_count"),
+    ("families_trend", "families_growing"),
+    ("nvts_total", "nvt_count"),
+    ("nvt_count", "nvt_count"),
+    ("nvts_trend", "nvts_growing"),
+    ("predefined", "predefined_int"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+];
+const FILTER_ASSET_DEFAULT_SORT: &str = "name";
+const FILTER_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("term", "term"),
+    ("type", "filter_type"),
+    ("filter_type", "filter_type"),
+    ("alert_count", "alert_count"),
+    ("alerts", "alert_count"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+];
+const OVERRIDE_ASSET_DEFAULT_SORT: &str = "text";
+const OVERRIDE_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("text", "text"),
+    ("name", "nvt_name"),
+    ("nvt", "nvt_name"),
+    ("hosts", "hosts"),
+    ("port", "port"),
+    ("severity", "severity_sort"),
+    ("newSeverity", "new_severity_sort"),
+    ("new_severity", "new_severity_sort"),
+    ("active", "active_int"),
+    ("task_name", "task_name"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+];
+const CPE_CATALOG_DEFAULT_SORT: &str = "-modified";
+const CPE_CATALOG_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("title", "title"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+    ("severity", "severity"),
+    ("cves", "cve_refs"),
+    ("cpe_name_id", "cpe_name_id"),
+    ("cpeNameId", "cpe_name_id"),
+    ("deprecated", "deprecated_int"),
+];
+const CVE_CATALOG_DEFAULT_SORT: &str = "-severity";
+const CVE_CATALOG_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("description", "description"),
+    ("published", "published_at_unix"),
+    ("modified", "modified_at_unix"),
+    ("cvss_base_vector", "cvss_base_vector"),
+    ("cvssBaseVector", "cvss_base_vector"),
+    ("severity", "severity"),
+    ("epss_score", "epss_score"),
+    ("epss_percentile", "epss_percentile"),
+];
+const CERT_ADVISORY_DEFAULT_SORT: &str = "-created";
+const CERT_ADVISORY_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("title", "title"),
+    ("summary", "summary"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+    ("cves", "cve_refs"),
+    ("severity", "severity"),
+];
+const NVT_CATALOG_DEFAULT_SORT: &str = "-created";
+const NVT_CATALOG_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "oid"),
+    ("oid", "oid"),
+    ("name", "name"),
+    ("family", "family"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+    ("cve", "cve_refs"),
+    ("severity", "severity"),
+    ("qod", "qod"),
+    ("qod_type", "qod_type"),
+    ("solution_type", "solution_type"),
+    ("epss_score", "max_epss_score"),
+    ("epss_percentile", "max_epss_percentile"),
+];
+const OPERATING_SYSTEM_ASSET_DEFAULT_SORT: &str = "-latest_severity";
+const OPERATING_SYSTEM_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("title", "title"),
+    ("latest_severity", "latest_severity"),
+    ("highest_severity", "highest_severity"),
+    ("average_severity", "average_severity"),
+    ("hosts", "hosts"),
+    ("all_hosts", "all_hosts"),
+    ("modified", "modified_at_unix"),
+];
 
 #[derive(Debug, Serialize)]
 struct ErrorBody {
@@ -2266,19 +2411,8 @@ async fn host_assets(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<HostAssetItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-severity")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("hostname", "hostname"),
-            ("ip", "ip"),
-            ("os", "best_os_cpe"),
-            ("severity", "severity"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, HOST_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, HOST_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH latest_ip AS (
              SELECT DISTINCT ON (host)
@@ -2567,26 +2701,8 @@ async fn tls_certificate_assets(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<TlsCertificateAssetItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-last_seen")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("subject_dn", "subject_dn"),
-            ("subject", "subject_dn"),
-            ("issuer_dn", "issuer_dn"),
-            ("serial", "serial"),
-            ("activates", "activation_time_unix"),
-            ("activation_time", "activation_time_unix"),
-            ("not_before", "activation_time_unix"),
-            ("expires", "expiration_time_unix"),
-            ("expiration_time", "expiration_time_unix"),
-            ("not_after", "expiration_time_unix"),
-            ("last_seen", "last_seen_unix"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, TLS_CERTIFICATE_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, TLS_CERTIFICATE_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH tls_rows AS (
              SELECT c.uuid AS id,
@@ -2726,20 +2842,8 @@ async fn scanner_assets(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<ScannerAssetItem>>, ApiError> {
-    let params = normalize_collection_query(query, "name")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("host", "host"),
-            ("port", "port"),
-            ("type", "scanner_type"),
-            ("scanner_type", "scanner_type"),
-            ("credential", "credential_name"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, SCANNER_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, SCANNER_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH scanner_rows AS (
              SELECT s.uuid AS id,
@@ -2869,23 +2973,8 @@ async fn scan_config_assets(
     if !matches!(predefined_filter.as_str(), "" | "0" | "1") {
         return Err(ApiError::BadRequest("invalid predefined filter".into()));
     }
-    let params = normalize_collection_query(query, "name")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("families_total", "family_count"),
-            ("family_count", "family_count"),
-            ("families_trend", "families_growing"),
-            ("nvts_total", "nvt_count"),
-            ("nvt_count", "nvt_count"),
-            ("nvts_trend", "nvts_growing"),
-            ("predefined", "predefined_int"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, SCAN_CONFIG_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, SCAN_CONFIG_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH scan_config_rows AS (
              SELECT c.id AS internal_id,
@@ -3173,21 +3262,8 @@ async fn filter_assets(
         .unwrap_or("")
         .trim()
         .to_string();
-    let params = normalize_collection_query(query, "name")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("term", "term"),
-            ("type", "filter_type"),
-            ("filter_type", "filter_type"),
-            ("alert_count", "alert_count"),
-            ("alerts", "alert_count"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, FILTER_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, FILTER_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH filter_rows AS (
              SELECT f.uuid AS id,
@@ -3618,25 +3694,8 @@ async fn override_assets(
     let active_filter = query.active.clone().unwrap_or_default();
     let text_filter = query.text.clone().unwrap_or_default();
     let task_name_filter = query.task_name.clone().unwrap_or_default();
-    let params = normalize_collection_query(query, "text")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("text", "text"),
-            ("name", "nvt_name"),
-            ("nvt", "nvt_name"),
-            ("hosts", "hosts"),
-            ("port", "port"),
-            ("severity", "severity_sort"),
-            ("newSeverity", "new_severity_sort"),
-            ("new_severity", "new_severity_sort"),
-            ("active", "active_int"),
-            ("task_name", "task_name"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, OVERRIDE_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, OVERRIDE_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH override_rows AS (
              SELECT o.uuid AS id,
@@ -4640,22 +4699,8 @@ async fn cpe_catalog(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<CatalogCpeItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-modified")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("title", "title"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-            ("severity", "severity"),
-            ("cves", "cve_refs"),
-            ("cpe_name_id", "cpe_name_id"),
-            ("cpeNameId", "cpe_name_id"),
-            ("deprecated", "deprecated_int"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, CPE_CATALOG_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, CPE_CATALOG_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH cpe_rows AS (
              SELECT c.uuid AS id,
@@ -4776,22 +4821,8 @@ async fn cve_catalog(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<CatalogCveItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-severity")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("description", "description"),
-            ("published", "published_at_unix"),
-            ("modified", "modified_at_unix"),
-            ("cvss_base_vector", "cvss_base_vector"),
-            ("cvssBaseVector", "cvss_base_vector"),
-            ("severity", "severity"),
-            ("epss_score", "epss_score"),
-            ("epss_percentile", "epss_percentile"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, CVE_CATALOG_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, CVE_CATALOG_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH cve_rows AS (
              SELECT c.name AS id,
@@ -4874,20 +4905,8 @@ async fn dfn_cert_advisories(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<DfnCertAdvisoryItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-created")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("title", "title"),
-            ("summary", "summary"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-            ("cves", "cve_refs"),
-            ("severity", "severity"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, CERT_ADVISORY_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, CERT_ADVISORY_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH advisory_rows AS (
              SELECT d.uuid AS id,
@@ -4980,20 +4999,8 @@ async fn cert_bund_advisories(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<CertBundAdvisoryItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-created")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("title", "title"),
-            ("summary", "summary"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-            ("cves", "cve_refs"),
-            ("severity", "severity"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, CERT_ADVISORY_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, CERT_ADVISORY_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH advisory_rows AS (
              SELECT d.uuid AS id,
@@ -5086,26 +5093,9 @@ async fn nvt_catalog(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<NvtCatalogItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-created")?;
+    let params = normalize_collection_query(query, NVT_CATALOG_DEFAULT_SORT)?;
     let (filter_mode, filter_value) = nvt_filter_parts(&params.filter);
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "oid"),
-            ("oid", "oid"),
-            ("name", "name"),
-            ("family", "family"),
-            ("created", "created_at_unix"),
-            ("modified", "modified_at_unix"),
-            ("cve", "cve_refs"),
-            ("severity", "severity"),
-            ("qod", "qod"),
-            ("qod_type", "qod_type"),
-            ("solution_type", "solution_type"),
-            ("epss_score", "max_epss_score"),
-            ("epss_percentile", "max_epss_percentile"),
-        ],
-    )?;
+    let sort_sql = sort_clause(&params.sort, NVT_CATALOG_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH filtered AS (
              SELECT n.oid AS id,
@@ -5301,21 +5291,8 @@ async fn operating_system_assets(
     State(state): State<AppState>,
     Query(query): Query<CollectionQuery>,
 ) -> Result<Json<Collection<OperatingSystemAssetItem>>, ApiError> {
-    let params = normalize_collection_query(query, "-latest_severity")?;
-    let sort_sql = sort_clause(
-        &params.sort,
-        &[
-            ("id", "id"),
-            ("name", "name"),
-            ("title", "title"),
-            ("latest_severity", "latest_severity"),
-            ("highest_severity", "highest_severity"),
-            ("average_severity", "average_severity"),
-            ("hosts", "hosts"),
-            ("all_hosts", "all_hosts"),
-            ("modified", "modified_at_unix"),
-        ],
-    )?;
+    let params = normalize_collection_query(query, OPERATING_SYSTEM_ASSET_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, OPERATING_SYSTEM_ASSET_SORT_FIELDS)?;
     let sql = format!(
         r#"WITH latest_best_os AS (
              SELECT DISTINCT ON (hd.host)
@@ -10493,6 +10470,116 @@ mod tests {
         },
     ];
 
+    const ASSET_CATALOG_COLLECTION_CONTRACTS: &[CollectionContract] = &[
+        CollectionContract {
+            path: "/api/v1/hosts",
+            default_sort: HOST_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: HOST_ASSET_SORT_FIELDS,
+            filter_fields: &["id", "name", "hostname", "ip", "best_os_cpe", "best_os_txt"],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/tls-certificates",
+            default_sort: TLS_CERTIFICATE_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: TLS_CERTIFICATE_ASSET_SORT_FIELDS,
+            filter_fields: &[
+                "id",
+                "name",
+                "subject_dn",
+                "issuer_dn",
+                "serial",
+                "md5_fingerprint",
+                "sha256_fingerprint",
+            ],
+            tie_breakers: &["subject_dn", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/scanners",
+            default_sort: SCANNER_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: SCANNER_ASSET_SORT_FIELDS,
+            filter_fields: &[
+                "id",
+                "name",
+                "comment",
+                "host",
+                "credential_name",
+                "relay_host",
+            ],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/scan-configs",
+            default_sort: SCAN_CONFIG_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: SCAN_CONFIG_ASSET_SORT_FIELDS,
+            filter_fields: &["id", "name", "comment", "owner_name"],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/filters",
+            default_sort: FILTER_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: FILTER_ASSET_SORT_FIELDS,
+            filter_fields: &["id", "name", "comment", "filter_type", "term"],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/overrides",
+            default_sort: OVERRIDE_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: OVERRIDE_ASSET_SORT_FIELDS,
+            filter_fields: &[
+                "id",
+                "nvt_id",
+                "nvt_name",
+                "text",
+                "hosts",
+                "port",
+                "task_name",
+            ],
+            tie_breakers: &["text", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/cpes",
+            default_sort: CPE_CATALOG_DEFAULT_SORT,
+            allowed_sort_fields: CPE_CATALOG_SORT_FIELDS,
+            filter_fields: &["id", "name", "title", "cpe_name_id", "comment"],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/cves",
+            default_sort: CVE_CATALOG_DEFAULT_SORT,
+            allowed_sort_fields: CVE_CATALOG_SORT_FIELDS,
+            filter_fields: &["id", "description", "cvss_base_vector", "products"],
+            tie_breakers: &["id"],
+        },
+        CollectionContract {
+            path: "/api/v1/dfn-cert-advisories",
+            default_sort: CERT_ADVISORY_DEFAULT_SORT,
+            allowed_sort_fields: CERT_ADVISORY_SORT_FIELDS,
+            filter_fields: &["id", "name", "title", "summary", "cves"],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/cert-bund-advisories",
+            default_sort: CERT_ADVISORY_DEFAULT_SORT,
+            allowed_sort_fields: CERT_ADVISORY_SORT_FIELDS,
+            filter_fields: &["id", "name", "title", "summary", "cves"],
+            tie_breakers: &["name", "id"],
+        },
+        CollectionContract {
+            path: "/api/v1/nvts",
+            default_sort: NVT_CATALOG_DEFAULT_SORT,
+            allowed_sort_fields: NVT_CATALOG_SORT_FIELDS,
+            filter_fields: &["oid", "name", "family", "cve", "qod_type", "solution_type"],
+            tie_breakers: &["name", "oid"],
+        },
+        CollectionContract {
+            path: "/api/v1/operating-systems",
+            default_sort: OPERATING_SYSTEM_ASSET_DEFAULT_SORT,
+            allowed_sort_fields: OPERATING_SYSTEM_ASSET_SORT_FIELDS,
+            filter_fields: &["id", "name", "title"],
+            tie_breakers: &["name", "id"],
+        },
+    ];
+
     const MANAGEMENT_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         CollectionContract {
             path: "/api/v1/alerts",
@@ -10738,6 +10825,46 @@ mod tests {
         assert!(sort_field_names(REPORT_FORMAT_SORT_FIELDS).contains(&"content_type"));
         assert!(sort_clause("-modified", REPORT_FORMAT_SORT_FIELDS).is_ok());
         assert!(sort_clause("created_at", ALERT_SORT_FIELDS).is_err());
+    }
+
+    #[test]
+    fn asset_catalog_collection_contracts_define_sort_filter_and_tie_breakers() {
+        let paths: Vec<&str> = ASSET_CATALOG_COLLECTION_CONTRACTS
+            .iter()
+            .map(|contract| contract.path)
+            .collect();
+        assert_eq!(
+            paths,
+            vec![
+                "/api/v1/hosts",
+                "/api/v1/tls-certificates",
+                "/api/v1/scanners",
+                "/api/v1/scan-configs",
+                "/api/v1/filters",
+                "/api/v1/overrides",
+                "/api/v1/cpes",
+                "/api/v1/cves",
+                "/api/v1/dfn-cert-advisories",
+                "/api/v1/cert-bund-advisories",
+                "/api/v1/nvts",
+                "/api/v1/operating-systems",
+            ]
+        );
+        for contract in ASSET_CATALOG_COLLECTION_CONTRACTS {
+            assert_collection_contract(contract);
+        }
+        assert!(sort_field_names(HOST_ASSET_SORT_FIELDS).contains(&"severity"));
+        assert!(sort_field_names(TLS_CERTIFICATE_ASSET_SORT_FIELDS).contains(&"last_seen"));
+        assert!(sort_field_names(SCANNER_ASSET_SORT_FIELDS).contains(&"credential"));
+        assert!(sort_field_names(SCAN_CONFIG_ASSET_SORT_FIELDS).contains(&"family_count"));
+        assert!(sort_field_names(FILTER_ASSET_SORT_FIELDS).contains(&"alert_count"));
+        assert!(sort_field_names(OVERRIDE_ASSET_SORT_FIELDS).contains(&"new_severity"));
+        assert!(sort_field_names(CPE_CATALOG_SORT_FIELDS).contains(&"cpeNameId"));
+        assert!(sort_field_names(CVE_CATALOG_SORT_FIELDS).contains(&"epss_score"));
+        assert!(sort_field_names(CERT_ADVISORY_SORT_FIELDS).contains(&"cves"));
+        assert!(sort_field_names(NVT_CATALOG_SORT_FIELDS).contains(&"solution_type"));
+        assert!(sort_field_names(OPERATING_SYSTEM_ASSET_SORT_FIELDS).contains(&"latest_severity"));
+        assert!(sort_clause("created_at", CPE_CATALOG_SORT_FIELDS).is_err());
     }
 
     #[test]

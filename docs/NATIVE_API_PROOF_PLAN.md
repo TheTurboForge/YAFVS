@@ -198,15 +198,15 @@ where it exists:
 Together with Results, Hosts, Ports, CVEs, Error Messages, Metrics, and the
 Security Information CVE/CPE/CERT advisory catalogs, these
 endpoints complete native browser coverage for current scope-report evidence
-tabs and the high-value raw report evidence tabs. Target list reads are also
-browser-proxied through the authenticated `gsad` same-origin boundary, including
-credential metadata that the inherited UI already displayed. Task list reads are
-also browser-proxied with the read-only table metadata required by the current
-operator view. Scanner metadata list and detail Information reads are
-browser-proxied, while verify/export/download, credential/certificate download
-context, User Tags, and scanner writes remain inherited. Target-detail and
-task-detail reads remain internal native endpoints until their browser parity
-gaps are closed.
+tabs and the high-value raw report evidence tabs. Target list/detail reads are
+also browser-proxied through the authenticated `gsad` same-origin boundary,
+including credential metadata that the inherited UI already displayed. Task
+list/detail reads are also browser-proxied with the read-only metadata required
+by the current operator view. Target writes, task writes/start/stop, credential
+material, and scanner-control semantics remain inherited. Scanner metadata list
+and detail Information reads are browser-proxied, while verify/export/download,
+credential/certificate download context, User Tags, and scanner writes remain
+inherited.
 Port-list list/detail reads are browser-proxied, including port ranges and target
 backlinks; port-list writes and import/export actions remain inherited. Override
 list/detail metadata reads are browser-proxied, including NVT identity, active

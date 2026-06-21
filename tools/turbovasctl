@@ -312,8 +312,8 @@ OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset(
 )
 OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset({"direct-read", "internal-only"})
 OPENAPI_ALLOWED_MATURITY_VALUES = frozenset({"live-read", "preview-read"})
-OPENAPI_ALLOWED_REPLACES_VALUES = frozenset({"alert-metadata-list-read", "feed-status-read", "nvt-catalog-detail-read", "none", "tag-metadata-read", "tag-resource-name-read", "tag-resource-reference-read", "trashcan-count-summary-read"})
-OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset({"alert-detail-delivery-control", "feed-sync-import-control", "nvt-rich-detail", "retention-mutations", "tag-write-control", "trashcan-row-data-and-mutations"})
+OPENAPI_ALLOWED_REPLACES_VALUES = frozenset({"alert-metadata-list-read", "cert-bund-advisory-catalog-detail-read", "cert-bund-advisory-list-read", "cpe-catalog-detail-read", "cpe-catalog-list-read", "cve-catalog-detail-read", "cve-catalog-list-read", "dfn-cert-advisory-catalog-detail-read", "dfn-cert-advisory-list-read", "feed-status-read", "nvt-catalog-detail-read", "nvt-catalog-list-read", "none", "tag-metadata-read", "tag-resource-name-read", "tag-resource-reference-read", "trashcan-count-summary-read"})
+OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset({"alert-detail-delivery-control", "cert-advisory-rich-detail-export", "feed-sync-import-control", "nvt-rich-detail", "retention-mutations", "scap-rich-context", "tag-write-control", "trashcan-row-data-and-mutations"})
 OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES = {
     "x-turbovas-inherited-still-owns": OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES,
     "x-turbovas-maturity": OPENAPI_ALLOWED_MATURITY_VALUES,
@@ -321,7 +321,16 @@ OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES = {
 }
 OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts"): "direct-read",
+    ("get", "/cert-bund-advisories"): "direct-read",
+    ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): "direct-read",
+    ("get", "/cpes"): "direct-read",
+    ("get", "/cpes/{cpe_id}"): "direct-read",
+    ("get", "/cves"): "direct-read",
+    ("get", "/cves/{cve_id}"): "direct-read",
+    ("get", "/dfn-cert-advisories"): "direct-read",
+    ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}"): "direct-read",
     ("get", "/feeds"): "direct-read",
+    ("get", "/nvts"): "direct-read",
     ("get", "/nvts/{nvt_id}"): "direct-read",
     ("get", "/tags/resource-names/{resource_type}"): "direct-read",
     ("get", "/tags"): "direct-read",
@@ -340,6 +349,51 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "feed-sync-import-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "feed-status-read",
+    },
+    ("get", "/cert-bund-advisories"): {
+        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cert-bund-advisory-list-read",
+    },
+    ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): {
+        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cert-bund-advisory-catalog-detail-read",
+    },
+    ("get", "/cpes"): {
+        "x-turbovas-inherited-still-owns": "scap-rich-context",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cpe-catalog-list-read",
+    },
+    ("get", "/cpes/{cpe_id}"): {
+        "x-turbovas-inherited-still-owns": "scap-rich-context",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cpe-catalog-detail-read",
+    },
+    ("get", "/cves"): {
+        "x-turbovas-inherited-still-owns": "scap-rich-context",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cve-catalog-list-read",
+    },
+    ("get", "/cves/{cve_id}"): {
+        "x-turbovas-inherited-still-owns": "scap-rich-context",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cve-catalog-detail-read",
+    },
+    ("get", "/dfn-cert-advisories"): {
+        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "dfn-cert-advisory-list-read",
+    },
+    ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}"): {
+        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "dfn-cert-advisory-catalog-detail-read",
+    },
+    ("get", "/nvts"): {
+        "x-turbovas-inherited-still-owns": "nvt-rich-detail",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "nvt-catalog-list-read",
     },
     ("get", "/nvts/{nvt_id}"): {
         "x-turbovas-inherited-still-owns": "nvt-rich-detail",

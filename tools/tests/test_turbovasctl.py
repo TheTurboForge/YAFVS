@@ -1211,8 +1211,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["unexpected_turbovas_operation_fields"], [])
         self.assertEqual(contract["allowed_exposure_values"], ["direct-read", "internal-only"])
         self.assertEqual(contract["allowed_maturity_values"], ["live-read", "preview-read"])
-        self.assertEqual(contract["allowed_replaces_values"], ["alert-metadata-list-read", "feed-status-read", "none", "nvt-catalog-detail-read", "tag-metadata-read", "tag-resource-name-read", "tag-resource-reference-read", "trashcan-count-summary-read"])
-        self.assertEqual(contract["allowed_inherited_still_owns_values"], ["alert-detail-delivery-control", "feed-sync-import-control", "nvt-rich-detail", "retention-mutations", "tag-write-control", "trashcan-row-data-and-mutations"])
+        self.assertEqual(contract["allowed_replaces_values"], ["alert-metadata-list-read", "cert-bund-advisory-catalog-detail-read", "cert-bund-advisory-list-read", "cpe-catalog-detail-read", "cpe-catalog-list-read", "cve-catalog-detail-read", "cve-catalog-list-read", "dfn-cert-advisory-catalog-detail-read", "dfn-cert-advisory-list-read", "feed-status-read", "none", "nvt-catalog-detail-read", "nvt-catalog-list-read", "tag-metadata-read", "tag-resource-name-read", "tag-resource-reference-read", "trashcan-count-summary-read"])
+        self.assertEqual(contract["allowed_inherited_still_owns_values"], ["alert-detail-delivery-control", "cert-advisory-rich-detail-export", "feed-sync-import-control", "nvt-rich-detail", "retention-mutations", "scap-rich-context", "tag-write-control", "trashcan-row-data-and-mutations"])
         self.assertEqual(contract["missing_exposure_operations"], [])
         self.assertEqual(contract["invalid_exposure_operations"], [])
         self.assertEqual(contract["exposure_mismatches"], [])
@@ -1236,8 +1236,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(details["summary"]["total_rows"], 73)
         self.assertEqual(details["summary"]["openapi_operation_rows"], 73)
         self.assertEqual(details["summary"]["inventory_rows"], 72)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 9)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 9)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 18)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 18)
         self.assertIn("native-api-migration-matrix", source)
         self.assertIn("def command_native_api_migration_matrix", source)
 
@@ -1257,6 +1257,26 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(feeds["x_turbovas_maturity"], "live-read")
         self.assertEqual(feeds["x_turbovas_replaces"], "feed-status-read")
         self.assertEqual(feeds["x_turbovas_inherited_still_owns"], "feed-sync-import-control")
+
+        expected_catalog_metadata = {
+            "/api/v1/cves": ("getCves", "cve-catalog-list-read", "scap-rich-context"),
+            "/api/v1/cves/{cve_id}": ("getCvesByCveId", "cve-catalog-detail-read", "scap-rich-context"),
+            "/api/v1/cpes": ("getCpes", "cpe-catalog-list-read", "scap-rich-context"),
+            "/api/v1/cpes/{cpe_id}": ("getCpesByCpeId", "cpe-catalog-detail-read", "scap-rich-context"),
+            "/api/v1/cert-bund-advisories": ("getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
+            "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}": ("getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
+            "/api/v1/dfn-cert-advisories": ("getDfnCertAdvisories", "dfn-cert-advisory-list-read", "cert-advisory-rich-detail-export"),
+            "/api/v1/dfn-cert-advisories/{dfn_cert_advisory_id}": ("getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
+            "/api/v1/nvts": ("getNvts", "nvt-catalog-list-read", "nvt-rich-detail"),
+            "/api/v1/nvts/{nvt_id}": ("getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
+        }
+        for endpoint, (operation_id, replaces, inherited_still_owns) in expected_catalog_metadata.items():
+            row = rows[endpoint]
+            self.assertEqual(row["operation_id"], operation_id)
+            self.assertEqual(row["x_turbovas_exposure"], "direct-read")
+            self.assertEqual(row["x_turbovas_maturity"], "live-read")
+            self.assertEqual(row["x_turbovas_replaces"], replaces)
+            self.assertEqual(row["x_turbovas_inherited_still_owns"], inherited_still_owns)
 
         tags = rows["/api/v1/tags"]
         self.assertEqual(tags["operation_id"], "getTags")
@@ -1364,7 +1384,16 @@ class TurboVASCtlTests(unittest.TestCase):
             missing_exposure,
             {
                 "GET /alerts",
+                "GET /cert-bund-advisories",
+                "GET /cert-bund-advisories/{cert_bund_advisory_id}",
+                "GET /cpes",
+                "GET /cpes/{cpe_id}",
+                "GET /cves",
+                "GET /cves/{cve_id}",
+                "GET /dfn-cert-advisories",
+                "GET /dfn-cert-advisories/{dfn_cert_advisory_id}",
                 "GET /feeds",
+                "GET /nvts",
                 "GET /nvts/{nvt_id}",
                 "GET /tags",
                 "GET /tags/resource-names/{resource_type}",
@@ -1381,7 +1410,7 @@ class TurboVASCtlTests(unittest.TestCase):
                     "operation": "GET /reports",
                     "field": "x-turbovas-inherited-still-owns",
                     "actual": "all-the-things",
-                    "allowed": ["alert-detail-delivery-control", "feed-sync-import-control", "nvt-rich-detail", "retention-mutations", "tag-write-control", "trashcan-row-data-and-mutations"],
+                    "allowed": ["alert-detail-delivery-control", "cert-advisory-rich-detail-export", "feed-sync-import-control", "nvt-rich-detail", "retention-mutations", "scap-rich-context", "tag-write-control", "trashcan-row-data-and-mutations"],
                 },
                 {
                     "operation": "GET /reports",
@@ -1393,13 +1422,22 @@ class TurboVASCtlTests(unittest.TestCase):
                     "operation": "GET /reports",
                     "field": "x-turbovas-replaces",
                     "actual": "everything",
-                    "allowed": ["alert-metadata-list-read", "feed-status-read", "none", "nvt-catalog-detail-read", "tag-metadata-read", "tag-resource-name-read", "tag-resource-reference-read", "trashcan-count-summary-read"],
+                    "allowed": ["alert-metadata-list-read", "cert-bund-advisory-catalog-detail-read", "cert-bund-advisory-list-read", "cpe-catalog-detail-read", "cpe-catalog-list-read", "cve-catalog-detail-read", "cve-catalog-list-read", "dfn-cert-advisory-catalog-detail-read", "dfn-cert-advisory-list-read", "feed-status-read", "none", "nvt-catalog-detail-read", "nvt-catalog-list-read", "tag-metadata-read", "tag-resource-name-read", "tag-resource-reference-read", "trashcan-count-summary-read"],
                 },
             ],
         )
         missing_migration = {(item["operation"], item["field"]) for item in summary["missing_migration_metadata_operations"]}
         self.assertIn(("GET /alerts", "x-turbovas-replaces"), missing_migration)
+        self.assertIn(("GET /cert-bund-advisories", "x-turbovas-maturity"), missing_migration)
+        self.assertIn(("GET /cert-bund-advisories/{cert_bund_advisory_id}", "x-turbovas-inherited-still-owns"), missing_migration)
+        self.assertIn(("GET /cpes", "x-turbovas-replaces"), missing_migration)
+        self.assertIn(("GET /cpes/{cpe_id}", "x-turbovas-inherited-still-owns"), missing_migration)
+        self.assertIn(("GET /cves", "x-turbovas-maturity"), missing_migration)
+        self.assertIn(("GET /cves/{cve_id}", "x-turbovas-replaces"), missing_migration)
+        self.assertIn(("GET /dfn-cert-advisories", "x-turbovas-maturity"), missing_migration)
+        self.assertIn(("GET /dfn-cert-advisories/{dfn_cert_advisory_id}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /feeds", "x-turbovas-maturity"), missing_migration)
+        self.assertIn(("GET /nvts", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /nvts/{nvt_id}", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /tags", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /tags/resource-names/{resource_type}", "x-turbovas-inherited-still-owns"), missing_migration)
@@ -1507,7 +1545,7 @@ class TurboVASCtlTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 turbovasctl.validate_native_api_request_path(bad_path)
 
-    def test_openapi_tracks_direct_feed_and_alert_tag_lookup_contracts(self):
+    def test_openapi_tracks_direct_feed_security_information_and_alert_tag_lookup_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         contract = (root / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
@@ -1515,9 +1553,38 @@ class TurboVASCtlTests(unittest.TestCase):
         operations = {(item["method"], item["path"]): item for item in turbovasctl.openapi_contract_operations(root)}
         alerts = operations[("get", "/alerts")]
         feeds = operations[("get", "/feeds")]
+        cves = operations[("get", "/cves")]
+        cve_detail = operations[("get", "/cves/{cve_id}")]
+        cpes = operations[("get", "/cpes")]
+        cpe_detail = operations[("get", "/cpes/{cpe_id}")]
+        cert_bund_advisories = operations[("get", "/cert-bund-advisories")]
+        cert_bund_detail = operations[("get", "/cert-bund-advisories/{cert_bund_advisory_id}")]
+        dfn_cert_advisories = operations[("get", "/dfn-cert-advisories")]
+        dfn_cert_detail = operations[("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}")]
+        nvts = operations[("get", "/nvts")]
         nvt_detail = operations[("get", "/nvts/{nvt_id}")]
         tag_resource_names = operations[("get", "/tags/resource-names/{resource_type}")]
         trashcan_summary = operations[("get", "/trashcan/summary")]
+
+        expected_catalog_metadata = [
+            (cves, "getCves", "cve-catalog-list-read", "scap-rich-context"),
+            (cve_detail, "getCvesByCveId", "cve-catalog-detail-read", "scap-rich-context"),
+            (cpes, "getCpes", "cpe-catalog-list-read", "scap-rich-context"),
+            (cpe_detail, "getCpesByCpeId", "cpe-catalog-detail-read", "scap-rich-context"),
+            (cert_bund_advisories, "getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
+            (cert_bund_detail, "getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
+            (dfn_cert_advisories, "getDfnCertAdvisories", "dfn-cert-advisory-list-read", "cert-advisory-rich-detail-export"),
+            (dfn_cert_detail, "getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
+            (nvts, "getNvts", "nvt-catalog-list-read", "nvt-rich-detail"),
+            (nvt_detail, "getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
+        ]
+        for operation, operation_id, replaces, inherited_still_owns in expected_catalog_metadata:
+            self.assertEqual(operation["operation_id"], operation_id)
+            self.assertIn("x-turbovas-direct", operation["x_turbovas_fields"])
+            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
+            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
+            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
+            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-inherited-still-owns"], inherited_still_owns)
 
         self.assertEqual(alerts["operation_id"], "getAlerts")
         self.assertIn("x-turbovas-direct", alerts["x_turbovas_fields"])
@@ -1532,12 +1599,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-replaces"], "feed-status-read")
         self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "feed-sync-import-control")
         self.assertEqual(feeds["responses"]["400"], "#/components/responses/BadRequest")
-        self.assertEqual(nvt_detail["operation_id"], "getNvtsByNvtId")
-        self.assertIn("x-turbovas-direct", nvt_detail["x_turbovas_fields"])
-        self.assertEqual(nvt_detail["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(nvt_detail["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(nvt_detail["x_turbovas_values"]["x-turbovas-replaces"], "nvt-catalog-detail-read")
-        self.assertEqual(nvt_detail["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "nvt-rich-detail")
         self.assertEqual(tag_resource_names["operation_id"], "getTagsResourceNamesByResourceType")
         self.assertIn("x-turbovas-direct", tag_resource_names["x_turbovas_fields"])
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")

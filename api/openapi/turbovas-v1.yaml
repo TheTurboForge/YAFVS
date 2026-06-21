@@ -99,6 +99,10 @@ paths:
     get:
       operationId: getCves
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cve-catalog-list-read
+      x-turbovas-inherited-still-owns: scap-rich-context
       summary: List Security Information CVEs
       description: Searchable CVE intelligence catalog backed by SCAP feed metadata in gvmd/PostgreSQL. This is distinct from observed report CVEs and vulnerability findings.
       parameters:
@@ -127,6 +131,10 @@ paths:
     get:
       operationId: getCvesByCveId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cve-catalog-detail-read
+      x-turbovas-inherited-still-owns: scap-rich-context
       summary: Read one Security Information CVE
       parameters:
         - $ref: '#/components/parameters/CveId'
@@ -153,6 +161,10 @@ paths:
     get:
       operationId: getCpes
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cpe-catalog-list-read
+      x-turbovas-inherited-still-owns: scap-rich-context
       summary: List Security Information CPEs
       description: Searchable CPE intelligence catalog backed by SCAP feed metadata in gvmd/PostgreSQL. This is distinct from observed operating-system and application evidence in raw and scope reports.
       parameters:
@@ -181,6 +193,10 @@ paths:
     get:
       operationId: getCpesByCpeId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cpe-catalog-detail-read
+      x-turbovas-inherited-still-owns: scap-rich-context
       summary: Read one Security Information CPE
       parameters:
         - $ref: '#/components/parameters/CpeId'
@@ -207,6 +223,10 @@ paths:
     get:
       operationId: getCertBundAdvisories
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cert-bund-advisory-list-read
+      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: List Security Information CERT-Bund advisories
       description: Searchable CERT-Bund advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL. Rich advisory detail remains inherited from feed XML/XSLT.
       parameters:
@@ -235,6 +255,10 @@ paths:
     get:
       operationId: getCertBundAdvisoriesByCertBundAdvisoryId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cert-bund-advisory-catalog-detail-read
+      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: Read one Security Information CERT-Bund advisory catalog entry
       description: Catalog-detail metadata backed by CERT feed metadata already imported into gvmd/PostgreSQL. This endpoint intentionally does not reconstruct XML-only rich advisory fields such as revision history, platform, risk, reference URLs, or description blocks.
       parameters:
@@ -262,6 +286,10 @@ paths:
     get:
       operationId: getDfnCertAdvisories
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: dfn-cert-advisory-list-read
+      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: List Security Information DFN-CERT advisories
       description: Searchable DFN-CERT advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL. Rich advisory detail remains inherited from feed XML/XSLT.
       parameters:
@@ -290,6 +318,10 @@ paths:
     get:
       operationId: getDfnCertAdvisoriesByDfnCertAdvisoryId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: dfn-cert-advisory-catalog-detail-read
+      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: Read one Security Information DFN-CERT advisory catalog entry
       description: Catalog-detail metadata backed by CERT feed metadata already imported into gvmd/PostgreSQL. This endpoint intentionally does not reconstruct XML-only rich advisory fields such as advisory links or additional feed links.
       parameters:
@@ -317,6 +349,10 @@ paths:
     get:
       operationId: getNvts
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: nvt-catalog-list-read
+      x-turbovas-inherited-still-owns: nvt-rich-detail
       summary: List Security Information NVTs
       description: Searchable NVT catalog backed by gvmd/PostgreSQL feed metadata. This list contract is intentionally separate from rich NVT detail, preferences, and export behavior, which remain inherited until a separate typed contract is designed.
       parameters:

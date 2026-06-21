@@ -1198,8 +1198,12 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
-        self.assertEqual(contract["allowed_turbovas_operation_fields"], ["x-turbovas-direct"])
+        self.assertEqual(contract["allowed_turbovas_operation_fields"], ["x-turbovas-direct", "x-turbovas-exposure"])
         self.assertEqual(contract["unexpected_turbovas_operation_fields"], [])
+        self.assertEqual(contract["allowed_exposure_values"], ["direct-read", "internal-only"])
+        self.assertEqual(contract["missing_exposure_operations"], [])
+        self.assertEqual(contract["invalid_exposure_operations"], [])
+        self.assertEqual(contract["exposure_mismatches"], [])
         self.assertEqual(contract["missing_shared_error_responses"], [])
         self.assertEqual(contract["invalid_shared_error_responses"], [])
         self.assertEqual(contract["operations_missing_error_responses"], [])
@@ -1234,6 +1238,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "    get:\n"
                 "      operationId: customReports\n"
                 "      x-turbovas-direct: true\n"
+                "      x-turbovas-exposure: banana\n"
                 "      x-turbovas-surprise: true\n"
                 "      responses:\n"
                 "        '200':\n"
@@ -1261,6 +1266,17 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["operation"], "GET /reports")
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["expected"], "getReports")
         self.assertEqual(summary["unexpected_turbovas_operation_fields"], [{"operation": "GET /reports", "fields": ["x-turbovas-surprise"]}])
+        self.assertEqual(summary["invalid_exposure_operations"], [{"operation": "GET /reports", "actual": "banana", "allowed": ["direct-read", "internal-only"]}])
+        missing_exposure = {item["operation"] for item in summary["missing_exposure_operations"]}
+        self.assertEqual(
+            missing_exposure,
+            {
+                "GET /feeds",
+                "GET /tags/resource-names/{resource_type}",
+                "GET /scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+            },
+        )
+        self.assertEqual(summary["exposure_mismatches"], [])
         self.assertIn("Unauthorized", summary["missing_shared_error_responses"])
         self.assertEqual(summary["invalid_shared_error_responses"], [{"response": "BadRequest", "actual": "#/components/schemas/Other", "expected": "#/components/schemas/Error"}])
         missing_statuses = {item["status"] for item in summary["operations_missing_error_responses"]}
@@ -1370,9 +1386,11 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(feeds["operation_id"], "getFeeds")
         self.assertIn("x-turbovas-direct", feeds["x_turbovas_fields"])
+        self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(feeds["responses"]["400"], "#/components/responses/BadRequest")
         self.assertEqual(tag_resource_names["operation_id"], "getTagsResourceNamesByResourceType")
         self.assertIn("x-turbovas-direct", tag_resource_names["x_turbovas_fields"])
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertIn("summary: List feed inventory metadata", openapi)
         self.assertIn("does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content", openapi)
@@ -1416,6 +1434,10 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (root / "services" / "turbovas-api" / "src" / "main.rs").read_text(encoding="utf-8")
         smoke = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         self.assertIn("/scopes/{scope_id}/reports/{scope_report_id}/retention-plan:", openapi)
+        operations = {(item["method"], item["path"]): item for item in turbovasctl.openapi_contract_operations(root)}
+        retention = operations[("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
+        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-exposure"], "internal-only")
+        self.assertNotIn("x-turbovas-direct", retention["x_turbovas_fields"])
         self.assertIn("ScopeReportRetentionPlan", openapi)
         self.assertIn("detail_compacted", openapi)
         self.assertIn("aggregate_only", openapi)

@@ -301,7 +301,13 @@ NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset(
 )
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
-OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset({"x-turbovas-direct"})
+OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset({"x-turbovas-direct", "x-turbovas-exposure"})
+OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset({"direct-read", "internal-only"})
+OPENAPI_REQUIRED_EXPOSURE = {
+    ("get", "/feeds"): "direct-read",
+    ("get", "/tags/resource-names/{resource_type}"): "direct-read",
+    ("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"): "internal-only",
+}
 OPENAPI_SHARED_ERROR_RESPONSES = {
     "BadRequest": "#/components/schemas/Error",
     "Unauthorized": "#/components/schemas/Error",
@@ -3726,6 +3732,7 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
                 "path": current_path,
                 "operation_id": None,
                 "x_turbovas_fields": [],
+                "x_turbovas_values": {},
                 "responses": {},
             }
             continue
@@ -3736,9 +3743,13 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
         if operation_id_match:
             current["operation_id"] = operation_id_match.group(1)
             continue
-        turbovas_field_match = re.match(r"^      (x-turbovas-[A-Za-z0-9_-]+):", line)
+        turbovas_field_match = re.match(r"^      (x-turbovas-[A-Za-z0-9_-]+):(?:\s*([^#]+?))?\s*(?:#.*)?$", line)
         if turbovas_field_match:
-            current["x_turbovas_fields"].append(turbovas_field_match.group(1))
+            field = turbovas_field_match.group(1)
+            value = turbovas_field_match.group(2)
+            current["x_turbovas_fields"].append(field)
+            if isinstance(current.get("x_turbovas_values"), dict):
+                current["x_turbovas_values"][field] = openapi_scalar_value(value)
             continue
         if line == "      responses:":
             in_responses = True
@@ -3760,6 +3771,79 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
 
     finish_current()
     return operations
+
+
+def openapi_scalar_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value or None
+
+
+def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    by_key = {(str(item.get("method", "")), str(item.get("path", ""))): item for item in operations}
+    missing: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    mismatches: list[dict[str, Any]] = []
+
+    for item in operations:
+        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        if "x-turbovas-exposure" in values and values.get("x-turbovas-exposure") not in OPENAPI_ALLOWED_EXPOSURE_VALUES:
+            invalid.append(
+                {
+                    "operation": openapi_operation_label(item),
+                    "actual": values.get("x-turbovas-exposure"),
+                    "allowed": sorted(OPENAPI_ALLOWED_EXPOSURE_VALUES),
+                }
+            )
+
+    for key, expected in sorted(OPENAPI_REQUIRED_EXPOSURE.items()):
+        item = by_key.get(key)
+        operation = f"{key[0].upper()} {key[1]}"
+        if item is None:
+            missing.append({"operation": operation, "expected": expected, "reason": "operation_missing"})
+            continue
+        fields = set(item.get("x_turbovas_fields", [])) if isinstance(item.get("x_turbovas_fields"), list) else set()
+        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        if "x-turbovas-exposure" not in fields:
+            missing.append({"operation": operation, "expected": expected, "reason": "field_missing"})
+            continue
+        actual = values.get("x-turbovas-exposure")
+        if actual != expected:
+            mismatches.append(
+                {
+                    "operation": operation,
+                    "field": "x-turbovas-exposure",
+                    "actual": actual,
+                    "expected": expected,
+                }
+            )
+        has_direct_marker = "x-turbovas-direct" in fields
+        if expected == "direct-read" and not has_direct_marker:
+            mismatches.append(
+                {
+                    "operation": operation,
+                    "field": "x-turbovas-direct",
+                    "actual": False,
+                    "expected": True,
+                }
+            )
+        if expected == "internal-only" and has_direct_marker:
+            mismatches.append(
+                {
+                    "operation": operation,
+                    "field": "x-turbovas-direct",
+                    "actual": True,
+                    "expected": False,
+                }
+            )
+    return {
+        "missing_exposure_operations": missing,
+        "invalid_exposure_operations": invalid,
+        "exposure_mismatches": mismatches,
+    }
 
 
 def openapi_components_response_refs(repo_root: Path | None) -> dict[str, str | None]:
@@ -3822,6 +3906,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         for item in operations
         if sorted(set(item.get("x_turbovas_fields", [])) - OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS)
     ]
+    exposure_drift = openapi_exposure_contract_drift(operations)
 
     shared_response_refs = openapi_components_response_refs(repo_root)
     missing_shared_responses = sorted(set(OPENAPI_SHARED_ERROR_RESPONSES) - set(shared_response_refs))
@@ -3850,6 +3935,9 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         or duplicate_ids
         or nondeterministic_operation_ids
         or unexpected_turbovas_fields
+        or exposure_drift["missing_exposure_operations"]
+        or exposure_drift["invalid_exposure_operations"]
+        or exposure_drift["exposure_mismatches"]
         or missing_shared_responses
         or invalid_shared_responses
         or operations_missing_error_responses
@@ -3863,6 +3951,8 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         "nondeterministic_operation_ids": nondeterministic_operation_ids,
         "allowed_turbovas_operation_fields": sorted(OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS),
         "unexpected_turbovas_operation_fields": unexpected_turbovas_fields,
+        "allowed_exposure_values": sorted(OPENAPI_ALLOWED_EXPOSURE_VALUES),
+        **exposure_drift,
         "shared_error_responses": shared_response_refs,
         "missing_shared_error_responses": missing_shared_responses,
         "invalid_shared_error_responses": invalid_shared_responses,
@@ -4495,6 +4585,9 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "duplicate_operation_id_count": len(openapi_contract.get("duplicate_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "nondeterministic_operation_id_count": len(openapi_contract.get("nondeterministic_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "unexpected_turbovas_operation_field_count": len(openapi_contract.get("unexpected_turbovas_operation_fields", [])) if isinstance(openapi_contract, dict) else 0,
+        "missing_exposure_operation_count": len(openapi_contract.get("missing_exposure_operations", [])) if isinstance(openapi_contract, dict) else 0,
+        "invalid_exposure_operation_count": len(openapi_contract.get("invalid_exposure_operations", [])) if isinstance(openapi_contract, dict) else 0,
+        "exposure_mismatch_count": len(openapi_contract.get("exposure_mismatches", [])) if isinstance(openapi_contract, dict) else 0,
         "missing_shared_error_response_count": len(openapi_contract.get("missing_shared_error_responses", [])) if isinstance(openapi_contract, dict) else 0,
         "invalid_shared_error_response_count": len(openapi_contract.get("invalid_shared_error_responses", [])) if isinstance(openapi_contract, dict) else 0,
         "operations_missing_error_response_count": len(openapi_contract.get("operations_missing_error_responses", [])) if isinstance(openapi_contract, dict) else 0,
@@ -4548,9 +4641,9 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False) -> dict
         finding(
             "pass" if openapi_alignment_status == "pass" else "warn",
             "native-tooling.openapi-contract",
-            "Native API OpenAPI operations have deterministic operation IDs and shared Error responses."
+            "Native API OpenAPI operations have deterministic operation IDs, exposure metadata, and shared Error responses."
             if openapi_alignment_status == "pass"
-            else "Native API OpenAPI operation IDs, x-turbovas fields, or shared Error responses need attention.",
+            else "Native API OpenAPI operation IDs, x-turbovas exposure fields, or shared Error responses need attention.",
             details=openapi_contract,
         ),
         finding("warn" if unknown_count else "pass", "native-tooling.unknown", f"{unknown_count} inherited tooling surface(s) are outside the current classification map." if unknown_count else "No inherited tooling surfaces were left unclassified.", details={"paths": summary["by_category"]["unknown"]["paths"]}),

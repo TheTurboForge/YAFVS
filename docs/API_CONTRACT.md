@@ -95,6 +95,11 @@ separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
   `x-turbovas-direct: true` in `api/openapi/turbovas-v1.yaml`. The
   `native-tooling-state` command compares those markers with the implementation
   inventory and reports drift as `native-tooling.direct-api-contract`.
+- Exposure contract metadata: boundary seed operations carry
+  `x-turbovas-exposure: direct-read` or `internal-only` in OpenAPI, and
+  `native-tooling-state` reports missing, invalid, or mismatched seed metadata
+  as `native-tooling.openapi-contract` drift. Extend this enforced seed before
+  adding broader free-form migration metadata.
 - Response body: JSON objects only; no XML payloads in native product APIs.
 - IDs: UUID strings matching the underlying gvmd resource identifiers.
 - Timestamps: RFC 3339 UTC strings.

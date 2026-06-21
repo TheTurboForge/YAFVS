@@ -18,6 +18,10 @@ paths:
     get:
       operationId: getResults
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: result-list-read
+      x-turbovas-inherited-still-owns: result-overrides-tags-exports-and-actions
       summary: List top-level scan results
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -45,6 +49,10 @@ paths:
     get:
       operationId: getResultsByResultId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: result-detail-metadata-read
+      x-turbovas-inherited-still-owns: result-overrides-tags-exports-and-actions
       summary: Read one scan result metadata row
       description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text needed by the Information tab; inherited paths still own overrides, user tags, EPSS/CVE context, exports, actions, and create-override workflows until native parity is explicitly proven.
       parameters:
@@ -72,6 +80,10 @@ paths:
     get:
       operationId: getVulnerabilities
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: vulnerability-list-read
+      x-turbovas-inherited-still-owns: vulnerability-rich-context-exports-and-actions
       summary: List top-level vulnerabilities from scan results
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -664,6 +676,10 @@ paths:
     get:
       operationId: getFilters
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: saved-filter-metadata-list-read
+      x-turbovas-inherited-still-owns: saved-filter-writes-and-alert-linkage
       summary: List saved filters
       description: Read-only saved-filter metadata backed by gvmd/PostgreSQL. Filter terms are operator configuration data and remain available only through authenticated operator access.
       parameters:
@@ -693,6 +709,10 @@ paths:
     get:
       operationId: getFiltersByFilterId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: saved-filter-metadata-detail-read
+      x-turbovas-inherited-still-owns: saved-filter-writes-and-alert-linkage
       summary: Read one saved filter
       parameters:
         - $ref: '#/components/parameters/FilterId'
@@ -915,6 +935,10 @@ paths:
     get:
       operationId: getOverrides
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: override-metadata-list-read
+      x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion
       summary: List overrides
       description: Read-only override metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, delete, trashcan mutation, and result-specific override expansion remain on inherited compatibility paths while native write semantics are designed.
       parameters:
@@ -943,6 +967,10 @@ paths:
     get:
       operationId: getOverridesByOverrideId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: override-metadata-detail-read
+      x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion
       summary: Read one override
       parameters:
         - $ref: '#/components/parameters/OverrideId'
@@ -969,6 +997,10 @@ paths:
     get:
       operationId: getPortLists
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: port-list-metadata-list-read
+      x-turbovas-inherited-still-owns: port-list-import-export-writes-and-deletes
       summary: List port lists
       description: Read-only port-list metadata backed by gvmd/PostgreSQL. Create, modify, import, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
       parameters:
@@ -997,6 +1029,10 @@ paths:
     get:
       operationId: getPortListsByPortListId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: port-list-metadata-detail-read
+      x-turbovas-inherited-still-owns: port-list-import-export-writes-and-deletes
       summary: Read one port list
       parameters:
         - $ref: '#/components/parameters/PortListId'
@@ -1023,6 +1059,10 @@ paths:
     get:
       operationId: getSchedules
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: schedule-metadata-list-read
+      x-turbovas-inherited-still-owns: schedule-writes-exports-and-deletes
       summary: List schedules
       description: Read-only schedule metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
       parameters:
@@ -1051,6 +1091,10 @@ paths:
     get:
       operationId: getSchedulesByScheduleId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: schedule-metadata-detail-read
+      x-turbovas-inherited-still-owns: schedule-writes-exports-and-deletes
       summary: Read one schedule
       parameters:
         - $ref: '#/components/parameters/ScheduleId'
@@ -1178,6 +1222,10 @@ paths:
     get:
       operationId: getReportConfigs
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: report-config-metadata-list-read
+      x-turbovas-inherited-still-owns: report-config-export-writes-and-deletes
       summary: List report configs
       description: Read-only report-config metadata backed by gvmd/PostgreSQL. Create, modify, clone, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
       parameters:
@@ -1206,6 +1254,10 @@ paths:
     get:
       operationId: getReportConfigsByReportConfigId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: report-config-metadata-detail-read
+      x-turbovas-inherited-still-owns: report-config-export-writes-and-deletes
       summary: Read one report config
       parameters:
         - $ref: '#/components/parameters/ReportConfigId'
@@ -1232,6 +1284,10 @@ paths:
     get:
       operationId: getReportFormats
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: report-format-metadata-list-read
+      x-turbovas-inherited-still-owns: report-format-import-export-verify-writes-and-deletes
       summary: List report formats
       description: Read-only report-format metadata backed by gvmd/PostgreSQL. Create, modify, import, export, verify, and delete operations remain on inherited compatibility paths while native write semantics are designed.
       parameters:
@@ -1260,6 +1316,10 @@ paths:
     get:
       operationId: getReportFormatsByReportFormatId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: report-format-metadata-detail-read
+      x-turbovas-inherited-still-owns: report-format-import-export-verify-writes-and-deletes
       summary: Read one report format
       parameters:
         - $ref: '#/components/parameters/ReportFormatId'
@@ -1676,6 +1736,10 @@ paths:
     get:
       operationId: getScopes
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scope-list-read
+      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
       summary: List scopes
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -1703,6 +1767,10 @@ paths:
     get:
       operationId: getScopesByScopeId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scope-detail-membership-read
+      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
       summary: Read one scope
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -1729,6 +1797,10 @@ paths:
     get:
       operationId: getTargets
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: target-list-read
+      x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       summary: List scan targets
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -1756,6 +1828,10 @@ paths:
     get:
       operationId: getTargetsByTargetId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: target-detail-summary-read
+      x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       summary: Read one scan target summary
       parameters:
         - $ref: '#/components/parameters/TargetId'
@@ -1782,6 +1858,10 @@ paths:
     get:
       operationId: getTasks
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: task-list-read
+      x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes
       summary: List scan tasks
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -1809,6 +1889,10 @@ paths:
     get:
       operationId: getTasksByTaskId
       x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: task-detail-summary-read
+      x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes
       summary: Read one scan task summary
       parameters:
         - $ref: '#/components/parameters/TaskId'

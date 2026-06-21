@@ -28,8 +28,10 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 use uuid::Uuid;
 
 mod collections;
+mod errors;
 
 use collections::*;
+use errors::ApiError;
 
 #[derive(Clone)]
 struct AppState {
@@ -109,17 +111,6 @@ struct CollectionQuery {
     text: Option<String>,
     task_name: Option<String>,
     value: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: ErrorPayload,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorPayload {
-    code: String,
-    message: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1335,79 +1326,6 @@ struct MetricsPayload {
     summary: MetricsSummary,
     systems: Vec<MetricsSystem>,
     vulnerabilities: Vec<MetricsVulnerability>,
-}
-
-#[derive(Debug, thiserror::Error)]
-enum ApiError {
-    #[error("unauthorized")]
-    Unauthorized,
-    #[error("method not allowed")]
-    MethodNotAllowed,
-    #[error("request too large")]
-    RequestTooLarge,
-    #[error("{0}")]
-    BadRequest(String),
-    #[error("resource not found")]
-    NotFound,
-    #[error("database error")]
-    Database,
-    #[error("configuration error")]
-    Config,
-}
-
-impl ApiError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::Unauthorized => StatusCode::UNAUTHORIZED,
-            Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
-            Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Database | Self::Config => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-
-    fn code(&self) -> &'static str {
-        match self {
-            Self::Unauthorized => "unauthorized",
-            Self::MethodNotAllowed => "method_not_allowed",
-            Self::RequestTooLarge => "request_too_large",
-            Self::BadRequest(_) => "bad_request",
-            Self::NotFound => "not_found",
-            Self::Database => "database_error",
-            Self::Config => "configuration_error",
-        }
-    }
-
-    fn public_message(&self) -> String {
-        match self {
-            Self::Unauthorized => "A valid bearer token is required.".to_string(),
-            Self::MethodNotAllowed => {
-                "Direct native API access currently allows read-only GET requests only.".to_string()
-            }
-            Self::RequestTooLarge => {
-                "Direct native API requests must fit the bounded read-only request shape."
-                    .to_string()
-            }
-            Self::BadRequest(message) => message.clone(),
-            Self::NotFound => "The requested resource was not found.".to_string(),
-            Self::Database => "The database query failed.".to_string(),
-            Self::Config => "The API service is not configured correctly.".to_string(),
-        }
-    }
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let status = self.status_code();
-        let body = ErrorBody {
-            error: ErrorPayload {
-                code: self.code().to_string(),
-                message: self.public_message(),
-            },
-        };
-        (status, Json(body)).into_response()
-    }
 }
 
 #[tokio::main]

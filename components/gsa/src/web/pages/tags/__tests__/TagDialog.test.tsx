@@ -271,6 +271,72 @@ describe('TagDialog tests', () => {
     );
   });
 
+  test('should use native resource-name lookup for scanner and schedule names', async () => {
+    const fetchMock = testing.fn((url: string) =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+          items: [
+            url.includes('/schedule')
+              ? {id: 'schedule-native', type: 'schedule', name: 'Native Schedule'}
+              : {id: 'scanner-native', type: 'scanner', name: 'Native Scanner'},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const getResourceNames = testing.fn();
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const {render} = rendererWith({
+      gmp: createGmp({
+        buildUrl,
+        getResourceNames,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
+    });
+
+    render(
+      <TagDialog
+        resourceType="scanner"
+        resourceTypes={['scanner', 'schedule']}
+      />,
+    );
+    await wait();
+    render(
+      <TagDialog
+        resourceType="schedule"
+        resourceTypes={['scanner', 'schedule']}
+      />,
+    );
+    await wait();
+
+    expect(getResourceNames).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/resource-names/scanner',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: SELECT_MAX_RESOURCES,
+        sort: 'name',
+        filter: '',
+      },
+    );
+    expect(buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/resource-names/schedule',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: SELECT_MAX_RESOURCES,
+        sort: 'name',
+        filter: '',
+      },
+    );
+  });
+
   test('should keep unsupported resource-name lookups on inherited GMP', async () => {
     const getResourceNames = testing.fn().mockResolvedValue(
       new Response([new ResourceName({id: 'report-1', name: 'Report', type: 'report'})]),

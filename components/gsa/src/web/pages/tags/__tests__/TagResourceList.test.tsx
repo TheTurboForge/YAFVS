@@ -155,28 +155,28 @@ describe('ResourceList tests', () => {
   test('should keep unsupported resource types on inherited commands', async () => {
     const tag = new Tag({
       id: 'tag-1',
-      name: 'Scanner Tag',
-      resourceType: 'scanner',
+      name: 'Credential Tag',
+      resourceType: 'credential',
       resourceCount: 1,
     });
-    const getScanners = testing.fn().mockResolvedValue({
-      data: [new Task({id: 'scanner-1', name: 'Inherited Scanner'})],
+    const getCredentials = testing.fn().mockResolvedValue({
+      data: [new Task({id: 'credential-1', name: 'Inherited Credential'})],
       meta: {filter: Filter.fromString(), counts: new CollectionCounts()},
     });
     const gmp = {
       buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
       session: {jwt: 'jwt-token', token: 'test-token'},
-      scanners: {
-        get: getScanners,
+      credentials: {
+        get: getCredentials,
       },
     };
 
     const {render} = rendererWith({gmp, capabilities: true});
     render(<TagResourceList entity={tag} />);
 
-    await screen.findByText('Inherited Scanner');
+    await screen.findByText('Inherited Credential');
 
-    expect(getScanners).toHaveBeenCalled();
+    expect(getCredentials).toHaveBeenCalled();
     expect(gmp.buildUrl).not.toHaveBeenCalled();
   });
 });

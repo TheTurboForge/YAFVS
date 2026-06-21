@@ -731,7 +731,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/tags/resource-names/{resource_type}", source)
         self.assertIn("native-api.tag-resource-names", source)
         self.assertIn("native-api.tag-resource-names.alert", source)
+        self.assertIn("native-api.tag-resource-names.scanner", source)
+        self.assertIn("native-api.tag-resource-names.schedule", source)
         self.assertIn("/api/v1/tags/resource-names/alert", source)
+        self.assertIn("/api/v1/tags/resource-names/scanner", source)
+        self.assertIn("/api/v1/tags/resource-names/schedule", source)
         self.assertIn("/api/v1/tags/{tag_id}", source)
         self.assertIn("/api/v1/tags/{tag_id}/resources", source)
         self.assertIn("/api/v1/overrides", source)
@@ -1176,7 +1180,7 @@ class TurboVASCtlTests(unittest.TestCase):
             """/tags/resource-names/{resource_type}:
     get:
       summary: List tag-dialog resource names
-      description: Read-only resource-name lookup for the Tag dialog, limited to the same native-safe asset and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, scanners, schedules, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
+      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule id-name, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
       x-turbovas-direct: true
       parameters:
         - name: resource_type
@@ -1184,7 +1188,7 @@ class TurboVASCtlTests(unittest.TestCase):
           required: true
           schema:
             type: string
-            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, config, target, task, tls_certificate, alert]""",
+            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]""",
             openapi,
         )
         self.assertIn("redacted id/name resource-name lookup", openapi)

@@ -9651,6 +9651,20 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
             extra_where: "",
         }),
+        "scanner" => Ok(TagResourceSqlSpec {
+            table: "scanners",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "schedule" => Ok(TagResourceSqlSpec {
+            table: "schedules",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
         "nvt" => Ok(TagResourceSqlSpec {
             table: "nvts",
             join_on: "r.id = tr.resource OR r.oid = tr.resource_uuid OR r.uuid = tr.resource_uuid",
@@ -10274,8 +10288,11 @@ mod tests {
         assert!(!alert_sql.contains("alert_method_data"));
         assert!(!alert_sql.contains("alert_event_data"));
         assert!(!alert_sql.contains("alert_condition_data"));
+        let scanner_sql = tag_resource_collection_sql("scanner", &sort_sql).unwrap();
+        assert!(scanner_sql.contains("JOIN scanners r ON r.id = tr.resource"));
+        let schedule_sql = tag_resource_collection_sql("schedule", &sort_sql).unwrap();
+        assert!(schedule_sql.contains("JOIN schedules r ON r.id = tr.resource"));
         assert!(tag_resource_collection_sql("credential", &sort_sql).is_err());
-        assert!(tag_resource_collection_sql("scanner", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("report", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("result", &sort_sql).is_err());
     }
@@ -10292,10 +10309,12 @@ mod tests {
         assert!(!alert_sql.contains("alert_method_data"));
         assert!(!alert_sql.contains("alert_event_data"));
         assert!(!alert_sql.contains("alert_condition_data"));
+        let scanner_sql = tag_resource_name_collection_sql("scanner", &sort_sql).unwrap();
+        assert!(scanner_sql.contains("FROM scanners r"));
+        let schedule_sql = tag_resource_name_collection_sql("schedule", &sort_sql).unwrap();
+        assert!(schedule_sql.contains("FROM schedules r"));
         assert!(tag_resource_name_collection_sql("credential", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("user", &sort_sql).is_err());
-        assert!(tag_resource_name_collection_sql("scanner", &sort_sql).is_err());
-        assert!(tag_resource_name_collection_sql("schedule", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("report", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("result", &sort_sql).is_err());
     }

@@ -126,6 +126,8 @@ const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([
   'port_list',
   'report_config',
   'report_format',
+  'scanner',
+  'schedule',
   'config',
   'target',
   'task',

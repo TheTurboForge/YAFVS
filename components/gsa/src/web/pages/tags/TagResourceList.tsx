@@ -49,6 +49,8 @@ const NATIVE_TAG_RESOURCE_TYPES = new Set<EntityType>([
   'reportconfig',
   'reportformat',
   'scanconfig',
+  'scanner',
+  'schedule',
   'target',
   'task',
   'tlscertificate',

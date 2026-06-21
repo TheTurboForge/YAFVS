@@ -8008,6 +8008,34 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             alert_tag_resource_names_json,
         )
     )
+    scanner_tag_resource_names = native_api_curl(repo_root, "/api/v1/tags/resource-names/scanner?page_size=1&sort=name")
+    scanner_tag_resource_names_json = parse_json_output(scanner_tag_resource_names)
+    scanner_tag_resource_name_items = scanner_tag_resource_names_json.get("items", []) if isinstance(scanner_tag_resource_names_json, dict) else []
+    details["tag_resource_names_scanner"] = summarize_native_api_response(scanner_tag_resource_names_json)
+    findings.append(
+        native_api_probe_finding(
+            "pass" if scanner_tag_resource_names.returncode == 0 and isinstance(scanner_tag_resource_name_items, list) else "fail",
+            "native-api.tag-resource-names.scanner",
+            f"Native API Tag scanner resource-name probe exit code {scanner_tag_resource_names.returncode}.",
+            scanner_tag_resource_names,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/scanner?page_size=1"),
+            scanner_tag_resource_names_json,
+        )
+    )
+    schedule_tag_resource_names = native_api_curl(repo_root, "/api/v1/tags/resource-names/schedule?page_size=1&sort=name")
+    schedule_tag_resource_names_json = parse_json_output(schedule_tag_resource_names)
+    schedule_tag_resource_name_items = schedule_tag_resource_names_json.get("items", []) if isinstance(schedule_tag_resource_names_json, dict) else []
+    details["tag_resource_names_schedule"] = summarize_native_api_response(schedule_tag_resource_names_json)
+    findings.append(
+        native_api_probe_finding(
+            "pass" if schedule_tag_resource_names.returncode == 0 and isinstance(schedule_tag_resource_name_items, list) else "fail",
+            "native-api.tag-resource-names.schedule",
+            f"Native API Tag schedule resource-name probe exit code {schedule_tag_resource_names.returncode}.",
+            schedule_tag_resource_names,
+            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/schedule?page_size=1"),
+            schedule_tag_resource_names_json,
+        )
+    )
     if tag_items:
         first_tag = tag_items[0]
         tag_detail_id = first_tag.get("id") if isinstance(first_tag, dict) else None

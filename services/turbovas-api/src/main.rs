@@ -9,13 +9,12 @@ use std::{
     net::SocketAddr,
     os::fd::AsRawFd,
     path::{Path as FsPath, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 use axum::{
     Json, Router,
     extract::{Path, Query, Request, State},
-    http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
@@ -29,9 +28,11 @@ use uuid::Uuid;
 
 mod collections;
 mod errors;
+mod request_ids;
 
 use collections::*;
 use errors::ApiError;
+use request_ids::*;
 
 #[derive(Clone)]
 struct AppState {
@@ -45,17 +46,14 @@ struct DirectApiAuth {
 
 const DIRECT_API_BIND_ENV: &str = "TURBOVAS_API_DIRECT_BIND";
 const DIRECT_API_BEARER_TOKEN_ENV: &str = "TURBOVAS_API_BEARER_TOKEN";
-const DIRECT_API_REQUEST_ID_HEADER: &str = "x-request-id";
 const MIN_DIRECT_API_BEARER_TOKEN_LENGTH: usize = 32;
 const MAX_DIRECT_API_QUERY_BYTES: usize = 8 * 1024;
 const FEED_METADATA_ROOT_ENV: &str = "TURBOVAS_FEED_METADATA_DIR";
 const FEED_LOCK_ROOT_ENV: &str = "TURBOVAS_FEED_LOCK_DIR";
 const DEFAULT_FEED_METADATA_ROOT: &str = "/runtime/feeds";
 const DEFAULT_FEED_LOCK_ROOT: &str = "/runtime/run";
-const MAX_REQUEST_ID_LENGTH: usize = 128;
 const MAX_FEED_METADATA_BYTES: u64 = 256 * 1024;
 const MAX_FEED_LOCK_BYTES: u64 = 4096;
-static REQUEST_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy)]
 enum FeedMetadataFormat {
@@ -1741,41 +1739,6 @@ fn constant_time_str_eq(candidate: &str, expected: &str) -> bool {
         diff |= usize::from(candidate_byte ^ expected_byte);
     }
     diff == 0
-}
-
-fn request_id_header_name() -> HeaderName {
-    HeaderName::from_static(DIRECT_API_REQUEST_ID_HEADER)
-}
-
-fn request_id_from_headers(headers: &HeaderMap) -> String {
-    headers
-        .get(request_id_header_name())
-        .and_then(|value| value.to_str().ok())
-        .filter(|value| request_id_is_valid(value))
-        .map(str::to_string)
-        .unwrap_or_else(new_request_id)
-}
-
-fn request_id_is_valid(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= MAX_REQUEST_ID_LENGTH
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
-}
-
-fn new_request_id() -> String {
-    let counter = REQUEST_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let timestamp = OffsetDateTime::now_utc().unix_timestamp_nanos();
-    format!("tv-{timestamp:x}-{counter:x}")
-}
-
-fn attach_request_id_header(response: &mut Response, request_id: &str) {
-    if let Ok(value) = HeaderValue::from_str(request_id) {
-        response
-            .headers_mut()
-            .insert(request_id_header_name(), value);
-    }
 }
 
 async fn shutdown_signal() {
@@ -10866,7 +10829,7 @@ FEED_COMMIT = "not part of the public contract";
         let too_long = "a".repeat(MAX_REQUEST_ID_LENGTH + 1);
         headers.insert(
             request_id_header_name(),
-            HeaderValue::from_str(&too_long).unwrap(),
+            axum::http::HeaderValue::from_str(&too_long).unwrap(),
         );
         assert!(request_id_from_headers(&headers).starts_with("tv-"));
     }

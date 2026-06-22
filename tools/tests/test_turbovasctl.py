@@ -1478,8 +1478,13 @@ class TurboVASCtlTests(unittest.TestCase):
                 "missing_security_scheme_count",
                 "unexpected_security_scheme_count",
                 "security_scheme_mismatch_count",
+                "collection_query_alignment_status",
                 "openapi_collection_operation_count",
                 "rust_collection_contract_count",
+                "collection_limit_mismatch_count",
+                "incomplete_collection_parameter_count",
+                "missing_openapi_collection_parameter_count",
+                "missing_rust_collection_contract_count",
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
@@ -1498,6 +1503,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_security_scheme_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["unexpected_security_scheme_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["security_scheme_mismatch_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["collection_query_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["openapi_contract"]["collection_limit_mismatch_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["incomplete_collection_parameter_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(
             status_only["findings"],
             [

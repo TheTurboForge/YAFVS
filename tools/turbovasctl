@@ -6109,8 +6109,13 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "missing_security_scheme_count": openapi_contract.get("missing_security_scheme_count", 0),
             "unexpected_security_scheme_count": openapi_contract.get("unexpected_security_scheme_count", 0),
             "security_scheme_mismatch_count": openapi_contract.get("security_scheme_mismatch_count", 0),
+            "collection_query_alignment_status": openapi_contract.get("collection_query_alignment_status", "unknown"),
             "openapi_collection_operation_count": openapi_contract.get("openapi_collection_operation_count", 0),
             "rust_collection_contract_count": openapi_contract.get("rust_collection_contract_count", 0),
+            "collection_limit_mismatch_count": openapi_contract.get("collection_limit_mismatch_count", 0),
+            "incomplete_collection_parameter_count": openapi_contract.get("incomplete_collection_parameter_count", 0),
+            "missing_openapi_collection_parameter_count": openapi_contract.get("missing_openapi_collection_parameter_count", 0),
+            "missing_rust_collection_contract_count": openapi_contract.get("missing_rust_collection_contract_count", 0),
         },
     }
 

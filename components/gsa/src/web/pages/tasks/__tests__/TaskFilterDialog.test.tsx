@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -9,7 +10,7 @@ import {
   screen,
   rendererWith,
   fireEvent,
-  wait,
+  waitFor,
 } from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
 import Filter from 'gmp/models/filter';
@@ -51,7 +52,7 @@ describe('TaskFilterDialog tests', () => {
     const gmp = {
       filter: {
         create: testing.fn().mockResolvedValue({data: newFilter}),
-        get: testing.fn().mockReturnValue({data: newFilterWithDetails}),
+        get: testing.fn().mockResolvedValue({data: newFilterWithDetails}),
       },
     };
     const {render} = rendererWith({capabilities: true, gmp});
@@ -75,7 +76,7 @@ describe('TaskFilterDialog tests', () => {
     const saveButton = screen.getDialogSaveButton();
     fireEvent.click(saveButton);
 
-    await wait();
+    await waitFor(() => expect(handleClose).toHaveBeenCalled());
 
     expect(gmp.filter.create).toHaveBeenCalledWith({
       term: filter.toFilterString(),
@@ -84,7 +85,6 @@ describe('TaskFilterDialog tests', () => {
     });
     expect(gmp.filter.get).toHaveBeenCalledWith({id: newFilter.id});
     expect(handleFilterChanged).not.toHaveBeenCalledWith();
-    expect(handleClose).toHaveBeenCalled();
     expect(handleFilterCreated).toHaveBeenCalledWith(newFilterWithDetails);
   });
 

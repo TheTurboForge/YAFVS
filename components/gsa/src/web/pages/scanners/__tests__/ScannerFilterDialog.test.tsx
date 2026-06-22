@@ -11,7 +11,7 @@ import {
   rendererWith,
   fireEvent,
   getSelectItemElementsForSelect,
-  wait,
+  waitFor,
 } from 'web/testing';
 import Features from 'gmp/capabilities/features';
 import Filter from 'gmp/models/filter';
@@ -31,7 +31,7 @@ describe('ScannerFilterDialog tests', () => {
       settings: {enableGreenboneSensor: true},
       filter: {
         create: testing.fn().mockResolvedValue({data: newFilter}),
-        get: testing.fn().mockReturnValue({data: newFilterWithDetails}),
+        get: testing.fn().mockResolvedValue({data: newFilterWithDetails}),
       },
     };
     const handleClose = testing.fn();
@@ -58,7 +58,7 @@ describe('ScannerFilterDialog tests', () => {
     const saveButton = screen.getDialogSaveButton();
     fireEvent.click(saveButton);
 
-    await wait();
+    await waitFor(() => expect(handleClose).toHaveBeenCalled());
 
     expect(gmp.filter.create).toHaveBeenCalledWith({
       term: filter.toFilterString(),
@@ -67,7 +67,6 @@ describe('ScannerFilterDialog tests', () => {
     });
     expect(gmp.filter.get).toHaveBeenCalledWith({id: newFilter.id});
     expect(handleFilterChanged).not.toHaveBeenCalledWith();
-    expect(handleClose).toHaveBeenCalled();
     expect(handleFilterCreated).toHaveBeenCalledWith(newFilterWithDetails);
   });
 

@@ -4592,6 +4592,7 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
                 "method": method_match.group(1),
                 "path": current_path,
                 "operation_id": None,
+                "summary": None,
                 "x_turbovas_fields": [],
                 "x_turbovas_values": {},
                 "parameters": [],
@@ -4601,6 +4602,10 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
         if current is None:
             continue
 
+        summary_match = re.match(r"^      summary:\s*([^#].*?)\s*(?:#.*)?$", line)
+        if summary_match:
+            current["summary"] = summary_match.group(1).strip()
+            continue
         operation_id_match = re.match(r"^      operationId:\s*([^#\s]+)\s*$", line)
         if operation_id_match:
             current["operation_id"] = operation_id_match.group(1)
@@ -4664,6 +4669,7 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
     mismatches: list[dict[str, Any]] = []
 
     for item in operations:
+        fields = set(item.get("x_turbovas_fields", [])) if isinstance(item.get("x_turbovas_fields"), list) else set()
         values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
         if "x-turbovas-exposure" in values and values.get("x-turbovas-exposure") not in OPENAPI_ALLOWED_EXPOSURE_VALUES:
             invalid.append(
@@ -4673,6 +4679,36 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
                     "allowed": sorted(OPENAPI_ALLOWED_EXPOSURE_VALUES),
                 }
             )
+        turbovas_contract_fields = fields & OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS
+        if turbovas_contract_fields and "x-turbovas-exposure" not in fields:
+            missing.append(
+                {
+                    "operation": openapi_operation_label(item),
+                    "expected": sorted(OPENAPI_ALLOWED_EXPOSURE_VALUES),
+                    "reason": "field_missing_for_turbovas_contract",
+                }
+            )
+        if "x-turbovas-exposure" in fields:
+            actual = values.get("x-turbovas-exposure")
+            has_direct_marker = "x-turbovas-direct" in fields
+            if actual == "direct-read" and not has_direct_marker:
+                mismatches.append(
+                    {
+                        "operation": openapi_operation_label(item),
+                        "field": "x-turbovas-direct",
+                        "actual": False,
+                        "expected": True,
+                    }
+                )
+            if actual == "internal-only" and has_direct_marker:
+                mismatches.append(
+                    {
+                        "operation": openapi_operation_label(item),
+                        "field": "x-turbovas-direct",
+                        "actual": True,
+                        "expected": False,
+                    }
+                )
 
     for key, expected in sorted(OPENAPI_REQUIRED_EXPOSURE.items()):
         item = by_key.get(key)
@@ -4693,25 +4729,6 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
                     "field": "x-turbovas-exposure",
                     "actual": actual,
                     "expected": expected,
-                }
-            )
-        has_direct_marker = "x-turbovas-direct" in fields
-        if expected == "direct-read" and not has_direct_marker:
-            mismatches.append(
-                {
-                    "operation": operation,
-                    "field": "x-turbovas-direct",
-                    "actual": False,
-                    "expected": True,
-                }
-            )
-        if expected == "internal-only" and has_direct_marker:
-            mismatches.append(
-                {
-                    "operation": operation,
-                    "field": "x-turbovas-direct",
-                    "actual": True,
-                    "expected": False,
                 }
             )
     return {
@@ -5012,6 +5029,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     operation_ids = [item["operation_id"] for item in operations if isinstance(item.get("operation_id"), str) and item["operation_id"]]
     duplicate_ids = sorted({operation_id for operation_id in operation_ids if operation_ids.count(operation_id) > 1})
     missing_operation_ids = [openapi_operation_label(item) for item in operations if not item.get("operation_id")]
+    missing_operation_summaries = [openapi_operation_label(item) for item in operations if not item.get("summary")]
     nondeterministic_operation_ids = [
         {
             "operation": openapi_operation_label(item),
@@ -5056,6 +5074,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
 
     drift = (
         missing_operation_ids
+        or missing_operation_summaries
         or duplicate_ids
         or nondeterministic_operation_ids
         or unexpected_turbovas_fields
@@ -5078,6 +5097,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         "operation_count": len(operations),
         "operation_ids": sorted(operation_ids),
         "missing_operation_ids": missing_operation_ids,
+        "missing_operation_summaries": missing_operation_summaries,
         "duplicate_operation_ids": duplicate_ids,
         "nondeterministic_operation_ids": nondeterministic_operation_ids,
         "allowed_turbovas_operation_fields": sorted(OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS),

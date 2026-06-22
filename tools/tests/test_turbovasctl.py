@@ -1542,6 +1542,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
         self.assertEqual(contract["operation_count"], 73)
         self.assertEqual(contract["missing_operation_ids"], [])
+        self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
 
@@ -2057,6 +2058,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "paths:\n"
                 "  /reports:\n"
                 "    get:\n"
+                "      summary: Drifted reports\n"
                 "      operationId: customReports\n"
                 "      x-turbovas-direct: true\n"
                 "      x-turbovas-exposure: banana\n"
@@ -2086,6 +2088,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["alignment_status"], "warn")
         self.assertEqual(summary["operation_count"], 1)
         self.assertEqual(summary["missing_operation_ids"], [])
+        self.assertEqual(summary["missing_operation_summaries"], [])
         self.assertEqual(summary["duplicate_operation_ids"], [])
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["operation"], "GET /reports")
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["expected"], "getReports")
@@ -2242,6 +2245,72 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("properties.error.required", missing_error_schema)
         self.assertIn("properties.error.properties.code.type", missing_error_schema)
         self.assertEqual(summary["invalid_error_schema_fields"], [])
+
+    def test_openapi_contract_requires_summary_and_generic_direct_exposure_parity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi.parent.mkdir(parents=True)
+            openapi.write_text(
+                "openapi: 3.1.0\n"
+                "paths:\n"
+                "  /future-direct:\n"
+                "    get:\n"
+                "      operationId: getFutureDirect\n"
+                "      x-turbovas-exposure: direct-read\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Future\n"
+                "  /future-internal:\n"
+                "    post:\n"
+                "      summary: Future internal\n"
+                "      operationId: postFutureInternal\n"
+                "      x-turbovas-direct: true\n"
+                "      x-turbovas-exposure: internal-only\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Future\n"
+                "  /future-metadata:\n"
+                "    get:\n"
+                "      summary: Future metadata\n"
+                "      operationId: getFutureMetadata\n"
+                "      x-turbovas-replaces: none\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Future\n",
+                encoding="utf-8",
+            )
+
+            summary = turbovasctl.native_api_openapi_contract_summary(root)
+
+        self.assertEqual(summary["alignment_status"], "warn")
+        self.assertEqual(summary["missing_operation_summaries"], ["GET /future-direct"])
+        self.assertIn(
+            {
+                "operation": "GET /future-metadata",
+                "expected": ["direct-read", "internal-only"],
+                "reason": "field_missing_for_turbovas_contract",
+            },
+            summary["missing_exposure_operations"],
+        )
+        self.assertIn(
+            {
+                "operation": "GET /future-direct",
+                "field": "x-turbovas-direct",
+                "actual": False,
+                "expected": True,
+            },
+            summary["exposure_mismatches"],
+        )
+        self.assertIn(
+            {
+                "operation": "POST /future-internal",
+                "field": "x-turbovas-direct",
+                "actual": True,
+                "expected": False,
+            },
+            summary["exposure_mismatches"],
+        )
 
     def test_native_tooling_state_reports_openapi_collection_query_contract_drift(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -6152,6 +6152,24 @@ def compact_license_status_finding(item: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def production_posture_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
+    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
+    compact["details"] = {
+        "finding_count": len(findings),
+        "non_pass_count": len(non_pass),
+        "public_release_license_status": details.get("public_release_license_gate", {}).get("status", "unknown")
+        if isinstance(details.get("public_release_license_gate"), dict)
+        else "unknown",
+    }
+    compact["findings"] = non_pass or [
+        finding("pass", "production-posture.status-only", "Production posture check passed; no non-pass findings.")
+    ]
+    return compact
+
+
 def license_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     findings = result.get("findings", [])
     non_pass = [compact_license_status_finding(item) for item in findings if item.get("status") != "pass"]
@@ -7695,7 +7713,7 @@ def command_security_policy_check(repo_root: Path) -> dict[str, Any]:
     return result
 
 
-def command_production_posture_check(repo_root: Path) -> dict[str, Any]:
+def command_production_posture_check(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     details: dict[str, Any] = {}
 
@@ -7765,6 +7783,8 @@ def command_production_posture_check(repo_root: Path) -> dict[str, Any]:
 
     result = make_result("production-posture-check", repo_root, "Production posture checklist completed.", findings)
     result["details"] = details
+    if status_only:
+        result = production_posture_status_only_result(result)
     return result
 
 
@@ -12831,7 +12851,8 @@ def build_parser() -> argparse.ArgumentParser:
     license_report.add_argument("--diff-scope", choices=("baseline", "staged", "worktree"), default="baseline", help="diff scope for focused modified-imported-file checks")
     license_report.add_argument("--modified-imported-only", action="store_true", help="run only the fast modified-imported-file notice checks")
     license_report.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
-    subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
+    production_posture = subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
+    production_posture.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe posture checks")
     deps = subparsers.add_parser("deps", parents=[common], help="check dependency readiness")
     deps.add_argument("component", nargs="?", help="component name")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
@@ -12949,7 +12970,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "license-report":
         result = command_license_report(repo_root, public_release=args.public_release, mode=args.mode, diff_scope=args.diff_scope, modified_imported_only=args.modified_imported_only, status_only=args.status_only)
     elif args.command == "production-posture-check":
-        result = command_production_posture_check(repo_root)
+        result = command_production_posture_check(repo_root, status_only=args.status_only)
     elif args.command == "deps":
         result = command_deps(repo_root, args.component)
     elif args.command == "configure":

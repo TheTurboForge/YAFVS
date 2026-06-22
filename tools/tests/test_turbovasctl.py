@@ -1893,6 +1893,28 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(compact["findings"][0]["details"]["commands"], {"type": "list", "count": 2})
         self.assertEqual(compact["findings"][0]["details"]["status"], "known")
 
+    def test_production_posture_status_only_omits_pass_findings(self):
+        result = {
+            "status": "fail",
+            "summary": "Production posture checklist completed.",
+            "details": {"public_release_license_gate": {"status": "pass", "summary": "ok"}},
+            "findings": [
+                {"status": "pass", "check": "production.docs", "message": "ok"},
+                {
+                    "status": "fail",
+                    "check": "production.tls",
+                    "message": "missing TLS",
+                    "details": {"cert_files": ["a", "b"]},
+                },
+            ],
+        }
+
+        compact = turbovasctl.production_posture_status_only_result(result)
+
+        self.assertEqual(compact["details"], {"finding_count": 2, "non_pass_count": 1, "public_release_license_status": "pass"})
+        self.assertEqual(compact["findings"][0]["check"], "production.tls")
+        self.assertEqual(compact["findings"][0]["details"]["cert_files"], {"type": "list", "count": 2})
+
     def test_native_api_migration_matrix_combines_inventory_and_openapi_metadata(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_native_api_migration_matrix(root)

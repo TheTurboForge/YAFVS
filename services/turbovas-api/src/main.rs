@@ -10176,6 +10176,29 @@ mod tests {
     }
 
     #[test]
+    fn collection_handlers_use_api_query_contract_extractor() {
+        let source = include_str!("main.rs");
+        let expected_collection_count = PRIORITY_COLLECTION_CONTRACTS.len()
+            + REPORT_EVIDENCE_COLLECTION_CONTRACTS.len()
+            + SCOPE_TASK_TARGET_COLLECTION_CONTRACTS.len()
+            + ASSET_CATALOG_COLLECTION_CONTRACTS.len()
+            + MANAGEMENT_COLLECTION_CONTRACTS.len();
+        let raw_axum_query = concat!("Query", "(query): Query", "<CollectionQuery>");
+        let api_query = concat!("ApiQuery", "(query): ApiQuery", "<CollectionQuery>");
+
+        assert_eq!(
+            source.matches(raw_axum_query).count(),
+            0,
+            "collection handlers must not use Axum Query directly"
+        );
+        assert_eq!(
+            source.matches(api_query).count(),
+            expected_collection_count,
+            "every checked collection contract should use ApiQuery"
+        );
+    }
+
+    #[test]
     fn scope_report_results_sql_is_source_scoped_and_deduplicated() {
         let sort_sql = sort_clause(REPORT_RESULT_DEFAULT_SORT, REPORT_RESULT_SORT_FIELDS).unwrap();
         let sql = scope_report_results_sql(&sort_sql);

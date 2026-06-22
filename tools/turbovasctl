@@ -9849,6 +9849,28 @@ def native_api_curl(repo_root: Path, path: str, *, request_id: str | None = None
     )
 
 
+def native_api_curl_with_http_status(repo_root: Path, path: str) -> subprocess.CompletedProcess[str]:
+    command = compose_command(
+        repo_root,
+        "exec",
+        "-T",
+        "turbovas-api",
+        "curl",
+        "-sS",
+        "--max-time",
+        "10",
+        "-w",
+        "\n%{http_code}",
+    )
+    command.append(f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{path}")
+    return run_command(
+        command,
+        repo_root,
+        env=runtime_env(repo_root),
+        timeout=30,
+    )
+
+
 def validate_native_api_request_path(path: str) -> str:
     parsed = urllib.parse.urlsplit(path)
     if parsed.scheme or parsed.netloc:
@@ -10142,6 +10164,36 @@ def native_api_probe_finding(
     return finding(status, check, message, details=details)
 
 
+def native_api_expected_bad_request_finding(repo_root: Path, check: str, path: str, expected_code: str) -> dict[str, Any]:
+    result = native_api_curl_with_http_status(repo_root, path)
+    parsed, http_status = parse_json_output_with_http_status(result)
+    actual_code = parsed.get("error", {}).get("code") if isinstance(parsed, dict) else None
+    ok = result.returncode == 0 and http_status == 400 and actual_code == expected_code
+    return native_api_probe_finding(
+        "pass" if ok else "fail",
+        check,
+        f"Native API rejected {path} with JSON 400 {expected_code}."
+        if ok
+        else f"Native API did not reject {path} with JSON 400 {expected_code}.",
+        result,
+        compose_command(
+            repo_root,
+            "exec",
+            "-T",
+            "turbovas-api",
+            "curl",
+            "-sS",
+            "--max-time",
+            "10",
+            "-w",
+            "\\n%{http_code}",
+            f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{path}",
+        ),
+        parsed,
+        {"http_status": http_status, "error_code": actual_code, **summarize_native_api_response(parsed)},
+    )
+
+
 def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -10278,6 +10330,14 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             reports_json,
         )
     )
+    findings.append(
+        native_api_expected_bad_request_finding(
+            repo_root,
+            "native-api.scope-reports.invalid-sort",
+            "/api/v1/scope-reports?page_size=1&sort=not_a_scope_report_sort",
+            "bad_request",
+        )
+    )
     if report_items:
         first_scope_report = report_items[0]
         scope_report_detail_id = first_scope_report.get("id") if isinstance(first_scope_report, dict) else None
@@ -10349,6 +10409,14 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             targets,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets?page_size=1"),
             targets_json,
+        )
+    )
+    findings.append(
+        native_api_expected_bad_request_finding(
+            repo_root,
+            "native-api.targets.invalid-sort",
+            "/api/v1/targets?page_size=1&sort=not_a_target_sort",
+            "bad_request",
         )
     )
     if target_items:
@@ -10436,6 +10504,14 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
             vulnerabilities,
             compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/vulnerabilities?page_size=1"),
             vulnerabilities_json,
+        )
+    )
+    findings.append(
+        native_api_expected_bad_request_finding(
+            repo_root,
+            "native-api.vulnerabilities.invalid-sort",
+            "/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort",
+            "bad_request",
         )
     )
 

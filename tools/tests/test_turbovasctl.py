@@ -818,6 +818,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("native-api.overrides", source)
         self.assertIn("native-api.trashcan-summary", source)
         self.assertIn("native-api.alerts", source)
+        self.assertIn("def native_api_expected_bad_request_finding", source)
+        self.assertIn("native-api.scope-reports.invalid-sort", source)
+        self.assertIn("/api/v1/scope-reports?page_size=1&sort=not_a_scope_report_sort", source)
+        self.assertIn("native-api.targets.invalid-sort", source)
+        self.assertIn("/api/v1/targets?page_size=1&sort=not_a_target_sort", source)
+        self.assertIn("native-api.vulnerabilities.invalid-sort", source)
+        self.assertIn("/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort", source)
         self.assertIn("/api/v1/report-configs", source)
         self.assertIn("/api/v1/report-configs/{report_config_id}", source)
         self.assertIn("/api/v1/scan-configs", source)
@@ -967,6 +974,37 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(details["response_summary"]["systems_count"], 20)
         self.assertEqual(len(details["response_summary"]["systems_sample"]), 3)
         self.assertNotIn("output_tail", details)
+
+    def test_native_api_expected_bad_request_finding_checks_json_error_code(self):
+        original = turbovasctl.native_api_curl_with_http_status
+
+        def fake_curl(_root, path):
+            self.assertEqual(path, "/api/v1/vulnerabilities?page_size=1&sort=bogus")
+            return turbovasctl.subprocess.CompletedProcess(
+                ["curl"],
+                0,
+                stdout=json.dumps({"error": {"code": "bad_request", "message": "Invalid sort"}}) + "\n400",
+                stderr="",
+            )
+
+        try:
+            turbovasctl.native_api_curl_with_http_status = fake_curl
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "TurboVAS"
+                root.mkdir()
+                finding = turbovasctl.native_api_expected_bad_request_finding(
+                    root,
+                    "native-api.vulnerabilities.invalid-sort",
+                    "/api/v1/vulnerabilities?page_size=1&sort=bogus",
+                    "bad_request",
+                )
+        finally:
+            turbovasctl.native_api_curl_with_http_status = original
+
+        self.assertEqual(finding["status"], "pass")
+        self.assertEqual(finding["details"]["response_summary"]["http_status"], 400)
+        self.assertEqual(finding["details"]["response_summary"]["error_code"], "bad_request")
+        self.assertNotIn("output_tail", finding["details"])
 
     def test_security_policy_check_validates_seeded_policy(self):
         root = Path(__file__).resolve().parents[2]

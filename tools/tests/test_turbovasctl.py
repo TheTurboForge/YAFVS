@@ -660,6 +660,34 @@ class TurboVASCtlTests(unittest.TestCase):
                 self.assertIn(source_identity, body)
                 self.assertIn("scope_report_exists(&client, &scope_report_id, &scope_id)", body)
 
+    def test_scope_report_source_reports_are_excluded_from_raw_report_deletion(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "components" / "gvmd" / "src" / "manage_sql.c").read_text(encoding="utf-8")
+
+        def section(start, end):
+            self.assertIn(start, source)
+            self.assertIn(end, source)
+            return source.split(start, 1)[1].split(end, 1)[0]
+
+        auto_delete = section("auto_delete_reports ()", "delete_report_internal (report_t report)")
+        delete_internal = section("delete_report_internal (report_t report)", "delete_report (const char *report_id")
+        source_reference_query = "SELECT count(*) FROM scope_report_sources"
+        destructive_delete = "DELETE FROM report_host_details"
+
+        self.assertIn("AND NOT EXISTS (SELECT 1 FROM scope_report_sources", auto_delete)
+        self.assertIn("WHERE source_report = reports.id)", auto_delete)
+        self.assertLess(
+            auto_delete.index("AND NOT EXISTS (SELECT 1 FROM scope_report_sources"),
+            auto_delete.index("g_array_append_val (reports_to_delete, report)"),
+        )
+
+        self.assertIn("4 report is referenced by a scope", delete_internal)
+        self.assertIn(source_reference_query, delete_internal)
+        self.assertIn("WHERE source_report = %llu;", delete_internal)
+        self.assertIn("return 4;", delete_internal)
+        self.assertIn(destructive_delete, delete_internal)
+        self.assertLess(delete_internal.index(source_reference_query), delete_internal.index(destructive_delete))
+
     def test_gsad_native_api_proxy_is_authenticated_and_allowlisted(self):
         root = Path(__file__).resolve().parents[2]
         request_router = (root / "components" / "gsad" / "src" / "gsad_http_handle_request.c").read_text(encoding="utf-8")

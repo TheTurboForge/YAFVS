@@ -2243,6 +2243,18 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["rows_missing_migration_metadata_count"], 1)
         self.assertEqual(summary["direct_exposure_mismatch_count"], 2)
         self.assertEqual(summary["direct_marker_mismatch_count"], 2)
+        self.assertEqual(
+            summary["progress_percentages"],
+            {
+                "openapi_operation_rows_percent": 50.0,
+                "inventory_rows_percent": 50.0,
+                "rows_with_replacement_candidates_percent": 0.0,
+                "rows_with_checked_migration_metadata_percent": 100.0,
+                "browser_proxied_percent": 0.0,
+                "scriptable_read_percent": 50.0,
+                "internal_only_percent": 50.0,
+            },
+        )
 
     def test_native_api_migration_matrix_status_only_omits_items(self):
         result = {

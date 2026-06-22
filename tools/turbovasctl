@@ -6308,22 +6308,41 @@ def native_api_migration_matrix_summary(rows: list[dict[str, Any]]) -> dict[str,
             result[key] = result.get(key, 0) + 1
         return dict(sorted(result.items()))
 
+    def percentage(count: int, total: int) -> float:
+        return round((100.0 * count / total), 1) if total else 0.0
+
     contract = native_api_migration_matrix_contract_summary(rows)
+    total_rows = len(rows)
+    openapi_rows = sum(1 for row in rows if row.get("openapi_path") is not None)
+    inventory_rows = sum(1 for row in rows if row.get("inventory_endpoint") is not None)
+    replacement_candidate_rows = sum(1 for row in rows if row.get("replacement_candidates"))
+    metadata_rows = sum(1 for row in rows if any(row.get(field) is not None for field in NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS))
+    browser_access_counts = counts("browser_access")
+    direct_access_counts = counts("direct_access")
     return {
-        "total_rows": len(rows),
-        "openapi_operation_rows": sum(1 for row in rows if row.get("openapi_path") is not None),
-        "inventory_rows": sum(1 for row in rows if row.get("inventory_endpoint") is not None),
-        "rows_with_replacement_candidates": sum(1 for row in rows if row.get("replacement_candidates")),
-        "rows_with_checked_migration_metadata": sum(1 for row in rows if any(row.get(field) is not None for field in NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS)),
+        "total_rows": total_rows,
+        "openapi_operation_rows": openapi_rows,
+        "inventory_rows": inventory_rows,
+        "rows_with_replacement_candidates": replacement_candidate_rows,
+        "rows_with_checked_migration_metadata": metadata_rows,
         "checked_migration_field_counts": {field: sum(1 for row in rows if row.get(field) is not None) for field in NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS},
         "rows_missing_openapi_count": len(contract["rows_missing_openapi"]),
         "rows_missing_inventory_count": len(contract["rows_missing_inventory"]),
         "rows_missing_migration_metadata_count": len(contract["rows_missing_migration_metadata"]),
         "direct_exposure_mismatch_count": len(contract["direct_exposure_mismatches"]),
         "direct_marker_mismatch_count": len(contract["direct_marker_mismatches"]),
+        "progress_percentages": {
+            "openapi_operation_rows_percent": percentage(openapi_rows, total_rows),
+            "inventory_rows_percent": percentage(inventory_rows, total_rows),
+            "rows_with_replacement_candidates_percent": percentage(replacement_candidate_rows, total_rows),
+            "rows_with_checked_migration_metadata_percent": percentage(metadata_rows, total_rows),
+            "browser_proxied_percent": percentage(browser_access_counts.get("browser_proxied", 0), total_rows),
+            "scriptable_read_percent": percentage(direct_access_counts.get("scriptable_read", 0), total_rows),
+            "internal_only_percent": percentage(direct_access_counts.get("internal_only", 0), total_rows),
+        },
         "by_status": counts("status"),
-        "by_browser_access": counts("browser_access"),
-        "by_direct_access": counts("direct_access"),
+        "by_browser_access": browser_access_counts,
+        "by_direct_access": direct_access_counts,
     }
 
 

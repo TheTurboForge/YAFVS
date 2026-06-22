@@ -1332,12 +1332,45 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("direct_api_contract", status_only["details"])
         self.assertEqual(
             set(status_only["details"]["direct_api_contract"]),
-            {"alignment_status", "rust_route_count", "scriptable_read_count", "internal_only_count"},
+            {
+                "alignment_status",
+                "rust_route_count",
+                "openapi_marked_direct_count",
+                "rust_direct_allowlist_count",
+                "scriptable_read_count",
+                "internal_only_count",
+                "missing_openapi_direct_marker_count",
+                "unexpected_openapi_direct_marker_count",
+                "missing_rust_route_count",
+                "untracked_rust_route_count",
+                "missing_rust_direct_allowlist_count",
+                "unexpected_rust_direct_allowlist_count",
+            },
         )
+        self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_rust_direct_allowlist_count"], 0)
         self.assertEqual(
             set(status_only["details"]["browser_proxy_contract"]),
-            {"alignment_status", "browser_proxied_count", "internal_only_count", "gsad_proxy_allowlist_count"},
+            {
+                "alignment_status",
+                "browser_proxied_count",
+                "openapi_internal_only_count",
+                "internal_only_count",
+                "gsad_proxy_allowlist_count",
+                "missing_gsad_proxy_allowlist_count",
+                "unexpected_gsad_proxy_allowlist_count",
+                "internal_only_gsad_proxy_allowlist_count",
+                "parse_error_count",
+            },
         )
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["missing_gsad_proxy_allowlist_count"], 0)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["unexpected_gsad_proxy_allowlist_count"], 0)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["internal_only_gsad_proxy_allowlist_count"], 0)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["parse_error_count"], 0)
         self.assertEqual(
             set(status_only["details"]["openapi_contract"]),
             {

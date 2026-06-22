@@ -23,7 +23,7 @@ Validation should scale with the change class. These are minimums, not a ceiling
 ## GSA UI
 
 - `cd components/gsa && npm run type-check`
-- focused web tests for changed components/routes
+- focused Vitest files through `just gsa-vitest -- <path-or-filter>`
 - `cd components/gsa && npm run test:web-fast` when route/component surface is
   non-trivial
 - Playwright/browser smoke for operator-visible workflow changes where feasible

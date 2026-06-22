@@ -327,6 +327,67 @@ NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset(
         "generate-scope-report.gmp.py",
     }
 )
+NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
+    "compatibility_probe": {
+        "check-gmp-gos22.04.gmp.py",
+        "check-gmp-gos24.10.gmp.py",
+    },
+    "credential_or_account": {
+        "create-credentials-from-csv.gmp.py",
+        "list-credentials.gmp.py",
+        "list-users.gmp.py",
+    },
+    "export_or_report_generation": {
+        "export-csv-report.gmp.py",
+        "export-pdf-report.gmp.py",
+        "export-xml-report.gmp.py",
+        "monthly-report-gos24.10.gmp.py",
+        "monthly-report-gos3.gmp.py",
+        "monthly-report-gos4.gmp.py",
+    },
+    "scanner_or_task_control": {
+        "nvt-scan.gmp.py",
+        "scan-new-system.gmp.py",
+        "start-alert-scan.gmp.py",
+        "start-multiple-alerts-scan.gmp.py",
+        "start-nvt-scan.gmp.py",
+        "start-scans-from-csv.py",
+        "stop-all-scans.gmp.py",
+        "stop-scans-from-csv.py",
+        "verify-scanners.gmp.py",
+    },
+    "write_or_mutation": {
+        "bulk-modify-schedules.gmp.py",
+        "cfg-gen-for-certs.gmp.py",
+        "clean-sensor.gmp.py",
+        "create-alerts-from-csv.gmp.py",
+        "create-dummy-data.gmp.py",
+        "create-filters-from-csv.gmp.py",
+        "create-report-format-from-csv.gmp.py",
+        "create-schedules-from-csv.gmp.py",
+        "create-tags-from-csv.gmp.py",
+        "create-targets-from-csv.gmp.py",
+        "create-targets-from-host-list.gmp.py",
+        "create-tasks-from-csv.gmp.py",
+        "delete-overrides-by-filter.gmp.py",
+        "empty-trash.gmp.py",
+        "generate-random-targets.gmp.py",
+        "send-schedules.gmp.py",
+        "send-targets.gmp.py",
+        "send-tasks.gmp.py",
+        "sync-hosts.gmp.py",
+        "update-task-target.gmp.py",
+    },
+}
+NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
+    "native_read_replaced": "Read-only inherited script has an unambiguous native API/tooling replacement and no retained compatibility need.",
+    "compatibility_probe": "Inherited GMP compatibility probe; delete only after an equivalent native compatibility check exists or the probe is no longer needed.",
+    "credential_or_account": "Credential/account-adjacent script; keep out of opportunistic removal until auth and secret handling are explicitly designed.",
+    "export_or_report_generation": "Export or report-generation script; native read APIs do not replace file export, delivery, or generation semantics.",
+    "scanner_or_task_control": "Scanner/task-control script; requires separate safety design before replacement or removal.",
+    "write_or_mutation": "Write, mutation, destructive, or side-effecting script; not safe for read-only native API retirement.",
+    "needs_review": "Script is still marked as a removal candidate but lacks a specific retirement-safety bucket.",
+}
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset(
@@ -2275,6 +2336,31 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name in {"feed-status.ts", "dashboards.ts", "entity.ts"}:
         return "feed-control-or-status-compatibility", "Retained inherited command compatibility remains after removed or native-covered UI reads."
     return "retained-gmp-product-residue", "Remaining inherited GSA/GMP product residue needs a narrower owner before replacement."
+
+
+def native_tooling_gvm_tools_removal_bucket(relative_path: str) -> str:
+    name = Path(relative_path).name
+    for bucket, names in NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.items():
+        if name in names:
+            return bucket
+    return "needs_review"
+
+
+def native_tooling_removal_review(paths: list[str]) -> dict[str, Any]:
+    buckets = {
+        bucket: {"count": 0, "paths": [], "reason": reason}
+        for bucket, reason in NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS.items()
+    }
+    for path in sorted(paths):
+        bucket = native_tooling_gvm_tools_removal_bucket(path)
+        buckets[bucket]["count"] += 1
+        buckets[bucket]["paths"].append(path)
+    return {
+        "total": len(paths),
+        "safe_removal_count": buckets["native_read_replaced"]["count"],
+        "blocked_or_review_count": len(paths) - buckets["native_read_replaced"]["count"],
+        "buckets": {bucket: data for bucket, data in buckets.items() if data["count"] > 0},
+    }
 
 
 def native_api_direct_token_sources(repo_root: Path, env: dict[str, str]) -> tuple[tuple[str, ...], Path, bool]:
@@ -5539,10 +5625,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "paths": [item["path"] for item in residue_items],
                 "reason": residue_items[0].get("residue_reason"),
             }
+    removal_candidate_paths = by_category["candidate_for_removal"]["paths"]
     return {
         "total_items": len(items),
         "by_category": by_category,
         "product_workflow_residue": product_residue,
+        "candidate_for_removal_review": native_tooling_removal_review(removal_candidate_paths),
         "implemented_native_endpoints": [
             {
                 "endpoint": "/api/v1/results",
@@ -6032,6 +6120,7 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "by_category": by_category,
         "product_workflow_residue": product_residue,
         "candidate_for_removal_paths": summary.get("by_category", {}).get("candidate_for_removal", {}).get("paths", []),
+        "candidate_for_removal_review": summary.get("candidate_for_removal_review", {}),
         "unknown_paths": summary.get("by_category", {}).get("unknown", {}).get("paths", []),
         "implemented_native_endpoint_count": len(summary.get("implemented_native_endpoints", [])),
         "implemented_native_endpoints_by_status": endpoint_statuses,
@@ -6048,6 +6137,16 @@ def compact_native_tooling_finding_details(summary: dict[str, Any]) -> dict[str,
         "total_items": compact["total_items"],
         "by_category": compact["by_category"],
         "product_workflow_residue": compact["product_workflow_residue"],
+        "candidate_for_removal_review": {
+            "total": compact.get("candidate_for_removal_review", {}).get("total", 0),
+            "safe_removal_count": compact.get("candidate_for_removal_review", {}).get("safe_removal_count", 0),
+            "blocked_or_review_count": compact.get("candidate_for_removal_review", {}).get("blocked_or_review_count", 0),
+            "bucket_counts": {
+                bucket: data.get("count", 0)
+                for bucket, data in compact.get("candidate_for_removal_review", {}).get("buckets", {}).items()
+                if isinstance(data, dict)
+            },
+        },
         "implemented_native_endpoint_count": compact["implemented_native_endpoint_count"],
         "implemented_native_endpoints_by_status": compact["implemented_native_endpoints_by_status"],
         "direct_api_contract": compact["direct_api_contract"],

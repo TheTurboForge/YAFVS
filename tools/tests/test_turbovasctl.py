@@ -1291,8 +1291,19 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("browser_proxy_contract", details)
         self.assertIn("product_workflow_residue", details)
         self.assertIn("candidate_for_removal_paths", details)
+        self.assertIn("candidate_for_removal_review", details)
+        review = details["candidate_for_removal_review"]
+        self.assertEqual(review["total"], details["by_category"]["candidate_for_removal"]["count"])
+        self.assertEqual(review["safe_removal_count"], 0)
+        self.assertEqual(review["blocked_or_review_count"], review["total"])
+        self.assertGreater(review["buckets"]["write_or_mutation"]["count"], 0)
+        self.assertGreater(review["buckets"]["scanner_or_task_control"]["count"], 0)
+        self.assertGreater(review["buckets"]["export_or_report_generation"]["count"], 0)
+        self.assertGreater(review["buckets"]["credential_or_account"]["count"], 0)
         inventory_details = compact["findings"][0]["details"]
         self.assertNotIn("candidate_for_removal_paths", inventory_details)
+        self.assertIn("candidate_for_removal_review", inventory_details)
+        self.assertIn("bucket_counts", inventory_details["candidate_for_removal_review"])
         self.assertNotIn("next_replacement_candidates", inventory_details)
         self.assertIn("product_workflow_residue", inventory_details)
         self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
@@ -3135,6 +3146,28 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/generate-scope-report.gmp.py")[0], "product_workflow")
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
+
+    def test_native_tooling_candidate_removal_review_splits_safety_buckets(self):
+        review = turbovasctl.native_tooling_removal_review(
+            [
+                "components/gvm-tools/scripts/list-users.gmp.py",
+                "components/gvm-tools/scripts/export-pdf-report.gmp.py",
+                "components/gvm-tools/scripts/verify-scanners.gmp.py",
+                "components/gvm-tools/scripts/empty-trash.gmp.py",
+                "components/gvm-tools/scripts/check-gmp-gos24.10.gmp.py",
+                "components/gvm-tools/scripts/unclassified.gmp.py",
+            ]
+        )
+
+        self.assertEqual(review["safe_removal_count"], 0)
+        self.assertEqual(review["blocked_or_review_count"], 6)
+        buckets = review["buckets"]
+        self.assertEqual(buckets["credential_or_account"]["count"], 1)
+        self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
+        self.assertEqual(buckets["scanner_or_task_control"]["count"], 1)
+        self.assertEqual(buckets["write_or_mutation"]["count"], 1)
+        self.assertEqual(buckets["compatibility_probe"]["count"], 1)
+        self.assertEqual(buckets["needs_review"]["count"], 1)
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")

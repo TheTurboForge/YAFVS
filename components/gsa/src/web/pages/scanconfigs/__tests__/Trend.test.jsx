@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -62,6 +63,6 @@ describe('Scan Config Trend tests', () => {
 
     expect(element).toHaveTextContent('N/A');
 
-    console.warn = consoleError;
+    console.error = consoleError;
   });
 });

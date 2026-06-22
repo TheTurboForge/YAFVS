@@ -5935,6 +5935,19 @@ def compact_native_tooling_finding_details(summary: dict[str, Any]) -> dict[str,
     }
 
 
+def native_tooling_status_only_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    non_pass = [item for item in findings if item.get("status") != "pass"]
+    if non_pass:
+        return non_pass
+    return [
+        finding(
+            "pass",
+            "native-tooling.status-only",
+            "Native tooling state passed; no non-pass findings.",
+        )
+    ]
+
+
 def native_api_browser_access_from_status(status: str | None) -> str:
     if status == "planned_internal_and_browser_proxied":
         return "planned_browser_proxied"
@@ -6128,7 +6141,7 @@ def command_native_api_client_contract(repo_root: Path) -> dict[str, Any]:
     return result
 
 
-def command_native_tooling_state(repo_root: Path, compact: bool = False, summary_only: bool = False) -> dict[str, Any]:
+def command_native_tooling_state(repo_root: Path, compact: bool = False, summary_only: bool = False, status_only: bool = False) -> dict[str, Any]:
     items = native_tooling_inventory(repo_root)
     summary = summarize_native_tooling(items, repo_root)
     annotate_native_tooling_direct_api(summary, repo_root)
@@ -6143,11 +6156,12 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
     openapi_contract = summary.get("openapi_contract", {})
     openapi_alignment_status = openapi_contract.get("alignment_status", "warn") if isinstance(openapi_contract, dict) else "warn"
     summary_details = compact_native_tooling_finding_details(summary)
-    finding_details = summary_details if compact or summary_only else summary
-    direct_finding_details = summary_details["direct_api_contract"] if summary_only else direct_contract
-    browser_proxy_finding_details = summary_details["browser_proxy_contract"] if summary_only else browser_proxy_contract
-    openapi_finding_details = summary_details["openapi_contract"] if summary_only else openapi_contract
-    unknown_finding_details = {"count": unknown_count} if summary_only else {"paths": summary["by_category"]["unknown"]["paths"]}
+    low_noise = summary_only or status_only
+    finding_details = summary_details if compact or low_noise else summary
+    direct_finding_details = summary_details["direct_api_contract"] if low_noise else direct_contract
+    browser_proxy_finding_details = summary_details["browser_proxy_contract"] if low_noise else browser_proxy_contract
+    openapi_finding_details = summary_details["openapi_contract"] if low_noise else openapi_contract
+    unknown_finding_details = {"count": unknown_count} if low_noise else {"paths": summary["by_category"]["unknown"]["paths"]}
     findings = [
         finding("pass", "native-tooling.inventory", f"Classified {len(items)} inherited tooling dependency surface(s).", details=finding_details),
         finding(
@@ -6178,7 +6192,10 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
         finding("pass", "native-tooling.end-state", "End-state remains full removal of required python-gvm and gvm-tools dependence after native API replacements land."),
     ]
     result = make_result("native-tooling-state", repo_root, "Inherited GMP/python-gvm/gvm-tools dependency state collected.", findings)
-    if summary_only:
+    if status_only:
+        result["details"] = summary_details
+        result["findings"] = native_tooling_status_only_findings(findings)
+    elif summary_only:
         result["details"] = summary_details
     elif compact:
         result["details"] = compact_native_tooling_summary(summary)
@@ -12126,6 +12143,7 @@ def build_parser() -> argparse.ArgumentParser:
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="omit full item and endpoint inventories from JSON output")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit only status/count contract summaries for low-noise closeout checks")
+    native_tooling_state.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
     subparsers.add_parser("native-api-migration-matrix", parents=[common], help="show native API migration metadata by endpoint")
     subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
@@ -12240,7 +12258,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "native-api-request":
         result = command_native_api_request(repo_root, args.path, direct=args.direct, request_id=args.request_id)
     elif args.command == "native-tooling-state":
-        result = command_native_tooling_state(repo_root, compact=args.compact, summary_only=args.summary)
+        result = command_native_tooling_state(repo_root, compact=args.compact, summary_only=args.summary, status_only=args.status_only)
     elif args.command == "native-api-migration-matrix":
         result = command_native_api_migration_matrix(repo_root)
     elif args.command == "native-api-client-contract":

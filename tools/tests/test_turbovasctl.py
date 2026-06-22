@@ -1179,6 +1179,26 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["findings"][4]["details"], {"count": 0})
         self.assertLess(len(json.dumps(summary)), len(json.dumps(compact)))
 
+    def test_native_tooling_state_status_only_is_chat_safe(self):
+        root = Path(__file__).resolve().parents[2]
+        summary = turbovasctl.command_native_tooling_state(root, summary_only=True)
+        status_only = turbovasctl.command_native_tooling_state(root, status_only=True)
+
+        self.assertEqual(status_only["status"], "pass")
+        self.assertEqual(status_only["details"]["total_items"], summary["details"]["total_items"])
+        self.assertIn("direct_api_contract", status_only["details"])
+        self.assertEqual(
+            status_only["findings"],
+            [
+                {
+                    "status": "pass",
+                    "check": "native-tooling.status-only",
+                    "message": "Native tooling state passed; no non-pass findings.",
+                }
+            ],
+        )
+        self.assertLess(len(json.dumps(status_only)), len(json.dumps(summary)))
+
     def test_native_tooling_state_tracks_direct_api_contract_alignment(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_native_tooling_state(root)

@@ -2,8 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::{
+    extract::{FromRequestParts, Query},
+    http::request::Parts,
+};
 use deadpool_postgres::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio_postgres::Row;
 
 use crate::{
@@ -26,6 +30,25 @@ pub(crate) struct CollectionQuery {
     pub(crate) text: Option<String>,
     pub(crate) task_name: Option<String>,
     pub(crate) value: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ApiQuery<T>(pub(crate) T);
+
+#[axum::async_trait]
+impl<S, T> FromRequestParts<S> for ApiQuery<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        Query::<T>::from_request_parts(parts, state)
+            .await
+            .map(|Query(query)| Self(query))
+            .map_err(|_| ApiError::BadRequest("invalid query parameter".to_string()))
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -195,6 +218,23 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn api_query_maps_malformed_values_to_bad_request() {
+        let request = axum::http::Request::builder()
+            .uri("/api/v1/scope-reports?page=abc&page_size=1")
+            .body(())
+            .unwrap();
+        let (mut parts, _) = request.into_parts();
+
+        let err = ApiQuery::<CollectionQuery>::from_request_parts(&mut parts, &())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ApiError::BadRequest(_)));
+        assert_eq!(err.code(), "bad_request");
+        assert_eq!(err.public_message(), "invalid query parameter");
     }
 
     #[test]

@@ -6,7 +6,7 @@ use std::{env, net::SocketAddr};
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     middleware,
     routing::get,
 };
@@ -1457,7 +1457,7 @@ async fn shutdown_signal() {
 
 async fn reports(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ReportItem>>, ApiError> {
     let params = normalize_collection_query(query, REPORT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_SORT_FIELDS)?;
@@ -1491,7 +1491,7 @@ async fn reports(
 
 async fn host_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<HostAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, HOST_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, HOST_ASSET_SORT_FIELDS)?;
@@ -1820,7 +1820,7 @@ async fn host_user_tags(
 
 async fn tls_certificate_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TlsCertificateAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, TLS_CERTIFICATE_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, TLS_CERTIFICATE_ASSET_SORT_FIELDS)?;
@@ -2025,7 +2025,7 @@ async fn tls_certificate_user_tags(
 
 async fn scanner_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ScannerAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, SCANNER_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, SCANNER_ASSET_SORT_FIELDS)?;
@@ -2227,7 +2227,7 @@ fn scan_config_asset_from_row(row: &Row) -> ScanConfigAssetItem {
 
 async fn scan_config_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ScanConfigAssetItem>>, ApiError> {
     let predefined_filter = query.predefined.clone().unwrap_or_default();
     if !matches!(predefined_filter.as_str(), "" | "0" | "1") {
@@ -2590,7 +2590,7 @@ async fn scan_config_asset_families(
 
 async fn filter_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<FilterAssetItem>>, ApiError> {
     let filter_type = query
         .filter_type
@@ -2805,7 +2805,7 @@ fn alert_assets_sql(sort_sql: &str) -> String {
 
 async fn alert_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<AlertAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, ALERT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, ALERT_SORT_FIELDS)?;
@@ -2927,7 +2927,7 @@ async fn alert_asset_detail(
 
 async fn tag_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TagAssetItem>>, ApiError> {
     let active_filter = query.active.clone().unwrap_or_default();
     let resource_type_filter = query.resource_type.clone().unwrap_or_default();
@@ -3032,7 +3032,7 @@ async fn tag_asset_detail(
 async fn tag_asset_resources(
     State(state): State<AppState>,
     Path(tag_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<TagResourceCollection>, ApiError> {
     let tag_id = parse_uuid(&tag_id)?.to_string();
     let params = normalize_collection_query(query, TAG_RESOURCE_DEFAULT_SORT)?;
@@ -3086,7 +3086,7 @@ async fn tag_asset_resources(
 async fn tag_resource_names(
     State(state): State<AppState>,
     Path(resource_type): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TagResourceItem>>, ApiError> {
     let resource_type = normalize_tag_resource_type(resource_type);
     let params = normalize_collection_query(query, TAG_RESOURCE_DEFAULT_SORT)?;
@@ -3122,7 +3122,7 @@ async fn tag_resource_names(
 
 async fn override_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<OverrideAssetItem>>, ApiError> {
     let active_filter = query.active.clone().unwrap_or_default();
     let text_filter = query.text.clone().unwrap_or_default();
@@ -3273,7 +3273,7 @@ async fn override_asset_detail(
 
 async fn port_list_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<PortListAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, PORT_LIST_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, PORT_LIST_SORT_FIELDS)?;
@@ -3425,7 +3425,7 @@ async fn port_list_asset_detail(
 
 async fn schedule_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ScheduleAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, SCHEDULE_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, SCHEDULE_SORT_FIELDS)?;
@@ -3546,7 +3546,7 @@ async fn schedule_asset_detail(
 
 async fn report_format_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ReportFormatAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, REPORT_FORMAT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_FORMAT_SORT_FIELDS)?;
@@ -3936,7 +3936,7 @@ async fn report_config_asset_from_row(
 
 async fn report_config_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ReportConfigAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, REPORT_CONFIG_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_CONFIG_SORT_FIELDS)?;
@@ -4077,7 +4077,7 @@ async fn trashcan_summary(
 
 async fn vulnerabilities(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<VulnerabilityItem>>, ApiError> {
     let params = normalize_collection_query(query, VULNERABILITY_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, VULNERABILITY_SORT_FIELDS)?;
@@ -4130,7 +4130,7 @@ async fn vulnerabilities(
 
 async fn cpe_catalog(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<CatalogCpeItem>>, ApiError> {
     let params = normalize_collection_query(query, CPE_CATALOG_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, CPE_CATALOG_SORT_FIELDS)?;
@@ -4252,7 +4252,7 @@ async fn cpe_catalog_detail(
 
 async fn cve_catalog(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<CatalogCveItem>>, ApiError> {
     let params = normalize_collection_query(query, CVE_CATALOG_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, CVE_CATALOG_SORT_FIELDS)?;
@@ -4336,7 +4336,7 @@ async fn cve_catalog_detail(
 
 async fn dfn_cert_advisories(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<DfnCertAdvisoryItem>>, ApiError> {
     let params = normalize_collection_query(query, CERT_ADVISORY_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, CERT_ADVISORY_SORT_FIELDS)?;
@@ -4430,7 +4430,7 @@ async fn dfn_cert_advisory_detail(
 
 async fn cert_bund_advisories(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<CertBundAdvisoryItem>>, ApiError> {
     let params = normalize_collection_query(query, CERT_ADVISORY_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, CERT_ADVISORY_SORT_FIELDS)?;
@@ -4524,7 +4524,7 @@ async fn cert_bund_advisory_detail(
 
 async fn nvt_catalog(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<NvtCatalogItem>>, ApiError> {
     let params = normalize_collection_query(query, NVT_CATALOG_DEFAULT_SORT)?;
     let (filter_mode, filter_value) = nvt_filter_parts(&params.filter);
@@ -4722,7 +4722,7 @@ async fn nvt_catalog_detail(
 
 async fn operating_system_assets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<OperatingSystemAssetItem>>, ApiError> {
     let params = normalize_collection_query(query, OPERATING_SYSTEM_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, OPERATING_SYSTEM_ASSET_SORT_FIELDS)?;
@@ -4922,7 +4922,7 @@ async fn operating_system_user_tags(
 async fn report_ports(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<PortItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_PORT_DEFAULT_SORT)?;
@@ -4991,7 +4991,7 @@ async fn report_ports(
 async fn report_applications(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ApplicationItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_APPLICATION_DEFAULT_SORT)?;
@@ -5128,7 +5128,7 @@ async fn report_applications(
 async fn report_operating_systems(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<OperatingSystemItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_OPERATING_SYSTEM_DEFAULT_SORT)?;
@@ -5210,7 +5210,7 @@ async fn report_operating_systems(
 async fn report_tls_certificates(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TlsCertificateItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_TLS_CERTIFICATE_DEFAULT_SORT)?;
@@ -5291,7 +5291,7 @@ async fn report_tls_certificates(
 async fn report_cves(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<CveItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_CVE_DEFAULT_SORT)?;
@@ -5350,7 +5350,7 @@ async fn report_cves(
 async fn report_errors(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ErrorMessageItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_ERROR_DEFAULT_SORT)?;
@@ -5433,7 +5433,7 @@ async fn report_detail(
 
 async fn results(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ResultItem>>, ApiError> {
     let params = normalize_collection_query(query, RESULT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, RESULT_SORT_FIELDS)?;
@@ -5607,7 +5607,7 @@ async fn result_detail(
 async fn report_results(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ResultItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_RESULT_DEFAULT_SORT)?;
@@ -5707,7 +5707,7 @@ async fn report_results(
 async fn report_hosts(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ReportHostItem>>, ApiError> {
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_HOST_DEFAULT_SORT)?;
@@ -5838,7 +5838,7 @@ async fn report_hosts(
 
 async fn targets(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TargetItem>>, ApiError> {
     let params = normalize_collection_query(query, TARGET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, TARGET_SORT_FIELDS)?;
@@ -5981,7 +5981,7 @@ fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> S
 
 async fn tasks(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TaskItem>>, ApiError> {
     let params = normalize_collection_query(query, TASK_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, TASK_SORT_FIELDS)?;
@@ -6178,7 +6178,7 @@ fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> Str
 
 async fn scopes(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ScopeItem>>, ApiError> {
     let params = normalize_collection_query(query, SCOPE_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, SCOPE_SORT_FIELDS)?;
@@ -6510,7 +6510,7 @@ async fn report_user_tags(
 async fn scope_report_results(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ResultItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -6980,7 +6980,7 @@ async fn report_metrics(
 async fn scope_report_errors(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ErrorMessageItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -7065,7 +7065,7 @@ async fn scope_report_errors(
 
 async fn scope_reports(
     State(state): State<AppState>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ScopeReportItem>>, ApiError> {
     let params = normalize_collection_query(query, SCOPE_REPORT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, SCOPE_REPORT_SORT_FIELDS)?;
@@ -7278,7 +7278,7 @@ async fn scope_report_detail(
 async fn scope_report_hosts(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<HostItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -7393,7 +7393,7 @@ async fn scope_report_hosts(
 async fn scope_report_ports(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<PortItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -7484,7 +7484,7 @@ async fn scope_report_ports(
 async fn scope_report_applications(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ApplicationItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -7644,7 +7644,7 @@ async fn scope_report_applications(
 async fn scope_report_operating_systems(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<OperatingSystemItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -7747,7 +7747,7 @@ async fn scope_report_operating_systems(
 async fn scope_report_tls_certificates(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TlsCertificateItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
@@ -7842,7 +7842,7 @@ async fn scope_report_tls_certificates(
 async fn scope_report_cves(
     State(state): State<AppState>,
     Path((scope_id, scope_report_id)): Path<(String, String)>,
-    Query(query): Query<CollectionQuery>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<CveItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;

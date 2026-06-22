@@ -10371,6 +10371,14 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
     findings.append(
         native_api_expected_bad_request_finding(
             repo_root,
+            "native-api.scope-reports.malformed-page",
+            "/api/v1/scope-reports?page=abc&page_size=1",
+            "bad_request",
+        )
+    )
+    findings.append(
+        native_api_expected_bad_request_finding(
+            repo_root,
             "native-api.scope-reports.oversized-page-size",
             "/api/v1/scope-reports?page_size=501",
             "bad_request",

@@ -834,6 +834,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scope-reports?page_size=1&sort=not_a_scope_report_sort", source)
         self.assertIn("native-api.scope-reports.invalid-page", source)
         self.assertIn("/api/v1/scope-reports?page=0&page_size=1", source)
+        self.assertIn("native-api.scope-reports.malformed-page", source)
+        self.assertIn("/api/v1/scope-reports?page=abc&page_size=1", source)
         self.assertIn("native-api.scope-reports.oversized-page-size", source)
         self.assertIn("/api/v1/scope-reports?page_size=501", source)
         self.assertIn("def native_api_oversized_filter_path", source)

@@ -9644,6 +9644,80 @@ mod tests {
     }
 
     #[test]
+    fn direct_api_allowlist_tracks_registered_read_routes() {
+        let source = include_str!("main.rs");
+        let routes = app_route_registration_block(source);
+        let api_routes = registered_route_paths(routes)
+            .into_iter()
+            .filter(|path| path.starts_with("/api/v1/"))
+            .collect::<Vec<_>>();
+        let internal_only_routes =
+            ["/api/v1/scopes/:scope_id/reports/:scope_report_id/retention-plan"];
+
+        assert!(api_routes.len() > 40, "expected the native API route table");
+        for forbidden_method in ["post(", "put(", "patch(", "delete("] {
+            assert!(
+                !routes.contains(forbidden_method),
+                "registered native API routes must remain read-only"
+            );
+        }
+        for route in api_routes {
+            let concrete_path = concrete_direct_api_path(route);
+            if internal_only_routes.contains(&route) {
+                assert!(
+                    !direct_api_v1_path_is_allowed(&concrete_path),
+                    "internal-only route {route} must not be direct API allowlisted"
+                );
+            } else {
+                assert!(
+                    direct_api_v1_path_is_allowed(&concrete_path),
+                    "registered read route {route} should be direct API allowlisted as {concrete_path}"
+                );
+            }
+        }
+    }
+
+    fn app_route_registration_block(source: &str) -> &str {
+        source
+            .split_once("let app = Router::new()")
+            .expect("native API router must be registered")
+            .1
+            .split_once("\n        .with_state(state);")
+            .expect("native API router must attach app state")
+            .0
+    }
+
+    fn registered_route_paths(routes: &str) -> Vec<&str> {
+        let mut paths = Vec::new();
+        let mut remainder = routes;
+        while let Some((_, after_route)) = remainder.split_once(".route(") {
+            let Some((_, after_quote)) = after_route.split_once('"') else {
+                break;
+            };
+            let Some((path, after_path)) = after_quote.split_once('"') else {
+                break;
+            };
+            paths.push(path);
+            remainder = after_path;
+        }
+        paths
+    }
+
+    fn concrete_direct_api_path(route: &str) -> String {
+        route
+            .split('/')
+            .map(|segment| {
+                segment
+                    .strip_prefix(':')
+                    .or_else(|| segment.strip_prefix('*'))
+                    .map(|name| format!("sample-{name}"))
+                    .unwrap_or_else(|| segment.to_string())
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
+    #[test]
     fn scope_report_native_routes_remain_get_only_read_paths() {
         let source = include_str!("main.rs");
         let start = ".route(\"/api/v1/scope-reports\", get(scope_reports))";

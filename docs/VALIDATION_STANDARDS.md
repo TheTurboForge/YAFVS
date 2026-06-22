@@ -63,3 +63,23 @@ Validation should scale with the change class. These are minimums, not a ceiling
 - `just quality-gate --json` is the local source-quality gate.
 - The GitHub Actions source gate should stay aligned with `quality-gate`.
 - The server-side daily quality gate is the runtime-capable continuous gate.
+
+## Gate Purpose Matrix
+
+No single gate proves every release or runtime claim. Use the narrowest gate
+that answers the current question, then add broader gates when the change spans
+surfaces.
+
+| Gate | Proves | Does Not Prove |
+| --- | --- | --- |
+| `git diff --check` | Patch formatting has no trailing whitespace or conflict markers. | Build, runtime, behavior, or license safety. |
+| `just native-tooling-state --summary --json` | Native API inventory, browser-proxy, direct-read, and OpenAPI contract alignment. | Runtime data parity, browser behavior, or production readiness. |
+| `just native-api-client-contract --json` | OpenAPI server/auth/error/direct-read metadata is ready for generated-client use. | Endpoint response correctness or direct listener availability. |
+| `just runtime-native-api-smoke --json` | Internal native API sidecar can answer representative live runtime reads. | Browser workflows, direct scriptable access, or production posture. |
+| `just runtime-native-api-direct-smoke --json` | Opt-in direct bearer-auth development listener rejects bad access and serves allowlisted reads. | Production TLS, host-binding safety, or write/control authorization. |
+| `just runtime-browser-smoke --json` | Key operator workflows render through GSA/browser against the dev runtime. | Deep route regression, generated-client contracts, or release readiness. |
+| `just runtime-browser-regression --json` | Deeper browser route/link/pagination regressions for selected workflows. | Backend-only invariants or production posture. |
+| `just production-posture-check --json` | Known production blockers and exposure hazards are visible and fail/warn deterministically. | That the deployment is production-ready while failures or warnings remain. |
+| `just license-report --json` | Daily engineering license/provenance guardrails are clean. | Binary/container/hosted/feed redistribution readiness. |
+| `just license-public-release-gate --mode source-public` | Source-public license/provenance posture for the selected mode. | Broader release modes unless their stricter mode gates pass. |
+| `just quality-gate --json` | Broad local source-quality and selected runtime-aware project gates. | Exhaustive browser regression, production readiness, or public release readiness by itself. |

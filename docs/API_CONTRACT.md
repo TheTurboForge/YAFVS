@@ -150,10 +150,11 @@ bounded `X-Request-Id`; expect JSON bodies for API responses and no browser CORS
 access headers from the direct listener. Development `curl` examples should read
 the token from the ignored runtime secret into shell memory and unset it after
 the probe rather than printing or persisting the token.
-Use `just native-api-client-contract --json` before relying on generated-client
-output; it checks the OpenAPI version, servers, cookie/bearer auth schemes,
-operation IDs, shared Error responses, and direct-read markers without dumping
-the full endpoint inventory.
+Use `just native-api-client-contract --status-only --json` before relying on
+generated-client output; it checks the OpenAPI version, servers, cookie/bearer
+auth schemes, operation IDs, shared Error responses, and direct-read markers
+without dumping the full endpoint inventory. Use full `--json` only when
+investigating a contract mismatch.
 The direct helper validates direct listener env shape locally before access:
 `TURBOVAS_API_DIRECT_HOST` is a single host name, IPv4 address, or bracketed
 IPv6 address, `TURBOVAS_API_DIRECT_PORT` is a decimal TCP port, and

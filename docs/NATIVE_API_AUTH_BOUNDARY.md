@@ -101,7 +101,7 @@ just runtime-native-api-direct-bootstrap --json
 just runtime-native-api-direct-smoke --json
 just runtime-native-api-direct-token --json
 just runtime-native-api-direct-token --json --rotate
-just native-api-client-contract --json
+just native-api-client-contract --status-only --json
 tools/turbovasctl native-api-request --direct --json --path '/api/v1/reports?page_size=1'
 tools/turbovasctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
 ```

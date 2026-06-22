@@ -252,6 +252,38 @@ mod tests {
     }
 
     #[test]
+    fn direct_api_audit_logs_do_not_include_auth_material() {
+        let source = include_str!("direct_api.rs");
+        let audit_block = source
+            .split_once("pub(crate) async fn require_direct_api_auth")
+            .expect("direct API auth middleware must exist")
+            .1
+            .split_once("fn direct_api_audit_path")
+            .expect("audit path helper must follow auth middleware")
+            .0;
+        let tracing_lines = audit_block
+            .lines()
+            .filter(|line| line.contains("tracing::"))
+            .collect::<Vec<_>>();
+
+        assert!(tracing_lines.len() >= 3, "expected direct API audit logs");
+        for line in tracing_lines {
+            let fields = line
+                .split_once('"')
+                .map(|(fields, _message)| fields)
+                .unwrap_or(line);
+            let lower = fields.to_ascii_lowercase();
+            assert!(
+                !lower.contains("authorization")
+                    && !lower.contains("bearer")
+                    && !lower.contains("token")
+                    && !lower.contains("header"),
+                "direct API audit log fields must not include auth material: {line}"
+            );
+        }
+    }
+
+    #[test]
     fn direct_api_auth_slots_enforce_in_flight_cap_and_release_on_drop() {
         let auth = DirectApiAuth::with_max_in_flight_requests(
             "token-0123456789abcdef0123456789abcdef".to_string(),

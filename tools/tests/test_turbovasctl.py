@@ -983,6 +983,30 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_quality_gate_schedule", source)
         self.assertNotIn("Use: just native-api-request -- --json --path '/api/v1/...'", justfile)
 
+    def test_quality_gate_state_status_only_omits_history(self):
+        result = {
+            "status": "fail",
+            "summary": "Latest quality gate status is fail.",
+            "details": {
+                "history_count": 30,
+                "history": [{"status": "pass"}],
+                "recent_failures": [{"status": "fail"}, {"status": "fail"}],
+                "latest": {"status": "fail", "generated_at": "2026-06-22T01:38:49+00:00"},
+            },
+            "findings": [
+                {"status": "fail", "check": "quality-gate-state.latest", "message": "failed"},
+                {"status": "pass", "check": "quality-gate-state.history", "message": "ok"},
+            ],
+        }
+
+        compact = turbovasctl.quality_gate_state_status_only_result(result)
+
+        self.assertEqual(compact["details"]["history_count"], 30)
+        self.assertEqual(compact["details"]["recent_failure_count"], 2)
+        self.assertEqual(compact["details"]["latest"]["status"], "fail")
+        self.assertNotIn("history", compact["details"])
+        self.assertEqual(compact["findings"], [{"status": "fail", "check": "quality-gate-state.latest", "message": "failed"}])
+
     def test_native_api_request_just_recipe_accepts_direct_options(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertIn('native-api-request *args:', justfile)

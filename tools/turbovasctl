@@ -12942,7 +12942,24 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     return result
 
 
-def command_quality_gate_state(repo_root: Path) -> dict[str, Any]:
+def quality_gate_state_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    latest = details.get("latest") if isinstance(details.get("latest"), dict) else None
+    recent_failures = details.get("recent_failures") if isinstance(details.get("recent_failures"), list) else []
+    compact = dict(result)
+    compact["details"] = {
+        "latest": latest,
+        "history_count": details.get("history_count", 0),
+        "recent_failure_count": len(recent_failures),
+    }
+    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding("pass", "quality-gate-state.status-only", "Quality gate state passed; no non-pass findings.")
+    ]
+    return compact
+
+
+def command_quality_gate_state(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     artifact_dir = quality_gate_artifact_dir(repo_root)
     latest_path = artifact_dir / "quality-gate.json"
     latest = read_json_artifact(latest_path)
@@ -12972,6 +12989,8 @@ def command_quality_gate_state(repo_root: Path) -> dict[str, Any]:
     findings.append(finding("pass", "quality-gate-state.history", f"Quality gate history contains {len(history)} retained timestamped artifacts.", details={"history_count": len(history), "recent_failure_count": len(recent_failures)}))
     result = make_result("quality-gate-state", repo_root, summary, findings, [str(latest_path)] if latest_path.exists() else [])
     result["details"] = details
+    if status_only:
+        result = quality_gate_state_status_only_result(result)
     return result
 
 
@@ -13154,7 +13173,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-rbac-smoke", parents=[common], help="verify all authenticated users share operator privileges")
     quality_gate = subparsers.add_parser("quality-gate", parents=[common], help="run the local deterministic quality gate")
     quality_gate.add_argument("--runtime", action="store_true", help="include runtime-safe status/log/data diagnostics")
-    subparsers.add_parser("quality-gate-state", parents=[common], help="show retained local quality gate history")
+    quality_gate_state = subparsers.add_parser("quality-gate-state", parents=[common], help="show retained local quality gate history")
+    quality_gate_state.add_argument("--status-only", action="store_true", help="emit latest status/counts and only non-pass findings for chat-safe closeout checks")
     quality_gate_schedule = subparsers.add_parser("quality-gate-schedule", parents=[common], help="install, inspect, or disable the server-side quality gate timer")
     schedule_actions = quality_gate_schedule.add_mutually_exclusive_group()
     schedule_actions.add_argument("--install", action="store_true", help="install and enable the turboforge user systemd timer")
@@ -13309,7 +13329,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "quality-gate":
         result = command_quality_gate(repo_root, include_runtime=args.runtime)
     elif args.command == "quality-gate-state":
-        result = command_quality_gate_state(repo_root)
+        result = command_quality_gate_state(repo_root, status_only=args.status_only)
     elif args.command == "quality-gate-schedule":
         action = "install" if args.install else "disable" if args.disable else "status"
         result = command_quality_gate_schedule(repo_root, action)

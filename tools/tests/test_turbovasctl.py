@@ -1870,6 +1870,29 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(finding["status"], "pass")
         self.assertEqual(finding["details"]["minimum"], "3.11")
 
+    def test_doctor_status_only_omits_pass_findings_and_summarizes_details(self):
+        result = {
+            "status": "warn",
+            "summary": "Monorepo health checks completed.",
+            "findings": [
+                {"status": "pass", "check": "repo.git", "message": "ok"},
+                {
+                    "status": "warn",
+                    "check": "surface.deferred",
+                    "message": "deferred",
+                    "details": {"commands": ["one", "two"], "status": "known"},
+                },
+            ],
+        }
+
+        compact = turbovasctl.doctor_status_only_result(result)
+
+        self.assertEqual(compact["details"], {"finding_count": 2, "non_pass_count": 1})
+        self.assertEqual(len(compact["findings"]), 1)
+        self.assertEqual(compact["findings"][0]["check"], "surface.deferred")
+        self.assertEqual(compact["findings"][0]["details"]["commands"], {"type": "list", "count": 2})
+        self.assertEqual(compact["findings"][0]["details"]["status"], "known")
+
     def test_native_api_migration_matrix_combines_inventory_and_openapi_metadata(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_native_api_migration_matrix(root)

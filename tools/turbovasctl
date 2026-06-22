@@ -6177,6 +6177,41 @@ def license_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def compact_doctor_finding(item: dict[str, Any]) -> dict[str, Any]:
+    compact = {
+        key: item[key]
+        for key in ("status", "check", "message", "path")
+        if key in item and item[key] not in (None, "")
+    }
+    details = item.get("details")
+    if isinstance(details, dict):
+        compact_details: dict[str, Any] = {}
+        for key, value in details.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                compact_details[key] = value
+            elif isinstance(value, list):
+                compact_details[key] = {"type": "list", "count": len(value)}
+            elif isinstance(value, dict):
+                compact_details[key] = {"type": "object", "key_count": len(value)}
+        if compact_details:
+            compact["details"] = compact_details
+    return compact
+
+
+def doctor_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
+    compact["details"] = {
+        "finding_count": len(findings),
+        "non_pass_count": len(non_pass),
+    }
+    compact["findings"] = non_pass or [
+        finding("pass", "doctor.status-only", "Doctor passed; no non-pass findings.")
+    ]
+    return compact
+
+
 def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
     items = native_tooling_inventory(repo_root)
     summary = summarize_native_tooling(items, repo_root)
@@ -12556,7 +12591,7 @@ def command_gvmd_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("gvmd-smoke", repo_root, "gvmd profile smoke completed.", findings, [str(runtime_dir(repo_root))])
 
 
-def command_doctor(repo_root: Path) -> dict[str, Any]:
+def command_doctor(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     findings.append(finding("pass" if (repo_root / ".git").exists() else "fail", "repo.git", "Repository metadata is present." if (repo_root / ".git").exists() else "Repository metadata is missing.", ".git"))
     porcelain = run_git(repo_root, ["status", "--short"]) or ""
@@ -12579,7 +12614,10 @@ def command_doctor(repo_root: Path) -> dict[str, Any]:
     findings.append(finding("pass", "surface.diagnostics", "Native API, Redis, path-coupling, and security-policy diagnostics are available.", details={"commands": ["just native-tooling-state", "just runtime-redis-state", "just path-coupling-state", "just security-policy-check"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
-    return make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
+    result = make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
+    if status_only:
+        result = doctor_status_only_result(result)
+    return result
 
 
 def quality_gate_doctor_status(doctor_result: dict[str, Any]) -> tuple[str, str]:
@@ -12784,7 +12822,8 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_client_contract = subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
     native_api_client_contract.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe generated-client checks")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
-    subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
+    doctor = subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
+    doctor.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe doctor checks")
     subparsers.add_parser("branding-state", parents=[common], help="inventory visible branding and upstream-identity surfaces")
     license_report = subparsers.add_parser("license-report", parents=[common], help="check preserved license/provenance files")
     license_report.add_argument("--public-release", action="store_true", help="fail while public-release license review items remain open")
@@ -12904,7 +12943,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "rust-migration-state":
         result = command_rust_migration_state(repo_root)
     elif args.command == "doctor":
-        result = command_doctor(repo_root)
+        result = command_doctor(repo_root, status_only=args.status_only)
     elif args.command == "branding-state":
         result = command_branding_state(repo_root)
     elif args.command == "license-report":

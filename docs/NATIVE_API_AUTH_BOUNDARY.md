@@ -55,11 +55,16 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   in progress. That bridge is not the final scriptable API boundary.
 - Direct development access currently uses HTTP on an explicit development host
   binding. Production or hosted use still requires B-109/B-134 TLS, bootstrap,
-  host-binding, and deployment hardening.
+  host-binding, and deployment hardening. Until that work lands,
+  `production-posture-check` treats non-loopback direct native API exposure as a
+  hard failure, not as production-ready behavior protected merely by bearer
+  auth.
 
 ## Direct API Rules
 
 - Do not expose a wildcard direct host binding through the development helper.
+- Do not treat explicit non-loopback direct host binding as production-ready
+  before the production TLS/bootstrap/host-binding posture is implemented.
 - Do not log, print, or commit bearer tokens. Runtime-generated tokens live under
   the ignored runtime `secrets/` directory and are mounted read-only into the
   direct API container for the opt-in helper. Do not pass generated runtime

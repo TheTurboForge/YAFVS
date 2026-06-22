@@ -3526,6 +3526,23 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(auth["details"]["minimum_token_length"], 32)
         self.assertNotIn("short-token", rendered)
 
+    def test_direct_native_api_posture_fails_configured_non_loopback_even_with_auth_boundary(self):
+        env = {
+            turbovasctl.TURBOVAS_API_DIRECT_ENV: "1",
+            turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV: "192.0.2.10",
+            turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV: "A" * turbovasctl.TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(turbovasctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(turbovasctl, "running_service_env_value", return_value=None):
+                findings = turbovasctl.direct_native_api_posture_findings(root, env)
+
+        by_check = {item["check"]: item for item in findings}
+        self.assertEqual(by_check["production.native-api-direct.configured-binding"]["status"], "fail")
+        self.assertIn("production TLS/bootstrap/host-binding", by_check["production.native-api-direct.configured-binding"]["message"])
+        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "pass")
+
     def test_direct_native_api_posture_does_not_treat_secret_file_as_live_auth_boundary(self):
         env = {turbovasctl.TURBOVAS_API_DIRECT_ENV: "1"}
         with tempfile.TemporaryDirectory() as tmp:
@@ -3542,7 +3559,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(auth["details"]["token_sources"], [])
         self.assertTrue(auth["details"]["runtime_secret_present"])
 
-    def test_direct_native_api_posture_warns_for_running_non_loopback_binding(self):
+    def test_direct_native_api_posture_fails_for_running_non_loopback_binding(self):
         running = ({"host": "192.0.2.10", "host_port": "19080", "container_port": "9081"},)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -3556,7 +3573,8 @@ db2:keys=5,expires=0,avg_ttl=0
                 findings = turbovasctl.direct_native_api_posture_findings(root, {})
 
         by_check = {item["check"]: item for item in findings}
-        self.assertEqual(by_check["production.native-api-direct.running-binding"]["status"], "warn")
+        self.assertEqual(by_check["production.native-api-direct.running-binding"]["status"], "fail")
+        self.assertIn("production TLS/bootstrap/host-binding", by_check["production.native-api-direct.running-binding"]["message"])
         self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "pass")
         self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["details"]["token_sources"], ["running-container-token-file"])
 

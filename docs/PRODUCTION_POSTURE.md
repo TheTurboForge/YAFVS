@@ -18,10 +18,10 @@ as the primary scanner administration boundary.
 - Is a first-login or password-rotation bootstrap in place instead of relying
   on the development `admin` / `admin` account?
 - Is GSA exposed only to authorized operator networks?
-- If direct native API access is enabled, is it bound only to an authorized
-  operator network, protected by a bearer token that satisfies the local
-  minimum strength contract or stronger auth, and explicitly limited to
-  reviewed endpoints?
+- If direct native API access is enabled outside loopback, has the separate
+  production TLS/bootstrap/host-binding design landed? Until then,
+  `production-posture-check` fails non-loopback direct native API exposure even
+  when the bearer-token boundary is present.
 - Is TLS configured with trusted certificates for the deployment context?
 - Are runtime secrets stored outside git and outside public artifacts?
 - Are feed terms understood for the chosen feed handling model?

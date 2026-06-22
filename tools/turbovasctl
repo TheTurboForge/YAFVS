@@ -2289,8 +2289,8 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
             configured_status = "fail"
             configured_message = "Direct native API host publication is configured for a broad wildcard binding."
         elif not host_is_loopback(configured_host):
-            configured_status = "warn"
-            configured_message = "Direct native API host publication is configured for explicit non-loopback access; review the operator network before production exposure."
+            configured_status = "fail"
+            configured_message = "Direct native API host publication is configured for explicit non-loopback access before production TLS/bootstrap/host-binding hardening is complete."
         else:
             configured_status = "pass"
             configured_message = "Direct native API host publication is configured for loopback access."
@@ -2325,8 +2325,8 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
         running_status = "fail"
         running_message = "A running direct native API listener is published on a broad wildcard host binding."
     elif external_running:
-        running_status = "warn"
-        running_message = "A running direct native API listener is published on explicit non-loopback host binding."
+        running_status = "fail"
+        running_message = "A running direct native API listener is published on explicit non-loopback host binding before production TLS/bootstrap/host-binding hardening is complete."
     elif running_bindings:
         running_status = "pass"
         running_message = "Any running direct native API listener is published only on loopback host binding."

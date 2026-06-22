@@ -61,7 +61,9 @@ configuration, or other sensitive material.
 
 ## Development Commands
 
-TurboVAS provides a small root command surface for repository health checks:
+TurboVAS provides a small root command surface for repository health checks. See
+`docs/VALIDATION_STANDARDS.md` for which gate answers which source, runtime,
+browser, direct API, production-posture, or release-readiness question.
 
 - `just status`: show repository branch, HEAD, upstream, and worktree state.
 - `just inventory`: list the expected monorepo components.

@@ -115,7 +115,9 @@ It does not start or expose the listener.
 `runtime-native-api-direct-token --rotate` rotates only the ignored development
 runtime bearer-token secret and never prints the token value. Restart
 `turbovas-api` or rerun `runtime-native-api-direct-smoke` before expecting a
-running direct listener to accept the rotated token.
+running direct listener to accept the rotated token. The helper reports a
+machine-readable warning when it detects a currently published direct listener
+that may still be using the old file-backed token.
 
 Raw `curl` clients use the same bearer boundary. For the default development
 listener, first run the direct smoke so the ignored runtime secret exists, then

@@ -1343,11 +1343,27 @@ class TurboVASCtlTests(unittest.TestCase):
             {
                 "alignment_status",
                 "operation_count",
+                "missing_operation_id_count",
                 "missing_operation_summary_count",
+                "duplicate_operation_id_count",
+                "nondeterministic_operation_id_count",
+                "missing_shared_error_response_count",
+                "invalid_shared_error_response_count",
+                "operations_missing_error_response_count",
+                "missing_error_schema_field_count",
+                "invalid_error_schema_field_count",
                 "openapi_collection_operation_count",
                 "rust_collection_contract_count",
             },
         )
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_shared_error_response_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["invalid_shared_error_response_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["operations_missing_error_response_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_error_schema_field_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["invalid_error_schema_field_count"], 0)
         self.assertEqual(
             status_only["findings"],
             [

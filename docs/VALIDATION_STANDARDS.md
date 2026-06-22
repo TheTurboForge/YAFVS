@@ -73,6 +73,7 @@ surfaces.
 | Gate | Proves | Does Not Prove |
 | --- | --- | --- |
 | `git diff --check` | Patch formatting has no trailing whitespace or conflict markers. | Build, runtime, behavior, or license safety. |
+| `just doctor --status-only --json` | Repository structure, required documents, tool availability, Python tooling version, and known deferred surfaces are visible with compact status/non-pass output. | Component builds, runtime behavior, browser workflows, or production readiness. |
 | `just native-tooling-state --status-only --json` | Native API inventory, browser-proxy, direct-read, and OpenAPI contract alignment with chat-safe status/non-pass output. Use `--summary` only when compact count details are needed. | Runtime data parity, browser behavior, or production readiness. |
 | `just native-api-client-contract --status-only --json` | OpenAPI server/auth/error/direct-read metadata is ready for generated-client use with compact status/non-pass output. Use full `--json` only when investigating a contract mismatch. | Endpoint response correctness or direct listener availability. |
 | `just runtime-native-api-smoke --json` | Internal native API sidecar can answer representative live runtime reads. | Browser workflows, direct scriptable access, or production posture. |

@@ -26,6 +26,7 @@ mod query;
 mod request_ids;
 mod request_shapes;
 mod row_helpers;
+mod tag_resource_helpers;
 
 use app_state::{AppState, create_pool, healthz};
 use collections::*;
@@ -36,6 +37,7 @@ use formatters::*;
 use path_ids::*;
 use query::*;
 use row_helpers::*;
+use tag_resource_helpers::*;
 
 #[derive(Debug, Serialize)]
 struct ScopeSummary {
@@ -8839,10 +8841,6 @@ fn tag_asset_from_row(row: &Row) -> TagAssetItem {
     }
 }
 
-fn normalize_tag_resource_type(value: String) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
 fn tag_resource_from_row(row: &Row) -> TagResourceItem {
     TagResourceItem {
         id: row.get("id"),
@@ -8976,29 +8974,6 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             "unsupported tag resource type: {resource_type}"
         ))),
     }
-}
-
-fn strip_wrapping_quotes(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.len() >= 2
-        && ((trimmed.starts_with('"') && trimmed.ends_with('"'))
-            || (trimmed.starts_with('\'') && trimmed.ends_with('\'')))
-    {
-        trimmed[1..trimmed.len() - 1].trim().to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn tag_resource_name_filter(filter: &str) -> (String, bool) {
-    let trimmed = filter.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    for prefix in ["uuid=", "id="] {
-        if lower.starts_with(prefix) {
-            return (strip_wrapping_quotes(&trimmed[prefix.len()..]), true);
-        }
-    }
-    (trimmed.to_string(), false)
 }
 
 fn tag_resource_collection_sql(resource_type: &str, sort_sql: &str) -> Result<String, ApiError> {
@@ -10745,22 +10720,6 @@ mod tests {
         assert!(nvt_sql.contains("r.oid"));
         let cert_sql = tag_resource_name_collection_sql("cert_bund_adv", &sort_sql).unwrap();
         assert!(cert_sql.contains("FROM cert.cert_bund_advs r"));
-    }
-
-    #[test]
-    fn tag_resource_name_filter_supports_exact_id_syntax() {
-        assert_eq!(
-            tag_resource_name_filter("uuid=12345678-1234-1234-1234-123456789abc"),
-            ("12345678-1234-1234-1234-123456789abc".to_string(), true)
-        );
-        assert_eq!(
-            tag_resource_name_filter("id='CVE-2026-0001'"),
-            ("CVE-2026-0001".to_string(), true)
-        );
-        assert_eq!(
-            tag_resource_name_filter("nightly"),
-            ("nightly".to_string(), false)
-        );
     }
 
     #[test]

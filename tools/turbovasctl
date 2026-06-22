@@ -2345,6 +2345,8 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
     token_sources, secret_path, secret_present = native_api_direct_token_sources(repo_root, env)
     configured_token = env.get(TURBOVAS_API_BEARER_TOKEN_ENV, "")
     configured_token_ok = direct_api_bearer_token_is_acceptable(configured_token) if configured_token else None
+    secret_metadata = runtime_secret_file_metadata(secret_path)
+    secret_file_used = "configured-token-file" in token_sources or "running-container-token-file" in token_sources
     exposure_enabled = configured or bool(running_bindings)
     auth_details = {
         "exposure_enabled": exposure_enabled,
@@ -2355,6 +2357,9 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
         "configured_environment_token_ok": configured_token_ok,
         "runtime_secret": str(secret_path),
         "runtime_secret_present": secret_present,
+        "runtime_secret_mode": secret_metadata["mode"],
+        "runtime_secret_permission_ok": secret_metadata["permission_ok"],
+        "runtime_secret_group_or_world_accessible": secret_metadata["group_or_world_accessible"],
     }
     if not exposure_enabled:
         findings.append(
@@ -2371,6 +2376,15 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
                 "fail",
                 "production.native-api-direct.auth-boundary",
                 "Direct native API exposure is configured with a bearer token that is too short or contains unsafe characters.",
+                details=auth_details,
+            )
+        )
+    elif secret_file_used and secret_metadata["exists"] and not secret_metadata["permission_ok"]:
+        findings.append(
+            finding(
+                "fail",
+                "production.native-api-direct.auth-boundary",
+                "Direct native API exposure uses the runtime bearer-token file, but the file is group/world accessible.",
                 details=auth_details,
             )
         )
@@ -2764,6 +2778,24 @@ def gvm_cert_env(repo_root: Path) -> dict[str, str]:
 
 def runtime_secret_path(repo_root: Path, name: str) -> Path:
     return runtime_path(repo_root, "secrets", name)
+
+
+def runtime_secret_file_metadata(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {
+            "exists": False,
+            "mode": None,
+            "permission_ok": False,
+            "group_or_world_accessible": False,
+        }
+    mode = path.stat().st_mode & 0o777
+    group_or_world_accessible = bool(mode & 0o077)
+    return {
+        "exists": True,
+        "mode": f"{mode:04o}",
+        "permission_ok": not group_or_world_accessible,
+        "group_or_world_accessible": group_or_world_accessible,
+    }
 
 
 def read_or_create_runtime_secret(repo_root: Path, name: str, default: str | None = None) -> tuple[str, bool]:
@@ -9060,18 +9092,25 @@ def command_runtime_native_api_direct_token(repo_root: Path, *, rotate: bool) ->
         token = ""
     token_exists = bool(token)
     token_ok = direct_api_bearer_token_is_acceptable(token) if token_exists else False
+    secret_metadata = runtime_secret_file_metadata(secret_path)
+    token_status = "pass" if token_exists and token_ok and secret_metadata["permission_ok"] else "warn"
+    if token_exists and token_ok and not secret_metadata["permission_ok"]:
+        token_status = "fail"
     findings.append(
         finding(
-            "pass" if token_exists and token_ok else "warn",
+            token_status,
             "native-api-direct-token.runtime-secret",
-            "Direct native API runtime bearer token file exists and satisfies the local strength contract."
-            if token_exists and token_ok
-            else "Direct native API runtime bearer token file is missing or does not satisfy the local strength contract.",
+            "Direct native API runtime bearer token file exists, satisfies the local strength contract, and is not group/world accessible."
+            if token_status == "pass"
+            else "Direct native API runtime bearer token file is missing, weak, or group/world accessible.",
             str(secret_path),
             {
                 "exists": token_exists,
                 "acceptable": token_ok,
                 "secret_path": str(secret_path),
+                "mode": secret_metadata["mode"],
+                "permission_ok": secret_metadata["permission_ok"],
+                "group_or_world_accessible": secret_metadata["group_or_world_accessible"],
                 "token_value_reported": False,
             },
         )
@@ -9121,18 +9160,24 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path) -> dict[str, An
     )
 
     token_ok = direct_api_bearer_token_is_acceptable(token)
+    secret_metadata = runtime_secret_file_metadata(secret_path)
+    token_permission_ok = token_source != "runtime-secret-file" or secret_metadata["permission_ok"]
+    token_status = "pass" if token_ok and token_permission_ok else "fail"
     findings.append(
         finding(
-            "pass" if token_ok else "fail",
+            token_status,
             "native-api-direct-bootstrap.token",
-            "Direct native API bootstrap has a bearer token that satisfies the local strength contract."
-            if token_ok
-            else "Direct native API bootstrap bearer token is missing, too short, or contains unsafe characters.",
+            "Direct native API bootstrap has a bearer token that satisfies the local strength contract and is not group/world accessible."
+            if token_status == "pass"
+            else "Direct native API bootstrap bearer token is missing, weak, or group/world accessible.",
             str(secret_path) if token_source == "runtime-secret-file" else None,
             {
                 "token_source": token_source,
                 "minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
                 "runtime_secret": str(secret_path),
+                "runtime_secret_mode": secret_metadata["mode"],
+                "runtime_secret_permission_ok": secret_metadata["permission_ok"],
+                "runtime_secret_group_or_world_accessible": secret_metadata["group_or_world_accessible"],
                 "token_value_reported": False,
             },
         )

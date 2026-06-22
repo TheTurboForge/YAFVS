@@ -3248,6 +3248,9 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(secret, "admin")
             secret_path = turbovasctl.runtime_secret_path(root, "example")
             self.assertEqual(secret_path.read_text(encoding="utf-8").strip(), "admin")
+            metadata = turbovasctl.runtime_secret_file_metadata(secret_path)
+            self.assertEqual(metadata["mode"], "0600")
+            self.assertTrue(metadata["permission_ok"])
 
     def test_short_secret_redaction_preserves_benign_identifier_names(self):
         text = '{"admin_uuid":"kept", "created_by":"admin", "check":"runtime.admin-secret", "flag":"admin-secret", "user":"admin"}'
@@ -3470,7 +3473,31 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn(after, rendered)
         checks = {item["check"]: item for item in result["findings"]}
         self.assertEqual(checks["native-api-direct-token.runtime-secret"]["details"]["token_value_reported"], False)
+        self.assertTrue(checks["native-api-direct-token.runtime-secret"]["details"]["permission_ok"])
         self.assertIn("rerun runtime-native-api-direct-smoke", checks["native-api-direct-token.reload-required"]["message"])
+
+    def test_runtime_direct_token_reports_broad_secret_permissions_without_leaking_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            token_path = turbovasctl.write_runtime_secret(
+                root,
+                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                "0123456789abcdef0123456789abcdef",
+            )
+            token_path.chmod(0o644)
+            token = token_path.read_text(encoding="utf-8").strip()
+
+            result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=False)
+
+        rendered = json.dumps(result, sort_keys=True)
+        checks = {item["check"]: item for item in result["findings"]}
+        secret = checks["native-api-direct-token.runtime-secret"]
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(secret["status"], "fail")
+        self.assertEqual(secret["details"]["mode"], "0644")
+        self.assertFalse(secret["details"]["permission_ok"])
+        self.assertNotIn(token, rendered)
 
     def test_direct_native_api_bootstrap_creates_secret_without_reporting_value(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3487,7 +3514,32 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn(token, rendered)
         self.assertEqual(checks["native-api-direct-bootstrap.host-binding"]["status"], "pass")
         self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["token_value_reported"], False)
+        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_mode"], "0600")
+        self.assertTrue(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_permission_ok"])
         self.assertEqual(checks["production.native-api-direct.auth-boundary"]["status"], "pass")
+
+    def test_direct_native_api_bootstrap_fails_broad_secret_permissions_without_leaking_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            token_path = turbovasctl.write_runtime_secret(
+                root,
+                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                "0123456789abcdef0123456789abcdef",
+            )
+            token_path.chmod(0o644)
+            token = token_path.read_text(encoding="utf-8").strip()
+            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(turbovasctl, "running_service_env_value", return_value=None):
+                result = turbovasctl.command_runtime_native_api_direct_bootstrap(root)
+
+        rendered = json.dumps(result, sort_keys=True)
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(checks["native-api-direct-bootstrap.token"]["status"], "fail")
+        self.assertEqual(checks["production.native-api-direct.auth-boundary"]["status"], "fail")
+        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_mode"], "0644")
+        self.assertFalse(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_permission_ok"])
+        self.assertNotIn(token, rendered)
 
     def test_direct_native_api_bootstrap_fails_non_loopback_without_leaking_token(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3604,6 +3656,28 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(auth["status"], "fail")
         self.assertEqual(auth["details"]["token_sources"], [])
         self.assertTrue(auth["details"]["runtime_secret_present"])
+
+    def test_direct_native_api_posture_fails_broad_runtime_secret_permissions(self):
+        env = {
+            turbovasctl.TURBOVAS_API_DIRECT_ENV: "1",
+            turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV: turbovasctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            secret_path = turbovasctl.write_runtime_secret(
+                root,
+                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                "0123456789abcdef0123456789abcdef",
+            )
+            secret_path.chmod(0o664)
+            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(turbovasctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(turbovasctl, "running_service_env_value", return_value=None):
+                findings = turbovasctl.direct_native_api_posture_findings(root, env)
+
+        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
+        self.assertEqual(auth["status"], "fail")
+        self.assertEqual(auth["details"]["runtime_secret_mode"], "0664")
+        self.assertFalse(auth["details"]["runtime_secret_permission_ok"])
 
     def test_direct_native_api_posture_fails_for_running_non_loopback_binding(self):
         running = ({"host": "192.0.2.10", "host_port": "19080", "container_port": "9081"},)

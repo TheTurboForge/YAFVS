@@ -110,7 +110,9 @@ tools/turbovasctl native-api-request --direct --json --request-id 'operator-chec
 secret if needed, verifies local direct host/port/bind shape, refuses wildcard or
 non-loopback host publication, checks that the runtime token secret is not
 group/world accessible when that file is used, and reports only token metadata.
-It does not start or expose the listener.
+It also requires helper-managed direct binds to target the fixed service
+container port `9081`, matching the Compose publication boundary. It does not
+start or expose the listener.
 
 `runtime-native-api-direct-token --rotate` rotates only the ignored development
 runtime bearer-token secret and never prints the token value. Restart

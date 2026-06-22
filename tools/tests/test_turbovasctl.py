@@ -3434,12 +3434,20 @@ db2:keys=5,expires=0,avg_ttl=0
             (turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV, "19 080"),
             (turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0"),
             (turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0:not-a-port"),
+            (turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0:9999"),
         ]
         for env_name, value in cases:
             with self.subTest(env_name=env_name, value=value):
                 env = dict(valid)
                 env[env_name] = value
                 self.assertTrue(turbovasctl.native_api_direct_config_errors(env))
+
+        bad_bind = dict(valid)
+        bad_bind[turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
+        self.assertIn(
+            f"{turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV} must use container port {turbovasctl.TURBOVAS_API_DIRECT_CONTAINER_PORT}",
+            turbovasctl.native_api_direct_config_errors(bad_bind)[0],
+        )
 
     def test_native_api_request_direct_rejects_malformed_config_before_curl(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3617,6 +3625,36 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(result["status"], "fail")
         self.assertEqual(checks["native-api-direct-bootstrap.host-binding"]["status"], "fail")
         self.assertEqual(checks["production.native-api-direct.configured-binding"]["status"], "fail")
+        self.assertNotIn(token, rendered)
+
+    def test_direct_native_api_bootstrap_fails_wrong_container_bind_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            token = "0123456789abcdef0123456789abcdef"
+            original_bind = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV)
+            original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            try:
+                turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
+                turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(turbovasctl, "running_service_env_value", return_value=None):
+                    result = turbovasctl.command_runtime_native_api_direct_bootstrap(root)
+            finally:
+                if original_bind is None:
+                    turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV] = original_bind
+                if original_token is None:
+                    turbovasctl.os.environ.pop(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                else:
+                    turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+
+        rendered = json.dumps(result, sort_keys=True)
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(checks["native-api-direct-bootstrap.config-shape"]["status"], "fail")
+        self.assertEqual(checks["production.native-api-direct.config-shape"]["status"], "fail")
+        self.assertIn("container port 9081", rendered)
         self.assertNotIn(token, rendered)
 
     def test_direct_native_api_smoke_fails_non_loopback_before_runtime_restart(self):

@@ -2001,7 +2001,13 @@ def validate_native_api_direct_bind_value(value: str, *, env_name: str) -> str:
         if bind.count(":") != 1:
             raise ValueError(f"{env_name} must be host:port or [ipv6]:port")
         host, port = bind.rsplit(":", 1)
-    return f"{validate_native_api_direct_host_value(host, env_name=env_name)}:{validate_native_api_direct_port_value(port, env_name=env_name)}"
+    normalized_port = validate_native_api_direct_port_value(port, env_name=env_name)
+    if normalized_port != TURBOVAS_API_DIRECT_CONTAINER_PORT:
+        raise ValueError(
+            f"{env_name} must use container port {TURBOVAS_API_DIRECT_CONTAINER_PORT} "
+            "when managed by turbovasctl"
+        )
+    return f"{validate_native_api_direct_host_value(host, env_name=env_name)}:{normalized_port}"
 
 
 def native_api_direct_config_errors(env: dict[str, str]) -> tuple[str, ...]:

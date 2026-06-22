@@ -6262,14 +6262,58 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
     }
 
 
+def native_api_migration_matrix_remaining_surface(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    bucket_tokens = {
+        "write_or_mutation": ("write", "writes", "mutation", "mutations", "delete", "deletes", "creation", "import"),
+        "control_or_operation": ("control", "actions", "feed-sync", "scan-control", "delivery"),
+        "export_or_download": ("export", "exports", "download", "downloads"),
+        "credential_or_secret": ("credential", "credentials", "secret", "secrets"),
+        "rich_context_or_history": ("rich", "history", "raw", "xml", "row-data"),
+        "report_generation_or_retention": ("generation", "report-generation", "retention"),
+    }
+    bucket_counts = {bucket: 0 for bucket in bucket_tokens}
+    residue_counts: dict[str, int] = {}
+    examples: dict[str, str] = {}
+    for row in rows:
+        residue = row.get("x_turbovas_inherited_still_owns")
+        if not isinstance(residue, str) or not residue:
+            continue
+        residue_counts[residue] = residue_counts.get(residue, 0) + 1
+        endpoint = row.get("endpoint")
+        if isinstance(endpoint, str):
+            examples.setdefault(residue, endpoint)
+        residue_words = residue.lower()
+        for bucket, tokens in bucket_tokens.items():
+            if any(token in residue_words for token in tokens):
+                bucket_counts[bucket] += 1
+
+    top_residuals = [
+        {"residue": residue, "count": count, "example_endpoint": examples.get(residue)}
+        for residue, count in sorted(residue_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+    ]
+    return {
+        "rows_with_inherited_owner_tail": sum(residue_counts.values()),
+        "distinct_owner_tails": len(residue_counts),
+        "bucket_counts": bucket_counts,
+        "top_residuals": top_residuals,
+        "planning_hint": (
+            "Current native rows are metadata-complete; remaining inherited tails are mostly "
+            "writes, control, exports, rich context, credentials, report generation, or retention. "
+            "Skip candidates that cross those boundaries unless a dedicated design packet authorizes them."
+        ),
+    }
+
+
 def native_api_migration_matrix_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    rows = details.get("items") if isinstance(details.get("items"), list) else []
     findings = result.get("findings", [])
     non_pass = [item for item in findings if item.get("status") != "pass"]
     compact = dict(result)
     compact["details"] = {
         "summary": details.get("summary", {}),
         "contract": details.get("contract", {}),
+        "remaining_inherited_surface": native_api_migration_matrix_remaining_surface(rows),
     }
     compact["findings"] = non_pass or [
         finding(

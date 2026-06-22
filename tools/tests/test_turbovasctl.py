@@ -1971,7 +1971,12 @@ class TurboVASCtlTests(unittest.TestCase):
             "details": {
                 "summary": {"total_rows": 2},
                 "contract": {"rows_missing_openapi": []},
-                "items": [{"endpoint": "/api/v1/reports"}],
+                "items": [
+                    {
+                        "endpoint": "/api/v1/reports",
+                        "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                    }
+                ],
             },
             "findings": [
                 {"status": "pass", "check": "native-api-migration-matrix.rows", "message": "ok"},
@@ -1980,8 +1985,33 @@ class TurboVASCtlTests(unittest.TestCase):
 
         compact = turbovasctl.native_api_migration_matrix_status_only_result(result)
 
-        self.assertEqual(compact["details"], {"summary": {"total_rows": 2}, "contract": {"rows_missing_openapi": []}})
+        self.assertEqual(compact["details"]["summary"], {"total_rows": 2})
+        self.assertEqual(compact["details"]["contract"], {"rows_missing_openapi": []})
+        self.assertNotIn("items", compact["details"])
+        remaining = compact["details"]["remaining_inherited_surface"]
+        self.assertEqual(remaining["rows_with_inherited_owner_tail"], 1)
+        self.assertEqual(remaining["distinct_owner_tails"], 1)
+        self.assertEqual(remaining["bucket_counts"]["export_or_download"], 1)
+        self.assertEqual(remaining["bucket_counts"]["report_generation_or_retention"], 1)
+        self.assertEqual(remaining["top_residuals"][0]["example_endpoint"], "/api/v1/reports")
         self.assertEqual(compact["findings"], [{"status": "pass", "check": "native-api-migration-matrix.status-only", "message": "Native API migration matrix passed; no non-pass findings."}])
+
+    def test_native_api_migration_matrix_remaining_surface_buckets_owner_tails(self):
+        rows = [
+            {"endpoint": "/api/v1/tasks", "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes"},
+            {"endpoint": "/api/v1/targets", "x_turbovas_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
+            {"endpoint": "/api/v1/cves", "x_turbovas_inherited_still_owns": "scap-rich-context"},
+        ]
+
+        remaining = turbovasctl.native_api_migration_matrix_remaining_surface(rows)
+
+        self.assertEqual(remaining["rows_with_inherited_owner_tail"], 3)
+        self.assertEqual(remaining["distinct_owner_tails"], 3)
+        self.assertEqual(remaining["bucket_counts"]["write_or_mutation"], 2)
+        self.assertEqual(remaining["bucket_counts"]["control_or_operation"], 1)
+        self.assertEqual(remaining["bucket_counts"]["credential_or_secret"], 1)
+        self.assertEqual(remaining["bucket_counts"]["rich_context_or_history"], 1)
+        self.assertIn("dedicated design packet", remaining["planning_hint"])
 
     def test_openapi_operation_id_generator_is_stable_and_collision_free(self):
         root = Path(__file__).resolve().parents[2]

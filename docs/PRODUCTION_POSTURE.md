@@ -34,7 +34,7 @@ as the primary scanner administration boundary.
 
 Useful non-destructive checks:
 
-- `just doctor --json`
+- `just doctor --status-only --json`
 - `just license-report --json`
 - `just runtime-status --json`
 - `just runtime-smoke --json`

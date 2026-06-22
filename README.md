@@ -134,8 +134,8 @@ additional command arguments consistently, so JSON output can be requested via
 either surface, for example:
 
 ```sh
-just doctor --json
-tools/turbovasctl doctor --json
+just doctor --status-only --json
+tools/turbovasctl doctor --status-only --json
 ```
 
 GitHub Actions also runs the source-only quality gate in

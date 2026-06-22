@@ -827,6 +827,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def native_api_expected_bad_request_finding", source)
         self.assertIn("native-api.scope-reports.invalid-sort", source)
         self.assertIn("/api/v1/scope-reports?page_size=1&sort=not_a_scope_report_sort", source)
+        self.assertIn("native-api.scope-reports.oversized-page-size", source)
+        self.assertIn("/api/v1/scope-reports?page_size=501", source)
         self.assertIn("native-api.targets.invalid-sort", source)
         self.assertIn("/api/v1/targets?page_size=1&sort=not_a_target_sort", source)
         self.assertIn("native-api.vulnerabilities.invalid-sort", source)

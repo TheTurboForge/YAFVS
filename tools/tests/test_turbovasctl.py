@@ -1385,6 +1385,14 @@ class TurboVASCtlTests(unittest.TestCase):
                 "operations_missing_error_response_count",
                 "missing_error_schema_field_count",
                 "invalid_error_schema_field_count",
+                "auth_contract_alignment_status",
+                "missing_server_count",
+                "unexpected_server_count",
+                "missing_security_requirement_count",
+                "unexpected_security_requirement_count",
+                "missing_security_scheme_count",
+                "unexpected_security_scheme_count",
+                "security_scheme_mismatch_count",
                 "openapi_collection_operation_count",
                 "rust_collection_contract_count",
             },
@@ -1397,6 +1405,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["operations_missing_error_response_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_error_schema_field_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_error_schema_field_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["auth_contract_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_server_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["unexpected_server_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_security_requirement_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["unexpected_security_requirement_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_security_scheme_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["unexpected_security_scheme_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["security_scheme_mismatch_count"], 0)
         self.assertEqual(
             status_only["findings"],
             [

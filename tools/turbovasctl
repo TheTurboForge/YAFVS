@@ -6425,7 +6425,35 @@ def command_native_api_migration_matrix(repo_root: Path, status_only: bool = Fal
     return result
 
 
-def command_native_api_client_contract(repo_root: Path) -> dict[str, Any]:
+def native_api_client_contract_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        "openapi_version": details.get("openapi_version"),
+        "operation_count": details.get("operation_count", 0),
+        "direct_read_operation_count": details.get("direct_read_operation_count", 0),
+        "non_get_direct_operation_count": len(details.get("non_get_direct_operations", [])) if isinstance(details.get("non_get_direct_operations"), list) else 0,
+        "openapi_alignment_status": details.get("openapi_alignment_status", "unknown"),
+        "auth_contract_alignment_status": details.get("auth_contract_alignment_status", "unknown"),
+        "missing_operation_id_count": details.get("missing_operation_id_count", 0),
+        "duplicate_operation_id_count": details.get("duplicate_operation_id_count", 0),
+        "operations_missing_error_response_count": details.get("operations_missing_error_response_count", 0),
+        "missing_error_schema_field_count": details.get("missing_error_schema_field_count", 0),
+        "missing_server_count": details.get("missing_server_count", 0),
+        "missing_security_scheme_count": details.get("missing_security_scheme_count", 0),
+    }
+    non_pass = [finding for finding in result.get("findings", []) if finding.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding(
+            "pass",
+            "native-api-client-contract.status-only",
+            "Native API generated-client contract passed; no non-pass findings.",
+        )
+    ]
+    return compact
+
+
+def command_native_api_client_contract(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     contract = native_api_openapi_contract_summary(repo_root)
     auth_contract = contract.get("auth_contract", {}) if isinstance(contract.get("auth_contract"), dict) else {}
     operations = openapi_contract_operations(repo_root)
@@ -6495,6 +6523,8 @@ def command_native_api_client_contract(repo_root: Path) -> dict[str, Any]:
     ]
     result = make_result("native-api-client-contract", repo_root, "Native API generated-client contract checked.", findings)
     result["details"] = details
+    if status_only:
+        result = native_api_client_contract_status_only_result(result)
     return result
 
 
@@ -12726,7 +12756,8 @@ def build_parser() -> argparse.ArgumentParser:
     native_tooling_state.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
     migration_matrix = subparsers.add_parser("native-api-migration-matrix", parents=[common], help="show native API migration metadata by endpoint")
     migration_matrix.add_argument("--status-only", action="store_true", help="emit summary/contract details and only non-pass findings for chat-safe API planning")
-    subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
+    native_api_client_contract = subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
+    native_api_client_contract.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe generated-client checks")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
     subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     subparsers.add_parser("branding-state", parents=[common], help="inventory visible branding and upstream-identity surfaces")
@@ -12844,7 +12875,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "native-api-migration-matrix":
         result = command_native_api_migration_matrix(repo_root, status_only=args.status_only)
     elif args.command == "native-api-client-contract":
-        result = command_native_api_client_contract(repo_root)
+        result = command_native_api_client_contract(repo_root, status_only=args.status_only)
     elif args.command == "rust-migration-state":
         result = command_rust_migration_state(repo_root)
     elif args.command == "doctor":

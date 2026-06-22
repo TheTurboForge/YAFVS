@@ -1817,6 +1817,37 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(findings["native-api-client-contract.auth"]["status"], "pass")
         self.assertEqual(findings["native-api-client-contract.direct-read"]["status"], "pass")
 
+    def test_native_api_client_contract_status_only_is_chat_safe(self):
+        root = Path(__file__).resolve().parents[2]
+        full = turbovasctl.command_native_api_client_contract(root)
+        status_only = turbovasctl.command_native_api_client_contract(root, status_only=True)
+
+        self.assertEqual(status_only["status"], "pass")
+        self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
+        self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["missing_operation_id_count"], 0)
+        self.assertEqual(status_only["details"]["duplicate_operation_id_count"], 0)
+        self.assertEqual(status_only["details"]["operations_missing_error_response_count"], 0)
+        self.assertEqual(status_only["details"]["missing_error_schema_field_count"], 0)
+        self.assertEqual(status_only["details"]["missing_server_count"], 0)
+        self.assertEqual(status_only["details"]["missing_security_scheme_count"], 0)
+        self.assertNotIn("servers", status_only["details"])
+        self.assertNotIn("security_schemes", status_only["details"])
+        self.assertEqual(
+            status_only["findings"],
+            [
+                {
+                    "status": "pass",
+                    "check": "native-api-client-contract.status-only",
+                    "message": "Native API generated-client contract passed; no non-pass findings.",
+                }
+            ],
+        )
+        self.assertLess(len(json.dumps(status_only)), len(json.dumps(full)))
+
     def test_native_api_migration_matrix_combines_inventory_and_openapi_metadata(self):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_native_api_migration_matrix(root)

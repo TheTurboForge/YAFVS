@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 TurboVAS contributors
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
 use std::{path::PathBuf, str::FromStr, time::Duration};

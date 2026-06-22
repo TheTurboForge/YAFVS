@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: 2026 TurboVAS contributors -->
+<!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 # Scope-Based Reporting

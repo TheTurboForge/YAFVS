@@ -1,4 +1,4 @@
-<!-- Modified by TurboVAS contributors, 2026. -->
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
 
 # OpenVAS Daemon
 

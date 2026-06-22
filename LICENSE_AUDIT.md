@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: 2026 TurboVAS contributors -->
+<!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 # License Audit
@@ -45,8 +45,10 @@ artifacts that include the service.
 - Record source provenance for every imported component, vendored dependency, generated source addition, or substantial source replacement.
 - Update this file whenever source scope, component provenance, dependency scope, packaging, distribution, or release behavior changes.
 - Preserve existing attribution and modification history when changing imported source files.
-- Add TurboVAS modification notices to imported source files when they are changed.
-- Add explicit license information to new TurboVAS-created files.
+- Add Robert Pelfrey-attributed TurboVAS modification notices to imported
+  source files when they are changed.
+- Add explicit license information to new TurboVAS-created files, including
+  `SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>`.
 - Treat feed content terms separately from source code licensing.
 - Treat development feed caches and runtime feed copies as local, untracked runtime state; do not commit, bundle, package, or redistribute feed content without a separate feed-terms review.
 - Treat TurboVAS as Greenbone Community Feed-only. Do not add or re-enable
@@ -76,17 +78,18 @@ For GPL- or AGPL-covered files, add a concise prominent TurboVAS modification
 notice near the existing license header or another established file-level notice
 location. Use the file's existing comment style. A typical form is:
 
-`Modified by TurboVAS contributors, 2026.`
+`TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.`
 
 If a file already has a structured modification history, add the TurboVAS entry
 there instead of creating a duplicate header block. TurboVAS modifications remain
 under the file's existing license unless a more specific compatible notice is
 reviewed and documented.
 
-New TurboVAS-created files should include an SPDX license identifier and copyright
-notice. Prefer the license already governing the component or subdirectory where
-the file lives. If the governing license is unclear, especially in mixed-license
-areas such as `components/openvas-scanner`, stop and review before adding the file.
+New TurboVAS-created files should include an SPDX license identifier and
+`SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>`. Prefer the
+license already governing the component or subdirectory where the file lives. If
+the governing license is unclear, especially in mixed-license areas such as
+`components/openvas-scanner`, stop and review before adding the file.
 Root-level TurboVAS-only tooling, public documentation, and TurboVAS-owned
 service code outside imported component trees use `GPL-3.0-or-later` as the
 default.

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 TurboVAS contributors
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import importlib.util
@@ -3823,7 +3823,7 @@ db2:keys=5,expires=0,avg_ttl=0
             missing, review = turbovasctl.modified_imported_notice_gaps(root, rows)
             self.assertEqual(missing, ["components/gvmd/src/example.c"])
             self.assertEqual(review, ["components/gsa/package.json"])
-            source.write_text(source.read_text(encoding="utf-8").replace(" *\n", " * Modified by TurboVAS contributors, 2026.\n *\n", 1), encoding="utf-8")
+            source.write_text(source.read_text(encoding="utf-8").replace(" *\n", " * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.\n *\n", 1), encoding="utf-8")
             missing, review = turbovasctl.modified_imported_notice_gaps(root, rows)
             self.assertEqual(missing, [])
             self.assertEqual(review, ["components/gsa/package.json"])
@@ -3833,7 +3833,7 @@ db2:keys=5,expires=0,avg_ttl=0
             root = Path(tmp)
             source = root / "components" / "gvmd" / "src" / "example.c"
             source.parent.mkdir(parents=True)
-            source.write_text("/* Modified by TurboVAS contributors, 2026. */\n", encoding="utf-8")
+            source.write_text("/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n", encoding="utf-8")
             rows = [("M", "components/gvmd/src/example.c")]
 
             missing, review = turbovasctl.modified_imported_notice_gaps(
@@ -3867,7 +3867,7 @@ db2:keys=5,expires=0,avg_ttl=0
             root = Path(tmp)
             source = root / "components" / "gvmd" / "src" / "example.c"
             source.parent.mkdir(parents=True)
-            source.write_text("/* Modified by TurboVAS contributors, 2026. */\n", encoding="utf-8")
+            source.write_text("/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n", encoding="utf-8")
 
             with unittest.mock.patch.object(
                 turbovasctl,
@@ -3936,7 +3936,7 @@ db2:keys=5,expires=0,avg_ttl=0
             imported.write_text("/* upstream imported file */\n", encoding="utf-8")
             rows = [("A", "tools/example.py"), ("A", "components/pg-gvm/src/array.c")]
             self.assertEqual(turbovasctl.added_turbovas_spdx_gaps(root, rows), ["tools/example.py"])
-            tool.write_text("# SPDX-FileCopyrightText: 2026 TurboVAS contributors\n# SPDX-License-Identifier: GPL-3.0-or-later\n\nprint('ok')\n", encoding="utf-8")
+            tool.write_text("# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n# SPDX-License-Identifier: GPL-3.0-or-later\n\nprint('ok')\n", encoding="utf-8")
             self.assertEqual(turbovasctl.added_turbovas_spdx_gaps(root, rows), [])
 
     def test_comment_notice_supported_distinguishes_data_files(self):

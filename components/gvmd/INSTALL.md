@@ -1,6 +1,6 @@
 # Installation Instructions for Greenbone Vulnerability Manager Daemon
 
-<!-- Modified by TurboVAS contributors, 2026. -->
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
 
 Please note: The reference system used by most of the developers is Debian
 stable. The build might fail on any other system. Also, it is necessary to

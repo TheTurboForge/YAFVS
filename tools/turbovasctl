@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: 2026 TurboVAS contributors
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
 """TurboVAS monorepo health and build-readiness command surface."""
 
@@ -47,7 +47,7 @@ BINARY_BYTE_UNITS = {"KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4
 BYTE_UNITS = {**DECIMAL_BYTE_UNITS, **BINARY_BYTE_UNITS}
 EXPECTED_ROOT_DOCS = ("README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md")
 IMPORT_BASELINE_COMMIT = "def84d156dd45c27cad0a75bc2302ce151585d3c"
-TURBOVAS_MODIFICATION_NOTICE = "Modified by TurboVAS contributors, 2026."
+TURBOVAS_MODIFICATION_NOTICE = "TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>."
 COMMENT_NOTICE_SUFFIXES = frozenset({".c", ".h", ".js", ".jsx", ".ts", ".tsx", ".py", ".cmake", ".rs", ".sh", ".sql", ".xml", ".in", ".md", ".txt", ".toml", ".yml", ".yaml"})
 COMMENT_NOTICE_NAMES = frozenset({"Makefile", ".dockerignore", ".gitignore"})
 IMPORTED_ADDED_PREFIXES = ("components/pg-gvm/",)
@@ -4261,7 +4261,7 @@ def write_openvas_runtime_config(repo_root: Path) -> Path:
     path = openvas_runtime_config_path(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        "# SPDX-FileCopyrightText: 2026 TurboVAS contributors\n"
+        "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n"
         "# SPDX-License-Identifier: GPL-3.0-or-later\n"
         "# Generated development runtime configuration.\n"
         "db_address = /runtime/run/redis-openvas/redis.sock\n"

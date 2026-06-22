@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Martin Boller
-# Modified by TurboVAS contributors, 2026.
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #

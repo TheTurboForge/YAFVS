@@ -80,7 +80,7 @@ surfaces.
 | `just runtime-native-api-direct-smoke --json` | Opt-in direct bearer-auth development listener rejects bad access and serves allowlisted reads. | Production TLS, host-binding safety, or write/control authorization. |
 | `just runtime-browser-smoke --json` | Key operator workflows render through GSA/browser against the dev runtime. | Deep route regression, generated-client contracts, or release readiness. |
 | `just runtime-browser-regression --json` | Deeper browser route/link/pagination regressions for selected workflows. | Backend-only invariants or production posture. |
-| `just production-posture-check --json` | Known production blockers and exposure hazards are visible and fail/warn deterministically. | That the deployment is production-ready while failures or warnings remain. |
+| `just production-posture-check --status-only --json` | Known production blockers and exposure hazards are visible with compact status/non-pass output. Use full `--json` only when investigating pass-detail context. | That the deployment is production-ready while failures or warnings remain. |
 | `just license-report --json` | Daily engineering license/provenance guardrails are clean. | Binary/container/hosted/feed redistribution readiness. |
 | `just license-public-release-gate --mode source-public` | Source-public license/provenance posture for the selected mode. | Broader release modes unless their stricter mode gates pass. |
 | `just quality-gate --json` | Broad local source-quality and selected runtime-aware project gates. | Exhaustive browser regression, production readiness, or public release readiness by itself. |

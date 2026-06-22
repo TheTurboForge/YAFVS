@@ -59,7 +59,7 @@ Useful development checks include:
 - `just runtime-performance-snapshot --json`
 - `just quality-gate-state --json`
 - `just quality-gate-schedule --json --status`
-- `just production-posture-check --json`
+- `just production-posture-check --status-only --json`
 - `just runtime-app-smoke`
 - `just runtime-native-api-smoke --json`
 - `just runtime-native-api-direct-smoke --json`

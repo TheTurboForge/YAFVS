@@ -163,7 +163,7 @@ Checks to consider:
 
 - `license-report --json` for daily work;
 - `license-public-release-gate --json` before publication;
-- `production-posture-check --json` before production-like deployment;
+- `production-posture-check --status-only --json` before production-like deployment;
 - branding-state review before public-facing release artifacts.
 
 ## Working Rule

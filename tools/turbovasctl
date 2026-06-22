@@ -9133,11 +9133,25 @@ def command_runtime_native_api_direct_token(repo_root: Path, *, rotate: bool) ->
         )
     )
     if rotate:
+        running_bindings = current_native_api_direct_published_bindings(repo_root)
+        findings.append(
+            finding(
+                "warn" if running_bindings else "pass",
+                "native-api-direct-token.running-listener-reload",
+                "A running direct native API listener is currently published and may still require turbovas-api restart or runtime-native-api-direct-smoke before it accepts the rotated token."
+                if running_bindings
+                else "No running direct native API listener publication was detected; no live direct listener needs token reload.",
+                details={
+                    "published_bindings": list(running_bindings),
+                    "token_value_reported": False,
+                },
+            )
+        )
         findings.append(
             finding(
                 "pass",
                 "native-api-direct-token.reload-required",
-                "Restart turbovas-api or rerun runtime-native-api-direct-smoke before expecting a running direct listener to accept the rotated token.",
+                "Restart turbovas-api or rerun runtime-native-api-direct-smoke before expecting any running direct listener to accept the rotated token.",
             )
         )
     summary = "Direct native API runtime bearer token rotated." if rotate else "Direct native API runtime bearer token inspected."

@@ -3482,7 +3482,8 @@ db2:keys=5,expires=0,avg_ttl=0
             )
             before = before_path.read_text(encoding="utf-8").strip()
 
-            result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=True)
+            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=()):
+                result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=True)
             after = before_path.read_text(encoding="utf-8").strip()
 
         rendered = json.dumps(result, sort_keys=True)
@@ -3494,7 +3495,35 @@ db2:keys=5,expires=0,avg_ttl=0
         checks = {item["check"]: item for item in result["findings"]}
         self.assertEqual(checks["native-api-direct-token.runtime-secret"]["details"]["token_value_reported"], False)
         self.assertTrue(checks["native-api-direct-token.runtime-secret"]["details"]["permission_ok"])
+        self.assertEqual(checks["native-api-direct-token.running-listener-reload"]["status"], "pass")
         self.assertIn("rerun runtime-native-api-direct-smoke", checks["native-api-direct-token.reload-required"]["message"])
+
+    def test_runtime_direct_token_rotation_warns_when_listener_is_running(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            before_path = turbovasctl.write_runtime_secret(
+                root,
+                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                "old-token-0123456789abcdef0123456789abcdef",
+            )
+            before = before_path.read_text(encoding="utf-8").strip()
+            running = ({"host": "127.0.0.1", "host_port": "19080", "container_port": "9081"},)
+
+            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=running):
+                result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=True)
+            after = before_path.read_text(encoding="utf-8").strip()
+
+        rendered = json.dumps(result, sort_keys=True)
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(result["status"], "warn")
+        self.assertNotEqual(before, after)
+        self.assertNotIn(before, rendered)
+        self.assertNotIn(after, rendered)
+        reload = checks["native-api-direct-token.running-listener-reload"]
+        self.assertEqual(reload["status"], "warn")
+        self.assertEqual(reload["details"]["published_bindings"], list(running))
+        self.assertFalse(reload["details"]["token_value_reported"])
 
     def test_runtime_direct_token_reports_broad_secret_permissions_without_leaking_value(self):
         with tempfile.TemporaryDirectory() as tmp:

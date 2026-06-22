@@ -1567,7 +1567,6 @@ class TurboVASCtlTests(unittest.TestCase):
             "cpe-catalog-list-read",
             "cve-catalog-detail-epss-reference-read",
             "cve-catalog-detail-read",
-            "cve-catalog-detail-reference-read",
             "cve-catalog-list-read",
             "dfn-cert-advisory-catalog-detail-read",
             "dfn-cert-advisory-list-read",

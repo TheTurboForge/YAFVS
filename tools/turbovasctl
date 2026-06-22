@@ -383,7 +383,6 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "saved-filter-metadata-detail-read",
         "saved-filter-metadata-list-read",
         "scan-config-family-summary-read",
-        "scan-config-metadata-detail-info-read",
         "scan-config-metadata-detail-info-tags-and-task-backlink-read",
         "scan-config-metadata-list-read",
         "scanner-metadata-detail-info-tags-and-task-backlink-read",
@@ -903,6 +902,12 @@ OPENAPI_COMMON_ERROR_RESPONSE_REFS = {
     "500": "InternalError",
 }
 OPENAPI_PARAMETERIZED_ERROR_RESPONSE_REFS = {"404": "NotFound"}
+NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS = (
+    "x_turbovas_exposure",
+    "x_turbovas_maturity",
+    "x_turbovas_replaces",
+    "x_turbovas_inherited_still_owns",
+)
 DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
     {
         "/api/v1/results",
@@ -6078,35 +6083,132 @@ def native_api_migration_matrix_summary(rows: list[dict[str, Any]]) -> dict[str,
             result[key] = result.get(key, 0) + 1
         return dict(sorted(result.items()))
 
-    migration_fields = (
-        "x_turbovas_exposure",
-        "x_turbovas_maturity",
-        "x_turbovas_replaces",
-        "x_turbovas_inherited_still_owns",
-    )
+    contract = native_api_migration_matrix_contract_summary(rows)
     return {
         "total_rows": len(rows),
         "openapi_operation_rows": sum(1 for row in rows if row.get("openapi_path") is not None),
         "inventory_rows": sum(1 for row in rows if row.get("inventory_endpoint") is not None),
         "rows_with_replacement_candidates": sum(1 for row in rows if row.get("replacement_candidates")),
-        "rows_with_checked_migration_metadata": sum(1 for row in rows if any(row.get(field) is not None for field in migration_fields)),
-        "checked_migration_field_counts": {field: sum(1 for row in rows if row.get(field) is not None) for field in migration_fields},
+        "rows_with_checked_migration_metadata": sum(1 for row in rows if any(row.get(field) is not None for field in NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS)),
+        "checked_migration_field_counts": {field: sum(1 for row in rows if row.get(field) is not None) for field in NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS},
+        "rows_missing_openapi_count": len(contract["rows_missing_openapi"]),
+        "rows_missing_inventory_count": len(contract["rows_missing_inventory"]),
+        "rows_missing_migration_metadata_count": len(contract["rows_missing_migration_metadata"]),
+        "direct_exposure_mismatch_count": len(contract["direct_exposure_mismatches"]),
+        "direct_marker_mismatch_count": len(contract["direct_marker_mismatches"]),
         "by_status": counts("status"),
         "by_browser_access": counts("browser_access"),
         "by_direct_access": counts("direct_access"),
     }
 
 
+def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    rows_missing_openapi = [
+        {"endpoint": row.get("endpoint"), "method": row.get("method"), "inventory_endpoint": row.get("inventory_endpoint")}
+        for row in rows
+        if row.get("openapi_path") is None
+    ]
+    rows_missing_inventory = [
+        {"endpoint": row.get("endpoint"), "method": row.get("method"), "openapi_path": row.get("openapi_path")}
+        for row in rows
+        if row.get("inventory_endpoint") is None
+    ]
+    rows_missing_migration_metadata = []
+    direct_exposure_mismatches = []
+    direct_marker_mismatches = []
+    for row in rows:
+        missing_fields = [field for field in NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS if row.get(field) is None]
+        if missing_fields:
+            rows_missing_migration_metadata.append(
+                {"endpoint": row.get("endpoint"), "method": row.get("method"), "missing_fields": missing_fields}
+            )
+
+        direct_access = row.get("direct_access")
+        expected_exposure = None
+        expected_marker = None
+        if direct_access == "scriptable_read":
+            expected_exposure = "direct-read"
+            expected_marker = True
+        elif direct_access == "internal_only":
+            expected_exposure = "internal-only"
+            expected_marker = False
+
+        if expected_exposure is not None and row.get("x_turbovas_exposure") != expected_exposure:
+            direct_exposure_mismatches.append(
+                {
+                    "endpoint": row.get("endpoint"),
+                    "method": row.get("method"),
+                    "direct_access": direct_access,
+                    "actual": row.get("x_turbovas_exposure"),
+                    "expected": expected_exposure,
+                }
+            )
+        if expected_marker is not None and row.get("openapi_direct_marker") is not expected_marker:
+            direct_marker_mismatches.append(
+                {
+                    "endpoint": row.get("endpoint"),
+                    "method": row.get("method"),
+                    "direct_access": direct_access,
+                    "actual": row.get("openapi_direct_marker"),
+                    "expected": expected_marker,
+                }
+            )
+
+    return {
+        "rows_missing_openapi": rows_missing_openapi,
+        "rows_missing_inventory": rows_missing_inventory,
+        "rows_missing_migration_metadata": rows_missing_migration_metadata,
+        "direct_exposure_mismatches": direct_exposure_mismatches,
+        "direct_marker_mismatches": direct_marker_mismatches,
+    }
+
+
 def command_native_api_migration_matrix(repo_root: Path) -> dict[str, Any]:
     rows = native_api_migration_matrix_rows(repo_root)
-    details = {"summary": native_api_migration_matrix_summary(rows), "items": rows}
+    contract = native_api_migration_matrix_contract_summary(rows)
+    summary = native_api_migration_matrix_summary(rows)
+    details = {"summary": summary, "contract": contract, "items": rows}
+    row_drift = contract["rows_missing_openapi"] or contract["rows_missing_inventory"]
+    metadata_drift = (
+        contract["rows_missing_migration_metadata"]
+        or contract["direct_exposure_mismatches"]
+        or contract["direct_marker_mismatches"]
+    )
     findings = [
         finding(
             "pass" if rows else "warn",
             "native-api-migration-matrix.rows",
             f"Collected {len(rows)} native API migration matrix row(s) from endpoint inventory and OpenAPI metadata.",
             details=details["summary"],
-        )
+        ),
+        finding(
+            "warn" if row_drift else "pass",
+            "native-api-migration-matrix.coverage",
+            "Native API migration matrix rows are present in both endpoint inventory and OpenAPI."
+            if not row_drift
+            else "Native API migration matrix has endpoint inventory/OpenAPI row gaps.",
+            details={
+                "rows_missing_openapi_count": summary["rows_missing_openapi_count"],
+                "rows_missing_inventory_count": summary["rows_missing_inventory_count"],
+                "rows_missing_openapi": contract["rows_missing_openapi"],
+                "rows_missing_inventory": contract["rows_missing_inventory"],
+            },
+        ),
+        finding(
+            "warn" if metadata_drift else "pass",
+            "native-api-migration-matrix.metadata",
+            "Native API migration matrix rows have complete migration metadata and direct exposure markers."
+            if not metadata_drift
+            else "Native API migration matrix rows have missing migration metadata or direct exposure marker drift.",
+            details={
+                "rows_missing_migration_metadata_count": summary["rows_missing_migration_metadata_count"],
+                "direct_exposure_mismatch_count": summary["direct_exposure_mismatch_count"],
+                "direct_marker_mismatch_count": summary["direct_marker_mismatch_count"],
+                "rows_missing_migration_metadata": contract["rows_missing_migration_metadata"],
+                "direct_exposure_mismatches": contract["direct_exposure_mismatches"],
+                "direct_marker_mismatches": contract["direct_marker_mismatches"],
+            },
+        ),
     ]
     result = make_result("native-api-migration-matrix", repo_root, "Native API migration matrix collected.", findings)
     result["details"] = details

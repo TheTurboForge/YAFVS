@@ -1444,7 +1444,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "saved-filter-metadata-detail-read",
             "saved-filter-metadata-list-read",
             "scan-config-family-summary-read",
-            "scan-config-metadata-detail-info-read",
+            "scan-config-metadata-detail-info-tags-and-task-backlink-read",
             "scan-config-metadata-list-read",
             "scanner-metadata-detail-info-read",
             "scanner-metadata-detail-info-tags-and-task-backlink-read",
@@ -1565,6 +1565,7 @@ class TurboVASCtlTests(unittest.TestCase):
         result = turbovasctl.command_native_api_migration_matrix(root)
         details = result["details"]
         rows = {item["endpoint"]: item for item in details["items"]}
+        findings = {item["check"]: item for item in result["findings"]}
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
@@ -1573,6 +1574,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(details["summary"]["inventory_rows"], 73)
         self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 73)
         self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 73)
+        self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
+        self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
+        self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
+        self.assertEqual(details["summary"]["direct_exposure_mismatch_count"], 0)
+        self.assertEqual(details["summary"]["direct_marker_mismatch_count"], 0)
+        self.assertEqual(findings["native-api-migration-matrix.coverage"]["status"], "pass")
+        self.assertEqual(findings["native-api-migration-matrix.metadata"]["status"], "pass")
         self.assertIn("native-api-migration-matrix", source)
         self.assertIn("def command_native_api_migration_matrix", source)
 
@@ -1646,7 +1654,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scanners": ("getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", "scan-config-preferences-export-import-writes-and-deletes"),
-            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-read", "scan-config-preferences-export-import-writes-and-deletes"),
+            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", "scan-config-preferences-export-import-writes-and-deletes"),
             "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preferences-export-import-writes-and-deletes"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
@@ -1731,6 +1739,60 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("GSA Security Information CERT-Bund advisory detail metadata overlay (migrated through gsad same-origin proxy)", cert_bund_detail["replacement_candidates"])
 
         self.assertNotIn("/api/v1/scopes/{scope_id}/reports/{scope_report_id}", rows)
+
+    def test_native_api_migration_matrix_contract_reports_row_and_metadata_gaps(self):
+        rows = [
+            {
+                "endpoint": "/api/v1/reports",
+                "method": "get",
+                "inventory_endpoint": "/api/v1/reports",
+                "openapi_path": None,
+                "direct_access": "scriptable_read",
+                "openapi_direct_marker": False,
+                "x_turbovas_exposure": "internal-only",
+                "x_turbovas_maturity": "live-read",
+                "x_turbovas_replaces": "raw-report-list-read",
+                "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+            },
+            {
+                "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+                "method": "get",
+                "inventory_endpoint": None,
+                "openapi_path": "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+                "direct_access": "internal_only",
+                "openapi_direct_marker": True,
+                "x_turbovas_exposure": "direct-read",
+                "x_turbovas_maturity": None,
+                "x_turbovas_replaces": "none",
+                "x_turbovas_inherited_still_owns": "retention-mutations",
+            },
+        ]
+
+        contract = turbovasctl.native_api_migration_matrix_contract_summary(rows)
+        summary = turbovasctl.native_api_migration_matrix_summary(rows)
+
+        self.assertEqual(contract["rows_missing_openapi"][0]["endpoint"], "/api/v1/reports")
+        self.assertEqual(
+            contract["rows_missing_inventory"][0]["endpoint"],
+            "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+        )
+        self.assertEqual(
+            contract["rows_missing_migration_metadata"],
+            [
+                {
+                    "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+                    "method": "get",
+                    "missing_fields": ["x_turbovas_maturity"],
+                }
+            ],
+        )
+        self.assertEqual({item["endpoint"] for item in contract["direct_exposure_mismatches"]}, {row["endpoint"] for row in rows})
+        self.assertEqual({item["endpoint"] for item in contract["direct_marker_mismatches"]}, {row["endpoint"] for row in rows})
+        self.assertEqual(summary["rows_missing_openapi_count"], 1)
+        self.assertEqual(summary["rows_missing_inventory_count"], 1)
+        self.assertEqual(summary["rows_missing_migration_metadata_count"], 1)
+        self.assertEqual(summary["direct_exposure_mismatch_count"], 2)
+        self.assertEqual(summary["direct_marker_mismatch_count"], 2)
 
     def test_openapi_operation_id_generator_is_stable_and_collision_free(self):
         root = Path(__file__).resolve().parents[2]
@@ -2256,7 +2318,7 @@ class TurboVASCtlTests(unittest.TestCase):
             (scanners, "getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", "scan-config-preferences-export-import-writes-and-deletes"),
-            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-read", "scan-config-preferences-export-import-writes-and-deletes"),
+            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", "scan-config-preferences-export-import-writes-and-deletes"),
             (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preferences-export-import-writes-and-deletes"),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:

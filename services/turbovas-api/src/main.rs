@@ -640,6 +640,8 @@ struct OperatingSystemAssetItem {
     all_hosts: i64,
     created_at: Option<String>,
     modified_at: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Serialize)]
@@ -4573,7 +4575,46 @@ async fn operating_system_asset_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(operating_system_asset_from_row(&row)))
+    let mut item = operating_system_asset_from_row(&row);
+    item.user_tags = operating_system_user_tags(&client, &os_id).await?;
+    Ok(Json(item))
+}
+
+fn operating_system_user_tags_sql() -> &'static str {
+    r#"SELECT t.uuid AS id,
+              coalesce(t.name, '') AS name,
+              coalesce(t.value, '') AS value,
+              coalesce(t.comment, '') AS comment
+         FROM tags t
+         JOIN tag_resources tr ON tr.tag = t.id
+         JOIN oss ON oss.id = tr.resource
+        WHERE lower(oss.uuid) = lower($1)
+          AND tr.resource_type = 'os'
+          AND tr.resource_location = 0
+          AND coalesce(t.active, 0) = 1
+        ORDER BY t.name ASC, t.uuid ASC;"#
+}
+
+async fn operating_system_user_tags(
+    client: &tokio_postgres::Client,
+    os_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(operating_system_user_tags_sql(), &[&os_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "operating system user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
 }
 
 async fn report_ports(
@@ -7745,6 +7786,7 @@ fn operating_system_asset_from_row(row: &Row) -> OperatingSystemAssetItem {
         all_hosts: row.get("all_hosts"),
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+        user_tags: Vec::new(),
     }
 }
 
@@ -10126,6 +10168,20 @@ mod tests {
         assert!(!tasks_sql.contains("alert_method_data"));
         assert!(!tasks_sql.contains("alert_event_data"));
         assert!(!tasks_sql.contains("alert_condition_data"));
+    }
+
+    #[test]
+    fn operating_system_user_tags_are_active_os_tags_only() {
+        let sql = operating_system_user_tags_sql();
+        assert!(sql.contains("FROM tags t"));
+        assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
+        assert!(sql.contains("JOIN oss ON oss.id = tr.resource"));
+        assert!(sql.contains("tr.resource_type = 'os'"));
+        assert!(sql.contains("tr.resource_location = 0"));
+        assert!(sql.contains("coalesce(t.active, 0) = 1"));
+        assert!(!sql.contains("credentials"));
+        assert!(!sql.contains("reports"));
+        assert!(!sql.contains("results"));
     }
 
     #[test]

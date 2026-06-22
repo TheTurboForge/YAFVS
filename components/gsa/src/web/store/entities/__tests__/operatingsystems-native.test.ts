@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -97,6 +98,14 @@ describe('native API operating systems list', () => {
         all_hosts: 3,
         created_at: '2026-06-18T18:00:00Z',
         modified_at: '2026-06-18T20:00:00Z',
+        user_tags: [
+          {
+            id: 'tag-1',
+            name: 'Critical OS',
+            value: 'true',
+            comment: 'watch closely',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -114,29 +123,17 @@ describe('native API operating systems list', () => {
     expect(os.name).toEqual('cpe:/o:example:linux:1.0');
     expect(os.latestSeverity).toEqual(7.5);
     expect(os.allHosts).toEqual(3);
+    expect(os.isWritable()).toEqual(true);
+    expect(os.userTags?.length).toEqual(1);
+    expect(os.userTags?.[0].name).toEqual('Critical OS');
     expect(gmp.buildUrl).toHaveBeenCalledWith(
       'api/v1/operating-systems/f3a25f89-2b6c-4e58-92b2-942c686f9342',
       {token: 'test-token'},
     );
   });
 
-  test('loads native Information fields without replacing inherited detail context', async () => {
+  test('loads native detail without inherited GMP double-read', async () => {
     const id = 'f3a25f89-2b6c-4e58-92b2-942c686f9342';
-    const inherited = OperatingSystem.fromElement({
-      _id: id,
-      name: 'cpe:/o:old:linux',
-      writable: 1,
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Critical OS', value: 'true'}],
-      },
-      os: {
-        installs: 1,
-        all_installs: 1,
-        latest_severity: {value: 1.0},
-        highest_severity: {value: 2.0},
-        average_severity: {value: 1.5},
-      },
-    });
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         id,
@@ -147,6 +144,14 @@ describe('native API operating systems list', () => {
         average_severity: 4.25,
         hosts: 2,
         all_hosts: 3,
+        user_tags: [
+          {
+            id: 'tag-1',
+            name: 'Critical OS',
+            value: 'true',
+            comment: 'watch closely',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -155,7 +160,7 @@ describe('native API operating systems list', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       operatingsystem: {
-        get: testing.fn().mockResolvedValue({data: inherited}),
+        get: testing.fn(),
       },
     };
     const actions: Array<{type: string; data?: OperatingSystem}> = [];
@@ -179,7 +184,7 @@ describe('native API operating systems list', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const os = success?.data;
-    expect(gmp.operatingsystem.get).toHaveBeenCalledWith({id});
+    expect(gmp.operatingsystem.get).not.toHaveBeenCalled();
     expect(os).toBeInstanceOf(OperatingSystem);
     expect(os?.name).toEqual('cpe:/o:example:linux:1.0');
     expect(os?.latestSeverity).toEqual(7.5);

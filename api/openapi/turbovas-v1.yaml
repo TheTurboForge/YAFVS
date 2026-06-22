@@ -3957,6 +3957,11 @@ components:
         modified_at:
           type: string
           format: date-time
+        user_tags:
+          type: array
+          description: Active user tags attached directly to this operating system. Write/tag actions remain inherited.
+          items:
+            $ref: '#/components/schemas/ReportUserTag'
     HostAssetOperatingSystem:
       type: object
       required: [id, name, operating_system_id, operating_system_name, source_type, source_id, source_data, source_data_truncated]

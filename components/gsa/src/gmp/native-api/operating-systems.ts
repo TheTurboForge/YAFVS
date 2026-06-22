@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -37,6 +38,14 @@ interface NativeOperatingSystemPayload {
   all_hosts: number;
   created_at?: string;
   modified_at?: string;
+  user_tags?: NativeUserTagPayload[];
+}
+
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
 }
 
 interface NativeOperatingSystemsPayload {
@@ -152,8 +161,18 @@ const severityValueElement = (value: unknown) => {
   return parsed === undefined ? undefined : {value: parsed};
 };
 
+const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
+});
+
 const nativeOperatingSystemToModel = (
   item: NativeOperatingSystemPayload,
+  {detail = false}: {detail?: boolean} = {},
 ): OperatingSystem =>
   OperatingSystem.fromElement({
     _id: stringValue(item.id),
@@ -161,7 +180,8 @@ const nativeOperatingSystemToModel = (
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
     in_use: integerValue(item.all_hosts) > 0 ? 1 : 0,
-    writable: 0,
+    writable: detail ? 1 : 0,
+    user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
     os: {
       title: stringValue(item.title),
       installs: integerValue(item.hosts),
@@ -194,8 +214,8 @@ export const fetchNativeOperatingSystems = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const operatingSystems = (payload.items ?? []).map(
-    nativeOperatingSystemToModel,
+  const operatingSystems = (payload.items ?? []).map(item =>
+    nativeOperatingSystemToModel(item),
   );
   return {
     operatingSystems,
@@ -214,6 +234,6 @@ export const fetchNativeOperatingSystem = async (
     {token: gmp.session.token},
   );
   return {
-    operatingSystem: nativeOperatingSystemToModel(payload),
+    operatingSystem: nativeOperatingSystemToModel(payload, {detail: true}),
   };
 };

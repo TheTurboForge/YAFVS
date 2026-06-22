@@ -850,6 +850,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/targets?page_size=1&sort=not_a_target_sort", source)
         self.assertIn("native-api.vulnerabilities.invalid-sort", source)
         self.assertIn("/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort", source)
+        self.assertIn("native-api.alerts.invalid-sort", source)
+        self.assertIn("/api/v1/alerts?page_size=1&sort=not_an_alert_sort", source)
         self.assertIn("/api/v1/report-configs", source)
         self.assertIn("/api/v1/report-configs/{report_config_id}", source)
         self.assertIn("/api/v1/scan-configs", source)

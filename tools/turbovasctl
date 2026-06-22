@@ -10998,6 +10998,14 @@ def command_runtime_native_api_smoke(repo_root: Path) -> dict[str, Any]:
                 {**alerts_summary, "forbidden_keys": forbidden_keys, "unexpected_keys": unexpected_keys},
             )
         )
+        findings.append(
+            native_api_expected_bad_request_finding(
+                repo_root,
+                "native-api.alerts.invalid-sort",
+                "/api/v1/alerts?page_size=1&sort=not_an_alert_sort",
+                "bad_request",
+            )
+        )
         if alerts.returncode == 0 and alert_items:
             alert_id = alert_items[0].get("id") if isinstance(alert_items[0], dict) else None
             if isinstance(alert_id, str) and alert_id:

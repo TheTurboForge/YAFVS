@@ -676,11 +676,16 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("cert-bund-advisory.list-native-api", browser_smoke)
         self.assertIn("trashcan.summary-native-api", browser_smoke)
         invalid_sort_helper = browser_smoke.split("async function assertNativeApiInvalidSortProxy", 1)[1].split("async function assertTagResourceNameProxy", 1)[0]
+        invalid_page_helper = browser_smoke.split("async function assertNativeApiInvalidPageProxy", 1)[1].split("async function assertTagResourceNameProxy", 1)[0]
         focused_route_catalog = browser_smoke.split("function focusedRouteCatalog", 1)[1].split("function routeLabelFromPath", 1)[0]
         self.assertIn("400 && errorCode === 'bad_request'", invalid_sort_helper)
         self.assertIn("`${spec.label}.invalid-sort-native-api`", invalid_sort_helper)
+        self.assertIn("400 && errorCode === 'bad_request'", invalid_page_helper)
+        self.assertIn("`${spec.label}.invalid-page-native-api`", invalid_page_helper)
         self.assertIn("/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort", focused_route_catalog)
+        self.assertIn("/api/v1/vulnerabilities?page=0&page_size=1", focused_route_catalog)
         self.assertIn("/api/v1/alerts?page_size=1&sort=not_an_alert_sort", focused_route_catalog)
+        self.assertIn("/api/v1/alerts?page=0&page_size=1", focused_route_catalog)
         self.assertIn("Raw-report list loaded through same-origin native API", browser_smoke)
         self.assertIn("browser_smoke.add_argument(\"--route\"", source)
         self.assertIn('args.extend(["--route", route])', source)

@@ -556,7 +556,7 @@ paths:
       x-turbovas-replaces: host-asset-detail-info-read
       x-turbovas-inherited-still-owns: host-target-creation-tags-writes-and-rich-history
       summary: Read one top-level host asset
-      description: Read-only host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, and whitelisted host detail state. This endpoint intentionally excludes host writes, delete-identifier behavior, XML export, target creation, user tags, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history.
+      description: Read-only host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, whitelisted host detail state, and active user tags. This endpoint intentionally excludes host writes, delete-identifier behavior, XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history.
       parameters:
         - $ref: '#/components/parameters/HostId'
       responses:
@@ -3011,6 +3011,11 @@ components:
           description: 'Latest whitelisted host detail rows only: best_os_cpe, best_os_txt, and traceroute.'
           items:
             $ref: '#/components/schemas/HostAssetDetailMetadata'
+        user_tags:
+          type: array
+          description: Active user tags attached directly to this host asset. Write/tag actions remain inherited.
+          items:
+            $ref: '#/components/schemas/ReportUserTag'
     TlsCertificateAssetCollection:
       type: object
       required: [page, items]

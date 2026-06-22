@@ -1108,6 +1108,8 @@ struct HostAssetDetail {
     identifiers: Vec<HostAssetDetailIdentifier>,
     operating_systems: Vec<HostAssetOperatingSystemItem>,
     details: Vec<HostAssetDetailItem>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Serialize)]
@@ -1714,6 +1716,7 @@ async fn host_asset_detail(
             tracing::warn!(%error, "host asset safe detail query failed");
             ApiError::Database
         })?;
+    let user_tags = host_user_tags(&client, &host_id).await?;
     Ok(Json(HostAssetDetail {
         asset: host_asset_from_row(&row),
         identifiers: identifier_rows
@@ -1728,7 +1731,45 @@ async fn host_asset_detail(
             .iter()
             .map(host_asset_detail_item_from_row)
             .collect(),
+        user_tags,
     }))
+}
+
+fn host_user_tags_sql() -> &'static str {
+    r#"SELECT t.uuid AS id,
+              coalesce(t.name, '') AS name,
+              coalesce(t.value, '') AS value,
+              coalesce(t.comment, '') AS comment
+         FROM tags t
+         JOIN tag_resources tr ON tr.tag = t.id
+         JOIN hosts ON hosts.id = tr.resource
+        WHERE lower(hosts.uuid) = lower($1)
+          AND tr.resource_type = 'host'
+          AND tr.resource_location = 0
+          AND coalesce(t.active, 0) = 1
+        ORDER BY t.name ASC, t.uuid ASC;"#
+}
+
+async fn host_user_tags(
+    client: &tokio_postgres::Client,
+    host_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(host_user_tags_sql(), &[&host_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "host user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
 }
 
 async fn tls_certificate_assets(
@@ -10177,6 +10218,40 @@ mod tests {
         assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
         assert!(sql.contains("JOIN oss ON oss.id = tr.resource"));
         assert!(sql.contains("tr.resource_type = 'os'"));
+        assert!(sql.contains("tr.resource_location = 0"));
+        assert!(sql.contains("coalesce(t.active, 0) = 1"));
+        assert!(!sql.contains("credentials"));
+        assert!(!sql.contains("reports"));
+        assert!(!sql.contains("results"));
+    }
+
+    #[test]
+    fn host_user_tags_are_detail_only_active_host_tags() {
+        let source = include_str!("main.rs");
+        let host_list_payload = source
+            .split_once("struct HostAssetItem {")
+            .expect("host list payload struct must exist")
+            .1
+            .split_once("struct HostAssetDetailIdentifier")
+            .expect("host list payload struct must precede detail identifiers")
+            .0;
+        let host_detail_payload = source
+            .split_once("struct HostAssetDetail {")
+            .expect("host detail payload struct must exist")
+            .1
+            .split_once("struct TlsCertificateAssetItem")
+            .expect("host detail payload struct must precede TLS asset struct")
+            .0;
+
+        assert!(!host_list_payload.contains("user_tags"));
+        assert!(host_detail_payload.contains("user_tags: Vec<ReportUserTag>"));
+
+        let sql = host_user_tags_sql();
+        assert!(sql.contains("FROM tags t"));
+        assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
+        assert!(sql.contains("JOIN hosts ON hosts.id = tr.resource"));
+        assert!(sql.contains("lower(hosts.uuid) = lower($1)"));
+        assert!(sql.contains("tr.resource_type = 'host'"));
         assert!(sql.contains("tr.resource_location = 0"));
         assert!(sql.contains("coalesce(t.active, 0) = 1"));
         assert!(!sql.contains("credentials"));

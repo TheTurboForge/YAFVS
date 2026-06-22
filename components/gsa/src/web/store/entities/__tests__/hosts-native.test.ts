@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -129,7 +130,35 @@ describe('native API hosts list', () => {
           created_at: '2026-06-18T18:00:00Z',
           modified_at: '2026-06-18T20:00:00Z',
         },
-        operating_systems: [],
+        identifiers: [
+          {
+            id: 'identifier-ip',
+            name: 'ip',
+            value: '192.168.178.42',
+            source_type: 'Report Host',
+            source_id: 'report-1',
+            source_data: 'Full and fast',
+          },
+          {
+            id: 'identifier-os',
+            name: 'OS',
+            value: 'cpe:/o:canonical:ubuntu_linux',
+            source_type: 'Report Host',
+            source_id: 'report-1',
+            source_data: 'Full and fast',
+          },
+        ],
+        operating_systems: [
+          {
+            id: 'host-os-1',
+            name: 'Ubuntu Linux',
+            operating_system_id: 'os-1',
+            operating_system_name: 'cpe:/o:canonical:ubuntu_linux',
+            source_type: 'Report Host',
+            source_id: 'report-1',
+            source_data: 'Full and fast',
+          },
+        ],
         details: [
           {
             name: 'best_os_cpe',
@@ -142,6 +171,14 @@ describe('native API hosts list', () => {
           {
             name: 'traceroute',
             value: '192.168.178.1,192.168.178.42',
+          },
+        ],
+        user_tags: [
+          {
+            id: 'tag-1',
+            name: 'Datacenter',
+            value: 'west',
+            comment: 'critical asset',
           },
         ],
       }),
@@ -161,6 +198,17 @@ describe('native API hosts list', () => {
     expect(host.hostname).toEqual('workstation.local');
     expect(host.ip).toEqual('192.168.178.42');
     expect(host.os).toEqual('cpe:/o:canonical:ubuntu_linux');
+    expect(host.isWritable()).toEqual(true);
+    expect(host.identifiers.map(identifier => identifier.id)).toEqual([
+      'identifier-ip',
+      'identifier-hostname',
+      'identifier-os',
+    ]);
+    expect(
+      host.identifiers.find(identifier => identifier.name === 'OS')?.os?.id,
+    ).toEqual('os-1');
+    expect(host.userTags?.[0].name).toEqual('Datacenter');
+    expect(host.userTags?.[0].value).toEqual('west');
     expect(host.routes?.[0]).toEqual([
       {
         ip: '192.168.178.1',
@@ -181,28 +229,8 @@ describe('native API hosts list', () => {
     );
   });
 
-  test('loads native Information fields without replacing inherited action context', async () => {
+  test('loads native detail without inherited GMP double-read', async () => {
     const id = 'a4be8ecf-4f23-4c83-b0fd-3b65161d652b';
-    const inherited = Host.fromElement({
-      _id: id,
-      name: 'old-host',
-      writable: 1,
-      identifiers: {
-        identifier: [
-          {
-            _id: 'inherited-identifier',
-            name: 'ip',
-            value: '10.0.0.1',
-          },
-        ],
-      },
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Datacenter', value: 'west'}],
-      },
-      host: {
-        severity: {value: '1.0'},
-      },
-    });
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         asset: {
@@ -231,8 +259,53 @@ describe('native API hosts list', () => {
             },
           ],
         },
-        operating_systems: [],
-        details: [],
+        identifiers: [
+          {
+            id: 'identifier-ip',
+            name: 'ip',
+            value: '192.168.178.42',
+            source_type: 'Report Host',
+            source_id: 'report-1',
+            source_data: 'Full and fast',
+          },
+          {
+            id: 'identifier-os',
+            name: 'OS',
+            value: 'cpe:/o:canonical:ubuntu_linux',
+            source_type: 'Report Host',
+            source_id: 'report-1',
+            source_data: 'Full and fast',
+          },
+        ],
+        operating_systems: [
+          {
+            id: 'host-os-1',
+            name: 'Ubuntu Linux',
+            operating_system_id: 'os-1',
+            operating_system_name: 'cpe:/o:canonical:ubuntu_linux',
+            source_type: 'Report Host',
+            source_id: 'report-1',
+            source_data: 'Full and fast',
+          },
+        ],
+        details: [
+          {
+            name: 'best_os_txt',
+            value: 'Ubuntu Linux',
+          },
+          {
+            name: 'traceroute',
+            value: '192.168.178.1,192.168.178.42',
+          },
+        ],
+        user_tags: [
+          {
+            id: 'tag-1',
+            name: 'Datacenter',
+            value: 'west',
+            comment: 'critical asset',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -241,7 +314,7 @@ describe('native API hosts list', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       host: {
-        get: testing.fn().mockResolvedValue({data: inherited}),
+        get: testing.fn(),
       },
     };
     const actions: Array<{type: string; data?: Host}> = [];
@@ -265,14 +338,26 @@ describe('native API hosts list', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const host = success?.data;
-    expect(gmp.host.get).toHaveBeenCalledWith({id});
+    expect(gmp.host.get).not.toHaveBeenCalled();
     expect(host).toBeInstanceOf(Host);
     expect(host?.name).toEqual('192.168.178.42');
     expect(host?.hostname).toEqual('workstation.local');
     expect(host?.severity).toEqual(7.5);
-    expect(host?.identifiers[0].id).toEqual('inherited-identifier');
+    expect(host?.details?.best_os_cpe?.value).toEqual(
+      'cpe:/o:canonical:ubuntu_linux',
+    );
+    expect(host?.details?.best_os_txt?.value).toEqual('Ubuntu Linux');
+    expect(host?.identifiers.map(identifier => identifier.id)).toEqual([
+      'identifier-ip',
+      'identifier-hostname',
+      'identifier-os',
+    ]);
+    expect(
+      host?.identifiers.find(identifier => identifier.name === 'OS')?.os?.id,
+    ).toEqual('os-1');
     expect(host?.isWritable()).toEqual(true);
     expect(host?.userTags?.length).toEqual(1);
     expect(host?.userTags?.[0].name).toEqual('Datacenter');
+    expect(host?.userTags?.[0].value).toEqual('west');
   });
 });

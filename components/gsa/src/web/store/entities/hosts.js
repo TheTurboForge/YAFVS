@@ -23,20 +23,6 @@ const {
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
 
-const mergeNativeInformation = (inherited, native) =>
-  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
-    name: native.name,
-    comment: native.comment,
-    creationTime: native.creationTime,
-    modificationTime: native.modificationTime,
-    details: native.details,
-    hostname: native.hostname,
-    ip: native.ip,
-    os: native.os,
-    routes: native.routes,
-    severity: native.severity,
-  });
-
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   if (!canUseNativeApi(gmp)) {
     return loadEntities(gmp)(filter)(dispatch, getState);
@@ -79,14 +65,8 @@ const nativeLoadEntity = gmp => id => (dispatch, getState) => {
 
   dispatch(entityLoadingActions.request(id));
 
-  return Promise.all([gmp.host.get({id}), fetchNativeHost(gmp, id)]).then(
-    ([inheritedResponse, nativeResponse]) =>
-      dispatch(
-        entityLoadingActions.success(
-          id,
-          mergeNativeInformation(inheritedResponse.data, nativeResponse.host),
-        ),
-      ),
+  return fetchNativeHost(gmp, id).then(
+    response => dispatch(entityLoadingActions.success(id, response.host)),
     error => dispatch(entityLoadingActions.error(id, error)),
   );
 };

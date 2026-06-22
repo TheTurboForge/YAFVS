@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 TurboVAS contributors
+ * Modified by TurboVAS contributors, 2026.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -37,6 +38,27 @@ interface NativeHostIdentifierPayload {
   modified_at?: string;
 }
 
+interface NativeHostOperatingSystemPayload {
+  id: string;
+  name: string;
+  comment?: string;
+  operating_system_id?: string;
+  operating_system_name?: string;
+  title?: string;
+  source_type?: string;
+  source_id?: string;
+  source_data?: string;
+  created_at?: string;
+  modified_at?: string;
+}
+
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
+}
+
 interface NativeHostPayload {
   id: string;
   name: string;
@@ -47,6 +69,7 @@ interface NativeHostPayload {
   best_os_txt?: string;
   severity: number;
   identifiers?: NativeHostIdentifierPayload[];
+  user_tags?: NativeUserTagPayload[];
   created_at?: string;
   modified_at?: string;
 }
@@ -63,7 +86,10 @@ interface NativeHostDetailMetadataPayload {
 
 interface NativeHostDetailPayload {
   asset: NativeHostPayload;
+  identifiers?: NativeHostIdentifierPayload[];
+  operating_systems?: NativeHostOperatingSystemPayload[];
   details?: NativeHostDetailMetadataPayload[];
+  user_tags?: NativeUserTagPayload[];
 }
 
 export interface NativeHostsQuery {
@@ -162,17 +188,60 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-const nativeIdentifierToElement = (item: NativeHostIdentifierPayload) => ({
-  _id: stringValue(item.id),
-  name: stringValue(item.name),
-  value: stringValue(item.value),
-  creation_time: stringValue(item.created_at),
-  modification_time: stringValue(item.modified_at),
-  source: {
-    _id: stringValue(item.source_id),
-    type: stringValue(item.source_type),
-    data: stringValue(item.source_data),
-  },
+const matchingOperatingSystem = (
+  identifier: NativeHostIdentifierPayload,
+  operatingSystems: NativeHostOperatingSystemPayload[] = [],
+) =>
+  identifier.name === 'OS'
+    ? operatingSystems.find(
+        os => os.operating_system_name === identifier.value,
+      )
+    : undefined;
+
+const nativeIdentifierToElement = (
+  item: NativeHostIdentifierPayload,
+  operatingSystems?: NativeHostOperatingSystemPayload[],
+) => {
+  const os = matchingOperatingSystem(item, operatingSystems);
+  return {
+    _id: stringValue(item.id),
+    name: stringValue(item.name),
+    value: stringValue(item.value),
+    creation_time: stringValue(item.created_at),
+    modification_time: stringValue(item.modified_at),
+    os: os ? {id: stringValue(os.operating_system_id)} : undefined,
+    source: {
+      _id: stringValue(item.source_id),
+      type: stringValue(item.source_type),
+      data: stringValue(item.source_data),
+    },
+  };
+};
+
+const nativeIdentifierKey = (item: NativeHostIdentifierPayload): string =>
+  stringValue(item.id) || `${stringValue(item.name)}:${stringValue(item.value)}`;
+
+const nativeIdentifierItems = (
+  item: NativeHostPayload,
+  detail?: Pick<NativeHostDetailPayload, 'identifiers'>,
+): NativeHostIdentifierPayload[] => {
+  const identifiers = new Map<string, NativeHostIdentifierPayload>();
+  for (const identifier of item.identifiers ?? []) {
+    identifiers.set(nativeIdentifierKey(identifier), identifier);
+  }
+  for (const identifier of detail?.identifiers ?? []) {
+    identifiers.set(nativeIdentifierKey(identifier), identifier);
+  }
+  return Array.from(identifiers.values());
+};
+
+const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
 });
 
 const nativeDetailToElement = (item: NativeHostDetailMetadataPayload) => ({
@@ -192,7 +261,10 @@ const routeFromTraceroute = (detail?: NativeHostDetailPayload['details']) => {
 
 const nativeHostToModel = (
   item: NativeHostPayload,
-  detail?: Pick<NativeHostDetailPayload, 'details'>,
+  detail?: Pick<
+    NativeHostDetailPayload,
+    'details' | 'identifiers' | 'operating_systems' | 'user_tags'
+  >,
 ): Host => {
   const details = new Map<string, {name: string; value: string}>();
   if (item.best_os_cpe) {
@@ -205,8 +277,8 @@ const nativeHostToModel = (
     details.set(stringValue(metadata.name), nativeDetailToElement(metadata));
   }
 
-  const identifiers = (item.identifiers ?? []).map(
-    nativeIdentifierToElement,
+  const identifiers = nativeIdentifierItems(item, detail).map(identifier =>
+    nativeIdentifierToElement(identifier, detail?.operating_systems),
   );
   const route = routeFromTraceroute(detail?.details);
 
@@ -216,6 +288,10 @@ const nativeHostToModel = (
     comment: stringValue(item.comment),
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
+    writable: detail ? 1 : undefined,
+    user_tags: detail
+      ? nativeUserTagsElement(detail.user_tags ?? item.user_tags ?? [])
+      : undefined,
     host: {
       severity: {value: String(numberValue(item.severity))},
       detail: Array.from(details.values()),

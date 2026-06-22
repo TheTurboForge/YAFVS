@@ -32,6 +32,19 @@ interface NativeTrendCountPayload {
   trend?: number;
 }
 
+interface NativeScanConfigTaskPayload {
+  id: string;
+  name: string;
+  usage_type?: string;
+}
+
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
+}
+
 interface NativeScanConfigPayload {
   id: string;
   name?: string;
@@ -50,6 +63,8 @@ interface NativeScanConfigPayload {
   orphan?: boolean;
   trash?: boolean;
   usage_type?: string;
+  tasks?: NativeScanConfigTaskPayload[];
+  user_tags?: NativeUserTagPayload[];
   created_at?: string;
   modified_at?: string;
 }
@@ -179,6 +194,21 @@ const nativeCounts = (page: NativePage, length: number): CollectionCounts =>
     rows: page.page_size,
   });
 
+const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
+});
+
+const nativeTaskToElement = (task: NativeScanConfigTaskPayload) => ({
+  _id: stringValue(task.id),
+  name: stringValue(task.name),
+  usage_type: 'scan' as const,
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -199,7 +229,10 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-const nativeScanConfigToModel = (item: NativeScanConfigPayload): ScanConfig => {
+const nativeScanConfigToModel = (
+  item: NativeScanConfigPayload,
+  {detail = false}: {detail?: boolean} = {},
+): ScanConfig => {
   const familyCount = item.family_count ?? item.families?.total ?? 0;
   const familiesGrowing = item.families_growing ?? item.families?.trend ?? 0;
   const nvtCount = item.nvt_count ?? item.nvts?.total ?? 0;
@@ -231,6 +264,10 @@ const nativeScanConfigToModel = (item: NativeScanConfigPayload): ScanConfig => {
       growing: trendValue(familiesGrowing),
     },
     nvt_count: {__text: String(nvtCount), growing: trendValue(nvtsGrowing)},
+    tasks: detail
+      ? {task: (item.tasks ?? []).map(nativeTaskToElement)}
+      : undefined,
+    user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
   });
 };
 
@@ -283,7 +320,9 @@ export const fetchNativeScanConfigs = async (
     },
   );
   const page = normalizePage(payload.page, query);
-  const scanConfigs = (payload.items ?? []).map(nativeScanConfigToModel);
+  const scanConfigs = (payload.items ?? []).map(item =>
+    nativeScanConfigToModel(item),
+  );
   return {
     scanConfigs,
     counts: nativeCounts(page, scanConfigs.length),
@@ -301,7 +340,7 @@ export const fetchNativeScanConfig = async (
     {token: gmp.session.token},
   );
   return {
-    scanConfig: nativeScanConfigToModel(payload),
+    scanConfig: nativeScanConfigToModel(payload, {detail: true}),
   };
 };
 

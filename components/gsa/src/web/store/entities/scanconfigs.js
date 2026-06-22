@@ -40,6 +40,8 @@ const mergeNativeInformation = (inherited, native, nativeFamilies) =>
     inUse: native.inUse,
     orphan: native.orphan,
     trash: native.trash,
+    tasks: native.tasks,
+    userTags: native.userTags,
   });
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {

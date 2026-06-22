@@ -107,6 +107,21 @@ describe('native API scan configs', () => {
         deprecated: false,
         writable: false,
         in_use: true,
+        tasks: [
+          {
+            id: 'b14d191b-69a2-43e1-bf03-74d01fcced19',
+            name: 'Native task',
+            usage_type: 'scan',
+          },
+        ],
+        user_tags: [
+          {
+            id: '8afbe92e-f808-447c-9399-1492f3f9ef3f',
+            name: 'Native tag',
+            value: 'true',
+            comment: 'Native tag comment',
+          },
+        ],
         created_at: '2026-06-02T11:57:09Z',
         modified_at: '2026-06-02T11:59:37Z',
       }),
@@ -128,6 +143,11 @@ describe('native API scan configs', () => {
     expect(config.predefined).toEqual(true);
     expect(config.isWritable()).toEqual(false);
     expect(config.isInUse()).toEqual(true);
+    expect(config.tasks[0].id).toEqual('b14d191b-69a2-43e1-bf03-74d01fcced19');
+    expect(config.tasks[0].name).toEqual('Native task');
+    expect(config.userTags?.[0].id).toEqual('8afbe92e-f808-447c-9399-1492f3f9ef3f');
+    expect(config.userTags?.[0].name).toEqual('Native tag');
+    expect(config.userTags?.[0].value).toEqual('true');
     expect(gmp.buildUrl).toHaveBeenCalledWith(`api/v1/scan-configs/${id}`, {
       token: 'test-token',
     });
@@ -269,6 +289,21 @@ describe('native API scan configs', () => {
           deprecated: false,
           writable: false,
           in_use: true,
+          tasks: [
+            {
+              id: 'native-task-1',
+              name: 'Native retained task',
+              usage_type: 'scan',
+            },
+          ],
+          user_tags: [
+            {
+              id: 'native-tag-1',
+              name: 'Native retained tag',
+              value: 'yes',
+              comment: 'native tag comment',
+            },
+          ],
           created_at: '2026-06-02T11:57:09Z',
           modified_at: '2026-06-02T11:59:37Z',
         }),
@@ -327,7 +362,8 @@ describe('native API scan configs', () => {
       '1.3.6.1.4.1.25623.1.0.1',
     );
     expect(config?.scanner?.name).toEqual('Inherited Scanner');
-    expect(config?.tasks[0].name).toEqual('Retained task');
-    expect(config?.userTags?.[0].name).toEqual('Retained tag');
+    expect(config?.tasks[0].name).toEqual('Native retained task');
+    expect(config?.userTags?.[0].name).toEqual('Native retained tag');
+    expect(config?.userTags?.[0].value).toEqual('yes');
   });
 });

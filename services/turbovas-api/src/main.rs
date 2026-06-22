@@ -827,6 +827,13 @@ struct ScanConfigTrendCount {
 }
 
 #[derive(Serialize)]
+struct ScanConfigTaskReference {
+    id: String,
+    name: String,
+    usage_type: String,
+}
+
+#[derive(Serialize)]
 struct ScanConfigAssetItem {
     id: String,
     name: String,
@@ -847,6 +854,16 @@ struct ScanConfigAssetItem {
     usage_type: String,
     created_at: Option<String>,
     modified_at: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ScanConfigAssetDetail {
+    #[serde(flatten)]
+    asset: ScanConfigAssetItem,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tasks: Vec<ScanConfigTaskReference>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Serialize)]
@@ -2289,7 +2306,7 @@ async fn scan_config_assets(
 async fn scan_config_asset_detail(
     State(state): State<AppState>,
     Path(scan_config_id): Path<String>,
-) -> Result<Json<ScanConfigAssetItem>, ApiError> {
+) -> Result<Json<ScanConfigAssetDetail>, ApiError> {
     parse_uuid(&scan_config_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let row = client
@@ -2331,7 +2348,83 @@ async fn scan_config_asset_detail(
         })?
         .ok_or(ApiError::NotFound)?;
 
-    Ok(Json(scan_config_asset_from_row(&row)))
+    let tasks = scan_config_task_references(&client, &scan_config_id).await?;
+    let user_tags = scan_config_user_tags(&client, &scan_config_id).await?;
+    Ok(Json(ScanConfigAssetDetail {
+        asset: scan_config_asset_from_row(&row),
+        tasks,
+        user_tags,
+    }))
+}
+
+fn scan_config_task_references_sql() -> &'static str {
+    r#"SELECT t.uuid AS id,
+              coalesce(t.name, '') AS name,
+              coalesce(t.usage_type, 'scan') AS usage_type
+         FROM configs c
+         JOIN tasks t ON t.config = c.id
+        WHERE lower(c.uuid) = lower($1)
+          AND t.config_location = 0
+          AND coalesce(t.hidden, 0) = 0
+        ORDER BY t.name ASC, t.uuid ASC;"#
+}
+
+async fn scan_config_task_references(
+    client: &tokio_postgres::Client,
+    scan_config_id: &str,
+) -> Result<Vec<ScanConfigTaskReference>, ApiError> {
+    let rows = client
+        .query(scan_config_task_references_sql(), &[&scan_config_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scan config task-reference query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ScanConfigTaskReference {
+            id: row.get("id"),
+            name: row.get("name"),
+            usage_type: row.get("usage_type"),
+        })
+        .collect())
+}
+
+fn scan_config_user_tags_sql() -> &'static str {
+    r#"SELECT t.uuid AS id,
+              coalesce(t.name, '') AS name,
+              coalesce(t.value, '') AS value,
+              coalesce(t.comment, '') AS comment
+         FROM tags t
+         JOIN tag_resources tr ON tr.tag = t.id
+         JOIN configs c ON c.id = tr.resource
+        WHERE lower(c.uuid) = lower($1)
+          AND tr.resource_type = 'config'
+          AND tr.resource_location = 0
+          AND coalesce(t.active, 0) = 1
+        ORDER BY t.name ASC, t.uuid ASC;"#
+}
+
+async fn scan_config_user_tags(
+    client: &tokio_postgres::Client,
+    scan_config_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(scan_config_user_tags_sql(), &[&scan_config_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scan config user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
 }
 
 async fn scan_config_asset_families(
@@ -10538,6 +10631,76 @@ mod tests {
         assert!(!detail_source.contains("secret"));
         assert!(!detail_source.contains("certificate_info"));
         assert!(!detail_source.contains("send_scanner_info"));
+    }
+
+    #[test]
+    fn scan_config_user_tags_are_detail_only_active_config_tags() {
+        let source = include_str!("main.rs");
+        let scan_config_list_payload = source
+            .split_once("struct ScanConfigAssetItem {")
+            .expect("scan config list payload struct must exist")
+            .1
+            .split_once("struct ScanConfigAssetDetail")
+            .expect("scan config list payload struct must precede detail payload")
+            .0;
+        let scan_config_detail_payload = source
+            .split_once("struct ScanConfigAssetDetail {")
+            .expect("scan config detail payload struct must exist")
+            .1
+            .split_once("struct FilterAlertReference")
+            .expect("scan config detail payload must precede filter structs")
+            .0;
+
+        assert!(!scan_config_list_payload.contains("user_tags"));
+        assert!(scan_config_detail_payload.contains("user_tags: Vec<ReportUserTag>"));
+
+        let sql = scan_config_user_tags_sql();
+        assert!(sql.contains("FROM tags t"));
+        assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
+        assert!(sql.contains("JOIN configs c ON c.id = tr.resource"));
+        assert!(sql.contains("lower(c.uuid) = lower($1)"));
+        assert!(sql.contains("tr.resource_type = 'config'"));
+        assert!(sql.contains("tr.resource_location = 0"));
+        assert!(sql.contains("coalesce(t.active, 0) = 1"));
+        assert!(!sql.contains("credential"));
+        assert!(!sql.contains("reports"));
+        assert!(!sql.contains("results"));
+    }
+
+    #[test]
+    fn scan_config_task_references_are_non_hidden_config_backlinks_only() {
+        let sql = scan_config_task_references_sql();
+        assert!(sql.contains("FROM configs c"));
+        assert!(sql.contains("JOIN tasks t ON t.config = c.id"));
+        assert!(sql.contains("lower(c.uuid) = lower($1)"));
+        assert!(sql.contains("t.config_location = 0"));
+        assert!(sql.contains("coalesce(t.hidden, 0) = 0"));
+        assert!(sql.contains("coalesce(t.usage_type, 'scan') AS usage_type"));
+        assert!(!sql.contains("credentials"));
+        assert!(!sql.contains("results"));
+    }
+
+    #[test]
+    fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
+        let source = include_str!("main.rs");
+        let detail_source = source
+            .split_once("async fn scan_config_asset_detail")
+            .expect("scan config detail handler must exist")
+            .1
+            .split_once("async fn scan_config_asset_families")
+            .expect("scan config detail handler must precede family endpoint")
+            .0;
+
+        assert!(detail_source.contains("scan_config_task_references"));
+        assert!(detail_source.contains("scan_config_user_tags"));
+        assert!(!detail_source.contains("preferences"));
+        assert!(!detail_source.contains("nvt_selector"));
+        assert!(!detail_source.contains("credential"));
+        assert!(!detail_source.contains("password"));
+        assert!(!detail_source.contains("secret"));
+        assert!(!detail_source.contains("private_key"));
+        assert!(!detail_source.contains("export"));
+        assert!(!detail_source.contains("xml"));
     }
 
     #[test]

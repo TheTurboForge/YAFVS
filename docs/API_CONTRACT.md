@@ -42,8 +42,8 @@ The first API phase is read-only and report-focused:
   plus tag-dialog resource-name lookups for supported types including alert,
   inside authenticated operator access only.
 - scan-config list and browser-proxied metadata-detail reads, including
-  family/NVT counts, growth flags and predefined/deprecated state, inside
-  authenticated operator access only.
+  family/NVT counts, growth flags, predefined/deprecated state, active User
+  Tags, and shallow task backlinks, inside authenticated operator access only.
 - Security Information CERT-Bund and DFN-CERT advisory list reads plus
   internal catalog-detail metadata reads from imported PostgreSQL state.
 - Security Information NVT list and browser-proxied catalog-detail metadata
@@ -255,10 +255,11 @@ are designed.
 
 Native scan-config rows include config identity, owner, comment, family/NVT
 counts, growth flags, predefined/deprecated state, in-use state, and
-timestamps. Scanner/NVT preferences, selector/family expansion, task backlink
-identity, import/export, and config writes remain inherited until native
-resource/write semantics are designed. The GSA list reads native metadata;
-rich detail tabs remain inherited for now.
+timestamps. Detail payloads add active User Tags and shallow non-hidden task
+backlinks. Scanner/NVT preferences, selector/family expansion, import/export,
+and config writes remain inherited until native resource/write semantics are
+designed. The GSA list reads native metadata; preference-heavy detail tabs
+remain inherited for now.
 
 Native override rows include override identity, owner, NVT identity/name, text,
 host/port constraints, original and replacement severity values, active/end-time

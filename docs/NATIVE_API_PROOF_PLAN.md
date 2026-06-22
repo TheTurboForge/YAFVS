@@ -104,10 +104,11 @@ page-load reads, while inherited GMP remains the fallback for remote scanner
 certificate context and still owns verify, export/download,
 credential/certificate download context, delete, clone, edit, and
 scanner-control behavior.
-Scan Config detail Information fields now read native metadata through the
-authenticated `gsad` proxy while inherited GMP context still owns preferences,
-family/NVT expansion, scanner reference context, task backlinks, User Tags,
-import/export, edit/delete actions, and writes.
+Scan Config detail Information fields, active User Tags, and shallow non-hidden
+task backlinks now read native metadata through the authenticated `gsad` proxy
+while inherited GMP context still owns scanner/NVT preferences, selector/family
+expansion, scanner reference context, import/export, edit/delete actions, and
+writes.
 `runtime-report-summary --json` and `runtime-report-export --json` use the
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.
@@ -180,7 +181,7 @@ where it exists:
 - `GET /api/v1/scanners`
 - `GET /api/v1/scanners/{scanner_id}` metadata, active User Tags, and task backlinks only
 - `GET /api/v1/scan-configs`
-- `GET /api/v1/scan-configs/{scan_config_id}` metadata only
+- `GET /api/v1/scan-configs/{scan_config_id}` metadata, active User Tags, and shallow task backlinks only
 - `GET /api/v1/filters`
 - `GET /api/v1/filters/{filter_id}`
 - `GET /api/v1/tags`

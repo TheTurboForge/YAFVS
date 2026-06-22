@@ -1267,10 +1267,10 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
-      x-turbovas-replaces: scan-config-metadata-detail-info-read
+      x-turbovas-replaces: scan-config-metadata-detail-info-tags-and-task-backlink-read
       x-turbovas-inherited-still-owns: scan-config-preferences-export-import-writes-and-deletes
       summary: Read one scan config metadata record
-      description: Metadata-only detail for automation and proof probes. Preferences, import/export, scanner control, and write operations remain on inherited compatibility paths while native contracts are designed.
+      description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Preferences, import/export, scanner control, and write operations remain on inherited compatibility paths while native contracts are designed.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -1279,7 +1279,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScanConfigAsset'
+                $ref: '#/components/schemas/ScanConfigAssetDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -3076,6 +3076,33 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScanConfigAsset'
+    ScanConfigTaskReference:
+      type: object
+      required: [id, name, usage_type]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        usage_type:
+          type: string
+          enum: [scan]
+    ScanConfigAssetDetail:
+      allOf:
+        - $ref: '#/components/schemas/ScanConfigAsset'
+        - type: object
+          properties:
+            tasks:
+              type: array
+              description: Non-hidden task backlinks that use this scan config. Task control remains inherited.
+              items:
+                $ref: '#/components/schemas/ScanConfigTaskReference'
+            user_tags:
+              type: array
+              description: Active user tags attached directly to this scan config. Write/tag actions remain inherited.
+              items:
+                $ref: '#/components/schemas/ReportUserTag'
     FilterAssetCollection:
       type: object
       required: [page, items]

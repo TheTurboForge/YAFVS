@@ -212,19 +212,20 @@ scanner CA material.
 Native operating-system asset rows include the `oss.uuid` identity, CPE/name,
 title, latest/highest/average host severity, current best-OS host count, all
 associated host count, and timestamps from gvmd/PostgreSQL asset tables. The
-detail endpoint returns the same bounded metadata for one OS asset by UUID;
-delete, export, and other asset writes remain inherited until native write
-semantics are designed.
+detail endpoint returns the same bounded metadata plus active User Tags for one
+OS asset by UUID; delete, export, tag writes/actions, and other asset writes
+remain inherited until native write semantics are designed.
 
 Native host asset detail rows use the `hosts.uuid` identity and return the
 existing host asset summary plus bounded safe metadata from `host_identifiers`,
 `host_oss`/`oss`, and latest whitelisted `host_details` names only:
 `best_os_cpe`, `best_os_txt`, and `traceroute`. The detail endpoint validates
-and canonicalizes UUID path IDs before parameterized PostgreSQL queries. It
-intentionally excludes host create/save/delete, delete-identifier behavior, XML
-export, target creation from host, User Tags, credential/privacy-sensitive
-identifiers, raw `report_host_details` expansion, report/result/port/application
-history, GMP-only `details=1` semantics, and all writes.
+and canonicalizes UUID path IDs before parameterized PostgreSQL queries. It also
+returns active User Tags attached directly to the host. It intentionally excludes
+host create/save/delete, delete-identifier behavior, XML export, target creation
+from host, tag writes/actions, credential/privacy-sensitive identifiers, raw
+`report_host_details` expansion, report/result/port/application history,
+GMP-only `details=1` semantics, and all writes.
 
 Native TLS certificate asset rows include the `tls_certificates.uuid` identity,
 subject and issuer distinguished names, serial and fingerprints, activation,

@@ -84,12 +84,14 @@ User Tags, override creation/list context, export, selector/config expansion,
 feed-control, scanner-control, and write semantics.
 Operating System detail Information fields now read native metadata through the
 authenticated `gsad` proxy while inherited GMP context still owns retained
-actions and User Tags.
+actions and tag writes/actions. Active OS User Tags are included in the native
+detail payload.
 Host detail Information fields now read native metadata through the authenticated
 `gsad` proxy while inherited GMP context still owns writes, export, target
-creation, delete identifier, User Tags, and GMP-only `details=1` behavior. The
-native metadata uses `hosts.uuid`, bounded safe identifier/source metadata, host
-OS associations, and latest whitelisted host details.
+creation, delete identifier, tag writes/actions, and GMP-only `details=1`
+behavior. The native metadata uses `hosts.uuid`, bounded safe identifier/source
+metadata, host OS associations, latest whitelisted host details, and active host
+User Tags.
 TLS Certificate detail Information fields now read native metadata through the
 authenticated `gsad` proxy while inherited GMP context still owns certificate
 download bytes, User Tags, export, delete, and retained actions. The native

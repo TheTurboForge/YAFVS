@@ -1532,10 +1532,18 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(collection_contract["collection_limit_mismatches"], [])
         self.assertEqual(collection_contract["incomplete_collection_parameters"], [])
+        self.assertEqual(collection_contract["rust_collection_contract_count"], 43)
+        self.assertEqual(collection_contract["openapi_collection_operation_count"], 43)
+        self.assertEqual(collection_contract["missing_openapi_collection_parameters"], [])
+        self.assertEqual(collection_contract["missing_rust_collection_contracts"], [])
         compact = turbovasctl.compact_native_tooling_summary(details)
         self.assertEqual(compact["openapi_contract"]["collection_query_alignment_status"], "pass")
+        self.assertEqual(compact["openapi_contract"]["rust_collection_contract_count"], 43)
+        self.assertEqual(compact["openapi_contract"]["openapi_collection_operation_count"], 43)
         self.assertEqual(compact["openapi_contract"]["collection_limit_mismatch_count"], 0)
         self.assertEqual(compact["openapi_contract"]["incomplete_collection_parameter_count"], 0)
+        self.assertEqual(compact["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
+        self.assertEqual(compact["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertIn("getResultsByResultId", contract["operation_ids"])
         self.assertIn("getAlertsByAlertId", contract["operation_ids"])
         self.assertIn("getScopesByScopeIdReportsByScopeReportIdRetentionPlan", contract["operation_ids"])
@@ -2012,12 +2020,19 @@ class TurboVASCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
             collections = root / "services" / "turbovas-api" / "src" / "collections.rs"
+            main = root / "services" / "turbovas-api" / "src" / "main.rs"
             openapi.parent.mkdir(parents=True)
             collections.parent.mkdir(parents=True)
             collections.write_text(
                 "pub(crate) const DEFAULT_COLLECTION_PAGE_SIZE: i64 = 50;\n"
                 "pub(crate) const MAX_COLLECTION_PAGE_SIZE: i64 = 500;\n"
                 "pub(crate) const MAX_COLLECTION_FILTER_LENGTH: usize = 4096;\n",
+                encoding="utf-8",
+            )
+            main.write_text(
+                'const COLLECTION_CONTRACTS: &[CollectionContract] = &[\n'
+                '    CollectionContract { path: "/api/v1/reports" },\n'
+                '];\n',
                 encoding="utf-8",
             )
             openapi.write_text(
@@ -2032,6 +2047,17 @@ class TurboVASCtlTests(unittest.TestCase):
                 "      responses:\n"
                 "        '200':\n"
                 "          description: Reports\n"
+                "  /results:\n"
+                "    get:\n"
+                "      operationId: getResults\n"
+                "      parameters:\n"
+                "        - $ref: '#/components/parameters/Page'\n"
+                "        - $ref: '#/components/parameters/PageSize'\n"
+                "        - $ref: '#/components/parameters/Sort'\n"
+                "        - $ref: '#/components/parameters/Filter'\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Results\n"
                 "components:\n"
                 "  parameters:\n"
                 "    Page:\n"
@@ -2077,6 +2103,10 @@ class TurboVASCtlTests(unittest.TestCase):
             summary["incomplete_collection_parameters"],
             [{"operation": "GET /reports", "present": ["Page", "PageSize"], "missing": ["Filter", "Sort"]}],
         )
+        self.assertEqual(summary["rust_collection_contract_count"], 1)
+        self.assertEqual(summary["openapi_collection_operation_count"], 1)
+        self.assertEqual(summary["missing_openapi_collection_parameters"], ["/api/v1/reports"])
+        self.assertEqual(summary["missing_rust_collection_contracts"], ["/api/v1/results"])
 
     def test_native_tooling_state_reports_invalid_openapi_error_schema_shape(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -4901,6 +4901,17 @@ def rust_collection_contract_constants(repo_root: Path | None) -> dict[str, int 
     }
 
 
+def rust_collection_contract_paths(repo_root: Path | None) -> list[str]:
+    if repo_root is None:
+        return []
+    path = repo_root / "services" / "turbovas-api" / "src" / "main.rs"
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return sorted(set(re.findall(r'path:\s*"(/api/v1[^"]+)"', source)))
+
+
 def openapi_component_parameter_block(repo_root: Path | None, parameter_name: str) -> list[str]:
     lines = openapi_contract_lines(repo_root)
     in_components = False
@@ -4937,6 +4948,7 @@ def openapi_component_parameter_block(repo_root: Path | None, parameter_name: st
 
 def openapi_collection_query_contract_summary(repo_root: Path | None, operations: list[dict[str, Any]]) -> dict[str, Any]:
     rust_constants = rust_collection_contract_constants(repo_root)
+    rust_contract_paths = rust_collection_contract_paths(repo_root)
     page_size_fields = openapi_indented_scalar_fields(openapi_component_parameter_block(repo_root, "PageSize"))
     filter_fields = openapi_indented_scalar_fields(openapi_component_parameter_block(repo_root, "Filter"))
 
@@ -4956,9 +4968,12 @@ def openapi_collection_query_contract_summary(repo_root: Path | None, operations
 
     required = set(OPENAPI_COLLECTION_PARAMETER_REFS)
     incomplete_collection_parameters = []
+    openapi_collection_paths = []
     for operation in operations:
         parameters = set(operation.get("parameters", [])) if isinstance(operation.get("parameters"), list) else set()
         present = parameters & required
+        if present == required and isinstance(operation.get("path"), str):
+            openapi_collection_paths.append(f"/api/v1{operation['path']}")
         if present and present != required:
             incomplete_collection_parameters.append(
                 {
@@ -4967,12 +4982,21 @@ def openapi_collection_query_contract_summary(repo_root: Path | None, operations
                     "missing": sorted(required - present),
                 }
             )
+    openapi_collection_paths = sorted(set(openapi_collection_paths))
+    missing_openapi_collection_parameters = sorted(set(rust_contract_paths) - set(openapi_collection_paths))
+    missing_rust_collection_contracts = sorted(set(openapi_collection_paths) - set(rust_contract_paths))
     return {
-        "alignment_status": "pass" if not mismatches and not incomplete_collection_parameters else "warn",
+        "alignment_status": "pass" if not mismatches and not incomplete_collection_parameters and not missing_openapi_collection_parameters and not missing_rust_collection_contracts else "warn",
         "rust_collection_constants": rust_constants,
         "openapi_collection_values": openapi_values,
+        "rust_collection_contract_count": len(rust_contract_paths),
+        "openapi_collection_operation_count": len(openapi_collection_paths),
+        "rust_collection_contract_paths": rust_contract_paths,
+        "openapi_collection_paths": openapi_collection_paths,
         "collection_limit_mismatches": mismatches,
         "incomplete_collection_parameters": incomplete_collection_parameters,
+        "missing_openapi_collection_parameters": missing_openapi_collection_parameters,
+        "missing_rust_collection_contracts": missing_rust_collection_contracts,
     }
 
 
@@ -5945,8 +5969,12 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "missing_error_schema_field_count": len(openapi_contract.get("missing_error_schema_fields", [])) if isinstance(openapi_contract, dict) else 0,
         "invalid_error_schema_field_count": len(openapi_contract.get("invalid_error_schema_fields", [])) if isinstance(openapi_contract, dict) else 0,
         "collection_query_alignment_status": openapi_contract.get("collection_query_contract", {}).get("alignment_status", "unknown") if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else "unknown",
+        "rust_collection_contract_count": openapi_contract.get("collection_query_contract", {}).get("rust_collection_contract_count", 0) if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else 0,
+        "openapi_collection_operation_count": openapi_contract.get("collection_query_contract", {}).get("openapi_collection_operation_count", 0) if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else 0,
         "collection_limit_mismatch_count": len(openapi_contract.get("collection_query_contract", {}).get("collection_limit_mismatches", [])) if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else 0,
         "incomplete_collection_parameter_count": len(openapi_contract.get("collection_query_contract", {}).get("incomplete_collection_parameters", [])) if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else 0,
+        "missing_openapi_collection_parameter_count": len(openapi_contract.get("collection_query_contract", {}).get("missing_openapi_collection_parameters", [])) if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else 0,
+        "missing_rust_collection_contract_count": len(openapi_contract.get("collection_query_contract", {}).get("missing_rust_collection_contracts", [])) if isinstance(openapi_contract.get("collection_query_contract", {}), dict) else 0,
         "auth_contract_alignment_status": openapi_contract.get("auth_contract", {}).get("alignment_status", "unknown") if isinstance(openapi_contract.get("auth_contract", {}), dict) else "unknown",
         "missing_server_count": len(openapi_contract.get("auth_contract", {}).get("missing_servers", [])) if isinstance(openapi_contract.get("auth_contract", {}), dict) else 0,
         "unexpected_server_count": len(openapi_contract.get("auth_contract", {}).get("unexpected_servers", [])) if isinstance(openapi_contract.get("auth_contract", {}), dict) else 0,

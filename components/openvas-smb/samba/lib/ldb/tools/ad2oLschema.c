@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Andrew Bartlett 2006
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 

@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Greenbone AG
 //
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
 #![allow(non_upper_case_globals)]

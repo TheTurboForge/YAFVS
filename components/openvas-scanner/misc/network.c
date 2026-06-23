@@ -2,6 +2,7 @@
  * SPDX-FileCopyrightText: 1998-2002 Renaud Deraison
  * SPDX-FileCopyrightText: 2001 Michel Arboi
  *
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 

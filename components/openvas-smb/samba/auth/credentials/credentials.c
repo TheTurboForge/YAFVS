@@ -2,6 +2,7 @@
  * SPDX-FileCopyrightText: Andrew Bartlett <abartlet@samba.org> 2005
  * SPDX-FileCopyrightText: Tim Potter 2001
  * SPDX-FileCopyrightText: Jelmer Vernooij 2005
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 

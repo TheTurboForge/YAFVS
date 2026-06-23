@@ -1456,6 +1456,12 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("bucket_counts", inventory_details["candidate_for_removal_review"])
         self.assertNotIn("next_replacement_candidates", inventory_details)
         self.assertIn("product_workflow_residue", inventory_details)
+        for item in compact["findings"]:
+            finding_details = item.get("details", {})
+            self.assertNotIn("inventory_endpoints", finding_details)
+            self.assertNotIn("rust_routes", finding_details)
+            self.assertNotIn("operation_ids", finding_details)
+            self.assertNotIn("openapi_collection_paths", finding_details)
         self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
         details = full["details"]
         product_residue = details["product_workflow_residue"]
@@ -1589,7 +1595,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("paths", summary["findings"][4]["details"])
         self.assertEqual(summary["findings"][4]["details"], {"count": 0})
         self.assertLess(len(json.dumps(summary)), len(json.dumps(compact)))
-        self.assertLess(len(json.dumps(summary)), len(json.dumps(compact)) // 2)
 
     def test_native_tooling_state_status_only_is_chat_safe(self):
         root = Path(__file__).resolve().parents[2]

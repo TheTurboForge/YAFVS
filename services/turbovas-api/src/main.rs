@@ -16,6 +16,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 mod app_state;
 mod auth;
+mod cert_advisories;
 mod collections;
 mod direct_api;
 mod errors;
@@ -36,6 +37,7 @@ mod tags;
 mod user_tags;
 
 use app_state::{AppState, create_pool, healthz};
+use cert_advisories::*;
 use collections::*;
 use direct_api::{direct_api_config, require_direct_api_auth};
 use errors::ApiError;
@@ -520,52 +522,6 @@ struct CatalogCpeItem {
 struct CatalogCpeDetail {
     #[serde(flatten)]
     item: CatalogCpeItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
-}
-
-#[derive(Debug, Serialize)]
-struct DfnCertAdvisoryItem {
-    id: String,
-    name: String,
-    comment: String,
-    title: String,
-    summary: String,
-    severity: f64,
-    cve_refs: i64,
-    cves: Vec<String>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct DfnCertAdvisoryDetail {
-    #[serde(flatten)]
-    item: DfnCertAdvisoryItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
-}
-
-#[derive(Debug, Serialize)]
-struct CertBundAdvisoryItem {
-    id: String,
-    name: String,
-    comment: String,
-    title: String,
-    summary: String,
-    severity: f64,
-    cve_refs: i64,
-    cves: Vec<String>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct CertBundAdvisoryDetail {
-    #[serde(flatten)]
-    item: CertBundAdvisoryItem,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     user_tags: Vec<ReportUserTag>,
 }
@@ -8650,38 +8606,6 @@ fn catalog_cpe_from_row(
     }
 }
 
-fn dfn_cert_advisory_from_row(row: &Row) -> DfnCertAdvisoryItem {
-    DfnCertAdvisoryItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        title: row.get("title"),
-        summary: row.get("summary"),
-        severity: row.get("severity"),
-        cve_refs: row.get("cve_refs"),
-        cves: row.get("cves"),
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-fn cert_bund_advisory_from_row(row: &Row) -> CertBundAdvisoryItem {
-    CertBundAdvisoryItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        title: row.get("title"),
-        summary: row.get("summary"),
-        severity: row.get("severity"),
-        cve_refs: row.get("cve_refs"),
-        cves: row.get("cves"),
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
 fn nvt_catalog_from_row(row: &Row) -> NvtCatalogItem {
     NvtCatalogItem {
         id: row.get("id"),
@@ -10037,14 +9961,15 @@ mod tests {
     #[test]
     fn cert_advisory_detail_user_tags_use_resolved_uuid_only() {
         let source = include_str!("main.rs");
-        let cert_bund_item_payload = source
+        let payload_source = include_str!("cert_advisories.rs");
+        let cert_bund_item_payload = payload_source
             .split_once("struct CertBundAdvisoryItem {")
             .expect("CERT-Bund advisory payload must exist")
             .1
             .split_once("struct CertBundAdvisoryDetail")
             .expect("CERT-Bund advisory payload must precede detail payload")
             .0;
-        let dfn_cert_item_payload = source
+        let dfn_cert_item_payload = payload_source
             .split_once("struct DfnCertAdvisoryItem {")
             .expect("DFN-CERT advisory payload must exist")
             .1
@@ -10082,8 +10007,8 @@ mod tests {
 
         assert!(!cert_bund_item_payload.contains("user_tags"));
         assert!(!dfn_cert_item_payload.contains("user_tags"));
-        assert!(source.contains("struct CertBundAdvisoryDetail"));
-        assert!(source.contains("struct DfnCertAdvisoryDetail"));
+        assert!(payload_source.contains("struct CertBundAdvisoryDetail"));
+        assert!(payload_source.contains("struct DfnCertAdvisoryDetail"));
         assert!(cert_bund_detail_source.contains("let id: String = row.get(\"id\");"));
         assert!(dfn_cert_detail_source.contains("let id: String = row.get(\"id\");"));
         assert!(

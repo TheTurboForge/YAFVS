@@ -7584,6 +7584,16 @@ def command_license_report(
         findings.append(finding("fail", "license.git-history", f"Could not compare against import baseline {IMPORT_BASELINE_COMMIT}."))
     else:
         findings.extend(modified_imported_license_findings(repo_root, rows, diff_scope="baseline"))
+    for transient_scope in ("staged", "worktree"):
+        transient_rows = git_name_status_for_diff_scope(repo_root, transient_scope, ("components",))
+        findings.extend(
+            modified_imported_license_findings(
+                repo_root,
+                transient_rows,
+                diff_scope=transient_scope,
+                check_manifest_stale=False,
+            )
+        )
 
     if all_rows is None:
         findings.append(finding("fail", "license.new-file-spdx", f"Could not compare new files against import baseline {IMPORT_BASELINE_COMMIT}."))

@@ -4016,6 +4016,37 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(result["details"], {"diff_scope": "worktree", "modified_imported_only": True})
         name_status.assert_called_once_with(root, "worktree", ("components",))
 
+    def test_full_license_report_checks_dirty_modified_imported_notices(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "components" / "gsa" / "src" / "example.jsx"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "/* SPDX-FileCopyrightText: 2025 Greenbone AG\n"
+                " * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n"
+                " *\n"
+                " * SPDX-License-Identifier: AGPL-3.0-or-later\n"
+                " */\n",
+                encoding="utf-8",
+            )
+
+            with unittest.mock.patch.object(turbovasctl, "git_name_status", return_value=[]), unittest.mock.patch.object(
+                turbovasctl,
+                "git_name_status_for_diff_scope",
+                side_effect=lambda _root, scope, _pathspecs=(): [("M", "components/gsa/src/example.jsx")] if scope == "worktree" else [],
+            ):
+                result = turbovasctl.command_license_report(root)
+
+        failed_checks = [finding for finding in result["findings"] if finding["status"] == "fail"]
+        self.assertIn("license.modified-imported-notices", {finding["check"] for finding in failed_checks})
+        self.assertTrue(
+            any(
+                finding.get("details", {}).get("diff_scope") == "worktree"
+                and finding.get("details", {}).get("missing") == ["components/gsa/src/example.jsx"]
+                for finding in failed_checks
+            )
+        )
+
     def test_license_report_rejects_non_baseline_full_scope(self):
         result = turbovasctl.command_license_report(Path("/tmp/repo"), diff_scope="staged")
 

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -9,9 +10,9 @@ import SearchBar from 'web/components/searchbar/SearchBar';
 
 describe('SearchBar', () => {
   const placeholder = 'Search...';
-  const onSearch = testing.fn();
 
   test('calls onSearch with debounced input value', async () => {
+    const onSearch = testing.fn();
     render(
       <SearchBar
         matchesCount={2}
@@ -21,6 +22,11 @@ describe('SearchBar', () => {
     );
     const input = screen.getByPlaceholderText(placeholder);
 
+    await waitFor(() => {
+      expect(onSearch).toHaveBeenCalledWith('');
+    });
+    onSearch.mockClear();
+
     fireEvent.change(input, {target: {value: 'ap'}});
 
     await waitFor(() => {
@@ -29,6 +35,7 @@ describe('SearchBar', () => {
   });
 
   test('shows no results message when resultsCount is zero', async () => {
+    const onSearch = testing.fn();
     render(
       <SearchBar
         matchesCount={0}

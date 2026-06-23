@@ -22,6 +22,7 @@ mod errors;
 mod feeds;
 mod formatters;
 mod path_ids;
+mod port_lists;
 mod query;
 mod report_configs;
 mod report_formats;
@@ -38,6 +39,7 @@ use errors::ApiError;
 use feeds::feeds;
 use formatters::*;
 use path_ids::*;
+use port_lists::*;
 use query::*;
 use report_configs::*;
 use report_formats::*;
@@ -1050,50 +1052,6 @@ struct OverrideAssetItem {
     permissions: Vec<String>,
     created_at: Option<String>,
     modified_at: Option<String>,
-}
-
-#[derive(Serialize)]
-struct PortRangeItem {
-    id: String,
-    protocol: String,
-    start: i64,
-    end: i64,
-    comment: String,
-}
-
-#[derive(Serialize)]
-struct PortCountItem {
-    all: i64,
-    tcp: i64,
-    udp: i64,
-}
-
-#[derive(Serialize)]
-struct PortListTargetReference {
-    id: String,
-    name: String,
-}
-
-#[derive(Serialize)]
-struct PortListAssetItem {
-    id: String,
-    name: String,
-    comment: String,
-    port_count: PortCountItem,
-    port_ranges: Vec<PortRangeItem>,
-    targets: Vec<PortListTargetReference>,
-    predefined: bool,
-    deprecated: bool,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-}
-
-#[derive(Serialize)]
-struct PortListAssetDetail {
-    #[serde(flatten)]
-    asset: PortListAssetItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Serialize)]
@@ -3442,10 +3400,10 @@ async fn port_list_asset_detail(
         .map(port_list_target_from_row)
         .collect();
     let user_tags = port_list_user_tags(&client, &port_list_id).await?;
-    Ok(Json(PortListAssetDetail {
-        asset: port_list_asset_from_row(&row, ranges, targets),
+    Ok(Json(port_list_asset_detail_payload(
+        port_list_asset_from_row(&row, ranges, targets),
         user_tags,
-    }))
+    )))
 }
 
 fn port_list_user_tags_sql() -> &'static str {
@@ -9132,46 +9090,6 @@ fn override_asset_from_row(row: &Row) -> OverrideAssetItem {
     }
 }
 
-fn port_range_from_row(row: &Row) -> PortRangeItem {
-    PortRangeItem {
-        id: row.get("id"),
-        protocol: row.get("protocol"),
-        start: row.get("start"),
-        end: row.get("end"),
-        comment: row.get("comment"),
-    }
-}
-
-fn port_list_target_from_row(row: &Row) -> PortListTargetReference {
-    PortListTargetReference {
-        id: row.get("id"),
-        name: row.get("name"),
-    }
-}
-
-fn port_list_asset_from_row(
-    row: &Row,
-    port_ranges: Vec<PortRangeItem>,
-    targets: Vec<PortListTargetReference>,
-) -> PortListAssetItem {
-    PortListAssetItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        port_count: PortCountItem {
-            all: row.get("port_count_all"),
-            tcp: row.get("port_count_tcp"),
-            udp: row.get("port_count_udp"),
-        },
-        port_ranges,
-        targets,
-        predefined: row.get::<_, i32>("predefined_int") != 0,
-        deprecated: row.get::<_, i32>("deprecated_int") != 0,
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
 fn schedule_task_from_row(row: &Row) -> ScheduleTaskReference {
     ScheduleTaskReference {
         id: row.get("id"),
@@ -11097,7 +11015,7 @@ mod tests {
 
     #[test]
     fn port_list_user_tags_are_detail_only_active_port_list_tags() {
-        let source = include_str!("main.rs");
+        let source = include_str!("port_lists.rs");
         let port_list_payload = source
             .split_once("struct PortListAssetItem {")
             .expect("port list payload struct must exist")
@@ -11109,8 +11027,8 @@ mod tests {
             .split_once("struct PortListAssetDetail {")
             .expect("port list detail payload struct must exist")
             .1
-            .split_once("struct HostIdentifierItem")
-            .expect("port list detail payload must precede host structs")
+            .split_once("pub(crate) fn port_range_from_row")
+            .expect("port list detail payload must precede row mappers")
             .0;
 
         assert!(!port_list_payload.contains("user_tags"));

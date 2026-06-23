@@ -595,6 +595,10 @@ void cli_credentials_set_conf(struct cli_credentials *cred)
 void cli_credentials_guess(struct cli_credentials *cred)
 {
 	char *p;
+	const char *passwd_fd;
+	const char *passwd_file;
+	char *endptr;
+	long fd_value;
 
 	cli_credentials_set_conf(cred);
 	
@@ -617,14 +621,23 @@ void cli_credentials_guess(struct cli_credentials *cred)
 		cli_credentials_set_password(cred, getenv("PASSWD"), CRED_GUESS_ENV);
 	}
 
-	if (getenv("PASSWD_FD")) {
-		cli_credentials_parse_password_fd(cred, atoi(getenv("PASSWD_FD")), CRED_GUESS_FILE);
+	passwd_fd = getenv("PASSWD_FD");
+	if (passwd_fd) {
+		errno = 0;
+		fd_value = strtol(passwd_fd, &endptr, 10);
+		if (errno == 0 && endptr != passwd_fd && *endptr == '\0' &&
+		    fd_value >= 0 && fd_value <= (long)INT_MAX) {
+			cli_credentials_parse_password_fd(cred, (int)fd_value, CRED_GUESS_FILE);
+		} else {
+			fprintf(stderr, "Ignoring invalid PASSWD_FD value\n");
+		}
 	}
 	
-	if (getenv("PASSWD_FILE")) {
-		// codeql[cpp/path-injection] PASSWD_FILE is an explicit inherited
-		// Samba environment interface for operator-selected credentials.
-		cli_credentials_parse_password_file(cred, getenv("PASSWD_FILE"), CRED_GUESS_FILE);
+	passwd_file = getenv("PASSWD_FILE");
+	if (passwd_file) {
+		/* codeql[cpp/path-injection] PASSWD_FILE is an explicit inherited
+		 * Samba environment interface for operator-selected credentials. */
+		cli_credentials_parse_password_file(cred, passwd_file, CRED_GUESS_FILE);
 	}
 	
 	if (cli_credentials_get_kerberos_state(cred) != CRED_DONT_USE_KERBEROS) {

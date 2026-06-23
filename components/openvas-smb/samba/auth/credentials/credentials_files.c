@@ -2,6 +2,7 @@
  * SPDX-FileCopyrightText: Andrew Bartlett <abartlet@samba.org> 2005
  * SPDX-FileCopyrightText: Tim Potter 2001
  * SPDX-FileCopyrightText: Jelmer Vernooij 2005
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
@@ -67,13 +68,13 @@ BOOL cli_credentials_parse_password_fd(struct cli_credentials *credentials,
 				p = NULL; /* then force the loop condition to become false */
 				break;
 			} else {
-				fprintf(stderr, "Error reading password from file descriptor %d: %s\n", fd, "empty password\n");
+				fprintf(stderr, "Error reading password from file descriptor: empty password\n");
 				return False;
 			}
 
 		default:
-			fprintf(stderr, "Error reading password from file descriptor %d: %s\n",
-					fd, strerror(errno));
+			fprintf(stderr, "Error reading password from file descriptor: %s\n",
+					strerror(errno));
 			return False;
 		}
 	}
@@ -96,8 +97,8 @@ BOOL cli_credentials_parse_password_file(struct cli_credentials *credentials, co
 	BOOL ret;
 
 	if (fd < 0) {
-		fprintf(stderr, "Error opening PASSWD_FILE %s: %s\n",
-				file, strerror(errno));
+		fprintf(stderr, "Error opening PASSWD_FILE: %s\n",
+				strerror(errno));
 		return False;
 	}
 

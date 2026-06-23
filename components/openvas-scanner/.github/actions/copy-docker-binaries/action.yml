@@ -11,11 +11,13 @@ runs:
   steps:
     - name: validate architecture input
       shell: bash
+      env:
+        TURBOVAS_RUST_BIN_ARCH: ${{ inputs.arch }}
       run: |
-        case "${{ inputs.arch }}" in
+        case "$TURBOVAS_RUST_BIN_ARCH" in
           amd64|arm64) ;;
           *)
-            echo "Unsupported architecture: ${{ inputs.arch }}" >&2
+            echo "Unsupported architecture: $TURBOVAS_RUST_BIN_ARCH" >&2
             exit 1
             ;;
         esac
@@ -27,7 +29,17 @@ runs:
         path: ./assets
     - run: mkdir -p .docker/install/usr/local
       shell: bash
-    - run: mv "assets/linux/${{ inputs.arch }}" .docker/install/usr/local/bin
+    - run: |
+        case "$TURBOVAS_RUST_BIN_ARCH" in
+          amd64|arm64) ;;
+          *)
+            echo "Unsupported architecture: $TURBOVAS_RUST_BIN_ARCH" >&2
+            exit 1
+            ;;
+        esac
+        mv "assets/linux/$TURBOVAS_RUST_BIN_ARCH" .docker/install/usr/local/bin
       shell: bash
+      env:
+        TURBOVAS_RUST_BIN_ARCH: ${{ inputs.arch }}
     - run: ls -las .docker/install/usr/local/bin
       shell: bash

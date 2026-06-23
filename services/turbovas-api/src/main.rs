@@ -35,6 +35,7 @@ mod row_helpers;
 mod schedules;
 mod tag_resource_helpers;
 mod tags;
+mod tls_certificates;
 mod user_tags;
 
 use app_state::{AppState, create_pool, healthz};
@@ -55,6 +56,7 @@ use row_helpers::*;
 use schedules::*;
 use tag_resource_helpers::*;
 use tags::*;
+use tls_certificates::*;
 use user_tags::*;
 
 #[derive(Debug, Serialize)]
@@ -458,43 +460,6 @@ struct ScanConfigFamiliesPayload {
     family_count: i64,
     families_growing: i32,
     families: Vec<ScanConfigFamilyItem>,
-}
-
-#[derive(Serialize)]
-struct TlsCertificateSourceLocation {
-    id: String,
-    host_ip: String,
-    port: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    host_asset_id: Option<String>,
-}
-
-#[derive(Serialize)]
-struct TlsCertificateSourceOrigin {
-    id: String,
-    origin_type: String,
-    origin_id: String,
-    origin_data: String,
-}
-
-#[derive(Serialize)]
-struct TlsCertificateSourceItem {
-    id: String,
-    timestamp: Option<String>,
-    tls_versions: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    location: Option<TlsCertificateSourceLocation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    origin: Option<TlsCertificateSourceOrigin>,
-}
-
-#[derive(Serialize)]
-struct TlsCertificateAssetDetail {
-    #[serde(flatten)]
-    asset: TlsCertificateAssetItem,
-    sources: Vec<TlsCertificateSourceItem>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Debug, Serialize)]
@@ -912,33 +877,6 @@ struct OverrideAssetItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<OverrideReference>,
     permissions: Vec<String>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-}
-
-#[derive(Serialize)]
-struct TlsCertificateAssetItem {
-    id: String,
-    name: String,
-    comment: String,
-    subject_dn: String,
-    issuer_dn: String,
-    serial: String,
-    md5_fingerprint: String,
-    sha256_fingerprint: String,
-    activation_time: Option<String>,
-    expiration_time: Option<String>,
-    last_seen: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    valid: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    trust: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    time_status: Option<String>,
-    source_host_count: i64,
-    source_port_count: i64,
-    source_count: i64,
-    in_use: bool,
     created_at: Option<String>,
     modified_at: Option<String>,
 }
@@ -8479,72 +8417,6 @@ fn nvt_max_severity_from_row(row: &Row) -> Option<NvtEpssItem> {
         cve: row.get::<_, Option<String>>("epss_cve").unwrap_or_default(),
         severity: row.get::<_, Option<f64>>("epss_severity").unwrap_or(0.0),
     })
-}
-
-fn tls_certificate_asset_from_row(row: &Row) -> TlsCertificateAssetItem {
-    let source_count = row.get("source_count");
-    TlsCertificateAssetItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        subject_dn: row.get("subject_dn"),
-        issuer_dn: row.get("issuer_dn"),
-        serial: row.get("serial"),
-        md5_fingerprint: row.get("md5_fingerprint"),
-        sha256_fingerprint: row.get("sha256_fingerprint"),
-        activation_time: unix_ts_to_rfc3339(row.get("activation_time_unix")),
-        expiration_time: unix_ts_to_rfc3339(row.get("expiration_time_unix")),
-        last_seen: unix_ts_to_rfc3339(row.get("last_seen_unix")),
-        valid: row
-            .try_get::<_, Option<i32>>("valid_int")
-            .ok()
-            .flatten()
-            .map(boolean_int),
-        trust: row
-            .try_get::<_, Option<i32>>("trust_int")
-            .ok()
-            .flatten()
-            .map(boolean_int),
-        time_status: optional_row_string(row, "time_status"),
-        source_host_count: row.get("source_host_count"),
-        source_port_count: row.get("source_port_count"),
-        source_count,
-        in_use: source_count > 0,
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-fn tls_certificate_source_from_row(row: &Row) -> TlsCertificateSourceItem {
-    let location_id: Option<String> = row.get("location_id");
-    let origin_uuid: Option<String> = row.get("origin_uuid");
-    TlsCertificateSourceItem {
-        id: row.get("id"),
-        timestamp: unix_ts_to_rfc3339(row.get("timestamp_unix")),
-        tls_versions: row.get("tls_versions"),
-        location: location_id.map(|id| TlsCertificateSourceLocation {
-            id,
-            host_ip: row
-                .get::<_, Option<String>>("location_host_ip")
-                .unwrap_or_default(),
-            port: row
-                .get::<_, Option<String>>("location_port")
-                .unwrap_or_default(),
-            host_asset_id: row.get("host_asset_id"),
-        }),
-        origin: origin_uuid.map(|id| TlsCertificateSourceOrigin {
-            id,
-            origin_type: row
-                .get::<_, Option<String>>("origin_type")
-                .unwrap_or_default(),
-            origin_id: row
-                .get::<_, Option<String>>("origin_resource_id")
-                .unwrap_or_default(),
-            origin_data: row
-                .get::<_, Option<String>>("origin_data")
-                .unwrap_or_default(),
-        }),
-    }
 }
 
 fn scanner_asset_from_row(row: &Row) -> ScannerAssetItem {

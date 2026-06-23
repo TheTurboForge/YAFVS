@@ -4168,6 +4168,13 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("license-precommit *args:", justfile)
         self.assertIn("tools/turbovasctl license-report --diff-scope staged --modified-imported-only", justfile)
 
+    def test_secret_precommit_recipe_is_registered(self):
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+
+        self.assertIn("secret-precommit *args:", justfile)
+        self.assertIn("gitleaks protect --staged --redact --no-banner", justfile)
+        self.assertIn("--exit-code 7 --report-format json", justfile)
+
     def test_no_comment_manifest_requires_current_documented_paths(self):
         review = ["components/gsa/package.json", "components/gsa/public/locales/gsa-en.json", "components/gsa/new-data.json"]
         manifest = {

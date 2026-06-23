@@ -82,5 +82,6 @@ surfaces.
 | `just runtime-browser-regression --json` | Deeper browser route/link/pagination regressions for selected workflows. | Backend-only invariants or production posture. |
 | `just production-posture-check --status-only --json` | Known production blockers and exposure hazards are visible with compact status/non-pass output. Use full `--json` only when investigating pass-detail context. | That the deployment is production-ready while failures or warnings remain. |
 | `just license-report --json` | Daily engineering license/provenance guardrails are clean. | Binary/container/hosted/feed redistribution readiness. |
+| `just secret-precommit` | Staged source changes pass a redacted gitleaks secret scan before commit. | Full repository history, runtime artifact, feed cache, or public-release secret review. |
 | `just license-public-release-gate --mode source-public` | Source-public license/provenance posture for the selected mode. | Broader release modes unless their stricter mode gates pass. |
 | `just quality-gate --json` | Broad local source-quality and selected runtime-aware project gates. | Exhaustive browser regression, production readiness, or public release readiness by itself. |

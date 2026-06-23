@@ -59,6 +59,9 @@ license-report *args:
 license-precommit *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl license-report --diff-scope staged --modified-imported-only --status-only "$@"
 
+secret-precommit *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; gitleaks protect --staged --redact --no-banner --log-level error --exit-code 7 --report-format json "$@"
+
 license-public-release-gate *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl license-report --public-release "$@"
 

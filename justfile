@@ -200,6 +200,9 @@ security-policy-check *args:
 native-api-cargo-audit *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-cargo-audit "$@"
 
+gsa-npm-audit *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl gsa-npm-audit "$@"
+
 path-coupling-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl path-coupling-state "$@"
 

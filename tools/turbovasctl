@@ -154,6 +154,9 @@ NATIVE_RUST_SERVICES = ("turbovas-api",)
 NATIVE_API_CRATE = Path("services/turbovas-api")
 NATIVE_API_CARGO_LOCK = NATIVE_API_CRATE / "Cargo.lock"
 NATIVE_API_CARGO_AUDIT_TIMEOUT_SECONDS = 120
+GSA_COMPONENT = Path("components/gsa")
+GSA_PACKAGE_LOCK = GSA_COMPONENT / "package-lock.json"
+GSA_NPM_AUDIT_TIMEOUT_SECONDS = 120
 PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
@@ -6300,6 +6303,25 @@ def production_posture_status_only_result(result: dict[str, Any]) -> dict[str, A
     return compact
 
 
+def gsa_npm_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
+    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
+    compact["details"] = {
+        "high_count": details.get("high_count", 0),
+        "critical_count": details.get("critical_count", 0),
+        "total_count": details.get("total_count", 0),
+        "dependency_count": details.get("dependency_count", 0),
+        "finding_count": len(findings),
+        "non_pass_count": len(non_pass),
+    }
+    compact["findings"] = non_pass or [
+        finding("pass", "gsa-npm-audit.status-only", "GSA npm audit passed; no non-pass findings.")
+    ]
+    return compact
+
+
 def native_api_cargo_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     compact = dict(result)
     findings = result.get("findings", [])
@@ -7972,6 +7994,60 @@ def command_native_api_cargo_audit(repo_root: Path, status_only: bool = False) -
         result["status"] = aggregate_status(result["findings"])
     if status_only:
         result = native_api_cargo_audit_status_only_result(result)
+    return result
+
+
+def command_gsa_npm_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    component_dir = repo_root / GSA_COMPONENT
+    lockfile = repo_root / GSA_PACKAGE_LOCK
+    findings.append(finding("pass" if component_dir.is_dir() else "fail", "gsa-npm-audit.component", "GSA component exists." if component_dir.is_dir() else "GSA component is missing.", str(GSA_COMPONENT)))
+    findings.append(finding("pass" if lockfile.is_file() else "fail", "gsa-npm-audit.lockfile", "GSA package-lock.json exists." if lockfile.is_file() else "GSA package-lock.json is missing.", str(GSA_PACKAGE_LOCK)))
+    if shutil.which("npm") is None:
+        findings.append(finding("warn", "gsa-npm-audit.tool", "npm is not installed; GSA dependency audit was skipped."))
+        result = make_result("gsa-npm-audit", repo_root, "GSA npm audit could not run because npm is unavailable.", findings, [str(GSA_PACKAGE_LOCK)])
+        if status_only:
+            result = gsa_npm_audit_status_only_result(result)
+        return result
+    if not component_dir.is_dir() or not lockfile.is_file():
+        result = make_result("gsa-npm-audit", repo_root, "GSA npm audit could not run because required files are missing.", findings, [str(GSA_PACKAGE_LOCK)])
+        if status_only:
+            result = gsa_npm_audit_status_only_result(result)
+        return result
+
+    audit = run_command(["npm", "audit", "--audit-level=high", "--json", "--offline"], component_dir, timeout=GSA_NPM_AUDIT_TIMEOUT_SECONDS)
+    try:
+        payload = json.loads(audit.stdout)
+    except json.JSONDecodeError:
+        findings.append(finding("fail", "gsa-npm-audit.parse", "npm audit did not emit parseable JSON.", details={"returncode": audit.returncode, "output_tail": output_tail(audit.stdout, 40)}))
+        result = make_result("gsa-npm-audit", repo_root, "GSA npm audit failed before results could be parsed.", findings, [str(GSA_PACKAGE_LOCK)])
+        if status_only:
+            result = gsa_npm_audit_status_only_result(result)
+        return result
+
+    metadata_payload = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+    vulnerabilities = metadata_payload.get("vulnerabilities", {}) if isinstance(metadata_payload, dict) else {}
+    dependencies = metadata_payload.get("dependencies", {}) if isinstance(metadata_payload, dict) else {}
+    high_count = int(vulnerabilities.get("high") or 0) if isinstance(vulnerabilities, dict) else 0
+    critical_count = int(vulnerabilities.get("critical") or 0) if isinstance(vulnerabilities, dict) else 0
+    total_count = int(vulnerabilities.get("total") or 0) if isinstance(vulnerabilities, dict) else 0
+    dependency_count = int(dependencies.get("total") or 0) if isinstance(dependencies, dict) else 0
+    severe_count = high_count + critical_count
+    findings.append(finding("pass", "gsa-npm-audit.tool", "npm audit is installed and runnable."))
+    findings.append(finding("fail" if severe_count else "pass", "gsa-npm-audit.high-critical", f"npm audit reported {high_count} high and {critical_count} critical GSA dependency vulnerabilities.", str(GSA_PACKAGE_LOCK), {"high_count": high_count, "critical_count": critical_count}))
+    result = make_result("gsa-npm-audit", repo_root, "GSA npm audit completed.", findings, [str(GSA_PACKAGE_LOCK)])
+    result["details"] = {
+        "high_count": high_count,
+        "critical_count": critical_count,
+        "total_count": total_count,
+        "dependency_count": dependency_count,
+        "returncode": audit.returncode,
+    }
+    if audit.returncode != 0 and severe_count == 0:
+        result["findings"].append(finding("warn", "gsa-npm-audit.exit-code", f"npm audit exited {audit.returncode} without parsed high or critical vulnerabilities.", details={"output_tail": output_tail(audit.stdout, 40)}))
+        result["status"] = aggregate_status(result["findings"])
+    if status_only:
+        result = gsa_npm_audit_status_only_result(result)
     return result
 
 
@@ -13274,6 +13350,8 @@ def build_parser() -> argparse.ArgumentParser:
     security_policy.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe security policy checks")
     native_api_cargo_audit = subparsers.add_parser("native-api-cargo-audit", parents=[common], help="audit native API Rust dependencies for known advisories")
     native_api_cargo_audit.add_argument("--status-only", action="store_true", help="emit compact advisory counts and only non-pass findings for chat-safe native API dependency checks")
+    gsa_npm_audit = subparsers.add_parser("gsa-npm-audit", parents=[common], help="audit GSA npm dependencies for high/critical advisories")
+    gsa_npm_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe GSA dependency checks")
     path_coupling = subparsers.add_parser("path-coupling-state", parents=[common], help="inspect absolute checkout/runtime path coupling")
     path_coupling.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe path-coupling checks")
     subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
@@ -13420,6 +13498,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_security_policy_check(repo_root, status_only=args.status_only)
     elif args.command == "native-api-cargo-audit":
         result = command_native_api_cargo_audit(repo_root, status_only=args.status_only)
+    elif args.command == "gsa-npm-audit":
+        result = command_gsa_npm_audit(repo_root, status_only=args.status_only)
     elif args.command == "path-coupling-state":
         result = command_path_coupling_state(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-up":

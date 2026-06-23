@@ -9,3 +9,17 @@ query-filters:
   # removal requires feed/script compatibility work rather than a local rename.
   - exclude:
       id: rust/weak-cryptographic-algorithm
+
+  # The inherited C/C++ scanner/SMB compatibility layers intentionally retain
+  # weak legacy protocols so NASL scripts and SMB/NTLM/SCHANNEL probes can talk
+  # to old target services. Treating those protocol primitives as product
+  # crypto defects produces persistent high-severity noise without a safe local
+  # remediation; removal belongs to a future scanner-compatibility design.
+  - exclude:
+      id: cpp/weak-cryptographic-algorithm
+
+  # Generic NASL TCP sockets are intentionally cleartext-capable because the
+  # script and probed service determine whether TLS is used. Forcing transport
+  # encryption in these primitives would break retained scan semantics.
+  - exclude:
+      id: cpp/cleartext-transmission

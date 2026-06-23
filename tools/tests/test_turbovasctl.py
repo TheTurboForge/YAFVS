@@ -1354,9 +1354,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("build_prefix_path", markers)
         self.assertIn("container_runtime_path", markers)
 
-    def test_path_coupling_warns_only_for_runtime_or_product_dev_checkout_markers(self):
+    def test_path_coupling_warns_only_for_product_dev_checkout_markers(self):
         summary = turbovasctl.summarize_path_coupling(
             [
+                {
+                    "path": "components/example.c",
+                    "category": "component_source",
+                    "markers": ["dev_checkout_path"],
+                },
                 {
                     "path": "tools/turbovasctl",
                     "category": "runtime_tooling",
@@ -1370,7 +1375,7 @@ class TurboVASCtlTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(summary["non_documentation_dev_checkout_paths"], ["tools/turbovasctl"])
+        self.assertEqual(summary["non_documentation_dev_checkout_paths"], ["components/example.c"])
 
     def test_path_coupling_status_only_is_chat_safe(self):
         root = Path(__file__).resolve().parents[2]

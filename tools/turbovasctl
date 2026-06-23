@@ -7065,7 +7065,7 @@ def summarize_path_coupling(references: list[dict[str, Any]]) -> dict[str, Any]:
         by_category.setdefault(category, []).append(path)
         for marker in reference["markers"]:
             by_marker.setdefault(marker, []).append(path)
-        if category in {"component_source", "other_tracked_source", "runtime_tooling"} and "dev_checkout_path" in reference["markers"]:
+        if category in {"component_source", "other_tracked_source"} and "dev_checkout_path" in reference["markers"]:
             warning_paths.append(path)
     return {
         "total_references": len(references),

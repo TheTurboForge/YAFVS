@@ -24,6 +24,7 @@ mod feeds;
 mod filters;
 mod formatters;
 mod host_assets;
+mod operating_systems;
 mod path_ids;
 mod port_lists;
 mod query;
@@ -49,6 +50,7 @@ use feeds::feeds;
 use filters::*;
 use formatters::*;
 use host_assets::*;
+use operating_systems::*;
 use path_ids::*;
 use port_lists::*;
 use query::*;
@@ -596,22 +598,6 @@ struct VulnerabilityItem {
     solution_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     solution: Option<String>,
-}
-
-#[derive(Serialize)]
-struct OperatingSystemAssetItem {
-    id: String,
-    name: String,
-    title: String,
-    latest_severity: Option<f64>,
-    highest_severity: Option<f64>,
-    average_severity: Option<f64>,
-    hosts: i64,
-    all_hosts: i64,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Serialize)]
@@ -7704,22 +7690,6 @@ fn vulnerability_from_row(row: &Row) -> VulnerabilityItem {
         detection: optional_row_string(row, "detection"),
         solution_type: optional_row_string(row, "solution_type"),
         solution: optional_row_string(row, "solution"),
-    }
-}
-
-fn operating_system_asset_from_row(row: &Row) -> OperatingSystemAssetItem {
-    OperatingSystemAssetItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        title: row.get("title"),
-        latest_severity: row.get("latest_severity"),
-        highest_severity: row.get("highest_severity"),
-        average_severity: row.get("average_severity"),
-        hosts: row.get("hosts"),
-        all_hosts: row.get("all_hosts"),
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        user_tags: Vec::new(),
     }
 }
 

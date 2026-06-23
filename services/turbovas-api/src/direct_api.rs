@@ -6,7 +6,7 @@ use std::{env, fs::File, io::Read};
 
 use axum::{
     extract::{Request, State},
-    http::{Method, StatusCode, Uri},
+    http::{HeaderName, HeaderValue, Method, StatusCode, Uri, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -134,8 +134,30 @@ pub(crate) async fn require_direct_api_auth(
     } else if authenticated_api_path {
         tracing::info!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, "direct native API request completed");
     }
+    attach_direct_api_security_headers(&mut response);
     attach_request_id_header(&mut response, &request_id);
     response
+}
+
+fn attach_direct_api_security_headers(response: &mut Response) {
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    response.headers_mut().insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    response.headers_mut().insert(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("no-referrer"),
+    );
+    response.headers_mut().insert(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    );
 }
 
 fn direct_api_audit_path(uri: &Uri) -> &str {
@@ -350,6 +372,19 @@ mod tests {
                 "direct API audit reason {reason} should be present"
             );
         }
+    }
+
+    #[test]
+    fn direct_api_security_headers_are_attached() {
+        let mut response = ApiError::Unauthorized.into_response();
+        attach_direct_api_security_headers(&mut response);
+
+        let headers = response.headers();
+        assert_eq!(headers.get(header::CACHE_CONTROL).unwrap(), "no-store");
+        assert_eq!(headers.get(header::PRAGMA).unwrap(), "no-cache");
+        assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+        assert_eq!(headers.get("referrer-policy").unwrap(), "no-referrer");
+        assert_eq!(headers.get("x-frame-options").unwrap(), "DENY");
     }
 
     #[test]

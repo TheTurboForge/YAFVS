@@ -224,6 +224,13 @@ TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH = 32
 TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH = 1024
 DIRECT_API_REQUEST_ID_HEADER = "X-Request-Id"
 MAX_DIRECT_API_REQUEST_ID_LENGTH = 128
+DIRECT_API_EXPECTED_RESPONSE_HEADERS = {
+    "cache-control": "no-store",
+    "pragma": "no-cache",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "x-frame-options": "DENY",
+}
 POSTGRES_DEFAULTS = {
     "user": "turbovas",
     "password": "turbovas-dev",
@@ -10049,6 +10056,24 @@ def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
             if cors_headers_ok
             else "Direct native API valid-token response unexpectedly included browser CORS headers.",
             details={"http_status": valid_status, "present_cors_headers": present_cors_headers},
+        )
+    )
+    observed_security_headers = {
+        name: valid_headers.get(name, "") for name in DIRECT_API_EXPECTED_RESPONSE_HEADERS
+    }
+    security_headers_ok = valid_ok and observed_security_headers == DIRECT_API_EXPECTED_RESPONSE_HEADERS
+    findings.append(
+        finding(
+            "pass" if security_headers_ok else "fail",
+            "native-api-direct.security-headers",
+            "Direct native API valid-token responses include no-store, no-sniff browser safety headers."
+            if security_headers_ok
+            else "Direct native API valid-token response is missing expected browser safety headers.",
+            details={
+                "http_status": valid_status,
+                "expected_headers": DIRECT_API_EXPECTED_RESPONSE_HEADERS,
+                "observed_headers": observed_security_headers,
+            },
         )
     )
     unsafe_request_id = "../bad"

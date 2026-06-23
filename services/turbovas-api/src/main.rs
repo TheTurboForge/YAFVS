@@ -11287,7 +11287,13 @@ mod tests {
         assert!(direct_api_bearer_token_is_acceptable(
             "0123456789abcdef0123456789abcdef"
         ));
+        assert!(direct_api_bearer_token_is_acceptable(
+            &"A".repeat(MAX_DIRECT_API_BEARER_TOKEN_LENGTH)
+        ));
         assert!(!direct_api_bearer_token_is_acceptable("short-token"));
+        assert!(!direct_api_bearer_token_is_acceptable(
+            &"A".repeat(MAX_DIRECT_API_BEARER_TOKEN_LENGTH + 1)
+        ));
         assert!(!direct_api_bearer_token_is_acceptable(
             "0123456789abcdef 123456789abcdef"
         ));

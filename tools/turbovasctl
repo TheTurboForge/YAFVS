@@ -221,6 +221,7 @@ TURBOVAS_API_BEARER_TOKEN_FILE_ENV = "TURBOVAS_API_BEARER_TOKEN_FILE"
 TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE = "/runtime/secrets/native-api-bearer-token"
 TURBOVAS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
 TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH = 32
+TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH = 1024
 DIRECT_API_REQUEST_ID_HEADER = "X-Request-Id"
 MAX_DIRECT_API_REQUEST_ID_LENGTH = 128
 POSTGRES_DEFAULTS = {
@@ -2139,7 +2140,7 @@ def native_api_direct_port_binding(env: dict[str, str]) -> str:
 
 
 def direct_api_bearer_token_is_acceptable(token: str) -> bool:
-    return len(token) >= TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH and all(
+    return TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH <= len(token) <= TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH and all(
         char.isascii() and not char.isspace() and 33 <= ord(char) <= 126 for char in token
     )
 
@@ -2474,6 +2475,7 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
         "bearer_token_env": TURBOVAS_API_BEARER_TOKEN_ENV,
         "bearer_token_file_env": TURBOVAS_API_BEARER_TOKEN_FILE_ENV,
         "minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
+        "maximum_token_length": TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH,
         "configured_environment_token_ok": configured_token_ok,
         "runtime_secret": str(secret_path),
         "runtime_secret_present": secret_present,

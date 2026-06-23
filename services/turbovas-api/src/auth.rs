@@ -10,6 +10,7 @@ use std::sync::{
 use axum::http::{HeaderMap, header};
 
 const MIN_DIRECT_API_BEARER_TOKEN_LENGTH: usize = 32;
+pub(crate) const MAX_DIRECT_API_BEARER_TOKEN_LENGTH: usize = 1024;
 const DIRECT_API_MAX_IN_FLIGHT_REQUESTS: usize = 32;
 
 #[derive(Clone)]
@@ -70,6 +71,7 @@ impl DirectApiAuth {
 
 pub(crate) fn direct_api_bearer_token_is_acceptable(token: &str) -> bool {
     token.len() >= MIN_DIRECT_API_BEARER_TOKEN_LENGTH
+        && token.len() <= MAX_DIRECT_API_BEARER_TOKEN_LENGTH
         && token.bytes().all(|byte| (0x21..=0x7e).contains(&byte))
 }
 

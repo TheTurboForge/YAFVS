@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{env, fs};
+use std::{env, fs::File, io::Read};
 
 use axum::{
     extract::{Request, State},
@@ -12,7 +12,10 @@ use axum::{
 };
 
 use crate::{
-    auth::{DirectApiAuth, bearer_token_matches, direct_api_bearer_token_is_acceptable},
+    auth::{
+        DirectApiAuth, MAX_DIRECT_API_BEARER_TOKEN_LENGTH, bearer_token_matches,
+        direct_api_bearer_token_is_acceptable,
+    },
     errors::ApiError,
     request_ids::{attach_request_id_header, request_id_from_headers},
     request_shapes::direct_api_request_shape_is_allowed,
@@ -52,18 +55,27 @@ fn direct_api_bearer_token_from_sources(
     token_env: Option<String>,
 ) -> Result<String, ApiError> {
     if let Some(path) = token_file {
-        return fs::read_to_string(path)
-            .map(|value| value.trim().to_string())
-            .map_err(|_| ApiError::Config)
-            .and_then(|value| {
-                if value.is_empty() {
-                    Err(ApiError::Config)
-                } else {
-                    Ok(value)
-                }
-            });
+        return read_direct_api_bearer_token_file(&path);
     }
     token_env.ok_or(ApiError::Config)
+}
+
+fn read_direct_api_bearer_token_file(path: &str) -> Result<String, ApiError> {
+    let mut value = String::new();
+    File::open(path)
+        .map_err(|_| ApiError::Config)?
+        .take((MAX_DIRECT_API_BEARER_TOKEN_LENGTH + 2) as u64)
+        .read_to_string(&mut value)
+        .map_err(|_| ApiError::Config)?;
+    if value.len() > MAX_DIRECT_API_BEARER_TOKEN_LENGTH + 1 {
+        return Err(ApiError::Config);
+    }
+    let value = value.trim().to_string();
+    if value.is_empty() || value.len() > MAX_DIRECT_API_BEARER_TOKEN_LENGTH {
+        Err(ApiError::Config)
+    } else {
+        Ok(value)
+    }
 }
 
 pub(crate) async fn require_direct_api_auth(
@@ -246,7 +258,10 @@ fn direct_api_wildcard_tail_is_allowed(tail: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn token_file(name: &str, value: &str) -> String {
         let nonce = SystemTime::now()
@@ -382,5 +397,29 @@ mod tests {
         );
         fs::remove_file(path).ok();
         assert!(matches!(result, Err(ApiError::Config)));
+    }
+
+    #[test]
+    fn direct_api_bearer_token_rejects_oversized_file_source() {
+        let path = token_file(
+            "oversized",
+            &"A".repeat(MAX_DIRECT_API_BEARER_TOKEN_LENGTH + 2),
+        );
+        let result = direct_api_bearer_token_from_sources(
+            Some(path.clone()),
+            Some("env-token-0123456789abcdef0123456789abcdef".to_string()),
+        );
+        fs::remove_file(path).ok();
+        assert!(matches!(result, Err(ApiError::Config)));
+    }
+
+    #[test]
+    fn direct_api_bearer_token_accepts_maximum_file_source_with_newline() {
+        let value = "A".repeat(MAX_DIRECT_API_BEARER_TOKEN_LENGTH);
+        let path = token_file("maximum", &format!("{value}\n"));
+        let token = direct_api_bearer_token_from_sources(Some(path.clone()), None)
+            .expect("maximum token with trailing newline should load");
+        fs::remove_file(path).ok();
+        assert_eq!(token, value);
     }
 }

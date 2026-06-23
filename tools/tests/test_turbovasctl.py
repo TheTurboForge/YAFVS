@@ -4298,8 +4298,15 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(finding_by_check["native-api-request.direct-config-shape"]["status"], "fail")
 
     def test_direct_api_bearer_token_strength_contract(self):
+        self.assertEqual(turbovasctl.TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH, 1024)
         self.assertTrue(turbovasctl.direct_api_bearer_token_is_acceptable("0123456789abcdef0123456789abcdef"))
-        for token in ("short-token", "0123456789abcdef 123456789abcdef", "0123456789abcdef0123456789abcde\n"):
+        self.assertTrue(turbovasctl.direct_api_bearer_token_is_acceptable("A" * turbovasctl.TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH))
+        for token in (
+            "short-token",
+            "A" * (turbovasctl.TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH + 1),
+            "0123456789abcdef 123456789abcdef",
+            "0123456789abcdef0123456789abcde\n",
+        ):
             with self.subTest(token=token):
                 self.assertFalse(turbovasctl.direct_api_bearer_token_is_acceptable(token))
 
@@ -4609,6 +4616,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(auth["status"], "fail")
         self.assertFalse(auth["details"]["configured_environment_token_ok"])
         self.assertEqual(auth["details"]["minimum_token_length"], 32)
+        self.assertEqual(auth["details"]["maximum_token_length"], 1024)
         self.assertNotIn("short-token", rendered)
 
     def test_direct_native_api_posture_fails_configured_non_loopback_even_with_auth_boundary(self):

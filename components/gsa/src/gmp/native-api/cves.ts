@@ -42,6 +42,13 @@ interface NativeCatalogCveNvtRefPayload {
   name?: string;
 }
 
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
+}
+
 interface NativeCatalogCvePayload {
   id: string;
   name?: string;
@@ -52,6 +59,7 @@ interface NativeCatalogCvePayload {
   products?: string[];
   cert_refs?: NativeCatalogCveCertRefPayload[];
   nvt_refs?: NativeCatalogCveNvtRefPayload[];
+  user_tags?: NativeUserTagPayload[];
   epss?: NativeCatalogEpssPayload;
   published_at?: string;
   modified_at?: string;
@@ -135,6 +143,15 @@ const nativeCounts = (page: NativePage, length: number): CollectionCounts =>
     rows: page.page_size,
   });
 
+const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -155,7 +172,10 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-const nativeCveToModel = (item: NativeCatalogCvePayload): Cve =>
+const nativeCveToModel = (
+  item: NativeCatalogCvePayload,
+  {detail = false}: {detail?: boolean} = {},
+): Cve =>
   Cve.fromElement({
     _id: stringValue(item.id),
     name: stringValue(item.name || item.id),
@@ -188,6 +208,7 @@ const nativeCveToModel = (item: NativeCatalogCvePayload): Cve =>
           }
         : undefined,
     },
+    user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
   });
 
 export const fetchNativeCves = async (
@@ -208,7 +229,7 @@ export const fetchNativeCves = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const cves = (payload.items ?? []).map(nativeCveToModel);
+  const cves = (payload.items ?? []).map(item => nativeCveToModel(item));
   return {
     cves,
     counts: nativeCounts(page, cves.length),
@@ -225,5 +246,5 @@ export const fetchNativeCve = async (
     `api/v1/cves/${encodeURIComponent(id)}`,
     {token: gmp.session.token},
   );
-  return nativeCveToModel(payload);
+  return nativeCveToModel(payload, {detail: true});
 };

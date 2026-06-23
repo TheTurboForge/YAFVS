@@ -85,6 +85,14 @@ describe('native API CPE catalog', () => {
         deprecated_by: 'cpe:/a:example:lightllm:1.2.0',
         cve_refs: 1,
         cves: [{id: 'CVE-2026-26220', severity: 9.8}],
+        user_tags: [
+          {
+            id: '7523f0c6-bf41-42b2-b92f-441776f777ac',
+            name: 'Native tag',
+            value: 'true',
+            comment: 'Native CPE tag',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -98,6 +106,11 @@ describe('native API CPE catalog', () => {
     expect(cpe.deprecated).toEqual(true);
     expect(cpe.deprecatedBy).toEqual('cpe:/a:example:lightllm:1.2.0');
     expect(cpe.cves).toEqual([{id: 'CVE-2026-26220', severity: 9.8}]);
+    expect(cpe.userTags).toHaveLength(1);
+    expect(cpe.userTags[0].id).toEqual('7523f0c6-bf41-42b2-b92f-441776f777ac');
+    expect(cpe.userTags[0].name).toEqual('Native tag');
+    expect(cpe.userTags[0].value).toEqual('true');
+    expect(cpe.userTags[0].comment).toEqual('Native CPE tag');
     expect(gmp.buildUrl).toHaveBeenCalledWith(
       'api/v1/cpes/cpe%3A%2Fa%3Aexample%3Alightllm%3A1.1.0',
       {token: 'test-token'},

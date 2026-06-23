@@ -426,6 +426,14 @@ struct CatalogCveItem {
     modified_at: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+struct CatalogCveDetail {
+    #[serde(flatten)]
+    item: CatalogCveItem,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    user_tags: Vec<ReportUserTag>,
+}
+
 #[derive(Serialize)]
 struct ScanConfigFamilyItem {
     name: String,
@@ -500,6 +508,14 @@ struct CatalogCpeItem {
     created_at: Option<String>,
     modified_at: Option<String>,
     updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CatalogCpeDetail {
+    #[serde(flatten)]
+    item: CatalogCpeItem,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    user_tags: Vec<ReportUserTag>,
 }
 
 #[derive(Debug, Serialize)]
@@ -4396,7 +4412,7 @@ async fn cpe_catalog(
 async fn cpe_catalog_detail(
     State(state): State<AppState>,
     Path(cpe_id): Path<String>,
-) -> Result<Json<CatalogCpeItem>, ApiError> {
+) -> Result<Json<CatalogCpeDetail>, ApiError> {
     let cpe_id = cpe_id.strip_prefix('/').unwrap_or(&cpe_id).to_string();
     validate_cpe_id(&cpe_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
@@ -4458,7 +4474,11 @@ async fn cpe_catalog_detail(
         })?
         .map(|row| row.get("deprecated_by"));
 
-    Ok(Json(catalog_cpe_from_row(&row, cves, deprecated_by)))
+    let user_tags = catalog_user_tags(&client, "cpe", &cpe_id).await?;
+    Ok(Json(CatalogCpeDetail {
+        item: catalog_cpe_from_row(&row, cves, deprecated_by),
+        user_tags,
+    }))
 }
 
 async fn cve_catalog(
@@ -4516,7 +4536,7 @@ async fn cve_catalog(
 async fn cve_catalog_detail(
     State(state): State<AppState>,
     Path(cve_id): Path<String>,
-) -> Result<Json<CatalogCveItem>, ApiError> {
+) -> Result<Json<CatalogCveDetail>, ApiError> {
     validate_cve_id(&cve_id)?;
     let sql = r#"SELECT c.name AS id,
                         c.name AS name,
@@ -4545,7 +4565,44 @@ async fn cve_catalog_detail(
     let mut item = catalog_cve_from_row(&row);
     item.cert_refs = cve_cert_refs(&client, &cve_id).await?;
     item.nvt_refs = cve_nvt_refs(&client, &cve_id).await?;
-    Ok(Json(item))
+    let user_tags = catalog_user_tags(&client, "cve", &cve_id).await?;
+    Ok(Json(CatalogCveDetail { item, user_tags }))
+}
+
+fn catalog_user_tags_sql() -> &'static str {
+    r#"SELECT t.uuid AS id,
+              coalesce(t.name, '') AS name,
+              coalesce(t.value, '') AS value,
+              coalesce(t.comment, '') AS comment
+         FROM tags t
+         JOIN tag_resources tr ON tr.tag = t.id
+        WHERE lower(tr.resource_uuid) = lower($1)
+          AND tr.resource_type = $2
+          AND coalesce(t.active, 0) = 1
+        ORDER BY t.name ASC, t.uuid ASC;"#
+}
+
+async fn catalog_user_tags(
+    client: &tokio_postgres::Client,
+    resource_type: &str,
+    resource_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(catalog_user_tags_sql(), &[&resource_id, &resource_type])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, resource_type, "catalog user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
 }
 
 async fn cve_cert_refs(
@@ -10522,6 +10579,72 @@ mod tests {
         for inherited_workflow in ["export", "delete", "modify", "create"] {
             assert!(!detail_source.contains(inherited_workflow));
         }
+    }
+
+    #[test]
+    fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
+        let source = include_str!("main.rs");
+        let cve_item_payload = source
+            .split_once("struct CatalogCveItem {")
+            .expect("CVE catalog payload must exist")
+            .1
+            .split_once("struct CatalogCveDetail")
+            .expect("CVE catalog payload must precede detail payload")
+            .0;
+        let cpe_item_payload = source
+            .split_once("struct CatalogCpeItem {")
+            .expect("CPE catalog payload must exist")
+            .1
+            .split_once("struct CatalogCpeDetail")
+            .expect("CPE catalog payload must precede detail payload")
+            .0;
+        let cve_detail_source = source
+            .split_once("async fn cve_catalog_detail")
+            .expect("CVE catalog detail handler must exist")
+            .1
+            .split_once("async fn cve_cert_refs")
+            .expect("CVE catalog detail handler must precede reference helpers")
+            .0;
+        let cpe_detail_source = source
+            .split_once("async fn cpe_catalog_detail")
+            .expect("CPE catalog detail handler must exist")
+            .1
+            .split_once("async fn cve_catalog")
+            .expect("CPE catalog detail handler must precede CVE catalog list")
+            .0;
+        let cve_list_source = source
+            .split_once("async fn cve_catalog(")
+            .expect("CVE catalog list handler must exist")
+            .1
+            .split_once("async fn cve_catalog_detail")
+            .expect("CVE catalog list handler must precede detail handler")
+            .0;
+        let cpe_list_source = source
+            .split_once("async fn cpe_catalog(")
+            .expect("CPE catalog list handler must exist")
+            .1
+            .split_once("async fn cpe_catalog_detail")
+            .expect("CPE catalog list handler must precede detail handler")
+            .0;
+
+        assert!(!cve_item_payload.contains("user_tags"));
+        assert!(!cpe_item_payload.contains("user_tags"));
+        assert!(source.contains("struct CatalogCveDetail"));
+        assert!(source.contains("struct CatalogCpeDetail"));
+        assert!(cve_detail_source.contains("catalog_user_tags(&client, \"cve\", &cve_id).await?"));
+        assert!(cpe_detail_source.contains("catalog_user_tags(&client, \"cpe\", &cpe_id).await?"));
+        assert!(!cve_list_source.contains("catalog_user_tags"));
+        assert!(!cpe_list_source.contains("catalog_user_tags"));
+
+        let sql = catalog_user_tags_sql();
+        assert!(sql.contains("FROM tags t"));
+        assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
+        assert!(sql.contains("lower(tr.resource_uuid) = lower($1)"));
+        assert!(sql.contains("tr.resource_type = $2"));
+        assert!(sql.contains("coalesce(t.active, 0) = 1"));
+        assert!(!sql.contains("credential"));
+        assert!(!sql.contains("reports"));
+        assert!(!sql.contains("results"));
     }
 
     #[test]

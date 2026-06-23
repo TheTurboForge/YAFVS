@@ -111,6 +111,14 @@ describe('native API CVE catalog', () => {
             name: 'Example vulnerability test',
           },
         ],
+        user_tags: [
+          {
+            id: 'a01cce79-9ad3-4714-903d-893a333ab33d',
+            name: 'Native tag',
+            value: 'true',
+            comment: 'Native CVE tag',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -135,6 +143,11 @@ describe('native API CVE catalog', () => {
         oid: '1.3.6.1.4.1.25623.1.0.900001',
       },
     ]);
+    expect(cve.userTags).toHaveLength(1);
+    expect(cve.userTags[0].id).toEqual('a01cce79-9ad3-4714-903d-893a333ab33d');
+    expect(cve.userTags[0].name).toEqual('Native tag');
+    expect(cve.userTags[0].value).toEqual('true');
+    expect(cve.userTags[0].comment).toEqual('Native CVE tag');
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/cves/CVE-2026-26220', {
       token: 'test-token',
     });

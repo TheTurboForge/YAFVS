@@ -32,6 +32,13 @@ interface NativeCatalogCpeCvePayload {
   severity?: number;
 }
 
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
+}
+
 interface NativeCatalogCpePayload {
   id: string;
   name?: string;
@@ -43,6 +50,7 @@ interface NativeCatalogCpePayload {
   severity?: number;
   cve_refs?: number;
   cves?: NativeCatalogCpeCvePayload[];
+  user_tags?: NativeUserTagPayload[];
   created_at?: string;
   modified_at?: string;
   updated_at?: string;
@@ -127,6 +135,15 @@ const nativeCounts = (page: NativePage, length: number): CollectionCounts =>
     rows: page.page_size,
   });
 
+const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -147,7 +164,10 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-const nativeCpeToModel = (item: NativeCatalogCpePayload): Cpe =>
+const nativeCpeToModel = (
+  item: NativeCatalogCpePayload,
+  {detail = false}: {detail?: boolean} = {},
+): Cpe =>
   Cpe.fromElement({
     _id: stringValue(item.id),
     name: stringValue(item.name || item.id),
@@ -173,6 +193,7 @@ const nativeCpeToModel = (item: NativeCatalogCpePayload): Cpe =>
         })),
       },
     },
+    user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
   });
 
 export const fetchNativeCpes = async (
@@ -197,7 +218,7 @@ export const fetchNativeCpes = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const cpes = (payload.items ?? []).map(nativeCpeToModel);
+  const cpes = (payload.items ?? []).map(item => nativeCpeToModel(item));
   return {
     cpes,
     counts: nativeCounts(page, cpes.length),
@@ -214,5 +235,5 @@ export const fetchNativeCpe = async (
     `api/v1/cpes/${encodeURIComponent(id)}`,
     {token: gmp.session.token},
   );
-  return nativeCpeToModel(payload);
+  return nativeCpeToModel(payload, {detail: true});
 };

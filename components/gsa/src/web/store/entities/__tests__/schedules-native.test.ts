@@ -99,6 +99,14 @@ describe('native API schedules', () => {
             usage_type: 'scan',
           },
         ],
+        user_tags: [
+          {
+            id: '8afbe92e-f808-447c-9399-1492f3f9ef3f',
+            name: 'Maintenance window',
+            value: 'weekly',
+            comment: 'Native schedule tag',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -115,6 +123,11 @@ describe('native API schedules', () => {
     expect(schedule.tasks).toHaveLength(1);
     expect(schedule.tasks[0].id).toEqual('65da9d26-9e74-4b56-af0f-63825a851a23');
     expect(schedule.tasks[0].name).toEqual('Authorized LAN task');
+    expect(schedule.userTags).toHaveLength(1);
+    expect(schedule.userTags[0].id).toEqual('8afbe92e-f808-447c-9399-1492f3f9ef3f');
+    expect(schedule.userTags[0].name).toEqual('Maintenance window');
+    expect(schedule.userTags[0].value).toEqual('weekly');
+    expect(schedule.userTags[0].comment).toEqual('Native schedule tag');
     expect(schedule.event).toBeDefined();
   });
 });

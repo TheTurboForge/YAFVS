@@ -748,6 +748,14 @@ struct ScheduleAssetItem {
 }
 
 #[derive(Serialize)]
+struct ScheduleAssetDetail {
+    #[serde(flatten)]
+    asset: ScheduleAssetItem,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    user_tags: Vec<ReportUserTag>,
+}
+
+#[derive(Serialize)]
 struct TrashcanSummaryItem {
     resource_type: String,
     title: String,
@@ -3554,7 +3562,7 @@ async fn schedule_assets(
 async fn schedule_asset_detail(
     State(state): State<AppState>,
     Path(schedule_id): Path<String>,
-) -> Result<Json<ScheduleAssetItem>, ApiError> {
+) -> Result<Json<ScheduleAssetDetail>, ApiError> {
     parse_uuid(&schedule_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let row = client
@@ -3608,7 +3616,48 @@ async fn schedule_asset_detail(
         .iter()
         .map(schedule_task_from_row)
         .collect();
-    Ok(Json(schedule_asset_from_row(&row, tasks)))
+    let user_tags = schedule_user_tags(&client, &schedule_id).await?;
+    Ok(Json(ScheduleAssetDetail {
+        asset: schedule_asset_from_row(&row, tasks),
+        user_tags,
+    }))
+}
+
+fn schedule_user_tags_sql() -> &'static str {
+    r#"SELECT t.uuid AS id,
+              coalesce(t.name, '') AS name,
+              coalesce(t.value, '') AS value,
+              coalesce(t.comment, '') AS comment
+         FROM tags t
+         JOIN tag_resources tr ON tr.tag = t.id
+         JOIN schedules s ON s.id = tr.resource
+        WHERE lower(s.uuid) = lower($1)
+          AND tr.resource_type = 'schedule'
+          AND tr.resource_location = 0
+          AND coalesce(t.active, 0) = 1
+        ORDER BY t.name ASC, t.uuid ASC;"#
+}
+
+async fn schedule_user_tags(
+    client: &tokio_postgres::Client,
+    schedule_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(schedule_user_tags_sql(), &[&schedule_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "schedule user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
 }
 
 async fn report_format_assets(
@@ -11115,6 +11164,40 @@ mod tests {
         assert!(sql.contains("coalesce(t.hidden, 0) = 0"));
         assert!(sql.contains("coalesce(t.usage_type, 'scan') AS usage_type"));
         assert!(!sql.contains("credentials"));
+        assert!(!sql.contains("results"));
+    }
+
+    #[test]
+    fn schedule_user_tags_are_detail_only_active_schedule_tags() {
+        let source = include_str!("main.rs");
+        let schedule_list_payload = source
+            .split_once("struct ScheduleAssetItem {")
+            .expect("schedule list payload struct must exist")
+            .1
+            .split_once("struct ScheduleAssetDetail")
+            .expect("schedule list payload struct must precede detail payload")
+            .0;
+        let schedule_detail_payload = source
+            .split_once("struct ScheduleAssetDetail {")
+            .expect("schedule detail payload struct must exist")
+            .1
+            .split_once("struct TrashcanSummaryItem")
+            .expect("schedule detail payload must precede trashcan structs")
+            .0;
+
+        assert!(!schedule_list_payload.contains("user_tags"));
+        assert!(schedule_detail_payload.contains("user_tags: Vec<ReportUserTag>"));
+
+        let sql = schedule_user_tags_sql();
+        assert!(sql.contains("FROM tags t"));
+        assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
+        assert!(sql.contains("JOIN schedules s ON s.id = tr.resource"));
+        assert!(sql.contains("lower(s.uuid) = lower($1)"));
+        assert!(sql.contains("tr.resource_type = 'schedule'"));
+        assert!(sql.contains("tr.resource_location = 0"));
+        assert!(sql.contains("coalesce(t.active, 0) = 1"));
+        assert!(!sql.contains("credential"));
+        assert!(!sql.contains("reports"));
         assert!(!sql.contains("results"));
     }
 

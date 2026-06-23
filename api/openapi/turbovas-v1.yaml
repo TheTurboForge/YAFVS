@@ -1207,7 +1207,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScheduleAsset'
+                $ref: '#/components/schemas/ScheduleAssetDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4791,6 +4791,16 @@ components:
         modified_at:
           type: string
           format: date-time
+    ScheduleAssetDetail:
+      allOf:
+        - $ref: '#/components/schemas/ScheduleAsset'
+        - type: object
+          properties:
+            user_tags:
+              type: array
+              description: Active user tags attached directly to this schedule. Write/tag actions remain inherited.
+              items:
+                $ref: '#/components/schemas/ReportUserTag'
     ReportFormatReference:
       type: object
       required: [id, name]

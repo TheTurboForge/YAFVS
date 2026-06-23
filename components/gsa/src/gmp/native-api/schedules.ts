@@ -32,6 +32,13 @@ interface NativeScheduleTaskPayload {
   usage_type?: string;
 }
 
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
+}
+
 interface NativeSchedulePayload {
   id: string;
   name: string;
@@ -40,6 +47,7 @@ interface NativeSchedulePayload {
   timezone?: string;
   timezone_abbrev?: string;
   tasks?: NativeScheduleTaskPayload[];
+  user_tags?: NativeUserTagPayload[];
   created_at?: string;
   modified_at?: string;
 }
@@ -120,6 +128,15 @@ const nativeCounts = (page: NativePage, length: number): CollectionCounts =>
     rows: page.page_size,
   });
 
+const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -140,7 +157,10 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-const nativeScheduleToModel = (item: NativeSchedulePayload): Schedule =>
+const nativeScheduleToModel = (
+  item: NativeSchedulePayload,
+  {detail = false}: {detail?: boolean} = {},
+): Schedule =>
   Schedule.fromElement({
     _id: stringValue(item.id),
     name: stringValue(item.name),
@@ -157,6 +177,7 @@ const nativeScheduleToModel = (item: NativeSchedulePayload): Schedule =>
         usage_type: 'scan' as const,
       })),
     },
+    user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
   });
 
 export const fetchNativeSchedules = async (
@@ -181,7 +202,7 @@ export const fetchNativeSchedules = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const schedules = (payload.items ?? []).map(nativeScheduleToModel);
+  const schedules = (payload.items ?? []).map(item => nativeScheduleToModel(item));
   return {
     schedules,
     counts: nativeCounts(page, schedules.length),
@@ -198,5 +219,5 @@ export const fetchNativeSchedule = async (
     `api/v1/schedules/${encodeURIComponent(id)}`,
     {token: gmp.session.token},
   );
-  return nativeScheduleToModel(payload);
+  return nativeScheduleToModel(payload, {detail: true});
 };

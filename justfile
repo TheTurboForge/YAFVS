@@ -209,6 +209,9 @@ gsa-npm-audit *args:
 osv-lockfile-audit *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl osv-lockfile-audit "$@"
 
+native-api-semgrep-audit *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-semgrep-audit "$@"
+
 path-coupling-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl path-coupling-state "$@"
 

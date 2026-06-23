@@ -158,6 +158,9 @@ GSA_COMPONENT = Path("components/gsa")
 GSA_PACKAGE_LOCK = GSA_COMPONENT / "package-lock.json"
 GSA_NPM_AUDIT_TIMEOUT_SECONDS = 120
 OSV_SCANNER_TIMEOUT_SECONDS = 120
+NATIVE_API_SEMGREP_TIMEOUT_SECONDS = 120
+NATIVE_API_SEMGREP_CONFIG = Path("policy/semgrep-native-api.yml")
+NATIVE_API_SOURCE_DIR = NATIVE_API_CRATE / "src"
 OSV_LOCKFILES = (
     NATIVE_API_CARGO_LOCK,
     GSA_PACKAGE_LOCK,
@@ -6293,6 +6296,28 @@ def compact_license_status_finding(item: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def native_api_semgrep_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
+    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
+    top_findings = details.get("top_findings") if isinstance(details.get("top_findings"), list) else []
+    if top_findings:
+        for item in non_pass:
+            if item.get("check") == "native-api-semgrep-audit.findings":
+                item["top_findings"] = top_findings[:5]
+    compact["details"] = {
+        "result_count": details.get("result_count", 0),
+        "error_count": details.get("error_count", 0),
+        "finding_count": len(findings),
+        "non_pass_count": len(non_pass),
+    }
+    compact["findings"] = non_pass or [
+        finding("pass", "native-api-semgrep-audit.status-only", "Native API Semgrep audit passed; no non-pass findings.")
+    ]
+    return compact
+
+
 def production_posture_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     sensitive_parts = ("secret", "token", "password", "credential", "bearer")
 
@@ -6414,6 +6439,106 @@ def license_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
         "non_pass_count": len(non_pass),
     }
     result["findings"] = compact_findings
+    return result
+
+
+def compact_semgrep_path(path: str, repo_root: Path) -> str:
+    if not path:
+        return ""
+    try:
+        source_path = Path(path)
+        if source_path.is_absolute():
+            return str(source_path.resolve().relative_to(repo_root.resolve()))
+    except (OSError, ValueError):
+        marker = "/TurboVAS/"
+        if marker in path:
+            return path.split(marker, 1)[1]
+        return Path(path).name
+    return path
+
+
+def summarize_semgrep_payload(payload: dict[str, Any], repo_root: Path) -> dict[str, Any]:
+    results = payload.get("results", []) if isinstance(payload, dict) else []
+    errors = payload.get("errors", []) if isinstance(payload, dict) else []
+    if not isinstance(results, list):
+        results = []
+    if not isinstance(errors, list):
+        errors = []
+    top_findings: list[dict[str, Any]] = []
+    for item in results[:5]:
+        if not isinstance(item, dict):
+            continue
+        extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
+        start = item.get("start") if isinstance(item.get("start"), dict) else {}
+        top_findings.append(
+            {
+                "status": "fail",
+                "check": str(item.get("check_id") or "unknown"),
+                "path": compact_semgrep_path(str(item.get("path") or ""), repo_root),
+                "line": int(start.get("line") or 0),
+                "message": str(extra.get("message") or "Semgrep finding"),
+            }
+        )
+    return {
+        "result_count": len(results),
+        "error_count": len(errors),
+        "top_findings": top_findings,
+    }
+
+
+def command_native_api_semgrep_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    config = repo_root / NATIVE_API_SEMGREP_CONFIG
+    source_dir = repo_root / NATIVE_API_SOURCE_DIR
+    artifacts = [str(NATIVE_API_SEMGREP_CONFIG), str(NATIVE_API_SOURCE_DIR)]
+    findings.append(finding("pass" if config.is_file() else "fail", "native-api-semgrep-audit.config", "Native API Semgrep policy exists." if config.is_file() else "Native API Semgrep policy is missing.", str(NATIVE_API_SEMGREP_CONFIG)))
+    findings.append(finding("pass" if source_dir.is_dir() else "fail", "native-api-semgrep-audit.source", "Native API source directory exists." if source_dir.is_dir() else "Native API source directory is missing.", str(NATIVE_API_SOURCE_DIR)))
+    if shutil.which("semgrep") is None:
+        findings.append(finding("warn", "native-api-semgrep-audit.tool", "semgrep is not installed; native API static security check was skipped."))
+        result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit could not run because semgrep is unavailable.", findings, artifacts)
+        if status_only:
+            result = native_api_semgrep_audit_status_only_result(result)
+        return result
+    if not config.is_file() or not source_dir.is_dir():
+        result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit could not run because required files are missing.", findings, artifacts)
+        if status_only:
+            result = native_api_semgrep_audit_status_only_result(result)
+        return result
+
+    audit = run_command(
+        ["semgrep", "--quiet", "--config", str(NATIVE_API_SEMGREP_CONFIG), "--json", "--error", "--metrics=off", str(NATIVE_API_SOURCE_DIR)],
+        repo_root,
+        timeout=NATIVE_API_SEMGREP_TIMEOUT_SECONDS,
+    )
+    try:
+        payload = json.loads(audit.stdout)
+    except json.JSONDecodeError:
+        findings.append(finding("fail", "native-api-semgrep-audit.parse", "semgrep did not emit parseable JSON.", details={"returncode": audit.returncode, "output_tail": output_tail(audit.stdout, 40)}))
+        result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit failed before results could be parsed.", findings, artifacts)
+        if status_only:
+            result = native_api_semgrep_audit_status_only_result(result)
+        return result
+
+    summary = summarize_semgrep_payload(payload, repo_root)
+    result_count = int(summary["result_count"])
+    error_count = int(summary["error_count"])
+    findings.append(finding("pass", "native-api-semgrep-audit.tool", "semgrep is installed and runnable."))
+    findings.append(finding("fail" if error_count else "pass", "native-api-semgrep-audit.errors", f"semgrep reported {error_count} execution error(s).", details={"error_count": error_count}))
+    findings.append(finding("fail" if result_count else "pass", "native-api-semgrep-audit.findings", f"semgrep reported {result_count} native API static security finding(s).", details={"result_count": result_count}))
+    if result_count:
+        findings[-1]["top_findings"] = summary["top_findings"]
+    result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit completed.", findings, artifacts)
+    result["details"] = {
+        "result_count": result_count,
+        "error_count": error_count,
+        "returncode": audit.returncode,
+        "top_findings": summary["top_findings"],
+    }
+    if audit.returncode != 0 and result_count == 0 and error_count == 0:
+        result["findings"].append(finding("warn", "native-api-semgrep-audit.exit-code", f"semgrep exited {audit.returncode} without parsed findings or errors.", details={"output_tail": output_tail(audit.stdout, 40)}))
+        result["status"] = aggregate_status(result["findings"])
+    if status_only:
+        result = native_api_semgrep_audit_status_only_result(result)
     return result
 
 
@@ -13553,6 +13678,8 @@ def build_parser() -> argparse.ArgumentParser:
     security_policy.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe security policy checks")
     native_api_cargo_audit = subparsers.add_parser("native-api-cargo-audit", parents=[common], help="audit native API Rust dependencies for known advisories")
     native_api_cargo_audit.add_argument("--status-only", action="store_true", help="emit compact advisory counts and only non-pass findings for chat-safe native API dependency checks")
+    native_api_semgrep_audit = subparsers.add_parser("native-api-semgrep-audit", parents=[common], help="run bounded Semgrep security rules over the native API source")
+    native_api_semgrep_audit.add_argument("--status-only", action="store_true", help="emit compact finding counts and only non-pass findings for chat-safe native API Semgrep checks")
     gsa_npm_audit = subparsers.add_parser("gsa-npm-audit", parents=[common], help="audit GSA npm dependencies for high/critical advisories")
     gsa_npm_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe GSA dependency checks")
     osv_lockfile_audit = subparsers.add_parser("osv-lockfile-audit", parents=[common], help="audit selected lockfiles with OSV Scanner")
@@ -13703,6 +13830,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_security_policy_check(repo_root, status_only=args.status_only)
     elif args.command == "native-api-cargo-audit":
         result = command_native_api_cargo_audit(repo_root, status_only=args.status_only)
+    elif args.command == "native-api-semgrep-audit":
+        result = command_native_api_semgrep_audit(repo_root, status_only=args.status_only)
     elif args.command == "gsa-npm-audit":
         result = command_gsa_npm_audit(repo_root, status_only=args.status_only)
     elif args.command == "osv-lockfile-audit":

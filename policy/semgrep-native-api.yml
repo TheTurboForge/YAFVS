@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+---
+rules:
+  - id: turbovas.native-api.subprocess-spawn
+    languages: [rust]
+    severity: ERROR
+    message: Native API code must not spawn subprocesses; keep runtime control in explicit helpers.
+    paths:
+      include:
+        - /services/turbovas-api/src/**/*.rs
+    pattern-either:
+      - pattern: std::process::Command::new(...)
+      - pattern: tokio::process::Command::new(...)
+      - pattern: Command::new(...)
+
+  - id: turbovas.native-api.unsafe-rust
+    languages: [rust]
+    severity: ERROR
+    message: Native API code must not use unsafe Rust without a deliberate security review.
+    paths:
+      include:
+        - /services/turbovas-api/src/**/*.rs
+    pattern-either:
+      - pattern: unsafe { ... }
+      - pattern: unsafe fn $FUNC(...) { ... }
+
+  - id: turbovas.native-api.dynamic-sql-format
+    languages: [rust]
+    severity: ERROR
+    message: Avoid format!-built SQL in native API sqlx calls; use static SQL with bind parameters.
+    paths:
+      include:
+        - /services/turbovas-api/src/**/*.rs
+    pattern-either:
+      - pattern: sqlx::query(&format!(...))
+      - pattern: sqlx::query(format!(...).as_str())
+      - pattern: sqlx::query_scalar(&format!(...))
+      - pattern: sqlx::query_scalar(format!(...).as_str())
+      - pattern: sqlx::query_as::<$T, $U>(&format!(...))
+      - pattern: sqlx::query_as::<$T, $U>(format!(...).as_str())

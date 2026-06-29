@@ -72,7 +72,7 @@ use report_evidence_handlers::*;
 use report_formats::*;
 use report_payloads::*;
 use result_payloads::*;
-use runtime::serve_api;
+use runtime::{DirectApiListener, serve_api};
 use scan_configs::*;
 use scanner_assets::*;
 use schedules::*;
@@ -249,6 +249,11 @@ async fn main() -> Result<(), ApiError> {
             get(scope_report_retention_plan),
         )
         .with_state(state);
+    let direct_api = direct_api.map(|(bind, auth)| DirectApiListener {
+        bind,
+        auth,
+        app: app.clone(),
+    });
 
     serve_api(app, direct_api).await
 }
@@ -1446,6 +1451,23 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn runtime_accepts_distinct_internal_and_direct_routers() {
+        let runtime_source = include_str!("runtime.rs");
+        assert!(runtime_source.contains("pub(crate) struct DirectApiListener"));
+        assert!(runtime_source.contains("pub(crate) app: Router"));
+        assert!(runtime_source.contains("internal_app: Router"));
+        assert!(runtime_source.contains("Option<DirectApiListener>"));
+        assert!(runtime_source.contains("DirectApiListener { bind, auth, app }"));
+        assert!(runtime_source.contains("axum::serve(internal_listener, internal_app)"));
+        assert!(runtime_source.contains("axum::serve(direct_listener, direct_app)"));
+        assert!(!runtime_source.contains("app.clone().layer"));
+
+        let main_source = include_str!("main.rs");
+        assert!(main_source.contains("DirectApiListener {"));
+        assert!(main_source.contains("app: app.clone()"));
     }
 
     fn app_route_registration_block(source: &str) -> &str {

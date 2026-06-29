@@ -8,9 +8,15 @@ use axum::{Router, middleware};
 
 use crate::{auth::DirectApiAuth, direct_api::require_direct_api_auth, errors::ApiError};
 
+pub(crate) struct DirectApiListener {
+    pub(crate) bind: String,
+    pub(crate) auth: DirectApiAuth,
+    pub(crate) app: Router,
+}
+
 pub(crate) async fn serve_api(
-    app: Router,
-    direct_api: Option<(String, DirectApiAuth)>,
+    internal_app: Router,
+    direct_api: Option<DirectApiListener>,
 ) -> Result<(), ApiError> {
     let bind = env_string("TURBOVAS_API_BIND").unwrap_or_else(|| "0.0.0.0:9080".to_string());
     let internal_listener = tokio::net::TcpListener::bind(&bind)
@@ -21,24 +27,24 @@ pub(crate) async fn serve_api(
         .map_err(|_| ApiError::Config)?;
     tracing::info!(addr = %internal_addr, "starting turbovas-api internal listener");
 
-    if let Some((direct_bind, auth)) = direct_api {
-        let direct_listener = tokio::net::TcpListener::bind(&direct_bind)
+    if let Some(DirectApiListener { bind, auth, app }) = direct_api {
+        let direct_listener = tokio::net::TcpListener::bind(&bind)
             .await
             .map_err(|_| ApiError::Config)?;
         let direct_addr: SocketAddr = direct_listener.local_addr().map_err(|_| ApiError::Config)?;
         tracing::info!(addr = %direct_addr, "starting turbovas-api direct authenticated listener");
-        let direct_app = app.clone().layer(middleware::from_fn_with_state(
+        let direct_app = app.layer(middleware::from_fn_with_state(
             auth,
             require_direct_api_auth,
         ));
         tokio::try_join!(
-            axum::serve(internal_listener, app).with_graceful_shutdown(shutdown_signal()),
+            axum::serve(internal_listener, internal_app).with_graceful_shutdown(shutdown_signal()),
             axum::serve(direct_listener, direct_app).with_graceful_shutdown(shutdown_signal()),
         )
         .map(|_| ())
         .map_err(|_| ApiError::Config)
     } else {
-        axum::serve(internal_listener, app)
+        axum::serve(internal_listener, internal_app)
             .with_graceful_shutdown(shutdown_signal())
             .await
             .map_err(|_| ApiError::Config)

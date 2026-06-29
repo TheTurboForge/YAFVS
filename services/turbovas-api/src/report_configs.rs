@@ -2,10 +2,21 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use serde::Serialize;
 use tokio_postgres::{Client, Row};
 
-use crate::{errors::ApiError, formatters::unix_ts_to_rfc3339};
+use crate::{
+    app_state::AppState,
+    collections::{REPORT_CONFIG_DEFAULT_SORT, REPORT_CONFIG_SORT_FIELDS},
+    errors::ApiError,
+    formatters::unix_ts_to_rfc3339,
+    path_ids::parse_uuid,
+    query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
+};
 
 #[derive(Serialize)]
 struct ReportConfigOwner {
@@ -265,4 +276,91 @@ mod tests {
         assert_eq!(report_config_param_type_name(6), "multi_selection");
         assert_eq!(report_config_param_type_name(100), "string");
     }
+}
+
+pub(crate) async fn report_config_assets(
+    State(state): State<AppState>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
+) -> Result<Json<Collection<ReportConfigAssetItem>>, ApiError> {
+    let params = normalize_collection_query(query, REPORT_CONFIG_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, REPORT_CONFIG_SORT_FIELDS)?;
+    let sql = format!(
+        r#"SELECT count(*) OVER()::bigint AS total,
+                  rc.id::bigint AS internal_id,
+                  rc.uuid AS id,
+                  coalesce(rc.name, '') AS name,
+                  coalesce(rc.comment, '') AS comment,
+                  coalesce(u.name, '') AS owner_name,
+                  coalesce(rc.report_format_id, '') AS report_format_id,
+                  coalesce(rf.id, 0)::bigint AS report_format_rowid,
+                  coalesce(rf.name, '') AS report_format_name,
+                  CASE WHEN coalesce(rf.name, '') = '' THEN 1 ELSE 0 END AS orphan,
+                  coalesce(rc.creation_time, 0)::bigint AS created_at_unix,
+                  coalesce(rc.modification_time, 0)::bigint AS modified_at_unix
+             FROM report_configs rc
+        LEFT JOIN users u ON u.id = rc.owner
+        LEFT JOIN report_formats rf ON rf.uuid = rc.report_format_id
+            WHERE ($1 = ''
+                   OR lower(rc.uuid) LIKE '%' || lower($1) || '%'
+                   OR lower(rc.name) LIKE '%' || lower($1) || '%'
+                   OR lower(rc.comment) LIKE '%' || lower($1) || '%'
+                   OR lower(rf.name) LIKE '%' || lower($1) || '%')
+         ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "report config asset list query failed");
+            ApiError::Database
+        })?;
+    let total = rows
+        .first()
+        .map(|row| row.get::<_, i64>("total"))
+        .unwrap_or(0);
+    let mut items = Vec::new();
+    for row in &rows {
+        items.push(report_config_asset_from_row(&client, row).await?);
+    }
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+pub(crate) async fn report_config_asset_detail(
+    State(state): State<AppState>,
+    Path(report_config_id): Path<String>,
+) -> Result<Json<ReportConfigAssetItem>, ApiError> {
+    parse_uuid(&report_config_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(
+            r#"SELECT rc.id::bigint AS internal_id,
+                      rc.uuid AS id,
+                      coalesce(rc.name, '') AS name,
+                      coalesce(rc.comment, '') AS comment,
+                      coalesce(u.name, '') AS owner_name,
+                      coalesce(rc.report_format_id, '') AS report_format_id,
+                      coalesce(rf.id, 0)::bigint AS report_format_rowid,
+                      coalesce(rf.name, '') AS report_format_name,
+                      CASE WHEN coalesce(rf.name, '') = '' THEN 1 ELSE 0 END AS orphan,
+                      coalesce(rc.creation_time, 0)::bigint AS created_at_unix,
+                      coalesce(rc.modification_time, 0)::bigint AS modified_at_unix
+                 FROM report_configs rc
+            LEFT JOIN users u ON u.id = rc.owner
+            LEFT JOIN report_formats rf ON rf.uuid = rc.report_format_id
+                WHERE rc.uuid = $1
+                LIMIT 1;"#,
+            &[&report_config_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "report config asset detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+
+    Ok(Json(report_config_asset_from_row(&client, &row).await?))
 }

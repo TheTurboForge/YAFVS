@@ -1908,6 +1908,49 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postScopes
+      x-turbovas-exposure: internal-only
+      x-turbovas-maturity: preview-write
+      x-turbovas-replaces: none
+      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Preview create a scope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopeCreateRequest'
+      responses:
+        '201':
+          description: Scope created
+          headers:
+            Location:
+              description: Path of the created scope resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}:
     get:
       operationId: getScopesByScopeId
@@ -1934,6 +1977,80 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchScopesByScopeId
+      x-turbovas-exposure: internal-only
+      x-turbovas-maturity: preview-write
+      x-turbovas-replaces: none
+      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Preview update mutable scope metadata and membership
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopePatchRequest'
+      responses:
+        '200':
+          description: Scope updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteScopesByScopeId
+      x-turbovas-exposure: internal-only
+      x-turbovas-maturity: preview-write
+      x-turbovas-replaces: none
+      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Preview delete a mutable scope
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+      responses:
+        '204':
+          description: Scope deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -2527,6 +2644,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The native API request conflicts with existing persistent state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     MethodNotAllowed:
       description: The endpoint supports only the documented HTTP method.
       content:
@@ -2823,6 +2946,57 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Scope'
+    ScopeCreateRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        protection_requirement:
+          enum: [normal, high, very_high]
+        target_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        host_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+    ScopePatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        protection_requirement:
+          enum: [normal, high, very_high]
+        target_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        host_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
     ScopeReportCollection:
       type: object
       required: [page, items]

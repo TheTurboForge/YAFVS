@@ -1848,7 +1848,7 @@ class TurboVASCtlTests(unittest.TestCase):
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 2)
         self.assertEqual(status_only["details"]["openapi_contract"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
@@ -1871,7 +1871,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 3)
         self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
@@ -1977,6 +1977,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["openapi_internal_only_endpoints"],
         )
+        self.assertNotIn("/api/v1/scopes", contract["openapi_internal_only_endpoints"])
+        self.assertNotIn("/api/v1/scopes/{scope_id}", contract["openapi_internal_only_endpoints"])
 
     def test_native_tooling_state_reports_browser_proxy_contract_drift(self):
         endpoints = [
@@ -1995,6 +1997,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  /scopes/{scope_id}/reports/{scope_report_id}/retention-plan:\n"
                 "    get:\n"
                 "      operationId: getScopesByScopeIdReportsByScopeReportIdRetentionPlan\n"
+                "      x-turbovas-exposure: internal-only\n"
+                "  /scopes/{scope_id}:\n"
+                "    patch:\n"
+                "      operationId: patchScopesByScopeId\n"
                 "      x-turbovas-exposure: internal-only\n",
                 encoding="utf-8",
             )
@@ -2030,6 +2036,7 @@ class TurboVASCtlTests(unittest.TestCase):
             summary["internal_only_gsad_proxy_allowlist"],
             ["/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"],
         )
+        self.assertNotIn("/api/v1/scopes/{scope_id}", summary["openapi_internal_only_endpoints"])
         self.assertEqual(summary["parse_errors"], [])
 
     def test_native_tooling_state_reports_direct_api_contract_drift(self):
@@ -2091,10 +2098,10 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 73)
+        self.assertEqual(contract["operation_count"], 76)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
-        self.assertEqual(contract["operations_with_request_bodies"], [])
+        self.assertEqual(contract["operations_with_request_bodies"], ["POST /scopes", "PATCH /scopes/{scope_id}"])
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
 
@@ -2295,7 +2302,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass")
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 73)
+        self.assertEqual(details["operation_count"], 76)
         self.assertGreater(details["direct_read_operation_count"], 0)
         self.assertEqual(details["non_get_direct_operations"], [])
         self.assertIn("/api/v1", details["servers"])
@@ -2317,9 +2324,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
         self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 0)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 0)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 3)
         self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 0)
-        self.assertEqual(status_only["details"]["operation_request_body_count"], 0)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 2)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
@@ -2465,16 +2472,16 @@ class TurboVASCtlTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         result = turbovasctl.command_native_api_migration_matrix(root)
         details = result["details"]
-        rows = {item["endpoint"]: item for item in details["items"]}
+        rows = {(item["method"], item["endpoint"]): item for item in details["items"]}
         findings = {item["check"]: item for item in result["findings"]}
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 73)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 73)
+        self.assertEqual(details["summary"]["total_rows"], 76)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 76)
         self.assertEqual(details["summary"]["inventory_rows"], 73)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 73)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 73)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 76)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 76)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -2485,7 +2492,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("native-api-migration-matrix", source)
         self.assertIn("def command_native_api_migration_matrix", source)
 
-        reports = rows["/api/v1/reports"]
+        reports = rows[("get", "/api/v1/reports")]
         self.assertEqual(reports["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(reports["browser_access"], "browser_proxied")
         self.assertEqual(reports["direct_access"], "scriptable_read")
@@ -2497,28 +2504,36 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(reports["x_turbovas_inherited_still_owns"], "raw-report-generation-xml-export-retention-and-mutations")
         self.assertIn("GSA raw report list (migrated through gsad same-origin proxy)", reports["replacement_candidates"])
 
-        report_detail = rows["/api/v1/reports/{report_id}"]
+        preview_create = rows[("post", "/api/v1/scopes")]
+        self.assertEqual(preview_create["status"], "openapi_preview_write_control")
+        self.assertEqual(preview_create["method"], "post")
+        self.assertEqual(preview_create["inventory_endpoint"], None)
+        self.assertEqual(preview_create["direct_access"], "internal_only")
+        self.assertEqual(preview_create["x_turbovas_maturity"], "preview-write")
+        self.assertEqual(preview_create["x_turbovas_exposure"], "internal-only")
+
+        report_detail = rows[("get", "/api/v1/reports/{report_id}")]
         self.assertEqual(report_detail["operation_id"], "getReportsByReportId")
         self.assertEqual(report_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(report_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(report_detail["x_turbovas_replaces"], "raw-report-detail-summary-read")
         self.assertEqual(report_detail["x_turbovas_inherited_still_owns"], "raw-report-generation-xml-export-retention-and-mutations")
 
-        scope_reports = rows["/api/v1/scope-reports"]
+        scope_reports = rows[("get", "/api/v1/scope-reports")]
         self.assertEqual(scope_reports["operation_id"], "getScopeReports")
         self.assertEqual(scope_reports["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_reports["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_reports["x_turbovas_replaces"], "scope-report-list-read")
         self.assertEqual(scope_reports["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
 
-        scope_report_detail = rows["/api/v1/scope-reports/{scope_report_id}"]
+        scope_report_detail = rows[("get", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(scope_report_detail["operation_id"], "getScopeReportsByScopeReportId")
         self.assertEqual(scope_report_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_report_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_report_detail["x_turbovas_replaces"], "scope-report-detail-summary-read")
         self.assertEqual(scope_report_detail["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
 
-        feeds = rows["/api/v1/feeds"]
+        feeds = rows[("get", "/api/v1/feeds")]
         self.assertEqual(feeds["operation_id"], "getFeeds")
         self.assertEqual(feeds["x_turbovas_exposure"], "direct-read")
         self.assertEqual(feeds["x_turbovas_maturity"], "live-read")
@@ -2538,7 +2553,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/nvts/{nvt_id}": ("getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_catalog_metadata.items():
-            row = rows[endpoint]
+            row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
@@ -2559,7 +2574,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preferences-export-import-writes-and-deletes"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
-            row = rows[endpoint]
+            row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
@@ -2578,7 +2593,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/reports/{report_id}/metrics": ("getReportsByReportIdMetrics", "raw-report-metrics-read"),
         }
         for endpoint, (operation_id, replaces) in expected_raw_report_metadata.items():
-            row = rows[endpoint]
+            row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
@@ -2597,35 +2612,35 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/metrics": ("getScopesByScopeIdReportsByScopeReportIdMetrics", "scope-report-metrics-read"),
         }
         for endpoint, (operation_id, replaces) in expected_scope_report_metadata.items():
-            row = rows[endpoint]
+            row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
             self.assertEqual(row["x_turbovas_replaces"], replaces)
             self.assertEqual(row["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
 
-        tags = rows["/api/v1/tags"]
+        tags = rows[("get", "/api/v1/tags")]
         self.assertEqual(tags["operation_id"], "getTags")
         self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tags["x_turbovas_maturity"], "live-read")
         self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
         self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-write-control")
 
-        tag_detail = rows["/api/v1/tags/{tag_id}"]
+        tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
         self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
         self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-write-control")
 
-        tag_resources = rows["/api/v1/tags/{tag_id}/resources"]
+        tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
         self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
         self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-write-control")
 
-        retention = rows["/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"]
+        retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
         self.assertEqual(retention["status"], "implemented_internal")
         self.assertEqual(retention["browser_access"], "internal_only")
         self.assertEqual(retention["direct_access"], "internal_only")
@@ -2635,11 +2650,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(retention["x_turbovas_replaces"], "none")
         self.assertEqual(retention["x_turbovas_inherited_still_owns"], "retention-mutations")
 
-        cert_bund_detail = rows["/api/v1/cert-bund-advisories/{cert_bund_advisory_id}"]
+        cert_bund_detail = rows[("get", "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}")]
         self.assertEqual(cert_bund_detail["inventory_endpoint"], "/api/v1/cert-bund-advisories/{advisory_id}")
         self.assertIn("GSA Security Information CERT-Bund advisory detail metadata overlay (migrated through gsad same-origin proxy)", cert_bund_detail["replacement_candidates"])
 
-        self.assertNotIn("/api/v1/scopes/{scope_id}/reports/{scope_report_id}", rows)
+        self.assertNotIn(("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}"), rows)
 
     def test_native_api_migration_matrix_contract_reports_row_and_metadata_gaps(self):
         rows = [
@@ -2794,7 +2809,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 73)
+        self.assertEqual(len(operation_ids), 76)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/reports/{report_id}/results"), "getReportsByReportIdResults")

@@ -1027,6 +1027,7 @@ OPENAPI_SHARED_ERROR_RESPONSES = {
     "BadRequest": "#/components/schemas/Error",
     "Unauthorized": "#/components/schemas/Error",
     "NotFound": "#/components/schemas/Error",
+    "Conflict": "#/components/schemas/Error",
     "MethodNotAllowed": "#/components/schemas/Error",
     "RequestTooLarge": "#/components/schemas/Error",
     "TooManyRequests": "#/components/schemas/Error",
@@ -5898,6 +5899,7 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         f"/api/v1{operation.get('path')}"
         for operation in openapi_contract_operations(repo_root)
         if isinstance(operation.get("path"), str)
+        and operation.get("method") == "get"
         and isinstance(operation.get("x_turbovas_values"), dict)
         and operation["x_turbovas_values"].get("x-turbovas-exposure") == "internal-only"
     )
@@ -7015,7 +7017,14 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
         fields = set(operation.get("x_turbovas_fields", [])) if isinstance(operation, dict) else set()
         values = operation.get("x_turbovas_values", {}) if isinstance(operation, dict) and isinstance(operation.get("x_turbovas_values"), dict) else {}
         status = inventory.get("status") if isinstance(inventory, dict) and isinstance(inventory.get("status"), str) else "unknown"
-        direct_access = inventory.get("direct_access") if isinstance(inventory, dict) and isinstance(inventory.get("direct_access"), str) else native_api_direct_access(endpoint)
+        if status == "unknown" and openapi_operation_is_pending_write_control(operation):
+            status = "openapi_preview_write_control"
+        if isinstance(inventory, dict) and isinstance(inventory.get("direct_access"), str):
+            direct_access = inventory["direct_access"]
+        elif status == "openapi_preview_write_control":
+            direct_access = "internal_only"
+        else:
+            direct_access = native_api_direct_access(endpoint)
         replacement_candidates = inventory.get("replacement_candidates", []) if isinstance(inventory, dict) else []
         if not isinstance(replacement_candidates, list):
             replacement_candidates = []
@@ -7096,7 +7105,7 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
     rows_missing_inventory = [
         {"endpoint": row.get("endpoint"), "method": row.get("method"), "openapi_path": row.get("openapi_path")}
         for row in rows
-        if row.get("inventory_endpoint") is None
+        if row.get("inventory_endpoint") is None and row.get("status") != "openapi_preview_write_control"
     ]
     rows_missing_migration_metadata = []
     direct_exposure_mismatches = []
@@ -7146,6 +7155,15 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
         "direct_exposure_mismatches": direct_exposure_mismatches,
         "direct_marker_mismatches": direct_marker_mismatches,
     }
+
+
+def openapi_operation_is_pending_write_control(operation: dict[str, Any] | None) -> bool:
+    if not isinstance(operation, dict):
+        return False
+    values = operation.get("x_turbovas_values", {}) if isinstance(operation.get("x_turbovas_values"), dict) else {}
+    maturity = values.get("x-turbovas-maturity")
+    exposure = values.get("x-turbovas-exposure")
+    return exposure == "internal-only" and maturity in {"preview-write", "preview-control"}
 
 
 def native_api_migration_matrix_remaining_surface(rows: list[dict[str, Any]]) -> dict[str, Any]:

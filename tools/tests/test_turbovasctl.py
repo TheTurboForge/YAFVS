@@ -1816,6 +1816,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "missing_operation_id_count",
                 "missing_operation_summary_count",
                 "operation_request_body_count",
+                "get_request_body_count",
                 "duplicate_operation_id_count",
                 "nondeterministic_operation_id_count",
                 "missing_shared_error_response_count",
@@ -1838,10 +1839,16 @@ class TurboVASCtlTests(unittest.TestCase):
                 "incomplete_collection_parameter_count",
                 "missing_openapi_collection_parameter_count",
                 "missing_rust_collection_contract_count",
+                "write_control_alignment_status",
+                "write_control_operation_count",
+                "direct_write_control_operation_count",
+                "missing_write_control_metadata_count",
+                "invalid_write_control_metadata_count",
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_shared_error_response_count"], 0)
@@ -1862,6 +1869,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["incomplete_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(
             status_only["findings"],
             [
@@ -2093,19 +2105,21 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x-turbovas-inherited-still-owns",
                 "x-turbovas-maturity",
                 "x-turbovas-replaces",
+                "x-turbovas-safety-contract",
+                "x-turbovas-side-effect",
             ],
         )
         self.assertEqual(contract["unexpected_turbovas_operation_fields"], [])
-        self.assertEqual(contract["allowed_exposure_values"], ["direct-read", "internal-only"])
+        self.assertEqual(contract["allowed_exposure_values"], ["direct-read", "direct-write", "internal-only"])
         actual_exposure_values = sorted(
             {operation["x_turbovas_values"]["x-turbovas-exposure"] for operation in turbovasctl.openapi_contract_operations(root)}
         )
-        self.assertEqual(contract["allowed_exposure_values"], actual_exposure_values)
-        self.assertEqual(contract["allowed_maturity_values"], ["live-read", "preview-read"])
+        self.assertTrue(set(actual_exposure_values).issubset(set(contract["allowed_exposure_values"])))
+        self.assertEqual(contract["allowed_maturity_values"], ["live-control", "live-read", "live-write", "preview-control", "preview-read", "preview-write"])
         actual_maturity_values = sorted(
             {operation["x_turbovas_values"]["x-turbovas-maturity"] for operation in turbovasctl.openapi_contract_operations(root)}
         )
-        self.assertEqual(contract["allowed_maturity_values"], actual_maturity_values)
+        self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
         expected_replaces_values = [
             "alert-metadata-detail-read",
             "alert-metadata-list-read",
@@ -2289,6 +2303,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(findings["native-api-client-contract.openapi"]["status"], "pass")
         self.assertEqual(findings["native-api-client-contract.auth"]["status"], "pass")
         self.assertEqual(findings["native-api-client-contract.direct-read"]["status"], "pass")
+        self.assertEqual(findings["native-api-client-contract.write-control"]["status"], "pass")
 
     def test_native_api_client_contract_status_only_is_chat_safe(self):
         root = Path(__file__).resolve().parents[2]
@@ -2299,13 +2314,19 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
         self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 0)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 0)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 0)
         self.assertEqual(status_only["details"]["operation_request_body_count"], 0)
+        self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["write_control_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["missing_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["operations_missing_error_response_count"], 0)
         self.assertEqual(status_only["details"]["missing_error_schema_field_count"], 0)
+        self.assertEqual(status_only["details"]["missing_write_control_metadata_count"], 0)
+        self.assertEqual(status_only["details"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["missing_server_count"], 0)
         self.assertEqual(status_only["details"]["missing_security_scheme_count"], 0)
         self.assertNotIn("servers", status_only["details"])
@@ -2824,7 +2845,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["operation"], "GET /reports")
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["expected"], "getReports")
         self.assertEqual(summary["unexpected_turbovas_operation_fields"], [{"operation": "GET /reports", "fields": ["x-turbovas-surprise"]}])
-        self.assertEqual(summary["invalid_exposure_operations"], [{"operation": "GET /reports", "actual": "banana", "allowed": ["direct-read", "internal-only"]}])
+        self.assertEqual(summary["invalid_exposure_operations"], [{"operation": "GET /reports", "actual": "banana", "allowed": ["direct-read", "direct-write", "internal-only"]}])
         missing_exposure = {item["operation"] for item in summary["missing_exposure_operations"]}
         self.assertEqual(
             missing_exposure,
@@ -2895,7 +2916,7 @@ class TurboVASCtlTests(unittest.TestCase):
                     "operation": "GET /reports",
                     "field": "x-turbovas-maturity",
                     "actual": "stale",
-                    "allowed": ["live-read", "preview-read"],
+                    "allowed": ["live-control", "live-read", "live-write", "preview-control", "preview-read", "preview-write"],
                 },
                 {
                     "operation": "GET /reports",
@@ -3030,7 +3051,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(
             {
                 "operation": "GET /future-metadata",
-                "expected": ["direct-read", "internal-only"],
+                "expected": ["direct-read", "direct-write", "internal-only"],
                 "reason": "field_missing_for_turbovas_contract",
             },
             summary["missing_exposure_operations"],
@@ -3053,6 +3074,79 @@ class TurboVASCtlTests(unittest.TestCase):
             },
             summary["exposure_mismatches"],
         )
+
+    def test_openapi_contract_checks_write_control_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi.parent.mkdir(parents=True)
+            openapi.write_text(
+                "openapi: 3.1.0\n"
+                "paths:\n"
+                "  /future-tag:\n"
+                "    post:\n"
+                "      summary: Create future tag\n"
+                "      operationId: postFutureTag\n"
+                "      x-turbovas-direct: true\n"
+                "      x-turbovas-exposure: direct-write\n"
+                "      x-turbovas-maturity: preview-write\n"
+                "      x-turbovas-replaces: none\n"
+                "      x-turbovas-inherited-still-owns: tag-write-control\n"
+                "      x-turbovas-safety-contract: write-control-v1\n"
+                "      x-turbovas-side-effect: metadata-write\n"
+                "      requestBody:\n"
+                "        required: true\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Future\n"
+                "  /bad-write:\n"
+                "    patch:\n"
+                "      summary: Bad write\n"
+                "      operationId: patchBadWrite\n"
+                "      x-turbovas-direct: true\n"
+                "      x-turbovas-exposure: direct-read\n"
+                "      x-turbovas-side-effect: mystery\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Future\n"
+                "  /bad-get-body:\n"
+                "    get:\n"
+                "      summary: Bad get body\n"
+                "      operationId: getBadGetBody\n"
+                "      x-turbovas-direct: true\n"
+                "      x-turbovas-exposure: direct-write\n"
+                "      x-turbovas-maturity: preview-write\n"
+                "      x-turbovas-replaces: none\n"
+                "      x-turbovas-inherited-still-owns: tag-write-control\n"
+                "      x-turbovas-safety-contract: write-control-v1\n"
+                "      x-turbovas-side-effect: metadata-write\n"
+                "      requestBody:\n"
+                "        required: true\n"
+                "      responses:\n"
+                "        '200':\n"
+                "          description: Future\n",
+                encoding="utf-8",
+            )
+            operations = turbovasctl.openapi_contract_operations(root)
+            write_control = turbovasctl.openapi_write_control_contract_summary(operations)
+
+        self.assertEqual(write_control["alignment_status"], "warn")
+        self.assertEqual(
+            write_control["write_control_operations"],
+            ["POST /future-tag", "PATCH /bad-write", "GET /bad-get-body"],
+        )
+        self.assertEqual(write_control["direct_write_control_operations"], ["POST /future-tag", "PATCH /bad-write", "GET /bad-get-body"])
+        self.assertEqual(write_control["request_body_operations"], ["POST /future-tag", "GET /bad-get-body"])
+        self.assertEqual(write_control["get_request_body_operations"], ["GET /bad-get-body"])
+        missing = {(item["operation"], item["field"]) for item in write_control["missing_write_control_metadata"]}
+        self.assertIn(("PATCH /bad-write", "x-turbovas-inherited-still-owns"), missing)
+        self.assertIn(("PATCH /bad-write", "x-turbovas-maturity"), missing)
+        self.assertIn(("PATCH /bad-write", "x-turbovas-replaces"), missing)
+        invalid = {(item["operation"], item["field"]): item for item in write_control["invalid_write_control_metadata"]}
+        self.assertEqual(invalid[("PATCH /bad-write", "x-turbovas-exposure")]["actual"], "direct-read")
+        self.assertEqual(invalid[("PATCH /bad-write", "x-turbovas-side-effect")]["actual"], "mystery")
+        self.assertEqual(invalid[("GET /bad-get-body", "method")]["actual"], "get")
+        self.assertEqual(invalid[("GET /bad-get-body", "x-turbovas-exposure")]["actual"], "direct-write")
 
     def test_native_tooling_state_reports_openapi_collection_query_contract_drift(self):
         with tempfile.TemporaryDirectory() as tmp:

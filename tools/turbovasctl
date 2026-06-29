@@ -415,6 +415,7 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
 }
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
+OPENAPI_WRITE_CONTROL_METHODS = frozenset({"post", "put", "patch", "delete"})
 OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset(
     {
         "x-turbovas-direct",
@@ -422,16 +423,42 @@ OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset(
         "x-turbovas-inherited-still-owns",
         "x-turbovas-maturity",
         "x-turbovas-replaces",
+        "x-turbovas-safety-contract",
+        "x-turbovas-side-effect",
     }
 )
-OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset({"direct-read", "internal-only"})
+OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset({"direct-read", "direct-write", "internal-only"})
+OPENAPI_DIRECT_EXPOSURE_VALUES = frozenset({"direct-read", "direct-write"})
+OPENAPI_ALLOWED_SAFETY_CONTRACT_VALUES = frozenset({"write-control-v1"})
+OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
+    {
+        "account-auth-control",
+        "credential-secret-control",
+        "destructive-mutation",
+        "export-generation",
+        "feed-control",
+        "metadata-write",
+        "report-generation",
+        "scanner-control",
+    }
+)
+OPENAPI_WRITE_CONTROL_REQUIRED_FIELDS = frozenset(
+    {
+        "x-turbovas-exposure",
+        "x-turbovas-inherited-still-owns",
+        "x-turbovas-maturity",
+        "x-turbovas-replaces",
+        "x-turbovas-safety-contract",
+        "x-turbovas-side-effect",
+    }
+)
 OPENAPI_EXPECTED_SERVER_URLS = frozenset({"/api/v1", "http://127.0.0.1:19080/api/v1"})
 OPENAPI_EXPECTED_SECURITY_REQUIREMENTS = frozenset({"operatorSession", "bearerAuth"})
 OPENAPI_EXPECTED_SECURITY_SCHEMES = {
     "operatorSession": {"type": "apiKey", "in": "cookie", "name": "turbovas_session"},
     "bearerAuth": {"type": "http", "scheme": "bearer"},
 }
-OPENAPI_ALLOWED_MATURITY_VALUES = frozenset({"live-read", "preview-read"})
+OPENAPI_ALLOWED_MATURITY_VALUES = frozenset({"live-control", "live-read", "live-write", "preview-control", "preview-read", "preview-write"})
 OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
     {
         "alert-metadata-list-read",
@@ -544,6 +571,8 @@ OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES = {
     "x-turbovas-inherited-still-owns": OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES,
     "x-turbovas-maturity": OPENAPI_ALLOWED_MATURITY_VALUES,
     "x-turbovas-replaces": OPENAPI_ALLOWED_REPLACES_VALUES,
+    "x-turbovas-safety-contract": OPENAPI_ALLOWED_SAFETY_CONTRACT_VALUES,
+    "x-turbovas-side-effect": OPENAPI_ALLOWED_SIDE_EFFECT_VALUES,
 }
 OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts"): "direct-read",
@@ -4900,6 +4929,100 @@ def openapi_scalar_value(value: str | None) -> str | None:
     return value or None
 
 
+def openapi_write_control_contract_summary(operations: list[dict[str, Any]]) -> dict[str, Any]:
+    write_control_operations: list[str] = []
+    direct_write_control_operations: list[str] = []
+    request_body_operations: list[str] = []
+    get_request_body_operations: list[str] = []
+    missing_metadata: list[dict[str, Any]] = []
+    invalid_metadata: list[dict[str, Any]] = []
+
+    for item in operations:
+        method = str(item.get("method", ""))
+        label = openapi_operation_label(item)
+        fields = set(item.get("x_turbovas_fields", [])) if isinstance(item.get("x_turbovas_fields"), list) else set()
+        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        exposure = values.get("x-turbovas-exposure")
+        maturity = values.get("x-turbovas-maturity")
+        has_direct_marker = "x-turbovas-direct" in fields
+        has_request_body = bool(item.get("request_body"))
+        has_write_control_metadata = bool(fields & {"x-turbovas-safety-contract", "x-turbovas-side-effect"})
+        looks_write_control = (
+            method in OPENAPI_WRITE_CONTROL_METHODS
+            or has_request_body
+            or has_write_control_metadata
+            or exposure == "direct-write"
+            or maturity in {"live-write", "preview-write", "live-control", "preview-control"}
+        )
+
+        if has_request_body:
+            request_body_operations.append(label)
+            if method == "get":
+                get_request_body_operations.append(label)
+        if not looks_write_control:
+            continue
+
+        write_control_operations.append(label)
+        if has_direct_marker:
+            direct_write_control_operations.append(label)
+        for field in sorted(OPENAPI_WRITE_CONTROL_REQUIRED_FIELDS - fields):
+            missing_metadata.append({"operation": label, "field": field})
+        for field, allowed in {
+            "x-turbovas-safety-contract": OPENAPI_ALLOWED_SAFETY_CONTRACT_VALUES,
+            "x-turbovas-side-effect": OPENAPI_ALLOWED_SIDE_EFFECT_VALUES,
+        }.items():
+            if field in values and values.get(field) not in allowed:
+                invalid_metadata.append(
+                    {
+                        "operation": label,
+                        "field": field,
+                        "actual": values.get(field),
+                        "allowed": sorted(allowed),
+                    }
+                )
+        if method == "get":
+            invalid_metadata.append(
+                {
+                    "operation": label,
+                    "field": "method",
+                    "actual": method,
+                    "expected": sorted(OPENAPI_WRITE_CONTROL_METHODS),
+                }
+            )
+        if method != "get" and exposure == "direct-read":
+            invalid_metadata.append(
+                {
+                    "operation": label,
+                    "field": "x-turbovas-exposure",
+                    "actual": exposure,
+                    "expected": "direct-write or internal-only",
+                }
+            )
+        if method == "get" and exposure == "direct-write":
+            invalid_metadata.append(
+                {
+                    "operation": label,
+                    "field": "x-turbovas-exposure",
+                    "actual": exposure,
+                    "expected": "direct-read or internal-only",
+                }
+            )
+
+    drift = missing_metadata or invalid_metadata or get_request_body_operations
+    return {
+        "alignment_status": "pass" if not drift else "warn",
+        "write_control_operations": write_control_operations,
+        "direct_write_control_operations": direct_write_control_operations,
+        "request_body_operations": request_body_operations,
+        "get_request_body_operations": get_request_body_operations,
+        "missing_write_control_metadata": missing_metadata,
+        "invalid_write_control_metadata": invalid_metadata,
+        "allowed_safety_contract_values": sorted(OPENAPI_ALLOWED_SAFETY_CONTRACT_VALUES),
+        "allowed_side_effect_values": sorted(OPENAPI_ALLOWED_SIDE_EFFECT_VALUES),
+        "required_write_control_fields": sorted(OPENAPI_WRITE_CONTROL_REQUIRED_FIELDS),
+    }
+
+
 def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     by_key = {(str(item.get("method", "")), str(item.get("path", ""))): item for item in operations}
     missing: list[dict[str, Any]] = []
@@ -4929,7 +5052,7 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
         if "x-turbovas-exposure" in fields:
             actual = values.get("x-turbovas-exposure")
             has_direct_marker = "x-turbovas-direct" in fields
-            if actual == "direct-read" and not has_direct_marker:
+            if actual in OPENAPI_DIRECT_EXPOSURE_VALUES and not has_direct_marker:
                 mismatches.append(
                     {
                         "operation": openapi_operation_label(item),
@@ -5268,7 +5391,8 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     duplicate_ids = sorted({operation_id for operation_id in operation_ids if operation_ids.count(operation_id) > 1})
     missing_operation_ids = [openapi_operation_label(item) for item in operations if not item.get("operation_id")]
     missing_operation_summaries = [openapi_operation_label(item) for item in operations if not item.get("summary")]
-    operations_with_request_bodies = [openapi_operation_label(item) for item in operations if item.get("request_body")]
+    write_control_contract = openapi_write_control_contract_summary(operations)
+    operations_with_request_bodies = write_control_contract["request_body_operations"]
     nondeterministic_operation_ids = [
         {
             "operation": openapi_operation_label(item),
@@ -5314,7 +5438,6 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     drift = (
         missing_operation_ids
         or missing_operation_summaries
-        or operations_with_request_bodies
         or duplicate_ids
         or nondeterministic_operation_ids
         or unexpected_turbovas_fields
@@ -5331,6 +5454,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         or error_schema_drift["invalid_error_schema_fields"]
         or collection_query_contract["alignment_status"] != "pass"
         or auth_contract["alignment_status"] != "pass"
+        or write_control_contract["alignment_status"] != "pass"
     )
     return {
         "alignment_status": "pass" if not drift else "warn",
@@ -5339,6 +5463,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         "missing_operation_ids": missing_operation_ids,
         "missing_operation_summaries": missing_operation_summaries,
         "operations_with_request_bodies": operations_with_request_bodies,
+        "get_operations_with_request_bodies": write_control_contract["get_request_body_operations"],
         "duplicate_operation_ids": duplicate_ids,
         "nondeterministic_operation_ids": nondeterministic_operation_ids,
         "allowed_turbovas_operation_fields": sorted(OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS),
@@ -5356,6 +5481,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         **error_schema_drift,
         "collection_query_contract": collection_query_contract,
         "auth_contract": auth_contract,
+        "write_control_contract": write_control_contract,
     }
 
 
@@ -6287,6 +6413,7 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "missing_operation_id_count": len(openapi_contract.get("missing_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "missing_operation_summary_count": len(openapi_contract.get("missing_operation_summaries", [])) if isinstance(openapi_contract, dict) else 0,
         "operation_request_body_count": len(openapi_contract.get("operations_with_request_bodies", [])) if isinstance(openapi_contract, dict) else 0,
+        "get_request_body_count": len(openapi_contract.get("get_operations_with_request_bodies", [])) if isinstance(openapi_contract, dict) else 0,
         "duplicate_operation_id_count": len(openapi_contract.get("duplicate_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "nondeterministic_operation_id_count": len(openapi_contract.get("nondeterministic_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "unexpected_turbovas_operation_field_count": len(openapi_contract.get("unexpected_turbovas_operation_fields", [])) if isinstance(openapi_contract, dict) else 0,
@@ -6316,6 +6443,11 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "missing_security_scheme_count": len(openapi_contract.get("auth_contract", {}).get("missing_security_schemes", [])) if isinstance(openapi_contract.get("auth_contract", {}), dict) else 0,
         "unexpected_security_scheme_count": len(openapi_contract.get("auth_contract", {}).get("unexpected_security_schemes", [])) if isinstance(openapi_contract.get("auth_contract", {}), dict) else 0,
         "security_scheme_mismatch_count": len(openapi_contract.get("auth_contract", {}).get("security_scheme_mismatches", [])) if isinstance(openapi_contract.get("auth_contract", {}), dict) else 0,
+        "write_control_alignment_status": openapi_contract.get("write_control_contract", {}).get("alignment_status", "unknown") if isinstance(openapi_contract.get("write_control_contract", {}), dict) else "unknown",
+        "write_control_operation_count": len(openapi_contract.get("write_control_contract", {}).get("write_control_operations", [])) if isinstance(openapi_contract.get("write_control_contract", {}), dict) else 0,
+        "direct_write_control_operation_count": len(openapi_contract.get("write_control_contract", {}).get("direct_write_control_operations", [])) if isinstance(openapi_contract.get("write_control_contract", {}), dict) else 0,
+        "missing_write_control_metadata_count": len(openapi_contract.get("write_control_contract", {}).get("missing_write_control_metadata", [])) if isinstance(openapi_contract.get("write_control_contract", {}), dict) else 0,
+        "invalid_write_control_metadata_count": len(openapi_contract.get("write_control_contract", {}).get("invalid_write_control_metadata", [])) if isinstance(openapi_contract.get("write_control_contract", {}), dict) else 0,
     }
     return {
         "total_items": summary.get("total_items", 0),
@@ -6399,6 +6531,7 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "missing_operation_id_count": openapi_contract.get("missing_operation_id_count", 0),
             "missing_operation_summary_count": openapi_contract.get("missing_operation_summary_count", 0),
             "operation_request_body_count": openapi_contract.get("operation_request_body_count", 0),
+            "get_request_body_count": openapi_contract.get("get_request_body_count", 0),
             "duplicate_operation_id_count": openapi_contract.get("duplicate_operation_id_count", 0),
             "nondeterministic_operation_id_count": openapi_contract.get("nondeterministic_operation_id_count", 0),
             "missing_shared_error_response_count": openapi_contract.get("missing_shared_error_response_count", 0),
@@ -6421,6 +6554,11 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "incomplete_collection_parameter_count": openapi_contract.get("incomplete_collection_parameter_count", 0),
             "missing_openapi_collection_parameter_count": openapi_contract.get("missing_openapi_collection_parameter_count", 0),
             "missing_rust_collection_contract_count": openapi_contract.get("missing_rust_collection_contract_count", 0),
+            "write_control_alignment_status": openapi_contract.get("write_control_alignment_status", "unknown"),
+            "write_control_operation_count": openapi_contract.get("write_control_operation_count", 0),
+            "direct_write_control_operation_count": openapi_contract.get("direct_write_control_operation_count", 0),
+            "missing_write_control_metadata_count": openapi_contract.get("missing_write_control_metadata_count", 0),
+            "invalid_write_control_metadata_count": openapi_contract.get("invalid_write_control_metadata_count", 0),
         },
     }
 
@@ -7075,13 +7213,19 @@ def native_api_client_contract_status_only_result(result: dict[str, Any]) -> dic
         "operation_count": details.get("operation_count", 0),
         "direct_read_operation_count": details.get("direct_read_operation_count", 0),
         "non_get_direct_operation_count": len(details.get("non_get_direct_operations", [])) if isinstance(details.get("non_get_direct_operations"), list) else 0,
+        "write_control_operation_count": details.get("write_control_operation_count", 0),
+        "direct_write_control_operation_count": details.get("direct_write_control_operation_count", 0),
         "operation_request_body_count": details.get("operation_request_body_count", 0),
+        "get_request_body_count": details.get("get_request_body_count", 0),
         "openapi_alignment_status": details.get("openapi_alignment_status", "unknown"),
         "auth_contract_alignment_status": details.get("auth_contract_alignment_status", "unknown"),
+        "write_control_alignment_status": details.get("write_control_alignment_status", "unknown"),
         "missing_operation_id_count": details.get("missing_operation_id_count", 0),
         "duplicate_operation_id_count": details.get("duplicate_operation_id_count", 0),
         "operations_missing_error_response_count": details.get("operations_missing_error_response_count", 0),
         "missing_error_schema_field_count": details.get("missing_error_schema_field_count", 0),
+        "missing_write_control_metadata_count": details.get("missing_write_control_metadata_count", 0),
+        "invalid_write_control_metadata_count": details.get("invalid_write_control_metadata_count", 0),
         "missing_server_count": details.get("missing_server_count", 0),
         "missing_security_scheme_count": details.get("missing_security_scheme_count", 0),
     }
@@ -7099,6 +7243,7 @@ def native_api_client_contract_status_only_result(result: dict[str, Any]) -> dic
 def command_native_api_client_contract(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     contract = native_api_openapi_contract_summary(repo_root)
     auth_contract = contract.get("auth_contract", {}) if isinstance(contract.get("auth_contract"), dict) else {}
+    write_control_contract = contract.get("write_control_contract", {}) if isinstance(contract.get("write_control_contract"), dict) else {}
     operations = openapi_contract_operations(repo_root)
     direct_operations = [
         operation
@@ -7109,22 +7254,29 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
     direct_count = len(direct_operations)
     openapi_status = contract_drift_status(contract.get("alignment_status"))
     auth_status = contract_drift_status(auth_contract.get("alignment_status"))
-    direct_status = "pass" if direct_count > 0 and not non_get_direct else "fail"
+    write_control_status = contract_drift_status(write_control_contract.get("alignment_status"))
+    direct_status = "pass" if direct_count > 0 else "fail"
     details = {
         "openapi_version": openapi_info_version(repo_root),
         "operation_count": contract.get("operation_count", 0),
         "direct_read_operation_count": direct_count,
         "non_get_direct_operations": non_get_direct,
+        "write_control_operation_count": len(write_control_contract.get("write_control_operations", [])),
+        "direct_write_control_operation_count": len(write_control_contract.get("direct_write_control_operations", [])),
         "servers": auth_contract.get("servers", []),
         "security_requirements": auth_contract.get("security_requirements", []),
         "security_schemes": auth_contract.get("security_schemes", {}),
         "openapi_alignment_status": contract.get("alignment_status", "unknown"),
         "auth_contract_alignment_status": auth_contract.get("alignment_status", "unknown"),
+        "write_control_alignment_status": write_control_contract.get("alignment_status", "unknown"),
         "missing_operation_id_count": len(contract.get("missing_operation_ids", [])),
         "duplicate_operation_id_count": len(contract.get("duplicate_operation_ids", [])),
         "operation_request_body_count": len(contract.get("operations_with_request_bodies", [])),
+        "get_request_body_count": len(contract.get("get_operations_with_request_bodies", [])),
         "operations_missing_error_response_count": len(contract.get("operations_missing_error_responses", [])),
         "missing_error_schema_field_count": len(contract.get("missing_error_schema_fields", [])),
+        "missing_write_control_metadata_count": len(write_control_contract.get("missing_write_control_metadata", [])),
+        "invalid_write_control_metadata_count": len(write_control_contract.get("invalid_write_control_metadata", [])),
         "missing_server_count": len(auth_contract.get("missing_servers", [])),
         "missing_security_scheme_count": len(auth_contract.get("missing_security_schemes", [])),
     }
@@ -7159,10 +7311,24 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
         finding(
             direct_status,
             "native-api-client-contract.direct-read",
-            f"OpenAPI marks {direct_count} direct read operation(s) for generated/client use."
+            f"OpenAPI marks {direct_count} direct operation(s) for generated/client use."
             if direct_status == "pass"
-            else "OpenAPI direct markers are missing or include non-GET operations.",
+            else "OpenAPI direct markers are missing for generated/client use.",
             details={"direct_read_operation_count": direct_count, "non_get_direct_operations": non_get_direct},
+        ),
+        finding(
+            write_control_status,
+            "native-api-client-contract.write-control",
+            "Native API write/control operations have explicit safety metadata."
+            if write_control_status == "pass"
+            else "Native API write/control operations need explicit safety metadata before generated/client use.",
+            details={
+                "write_control_operation_count": details["write_control_operation_count"],
+                "direct_write_control_operation_count": details["direct_write_control_operation_count"],
+                "missing_write_control_metadata_count": details["missing_write_control_metadata_count"],
+                "invalid_write_control_metadata_count": details["invalid_write_control_metadata_count"],
+                "get_request_body_count": details["get_request_body_count"],
+            },
         ),
     ]
     result = make_result("native-api-client-contract", repo_root, "Native API generated-client contract checked.", findings)

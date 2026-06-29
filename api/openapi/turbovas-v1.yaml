@@ -5,7 +5,7 @@ openapi: 3.1.0
 info:
   title: TurboVAS Native API
   version: 0.1.0-contract
-  description: Read-only contract baseline for DB-backed TurboVAS product workflows. Direct listener responses include X-Request-Id for correlation.
+  description: Contract baseline for DB-backed TurboVAS product workflows. Current live operations are read-focused; future write/control operations must carry explicit safety metadata before replacing inherited GMP/XML paths. Direct listener responses include X-Request-Id for correlation.
 servers:
   - url: /api/v1
   - url: http://127.0.0.1:19080/api/v1

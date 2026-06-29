@@ -4828,6 +4828,7 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
                 "x_turbovas_values": {},
                 "parameters": [],
                 "responses": {},
+                "request_body": False,
             }
             continue
         if current is None:
@@ -4848,6 +4849,12 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
             current["x_turbovas_fields"].append(field)
             if isinstance(current.get("x_turbovas_values"), dict):
                 current["x_turbovas_values"][field] = openapi_scalar_value(value)
+            continue
+        if line == "      requestBody:":
+            current["request_body"] = True
+            in_parameters = False
+            in_responses = False
+            current_status = None
             continue
         if line == "      parameters:":
             in_parameters = True
@@ -5261,6 +5268,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     duplicate_ids = sorted({operation_id for operation_id in operation_ids if operation_ids.count(operation_id) > 1})
     missing_operation_ids = [openapi_operation_label(item) for item in operations if not item.get("operation_id")]
     missing_operation_summaries = [openapi_operation_label(item) for item in operations if not item.get("summary")]
+    operations_with_request_bodies = [openapi_operation_label(item) for item in operations if item.get("request_body")]
     nondeterministic_operation_ids = [
         {
             "operation": openapi_operation_label(item),
@@ -5306,6 +5314,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     drift = (
         missing_operation_ids
         or missing_operation_summaries
+        or operations_with_request_bodies
         or duplicate_ids
         or nondeterministic_operation_ids
         or unexpected_turbovas_fields
@@ -5329,6 +5338,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         "operation_ids": sorted(operation_ids),
         "missing_operation_ids": missing_operation_ids,
         "missing_operation_summaries": missing_operation_summaries,
+        "operations_with_request_bodies": operations_with_request_bodies,
         "duplicate_operation_ids": duplicate_ids,
         "nondeterministic_operation_ids": nondeterministic_operation_ids,
         "allowed_turbovas_operation_fields": sorted(OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS),
@@ -6276,6 +6286,7 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "operation_count": openapi_contract.get("operation_count", 0) if isinstance(openapi_contract, dict) else 0,
         "missing_operation_id_count": len(openapi_contract.get("missing_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "missing_operation_summary_count": len(openapi_contract.get("missing_operation_summaries", [])) if isinstance(openapi_contract, dict) else 0,
+        "operation_request_body_count": len(openapi_contract.get("operations_with_request_bodies", [])) if isinstance(openapi_contract, dict) else 0,
         "duplicate_operation_id_count": len(openapi_contract.get("duplicate_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "nondeterministic_operation_id_count": len(openapi_contract.get("nondeterministic_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "unexpected_turbovas_operation_field_count": len(openapi_contract.get("unexpected_turbovas_operation_fields", [])) if isinstance(openapi_contract, dict) else 0,
@@ -6387,6 +6398,7 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "operation_count": openapi_contract.get("operation_count", 0),
             "missing_operation_id_count": openapi_contract.get("missing_operation_id_count", 0),
             "missing_operation_summary_count": openapi_contract.get("missing_operation_summary_count", 0),
+            "operation_request_body_count": openapi_contract.get("operation_request_body_count", 0),
             "duplicate_operation_id_count": openapi_contract.get("duplicate_operation_id_count", 0),
             "nondeterministic_operation_id_count": openapi_contract.get("nondeterministic_operation_id_count", 0),
             "missing_shared_error_response_count": openapi_contract.get("missing_shared_error_response_count", 0),
@@ -7063,6 +7075,7 @@ def native_api_client_contract_status_only_result(result: dict[str, Any]) -> dic
         "operation_count": details.get("operation_count", 0),
         "direct_read_operation_count": details.get("direct_read_operation_count", 0),
         "non_get_direct_operation_count": len(details.get("non_get_direct_operations", [])) if isinstance(details.get("non_get_direct_operations"), list) else 0,
+        "operation_request_body_count": details.get("operation_request_body_count", 0),
         "openapi_alignment_status": details.get("openapi_alignment_status", "unknown"),
         "auth_contract_alignment_status": details.get("auth_contract_alignment_status", "unknown"),
         "missing_operation_id_count": details.get("missing_operation_id_count", 0),
@@ -7109,6 +7122,7 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
         "auth_contract_alignment_status": auth_contract.get("alignment_status", "unknown"),
         "missing_operation_id_count": len(contract.get("missing_operation_ids", [])),
         "duplicate_operation_id_count": len(contract.get("duplicate_operation_ids", [])),
+        "operation_request_body_count": len(contract.get("operations_with_request_bodies", [])),
         "operations_missing_error_response_count": len(contract.get("operations_missing_error_responses", [])),
         "missing_error_schema_field_count": len(contract.get("missing_error_schema_fields", [])),
         "missing_server_count": len(auth_contract.get("missing_servers", [])),

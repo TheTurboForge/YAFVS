@@ -1815,6 +1815,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "operation_count",
                 "missing_operation_id_count",
                 "missing_operation_summary_count",
+                "operation_request_body_count",
                 "duplicate_operation_id_count",
                 "nondeterministic_operation_id_count",
                 "missing_shared_error_response_count",
@@ -1840,6 +1841,7 @@ class TurboVASCtlTests(unittest.TestCase):
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
+        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_shared_error_response_count"], 0)
@@ -2079,6 +2081,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["operation_count"], 73)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
+        self.assertEqual(contract["operations_with_request_bodies"], [])
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
 
@@ -2296,6 +2299,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
         self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 0)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["missing_operation_id_count"], 0)
@@ -2326,6 +2330,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "operation_count": 0,
             "missing_operation_ids": ["GET /example"],
             "duplicate_operation_ids": [],
+            "operations_with_request_bodies": [],
             "operations_missing_error_responses": [],
             "missing_error_schema_fields": [],
         }
@@ -3003,6 +3008,16 @@ class TurboVASCtlTests(unittest.TestCase):
                 "      x-turbovas-replaces: none\n"
                 "      responses:\n"
                 "        '200':\n"
+                "          description: Future\n"
+                "  /future-body:\n"
+                "    get:\n"
+                "      summary: Future body\n"
+                "      operationId: getFutureBody\n"
+                "      x-turbovas-exposure: direct-read\n"
+                "      requestBody:\n"
+                "        required: true\n"
+                "      responses:\n"
+                "        '200':\n"
                 "          description: Future\n",
                 encoding="utf-8",
             )
@@ -3011,6 +3026,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(summary["alignment_status"], "warn")
         self.assertEqual(summary["missing_operation_summaries"], ["GET /future-direct"])
+        self.assertEqual(summary["operations_with_request_bodies"], ["GET /future-body"])
         self.assertIn(
             {
                 "operation": "GET /future-metadata",

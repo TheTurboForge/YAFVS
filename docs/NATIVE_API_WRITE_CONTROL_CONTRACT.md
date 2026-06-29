@@ -57,6 +57,80 @@ Before any scope write route is implemented, the contract must state:
 `generate_scope_report` remains a separate report-generation workflow. It must
 not be folded into the first scope metadata-write slice.
 
+### First-Slice Scope Write Semantics
+
+The first live scope write slice should expose only metadata and membership
+mutations for non-global, non-predefined scopes:
+
+- `POST /api/v1/scopes` creates a normal user scope.
+- `PATCH /api/v1/scopes/{scope_id}` modifies mutable metadata and, when
+  provided, replaces target and host membership.
+- `DELETE /api/v1/scopes/{scope_id}` deletes only scopes with no generated
+  scope-report history.
+
+Inherited behavior anchors:
+
+- `components/gvmd/src/manage_sql_scopes.c:create_scope` validates name,
+  protection requirement, target UUIDs, host UUIDs, sets owner from the current
+  user, inserts `predefined=0` and `is_global=0`, then replaces target and host
+  membership.
+- `modify_scope` updates metadata and replaces target or host membership only
+  for non-global scopes; inherited GMP also blocks renaming predefined scopes.
+- `delete_scope` deletes non-predefined scope membership and the scope row.
+- `generate_scope_report` starts a transaction, creates `scope_reports` and
+  `scope_report_sources`, and recomputes counts and metrics. It is report
+  generation, not a metadata write.
+
+Request shape:
+
+- Create body: `name` is required and non-empty; `comment` is optional;
+  `protection_requirement` is optional and defaults to `normal`; `target_ids`
+  and `host_ids` are optional arrays and default to empty lists.
+- Patch body: `name`, `comment`, and `protection_requirement` are optional;
+  absent `target_ids` or `host_ids` preserve existing membership; present arrays
+  fully replace that membership, including an empty array clearing it.
+- Delete has no request body.
+- IDs are UUID strings. Duplicate IDs in a membership array are rejected rather
+  than silently collapsed.
+
+Validation and state rules:
+
+- Native live writes require an authenticated operator. OpenAPI metadata must
+  use `x-turbovas-operator-identity: proxied-session-operator` for the browser
+  bridge or `direct-token-operator` for direct API access. `service-admin-dev-only`
+  is allowed only for preview/scaffold operations, not live scope writes.
+- Ownership for create is `request-operator-owner`; patch and delete preserve
+  the existing owner. The write implementation must not create anonymous,
+  fallback, or global-admin-owned scopes accidentally.
+- The first slice rejects global or predefined scope mutation with a state
+  conflict. Special global-scope editing can be designed later if it proves
+  useful.
+- Target and host UUIDs must exist and must be visible to the authenticated
+  operator under the active authorization model. Missing or unauthorized
+  references are rejected before membership changes are committed.
+- Create, patch, and delete run in a single transaction. Failed validation must
+  leave scope metadata and membership unchanged.
+- Delete rejects scopes that have generated scope reports so historical scope
+  evidence is not silently orphaned or destroyed. Scope-report deletion remains
+  a separate design.
+
+Response and audit posture:
+
+- Create returns `201` with the resulting `ScopeItem` JSON and a `Location`
+  header. Patch returns `200` with the resulting `ScopeItem`. Delete returns
+  `204`.
+- Repeating the same patch body after success is idempotent. Repeating delete
+  after success returns `404`.
+- Audit/log fields may include operation, route template, request ID, operator
+  principal ID, scope UUID, membership counts, and result class. Logs must not
+  include bearer tokens, session cookies, credentials, or private network
+  details.
+- Expected error classes are `400` for malformed bodies or invalid enum/UUID
+  arrays, `401`/`403` for missing or unauthorized operators, `404` for missing
+  scopes or references when non-disclosure is required, `409` for global,
+  predefined, duplicate-membership, or scope-report-history conflicts, and `500`
+  only for unexpected persistence failures.
+
 Current checks:
 
 - `just native-api-client-contract --status-only --json`

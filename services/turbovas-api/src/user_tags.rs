@@ -22,7 +22,8 @@ pub(crate) fn catalog_user_tags_sql() -> &'static str {
               coalesce(t.comment, '') AS comment
          FROM tags t
          JOIN tag_resources tr ON tr.tag = t.id
-        WHERE lower(tr.resource_uuid) = ANY($1::text[])
+        WHERE (lower(tr.resource_uuid) = ANY($1::text[])
+               OR ($3::integer IS NOT NULL AND tr.resource = $3))
           AND tr.resource_type = $2
           AND coalesce(t.active, 0) = 1
         ORDER BY t.name ASC, t.uuid ASC;"#
@@ -34,13 +35,14 @@ pub(crate) async fn catalog_user_tags(
     resource_id: &str,
 ) -> Result<Vec<ReportUserTag>, ApiError> {
     let resource_ids = vec![resource_id.to_string()];
-    catalog_user_tags_for_aliases(client, resource_type, &resource_ids).await
+    catalog_user_tags_for_aliases_and_row_id(client, resource_type, &resource_ids, None).await
 }
 
-pub(crate) async fn catalog_user_tags_for_aliases(
+pub(crate) async fn catalog_user_tags_for_aliases_and_row_id(
     client: &Client,
     resource_type: &str,
     resource_ids: &[String],
+    resource_row_id: Option<i32>,
 ) -> Result<Vec<ReportUserTag>, ApiError> {
     let normalized_ids: Vec<String> = resource_ids
         .iter()
@@ -48,11 +50,14 @@ pub(crate) async fn catalog_user_tags_for_aliases(
         .filter(|resource_id| !resource_id.is_empty())
         .map(|resource_id| resource_id.to_ascii_lowercase())
         .collect();
-    if normalized_ids.is_empty() {
+    if normalized_ids.is_empty() && resource_row_id.is_none() {
         return Ok(Vec::new());
     }
     let rows = client
-        .query(catalog_user_tags_sql(), &[&normalized_ids, &resource_type])
+        .query(
+            catalog_user_tags_sql(),
+            &[&normalized_ids, &resource_type, &resource_row_id],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, resource_type, "catalog user-tag query failed");

@@ -20,7 +20,7 @@ use crate::{
     nvt_payloads::{NvtEpssItem, nvt_epss_from_row, nvt_max_severity_from_row},
     path_ids::{validate_cpe_id, validate_cve_id, validate_nvt_oid},
     query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
-    user_tags::{ReportUserTag, catalog_user_tags, catalog_user_tags_for_aliases},
+    user_tags::{ReportUserTag, catalog_user_tags, catalog_user_tags_for_aliases_and_row_id},
 };
 
 #[derive(Debug, Serialize)]
@@ -165,6 +165,7 @@ pub(crate) async fn cpe_catalog_detail(
     let row = client
         .query_opt(
             r#"SELECT c.uuid AS id,
+                      c.id AS internal_id,
                       c.name AS name,
                       coalesce(c.comment, '') AS comment,
                       coalesce(c.title, '') AS title,
@@ -185,6 +186,7 @@ pub(crate) async fn cpe_catalog_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
+    let cpe_internal_id: i32 = row.get("internal_id");
     let cpe_uuid: String = row.get("id");
     let cpe_name: String = row.get("name");
     let cves = client
@@ -223,7 +225,13 @@ pub(crate) async fn cpe_catalog_detail(
         .map(|row| row.get("deprecated_by"));
 
     let cpe_tag_ids = vec![cpe_uuid, cpe_name.clone()];
-    let user_tags = catalog_user_tags_for_aliases(&client, "cpe", &cpe_tag_ids).await?;
+    let user_tags = catalog_user_tags_for_aliases_and_row_id(
+        &client,
+        "cpe",
+        &cpe_tag_ids,
+        Some(cpe_internal_id),
+    )
+    .await?;
     Ok(Json(CatalogCpeDetail {
         item: catalog_cpe_from_row(&row, cves, deprecated_by),
         user_tags,

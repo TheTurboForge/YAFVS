@@ -254,7 +254,10 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
 }
 
 fn direct_api_segments_are_nonempty(parts: &[&str]) -> bool {
-    parts.iter().skip(4).all(|part| !part.is_empty())
+    parts
+        .iter()
+        .skip(4)
+        .all(|part| !part.is_empty() && *part != "." && *part != "..")
 }
 
 fn direct_api_wildcard_detail_path_is_allowed(path: &str) -> bool {

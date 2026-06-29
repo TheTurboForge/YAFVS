@@ -5422,10 +5422,9 @@ def rust_direct_scope_report_section_templates(function_body: str) -> list[str]:
     )
 
 
-def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[str]:
+def rust_direct_api_source(repo_root: Path | None) -> str:
     if repo_root is None:
-        return []
-    source = ""
+        return ""
     for relative_path in (
         "services/turbovas-api/src/direct_api.rs",
         "services/turbovas-api/src/main.rs",
@@ -5435,8 +5434,45 @@ def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[s
         except OSError:
             continue
         if rust_source_function_body(candidate, "direct_api_v1_path_is_allowed"):
-            source = candidate
-            break
+            return candidate
+    return ""
+
+
+def rust_direct_api_segment_guard_summary(repo_root: Path | None) -> dict[str, Any]:
+    source = rust_direct_api_source(repo_root)
+
+    def guard_summary(name: str) -> dict[str, Any]:
+        body = rust_source_function_body(source, name)
+        return {
+            "name": name,
+            "present": bool(body),
+            "rejects_empty": any(
+                marker in body
+                for marker in ("!part.is_empty()", "!segment.is_empty()", "!tail.is_empty()")
+            ),
+            "rejects_dot": '!= "."' in body,
+            "rejects_dotdot": '!= ".."' in body,
+        }
+
+    guards = [
+        guard_summary("direct_api_segments_are_nonempty"),
+        guard_summary("direct_api_wildcard_tail_is_allowed"),
+    ]
+    missing = [
+        {"guard": guard["name"], "property": property_name}
+        for guard in guards
+        for property_name in ("present", "rejects_empty", "rejects_dot", "rejects_dotdot")
+        if not guard.get(property_name)
+    ]
+    return {
+        "alignment_status": "pass" if not missing else "warn",
+        "guards": guards,
+        "missing_guard_properties": missing,
+    }
+
+
+def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[str]:
+    source = rust_direct_api_source(repo_root)
     if not source:
         return []
 
@@ -5476,6 +5512,7 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
     openapi_marked = openapi_direct_endpoint_templates(repo_root)
     rust_routes = rust_native_api_route_templates(repo_root)
     rust_direct_allowed = rust_direct_api_allowed_endpoint_templates(repo_root)
+    segment_guard = rust_direct_api_segment_guard_summary(repo_root)
     inventory_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in inventory}
     scriptable_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in scriptable}
     openapi_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_marked}
@@ -5487,7 +5524,15 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
     untracked_rust_routes = [rust_route_by_normalized[key] for key in sorted(set(rust_route_by_normalized) - set(inventory_by_normalized))]
     missing_rust_direct = [scriptable_by_normalized[key] for key in sorted(set(scriptable_by_normalized) - set(rust_direct_by_normalized))]
     unexpected_rust_direct = [rust_direct_by_normalized[key] for key in sorted(set(rust_direct_by_normalized) - set(scriptable_by_normalized))]
-    drift = missing or unexpected or missing_rust_routes or untracked_rust_routes or missing_rust_direct or unexpected_rust_direct
+    drift = (
+        missing
+        or unexpected
+        or missing_rust_routes
+        or untracked_rust_routes
+        or missing_rust_direct
+        or unexpected_rust_direct
+        or segment_guard["alignment_status"] != "pass"
+    )
     return {
         "alignment_status": "pass" if not drift else "warn",
         "inventory_endpoint_count": len(inventory),
@@ -5508,6 +5553,7 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
         "untracked_rust_routes": untracked_rust_routes,
         "missing_rust_direct_allowlist": missing_rust_direct,
         "unexpected_rust_direct_allowlist": unexpected_rust_direct,
+        "segment_guard": segment_guard,
     }
 
 
@@ -6209,6 +6255,8 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "untracked_rust_route_count": len(direct_contract.get("untracked_rust_routes", [])) if isinstance(direct_contract, dict) else 0,
         "missing_rust_direct_allowlist_count": len(direct_contract.get("missing_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
         "unexpected_rust_direct_allowlist_count": len(direct_contract.get("unexpected_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
+        "segment_guard_alignment_status": direct_contract.get("segment_guard", {}).get("alignment_status", "unknown") if isinstance(direct_contract.get("segment_guard", {}), dict) else "unknown",
+        "segment_guard_missing_property_count": len(direct_contract.get("segment_guard", {}).get("missing_guard_properties", [])) if isinstance(direct_contract.get("segment_guard", {}), dict) else 0,
     }
     browser_proxy_contract = summary.get("browser_proxy_contract", {})
     compact_browser_proxy_contract = {
@@ -6320,6 +6368,8 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "untracked_rust_route_count": direct_contract.get("untracked_rust_route_count", 0),
             "missing_rust_direct_allowlist_count": direct_contract.get("missing_rust_direct_allowlist_count", 0),
             "unexpected_rust_direct_allowlist_count": direct_contract.get("unexpected_rust_direct_allowlist_count", 0),
+            "segment_guard_alignment_status": direct_contract.get("segment_guard_alignment_status", "unknown"),
+            "segment_guard_missing_property_count": direct_contract.get("segment_guard_missing_property_count", 0),
         },
         "browser_proxy_contract": {
             "alignment_status": browser_proxy_contract.get("alignment_status", "unknown"),

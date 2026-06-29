@@ -8796,11 +8796,20 @@ mod tests {
         assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes/."));
         assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes/.."));
         assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes/foo/../bar"));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/reports/."));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/reports/.."));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/tags/tag-id/.."));
         assert!(!direct_api_v1_path_is_allowed(
             "/api/v1/cert-bund-advisories/.."
         ));
         assert!(direct_api_v1_path_is_allowed(
             "/api/v1/scopes/scope-id/reports/report-id/metrics"
+        ));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/./reports/report-id/metrics"
+        ));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/scope-id/reports/../metrics"
         ));
         assert!(direct_api_v1_path_is_allowed(
             "/api/v1/scope-reports/scope-report-id"

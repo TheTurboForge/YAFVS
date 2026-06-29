@@ -1778,6 +1778,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "untracked_rust_route_count",
                 "missing_rust_direct_allowlist_count",
                 "unexpected_rust_direct_allowlist_count",
+                "segment_guard_alignment_status",
+                "segment_guard_missing_property_count",
             },
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
@@ -1786,6 +1788,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_rust_direct_allowlist_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["segment_guard_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["direct_api_contract"]["segment_guard_missing_property_count"], 0)
         self.assertEqual(
             set(status_only["details"]["browser_proxy_contract"]),
             {
@@ -1884,6 +1888,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["untracked_rust_routes"], [])
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
+        self.assertEqual(contract["segment_guard"]["alignment_status"], "pass")
+        self.assertEqual(contract["segment_guard"]["missing_guard_properties"], [])
         self.assertEqual(endpoints["/api/v1/reports"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/reports/{report_id}/results"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/scope-reports/{scope_report_id}"]["direct_access"], "scriptable_read")
@@ -2038,6 +2044,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 '    let parts = path.split(\'/\').collect::<Vec<_>>();\n'
                 '    matches!(parts.as_slice(), ["", "api", "v1", "reports"] | ["", "api", "v1", "feeds"] if direct_api_segments_are_nonempty(&parts))\n'
                 '}\n'
+                'fn direct_api_segments_are_nonempty(parts: &[&str]) -> bool {\n'
+                '    parts.iter().skip(4).all(|part| !part.is_empty())\n'
+                '}\n'
                 'fn direct_api_wildcard_detail_path_is_allowed(_path: &str) -> bool { false }\n',
                 encoding="utf-8",
             )
@@ -2050,6 +2059,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["untracked_rust_routes"], ["/api/v1/orphans"])
         self.assertEqual(summary["missing_rust_direct_allowlist"], ["/api/v1/targets"])
         self.assertEqual(summary["unexpected_rust_direct_allowlist"], ["/api/v1/feeds"])
+        missing_guard_properties = {
+            (item["guard"], item["property"])
+            for item in summary["segment_guard"]["missing_guard_properties"]
+        }
+        self.assertIn(("direct_api_segments_are_nonempty", "rejects_dot"), missing_guard_properties)
+        self.assertIn(("direct_api_segments_are_nonempty", "rejects_dotdot"), missing_guard_properties)
+        self.assertIn(("direct_api_wildcard_tail_is_allowed", "rejects_empty"), missing_guard_properties)
 
     def test_native_tooling_state_tracks_openapi_contract_alignment(self):
         root = Path(__file__).resolve().parents[2]

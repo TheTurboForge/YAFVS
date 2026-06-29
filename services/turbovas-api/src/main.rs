@@ -10,8 +10,6 @@ use axum::{
     middleware,
     routing::get,
 };
-use serde::Serialize;
-use tokio_postgres::Row;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod alerts;
@@ -44,6 +42,7 @@ mod row_helpers;
 mod scan_configs;
 mod scanner_assets;
 mod schedules;
+mod scope_payloads;
 mod tag_resource_helpers;
 mod tags;
 mod task_targets;
@@ -77,6 +76,7 @@ use result_payloads::*;
 use scan_configs::*;
 use scanner_assets::*;
 use schedules::*;
+use scope_payloads::*;
 use tag_resource_helpers::*;
 use tags::*;
 use task_targets::{TargetItem, TaskItem, target_from_row, task_from_row};
@@ -84,162 +84,6 @@ use tls_certificates::*;
 use trashcan::{TrashcanSummary, trashcan_summary_from_rows};
 use user_tags::*;
 use vulnerability_payloads::{VulnerabilityItem, vulnerability_from_row};
-
-#[derive(Debug, Serialize)]
-struct ScopeSummary {
-    id: String,
-    name: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportItem {
-    id: String,
-    name: String,
-    status: String,
-    scope: ScopeSummary,
-    protection_requirement: String,
-    source_report_count: i64,
-    source_target_count: i64,
-    member_host_count: i64,
-    evidence_host_count: i64,
-    missing_host_count: i64,
-    result_count: i64,
-    vulnerability_count: i64,
-    severity: SeverityCounts,
-    max_severity: f64,
-    latest_evidence_time: Option<String>,
-    excluded_candidate_host_count: i64,
-    creation_time: Option<String>,
-    modification_time: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportDetail {
-    #[serde(flatten)]
-    report: ScopeReportItem,
-    sources: Vec<ScopeReportSourceItem>,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportSourceItem {
-    id: String,
-    source_report_id: String,
-    target_id: String,
-    target_name: String,
-    task_id: String,
-    task_name: String,
-    scan_end: Option<String>,
-    selected: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportRetentionPolicyPreview {
-    mode: String,
-    destructive_actions: bool,
-    latest_completed_raw_report_retains_full_detail: bool,
-    detail_compacted_field: String,
-    aggregate_only_field: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportRetentionSummary {
-    source_report_count: i64,
-    current_full_fidelity_count: i64,
-    future_tiered_retention_candidate_count: i64,
-    detail_compacted_count: i64,
-    aggregate_only_count: i64,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportRetentionSource {
-    source_report_id: String,
-    target_id: String,
-    target_name: String,
-    task_id: String,
-    task_name: String,
-    scan_start: Option<String>,
-    scan_end: Option<String>,
-    selected_time: Option<String>,
-    result_count: i64,
-    vulnerability_count: i64,
-    max_severity: f64,
-    retention_state: String,
-    detail_compacted: bool,
-    aggregate_only: bool,
-    kept_as_latest: bool,
-    pinned_by_scope_report: bool,
-    future_tiered_retention_candidate: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportRetentionPlan {
-    id: String,
-    name: String,
-    scope: ScopeSummary,
-    generated_at: Option<String>,
-    policy: ScopeReportRetentionPolicyPreview,
-    summary: ScopeReportRetentionSummary,
-    sources: Vec<ScopeReportRetentionSource>,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeEntity {
-    id: String,
-    name: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeCandidateHost {
-    id: String,
-    name: String,
-    target_id: Option<String>,
-    target_name: Option<String>,
-    source_report_id: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeReportReference {
-    id: String,
-    name: String,
-    creation_time: Option<String>,
-    latest_evidence_time: Option<String>,
-    source_report_count: i64,
-    member_host_count: i64,
-    evidence_host_count: i64,
-    missing_host_count: i64,
-    result_count: i64,
-    vulnerability_count: i64,
-    max_severity: f64,
-}
-
-#[derive(Debug, Serialize)]
-struct ScopeItem {
-    id: String,
-    name: String,
-    comment: String,
-    protection_requirement: String,
-    protection_requirement_label: String,
-    predefined: bool,
-    global: bool,
-    creation_time: Option<String>,
-    modification_time: Option<String>,
-    target_count: i64,
-    host_count: i64,
-    scope_report_count: i64,
-    targets: Vec<ScopeEntity>,
-    hosts: Vec<ScopeEntity>,
-    candidate_hosts: Vec<ScopeCandidateHost>,
-    scope_reports: Vec<ScopeReportReference>,
-}
-
-#[derive(Debug, Serialize)]
-struct SeverityCounts {
-    high: i64,
-    medium: i64,
-    low: i64,
-    log: i64,
-    false_positive: i64,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
@@ -7065,145 +6909,6 @@ async fn raw_report_exists(
     Ok(row.get::<_, bool>(0))
 }
 
-fn scope_from_row(
-    row: &Row,
-    targets: Vec<ScopeEntity>,
-    hosts: Vec<ScopeEntity>,
-    candidate_hosts: Vec<ScopeCandidateHost>,
-    scope_reports: Vec<ScopeReportReference>,
-) -> ScopeItem {
-    let protection = row.get::<_, String>(5);
-    let predefined: i32 = row.get(6);
-    let global: i32 = row.get(7);
-    ScopeItem {
-        id: row.get(2),
-        name: row.get(3),
-        comment: row.get(4),
-        protection_requirement: protection.clone(),
-        protection_requirement_label: normalize_protection_requirement(&protection),
-        predefined: predefined != 0,
-        global: global != 0,
-        creation_time: unix_ts_to_rfc3339(row.get(8)),
-        modification_time: unix_ts_to_rfc3339(row.get(9)),
-        target_count: row.get(10),
-        host_count: row.get(11),
-        scope_report_count: row.get(12),
-        targets,
-        hosts,
-        candidate_hosts,
-        scope_reports,
-    }
-}
-
-fn scope_entity_from_row(row: &Row) -> ScopeEntity {
-    ScopeEntity {
-        id: row.get(0),
-        name: row.get(1),
-    }
-}
-
-fn scope_candidate_host_from_row(row: &Row) -> ScopeCandidateHost {
-    let name: String = row.get(0);
-    ScopeCandidateHost {
-        id: name.clone(),
-        name,
-        target_id: row.get(1),
-        target_name: row.get(2),
-        source_report_id: row.get(3),
-    }
-}
-
-fn scope_report_reference_from_row(row: &Row) -> ScopeReportReference {
-    let scope_name: String = row.get(1);
-    ScopeReportReference {
-        id: row.get(0),
-        name: format!("{scope_name} scope report"),
-        creation_time: unix_ts_to_rfc3339(row.get(2)),
-        latest_evidence_time: unix_ts_to_rfc3339(row.get(3)),
-        source_report_count: row.get(4),
-        member_host_count: row.get(5),
-        evidence_host_count: row.get(6),
-        missing_host_count: row.get(7),
-        result_count: row.get(8),
-        vulnerability_count: row.get(9),
-        max_severity: row.get(10),
-    }
-}
-
-fn scope_report_from_row(row: &Row) -> ScopeReportItem {
-    let scope_name: String = row.get(3);
-    ScopeReportItem {
-        id: row.get(1),
-        name: format!("{scope_name} scope report"),
-        status: "Done".to_string(),
-        scope: ScopeSummary {
-            id: row.get(2),
-            name: scope_name,
-        },
-        protection_requirement: normalize_protection_requirement(&row.get::<_, String>(4)),
-        source_report_count: row.get(5),
-        source_target_count: row.get(6),
-        member_host_count: row.get(7),
-        evidence_host_count: row.get(8),
-        missing_host_count: row.get(9),
-        result_count: row.get(10),
-        vulnerability_count: row.get(11),
-        max_severity: row.get(12),
-        severity: SeverityCounts {
-            high: row.get(17),
-            medium: row.get(18),
-            low: row.get(19),
-            log: row.get(20),
-            false_positive: row.get(21),
-        },
-        latest_evidence_time: unix_ts_to_rfc3339(row.get(13)),
-        excluded_candidate_host_count: row.get(14),
-        creation_time: unix_ts_to_rfc3339(row.get(15)),
-        modification_time: unix_ts_to_rfc3339(row.get(16)),
-    }
-}
-
-fn scope_report_source_from_row(row: &Row) -> ScopeReportSourceItem {
-    let id: i64 = row.get("id");
-    ScopeReportSourceItem {
-        id: id.to_string(),
-        source_report_id: row.get("source_report_id"),
-        target_id: row.get("target_id"),
-        target_name: row.get("target_name"),
-        task_id: row.get("task_id"),
-        task_name: row.get("task_name"),
-        scan_end: unix_ts_to_rfc3339(row.get("scan_end")),
-        selected: true,
-    }
-}
-
-fn scope_report_retention_source_from_row(row: &Row) -> ScopeReportRetentionSource {
-    let kept_as_latest: bool = row.get("kept_as_latest");
-    ScopeReportRetentionSource {
-        source_report_id: row.get("source_report_uuid"),
-        target_id: row.get("target_uuid"),
-        target_name: row.get("target_name"),
-        task_id: row.get("task_uuid"),
-        task_name: row.get("task_name"),
-        scan_start: unix_ts_to_rfc3339(row.get("scan_start")),
-        scan_end: unix_ts_to_rfc3339(row.get("scan_end")),
-        selected_time: unix_ts_to_rfc3339(row.get("selected_time")),
-        result_count: row.get("result_count"),
-        vulnerability_count: row.get("vulnerability_count"),
-        max_severity: row.get("max_severity"),
-        retention_state: if kept_as_latest {
-            "current_full_fidelity".to_string()
-        } else {
-            "future_tiered_retention_candidate".to_string()
-        },
-        detail_compacted: false,
-        aggregate_only: false,
-        kept_as_latest,
-        pinned_by_scope_report: true,
-        future_tiered_retention_candidate: !kept_as_latest,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use axum::{
@@ -8432,13 +8137,13 @@ mod tests {
     fn scope_report_handlers_do_not_trigger_scanner_or_task_control() {
         let source = include_str!("main.rs");
         let start = "async fn scope_report_results(";
-        let end = "\n}\n\nfn scope_report_from_row";
+        let end = "\n}\n\n#[cfg(test)]";
         let handlers = source
             .split_once(start)
             .expect("scope report handlers must exist")
             .1
             .split_once(end)
-            .expect("scope report handlers must precede row mapping helpers")
+            .expect("scope report handlers must precede tests")
             .0;
         let lower_handlers = handlers.to_ascii_lowercase();
 

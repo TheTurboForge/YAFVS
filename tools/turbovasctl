@@ -2183,7 +2183,7 @@ def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
     env.setdefault(TURBOVAS_API_DIRECT_HOST_ENV, TURBOVAS_API_DIRECT_DEFAULT_HOST)
     env.setdefault(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT)
     env.setdefault(TURBOVAS_API_DIRECT_BIND_ENV, f"0.0.0.0:{TURBOVAS_API_DIRECT_CONTAINER_PORT}")
-    if not env.get(TURBOVAS_API_BEARER_TOKEN_ENV):
+    if not env.get(TURBOVAS_API_BEARER_TOKEN_ENV) and not env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV):
         read_or_create_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
         env[TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE
     return env
@@ -2412,6 +2412,60 @@ def native_api_direct_token_sources(repo_root: Path, env: dict[str, str]) -> tup
     return tuple(sources), secret_path, secret_present
 
 
+def native_api_direct_host_token_file_path(repo_root: Path, token_file: str) -> Path:
+    if token_file == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE:
+        return runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    return Path(token_file).expanduser()
+
+
+def native_api_direct_token_file_metadata(repo_root: Path, env: dict[str, str]) -> dict[str, Any]:
+    configured_token_file = env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV, "").strip()
+    if configured_token_file:
+        host_path = native_api_direct_host_token_file_path(repo_root, configured_token_file)
+        metadata = runtime_secret_file_metadata(host_path)
+        source = "runtime-secret-file" if configured_token_file == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE else "configured-token-file"
+        return {
+            **metadata,
+            "source": source,
+            "configured_value": configured_token_file,
+            "host_path": str(host_path),
+            "host_metadata_available": True,
+        }
+
+    running_token_file = running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+    if running_token_file:
+        if running_token_file == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE:
+            host_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+            metadata = runtime_secret_file_metadata(host_path)
+            return {
+                **metadata,
+                "source": "running-container-token-file",
+                "configured_value": running_token_file,
+                "host_path": str(host_path),
+                "host_metadata_available": True,
+            }
+        return {
+            "exists": None,
+            "mode": None,
+            "permission_ok": None,
+            "group_or_world_accessible": None,
+            "source": "running-container-token-file",
+            "configured_value": running_token_file,
+            "host_path": None,
+            "host_metadata_available": False,
+        }
+
+    host_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    metadata = runtime_secret_file_metadata(host_path)
+    return {
+        **metadata,
+        "source": "runtime-secret-default",
+        "configured_value": None,
+        "host_path": str(host_path),
+        "host_metadata_available": True,
+    }
+
+
 def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | None = None) -> list[dict[str, Any]]:
     env = runtime_env(repo_root) if env is None else env
     findings: list[dict[str, Any]] = []
@@ -2494,7 +2548,7 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
     token_sources, secret_path, secret_present = native_api_direct_token_sources(repo_root, env)
     configured_token = env.get(TURBOVAS_API_BEARER_TOKEN_ENV, "")
     configured_token_ok = direct_api_bearer_token_is_acceptable(configured_token) if configured_token else None
-    secret_metadata = runtime_secret_file_metadata(secret_path)
+    secret_metadata = native_api_direct_token_file_metadata(repo_root, env)
     secret_file_used = "configured-token-file" in token_sources or "running-container-token-file" in token_sources
     environment_token_used = "environment" in token_sources or "running-container-env" in token_sources
     exposure_enabled = configured or bool(running_bindings)
@@ -2510,6 +2564,10 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
         "configured_environment_token_ok": configured_token_ok,
         "runtime_secret": str(secret_path),
         "runtime_secret_present": secret_present,
+        "token_file_source": secret_metadata["source"],
+        "token_file_configured_value": secret_metadata["configured_value"],
+        "token_file_host_path": secret_metadata["host_path"],
+        "token_file_host_metadata_available": secret_metadata["host_metadata_available"],
         "runtime_secret_mode": secret_metadata["mode"],
         "runtime_secret_permission_ok": secret_metadata["permission_ok"],
         "runtime_secret_group_or_world_accessible": secret_metadata["group_or_world_accessible"],
@@ -2541,12 +2599,21 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
                 details=auth_details,
             )
         )
-    elif secret_file_used and secret_metadata["exists"] and not secret_metadata["permission_ok"]:
+    elif secret_file_used and secret_metadata["host_metadata_available"] and not secret_metadata["permission_ok"]:
         findings.append(
             finding(
                 "fail",
                 "production.native-api-direct.auth-boundary",
-                "Direct native API exposure uses the runtime bearer-token file, but the file is group/world accessible.",
+                "Direct native API exposure uses a bearer-token file that is missing or group/world accessible on the host.",
+                details=auth_details,
+            )
+        )
+    elif secret_file_used and not secret_metadata["host_metadata_available"]:
+        findings.append(
+            finding(
+                "warn",
+                "production.native-api-direct.auth-boundary",
+                "Direct native API exposure uses a running container bearer-token file path that the host posture helper cannot inspect.",
                 details=auth_details,
             )
         )
@@ -10393,8 +10460,12 @@ def command_runtime_native_api_direct_token(repo_root: Path, *, rotate: bool) ->
 def command_runtime_native_api_direct_bootstrap(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     env = native_api_direct_runtime_env(repo_root)
-    token = native_api_direct_bearer_token(repo_root, env)
-    token_source = "environment" if env.get(TURBOVAS_API_BEARER_TOKEN_ENV) else "runtime-secret-file"
+    try:
+        token = native_api_direct_bearer_token(repo_root, env)
+    except OSError:
+        token = ""
+    token_file_metadata = native_api_direct_token_file_metadata(repo_root, env)
+    token_source = "environment" if env.get(TURBOVAS_API_BEARER_TOKEN_ENV) else token_file_metadata["source"]
     secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
 
     findings.append(native_api_direct_config_shape_finding(env, check="native-api-direct-bootstrap.config-shape"))
@@ -10427,8 +10498,7 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path) -> dict[str, An
     )
 
     token_ok = direct_api_bearer_token_is_acceptable(token)
-    secret_metadata = runtime_secret_file_metadata(secret_path)
-    token_permission_ok = token_source != "runtime-secret-file" or secret_metadata["permission_ok"]
+    token_permission_ok = token_source == "environment" or not token_file_metadata["host_metadata_available"] or token_file_metadata["permission_ok"]
     token_status = "pass" if token_ok and token_permission_ok else "fail"
     findings.append(
         finding(
@@ -10437,14 +10507,17 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path) -> dict[str, An
             "Direct native API bootstrap has a bearer token that satisfies the local strength contract and is not group/world accessible."
             if token_status == "pass"
             else "Direct native API bootstrap bearer token is missing, weak, or group/world accessible.",
-            str(secret_path) if token_source == "runtime-secret-file" else None,
+            token_file_metadata["host_path"] if token_source != "environment" else None,
             {
                 "token_source": token_source,
                 "minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
                 "runtime_secret": str(secret_path),
-                "runtime_secret_mode": secret_metadata["mode"],
-                "runtime_secret_permission_ok": secret_metadata["permission_ok"],
-                "runtime_secret_group_or_world_accessible": secret_metadata["group_or_world_accessible"],
+                "token_file_configured_value": token_file_metadata["configured_value"],
+                "token_file_host_path": token_file_metadata["host_path"],
+                "token_file_host_metadata_available": token_file_metadata["host_metadata_available"],
+                "runtime_secret_mode": token_file_metadata["mode"],
+                "runtime_secret_permission_ok": token_file_metadata["permission_ok"],
+                "runtime_secret_group_or_world_accessible": token_file_metadata["group_or_world_accessible"],
                 "token_value_reported": False,
             },
         )

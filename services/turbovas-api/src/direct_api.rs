@@ -117,7 +117,7 @@ pub(crate) async fn require_direct_api_auth(
         if !direct_api_v1_path_is_allowed(&path) {
             audit_reason = Some("route_not_allowlisted");
             ApiError::NotFound.into_response()
-        } else if direct_api_v1_method_is_allowed(&method, &path) {
+        } else if direct_api_v1_method_is_allowed(&method, &path, auth.write_control_enabled()) {
             if direct_api_request_shape_is_allowed_for_method(&method, &request) {
                 if let Some(_slot) = auth.try_acquire_request_slot() {
                     attach_direct_api_operator_extension(&mut request, &auth);
@@ -281,19 +281,27 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
     )
 }
 
-pub(crate) fn direct_api_v1_method_is_allowed(method: &Method, path: &str) -> bool {
+pub(crate) fn direct_api_v1_method_is_allowed(
+    method: &Method,
+    path: &str,
+    write_control_enabled: bool,
+) -> bool {
     if !direct_api_v1_path_is_allowed(path) {
         return false;
     }
-    method == Method::GET || direct_api_v1_write_method_path_is_allowed(method, path)
+    method == Method::GET
+        || (write_control_enabled && direct_api_v1_write_method_path_is_allowed(method, path))
 }
 
 fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bool {
-    if !matches!(method, &Method::POST | &Method::PATCH | &Method::DELETE) {
-        return false;
+    let parts = path.split('/').collect::<Vec<_>>();
+    match (method, parts.as_slice()) {
+        (&Method::POST, ["", "api", "v1", "scopes"]) => true,
+        (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scopes", scope_id]) => {
+            !scope_id.is_empty() && *scope_id != "." && *scope_id != ".."
+        }
+        _ => false,
     }
-    let _ = path;
-    false
 }
 
 fn direct_api_segments_are_nonempty(parts: &[&str]) -> bool {

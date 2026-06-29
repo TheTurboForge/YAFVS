@@ -2271,7 +2271,8 @@ mod tests {
     fn direct_api_method_classifier_keeps_write_methods_closed_until_allowlisted() {
         assert!(direct_api_v1_method_is_allowed(
             &axum::http::Method::GET,
-            "/api/v1/scopes"
+            "/api/v1/scopes",
+            false
         ));
         for method in [
             axum::http::Method::POST,
@@ -2280,13 +2281,40 @@ mod tests {
             axum::http::Method::PUT,
         ] {
             assert!(
-                !direct_api_v1_method_is_allowed(&method, "/api/v1/scopes"),
+                !direct_api_v1_method_is_allowed(&method, "/api/v1/scopes", false),
                 "{method} should stay closed until direct write-control exposure is explicit"
             );
         }
         assert!(!direct_api_v1_method_is_allowed(
             &axum::http::Method::GET,
-            "/api/v1/internal-preview"
+            "/api/v1/internal-preview",
+            false
+        ));
+
+        assert!(direct_api_v1_method_is_allowed(
+            &axum::http::Method::POST,
+            "/api/v1/scopes",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &axum::http::Method::PATCH,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &axum::http::Method::DELETE,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &axum::http::Method::PUT,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &axum::http::Method::PATCH,
+            "/api/v1/scopes/../",
+            true
         ));
     }
 

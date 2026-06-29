@@ -19,6 +19,7 @@ const DIRECT_API_MAX_IN_FLIGHT_REQUESTS: usize = 32;
 pub(crate) struct DirectApiAuth {
     pub(crate) token: String,
     operator: Option<DirectApiOperator>,
+    write_control_enabled: bool,
     in_flight_requests: Arc<AtomicUsize>,
     max_in_flight_requests: usize,
 }
@@ -51,6 +52,7 @@ impl DirectApiAuth {
         Self {
             token,
             operator: None,
+            write_control_enabled: false,
             in_flight_requests: Arc::new(AtomicUsize::new(0)),
             max_in_flight_requests,
         }
@@ -67,6 +69,10 @@ impl DirectApiAuth {
 
     pub(crate) fn operator(&self) -> Option<&DirectApiOperator> {
         self.operator.as_ref()
+    }
+
+    pub(crate) fn write_control_enabled(&self) -> bool {
+        self.write_control_enabled
     }
 
     pub(crate) fn try_acquire_request_slot(&self) -> Option<DirectApiRequestSlot> {

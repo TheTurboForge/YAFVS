@@ -32,8 +32,10 @@ mod path_ids;
 mod port_lists;
 mod query;
 mod report_configs;
+mod report_evidence_handlers;
 mod report_evidence_payloads;
 mod report_formats;
+mod report_helpers;
 mod report_payloads;
 mod request_ids;
 mod request_shapes;
@@ -69,8 +71,10 @@ use path_ids::*;
 use port_lists::*;
 use query::*;
 use report_configs::*;
+use report_evidence_handlers::report_errors;
 use report_evidence_payloads::*;
 use report_formats::*;
+use report_helpers::raw_report_exists;
 use report_payloads::{ReportItem, report_from_row};
 use result_payloads::*;
 use scan_configs::*;
@@ -4134,70 +4138,6 @@ async fn report_cves(
     }))
 }
 
-async fn report_errors(
-    State(state): State<AppState>,
-    Path(report_id): Path<String>,
-    ApiQuery(query): ApiQuery<CollectionQuery>,
-) -> Result<Json<Collection<ErrorMessageItem>>, ApiError> {
-    parse_uuid(&report_id)?;
-    let params = normalize_collection_query(query, REPORT_ERROR_DEFAULT_SORT)?;
-    let sort_sql = sort_clause(&params.sort, REPORT_ERROR_SORT_FIELDS)?;
-    let sql = format!(
-        "WITH selected_report AS (\n\
-             SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)\n\
-         ),\n\
-         error_rows AS (\n\
-             SELECT r.uuid AS id,\n\
-                    lower(coalesce(nullif(r.host, ''), r.hostname, '')) AS host,\n\
-                    coalesce(r.port, '') AS port,\n\
-                    coalesce(r.nvt, '') AS nvt_oid,\n\
-                    coalesce(r.description, '') AS description,\n\
-                    sr.uuid AS source_report_id,\n\
-                    coalesce(r.date, 0)::bigint AS created_at_unix\n\
-               FROM selected_report sr\n\
-               JOIN results r ON r.report = sr.id\n\
-              WHERE (r.type = 'Error Message' OR coalesce(r.severity, 0) = -3)\n\
-                AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''\n\
-         ),\n\
-         filtered AS (\n\
-             SELECT * FROM error_rows\n\
-              WHERE ($2 = ''\n\
-                     OR lower(id) LIKE '%' || lower($2) || '%'\n\
-                     OR lower(host) LIKE '%' || lower($2) || '%'\n\
-                     OR lower(port) LIKE '%' || lower($2) || '%'\n\
-                     OR lower(nvt_oid) LIKE '%' || lower($2) || '%'\n\
-                     OR lower(description) LIKE '%' || lower($2) || '%')\n\
-         )\n\
-         SELECT count(*) OVER()::bigint AS total, * FROM filtered\n\
-          ORDER BY {sort_sql}, id ASC LIMIT $3 OFFSET $4;"
-    );
-    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
-    let rows = client
-        .query(
-            &sql,
-            &[
-                &report_id,
-                &params.filter,
-                &params.page_size,
-                &params.offset,
-            ],
-        )
-        .await
-        .map_err(|error| {
-            tracing::warn!(%error, "raw report error-message query failed");
-            ApiError::Database
-        })?;
-    if rows.is_empty() && !raw_report_exists(&client, &report_id).await? {
-        return Err(ApiError::NotFound);
-    }
-    let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
-    let items = rows.iter().map(error_message_from_row).collect();
-    Ok(Json(Collection {
-        page: params.page_info(total),
-        items,
-    }))
-}
-
 async fn report_detail(
     State(state): State<AppState>,
     Path(report_id): Path<String>,
@@ -6895,20 +6835,6 @@ async fn scope_report_exists(
     Ok(row.get::<_, bool>(0))
 }
 
-async fn raw_report_exists(
-    client: &tokio_postgres::Client,
-    report_id: &str,
-) -> Result<bool, ApiError> {
-    let row = client
-        .query_one(
-            "SELECT EXISTS (SELECT 1 FROM reports WHERE lower(uuid) = lower($1));",
-            &[&report_id],
-        )
-        .await
-        .map_err(|_| ApiError::Database)?;
-    Ok(row.get::<_, bool>(0))
-}
-
 #[cfg(test)]
 mod tests {
     use axum::{
@@ -7878,7 +7804,11 @@ mod tests {
 
     #[test]
     fn collection_handlers_use_api_query_contract_extractor() {
-        let source = include_str!("main.rs");
+        let source = [
+            include_str!("main.rs"),
+            include_str!("report_evidence_handlers.rs"),
+        ]
+        .join("\n");
         let expected_collection_count = PRIORITY_COLLECTION_CONTRACTS.len()
             + REPORT_EVIDENCE_COLLECTION_CONTRACTS.len()
             + SCOPE_TASK_TARGET_COLLECTION_CONTRACTS.len()

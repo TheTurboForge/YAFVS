@@ -11045,6 +11045,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scope-write-post-delete",
             "native-api-direct.tag-write-create",
             "native-api-direct.tag-write-update",
+            "native-api-direct.tag-write-query-denied",
             "native-api-direct.tag-delete-body-denied",
             "native-api-direct.tag-write-delete",
             "native-api-direct.tag-write-post-delete",
@@ -11213,6 +11214,15 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             patch_json, patch_status = parse_json_output_with_http_status(patch)
             patch_ok = patch.returncode == 0 and patch_status == 200 and isinstance(patch_json, dict) and patch_json.get("id") == tag_id and patch_json.get("value") == "updated" and patch_json.get("active") is False
             findings.append(native_api_probe_finding("pass" if patch_ok else "fail", "native-api-direct.tag-write-update", "Direct write-control patched temporary tag metadata." if patch_ok else "Direct write-control failed to patch temporary tag metadata.", patch, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env, method="PATCH", body=patch_body, extra_headers=content_type), patch_json, {"http_status": patch_status, "tag_id": tag_id, **summarize_native_api_response(patch_json)}))
+
+            query_patch_body = json.dumps(
+                {"value": "query-denied"},
+                separators=(",", ":"),
+            )
+            query_patch = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}?unexpected=1", token=token, env=env, method="PATCH", body=query_patch_body, extra_headers=content_type)
+            query_patch_json, query_patch_status = parse_json_output_with_http_status(query_patch)
+            query_patch_ok = query_patch.returncode == 0 and query_patch_status == 413 and isinstance(query_patch_json, dict) and query_patch_json.get("error", {}).get("code") == "request_too_large"
+            findings.append(native_api_probe_finding("pass" if query_patch_ok else "fail", "native-api-direct.tag-write-query-denied", "Direct write-control rejects non-GET query strings before tag mutation." if query_patch_ok else "Direct write-control did not reject a non-GET query string before tag mutation.", query_patch, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}?unexpected=1", token=token, env=env, method="PATCH", body=query_patch_body, extra_headers=content_type), query_patch_json, {"http_status": query_patch_status, "tag_id": tag_id, **summarize_native_api_response(query_patch_json)}))
 
             delete_body = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env, method="DELETE", body="probe-body", extra_headers=content_type)
             delete_body_json, delete_body_status = parse_json_output_with_http_status(delete_body)
@@ -11850,11 +11860,19 @@ def validate_native_api_request_body_json(body_json: str) -> str:
     return json.dumps(parsed, separators=(",", ":"))
 
 
-def validate_native_api_request_shape(method: str, *, body: str | None, allow_write_control: bool) -> None:
+def validate_native_api_request_shape(
+    method: str,
+    *,
+    body: str | None,
+    allow_write_control: bool,
+    request_path: str | None = None,
+) -> None:
     if method == "GET" and body is not None:
         raise ValueError("GET native API requests must not include a request body")
     if method == "DELETE" and body is not None:
         raise ValueError("DELETE native API requests must not include a request body")
+    if method != "GET" and request_path is not None and urllib.parse.urlsplit(request_path).query:
+        raise ValueError("non-GET native API requests must not include query parameters")
     if method != "GET" and not allow_write_control:
         raise ValueError("non-GET native API requests require --allow-write-control")
     if body is not None and not allow_write_control:
@@ -11917,7 +11935,12 @@ def command_native_api_request(
         return make_result("native-api-request", repo_root, "Native API request rejected before runtime access.", findings)
     try:
         body = validate_native_api_request_body_json(body_json) if body_json is not None else None
-        validate_native_api_request_shape(method, body=body, allow_write_control=allow_write_control)
+        validate_native_api_request_shape(
+            method,
+            body=body,
+            allow_write_control=allow_write_control,
+            request_path=request_path if direct else None,
+        )
     except ValueError as exc:
         findings.append(
             finding(

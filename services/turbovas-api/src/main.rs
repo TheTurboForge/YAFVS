@@ -2550,6 +2550,17 @@ mod tests {
             &patch
         ));
 
+        let patch_query = Request::builder()
+            .method("PATCH")
+            .uri("/api/v1/scopes/12345678-1234-1234-1234-123456789abc?unexpected=1")
+            .header(header::CONTENT_LENGTH, "128")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(!direct_api_request_shape_is_allowed_for_method(
+            &axum::http::Method::PATCH,
+            &patch_query
+        ));
+
         let delete = Request::builder()
             .method("DELETE")
             .uri("/api/v1/scopes/12345678-1234-1234-1234-123456789abc")

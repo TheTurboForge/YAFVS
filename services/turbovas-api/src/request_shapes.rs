@@ -19,10 +19,14 @@ pub(crate) fn direct_api_request_shape_is_allowed_for_method(
     method: &Method,
     request: &Request,
 ) -> bool {
-    if request
-        .uri()
-        .query()
-        .is_some_and(|query| query.len() > MAX_DIRECT_API_QUERY_BYTES)
+    if method != Method::GET && request.uri().query().is_some() {
+        return false;
+    }
+    if method == Method::GET
+        && request
+            .uri()
+            .query()
+            .is_some_and(|query| query.len() > MAX_DIRECT_API_QUERY_BYTES)
     {
         return false;
     }

@@ -100,8 +100,9 @@ separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
   while direct access remains script/operator oriented.
 - Direct v1 request-shape boundary: bearer-authenticated direct `GET` and
   `DELETE` requests reject request bodies, direct write-control `POST`/`PATCH`
-  bodies are size-bounded, and transfer-encoded bodies plus oversized query
-  strings are rejected with JSON `413 request_too_large`. Malformed
+  bodies are size-bounded, direct non-GET requests reject query strings, and
+  transfer-encoded bodies plus oversized query strings are rejected with JSON
+  `413 request_too_large`. Malformed
   `Content-Length` is rejected as malformed HTTP before middleware in the live
   stack, currently with HTTP 400. This first bound is listener-level hardening;
   endpoint-specific cost limits and full rate limits remain separate

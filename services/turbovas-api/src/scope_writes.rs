@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 
 use serde::Deserialize;
+use tokio_postgres::{Row, Transaction, types::ToSql};
 
 use crate::{errors::ApiError, path_ids::parse_uuid};
 
@@ -82,6 +83,12 @@ pub(crate) enum ScopeWriteStep {
 pub(crate) struct ScopeWriteTransactionPlan {
     pub(crate) operation: ScopeWriteOperation,
     pub(crate) steps: Vec<ScopeWriteStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScopeWriteRecord {
+    pub(crate) internal_id: i64,
+    pub(crate) uuid: String,
 }
 
 pub(crate) fn validate_scope_create_request(
@@ -199,6 +206,202 @@ pub(crate) fn ensure_scope_write_references_visible(
     Err(ApiError::Forbidden)
 }
 
+pub(crate) async fn execute_scope_create_transaction(
+    tx: &Transaction<'_>,
+    owner_id: i64,
+    request: &ValidatedScopeCreate,
+) -> Result<ScopeWriteRecord, ApiError> {
+    let record = query_scope_write_record(
+        tx,
+        scope_insert_sql(),
+        &[
+            &owner_id,
+            &request.name,
+            &request.comment,
+            &request.protection_requirement,
+        ],
+        "insert scope",
+    )
+    .await?;
+    replace_scope_membership(
+        tx,
+        record.internal_id,
+        &request.target_ids,
+        scope_delete_targets_sql(),
+        scope_insert_target_sql(),
+        "target_ids",
+    )
+    .await?;
+    replace_scope_membership(
+        tx,
+        record.internal_id,
+        &request.host_ids,
+        scope_delete_hosts_sql(),
+        scope_insert_host_sql(),
+        "host_ids",
+    )
+    .await?;
+    Ok(record)
+}
+
+pub(crate) async fn execute_scope_patch_transaction(
+    tx: &Transaction<'_>,
+    scope_internal_id: i64,
+    request: &ValidatedScopePatch,
+) -> Result<ScopeWriteRecord, ApiError> {
+    let record = if request.name.is_some()
+        || request.comment.is_some()
+        || request.protection_requirement.is_some()
+    {
+        query_scope_write_record(
+            tx,
+            scope_update_metadata_sql(),
+            &[
+                &scope_internal_id,
+                &request.name,
+                &request.comment,
+                &request.protection_requirement,
+            ],
+            "update scope metadata",
+        )
+        .await?
+    } else {
+        query_scope_write_record(
+            tx,
+            scope_by_internal_id_sql(),
+            &[&scope_internal_id],
+            "load scope after membership-only patch",
+        )
+        .await?
+    };
+
+    if let Some(target_ids) = request.target_ids.as_ref() {
+        replace_scope_membership(
+            tx,
+            record.internal_id,
+            target_ids,
+            scope_delete_targets_sql(),
+            scope_insert_target_sql(),
+            "target_ids",
+        )
+        .await?;
+    }
+    if let Some(host_ids) = request.host_ids.as_ref() {
+        replace_scope_membership(
+            tx,
+            record.internal_id,
+            host_ids,
+            scope_delete_hosts_sql(),
+            scope_insert_host_sql(),
+            "host_ids",
+        )
+        .await?;
+    }
+    Ok(record)
+}
+
+pub(crate) async fn execute_scope_delete_transaction(
+    tx: &Transaction<'_>,
+    scope_internal_id: i64,
+) -> Result<(), ApiError> {
+    execute_scope_write_sql(
+        tx,
+        scope_delete_targets_sql(),
+        &[&scope_internal_id],
+        "delete scope target membership",
+    )
+    .await?;
+    execute_scope_write_sql(
+        tx,
+        scope_delete_hosts_sql(),
+        &[&scope_internal_id],
+        "delete scope host membership",
+    )
+    .await?;
+    let deleted = execute_scope_write_sql(
+        tx,
+        scope_delete_sql(),
+        &[&scope_internal_id],
+        "delete scope",
+    )
+    .await?;
+    if deleted == 0 {
+        Err(ApiError::NotFound)
+    } else {
+        Ok(())
+    }
+}
+
+async fn query_scope_write_record(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<ScopeWriteRecord, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_scope_write_db_error(error, action))?
+        .map(|row| scope_write_record_from_row(&row))
+        .ok_or(ApiError::NotFound)
+}
+
+async fn execute_scope_write_sql(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<u64, ApiError> {
+    tx.execute(sql, params)
+        .await
+        .map_err(|error| map_scope_write_db_error(error, action))
+}
+
+async fn replace_scope_membership(
+    tx: &Transaction<'_>,
+    scope_internal_id: i64,
+    requested_ids: &[String],
+    delete_sql: &str,
+    insert_sql: &str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    execute_scope_write_sql(
+        tx,
+        delete_sql,
+        &[&scope_internal_id],
+        "delete scope membership",
+    )
+    .await?;
+    for requested_id in requested_ids {
+        let inserted = execute_scope_write_sql(
+            tx,
+            insert_sql,
+            &[&scope_internal_id, requested_id],
+            "insert scope membership",
+        )
+        .await?;
+        if inserted == 0 {
+            tracing::warn!(
+                field = field_name,
+                "scope write reference disappeared before insert"
+            );
+            return Err(ApiError::Forbidden);
+        }
+    }
+    Ok(())
+}
+
+fn scope_write_record_from_row(row: &Row) -> ScopeWriteRecord {
+    ScopeWriteRecord {
+        internal_id: row.get(0),
+        uuid: row.get(1),
+    }
+}
+
+fn map_scope_write_db_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
+    tracing::warn!(%error, action, "scope write database operation failed");
+    ApiError::Database
+}
+
 pub(crate) fn scope_write_operator_owner_sql() -> &'static str {
     "SELECT id::bigint, uuid::text, coalesce(name, '')::text
        FROM users
@@ -227,6 +430,12 @@ pub(crate) fn scope_write_visible_hosts_sql() -> &'static str {
     "SELECT uuid::text
        FROM hosts
       WHERE uuid = ANY($1);"
+}
+
+pub(crate) fn scope_by_internal_id_sql() -> &'static str {
+    "SELECT id::bigint, uuid::text
+       FROM scopes
+      WHERE id = $1;"
 }
 
 pub(crate) fn scope_insert_sql() -> &'static str {
@@ -590,6 +799,8 @@ mod tests {
 
     #[test]
     fn scope_write_mutation_sql_is_parameterized_and_scope_bounded() {
+        assert!(scope_by_internal_id_sql().contains("WHERE id = $1"));
+
         let insert = scope_insert_sql();
         assert!(insert.contains("INSERT INTO scopes"));
         assert!(insert.contains("VALUES (make_uuid(), $1, $2, $3, $4, 0, 0"));
@@ -624,6 +835,50 @@ mod tests {
         }
 
         assert_eq!(scope_delete_sql(), "DELETE FROM scopes WHERE id = $1;");
+    }
+
+    #[test]
+    fn scope_write_execution_helpers_stay_private_transaction_scaffold() {
+        let _create = execute_scope_create_transaction;
+        let _patch = execute_scope_patch_transaction;
+        let _delete = execute_scope_delete_transaction;
+
+        let source = include_str!("scope_writes.rs");
+        let create_body = source
+            .split_once("pub(crate) async fn execute_scope_create_transaction")
+            .expect("create executor must exist")
+            .1
+            .split_once("pub(crate) async fn execute_scope_patch_transaction")
+            .expect("create executor must precede patch executor")
+            .0;
+        let patch_body = source
+            .split_once("pub(crate) async fn execute_scope_patch_transaction")
+            .expect("patch executor must exist")
+            .1
+            .split_once("pub(crate) async fn execute_scope_delete_transaction")
+            .expect("patch executor must precede delete executor")
+            .0;
+        let delete_body = source
+            .split_once("pub(crate) async fn execute_scope_delete_transaction")
+            .expect("delete executor must exist")
+            .1
+            .split_once("async fn query_scope_write_record")
+            .expect("delete executor must precede shared query helper")
+            .0;
+
+        assert!(create_body.contains("scope_insert_sql()"));
+        assert!(create_body.contains("replace_scope_membership"));
+        assert!(patch_body.contains("scope_update_metadata_sql()"));
+        assert!(patch_body.contains("scope_by_internal_id_sql()"));
+        assert!(delete_body.contains("scope_delete_targets_sql()"));
+        assert!(delete_body.contains("scope_delete_hosts_sql()"));
+        assert!(delete_body.contains("scope_delete_sql()"));
+        for body in [create_body, patch_body, delete_body] {
+            assert!(body.contains("tx,"));
+            assert!(!body.contains("state.pool"));
+            assert!(!body.contains("transaction().await"));
+            assert!(!body.contains("commit().await"));
+        }
     }
 
     #[test]

@@ -2,9 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{env, net::SocketAddr};
-
-use axum::{Router, middleware, routing::get};
+use axum::{Router, routing::get};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod alerts;
@@ -37,6 +35,7 @@ mod request_ids;
 mod request_shapes;
 mod result_payloads;
 mod row_helpers;
+mod runtime;
 mod scan_configs;
 mod scanner_assets;
 mod schedules;
@@ -55,7 +54,7 @@ use app_state::{AppState, create_pool, healthz};
 use catalog_payloads::*;
 use cert_advisories::*;
 use collections::*;
-use direct_api::{direct_api_config, require_direct_api_auth};
+use direct_api::direct_api_config;
 use errors::ApiError;
 use feeds::feeds;
 use filters::*;
@@ -71,6 +70,7 @@ use report_evidence_handlers::*;
 use report_formats::*;
 use report_payloads::*;
 use result_payloads::*;
+use runtime::serve_api;
 use scan_configs::*;
 use scanner_assets::*;
 use schedules::*;
@@ -249,48 +249,7 @@ async fn main() -> Result<(), ApiError> {
         )
         .with_state(state);
 
-    let bind = env_string("TURBOVAS_API_BIND").unwrap_or_else(|| "0.0.0.0:9080".to_string());
-    let internal_listener = tokio::net::TcpListener::bind(&bind)
-        .await
-        .map_err(|_| ApiError::Config)?;
-    let internal_addr: SocketAddr = internal_listener
-        .local_addr()
-        .map_err(|_| ApiError::Config)?;
-    tracing::info!(addr = %internal_addr, "starting turbovas-api internal listener");
-
-    if let Some((direct_bind, auth)) = direct_api {
-        let direct_listener = tokio::net::TcpListener::bind(&direct_bind)
-            .await
-            .map_err(|_| ApiError::Config)?;
-        let direct_addr: SocketAddr = direct_listener.local_addr().map_err(|_| ApiError::Config)?;
-        tracing::info!(addr = %direct_addr, "starting turbovas-api direct authenticated listener");
-        let direct_app = app.clone().layer(middleware::from_fn_with_state(
-            auth,
-            require_direct_api_auth,
-        ));
-        tokio::try_join!(
-            axum::serve(internal_listener, app).with_graceful_shutdown(shutdown_signal()),
-            axum::serve(direct_listener, direct_app).with_graceful_shutdown(shutdown_signal()),
-        )
-        .map(|_| ())
-        .map_err(|_| ApiError::Config)
-    } else {
-        axum::serve(internal_listener, app)
-            .with_graceful_shutdown(shutdown_signal())
-            .await
-            .map_err(|_| ApiError::Config)
-    }
-}
-
-fn env_string(name: &str) -> Option<String> {
-    env::var(name)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+    serve_api(app, direct_api).await
 }
 
 #[cfg(test)]

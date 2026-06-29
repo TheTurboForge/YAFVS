@@ -229,6 +229,52 @@ pub(crate) fn scope_write_visible_hosts_sql() -> &'static str {
       WHERE uuid = ANY($1);"
 }
 
+pub(crate) fn scope_insert_sql() -> &'static str {
+    "INSERT INTO scopes
+        (uuid, owner, name, comment, protection_requirement, predefined, is_global,
+         creation_time, modification_time)
+     VALUES (make_uuid(), $1, $2, $3, $4, 0, 0, m_now(), m_now())
+     RETURNING id::bigint, uuid::text;"
+}
+
+pub(crate) fn scope_update_metadata_sql() -> &'static str {
+    "UPDATE scopes
+        SET name = coalesce($2, name),
+            comment = coalesce($3, comment),
+            protection_requirement = coalesce($4, protection_requirement),
+            modification_time = m_now()
+      WHERE id = $1
+      RETURNING id::bigint, uuid::text;"
+}
+
+pub(crate) fn scope_delete_targets_sql() -> &'static str {
+    "DELETE FROM scope_targets WHERE scope = $1;"
+}
+
+pub(crate) fn scope_insert_target_sql() -> &'static str {
+    "INSERT INTO scope_targets (scope, target, target_uuid, target_name, added_time)
+     SELECT $1, id, uuid, name, m_now()
+       FROM targets
+      WHERE uuid = $2
+     ON CONFLICT (scope, target) DO NOTHING;"
+}
+
+pub(crate) fn scope_delete_hosts_sql() -> &'static str {
+    "DELETE FROM scope_hosts WHERE scope = $1;"
+}
+
+pub(crate) fn scope_insert_host_sql() -> &'static str {
+    "INSERT INTO scope_hosts (scope, host, host_uuid, host_name, added_time)
+     SELECT $1, id, uuid, name, m_now()
+       FROM hosts
+      WHERE uuid = $2
+     ON CONFLICT (scope, host) DO NOTHING;"
+}
+
+pub(crate) fn scope_delete_sql() -> &'static str {
+    "DELETE FROM scopes WHERE id = $1;"
+}
+
 fn normalize_required_scope_text(value: String, field_name: &str) -> Result<String, ApiError> {
     let value = normalize_scope_text_value(value, field_name)?;
     if value.is_empty() {
@@ -540,6 +586,44 @@ mod tests {
         assert!(scope_write_report_history_sql().contains("FROM scope_reports"));
         assert!(scope_write_visible_targets_sql().contains("FROM targets"));
         assert!(scope_write_visible_hosts_sql().contains("FROM hosts"));
+    }
+
+    #[test]
+    fn scope_write_mutation_sql_is_parameterized_and_scope_bounded() {
+        let insert = scope_insert_sql();
+        assert!(insert.contains("INSERT INTO scopes"));
+        assert!(insert.contains("VALUES (make_uuid(), $1, $2, $3, $4, 0, 0"));
+        assert!(insert.contains("RETURNING id::bigint, uuid::text"));
+
+        let update = scope_update_metadata_sql();
+        assert!(update.contains("UPDATE scopes"));
+        assert!(update.contains("name = coalesce($2, name)"));
+        assert!(update.contains("comment = coalesce($3, comment)"));
+        assert!(update.contains("protection_requirement = coalesce($4, protection_requirement)"));
+        assert!(update.contains("WHERE id = $1"));
+
+        for (delete_sql, insert_sql, table, source_table) in [
+            (
+                scope_delete_targets_sql(),
+                scope_insert_target_sql(),
+                "scope_targets",
+                "targets",
+            ),
+            (
+                scope_delete_hosts_sql(),
+                scope_insert_host_sql(),
+                "scope_hosts",
+                "hosts",
+            ),
+        ] {
+            assert_eq!(delete_sql, format!("DELETE FROM {table} WHERE scope = $1;"));
+            assert!(insert_sql.contains(table));
+            assert!(insert_sql.contains(source_table));
+            assert!(insert_sql.contains("WHERE uuid = $2"));
+            assert!(insert_sql.contains("ON CONFLICT"));
+        }
+
+        assert_eq!(scope_delete_sql(), "DELETE FROM scopes WHERE id = $1;");
     }
 
     #[test]

@@ -5761,6 +5761,33 @@ def rust_direct_api_segment_guard_summary(repo_root: Path | None) -> dict[str, A
     }
 
 
+def rust_repo_file_source(repo_root: Path | None, relative_path: str) -> str:
+    if repo_root is None:
+        return ""
+    try:
+        return (repo_root / relative_path).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def rust_direct_api_body_limit_summary(repo_root: Path | None) -> dict[str, Any]:
+    main_source = rust_repo_file_source(repo_root, "services/turbovas-api/src/main.rs")
+    request_shape_source = rust_repo_file_source(repo_root, "services/turbovas-api/src/request_shapes.rs")
+    direct_router_body = rust_source_function_body(main_source, "direct_native_api_router")
+    properties = {
+        "direct_router_present": bool(direct_router_body),
+        "uses_default_body_limit": "DefaultBodyLimit::max(" in direct_router_body,
+        "uses_shared_write_limit": "MAX_DIRECT_API_WRITE_BODY_BYTES as usize" in direct_router_body,
+        "shared_write_limit_declared": "const MAX_DIRECT_API_WRITE_BODY_BYTES" in request_shape_source,
+    }
+    missing = [property_name for property_name, present in properties.items() if not present]
+    return {
+        "alignment_status": "pass" if not missing else "warn",
+        **properties,
+        "missing_body_limit_properties": missing,
+    }
+
+
 def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[str]:
     source = rust_direct_api_source(repo_root)
     if not source:
@@ -5814,6 +5841,7 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
     rust_routes = rust_native_api_route_templates(repo_root)
     rust_direct_allowed = rust_direct_api_allowed_endpoint_templates(repo_root)
     segment_guard = rust_direct_api_segment_guard_summary(repo_root)
+    body_limit = rust_direct_api_body_limit_summary(repo_root)
     inventory_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in inventory}
     scriptable_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in scriptable}
     openapi_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_marked}
@@ -5833,6 +5861,7 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
         or missing_rust_direct
         or unexpected_rust_direct
         or segment_guard["alignment_status"] != "pass"
+        or body_limit["alignment_status"] != "pass"
     )
     return {
         "alignment_status": "pass" if not drift else "warn",
@@ -5863,6 +5892,7 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
         "missing_rust_direct_allowlist": missing_rust_direct,
         "unexpected_rust_direct_allowlist": unexpected_rust_direct,
         "segment_guard": segment_guard,
+        "body_limit": body_limit,
     }
 
 
@@ -6613,6 +6643,8 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "unexpected_rust_direct_allowlist_count": len(direct_contract.get("unexpected_rust_direct_allowlist", [])) if isinstance(direct_contract, dict) else 0,
         "segment_guard_alignment_status": direct_contract.get("segment_guard", {}).get("alignment_status", "unknown") if isinstance(direct_contract.get("segment_guard", {}), dict) else "unknown",
         "segment_guard_missing_property_count": len(direct_contract.get("segment_guard", {}).get("missing_guard_properties", [])) if isinstance(direct_contract.get("segment_guard", {}), dict) else 0,
+        "body_limit_alignment_status": direct_contract.get("body_limit", {}).get("alignment_status", "unknown") if isinstance(direct_contract.get("body_limit", {}), dict) else "unknown",
+        "body_limit_missing_property_count": len(direct_contract.get("body_limit", {}).get("missing_body_limit_properties", [])) if isinstance(direct_contract.get("body_limit", {}), dict) else 0,
     }
     browser_proxy_contract = summary.get("browser_proxy_contract", {})
     compact_browser_proxy_contract = {
@@ -6737,6 +6769,8 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "unexpected_rust_direct_allowlist_count": direct_contract.get("unexpected_rust_direct_allowlist_count", 0),
             "segment_guard_alignment_status": direct_contract.get("segment_guard_alignment_status", "unknown"),
             "segment_guard_missing_property_count": direct_contract.get("segment_guard_missing_property_count", 0),
+            "body_limit_alignment_status": direct_contract.get("body_limit_alignment_status", "unknown"),
+            "body_limit_missing_property_count": direct_contract.get("body_limit_missing_property_count", 0),
         },
         "browser_proxy_contract": {
             "alignment_status": browser_proxy_contract.get("alignment_status", "unknown"),

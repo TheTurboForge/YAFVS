@@ -1833,6 +1833,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "unexpected_rust_direct_allowlist_count",
                 "segment_guard_alignment_status",
                 "segment_guard_missing_property_count",
+                "body_limit_alignment_status",
+                "body_limit_missing_property_count",
             },
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
@@ -1847,6 +1849,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_rust_direct_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["segment_guard_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["direct_api_contract"]["segment_guard_missing_property_count"], 0)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["body_limit_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["direct_api_contract"]["body_limit_missing_property_count"], 0)
         self.assertEqual(
             set(status_only["details"]["browser_proxy_contract"]),
             {
@@ -1987,6 +1991,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(contract["segment_guard"]["alignment_status"], "pass")
         self.assertEqual(contract["segment_guard"]["missing_guard_properties"], [])
+        self.assertEqual(contract["body_limit"]["alignment_status"], "pass")
+        self.assertEqual(contract["body_limit"]["missing_body_limit_properties"], [])
         self.assertEqual(endpoints["/api/v1/reports"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/reports/{report_id}/results"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/scope-reports/{scope_report_id}"]["direct_access"], "scriptable_read")
@@ -2186,6 +2192,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 'fn direct_api_wildcard_detail_path_is_allowed(_path: &str) -> bool { false }\n',
                 encoding="utf-8",
             )
+            request_shapes = root / "services" / "turbovas-api" / "src" / "request_shapes.rs"
+            request_shapes.write_text("", encoding="utf-8")
             summary = turbovasctl.native_api_direct_contract_summary(root, endpoints)
 
         self.assertEqual(summary["alignment_status"], "warn")
@@ -2202,6 +2210,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(("direct_api_segments_are_nonempty", "rejects_dot"), missing_guard_properties)
         self.assertIn(("direct_api_segments_are_nonempty", "rejects_dotdot"), missing_guard_properties)
         self.assertIn(("direct_api_wildcard_tail_is_allowed", "rejects_empty"), missing_guard_properties)
+        self.assertEqual(summary["body_limit"]["alignment_status"], "warn")
+        self.assertIn("uses_default_body_limit", summary["body_limit"]["missing_body_limit_properties"])
+        self.assertIn("uses_shared_write_limit", summary["body_limit"]["missing_body_limit_properties"])
 
     def test_native_tooling_state_tracks_openapi_contract_alignment(self):
         root = Path(__file__).resolve().parents[2]

@@ -20,7 +20,7 @@ use crate::{
     nvt_payloads::{NvtEpssItem, nvt_epss_from_row, nvt_max_severity_from_row},
     path_ids::{validate_cpe_id, validate_cve_id, validate_nvt_oid},
     query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
-    user_tags::{ReportUserTag, catalog_user_tags},
+    user_tags::{ReportUserTag, catalog_user_tags, catalog_user_tags_for_aliases},
 };
 
 #[derive(Debug, Serialize)]
@@ -185,6 +185,7 @@ pub(crate) async fn cpe_catalog_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
+    let cpe_uuid: String = row.get("id");
     let cpe_name: String = row.get("name");
     let cves = client
         .query(
@@ -221,7 +222,8 @@ pub(crate) async fn cpe_catalog_detail(
         })?
         .map(|row| row.get("deprecated_by"));
 
-    let user_tags = catalog_user_tags(&client, "cpe", &cpe_id).await?;
+    let cpe_tag_ids = vec![cpe_uuid, cpe_name.clone()];
+    let user_tags = catalog_user_tags_for_aliases(&client, "cpe", &cpe_tag_ids).await?;
     Ok(Json(CatalogCpeDetail {
         item: catalog_cpe_from_row(&row, cves, deprecated_by),
         user_tags,

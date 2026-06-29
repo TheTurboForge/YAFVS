@@ -1144,14 +1144,17 @@ mod tests {
         assert!(catalog_payload_source.contains("struct CatalogCveDetail"));
         assert!(catalog_payload_source.contains("struct CatalogCpeDetail"));
         assert!(cve_detail_source.contains("catalog_user_tags(&client, \"cve\", &cve_id).await?"));
-        assert!(cpe_detail_source.contains("catalog_user_tags(&client, \"cpe\", &cpe_id).await?"));
+        assert!(
+            cpe_detail_source
+                .contains("catalog_user_tags_for_aliases(&client, \"cpe\", &cpe_tag_ids).await?")
+        );
         assert!(!cve_list_source.contains("catalog_user_tags"));
         assert!(!cpe_list_source.contains("catalog_user_tags"));
 
         let sql = catalog_user_tags_sql();
         assert!(sql.contains("FROM tags t"));
         assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
-        assert!(sql.contains("lower(tr.resource_uuid) = lower($1)"));
+        assert!(sql.contains("lower(tr.resource_uuid) = ANY($1::text[])"));
         assert!(sql.contains("tr.resource_type = $2"));
         assert!(sql.contains("coalesce(t.active, 0) = 1"));
         assert!(!sql.contains("credential"));
@@ -1171,6 +1174,8 @@ mod tests {
             .0;
 
         assert!(cpe_detail_source.contains("let cpe_name: String = row.get(\"name\");"));
+        assert!(cpe_detail_source.contains("let cpe_uuid: String = row.get(\"id\");"));
+        assert!(cpe_detail_source.contains("let cpe_tag_ids = vec![cpe_uuid, cpe_name.clone()];"));
         assert!(cpe_detail_source.contains("FROM scap.cpes_deprecated_by"));
         assert!(cpe_detail_source.contains("WHERE cpe = $1"));
         assert!(cpe_detail_source.contains("&[&cpe_name]"));
@@ -1210,7 +1215,7 @@ mod tests {
         let sql = catalog_user_tags_sql();
         assert!(sql.contains("FROM tags t"));
         assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
-        assert!(sql.contains("lower(tr.resource_uuid) = lower($1)"));
+        assert!(sql.contains("lower(tr.resource_uuid) = ANY($1::text[])"));
         assert!(sql.contains("tr.resource_type = $2"));
         assert!(sql.contains("coalesce(t.active, 0) = 1"));
         assert!(!sql.contains("credential"));

@@ -2264,7 +2264,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_api_request_shape_rejects_bodies_and_oversized_queries() {
+    fn direct_api_request_shape_rejects_get_bodies_and_oversized_queries() {
         let allowed = Request::builder()
             .uri("/api/v1/reports?page_size=1")
             .body(axum::body::Body::empty())
@@ -2308,6 +2308,70 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         assert!(!direct_api_request_shape_is_allowed(&oversized));
+    }
+
+    #[test]
+    fn direct_api_request_shape_allows_bounded_write_bodies_only_for_write_methods() {
+        let post = Request::builder()
+            .method("POST")
+            .uri("/api/v1/scopes")
+            .header(header::CONTENT_LENGTH, "128")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(direct_api_request_shape_is_allowed_for_method(
+            &axum::http::Method::POST,
+            &post
+        ));
+
+        let patch = Request::builder()
+            .method("PATCH")
+            .uri("/api/v1/scopes/12345678-1234-1234-1234-123456789abc")
+            .header(
+                header::CONTENT_LENGTH,
+                MAX_DIRECT_API_WRITE_BODY_BYTES.to_string(),
+            )
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(direct_api_request_shape_is_allowed_for_method(
+            &axum::http::Method::PATCH,
+            &patch
+        ));
+
+        let delete = Request::builder()
+            .method("DELETE")
+            .uri("/api/v1/scopes/12345678-1234-1234-1234-123456789abc")
+            .header(header::CONTENT_LENGTH, "0")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(direct_api_request_shape_is_allowed_for_method(
+            &axum::http::Method::DELETE,
+            &delete
+        ));
+
+        let oversized = Request::builder()
+            .method("POST")
+            .uri("/api/v1/scopes")
+            .header(
+                header::CONTENT_LENGTH,
+                (MAX_DIRECT_API_WRITE_BODY_BYTES + 1).to_string(),
+            )
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(!direct_api_request_shape_is_allowed_for_method(
+            &axum::http::Method::POST,
+            &oversized
+        ));
+
+        let unsupported = Request::builder()
+            .method("PUT")
+            .uri("/api/v1/scopes")
+            .header(header::CONTENT_LENGTH, "0")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(!direct_api_request_shape_is_allowed_for_method(
+            &axum::http::Method::PUT,
+            &unsupported
+        ));
     }
 
     #[test]

@@ -101,7 +101,21 @@ async fn main() -> Result<(), ApiError> {
             tracing::info!(operator_uuid = %operator.user_uuid, "direct native API operator identity verified");
         }
     }
-    let app = Router::new()
+    let internal_app = native_api_router().with_state(state.clone());
+    let direct_api = direct_api.map(|(bind, auth)| {
+        let direct_app = direct_native_api_router(auth.write_control_enabled()).with_state(state);
+        DirectApiListener {
+            bind,
+            auth,
+            app: direct_app,
+        }
+    });
+
+    serve_api(internal_app, direct_api).await
+}
+
+fn native_api_router() -> Router<AppState> {
+    Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/results", get(results))
         .route("/api/v1/results/:result_id", get(result_detail))
@@ -248,14 +262,10 @@ async fn main() -> Result<(), ApiError> {
             "/api/v1/scopes/:scope_id/reports/:scope_report_id/retention-plan",
             get(scope_report_retention_plan),
         )
-        .with_state(state);
-    let direct_api = direct_api.map(|(bind, auth)| DirectApiListener {
-        bind,
-        auth,
-        app: app.clone(),
-    });
+}
 
-    serve_api(app, direct_api).await
+fn direct_native_api_router(_write_control_enabled: bool) -> Router<AppState> {
+    native_api_router()
 }
 
 #[cfg(test)]
@@ -1470,17 +1480,29 @@ mod tests {
         assert!(!runtime_source.contains("app.clone().layer"));
 
         let main_source = include_str!("main.rs");
+        let production_source = main_source
+            .split_once("#[cfg(test)]")
+            .expect("test module marker must exist")
+            .0;
         assert!(main_source.contains("DirectApiListener {"));
-        assert!(main_source.contains("app: app.clone()"));
+        assert!(
+            main_source
+                .contains("let internal_app = native_api_router().with_state(state.clone());")
+        );
+        assert!(main_source.contains(
+            "let direct_app = direct_native_api_router(auth.write_control_enabled()).with_state(state);"
+        ));
+        assert!(main_source.contains("app: direct_app"));
+        assert!(!production_source.contains("app: app.clone()"));
     }
 
     fn app_route_registration_block(source: &str) -> &str {
         source
-            .split_once("let app = Router::new()")
+            .split_once("fn native_api_router() -> Router<AppState> {\n    Router::new()")
             .expect("native API router must be registered")
             .1
-            .split_once("\n        .with_state(state);")
-            .expect("native API router must attach app state")
+            .split_once("\n}\n\nfn direct_native_api_router")
+            .expect("native API router must end before direct router")
             .0
     }
 
@@ -1523,7 +1545,7 @@ mod tests {
     fn scope_report_native_routes_remain_get_only_read_paths() {
         let source = include_str!("main.rs");
         let start = ".route(\"/api/v1/scope-reports\", get(scope_reports))";
-        let end = "\n        .with_state(state);";
+        let end = "\n}\n\nfn direct_native_api_router";
         let routes = source
             .split_once(start)
             .expect("scope report routes must be registered")

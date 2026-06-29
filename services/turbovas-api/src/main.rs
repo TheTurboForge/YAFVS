@@ -22,6 +22,7 @@ mod host_assets;
 mod metrics_payloads;
 mod nvt_payloads;
 mod operating_systems;
+mod operator_identity;
 mod overrides;
 mod path_ids;
 mod port_lists;
@@ -61,6 +62,7 @@ use filters::*;
 use host_assets::*;
 use metrics_payloads::*;
 use operating_systems::*;
+use operator_identity::resolve_configured_direct_api_operator;
 use overrides::*;
 use port_lists::*;
 use query::*;
@@ -92,6 +94,12 @@ async fn main() -> Result<(), ApiError> {
         pool: create_pool()?,
     };
     let direct_api = direct_api_config()?;
+    if let Some((_, auth)) = direct_api.as_ref() {
+        let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+        if let Some(operator) = resolve_configured_direct_api_operator(&client, auth).await? {
+            tracing::info!(operator_uuid = %operator.user_uuid, "direct native API operator identity verified");
+        }
+    }
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/results", get(results))

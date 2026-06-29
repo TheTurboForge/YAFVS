@@ -24,6 +24,8 @@ struct ErrorPayload {
 pub(crate) enum ApiError {
     #[error("unauthorized")]
     Unauthorized,
+    #[error("forbidden")]
+    Forbidden,
     #[error("method not allowed")]
     MethodNotAllowed,
     #[error("request too large")]
@@ -34,6 +36,8 @@ pub(crate) enum ApiError {
     BadRequest(String),
     #[error("resource not found")]
     NotFound,
+    #[error("conflict")]
+    Conflict(String),
     #[error("database error")]
     Database,
     #[error("configuration error")]
@@ -44,11 +48,13 @@ impl ApiError {
     pub(crate) fn status_code(&self) -> StatusCode {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Forbidden => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Database | Self::Config => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -56,11 +62,13 @@ impl ApiError {
     pub(crate) fn code(&self) -> &'static str {
         match self {
             Self::Unauthorized => "unauthorized",
+            Self::Forbidden => "forbidden",
             Self::MethodNotAllowed => "method_not_allowed",
             Self::RequestTooLarge => "request_too_large",
             Self::TooManyRequests => "too_many_requests",
             Self::BadRequest(_) => "bad_request",
             Self::NotFound => "not_found",
+            Self::Conflict(_) => "conflict",
             Self::Database => "database_error",
             Self::Config => "configuration_error",
         }
@@ -69,6 +77,9 @@ impl ApiError {
     pub(crate) fn public_message(&self) -> String {
         match self {
             Self::Unauthorized => "A valid bearer token is required.".to_string(),
+            Self::Forbidden => {
+                "The authenticated operator is not allowed to perform this action.".to_string()
+            }
             Self::MethodNotAllowed => {
                 "Direct native API access currently allows read-only GET requests only.".to_string()
             }
@@ -82,6 +93,7 @@ impl ApiError {
             }
             Self::BadRequest(message) => message.clone(),
             Self::NotFound => "The requested resource was not found.".to_string(),
+            Self::Conflict(message) => message.clone(),
             Self::Database => "The database query failed.".to_string(),
             Self::Config => "The API service is not configured correctly.".to_string(),
         }
@@ -114,6 +126,13 @@ mod tests {
                 "unauthorized",
                 "bearer token",
                 &["secret", "password", "credential", "authorization"][..],
+            ),
+            (
+                ApiError::Forbidden,
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "operator",
+                &["secret", "token", "password", "credential"][..],
             ),
             (
                 ApiError::MethodNotAllowed,
@@ -149,6 +168,13 @@ mod tests {
                 "not_found",
                 "not found",
                 &[],
+            ),
+            (
+                ApiError::Conflict("scope is immutable".to_string()),
+                StatusCode::CONFLICT,
+                "conflict",
+                "immutable",
+                &["secret", "token", "password", "credential"][..],
             ),
             (
                 ApiError::Database,

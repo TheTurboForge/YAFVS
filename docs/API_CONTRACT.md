@@ -127,7 +127,8 @@ separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
   `x-turbovas-replaces` (`feed-status-read`, `tag-resource-name-read`,
   `nvt-catalog-detail-read`, or `none`), and
   `x-turbovas-inherited-still-owns` (`feed-sync-import-control`,
-  `tag-write-control`, `nvt-rich-detail`, or `retention-mutations`).
+  `tag-resource-actions-clone-export-trash`, `nvt-rich-detail`, or
+  `retention-mutations`).
   `native-tooling-state` reports missing, invalid, or mismatched seed metadata
   as `native-tooling.openapi-contract` drift. Extend this enforced seed before
   adding broader free-form migration metadata.

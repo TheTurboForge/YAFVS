@@ -2360,7 +2360,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "schedule-writes-exports-and-deletes",
             "scope-report-generation",
             "scope-report-generation-retention-and-mutations",
-            "tag-write-control",
+            "tag-resource-actions-clone-export-trash",
             "target-credential-secrets-writes-and-deletes",
             "task-scan-control-writes-and-deletes",
             "tls-certificate-export-delete-and-rich-history",
@@ -2830,21 +2830,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tags["x_turbovas_maturity"], "live-read")
         self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-write-control")
+        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-resource-actions-clone-export-trash")
 
         tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
         self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-write-control")
+        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-resource-actions-clone-export-trash")
 
         tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
         self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
-        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-write-control")
+        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-resource-actions-clone-export-trash")
 
         retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
         self.assertEqual(retention["status"], "implemented_internal")
@@ -3321,7 +3321,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "      x-turbovas-exposure: direct-write\n"
                 "      x-turbovas-maturity: preview-write\n"
                 "      x-turbovas-replaces: none\n"
-                "      x-turbovas-inherited-still-owns: tag-write-control\n"
+                "      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash\n"
                 "      x-turbovas-operator-identity: direct-token-operator\n"
                 "      x-turbovas-owner-semantics: request-operator-owner\n"
                 "      x-turbovas-safety-contract: write-control-v1\n"
@@ -3349,7 +3349,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "      x-turbovas-exposure: direct-write\n"
                 "      x-turbovas-maturity: preview-write\n"
                 "      x-turbovas-replaces: none\n"
-                "      x-turbovas-inherited-still-owns: tag-write-control\n"
+                "      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash\n"
                 "      x-turbovas-operator-identity: not-applicable-preview\n"
                 "      x-turbovas-owner-semantics: not-applicable-preview\n"
                 "      x-turbovas-safety-contract: write-control-v1\n"
@@ -3400,7 +3400,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "      x-turbovas-exposure: direct-write\n"
                 "      x-turbovas-maturity: live-write\n"
                 "      x-turbovas-replaces: tag-metadata-write\n"
-                "      x-turbovas-inherited-still-owns: tag-write-control\n"
+                "      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash\n"
                 "      x-turbovas-operator-identity: direct-token-operator\n"
                 "      x-turbovas-owner-semantics: preserve-existing-owner\n"
                 "      x-turbovas-safety-contract: write-control-v1\n"
@@ -3878,7 +3878,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-replaces"], "tag-resource-name-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-write-control")
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-resource-actions-clone-export-trash")
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(trashcan_summary["operation_id"], "getTrashcanSummary")
         self.assertIn("x-turbovas-direct", trashcan_summary["x_turbovas_fields"])

@@ -886,7 +886,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-read
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       summary: List tags
       description: Read-only tag metadata backed by gvmd/PostgreSQL. Tag resource assignment/filter actions, clone, export, delete, and trash behavior remain on inherited compatibility paths while native resource semantics are designed.
       parameters:
@@ -919,7 +919,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-write
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -965,7 +965,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-resource-name-read
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       parameters:
         - name: resource_type
           in: path
@@ -1005,7 +1005,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-read
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       summary: Read one tag
       parameters:
         - $ref: '#/components/parameters/TagId'
@@ -1036,7 +1036,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-write
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -1078,7 +1078,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-delete
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -1113,7 +1113,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-resource-reference-read
-      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-inherited-still-owns: tag-resource-actions-clone-export-trash
       summary: List assigned tag resource references
       description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Tag mutation, trash resources, credentials, users, permissions, filters, alerts, schedules, scanners, overrides, reports, and results remain on inherited compatibility paths while native semantics are designed.
       parameters:

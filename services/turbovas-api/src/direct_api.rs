@@ -615,6 +615,131 @@ mod tests {
     }
 
     #[test]
+    fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
+        assert!(direct_api_v1_path_is_allowed("/api/v1/reports"));
+        assert!(direct_api_v1_path_is_allowed(
+            "/api/v1/reports/report-id/results"
+        ));
+        assert!(direct_api_v1_path_is_allowed("/api/v1/feeds"));
+        assert!(direct_api_v1_path_is_allowed(
+            "/api/v1/tags/resource-names/alert"
+        ));
+        assert!(direct_api_v1_path_is_allowed(
+            "/api/v1/cpes/cpe:/a:example:thing/1.0"
+        ));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes///"));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes/."));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes/.."));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/cpes/foo/../bar"));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/reports/."));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/reports/.."));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/tags/tag-id/.."));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/cert-bund-advisories/.."
+        ));
+        assert!(direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/scope-id/reports/report-id/metrics"
+        ));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/./reports/report-id/metrics"
+        ));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/scope-id/reports/../metrics"
+        ));
+        assert!(direct_api_v1_path_is_allowed(
+            "/api/v1/scope-reports/scope-report-id"
+        ));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/scope-id/reports/report-id/retention-plan"
+        ));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes//reports/report-id/results"
+        ));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/reports//results"));
+        assert!(!direct_api_v1_path_is_allowed(
+            "/api/v1/scopes/scope-id/reports/scope-report-id"
+        ));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/internal-preview"));
+        assert!(!direct_api_v1_path_is_allowed("/api/v1/reports/id/raw-xml"));
+    }
+
+    #[test]
+    fn direct_api_method_classifier_gates_scope_writes_on_write_control_flag() {
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::GET,
+            "/api/v1/scopes",
+            false
+        ));
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, "/api/v1/scopes", false),
+                "{method} should stay closed while direct write-control is disabled"
+            );
+        }
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::POST,
+            "/api/v1/scopes",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::PATCH,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::DELETE,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &Method::PUT,
+            "/api/v1/scopes/scope-id",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &Method::GET,
+            "/api/v1/internal-preview",
+            false
+        ));
+
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::POST,
+            "/api/v1/scopes",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::PATCH,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &Method::DELETE,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &Method::PUT,
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &Method::PATCH,
+            "/api/v1/scopes/../",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &Method::PATCH,
+            "/api/v1/scopes/not-a-uuid",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &Method::DELETE,
+            "/api/v1/tags/not-a-uuid",
+            true
+        ));
+    }
+
+    #[test]
     fn direct_api_bearer_token_rejects_empty_file_source() {
         let path = token_file("empty", "\n");
         let result = direct_api_bearer_token_from_sources(

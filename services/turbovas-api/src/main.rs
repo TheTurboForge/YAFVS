@@ -17,6 +17,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 mod alerts;
 mod app_state;
 mod auth;
+mod catalog_payloads;
 mod cert_advisories;
 mod collections;
 mod direct_api;
@@ -53,6 +54,7 @@ mod vulnerability_payloads;
 
 use alerts::{AlertAssetItem, AlertReference, alert_asset_from_row};
 use app_state::{AppState, create_pool, healthz};
+use catalog_payloads::*;
 use cert_advisories::*;
 use collections::*;
 use direct_api::{direct_api_config, require_direct_api_auth};
@@ -62,7 +64,6 @@ use filters::*;
 use formatters::*;
 use host_assets::*;
 use metrics_payloads::*;
-use nvt_payloads::*;
 use operating_systems::*;
 use overrides::{OverrideAssetItem, override_asset_from_row};
 use path_ids::*;
@@ -238,124 +239,6 @@ struct SeverityCounts {
     low: i64,
     log: i64,
     false_positive: i64,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogEpssItem {
-    score: f64,
-    percentile: f64,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCveCertReference {
-    name: String,
-    title: String,
-    #[serde(rename = "type")]
-    cert_type: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCveNvtReference {
-    id: String,
-    name: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCveItem {
-    id: String,
-    name: String,
-    comment: String,
-    description: String,
-    cvss_base_vector: String,
-    severity: f64,
-    products: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    cert_refs: Vec<CatalogCveCertReference>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    nvt_refs: Vec<CatalogCveNvtReference>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    epss: Option<CatalogEpssItem>,
-    published_at: Option<String>,
-    modified_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCveDetail {
-    #[serde(flatten)]
-    item: CatalogCveItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCpeCveItem {
-    id: String,
-    severity: f64,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCpeItem {
-    id: String,
-    name: String,
-    comment: String,
-    title: String,
-    cpe_name_id: String,
-    deprecated: bool,
-    deprecated_by: Option<String>,
-    severity: f64,
-    cve_refs: i64,
-    cves: Vec<CatalogCpeCveItem>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct CatalogCpeDetail {
-    #[serde(flatten)]
-    item: CatalogCpeItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
-}
-
-#[derive(Debug, Serialize)]
-struct NvtCatalogItem {
-    id: String,
-    oid: String,
-    name: String,
-    family: String,
-    severity: f64,
-    qod: i64,
-    qod_type: String,
-    solution_type: String,
-    solution_method: String,
-    solution: String,
-    tags: String,
-    cve_refs: i64,
-    cves: Vec<String>,
-    cert_refs: Vec<String>,
-    xrefs: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    max_epss: Option<NvtEpssItem>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    max_severity: Option<NvtEpssItem>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct NvtCatalogDetail {
-    #[serde(flatten)]
-    catalog: NvtCatalogItem,
-    comment: String,
-    summary: String,
-    insight: String,
-    affected: String,
-    impact: String,
-    detection: String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    user_tags: Vec<ReportUserTag>,
 }
 
 #[tokio::main]
@@ -7321,103 +7204,6 @@ fn scope_report_retention_source_from_row(row: &Row) -> ScopeReportRetentionSour
     }
 }
 
-fn split_catalog_products(value: String) -> Vec<String> {
-    value
-        .split_whitespace()
-        .filter(|product| !product.is_empty())
-        .map(ToString::to_string)
-        .collect()
-}
-
-fn catalog_cve_from_row(row: &Row) -> CatalogCveItem {
-    let epss_score: Option<f64> = row.get("epss_score");
-    let epss_percentile: Option<f64> = row.get("epss_percentile");
-    CatalogCveItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        description: row.get("description"),
-        cvss_base_vector: row.get("cvss_base_vector"),
-        severity: row.get("severity"),
-        products: split_catalog_products(row.get("products")),
-        cert_refs: Vec::new(),
-        nvt_refs: Vec::new(),
-        epss: epss_score
-            .zip(epss_percentile)
-            .map(|(score, percentile)| CatalogEpssItem { score, percentile }),
-        published_at: unix_ts_to_rfc3339(row.get("published_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-fn catalog_cpe_cve_from_row(row: &Row) -> CatalogCpeCveItem {
-    CatalogCpeCveItem {
-        id: row.get("id"),
-        severity: row.get("severity"),
-    }
-}
-
-fn catalog_cpe_from_row(
-    row: &Row,
-    cves: Vec<CatalogCpeCveItem>,
-    deprecated_by: Option<String>,
-) -> CatalogCpeItem {
-    let deprecated_int: i32 = row.get("deprecated_int");
-    CatalogCpeItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        title: row.get("title"),
-        cpe_name_id: row.get("cpe_name_id"),
-        deprecated: deprecated_int != 0,
-        deprecated_by,
-        severity: row.get("severity"),
-        cve_refs: row.get("cve_refs"),
-        cves,
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-fn nvt_catalog_from_row(row: &Row) -> NvtCatalogItem {
-    NvtCatalogItem {
-        id: row.get("id"),
-        oid: row.get("oid"),
-        name: row.get("name"),
-        family: row.get("family"),
-        severity: row.get("severity"),
-        qod: row.get("qod"),
-        qod_type: row.get("qod_type"),
-        solution_type: row.get("solution_type"),
-        solution_method: row.get("solution_method"),
-        solution: row.get("solution"),
-        tags: row.get("tags"),
-        cve_refs: row.get("cve_refs"),
-        cves: row.get("cves"),
-        cert_refs: row.get("cert_refs"),
-        xrefs: row.get("xrefs"),
-        max_epss: nvt_epss_from_row(row),
-        max_severity: nvt_max_severity_from_row(row),
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-fn nvt_catalog_detail_from_row(row: &Row, user_tags: Vec<ReportUserTag>) -> NvtCatalogDetail {
-    NvtCatalogDetail {
-        catalog: nvt_catalog_from_row(row),
-        comment: row.get("comment"),
-        summary: row.get("summary"),
-        insight: row.get("insight"),
-        affected: row.get("affected"),
-        impact: row.get("impact"),
-        detection: row.get("detection"),
-        user_tags,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use axum::{
@@ -8130,6 +7916,7 @@ mod tests {
     #[test]
     fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
         let source = include_str!("main.rs");
+        let catalog_payload_source = include_str!("catalog_payloads.rs");
         let detail_source = source
             .split_once("async fn cve_catalog_detail")
             .expect("CVE catalog detail handler must exist")
@@ -8144,7 +7931,7 @@ mod tests {
             .split_once("async fn cve_catalog_detail")
             .expect("CVE catalog list handler must precede detail handler")
             .0;
-        let payload_source = source
+        let payload_source = catalog_payload_source
             .split_once("struct CatalogCveItem {")
             .expect("CVE catalog payload must exist")
             .1
@@ -8171,14 +7958,15 @@ mod tests {
     #[test]
     fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
         let source = include_str!("main.rs");
-        let cve_item_payload = source
+        let catalog_payload_source = include_str!("catalog_payloads.rs");
+        let cve_item_payload = catalog_payload_source
             .split_once("struct CatalogCveItem {")
             .expect("CVE catalog payload must exist")
             .1
             .split_once("struct CatalogCveDetail")
             .expect("CVE catalog payload must precede detail payload")
             .0;
-        let cpe_item_payload = source
+        let cpe_item_payload = catalog_payload_source
             .split_once("struct CatalogCpeItem {")
             .expect("CPE catalog payload must exist")
             .1
@@ -8216,8 +8004,8 @@ mod tests {
 
         assert!(!cve_item_payload.contains("user_tags"));
         assert!(!cpe_item_payload.contains("user_tags"));
-        assert!(source.contains("struct CatalogCveDetail"));
-        assert!(source.contains("struct CatalogCpeDetail"));
+        assert!(catalog_payload_source.contains("struct CatalogCveDetail"));
+        assert!(catalog_payload_source.contains("struct CatalogCpeDetail"));
         assert!(cve_detail_source.contains("catalog_user_tags(&client, \"cve\", &cve_id).await?"));
         assert!(cpe_detail_source.contains("catalog_user_tags(&client, \"cpe\", &cpe_id).await?"));
         assert!(!cve_list_source.contains("catalog_user_tags"));
@@ -8237,7 +8025,8 @@ mod tests {
     #[test]
     fn nvt_detail_user_tags_are_detail_only_active_info_tags() {
         let source = include_str!("main.rs");
-        let nvt_item_payload = source
+        let catalog_payload_source = include_str!("catalog_payloads.rs");
+        let nvt_item_payload = catalog_payload_source
             .split_once("struct NvtCatalogItem {")
             .expect("NVT catalog item payload must exist")
             .1
@@ -8260,7 +8049,7 @@ mod tests {
             .0;
 
         assert!(!nvt_item_payload.contains("user_tags"));
-        assert!(source.contains("struct NvtCatalogDetail"));
+        assert!(catalog_payload_source.contains("struct NvtCatalogDetail"));
         assert!(nvt_detail_source.contains("catalog_user_tags(&client, \"nvt\", &nvt_id).await?"));
         assert!(!nvt_list_source.contains("catalog_user_tags"));
 

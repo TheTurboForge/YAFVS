@@ -13,7 +13,7 @@ use axum::{
 
 use crate::{
     auth::{
-        DirectApiAuth, MAX_DIRECT_API_BEARER_TOKEN_LENGTH, bearer_token_matches,
+        DirectApiAuth, DirectApiOperator, MAX_DIRECT_API_BEARER_TOKEN_LENGTH, bearer_token_matches,
         direct_api_bearer_token_is_acceptable,
     },
     errors::ApiError,
@@ -24,6 +24,8 @@ use crate::{
 const DIRECT_API_BIND_ENV: &str = "TURBOVAS_API_DIRECT_BIND";
 const DIRECT_API_BEARER_TOKEN_ENV: &str = "TURBOVAS_API_BEARER_TOKEN";
 const DIRECT_API_BEARER_TOKEN_FILE_ENV: &str = "TURBOVAS_API_BEARER_TOKEN_FILE";
+const DIRECT_API_OPERATOR_UUID_ENV: &str = "TURBOVAS_API_OPERATOR_UUID";
+const DIRECT_API_OPERATOR_NAME_ENV: &str = "TURBOVAS_API_OPERATOR_NAME";
 
 fn env_string(name: &str) -> Option<String> {
     env::var(name)
@@ -40,7 +42,14 @@ pub(crate) fn direct_api_config() -> Result<Option<(String, DirectApiAuth)>, Api
     if !direct_api_bearer_token_is_acceptable(&token) {
         return Err(ApiError::Config);
     }
-    Ok(Some((bind, DirectApiAuth::new(token))))
+    let operator = direct_api_operator_from_sources(
+        env_string(DIRECT_API_OPERATOR_UUID_ENV),
+        env_string(DIRECT_API_OPERATOR_NAME_ENV),
+    )?;
+    Ok(Some((
+        bind,
+        DirectApiAuth::new(token).with_operator(operator),
+    )))
 }
 
 fn direct_api_bearer_token() -> Result<String, ApiError> {
@@ -78,6 +87,17 @@ fn read_direct_api_bearer_token_file(path: &str) -> Result<String, ApiError> {
     }
 }
 
+fn direct_api_operator_from_sources(
+    operator_uuid: Option<String>,
+    operator_name: Option<String>,
+) -> Result<Option<DirectApiOperator>, ApiError> {
+    match (operator_uuid, operator_name) {
+        (Some(user_uuid), user_name) => DirectApiOperator::new(&user_uuid, user_name).map(Some),
+        (None, Some(_)) => Err(ApiError::Config),
+        (None, None) => Ok(None),
+    }
+}
+
 pub(crate) async fn require_direct_api_auth(
     State(auth): State<DirectApiAuth>,
     request: Request,
@@ -86,6 +106,7 @@ pub(crate) async fn require_direct_api_auth(
     let request_id = request_id_from_headers(request.headers());
     let method = request.method().clone();
     let path = direct_api_audit_path(request.uri()).to_string();
+    let operator_uuid = auth.operator_uuid().unwrap_or("unbound");
     let api_path = path.starts_with("/api/v1/") || path == "/api/v1";
     let authenticated_api_path = api_path && bearer_token_matches(request.headers(), &auth.token);
     let mut audit_reason: Option<&'static str> = None;
@@ -128,11 +149,11 @@ pub(crate) async fn require_direct_api_auth(
         }
     });
     if authenticated_api_path && status == StatusCode::TOO_MANY_REQUESTS {
-        tracing::warn!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, "direct native API request rejected by in-flight limit");
+        tracing::warn!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, operator_uuid = %operator_uuid, "direct native API request rejected by in-flight limit");
     } else if authenticated_api_path && status.is_server_error() {
-        tracing::warn!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, "direct native API request completed with server error");
+        tracing::warn!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, operator_uuid = %operator_uuid, "direct native API request completed with server error");
     } else if authenticated_api_path {
-        tracing::info!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, "direct native API request completed");
+        tracing::info!(request_id = %request_id, %method, path = %path, status = status.as_u16(), reason = %audit_reason, operator_uuid = %operator_uuid, "direct native API request completed");
     }
     attach_direct_api_security_headers(&mut response);
     attach_request_id_header(&mut response, &request_id);
@@ -424,6 +445,32 @@ mod tests {
         )
         .expect("environment token should load");
         assert_eq!(token, "env-token-0123456789abcdef0123456789abcdef");
+    }
+
+    #[test]
+    fn direct_api_operator_requires_uuid_before_name() {
+        let operator = direct_api_operator_from_sources(
+            Some("12345678-1234-1234-1234-123456789abc".to_string()),
+            Some("admin".to_string()),
+        )
+        .expect("operator should parse")
+        .expect("operator should be present");
+
+        assert_eq!(operator.user_uuid(), "12345678-1234-1234-1234-123456789abc");
+        assert_eq!(operator.user_name(), Some("admin"));
+        assert!(
+            direct_api_operator_from_sources(None, None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(matches!(
+            direct_api_operator_from_sources(None, Some("admin".to_string())),
+            Err(ApiError::Config)
+        ));
+        assert!(matches!(
+            direct_api_operator_from_sources(Some("not-a-uuid".to_string()), None),
+            Err(ApiError::Config)
+        ));
     }
 
     #[test]

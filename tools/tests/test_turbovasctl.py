@@ -2448,6 +2448,12 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(findings["native-api-client-contract.auth"]["status"], "pass")
         self.assertEqual(findings["native-api-client-contract.direct-read"]["status"], "pass")
         self.assertEqual(findings["native-api-client-contract.write-control"]["status"], "pass")
+        self.assertEqual(findings["native-api-client-contract.direct-runtime"]["status"], "pass")
+        self.assertEqual(details["direct_runtime_alignment_status"], "pass")
+        self.assertEqual(details["direct_segment_guard_alignment_status"], "pass")
+        self.assertEqual(details["direct_segment_guard_missing_property_count"], 0)
+        self.assertEqual(details["direct_body_limit_alignment_status"], "pass")
+        self.assertEqual(details["direct_body_limit_missing_property_count"], 0)
 
     def test_native_api_client_contract_status_only_is_chat_safe(self):
         root = Path(__file__).resolve().parents[2]
@@ -2465,6 +2471,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["write_control_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["direct_runtime_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["direct_segment_guard_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["direct_segment_guard_missing_property_count"], 0)
+        self.assertEqual(status_only["details"]["direct_body_limit_alignment_status"], "pass")
+        self.assertEqual(status_only["details"]["direct_body_limit_missing_property_count"], 0)
         self.assertEqual(status_only["details"]["missing_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["operations_missing_error_response_count"], 0)
@@ -2507,6 +2518,29 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(findings["native-api-client-contract.openapi"]["status"], "fail")
         self.assertEqual(findings["native-api-client-contract.direct-read"]["status"], "fail")
         self.assertEqual(result["details"]["openapi_alignment_status"], "warn")
+
+    def test_native_api_client_contract_fails_on_direct_runtime_drift(self):
+        root = Path(__file__).resolve().parents[2]
+        drift = {
+            "alignment_status": "warn",
+            "segment_guard": {
+                "alignment_status": "pass",
+                "missing_guard_properties": [],
+            },
+            "body_limit": {
+                "alignment_status": "warn",
+                "missing_body_limit_properties": ["uses_default_body_limit"],
+            },
+        }
+        with unittest.mock.patch.object(turbovasctl, "native_api_direct_contract_summary", return_value=drift):
+            result = turbovasctl.command_native_api_client_contract(root, status_only=True)
+
+        findings = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(findings["native-api-client-contract.direct-runtime"]["status"], "fail")
+        self.assertEqual(result["details"]["direct_runtime_alignment_status"], "warn")
+        self.assertEqual(result["details"]["direct_body_limit_alignment_status"], "warn")
+        self.assertEqual(result["details"]["direct_body_limit_missing_property_count"], 1)
 
     def test_security_policy_toml_missing_dependency_is_graceful(self):
         with unittest.mock.patch.object(turbovasctl, "tomllib", None):

@@ -7500,6 +7500,11 @@ def native_api_client_contract_status_only_result(result: dict[str, Any]) -> dic
         "openapi_alignment_status": details.get("openapi_alignment_status", "unknown"),
         "auth_contract_alignment_status": details.get("auth_contract_alignment_status", "unknown"),
         "write_control_alignment_status": details.get("write_control_alignment_status", "unknown"),
+        "direct_runtime_alignment_status": details.get("direct_runtime_alignment_status", "unknown"),
+        "direct_segment_guard_alignment_status": details.get("direct_segment_guard_alignment_status", "unknown"),
+        "direct_segment_guard_missing_property_count": details.get("direct_segment_guard_missing_property_count", 0),
+        "direct_body_limit_alignment_status": details.get("direct_body_limit_alignment_status", "unknown"),
+        "direct_body_limit_missing_property_count": details.get("direct_body_limit_missing_property_count", 0),
         "missing_operation_id_count": details.get("missing_operation_id_count", 0),
         "duplicate_operation_id_count": details.get("duplicate_operation_id_count", 0),
         "operations_missing_error_response_count": details.get("operations_missing_error_response_count", 0),
@@ -7524,6 +7529,11 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
     contract = native_api_openapi_contract_summary(repo_root)
     auth_contract = contract.get("auth_contract", {}) if isinstance(contract.get("auth_contract"), dict) else {}
     write_control_contract = contract.get("write_control_contract", {}) if isinstance(contract.get("write_control_contract"), dict) else {}
+    tooling_summary = summarize_native_tooling(native_tooling_inventory(repo_root), repo_root)
+    annotate_native_tooling_direct_api(tooling_summary, repo_root)
+    direct_runtime_contract = tooling_summary.get("direct_api_contract", {}) if isinstance(tooling_summary.get("direct_api_contract"), dict) else {}
+    segment_guard = direct_runtime_contract.get("segment_guard", {}) if isinstance(direct_runtime_contract.get("segment_guard"), dict) else {}
+    body_limit = direct_runtime_contract.get("body_limit", {}) if isinstance(direct_runtime_contract.get("body_limit"), dict) else {}
     operations = openapi_contract_operations(repo_root)
     direct_operations = [
         operation
@@ -7535,6 +7545,7 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
     openapi_status = contract_drift_status(contract.get("alignment_status"))
     auth_status = contract_drift_status(auth_contract.get("alignment_status"))
     write_control_status = contract_drift_status(write_control_contract.get("alignment_status"))
+    direct_runtime_status = contract_drift_status(direct_runtime_contract.get("alignment_status"))
     direct_status = "pass" if direct_count > 0 else "fail"
     details = {
         "openapi_version": openapi_info_version(repo_root),
@@ -7549,6 +7560,11 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
         "openapi_alignment_status": contract.get("alignment_status", "unknown"),
         "auth_contract_alignment_status": auth_contract.get("alignment_status", "unknown"),
         "write_control_alignment_status": write_control_contract.get("alignment_status", "unknown"),
+        "direct_runtime_alignment_status": direct_runtime_contract.get("alignment_status", "unknown"),
+        "direct_segment_guard_alignment_status": segment_guard.get("alignment_status", "unknown"),
+        "direct_segment_guard_missing_property_count": len(segment_guard.get("missing_guard_properties", [])),
+        "direct_body_limit_alignment_status": body_limit.get("alignment_status", "unknown"),
+        "direct_body_limit_missing_property_count": len(body_limit.get("missing_body_limit_properties", [])),
         "missing_operation_id_count": len(contract.get("missing_operation_ids", [])),
         "duplicate_operation_id_count": len(contract.get("duplicate_operation_ids", [])),
         "operation_request_body_count": len(contract.get("operations_with_request_bodies", [])),
@@ -7608,6 +7624,20 @@ def command_native_api_client_contract(repo_root: Path, status_only: bool = Fals
                 "missing_write_control_metadata_count": details["missing_write_control_metadata_count"],
                 "invalid_write_control_metadata_count": details["invalid_write_control_metadata_count"],
                 "get_request_body_count": details["get_request_body_count"],
+            },
+        ),
+        finding(
+            direct_runtime_status,
+            "native-api-client-contract.direct-runtime",
+            "Direct runtime routes, allowlist, segment guards, and body-limit contract align with generated-client direct exposure."
+            if direct_runtime_status == "pass"
+            else "Direct runtime routes, allowlist, segment guards, or body-limit contract drifted from generated-client direct exposure.",
+            details={
+                "direct_runtime_alignment_status": details["direct_runtime_alignment_status"],
+                "direct_segment_guard_alignment_status": details["direct_segment_guard_alignment_status"],
+                "direct_segment_guard_missing_property_count": details["direct_segment_guard_missing_property_count"],
+                "direct_body_limit_alignment_status": details["direct_body_limit_alignment_status"],
+                "direct_body_limit_missing_property_count": details["direct_body_limit_missing_property_count"],
             },
         ),
     ]

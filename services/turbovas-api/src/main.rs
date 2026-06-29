@@ -6369,6 +6369,20 @@ mod tests {
         tie_breakers: &'static [&'static str],
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct RegisteredRoute<'a> {
+        path: &'a str,
+        method: &'a str,
+    }
+
+    struct NativeWriteRouteContract {
+        method: &'static str,
+        path: &'static str,
+        safety_contract: &'static str,
+    }
+
+    const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[];
+
     const PRIORITY_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         CollectionContract {
             path: "/api/v1/vulnerabilities",
@@ -7450,34 +7464,60 @@ mod tests {
     }
 
     #[test]
-    fn direct_api_allowlist_tracks_registered_read_routes() {
+    fn direct_api_allowlist_tracks_registered_get_routes_and_write_contracts() {
         let source = include_str!("main.rs");
         let routes = app_route_registration_block(source);
-        let api_routes = registered_route_paths(routes)
+        let api_routes = registered_routes(routes)
             .into_iter()
-            .filter(|path| path.starts_with("/api/v1/"))
+            .filter(|route| route.path.starts_with("/api/v1/"))
             .collect::<Vec<_>>();
         let internal_only_routes =
             ["/api/v1/scopes/:scope_id/reports/:scope_report_id/retention-plan"];
 
         assert!(api_routes.len() > 40, "expected the native API route table");
-        for forbidden_method in ["post(", "put(", "patch(", "delete("] {
-            assert!(
-                !routes.contains(forbidden_method),
-                "registered native API routes must remain read-only"
-            );
-        }
         for route in api_routes {
-            let concrete_path = concrete_direct_api_path(route);
-            if internal_only_routes.contains(&route) {
+            if route.method == "get" {
+                let concrete_path = concrete_direct_api_path(route.path);
+                if internal_only_routes.contains(&route.path) {
+                    assert!(
+                        !direct_api_v1_path_is_allowed(&concrete_path),
+                        "internal-only route {} must not be direct API allowlisted",
+                        route.path
+                    );
+                } else {
+                    assert!(
+                        direct_api_v1_path_is_allowed(&concrete_path),
+                        "registered read route {} should be direct API allowlisted as {concrete_path}",
+                        route.path
+                    );
+                }
+                continue;
+            }
+
+            let contract = APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS
+                .iter()
+                .find(|contract| contract.method == route.method && contract.path == route.path);
+            let Some(contract) = contract else {
+                panic!(
+                    "registered native API write/control route {} {} must have an explicit safety contract entry",
+                    route.method.to_uppercase(),
+                    route.path
+                );
+            };
+            assert_eq!(
+                contract.safety_contract,
+                "write-control-v1",
+                "write/control route {} {} must use the current safety contract",
+                route.method.to_uppercase(),
+                route.path
+            );
+            let concrete_path = concrete_direct_api_path(route.path);
+            if route.method != "get" {
                 assert!(
                     !direct_api_v1_path_is_allowed(&concrete_path),
-                    "internal-only route {route} must not be direct API allowlisted"
-                );
-            } else {
-                assert!(
-                    direct_api_v1_path_is_allowed(&concrete_path),
-                    "registered read route {route} should be direct API allowlisted as {concrete_path}"
+                    "write/control route {} {} must not become direct API allowlisted until direct write exposure is explicitly designed",
+                    route.method.to_uppercase(),
+                    route.path
                 );
             }
         }
@@ -7493,8 +7533,8 @@ mod tests {
             .0
     }
 
-    fn registered_route_paths(routes: &str) -> Vec<&str> {
-        let mut paths = Vec::new();
+    fn registered_routes(routes: &str) -> Vec<RegisteredRoute<'_>> {
+        let mut registered = Vec::new();
         let mut remainder = routes;
         while let Some((_, after_route)) = remainder.split_once(".route(") {
             let Some((_, after_quote)) = after_route.split_once('"') else {
@@ -7503,10 +7543,15 @@ mod tests {
             let Some((path, after_path)) = after_quote.split_once('"') else {
                 break;
             };
-            paths.push(path);
+            let method = after_path
+                .split_once(',')
+                .and_then(|(_, after_comma)| after_comma.trim_start().split_once('('))
+                .map(|(method, _)| method.trim())
+                .unwrap_or("unknown");
+            registered.push(RegisteredRoute { path, method });
             remainder = after_path;
         }
-        paths
+        registered
     }
 
     fn concrete_direct_api_path(route: &str) -> String {

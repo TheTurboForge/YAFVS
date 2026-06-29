@@ -56,9 +56,16 @@ pub(crate) async fn scope_detail(
     State(state): State<AppState>,
     Path(scope_id): Path<String>,
 ) -> Result<Json<ScopeItem>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_scope_detail(&client, &scope_id).await?))
+}
+
+pub(crate) async fn load_scope_detail(
+    client: &Client,
+    scope_id: &str,
+) -> Result<ScopeItem, ApiError> {
     parse_uuid(&scope_id)?;
     let sql = scope_sql("lower(uuid) = lower($1)", "is_global DESC, name ASC", "");
-    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let row = client
         .query_opt(&sql, &[&scope_id])
         .await
@@ -74,13 +81,13 @@ pub(crate) async fn scope_detail(
     let hosts = scope_hosts(&client, scope_pk, global).await?;
     let candidate_hosts = scope_candidate_hosts(&client, scope_pk, global).await?;
     let scope_reports = scope_report_references(&client, scope_pk).await?;
-    Ok(Json(scope_from_row(
+    Ok(scope_from_row(
         &row,
         targets,
         hosts,
         candidate_hosts,
         scope_reports,
-    )))
+    ))
 }
 
 pub(crate) fn scope_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> String {

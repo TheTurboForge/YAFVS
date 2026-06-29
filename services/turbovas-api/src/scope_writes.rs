@@ -4,10 +4,21 @@
 
 use std::collections::HashSet;
 
+use axum::{
+    Json,
+    extract::{Extension, Path, State},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+};
 use serde::Deserialize;
 use tokio_postgres::{Row, Transaction, types::ToSql};
 
-use crate::{errors::ApiError, path_ids::parse_uuid};
+use crate::{
+    app_state::AppState,
+    auth::DirectApiOperator,
+    errors::ApiError,
+    path_ids::parse_uuid,
+    scope_payloads::{ScopeItem, load_scope_detail},
+};
 
 const MAX_SCOPE_TEXT_BYTES: usize = 4096;
 
@@ -89,6 +100,87 @@ pub(crate) struct ScopeWriteTransactionPlan {
 pub(crate) struct ScopeWriteRecord {
     pub(crate) internal_id: i64,
     pub(crate) uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScopeWriteState {
+    internal_id: i64,
+    uuid: String,
+}
+
+pub(crate) async fn create_scope(
+    State(state): State<AppState>,
+    Extension(operator): Extension<DirectApiOperator>,
+    Json(request): Json<ScopeCreateRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ScopeItem>), ApiError> {
+    let request = validate_scope_create_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "begin create scope transaction"))?;
+    let owner_id = resolve_scope_write_operator_owner(&tx, &operator).await?;
+    verify_scope_write_references_visible(&tx, &request.target_ids, &request.host_ids).await?;
+    let record = execute_scope_create_transaction(&tx, owner_id, &request).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "commit create scope transaction"))?;
+
+    let scope = load_scope_detail(&client, &record.uuid).await?;
+    Ok((
+        StatusCode::CREATED,
+        scope_write_location_headers(&record.uuid)?,
+        Json(scope),
+    ))
+}
+
+pub(crate) async fn patch_scope(
+    State(state): State<AppState>,
+    Path(scope_id): Path<String>,
+    Extension(operator): Extension<DirectApiOperator>,
+    Json(request): Json<ScopePatchRequest>,
+) -> Result<Json<ScopeItem>, ApiError> {
+    let request = validate_scope_patch_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "begin patch scope transaction"))?;
+    resolve_scope_write_operator_owner(&tx, &operator).await?;
+    let state = load_mutable_scope_write_state(&tx, &scope_id).await?;
+    verify_scope_write_references_visible(
+        &tx,
+        request.target_ids.as_deref().unwrap_or(&[]),
+        request.host_ids.as_deref().unwrap_or(&[]),
+    )
+    .await?;
+    let record = execute_scope_patch_transaction(&tx, state.internal_id, &request).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "commit patch scope transaction"))?;
+
+    Ok(Json(load_scope_detail(&client, &record.uuid).await?))
+}
+
+pub(crate) async fn delete_scope(
+    State(state): State<AppState>,
+    Path(scope_id): Path<String>,
+    Extension(operator): Extension<DirectApiOperator>,
+) -> Result<StatusCode, ApiError> {
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "begin delete scope transaction"))?;
+    resolve_scope_write_operator_owner(&tx, &operator).await?;
+    let state = load_mutable_scope_write_state(&tx, &scope_id).await?;
+    ensure_scope_has_no_report_history(&tx, &state.uuid).await?;
+    execute_scope_delete_transaction(&tx, state.internal_id).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "commit delete scope transaction"))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub(crate) fn validate_scope_create_request(
@@ -332,6 +424,109 @@ pub(crate) async fn execute_scope_delete_transaction(
     }
 }
 
+fn scope_write_location_headers(scope_id: &str) -> Result<HeaderMap, ApiError> {
+    let mut headers = HeaderMap::new();
+    let location = format!("/api/v1/scopes/{scope_id}");
+    headers.insert(
+        header::LOCATION,
+        HeaderValue::from_str(&location).map_err(|_| ApiError::Config)?,
+    );
+    Ok(headers)
+}
+
+async fn resolve_scope_write_operator_owner(
+    tx: &Transaction<'_>,
+    operator: &DirectApiOperator,
+) -> Result<i64, ApiError> {
+    tx.query_opt(scope_write_operator_owner_sql(), &[&operator.user_uuid()])
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "resolve scope write operator"))?
+        .map(|row| row.get(0))
+        .ok_or_else(|| {
+            tracing::warn!("direct API scope write operator does not resolve to a database user");
+            ApiError::Forbidden
+        })
+}
+
+async fn load_mutable_scope_write_state(
+    tx: &Transaction<'_>,
+    scope_id: &str,
+) -> Result<ScopeWriteState, ApiError> {
+    let scope_id = parse_uuid(scope_id)?.to_string();
+    let row = tx
+        .query_opt(scope_write_mutability_sql(), &[&scope_id])
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "load scope write state"))?
+        .ok_or(ApiError::NotFound)?;
+    let state = ScopeWriteState {
+        internal_id: row.get(0),
+        uuid: scope_id,
+    };
+    let predefined: i32 = row.get(1);
+    let global: i32 = row.get(2);
+    ensure_scope_is_mutable(global != 0, predefined != 0)?;
+    Ok(state)
+}
+
+async fn ensure_scope_has_no_report_history(
+    tx: &Transaction<'_>,
+    scope_id: &str,
+) -> Result<(), ApiError> {
+    let row = tx
+        .query_one(scope_write_report_history_sql(), &[&scope_id])
+        .await
+        .map_err(|error| map_scope_write_db_error(error, "check scope report history"))?;
+    let report_count: i64 = row.get(0);
+    if report_count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scope with report history cannot be deleted".to_string(),
+        ))
+    }
+}
+
+async fn verify_scope_write_references_visible(
+    tx: &Transaction<'_>,
+    target_ids: &[String],
+    host_ids: &[String],
+) -> Result<(), ApiError> {
+    let visible_target_ids = visible_scope_reference_ids(
+        tx,
+        scope_write_visible_targets_sql(),
+        target_ids,
+        "load visible scope targets",
+    )
+    .await?;
+    ensure_scope_write_references_visible("target_ids", target_ids, &visible_target_ids)?;
+
+    let visible_host_ids = visible_scope_reference_ids(
+        tx,
+        scope_write_visible_hosts_sql(),
+        host_ids,
+        "load visible scope hosts",
+    )
+    .await?;
+    ensure_scope_write_references_visible("host_ids", host_ids, &visible_host_ids)
+}
+
+async fn visible_scope_reference_ids(
+    tx: &Transaction<'_>,
+    sql: &str,
+    requested_ids: &[String],
+    action: &'static str,
+) -> Result<Vec<String>, ApiError> {
+    if requested_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let requested_ids = requested_ids.to_vec();
+    let rows = tx
+        .query(sql, &[&requested_ids])
+        .await
+        .map_err(|error| map_scope_write_db_error(error, action))?;
+    Ok(rows.iter().map(|row| row.get(0)).collect())
+}
+
 async fn query_scope_write_record(
     tx: &Transaction<'_>,
     sql: &str,
@@ -423,13 +618,13 @@ pub(crate) fn scope_write_report_history_sql() -> &'static str {
 pub(crate) fn scope_write_visible_targets_sql() -> &'static str {
     "SELECT uuid::text
        FROM targets
-      WHERE uuid = ANY($1);"
+      WHERE uuid = ANY($1::text[]);"
 }
 
 pub(crate) fn scope_write_visible_hosts_sql() -> &'static str {
     "SELECT uuid::text
        FROM hosts
-      WHERE uuid = ANY($1);"
+      WHERE uuid = ANY($1::text[]);"
 }
 
 pub(crate) fn scope_by_internal_id_sql() -> &'static str {
@@ -878,6 +1073,67 @@ mod tests {
             assert!(!body.contains("state.pool"));
             assert!(!body.contains("transaction().await"));
             assert!(!body.contains("commit().await"));
+        }
+    }
+
+    #[test]
+    fn scope_write_location_header_points_to_native_scope_detail() {
+        let headers = scope_write_location_headers("12345678-1234-1234-1234-123456789abc")
+            .expect("valid location header");
+
+        assert_eq!(
+            headers
+                .get(header::LOCATION)
+                .expect("location header")
+                .to_str()
+                .expect("ascii location"),
+            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc"
+        );
+    }
+
+    #[test]
+    fn scope_write_handlers_require_operator_transactions_and_payload_reload() {
+        let _create = create_scope;
+        let _patch = patch_scope;
+        let _delete = delete_scope;
+
+        let source = include_str!("scope_writes.rs");
+        let create_body = source
+            .split_once("pub(crate) async fn create_scope")
+            .expect("create handler must exist")
+            .1
+            .split_once("pub(crate) async fn patch_scope")
+            .expect("create handler must precede patch handler")
+            .0;
+        let patch_body = source
+            .split_once("pub(crate) async fn patch_scope")
+            .expect("patch handler must exist")
+            .1
+            .split_once("pub(crate) async fn delete_scope")
+            .expect("patch handler must precede delete handler")
+            .0;
+        let delete_body = source
+            .split_once("pub(crate) async fn delete_scope")
+            .expect("delete handler must exist")
+            .1
+            .split_once("pub(crate) fn validate_scope_create_request")
+            .expect("delete handler must precede DTO validation")
+            .0;
+
+        for body in [create_body, patch_body, delete_body] {
+            assert!(body.contains("Extension(operator): Extension<DirectApiOperator>"));
+            assert!(body.contains("state.pool.get()"));
+            assert!(body.contains("client"));
+            assert!(body.contains(".transaction()"));
+            assert!(body.contains("resolve_scope_write_operator_owner(&tx, &operator).await?"));
+            assert!(body.contains("tx.commit()"));
+        }
+        assert!(create_body.contains("verify_scope_write_references_visible"));
+        assert!(patch_body.contains("load_mutable_scope_write_state"));
+        assert!(patch_body.contains("verify_scope_write_references_visible"));
+        assert!(delete_body.contains("ensure_scope_has_no_report_history"));
+        for body in [create_body, patch_body] {
+            assert!(body.contains("load_scope_detail(&client"));
         }
     }
 

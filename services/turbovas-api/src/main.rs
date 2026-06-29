@@ -41,6 +41,8 @@ mod scanner_assets;
 mod schedules;
 mod scope_payloads;
 mod scope_report_handlers;
+// B-164 write-control code is intentionally dark until direct write exposure is enabled.
+#[allow(dead_code)]
 mod scope_writes;
 mod tag_resource_helpers;
 mod tags;

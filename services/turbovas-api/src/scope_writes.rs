@@ -69,6 +69,7 @@ pub(crate) struct ValidatedScopePatch {
     pub(crate) host_ids: Option<Vec<String>>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScopeWriteOperation {
     Create,
@@ -76,6 +77,7 @@ pub(crate) enum ScopeWriteOperation {
     Delete,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScopeWriteStep {
     ResolveOperatorOwner,
@@ -90,6 +92,7 @@ pub(crate) enum ScopeWriteStep {
     DeleteScope,
 }
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ScopeWriteTransactionPlan {
     pub(crate) operation: ScopeWriteOperation,
@@ -211,6 +214,7 @@ pub(crate) fn validate_scope_create_request(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn scope_create_transaction_plan(
     request: &ValidatedScopeCreate,
 ) -> ScopeWriteTransactionPlan {
@@ -229,6 +233,7 @@ pub(crate) fn scope_create_transaction_plan(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn scope_patch_transaction_plan(
     request: &ValidatedScopePatch,
 ) -> ScopeWriteTransactionPlan {
@@ -257,6 +262,7 @@ pub(crate) fn scope_patch_transaction_plan(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn scope_delete_transaction_plan() -> ScopeWriteTransactionPlan {
     ScopeWriteTransactionPlan {
         operation: ScopeWriteOperation::Delete,

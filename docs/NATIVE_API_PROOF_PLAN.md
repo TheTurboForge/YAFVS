@@ -134,7 +134,9 @@ requests.
 Direct scriptable access is narrower than the internal listener: endpoints must
 be explicitly classified for direct use. Internal-only scaffolds such as the
 scope-report retention preview stay available to internal validation but return
-JSON `404 not_found` on the direct bearer listener.
+JSON `404 not_found` on the direct bearer listener. Direct write-control is
+limited to explicitly registered scope metadata/membership routes behind
+verified operator identity and `TURBOVAS_API_DIRECT_WRITE_CONTROL`.
 The OpenAPI contract marks direct scriptable reads with the
 `x-turbovas-direct: true` operation extension, and `native-tooling-state`
 reports whether those markers align with the implementation inventory.

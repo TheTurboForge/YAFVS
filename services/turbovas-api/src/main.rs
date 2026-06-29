@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{delete, get, patch, post},
+};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod alerts;
@@ -41,8 +44,6 @@ mod scanner_assets;
 mod schedules;
 mod scope_payloads;
 mod scope_report_handlers;
-// B-164 write-control code is intentionally dark until direct write exposure is enabled.
-#[allow(dead_code)]
 mod scope_writes;
 mod tag_resource_helpers;
 mod tags;
@@ -78,6 +79,7 @@ use scanner_assets::*;
 use schedules::*;
 use scope_payloads::*;
 use scope_report_handlers::*;
+use scope_writes::{create_scope, delete_scope, patch_scope};
 use tags::*;
 use task_targets::*;
 use tls_certificates::*;
@@ -268,9 +270,16 @@ fn native_api_router() -> Router<AppState> {
 
 fn direct_native_api_router(
     router: Router<AppState>,
-    _write_control_enabled: bool,
+    write_control_enabled: bool,
 ) -> Router<AppState> {
-    router
+    if write_control_enabled {
+        router
+            .route("/api/v1/scopes", post(create_scope))
+            .route("/api/v1/scopes/:scope_id", patch(patch_scope))
+            .route("/api/v1/scopes/:scope_id", delete(delete_scope))
+    } else {
+        router
+    }
 }
 
 #[cfg(test)]
@@ -312,7 +321,23 @@ mod tests {
         safety_contract: &'static str,
     }
 
-    const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[];
+    const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
+        NativeWriteRouteContract {
+            method: "post",
+            path: "/api/v1/scopes",
+            safety_contract: "write-control-v1",
+        },
+        NativeWriteRouteContract {
+            method: "patch",
+            path: "/api/v1/scopes/:scope_id",
+            safety_contract: "write-control-v1",
+        },
+        NativeWriteRouteContract {
+            method: "delete",
+            path: "/api/v1/scopes/:scope_id",
+            safety_contract: "write-control-v1",
+        },
+    ];
 
     const PRIORITY_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         CollectionContract {
@@ -1464,12 +1489,67 @@ mod tests {
             if route.method != "get" {
                 assert!(
                     !direct_api_v1_path_is_allowed(&concrete_path),
-                    "write/control route {} {} must not become direct API allowlisted until direct write exposure is explicitly designed",
+                    "write/control route {} {} must use method-aware direct API gating, not the read allowlist",
                     route.method.to_uppercase(),
                     route.path
                 );
             }
         }
+    }
+
+    #[test]
+    fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
+        let source = include_str!("main.rs");
+        let internal_routes = registered_routes(app_route_registration_block(source));
+        let direct_routes = registered_routes(direct_api_route_registration_block(source));
+        let direct_writes = direct_routes
+            .iter()
+            .filter(|route| route.method != "get")
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            direct_writes.len(),
+            APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS.len(),
+            "direct write/control route count must match explicit safety contracts"
+        );
+        for contract in APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS {
+            let method = contract
+                .method
+                .to_ascii_uppercase()
+                .parse()
+                .expect("approved write/control route method must parse");
+            assert!(
+                !internal_routes
+                    .iter()
+                    .any(|route| route.method == contract.method && route.path == contract.path),
+                "{} {} must not be registered on the internal/browser router",
+                contract.method.to_uppercase(),
+                contract.path
+            );
+            assert!(
+                direct_writes
+                    .iter()
+                    .any(|route| route.method == contract.method && route.path == contract.path),
+                "{} {} must be registered on the direct router when write-control is enabled",
+                contract.method.to_uppercase(),
+                contract.path
+            );
+
+            let concrete_path = concrete_direct_api_path(contract.path);
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, &concrete_path, false),
+                "{} {} must stay denied when direct write-control is disabled",
+                contract.method.to_uppercase(),
+                contract.path
+            );
+            assert!(
+                direct_api_v1_method_is_allowed(&method, &concrete_path, true),
+                "{} {} must be method-allowlisted when direct write-control is enabled",
+                contract.method.to_uppercase(),
+                contract.path
+            );
+        }
+        assert!(direct_api_route_registration_block(source).contains("if write_control_enabled"));
     }
 
     #[test]
@@ -1509,6 +1589,16 @@ mod tests {
             .1
             .split_once("\n}\n\nfn direct_native_api_router")
             .expect("native API router must end before direct router")
+            .0
+    }
+
+    fn direct_api_route_registration_block(source: &str) -> &str {
+        source
+            .split_once("fn direct_native_api_router(")
+            .expect("direct API router must be registered")
+            .1
+            .split_once("\n}\n\n#[cfg(test)]")
+            .expect("direct API router must end before tests")
             .0
     }
 
@@ -2296,7 +2386,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_api_method_classifier_keeps_write_methods_closed_until_allowlisted() {
+    fn direct_api_method_classifier_gates_scope_writes_on_write_control_flag() {
         assert!(direct_api_v1_method_is_allowed(
             &axum::http::Method::GET,
             "/api/v1/scopes",
@@ -2310,9 +2400,29 @@ mod tests {
         ] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, "/api/v1/scopes", false),
-                "{method} should stay closed until direct write-control exposure is explicit"
+                "{method} should stay closed while direct write-control is disabled"
             );
         }
+        assert!(direct_api_v1_method_is_allowed(
+            &axum::http::Method::POST,
+            "/api/v1/scopes",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &axum::http::Method::PATCH,
+            "/api/v1/scopes/scope-id",
+            true
+        ));
+        assert!(direct_api_v1_method_is_allowed(
+            &axum::http::Method::DELETE,
+            "/api/v1/scopes/scope-id",
+            true
+        ));
+        assert!(!direct_api_v1_method_is_allowed(
+            &axum::http::Method::PUT,
+            "/api/v1/scopes/scope-id",
+            true
+        ));
         assert!(!direct_api_v1_method_is_allowed(
             &axum::http::Method::GET,
             "/api/v1/internal-preview",

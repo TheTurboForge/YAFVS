@@ -10,6 +10,7 @@ use axum::{
 pub(crate) const MAX_DIRECT_API_QUERY_BYTES: usize = 8 * 1024;
 pub(crate) const MAX_DIRECT_API_WRITE_BODY_BYTES: u64 = 256 * 1024;
 
+#[cfg(test)]
 pub(crate) fn direct_api_request_shape_is_allowed(request: &Request) -> bool {
     direct_api_request_shape_is_allowed_for_method(request.method(), request)
 }

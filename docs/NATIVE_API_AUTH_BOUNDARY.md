@@ -33,20 +33,20 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - Optional direct operator identity is carried by `TURBOVAS_API_OPERATOR_UUID`
   and `TURBOVAS_API_OPERATOR_NAME`. The helper validates shape locally, and the
   service verifies configured operator UUIDs against `users` before exposing the
-  direct listener. This is identity groundwork for future owner-bearing writes;
-  it does not authorize write routes by itself.
-- `TURBOVAS_API_DIRECT_WRITE_CONTROL` is the future direct write-control
-  enablement flag. It accepts only strict boolean values, requires
-  `TURBOVAS_API_OPERATOR_UUID` when truthy, and does not expose write routes
-  while write routes remain unregistered.
+  direct listener. This identity is required by direct write-control, but it
+  does not authorize write routes by itself.
+- `TURBOVAS_API_DIRECT_WRITE_CONTROL` is the direct write-control enablement
+  flag. It accepts only strict boolean values, requires
+  `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
+  direct scope metadata/membership write routes.
 - `/healthz` is unauthenticated for readiness. `/api/v1/...` on the direct
   listener requires `Authorization: Bearer <token>` and returns JSON `401`
   errors for missing or wrong tokens.
 - The direct listener rejects valid-token non-GET `/api/v1` requests with JSON
-  `405 method_not_allowed` unless a future write/control route is deliberately
-  registered and `TURBOVAS_API_DIRECT_WRITE_CONTROL` is enabled with a verified
-  operator identity. This prevents future native write/control routes
-  from becoming direct-scriptable without a separate safety design.
+  `405 method_not_allowed` unless the method/path pair is deliberately
+  registered as direct write-control and `TURBOVAS_API_DIRECT_WRITE_CONTROL` is
+  enabled with a verified operator identity. The current direct write surface is
+  limited to scope create/update/delete metadata and membership routes.
 - The direct listener applies a fixed in-flight cap to authenticated direct
   `GET` requests and returns JSON `429 too_many_requests` with `X-Request-Id`
   when the cap is reached. This is a coarse development pressure guard, not a

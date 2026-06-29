@@ -1910,15 +1910,16 @@ paths:
           $ref: '#/components/responses/InternalError'
     post:
       operationId: postScopes
-      x-turbovas-exposure: internal-only
-      x-turbovas-maturity: preview-write
-      x-turbovas-replaces: none
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scope-metadata-membership-write
       x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
-      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
-      summary: Preview create a scope
+      summary: Create a scope
       requestBody:
         required: true
         content:
@@ -1985,15 +1986,16 @@ paths:
           $ref: '#/components/responses/InternalError'
     patch:
       operationId: patchScopesByScopeId
-      x-turbovas-exposure: internal-only
-      x-turbovas-maturity: preview-write
-      x-turbovas-replaces: none
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scope-metadata-membership-write
       x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
-      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
-      summary: Preview update mutable scope metadata and membership
+      summary: Update mutable scope metadata and membership
       parameters:
         - $ref: '#/components/parameters/ScopeId'
       requestBody:
@@ -2027,15 +2029,16 @@ paths:
           $ref: '#/components/responses/InternalError'
     delete:
       operationId: deleteScopesByScopeId
-      x-turbovas-exposure: internal-only
-      x-turbovas-maturity: preview-write
-      x-turbovas-replaces: none
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scope-metadata-membership-write
       x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
-      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
-      summary: Preview delete a mutable scope
+      summary: Delete a mutable scope
       parameters:
         - $ref: '#/components/parameters/ScopeId'
       responses:

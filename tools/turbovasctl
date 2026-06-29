@@ -538,6 +538,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "schedule-metadata-list-read",
         "scope-detail-membership-read",
         "scope-list-read",
+        "scope-metadata-membership-write",
         "scope-report-application-evidence-read",
         "scope-report-cve-evidence-read",
         "scope-report-detail-summary-read",
@@ -656,6 +657,9 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/errors"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/metrics"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"): "internal-only",
+    ("post", "/scopes"): "direct-write",
+    ("patch", "/scopes/{scope_id}"): "direct-write",
+    ("delete", "/scopes/{scope_id}"): "direct-write",
 }
 OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts"): {
@@ -952,6 +956,21 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "scope-membership-writes-and-report-generation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-detail-membership-read",
+    },
+    ("post", "/scopes"): {
+        "x-turbovas-inherited-still-owns": "scope-membership-writes-and-report-generation",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "scope-metadata-membership-write",
+    },
+    ("patch", "/scopes/{scope_id}"): {
+        "x-turbovas-inherited-still-owns": "scope-membership-writes-and-report-generation",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "scope-metadata-membership-write",
+    },
+    ("delete", "/scopes/{scope_id}"): {
+        "x-turbovas-inherited-still-owns": "scope-membership-writes-and-report-generation",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "scope-metadata-membership-write",
     },
     ("get", "/targets"): {
         "x-turbovas-inherited-still-owns": "target-credential-secrets-writes-and-deletes",
@@ -5393,7 +5412,13 @@ def rust_collection_contract_paths(repo_root: Path | None) -> list[str]:
         source = path.read_text(encoding="utf-8")
     except OSError:
         return []
-    return sorted(set(re.findall(r'path:\s*"(/api/v1[^"]+)"', source)))
+    return sorted(
+        {
+            path
+            for path in re.findall(r'path:\s*"(/api/v1[^"]+)"', source)
+            if ":" not in path
+        }
+    )
 
 
 def openapi_component_parameter_block(repo_root: Path | None, parameter_name: str) -> list[str]:
@@ -5454,6 +5479,8 @@ def openapi_collection_query_contract_summary(repo_root: Path | None, operations
     incomplete_collection_parameters = []
     openapi_collection_paths = []
     for operation in operations:
+        if operation.get("method") != "get":
+            continue
         parameters = set(operation.get("parameters", [])) if isinstance(operation.get("parameters"), list) else set()
         present = parameters & required
         if present == required and isinstance(operation.get("path"), str):
@@ -6002,7 +6029,7 @@ def annotate_native_tooling_direct_api(summary: dict[str, Any], repo_root: Path 
         return
     for item in endpoints:
         if isinstance(item, dict) and isinstance(item.get("endpoint"), str):
-            item["direct_access"] = native_api_direct_access(item["endpoint"])
+            item.setdefault("direct_access", native_api_direct_access(item["endpoint"]))
     summary["direct_api_contract"] = native_api_direct_contract_summary(repo_root, [item for item in endpoints if isinstance(item, dict)])
 
 
@@ -6376,6 +6403,27 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA scope detail reads (migrated through gsad same-origin proxy)", "scope membership read helpers"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/scopes",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native scope create automation", "scope metadata and membership writes"],
+            },
+            {
+                "method": "patch",
+                "endpoint": "/api/v1/scopes/{scope_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native scope metadata and membership updates"],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/scopes/{scope_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native mutable scope delete automation"],
+            },
+            {
                 "endpoint": "/api/v1/targets",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA target list reads (migrated through gsad same-origin proxy)", "read-only target automation", "native-api-request helper"],
@@ -6719,6 +6767,8 @@ def native_api_browser_access_from_status(status: str | None) -> str:
         return "browser_proxied"
     if status == "implemented_internal":
         return "internal_only"
+    if status == "implemented_direct_write_control":
+        return "not_browser_proxied"
     return "unknown"
 
 
@@ -7059,7 +7109,8 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
     for item in summary.get("implemented_native_endpoints", []):
         if not isinstance(item, dict) or not isinstance(item.get("endpoint"), str):
             continue
-        key = ("get", normalize_native_api_endpoint_template(item["endpoint"]))
+        method = str(item.get("method", "get"))
+        key = (method, normalize_native_api_endpoint_template(item["endpoint"]))
         inventory_by_key.setdefault(key, item)
 
     openapi_by_key: dict[tuple[str, str], dict[str, Any]] = {}
@@ -7198,6 +7249,9 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
         elif direct_access == "internal_only":
             expected_exposure = "internal-only"
             expected_marker = False
+        elif direct_access == "direct_write_control":
+            expected_exposure = "direct-write"
+            expected_marker = True
 
         if expected_exposure is not None and row.get("x_turbovas_exposure") != expected_exposure:
             direct_exposure_mismatches.append(

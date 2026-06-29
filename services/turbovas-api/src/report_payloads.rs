@@ -2,11 +2,24 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use serde::Serialize;
 use tokio_postgres::Row;
 
 use crate::{
-    formatters::unix_ts_to_rfc3339, report_evidence_payloads::ReportSeverityCounts,
+    app_state::AppState,
+    collections::{REPORT_DEFAULT_SORT, REPORT_SORT_FIELDS},
+    errors::ApiError,
+    formatters::unix_ts_to_rfc3339,
+    path_ids::parse_uuid,
+    query::{
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
+        normalize_collection_query, sort_clause,
+    },
+    report_evidence_payloads::ReportSeverityCounts,
     user_tags::ReportUserTag,
 };
 
@@ -79,4 +92,179 @@ pub(crate) fn report_from_row(row: &Row) -> ReportItem {
         },
         user_tags: Vec::new(),
     }
+}
+
+fn raw_report_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> String {
+    format!(
+        r#"WITH base AS (
+             SELECT r.id AS report_pk,
+                    r.uuid,
+                    coalesce(nullif(t.name, ''), r.uuid) AS name,
+                    coalesce(u.name, '') AS owner_name,
+                    t.uuid AS task_uuid,
+                    t.name AS task_name,
+                    tg.uuid AS target_uuid,
+                    tg.name AS target_name,
+                    run_status_name(coalesce(r.scan_run_status, 0)) AS status,
+                    coalesce(r.creation_time, 0)::bigint AS creation_time,
+                    coalesce(r.start_time, 0)::bigint AS scan_start,
+                    coalesce(r.end_time, 0)::bigint AS scan_end,
+                    coalesce(r.modification_time, 0)::bigint AS modification_time
+               FROM reports r
+               LEFT JOIN tasks t ON t.id = r.task
+               LEFT JOIN users u ON u.id = r.owner
+               LEFT JOIN targets tg ON tg.id = t.target
+              WHERE (t.id IS NULL OR coalesce(t.usage_type, 'scan') = 'scan')
+         ),
+         result_agg AS (
+             SELECT b.report_pk,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) != -3.0)::bigint AS result_count,
+                    count(DISTINCT nullif(res.nvt, '')) FILTER (WHERE coalesce(res.severity, 0) != -3.0)::bigint AS vulnerability_count,
+                    coalesce(max(coalesce(res.severity, 0)) FILTER (WHERE coalesce(res.severity, 0) > 0), 0)::double precision AS max_severity,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) >= 9.0)::bigint AS severity_critical,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) >= 7.0 AND coalesce(res.severity, 0) < 9.0)::bigint AS severity_high,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) >= 4.0 AND coalesce(res.severity, 0) < 7.0)::bigint AS severity_medium,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) > 0.0 AND coalesce(res.severity, 0) < 4.0)::bigint AS severity_low,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) = 0.0)::bigint AS severity_log,
+                    count(res.id) FILTER (WHERE coalesce(res.severity, 0) = -1.0)::bigint AS severity_false_positive
+               FROM base b
+               LEFT JOIN results res ON res.report = b.report_pk
+              GROUP BY b.report_pk
+         ),
+         host_agg AS (
+             SELECT b.report_pk,
+                    count(DISTINCT lower(rh.host)) FILTER (WHERE coalesce(rh.host, '') <> '')::bigint AS host_count
+               FROM base b
+               LEFT JOIN report_hosts rh ON rh.report = b.report_pk
+              GROUP BY b.report_pk
+         ),
+         cve_agg AS (
+             SELECT b.report_pk,
+                    count(DISTINCT lower(vr.ref_id)) FILTER (WHERE coalesce(vr.ref_id, '') <> '')::bigint AS cve_count
+               FROM base b
+               LEFT JOIN results res ON res.report = b.report_pk AND coalesce(res.severity, 0) > 0
+               LEFT JOIN vt_refs vr ON vr.vt_oid = res.nvt AND lower(vr.type) = 'cve'
+              GROUP BY b.report_pk
+         ),
+         joined AS (
+             SELECT b.uuid, b.name, b.owner_name, b.task_uuid, b.task_name, b.target_uuid, b.target_name,
+                    b.status, b.creation_time, b.scan_start, b.scan_end, b.modification_time,
+                    coalesce(ra.result_count, 0)::bigint AS result_count,
+                    coalesce(ra.vulnerability_count, 0)::bigint AS vulnerability_count,
+                    coalesce(ha.host_count, 0)::bigint AS host_count,
+                    coalesce(ca.cve_count, 0)::bigint AS cve_count,
+                    coalesce(ra.max_severity, 0)::double precision AS max_severity,
+                    coalesce(ra.severity_critical, 0)::bigint AS severity_critical,
+                    coalesce(ra.severity_high, 0)::bigint AS severity_high,
+                    coalesce(ra.severity_medium, 0)::bigint AS severity_medium,
+                    coalesce(ra.severity_low, 0)::bigint AS severity_low,
+                    coalesce(ra.severity_log, 0)::bigint AS severity_log,
+                    coalesce(ra.severity_false_positive, 0)::bigint AS severity_false_positive
+               FROM base b
+               LEFT JOIN result_agg ra ON ra.report_pk = b.report_pk
+               LEFT JOIN host_agg ha ON ha.report_pk = b.report_pk
+               LEFT JOIN cve_agg ca ON ca.report_pk = b.report_pk
+         ),
+         filtered AS (
+             SELECT * FROM joined WHERE {filtered_predicate}
+         )
+         SELECT count(*) OVER()::bigint AS total,
+                uuid, name, owner_name, task_uuid, task_name, target_uuid, target_name, status,
+                creation_time, scan_start, scan_end, modification_time,
+                result_count, vulnerability_count, host_count, cve_count, max_severity,
+                severity_critical, severity_high, severity_medium, severity_low,
+                severity_log, severity_false_positive
+           FROM filtered
+          ORDER BY {sort_sql}, creation_time DESC, uuid DESC {limit_clause};"#,
+    )
+}
+
+async fn report_user_tags(
+    client: &tokio_postgres::Client,
+    report_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(
+            r#"SELECT t.uuid AS id,
+                      coalesce(t.name, '') AS name,
+                      coalesce(t.value, '') AS value,
+                      coalesce(t.comment, '') AS comment
+                 FROM tags t
+                 JOIN tag_resources tr ON tr.tag = t.id
+                 JOIN reports r ON r.id = tr.resource
+                WHERE lower(r.uuid) = lower($1)
+                  AND tr.resource_type = 'report'
+                  AND tr.resource_location = 0
+                  AND coalesce(t.active, 0) = 1
+                ORDER BY t.name ASC, t.uuid ASC;"#,
+            &[&report_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "raw report user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
+}
+
+pub(crate) async fn reports(
+    State(state): State<AppState>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
+) -> Result<Json<Collection<ReportItem>>, ApiError> {
+    let params = normalize_collection_query(query, REPORT_DEFAULT_SORT)?;
+    let sort_sql = sort_clause(&params.sort, REPORT_SORT_FIELDS)?;
+    let sql = raw_report_sql(
+        "($1 = ''\n\
+            OR lower(uuid) = lower($1)\n\
+            OR lower(name) LIKE '%' || lower($1) || '%'\n\
+            OR lower(status) LIKE '%' || lower($1) || '%'\n\
+            OR lower(coalesce(task_name, '')) LIKE '%' || lower($1) || '%'\n\
+            OR lower(coalesce(target_name, '')) LIKE '%' || lower($1) || '%')",
+        &sort_sql,
+        "LIMIT $2 OFFSET $3",
+    );
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let rows = client
+        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "raw report list query failed");
+            ApiError::Database
+        })?;
+    let total =
+        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "raw report list")
+            .await?;
+    let items = rows.iter().map(report_from_row).collect();
+    Ok(Json(Collection {
+        page: params.page_info(total),
+        items,
+    }))
+}
+
+pub(crate) async fn report_detail(
+    State(state): State<AppState>,
+    Path(report_id): Path<String>,
+) -> Result<Json<ReportItem>, ApiError> {
+    parse_uuid(&report_id)?;
+    let sql = raw_report_sql("lower(uuid) = lower($1)", "creation_time DESC", "");
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(&sql, &[&report_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "raw report detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    let mut report = report_from_row(&row);
+    report.user_tags = report_user_tags(&client, &report_id).await?;
+    Ok(Json(report))
 }

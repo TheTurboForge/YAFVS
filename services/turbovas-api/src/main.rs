@@ -101,9 +101,11 @@ async fn main() -> Result<(), ApiError> {
             tracing::info!(operator_uuid = %operator.user_uuid, "direct native API operator identity verified");
         }
     }
-    let internal_app = native_api_router().with_state(state.clone());
+    let base_router = native_api_router();
+    let internal_app = base_router.clone().with_state(state.clone());
     let direct_api = direct_api.map(|(bind, auth)| {
-        let direct_app = direct_native_api_router(auth.write_control_enabled()).with_state(state);
+        let direct_app =
+            direct_native_api_router(base_router, auth.write_control_enabled()).with_state(state);
         DirectApiListener {
             bind,
             auth,
@@ -264,8 +266,11 @@ fn native_api_router() -> Router<AppState> {
         )
 }
 
-fn direct_native_api_router(_write_control_enabled: bool) -> Router<AppState> {
-    native_api_router()
+fn direct_native_api_router(
+    router: Router<AppState>,
+    _write_control_enabled: bool,
+) -> Router<AppState> {
+    router
 }
 
 #[cfg(test)]
@@ -1485,12 +1490,13 @@ mod tests {
             .expect("test module marker must exist")
             .0;
         assert!(main_source.contains("DirectApiListener {"));
+        assert!(main_source.contains("let base_router = native_api_router();"));
         assert!(
             main_source
-                .contains("let internal_app = native_api_router().with_state(state.clone());")
+                .contains("let internal_app = base_router.clone().with_state(state.clone());")
         );
         assert!(main_source.contains(
-            "let direct_app = direct_native_api_router(auth.write_control_enabled()).with_state(state);"
+            "let direct_app = direct_native_api_router(base_router, auth.write_control_enabled()).with_state(state);"
         ));
         assert!(main_source.contains("app: direct_app"));
         assert!(!production_source.contains("app: app.clone()"));

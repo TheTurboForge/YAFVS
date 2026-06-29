@@ -100,7 +100,7 @@ fn direct_api_operator_from_sources(
 
 pub(crate) async fn require_direct_api_auth(
     State(auth): State<DirectApiAuth>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let request_id = request_id_from_headers(request.headers());
@@ -120,6 +120,7 @@ pub(crate) async fn require_direct_api_auth(
         } else if request.method() == Method::GET {
             if direct_api_request_shape_is_allowed(&request) {
                 if let Some(_slot) = auth.try_acquire_request_slot() {
+                    attach_direct_api_operator_extension(&mut request, &auth);
                     next.run(request).await
                 } else {
                     audit_reason = Some("rate_limited");
@@ -158,6 +159,12 @@ pub(crate) async fn require_direct_api_auth(
     attach_direct_api_security_headers(&mut response);
     attach_request_id_header(&mut response, &request_id);
     response
+}
+
+fn attach_direct_api_operator_extension(request: &mut Request, auth: &DirectApiAuth) {
+    if let Some(operator) = auth.operator() {
+        request.extensions_mut().insert(operator.clone());
+    }
 }
 
 fn attach_direct_api_security_headers(response: &mut Response) {
@@ -423,6 +430,41 @@ mod tests {
         assert!(auth.try_acquire_request_slot().is_none());
         drop(first);
         assert!(auth.try_acquire_request_slot().is_some());
+    }
+
+    #[test]
+    fn direct_api_operator_extension_is_attached_only_when_configured() {
+        let operator = DirectApiOperator::new(
+            "12345678-1234-1234-1234-123456789abc",
+            Some("admin".to_string()),
+        )
+        .expect("valid operator identity");
+        let auth = DirectApiAuth::new("token-0123456789abcdef0123456789abcdef".to_string())
+            .with_operator(Some(operator.clone()));
+        let mut request = Request::builder()
+            .uri("/api/v1/reports")
+            .body(axum::body::Body::empty())
+            .expect("request fixture");
+
+        attach_direct_api_operator_extension(&mut request, &auth);
+
+        assert_eq!(
+            request.extensions().get::<DirectApiOperator>(),
+            Some(&operator)
+        );
+
+        let unbound_auth = DirectApiAuth::new("token-0123456789abcdef0123456789abcdef".to_string());
+        let mut unbound_request = Request::builder()
+            .uri("/api/v1/reports")
+            .body(axum::body::Body::empty())
+            .expect("request fixture");
+        attach_direct_api_operator_extension(&mut unbound_request, &unbound_auth);
+        assert!(
+            unbound_request
+                .extensions()
+                .get::<DirectApiOperator>()
+                .is_none()
+        );
     }
 
     #[test]

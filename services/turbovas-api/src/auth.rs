@@ -65,6 +65,10 @@ impl DirectApiAuth {
         self.operator.as_ref().map(DirectApiOperator::user_uuid)
     }
 
+    pub(crate) fn operator(&self) -> Option<&DirectApiOperator> {
+        self.operator.as_ref()
+    }
+
     pub(crate) fn try_acquire_request_slot(&self) -> Option<DirectApiRequestSlot> {
         let mut current = self.in_flight_requests.load(Ordering::Acquire);
         loop {

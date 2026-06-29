@@ -26,6 +26,7 @@ mod filters;
 mod formatters;
 mod host_assets;
 mod metrics_payloads;
+mod nvt_payloads;
 mod operating_systems;
 mod overrides;
 mod path_ids;
@@ -58,6 +59,7 @@ use filters::*;
 use formatters::*;
 use host_assets::*;
 use metrics_payloads::*;
+use nvt_payloads::*;
 use operating_systems::*;
 use overrides::{OverrideAssetItem, override_asset_from_row};
 use path_ids::*;
@@ -406,14 +408,6 @@ struct CatalogCpeDetail {
     item: CatalogCpeItem,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     user_tags: Vec<ReportUserTag>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct NvtEpssItem {
-    score: f64,
-    percentile: f64,
-    cve: String,
-    severity: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -7720,32 +7714,6 @@ fn nvt_catalog_detail_from_row(row: &Row, user_tags: Vec<ReportUserTag>) -> NvtC
         detection: row.get("detection"),
         user_tags,
     }
-}
-
-pub(crate) fn nvt_epss_from_row(row: &Row) -> Option<NvtEpssItem> {
-    let score = row.get::<_, Option<f64>>("max_epss_score")?;
-    Some(NvtEpssItem {
-        score,
-        percentile: row
-            .get::<_, Option<f64>>("max_epss_percentile")
-            .unwrap_or(0.0),
-        cve: row
-            .get::<_, Option<String>>("max_epss_cve")
-            .unwrap_or_default(),
-        severity: row
-            .get::<_, Option<f64>>("max_epss_severity")
-            .unwrap_or(0.0),
-    })
-}
-
-pub(crate) fn nvt_max_severity_from_row(row: &Row) -> Option<NvtEpssItem> {
-    let score = row.get::<_, Option<f64>>("epss_score")?;
-    Some(NvtEpssItem {
-        score,
-        percentile: row.get::<_, Option<f64>>("epss_percentile").unwrap_or(0.0),
-        cve: row.get::<_, Option<String>>("epss_cve").unwrap_or_default(),
-        severity: row.get::<_, Option<f64>>("epss_severity").unwrap_or(0.0),
-    })
 }
 
 fn tls_certificate_from_row(row: &Row) -> TlsCertificateItem {

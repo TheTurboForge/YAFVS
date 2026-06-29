@@ -2001,7 +2001,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-list-read
-      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-inherited-still-owns: scope-report-generation
       summary: List scopes
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -2033,7 +2033,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-metadata-membership-write
-      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-inherited-still-owns: scope-report-generation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2078,7 +2078,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-detail-membership-read
-      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-inherited-still-owns: scope-report-generation
       summary: Read one scope
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -2109,7 +2109,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-metadata-membership-write
-      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-inherited-still-owns: scope-report-generation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2152,7 +2152,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-metadata-membership-write
-      x-turbovas-inherited-still-owns: scope-membership-writes-and-report-generation
+      x-turbovas-inherited-still-owns: scope-report-generation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1

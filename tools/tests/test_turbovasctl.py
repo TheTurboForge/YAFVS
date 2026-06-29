@@ -2358,7 +2358,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "scanner-control-credentials-writes-and-deletes",
             "scap-rich-context",
             "schedule-writes-exports-and-deletes",
-            "scope-membership-writes-and-report-generation",
+            "scope-report-generation",
             "scope-report-generation-retention-and-mutations",
             "tag-write-control",
             "target-credential-secrets-writes-and-deletes",

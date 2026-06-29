@@ -57,6 +57,21 @@ Before any scope write route is implemented, the contract must state:
 `generate_scope_report` remains a separate report-generation workflow. It must
 not be folded into the first scope metadata-write slice.
 
+## Second Candidate: Tag Metadata Only
+
+The next approved direct write-control slice is tag metadata create/update only:
+
+- `POST /api/v1/tags` creates tag metadata for a supported resource type without
+  assigning resources.
+- `PATCH /api/v1/tags/{tag_id}` updates only name, comment, value, and active
+  state.
+- Resource assignment filters, add/set/remove actions, resource-type patching,
+  clone/copy, export, delete, and trash behavior remain inherited until those
+  semantics receive a separate contract.
+
+This slice is intentionally not full inherited `create_tag`/`modify_tag` parity;
+it is a bounded metadata write surface that does not touch `tag_resources`.
+
 ### First-Slice Scope Write Semantics
 
 The first live scope write slice should expose only metadata and membership

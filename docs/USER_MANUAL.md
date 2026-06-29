@@ -109,8 +109,10 @@ readability, `TURBOVAS_API_OPERATOR_NAME`. When an operator UUID is set,
 `turbovas-api` verifies that it exists in `users` before binding the direct
 listener. The direct write-control flag is
 `TURBOVAS_API_DIRECT_WRITE_CONTROL=1`; it is strict-boolean, requires
-`TURBOVAS_API_OPERATOR_UUID`, and currently enables only the scope
-metadata/membership write routes. Direct mode otherwise accepts only classified
+`TURBOVAS_API_OPERATOR_UUID`, and currently enables only approved scope
+metadata/membership writes plus tag metadata create/update. Tag resource
+assignment/filter actions, tag delete/trash, clone/copy, and export remain on
+inherited compatibility paths. Direct mode otherwise accepts only classified
 read-only `GET` requests.
 Use a request ID when a direct probe needs a visible correlation ID in
 responses/logs:

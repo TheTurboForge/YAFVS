@@ -81,11 +81,10 @@ impl ApiError {
                 "The authenticated operator is not allowed to perform this action.".to_string()
             }
             Self::MethodNotAllowed => {
-                "Direct native API access currently allows read-only GET requests only.".to_string()
+                "Direct native API access does not currently allow this method/path.".to_string()
             }
             Self::RequestTooLarge => {
-                "Direct native API requests must fit the bounded read-only request shape."
-                    .to_string()
+                "Direct native API requests must fit the bounded request shape.".to_string()
             }
             Self::TooManyRequests => {
                 "The direct native API listener is already handling the maximum number of in-flight requests."
@@ -138,14 +137,14 @@ mod tests {
                 ApiError::MethodNotAllowed,
                 StatusCode::METHOD_NOT_ALLOWED,
                 "method_not_allowed",
-                "GET",
+                "method/path",
                 &[],
             ),
             (
                 ApiError::RequestTooLarge,
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "request_too_large",
-                "bounded read-only",
+                "bounded request",
                 &[],
             ),
             (

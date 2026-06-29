@@ -46,6 +46,7 @@ mod scope_payloads;
 mod scope_report_handlers;
 mod scope_writes;
 mod tag_resource_helpers;
+mod tag_writes;
 mod tags;
 mod task_targets;
 mod tls_certificates;
@@ -80,6 +81,7 @@ use schedules::*;
 use scope_payloads::*;
 use scope_report_handlers::*;
 use scope_writes::{create_scope, delete_scope, patch_scope};
+use tag_writes::{create_tag, patch_tag};
 use tags::*;
 use task_targets::*;
 use tls_certificates::*;
@@ -277,6 +279,8 @@ fn direct_native_api_router(
             .route("/api/v1/scopes", post(create_scope))
             .route("/api/v1/scopes/:scope_id", patch(patch_scope))
             .route("/api/v1/scopes/:scope_id", delete(delete_scope))
+            .route("/api/v1/tags", post(create_tag))
+            .route("/api/v1/tags/:tag_id", patch(patch_tag))
     } else {
         router
     }
@@ -335,6 +339,16 @@ mod tests {
         NativeWriteRouteContract {
             method: "delete",
             path: "/api/v1/scopes/:scope_id",
+            safety_contract: "write-control-v1",
+        },
+        NativeWriteRouteContract {
+            method: "post",
+            path: "/api/v1/tags",
+            safety_contract: "write-control-v1",
+        },
+        NativeWriteRouteContract {
+            method: "patch",
+            path: "/api/v1/tags/:tag_id",
             safety_contract: "write-control-v1",
         },
     ];
@@ -2297,7 +2311,7 @@ mod tests {
         let error = ApiError::MethodNotAllowed;
         assert_eq!(error.status_code(), StatusCode::METHOD_NOT_ALLOWED);
         assert_eq!(error.code(), "method_not_allowed");
-        assert!(error.public_message().contains("GET"));
+        assert!(error.public_message().contains("method/path"));
     }
 
     #[test]
@@ -2305,7 +2319,7 @@ mod tests {
         let error = ApiError::RequestTooLarge;
         assert_eq!(error.status_code(), StatusCode::PAYLOAD_TOO_LARGE);
         assert_eq!(error.code(), "request_too_large");
-        assert!(error.public_message().contains("bounded read-only"));
+        assert!(error.public_message().contains("bounded request"));
     }
 
     #[test]

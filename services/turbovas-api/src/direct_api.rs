@@ -330,6 +330,10 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scopes", scope_id]) => {
             !scope_id.is_empty() && *scope_id != "." && *scope_id != ".."
         }
+        (&Method::POST, ["", "api", "v1", "tags"]) => true,
+        (&Method::PATCH, ["", "api", "v1", "tags", tag_id]) => {
+            !tag_id.is_empty() && *tag_id != "." && *tag_id != ".."
+        }
         _ => false,
     }
 }

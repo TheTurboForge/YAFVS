@@ -167,6 +167,10 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
     }
 }
 
+pub(crate) fn tag_resource_type_is_supported(resource_type: &str) -> bool {
+    tag_resource_sql_spec(resource_type).is_ok()
+}
+
 pub(crate) fn tag_resource_collection_sql(
     resource_type: &str,
     sort_sql: &str,

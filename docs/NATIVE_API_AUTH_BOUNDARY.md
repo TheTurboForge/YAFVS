@@ -38,7 +38,8 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - `TURBOVAS_API_DIRECT_WRITE_CONTROL` is the direct write-control enablement
   flag. It accepts only strict boolean values, requires
   `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
-  direct scope metadata/membership write routes.
+  approved direct scope metadata/membership write routes plus tag metadata
+  create/update routes.
 - `/healthz` is unauthenticated for readiness. `/api/v1/...` on the direct
   listener requires `Authorization: Bearer <token>` and returns JSON `401`
   errors for missing or wrong tokens.
@@ -46,7 +47,9 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   `405 method_not_allowed` unless the method/path pair is deliberately
   registered as direct write-control and `TURBOVAS_API_DIRECT_WRITE_CONTROL` is
   enabled with a verified operator identity. The current direct write surface is
-  limited to scope create/update/delete metadata and membership routes.
+  limited to scope create/update/delete metadata and membership routes, plus
+  tag metadata create/update. Tag resource assignment/filter actions,
+  delete/trash behavior, clone/copy, and export remain inherited.
 - The direct listener applies a fixed in-flight cap to authenticated direct
   `GET` requests and returns JSON `429 too_many_requests` with `X-Request-Id`
   when the cap is reached. This is a coarse development pressure guard, not a
@@ -87,12 +90,13 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   the ignored runtime `secrets/` directory and are mounted read-only into the
   direct API container for the opt-in helper. Do not pass generated runtime
   tokens through container environment variables.
-- Keep direct v1 access read-only. Scanner control, credentials, feed sync,
-  feed import/update/download/mirroring, account management, target/task writes,
-  alert delivery, and destructive mutations stay inherited until native
-  write/control designs are separately reviewed. Read-only feed inventory
-  metadata at `/api/v1/feeds` is allowed only as a classified scriptable read
-  endpoint.
+- Keep direct v1 write-control limited to explicitly reviewed routes. Scanner
+  control, credentials, feed sync, feed import/update/download/mirroring,
+  account management, target/task writes, alert delivery, tag resource
+  assignment/delete/trash, and destructive mutations stay inherited until
+  native write/control designs are separately reviewed. Read-only feed
+  inventory metadata at `/api/v1/feeds` is allowed only as a classified
+  scriptable read endpoint.
 - Read-only tag-dialog resource-name lookups, including alert, are also
   allowlisted scriptable reads. They expose only id/type/name lookup data;
   alert delivery, method/event/condition payloads, and alert mutations remain

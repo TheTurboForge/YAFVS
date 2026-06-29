@@ -83,14 +83,17 @@ separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
   against `users` at startup and anchors owner-bearing writes.
 - Direct write-control enablement: `TURBOVAS_API_DIRECT_WRITE_CONTROL` is a
   strict-boolean enablement flag. Truthy values require
-  `TURBOVAS_API_OPERATOR_UUID` and register only the direct scope
-  metadata/membership write routes.
+  `TURBOVAS_API_OPERATOR_UUID` and register only explicitly approved direct
+  write-control routes.
 - Direct v1 method boundary: the opt-in direct listener accepts classified
   `GET` requests under `/api/v1` by default. With direct write-control enabled
   and operator identity verified, it additionally accepts only
   `POST /scopes`, `PATCH /scopes/{scope_id}`, and
-  `DELETE /scopes/{scope_id}` for scope metadata/membership writes. Other
-  valid-token non-GET requests return JSON `405 method_not_allowed`.
+  `DELETE /scopes/{scope_id}` for scope metadata/membership writes, plus
+  `POST /tags` and `PATCH /tags/{tag_id}` for tag metadata writes. Tag resource
+  assignment/filter actions, delete/trash behavior, clone/copy, and export
+  remain inherited. Other valid-token non-GET requests return JSON
+  `405 method_not_allowed`.
 - Direct v1 browser boundary: direct responses do not emit browser CORS access
   headers. Browser product reads continue through the same-origin `gsad` path
   while direct access remains script/operator oriented.

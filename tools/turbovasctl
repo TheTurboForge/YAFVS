@@ -551,6 +551,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scope-report-result-evidence-read",
         "scope-report-tls-certificate-evidence-read",
         "tag-metadata-read",
+        "tag-metadata-write",
         "tag-resource-name-read",
         "tag-resource-reference-read",
         "target-detail-summary-read",
@@ -660,6 +661,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/scopes"): "direct-write",
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
+    ("post", "/tags"): "direct-write",
+    ("patch", "/tags/{tag_id}"): "direct-write",
 }
 OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts"): {
@@ -826,6 +829,16 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "tag-write-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-metadata-read",
+    },
+    ("post", "/tags"): {
+        "x-turbovas-inherited-still-owns": "tag-write-control",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "tag-metadata-write",
+    },
+    ("patch", "/tags/{tag_id}"): {
+        "x-turbovas-inherited-still-owns": "tag-write-control",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "tag-metadata-write",
     },
     ("get", "/tags/{tag_id}/resources"): {
         "x-turbovas-inherited-still-owns": "tag-write-control",
@@ -6424,6 +6437,20 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native mutable scope delete automation"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/tags",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native tag metadata creation"],
+            },
+            {
+                "method": "patch",
+                "endpoint": "/api/v1/tags/{tag_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native tag metadata updates"],
+            },
+            {
                 "endpoint": "/api/v1/targets",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA target list reads (migrated through gsad same-origin proxy)", "read-only target automation", "native-api-request helper"],
@@ -10987,6 +11014,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.valid-token",
             "native-api-direct.read-only-method-guard",
             "native-api-direct.scope-write-disabled",
+            "native-api-direct.tag-write-disabled",
             "native-api-direct.positive-allowlist",
             "native-api-direct.internal-only-scope-report-detail",
             "native-api-direct.internal-only-retention-plan",
@@ -11206,6 +11234,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_scope_write_json, disabled_scope_write_status = parse_json_output_with_http_status(disabled_scope_write)
     disabled_scope_write_ok = disabled_scope_write.returncode == 0 and disabled_scope_write_status == 405 and isinstance(disabled_scope_write_json, dict) and disabled_scope_write_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_scope_write_ok else "fail", "native-api-direct.scope-write-disabled", "Direct native API rejects scope writes while direct write-control is disabled." if disabled_scope_write_ok else "Direct native API did not reject a scope write while direct write-control is disabled.", disabled_scope_write, direct_native_api_display_command("/api/v1/scopes", token=token, env=env, method="POST"), disabled_scope_write_json, {"http_status": disabled_scope_write_status, **summarize_native_api_response(disabled_scope_write_json)}))
+
+    disabled_tag_write = direct_native_api_curl(
+        repo_root,
+        "/api/v1/tags",
+        token=token,
+        env=env,
+        method="POST",
+    )
+    disabled_tag_write_json, disabled_tag_write_status = parse_json_output_with_http_status(disabled_tag_write)
+    disabled_tag_write_ok = disabled_tag_write.returncode == 0 and disabled_tag_write_status == 405 and isinstance(disabled_tag_write_json, dict) and disabled_tag_write_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_tag_write_ok else "fail", "native-api-direct.tag-write-disabled", "Direct native API rejects tag metadata writes while direct write-control is disabled." if disabled_tag_write_ok else "Direct native API did not reject a tag metadata write while direct write-control is disabled.", disabled_tag_write, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST"), disabled_tag_write_json, {"http_status": disabled_tag_write_status, **summarize_native_api_response(disabled_tag_write_json)}))
 
     request_body = direct_native_api_curl(
         repo_root,

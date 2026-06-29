@@ -888,7 +888,7 @@ paths:
       x-turbovas-replaces: tag-metadata-read
       x-turbovas-inherited-still-owns: tag-write-control
       summary: List tags
-      description: Read-only tag metadata backed by gvmd/PostgreSQL. Tag create, modify, clone, enable/disable, export, delete, and assigned-resource expansion remain on inherited compatibility paths while native write/resource semantics are designed.
+      description: Read-only tag metadata backed by gvmd/PostgreSQL. Tag resource assignment/filter actions, clone, export, delete, and trash behavior remain on inherited compatibility paths while native resource semantics are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -901,6 +901,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TagAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postTags
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: tag-metadata-write
+      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Create tag metadata
+      description: Direct write-control endpoint for creating tag metadata only. Assigned resources, resource filters, clone/copy, export, delete, and trash behavior remain on inherited compatibility paths.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagCreateRequest'
+      responses:
+        '201':
+          description: Tag metadata created
+          headers:
+            Location:
+              description: Path of the created tag resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagAsset'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -969,6 +1012,48 @@ paths:
       responses:
         '200':
           description: Tag detail metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchTagsByTagId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: tag-metadata-write
+      x-turbovas-inherited-still-owns: tag-write-control
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Update tag metadata
+      description: Direct write-control endpoint for updating tag name, comment, value, and active state only. Resource type changes, assigned resources, resource filters, clone/copy, export, delete, and trash behavior remain on inherited compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/TagId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagPatchRequest'
+      responses:
+        '200':
+          description: Tag metadata updated
           content:
             application/json:
               schema:
@@ -3352,6 +3437,43 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TagAsset'
+    TagCreateRequest:
+      type: object
+      required: [name, resource_type]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        resource_type:
+          type: string
+          enum: [alert, cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate]
+        comment:
+          type: string
+          maxLength: 4096
+        value:
+          type: string
+          maxLength: 4096
+        active:
+          type: boolean
+          default: true
+    TagPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        value:
+          type: string
+          maxLength: 4096
+        active:
+          type: boolean
     TagResourceCollection:
       type: object
       required: [tag_id, resource_type, page, items]

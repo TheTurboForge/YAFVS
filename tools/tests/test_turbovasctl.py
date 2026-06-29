@@ -5470,6 +5470,8 @@ db2:keys=5,expires=0,avg_ttl=0
             root.mkdir()
             token = "0123456789abcdef0123456789abcdef"
             operator_uuid = "11111111-1111-1111-1111-111111111111"
+            scope_uuid = "22222222-2222-2222-2222-222222222222"
+            tag_uuid = "33333333-3333-3333-3333-333333333333"
             original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
             envs: list[dict[str, str]] = []
@@ -5484,13 +5486,24 @@ db2:keys=5,expires=0,avg_ttl=0
 
             def fake_direct_curl(_root, path, *, method="GET", body=None, **_kwargs):
                 probes.append((method, path))
+                if method == "POST" and path == "/api/v1/scopes":
+                    payload = json.loads(body)
+                    self.assertEqual(payload["target_ids"], [])
+                    self.assertEqual(payload["host_ids"], [])
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scope_uuid, "name": payload["name"], "comment": payload["comment"]}) + "\n201", "")
+                if method == "PATCH" and path.startswith("/api/v1/scopes/"):
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scope_uuid, "comment": "TurboVAS direct write smoke updated temporary scope"}) + "\n200", "")
+                if method == "DELETE" and path.startswith("/api/v1/scopes/"):
+                    return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
+                if method == "GET" and path.startswith("/api/v1/scopes/"):
+                    return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "POST" and path == "/api/v1/tags":
                     payload = json.loads(body)
                     self.assertEqual(payload["resource_type"], "task")
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": operator_uuid, "name": payload["name"], "value": "initial", "active": True}) + "\n201", "")
-                if method == "PATCH":
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": operator_uuid, "value": "updated", "active": False}) + "\n200", "")
-                if method == "DELETE":
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "value": "initial", "active": True}) + "\n201", "")
+                if method == "PATCH" and path.startswith("/api/v1/tags/"):
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "value": "updated", "active": False}) + "\n200", "")
+                if method == "DELETE" and path.startswith("/api/v1/tags/"):
                     return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
 
@@ -5508,12 +5521,16 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["findings"][0]["check"], "runtime-native-api-direct-write-smoke.status-only")
         self.assertEqual(checks["native-api-direct.write-control-operator"], "pass")
+        self.assertEqual(checks["native-api-direct.scope-write-create"], "pass")
+        self.assertEqual(checks["native-api-direct.scope-write-update"], "pass")
+        self.assertEqual(checks["native-api-direct.scope-write-delete"], "pass")
+        self.assertEqual(checks["native-api-direct.scope-write-post-delete"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-delete"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-post-delete"], "pass")
         self.assertEqual(checks["native-api-direct.write-control-restore"], "pass")
-        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "DELETE", "GET"])
+        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "DELETE", "GET", "POST", "PATCH", "DELETE", "GET"])
         rendered = json.dumps(result, sort_keys=True)
         self.assertNotIn(token, rendered)
         self.assertTrue(any(env.get(turbovasctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) == "1" for env in envs))

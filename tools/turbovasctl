@@ -11039,6 +11039,10 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.tag-delete-disabled",
             "native-api-direct.write-control-operator",
             "native-api-direct.write-control-up",
+            "native-api-direct.scope-write-create",
+            "native-api-direct.scope-write-update",
+            "native-api-direct.scope-write-delete",
+            "native-api-direct.scope-write-post-delete",
             "native-api-direct.tag-write-create",
             "native-api-direct.tag-write-update",
             "native-api-direct.tag-write-delete",
@@ -11128,7 +11132,9 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     )
 
     started_write_control = False
+    scope_id: str | None = None
     tag_id: str | None = None
+    scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
@@ -11145,6 +11151,42 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
 
     if aggregate_status(findings) != "fail":
         content_type = (("Content-Type", "application/json"),)
+        scope_create_body = json.dumps(
+            {
+                "name": scope_name,
+                "comment": "TurboVAS direct write smoke temporary scope",
+                "protection_requirement": "normal",
+                "target_ids": [],
+                "host_ids": [],
+            },
+            separators=(",", ":"),
+        )
+        scope_create = direct_native_api_curl(repo_root, "/api/v1/scopes", token=token, env=env, method="POST", body=scope_create_body, extra_headers=content_type)
+        scope_create_json, scope_create_status = parse_json_output_with_http_status(scope_create)
+        scope_id = scope_create_json.get("id") if isinstance(scope_create_json, dict) and isinstance(scope_create_json.get("id"), str) else None
+        scope_create_ok = scope_create.returncode == 0 and scope_create_status == 201 and bool(scope_id) and scope_create_json.get("name") == scope_name
+        findings.append(native_api_probe_finding("pass" if scope_create_ok else "fail", "native-api-direct.scope-write-create", "Direct write-control created a temporary scope." if scope_create_ok else "Direct write-control failed to create a temporary scope.", scope_create, direct_native_api_display_command("/api/v1/scopes", token=token, env=env, method="POST", body=scope_create_body, extra_headers=content_type), scope_create_json, {"http_status": scope_create_status, "scope_id": scope_id, **summarize_native_api_response(scope_create_json)}))
+
+        if scope_id:
+            scope_patch_body = json.dumps(
+                {"comment": "TurboVAS direct write smoke updated temporary scope"},
+                separators=(",", ":"),
+            )
+            scope_patch = direct_native_api_curl(repo_root, f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env, method="PATCH", body=scope_patch_body, extra_headers=content_type)
+            scope_patch_json, scope_patch_status = parse_json_output_with_http_status(scope_patch)
+            scope_patch_ok = scope_patch.returncode == 0 and scope_patch_status == 200 and isinstance(scope_patch_json, dict) and scope_patch_json.get("id") == scope_id and scope_patch_json.get("comment") == "TurboVAS direct write smoke updated temporary scope"
+            findings.append(native_api_probe_finding("pass" if scope_patch_ok else "fail", "native-api-direct.scope-write-update", "Direct write-control patched temporary scope metadata." if scope_patch_ok else "Direct write-control failed to patch temporary scope metadata.", scope_patch, direct_native_api_display_command(f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env, method="PATCH", body=scope_patch_body, extra_headers=content_type), scope_patch_json, {"http_status": scope_patch_status, "scope_id": scope_id, **summarize_native_api_response(scope_patch_json)}))
+
+            scope_delete = direct_native_api_curl(repo_root, f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env, method="DELETE")
+            scope_delete_json, scope_delete_status = parse_json_output_with_http_status(scope_delete)
+            scope_delete_ok = scope_delete.returncode == 0 and scope_delete_status == 204
+            findings.append(native_api_probe_finding("pass" if scope_delete_ok else "fail", "native-api-direct.scope-write-delete", "Direct write-control deleted the temporary scope." if scope_delete_ok else "Direct write-control failed to delete the temporary scope.", scope_delete, direct_native_api_display_command(f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env, method="DELETE"), scope_delete_json, {"http_status": scope_delete_status, "scope_id": scope_id, **summarize_native_api_response(scope_delete_json)}))
+
+            scope_post_delete = direct_native_api_curl(repo_root, f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env)
+            scope_post_delete_json, scope_post_delete_status = parse_json_output_with_http_status(scope_post_delete)
+            scope_post_delete_ok = scope_post_delete.returncode == 0 and scope_post_delete_status == 404 and isinstance(scope_post_delete_json, dict) and scope_post_delete_json.get("error", {}).get("code") == "not_found"
+            findings.append(native_api_probe_finding("pass" if scope_post_delete_ok else "fail", "native-api-direct.scope-write-post-delete", "Direct API confirms the temporary scope is gone after delete." if scope_post_delete_ok else "Direct API did not confirm the temporary scope was deleted.", scope_post_delete, direct_native_api_display_command(f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env), scope_post_delete_json, {"http_status": scope_post_delete_status, "scope_id": scope_id, **summarize_native_api_response(scope_post_delete_json)}))
+
         create_body = json.dumps(
             {
                 "name": tag_name,
@@ -11208,6 +11250,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
         "token_source": token_source,
         "operator_uuid_found": bool(admin_uuid),
+        "temporary_scope_id": scope_id,
+        "temporary_scope_name": scope_name,
         "temporary_tag_id": tag_id,
         "temporary_tag_name": tag_name,
         "token_value_reported": False,

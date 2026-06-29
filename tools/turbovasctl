@@ -11149,6 +11149,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path) -> dict[str, Any]:
     non_get_ok = non_get.returncode == 0 and non_get_status == 405 and isinstance(non_get_json, dict) and non_get_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if non_get_ok else "fail", "native-api-direct.read-only-method-guard", "Direct native API rejects valid-token non-GET /api/v1 requests with JSON 405." if non_get_ok else "Direct native API did not reject a valid-token non-GET /api/v1 request correctly.", non_get, direct_native_api_display_command("/api/v1/reports?page_size=1", token=token, env=env, method="POST"), non_get_json, {"http_status": non_get_status, **summarize_native_api_response(non_get_json)}))
 
+    disabled_scope_write = direct_native_api_curl(
+        repo_root,
+        "/api/v1/scopes",
+        token=token,
+        env=env,
+        method="POST",
+    )
+    disabled_scope_write_json, disabled_scope_write_status = parse_json_output_with_http_status(disabled_scope_write)
+    disabled_scope_write_ok = disabled_scope_write.returncode == 0 and disabled_scope_write_status == 405 and isinstance(disabled_scope_write_json, dict) and disabled_scope_write_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_scope_write_ok else "fail", "native-api-direct.scope-write-disabled", "Direct native API rejects scope writes while direct write-control is disabled." if disabled_scope_write_ok else "Direct native API did not reject a scope write while direct write-control is disabled.", disabled_scope_write, direct_native_api_display_command("/api/v1/scopes", token=token, env=env, method="POST"), disabled_scope_write_json, {"http_status": disabled_scope_write_status, **summarize_native_api_response(disabled_scope_write_json)}))
+
     request_body = direct_native_api_curl(
         repo_root,
         "/api/v1/reports?page_size=1",

@@ -978,7 +978,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/overrides", source)
         self.assertIn("/api/v1/overrides/{override_id}", source)
         self.assertIn("def native_api_request_display_command", source)
-        self.assertIn("native_api_request_display_command(repo_root, request_path, request_id=request_id)", source)
+        self.assertIn("native_api_request_display_command(repo_root, request_path, method=method, request_id=request_id, body=body)", source)
+        self.assertIn("--allow-write-control", source)
         self.assertIn("def command_security_policy_check", source)
         self.assertIn("def command_path_coupling_state", source)
         self.assertIn("def command_production_posture_check", source)
@@ -3417,6 +3418,71 @@ class TurboVASCtlTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 turbovasctl.validate_native_api_request_path(bad_path)
+
+    def test_native_api_request_validates_method_and_body_intent(self):
+        self.assertEqual(turbovasctl.validate_native_api_request_method("post"), "POST")
+        self.assertEqual(turbovasctl.validate_native_api_request_body_json('{"enabled": true}'), '{"enabled":true}')
+        turbovasctl.validate_native_api_request_shape("POST", body='{"enabled":true}', allow_write_control=True)
+        with self.assertRaises(ValueError):
+            turbovasctl.validate_native_api_request_method("TRACE")
+        with self.assertRaises(ValueError):
+            turbovasctl.validate_native_api_request_body_json("not-json")
+        with self.assertRaises(ValueError):
+            turbovasctl.validate_native_api_request_shape("POST", body=None, allow_write_control=False)
+        with self.assertRaises(ValueError):
+            turbovasctl.validate_native_api_request_shape("GET", body='{}', allow_write_control=True)
+
+    def test_native_api_request_rejects_non_get_without_write_control_intent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "native_api_curl") as curl:
+                result = turbovasctl.command_native_api_request(root, "/api/v1/reports?page_size=1", method="POST")
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["native-api-request.write-control-intent"]["status"], "fail")
+        self.assertIn("--allow-write-control", checks["native-api-request.write-control-intent"]["message"])
+
+    def test_native_api_request_threads_allowed_body_without_leaking_it(self):
+        secret_body = '{"secret":"do-not-print"}'
+
+        def fake_native_api_curl(_root, path, **kwargs):
+            captured["path"] = path
+            captured["kwargs"] = kwargs
+            return subprocess.CompletedProcess(["curl"], 0, '{"ok":true}\n', "")
+
+        captured: dict[str, object] = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "native_api_curl", side_effect=fake_native_api_curl):
+                result = turbovasctl.command_native_api_request(
+                    root,
+                    "/api/v1/reports?page_size=1",
+                    method="POST",
+                    body_json=secret_body,
+                    allow_write_control=True,
+                )
+
+        rendered = json.dumps(result, sort_keys=True)
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(captured["path"], "/api/v1/reports?page_size=1")
+        self.assertEqual(captured["kwargs"], {"method": "POST", "request_id": None, "body": '{"secret":"do-not-print"}'})
+        self.assertIn("<redacted-body>", rendered)
+        self.assertIn("body_bytes", rendered)
+        self.assertNotIn(secret_body, rendered)
+        self.assertNotIn("do-not-print", rendered)
+
+    def test_native_api_request_direct_rejects_non_get_before_bad_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_api_request(root, "/api/v1/reports?page_size=1", direct=True, method="DELETE")
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["native-api-request.write-control-intent"]["status"], "fail")
 
     def test_openapi_tracks_direct_feed_security_information_and_alert_tag_lookup_contracts(self):
         root = Path(__file__).resolve().parents[2]

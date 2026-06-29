@@ -11205,7 +11205,17 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-app-smoke", repo_root, "Application runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
 
 
-def native_api_curl(repo_root: Path, path: str, *, request_id: str | None = None) -> subprocess.CompletedProcess[str]:
+NATIVE_API_REQUEST_ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+
+def native_api_curl(
+    repo_root: Path,
+    path: str,
+    *,
+    method: str = "GET",
+    request_id: str | None = None,
+    body: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     command = compose_command(
         repo_root,
         "exec",
@@ -11216,8 +11226,12 @@ def native_api_curl(repo_root: Path, path: str, *, request_id: str | None = None
         "--max-time",
         "10",
     )
+    if method != "GET" or body is not None:
+        command.extend(["-X", method])
     if request_id is not None:
         command.extend(["-H", f"{DIRECT_API_REQUEST_ID_HEADER}: {request_id}"])
+    if body is not None:
+        command.extend(["-H", "Content-Type: application/json", "--data-binary", body])
     command.append(f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{path}")
     return run_command(
         command,
@@ -11273,7 +11287,41 @@ def validate_direct_api_request_id(request_id: str) -> str:
     return request_id
 
 
-def native_api_request_display_command(repo_root: Path, request_path: str, *, request_id: str | None = None) -> list[str]:
+def validate_native_api_request_method(method: str) -> str:
+    normalized = method.upper()
+    if normalized not in NATIVE_API_REQUEST_ALLOWED_METHODS:
+        allowed = ", ".join(sorted(NATIVE_API_REQUEST_ALLOWED_METHODS))
+        raise ValueError(f"native API request method must be one of: {allowed}")
+    return normalized
+
+
+def validate_native_api_request_body_json(body_json: str) -> str:
+    if body_json == "":
+        raise ValueError("request body JSON must not be empty")
+    try:
+        parsed = json.loads(body_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"request body must be valid JSON: {exc.msg}") from exc
+    return json.dumps(parsed, separators=(",", ":"))
+
+
+def validate_native_api_request_shape(method: str, *, body: str | None, allow_write_control: bool) -> None:
+    if method == "GET" and body is not None:
+        raise ValueError("GET native API requests must not include a request body")
+    if method != "GET" and not allow_write_control:
+        raise ValueError("non-GET native API requests require --allow-write-control")
+    if body is not None and not allow_write_control:
+        raise ValueError("native API request bodies require --allow-write-control")
+
+
+def native_api_request_display_command(
+    repo_root: Path,
+    request_path: str,
+    *,
+    method: str = "GET",
+    request_id: str | None = None,
+    body: str | None = None,
+) -> list[str]:
     command = compose_command(
         repo_root,
         "exec",
@@ -11284,14 +11332,32 @@ def native_api_request_display_command(repo_root: Path, request_path: str, *, re
         "--max-time",
         "10",
     )
+    if method != "GET" or body is not None:
+        command.extend(["-X", method])
     if request_id is not None:
         command.extend(["-H", f"{DIRECT_API_REQUEST_ID_HEADER}: {request_id}"])
+    if body is not None:
+        command.extend(["-H", "Content-Type: application/json", "--data-binary", "<redacted-body>"])
     command.append(f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{request_path}")
     return command
 
 
-def command_native_api_request(repo_root: Path, path: str, *, direct: bool = False, request_id: str | None = None) -> dict[str, Any]:
+def command_native_api_request(
+    repo_root: Path,
+    path: str,
+    *,
+    direct: bool = False,
+    method: str = "GET",
+    request_id: str | None = None,
+    body_json: str | None = None,
+    allow_write_control: bool = False,
+) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    try:
+        method = validate_native_api_request_method(method)
+    except ValueError as exc:
+        findings.append(finding("fail", "native-api-request.method", str(exc), details={"method": method}))
+        return make_result("native-api-request", repo_root, "Native API request rejected before runtime access.", findings)
     try:
         request_path = validate_native_api_request_path(path)
     except ValueError as exc:
@@ -11301,6 +11367,19 @@ def command_native_api_request(repo_root: Path, path: str, *, direct: bool = Fal
         request_id = validate_direct_api_request_id(request_id) if request_id is not None else None
     except ValueError as exc:
         findings.append(finding("fail", "native-api-request.request-id", str(exc), details={"request_id": request_id}))
+        return make_result("native-api-request", repo_root, "Native API request rejected before runtime access.", findings)
+    try:
+        body = validate_native_api_request_body_json(body_json) if body_json is not None else None
+        validate_native_api_request_shape(method, body=body, allow_write_control=allow_write_control)
+    except ValueError as exc:
+        findings.append(
+            finding(
+                "fail",
+                "native-api-request.write-control-intent",
+                str(exc),
+                details={"method": method, "has_body": body_json is not None, "allow_write_control": allow_write_control},
+            )
+        )
         return make_result("native-api-request", repo_root, "Native API request rejected before runtime access.", findings)
 
     if direct:
@@ -11319,42 +11398,43 @@ def command_native_api_request(repo_root: Path, path: str, *, direct: bool = Fal
                 )
             )
             return make_result("native-api-request", repo_root, "Direct native API request rejected before runtime access.", findings)
-        response = direct_native_api_curl(repo_root, request_path, token=token, env=env, request_id=request_id)
+        extra_headers = (("Content-Type", "application/json"),) if body is not None else None
+        response = direct_native_api_curl(repo_root, request_path, token=token, env=env, method=method, request_id=request_id, body=body, extra_headers=extra_headers)
         parsed, http_status = parse_json_output_with_http_status(response)
-        ok = response.returncode == 0 and http_status == 200 and isinstance(parsed, dict)
+        ok = response.returncode == 0 and isinstance(http_status, int) and 200 <= http_status < 300 and isinstance(parsed, dict)
         findings.append(
             native_api_probe_finding(
                 "pass" if ok else "fail",
-                "native-api-request.direct-get",
-                f"Direct native API GET {request_path} returned authenticated JSON."
+                "native-api-request.direct",
+                f"Direct native API {method} {request_path} returned authenticated JSON."
                 if ok
-                else f"Direct native API GET {request_path} failed or returned non-JSON output.",
+                else f"Direct native API {method} {request_path} failed, returned non-2xx, or returned non-JSON output.",
                 response,
-                direct_native_api_display_command(request_path, token=token, env=env, request_id=request_id),
+                direct_native_api_display_command(request_path, token=token, env=env, method=method, request_id=request_id, body=body, extra_headers=extra_headers),
                 parsed,
-                {"http_status": http_status, "request_id": request_id, **summarize_native_api_response(parsed)},
+                {"http_status": http_status, "request_id": request_id, "method": method, "body_bytes": len(body.encode("utf-8")) if body is not None else 0, **summarize_native_api_response(parsed)},
             )
         )
         result = make_result("native-api-request", repo_root, "Direct native API request completed." if ok else "Direct native API request failed.", findings)
-        result["details"] = {"path": request_path, "direct": True, "http_status": http_status, "request_id": request_id, "response": parsed if isinstance(parsed, dict) else None}
+        result["details"] = {"path": request_path, "direct": True, "method": method, "http_status": http_status, "request_id": request_id, "body_bytes": len(body.encode("utf-8")) if body is not None else 0, "response": parsed if isinstance(parsed, dict) else None}
         return result
 
-    response = native_api_curl(repo_root, request_path, request_id=request_id)
+    response = native_api_curl(repo_root, request_path, method=method, request_id=request_id, body=body)
     parsed = parse_json_output(response)
     ok = response.returncode == 0 and isinstance(parsed, dict)
     findings.append(
         native_api_probe_finding(
             "pass" if ok else "fail",
             "native-api-request.get",
-            f"Native API GET {request_path} returned JSON." if ok else f"Native API GET {request_path} failed or returned non-JSON output.",
+            f"Native API {method} {request_path} returned JSON." if ok else f"Native API {method} {request_path} failed or returned non-JSON output.",
             response,
-            native_api_request_display_command(repo_root, request_path, request_id=request_id),
+            native_api_request_display_command(repo_root, request_path, method=method, request_id=request_id, body=body),
             parsed,
-            {"request_id": request_id},
+            {"request_id": request_id, "method": method, "body_bytes": len(body.encode("utf-8")) if body is not None else 0},
         )
     )
     result = make_result("native-api-request", repo_root, "Native API request completed." if ok else "Native API request failed.", findings)
-    result["details"] = {"path": request_path, "request_id": request_id, "response": parsed if isinstance(parsed, dict) else None}
+    result["details"] = {"path": request_path, "method": method, "request_id": request_id, "body_bytes": len(body.encode("utf-8")) if body is not None else 0, "response": parsed if isinstance(parsed, dict) else None}
     return result
 
 
@@ -13954,10 +14034,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status", parents=[common], help="show repository status")
     inventory = subparsers.add_parser("inventory", parents=[common], help="show expected component inventory")
     inventory.add_argument("--scope", help="limit inventory to a path under the repository")
-    native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform a read-only TurboVAS native API request")
+    native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform a guarded TurboVAS native API request")
     native_api_request.add_argument("--path", required=True, help="validated /api/v1/... path plus optional query string")
     native_api_request.add_argument("--direct", action="store_true", help="call the opt-in direct native API listener with bearer auth")
+    native_api_request.add_argument("--method", default="GET", help="HTTP method; non-GET requires --allow-write-control")
     native_api_request.add_argument("--request-id", help="optional safe X-Request-Id correlation value")
+    native_api_request.add_argument("--body-json", help="validated JSON request body; redacted in rendered commands")
+    native_api_request.add_argument("--allow-write-control", action="store_true", help="allow intentional non-GET/write-control-shaped request probes")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="omit full item and endpoint inventories, but keep review detail such as removal candidates")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -14091,7 +14174,15 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "inventory":
         result = command_inventory(repo_root, args.scope)
     elif args.command == "native-api-request":
-        result = command_native_api_request(repo_root, args.path, direct=args.direct, request_id=args.request_id)
+        result = command_native_api_request(
+            repo_root,
+            args.path,
+            direct=args.direct,
+            method=args.method,
+            request_id=args.request_id,
+            body_json=args.body_json,
+            allow_write_control=args.allow_write_control,
+        )
     elif args.command == "native-tooling-state":
         result = command_native_tooling_state(repo_root, compact=args.compact, summary_only=args.summary, status_only=args.status_only)
     elif args.command == "native-api-migration-matrix":

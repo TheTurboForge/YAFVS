@@ -8144,9 +8144,9 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
         finding(
             contract_drift_status(module_ownership_alignment_status),
             "native-tooling.module-ownership",
-            "Native API moved validation symbols remain in their owner modules."
+            "Native API moved module symbols remain in their owner modules."
             if module_ownership_alignment_status == "pass"
-            else "Native API moved validation symbols drifted out of their owner modules.",
+            else "Native API moved module symbols drifted out of their owner modules.",
             details=module_ownership_finding_details,
         ),
         finding("warn" if unknown_count else "pass", "native-tooling.unknown", f"{unknown_count} inherited tooling surface(s) are outside the current classification map." if unknown_count else "No inherited tooling surfaces were left unclassified.", details=unknown_finding_details),

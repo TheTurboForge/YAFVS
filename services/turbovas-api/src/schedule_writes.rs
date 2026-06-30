@@ -7,46 +7,21 @@ use axum::{
     extract::{Extension, Path, State},
     http::StatusCode,
 };
-use serde::Deserialize;
 use tokio_postgres::{Row, Transaction, types::ToSql};
 
 use crate::{
-    app_state::AppState, auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid,
-    schedule_payloads::ScheduleAssetDetail, schedule_write_sql::*,
+    app_state::AppState,
+    auth::DirectApiOperator,
+    errors::ApiError,
+    path_ids::parse_uuid,
+    schedule_payloads::ScheduleAssetDetail,
+    schedule_write_sql::*,
+    schedule_write_validation::{
+        ScheduleCloneRequest, SchedulePatchRequest, ValidatedScheduleClone, ValidatedSchedulePatch,
+        validate_schedule_clone_request, validate_schedule_patch_request,
+    },
     schedules::load_schedule_asset_detail,
 };
-
-const MAX_SCHEDULE_TEXT_BYTES: usize = 4096;
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SchedulePatchRequest {
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    comment: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ScheduleCloneRequest {
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    comment: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ValidatedSchedulePatch {
-    pub(crate) name: Option<String>,
-    pub(crate) comment: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ValidatedScheduleClone {
-    pub(crate) name: Option<String>,
-    pub(crate) comment: Option<String>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScheduleWriteRecord {
@@ -345,67 +320,6 @@ async fn ensure_schedule_uuid_not_live(
             "schedule with the same id already exists".to_string(),
         ))
     }
-}
-
-pub(crate) fn validate_schedule_patch_request(
-    request: SchedulePatchRequest,
-) -> Result<ValidatedSchedulePatch, ApiError> {
-    let validated = ValidatedSchedulePatch {
-        name: normalize_optional_required_schedule_text(request.name, "name")?,
-        comment: normalize_optional_schedule_text(request.comment, "comment")?,
-    };
-    if validated.name.is_none() && validated.comment.is_none() {
-        return Err(ApiError::BadRequest(
-            "schedule patch request must include at least one field".to_string(),
-        ));
-    }
-    Ok(validated)
-}
-
-pub(crate) fn validate_schedule_clone_request(
-    request: ScheduleCloneRequest,
-) -> Result<ValidatedScheduleClone, ApiError> {
-    Ok(ValidatedScheduleClone {
-        name: normalize_optional_required_schedule_text(request.name, "name")?,
-        comment: normalize_optional_schedule_text(request.comment, "comment")?,
-    })
-}
-
-fn normalize_optional_required_schedule_text(
-    value: Option<String>,
-    field_name: &str,
-) -> Result<Option<String>, ApiError> {
-    value
-        .map(|value| normalize_required_schedule_text(value, field_name))
-        .transpose()
-}
-
-fn normalize_required_schedule_text(value: String, field_name: &str) -> Result<String, ApiError> {
-    let value = normalize_schedule_text_value(value, field_name)?;
-    if value.is_empty() {
-        Err(ApiError::BadRequest(format!("{field_name} is required")))
-    } else {
-        Ok(value)
-    }
-}
-
-fn normalize_optional_schedule_text(
-    value: Option<String>,
-    field_name: &str,
-) -> Result<Option<String>, ApiError> {
-    value
-        .map(|value| normalize_schedule_text_value(value, field_name))
-        .transpose()
-}
-
-fn normalize_schedule_text_value(value: String, field_name: &str) -> Result<String, ApiError> {
-    let value = value.trim().to_string();
-    if value.len() > MAX_SCHEDULE_TEXT_BYTES || value.chars().any(char::is_control) {
-        return Err(ApiError::BadRequest(format!(
-            "{field_name} must be printable text up to {MAX_SCHEDULE_TEXT_BYTES} bytes"
-        )));
-    }
-    Ok(value)
 }
 
 pub(crate) async fn patch_schedule(

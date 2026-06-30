@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::schedule_writes::ValidatedScheduleClone;
+use crate::schedule_write_validation::ValidatedScheduleClone;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScheduleWriteOperation {

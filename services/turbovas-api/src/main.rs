@@ -100,6 +100,7 @@ mod tag_payloads;
 mod tag_resource_helpers;
 #[cfg(test)]
 mod tag_write_plans;
+mod tag_write_sql;
 mod tag_write_validation;
 mod tag_writes;
 mod tags;

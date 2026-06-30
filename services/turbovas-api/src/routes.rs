@@ -33,6 +33,7 @@ use crate::{
     schedules::*,
     scope_payloads::*,
     scope_report_handlers::*,
+    scope_report_retention::scope_report_retention_plan,
     scope_writes::{create_scope, delete_scope, patch_scope},
     tag_writes::{create_tag, delete_tag, patch_tag, update_tag_resources},
     tags::*,

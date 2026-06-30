@@ -43,6 +43,7 @@ mod scanner_assets;
 mod schedules;
 mod scope_payloads;
 mod scope_report_handlers;
+mod scope_report_retention;
 mod scope_writes;
 mod startup;
 mod tag_resource_helpers;

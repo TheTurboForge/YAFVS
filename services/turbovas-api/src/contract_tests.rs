@@ -21,7 +21,8 @@ use crate::{
     scanner_assets::{scanner_task_references_sql, scanner_user_tags_sql},
     schedules::schedule_user_tags_sql,
     scope_payloads::{scope_candidate_hosts_sql, scope_sql},
-    scope_report_handlers::{scope_report_results_sql, scope_report_retention_sources_sql},
+    scope_report_handlers::scope_report_results_sql,
+    scope_report_retention::scope_report_retention_sources_sql,
     tls_certificates::tls_certificate_user_tags_sql,
     user_tags::catalog_user_tags_sql,
 };
@@ -1091,6 +1092,7 @@ fn collection_handlers_use_api_query_contract_extractor() {
         include_str!("scan_configs.rs"),
         include_str!("scope_payloads.rs"),
         include_str!("scope_report_handlers.rs"),
+        include_str!("scope_report_retention.rs"),
         include_str!("scanner_assets.rs"),
         include_str!("schedules.rs"),
         include_str!("tags.rs"),
@@ -1176,7 +1178,7 @@ fn scope_report_retention_preview_marks_only_non_latest_sources() {
 
 #[test]
 fn scope_report_retention_plan_remains_dry_run_read_only_preview() {
-    let source = include_str!("scope_report_handlers.rs");
+    let source = include_str!("scope_report_retention.rs");
     let body = source
         .split_once("async fn scope_report_retention_plan(")
         .expect("scope report retention plan handler must exist")
@@ -1561,8 +1563,8 @@ fn result_rows_expose_nvt_epss_context_without_mutation_workflows() {
             .split_once("fn scope_report_results_sql")
             .expect("scope report result SQL helper must exist")
             .1
-            .split_once("pub(crate) async fn scope_report_retention_plan")
-            .expect("scope report result SQL helper must precede retention plan")
+            .split_once("pub(crate) async fn scope_report_errors")
+            .expect("scope report result SQL helper must precede error handler")
             .0,
     ];
     let row_mapper = result_source

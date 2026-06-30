@@ -101,4 +101,6 @@ mod report_config_characterization_tests;
 #[cfg(test)]
 mod schedule_characterization_tests;
 #[cfg(test)]
+mod scope_contract_tests;
+#[cfg(test)]
 mod scope_report_contract_tests;

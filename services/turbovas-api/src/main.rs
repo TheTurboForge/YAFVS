@@ -86,6 +86,7 @@ mod tag_writes;
 mod tags;
 mod task_target_payloads;
 mod task_targets;
+mod tls_certificate_payloads;
 mod tls_certificates;
 mod trashcan;
 mod user_tags;

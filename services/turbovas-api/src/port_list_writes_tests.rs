@@ -3,12 +3,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
-use crate::port_list_write_validation::MAX_PORT_LIST_TEXT_BYTES;
+use crate::port_list_write_validation::{
+    MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, PortListCreateRangeRequest,
+    PortListCreateRequest, validate_port_list_create_request,
+};
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequest {
     PortListPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+    }
+}
+
+fn create_request(name: &str, ranges: Vec<PortListCreateRangeRequest>) -> PortListCreateRequest {
+    PortListCreateRequest {
+        name: name.to_string(),
+        comment: Some("  created by native API  ".to_string()),
+        port_ranges: ranges,
+    }
+}
+
+fn create_range(protocol: &str, start: i32, end: i32) -> PortListCreateRangeRequest {
+    PortListCreateRangeRequest {
+        protocol: protocol.to_string(),
+        start,
+        end,
+        comment: Some("  operator range  ".to_string()),
     }
 }
 
@@ -24,6 +44,68 @@ fn port_list_create_plan_validates_ranges_before_insert() {
             PortListWriteStep::ReplacePortRanges,
         ]
     );
+}
+
+#[test]
+fn port_list_create_request_normalizes_text_protocol_and_range_order() {
+    let validated = validate_port_list_create_request(create_request(
+        "  Web ports  ",
+        vec![create_range("UDP", 53, 53), create_range("tcp", 80, 443)],
+    ))
+    .unwrap();
+    assert_eq!(validated.name, "Web ports");
+    assert_eq!(validated.comment, "created by native API");
+    assert_eq!(validated.port_ranges.len(), 2);
+    assert_eq!(validated.port_ranges[0].protocol_id, 0);
+    assert_eq!(validated.port_ranges[0].start, 80);
+    assert_eq!(validated.port_ranges[0].end, 443);
+    assert_eq!(validated.port_ranges[0].comment, "operator range");
+    assert_eq!(validated.port_ranges[1].protocol_id, 1);
+}
+
+#[test]
+fn port_list_create_request_rejects_invalid_ranges() {
+    for request in [
+        create_request("Web ports", vec![]),
+        create_request("Web ports", vec![create_range("icmp", 1, 1)]),
+        create_request("Web ports", vec![create_range("tcp", 0, 1)]),
+        create_request("Web ports", vec![create_range("tcp", 1, 65536)]),
+        create_request("Web ports", vec![create_range("tcp", 443, 80)]),
+        create_request(
+            "Web ports",
+            vec![create_range("tcp", 80, 90), create_range("tcp", 90, 100)],
+        ),
+    ] {
+        assert!(validate_port_list_create_request(request).is_err());
+    }
+}
+
+#[test]
+fn port_list_create_request_rejects_too_many_ranges_and_unknown_fields() {
+    let too_many = vec![create_range("tcp", 1, 1); MAX_PORT_LIST_CREATE_RANGES + 1];
+    assert!(validate_port_list_create_request(create_request("Web ports", too_many)).is_err());
+    let unknown = serde_json::json!({
+        "name": "Web ports",
+        "port_ranges": [{"protocol": "tcp", "start": 80, "end": 80, "exclude": true}],
+    });
+    assert!(serde_json::from_value::<PortListCreateRequest>(unknown).is_err());
+}
+
+#[test]
+fn port_list_create_sql_is_live_metadata_and_range_only() {
+    let metadata = port_list_create_metadata_sql();
+    assert!(metadata.contains("INSERT INTO port_lists"));
+    assert!(metadata.contains("predefined, creation_time, modification_time"));
+    assert!(metadata.contains("VALUES (make_uuid(), $1, $2, $3, 0, m_now(), m_now())"));
+    assert!(metadata.contains("RETURNING id::integer, uuid::text"));
+
+    let range = port_list_create_range_sql();
+    assert!(range.contains("INSERT INTO port_ranges"));
+    assert!(range.contains("VALUES (make_uuid(), $1, $2, $3, $4, $5, 0)"));
+    for forbidden in ["port_lists_trash", "port_ranges_trash", "targets", "DELETE"] {
+        assert!(!metadata.contains(forbidden));
+        assert!(!range.contains(forbidden));
+    }
 }
 
 #[test]

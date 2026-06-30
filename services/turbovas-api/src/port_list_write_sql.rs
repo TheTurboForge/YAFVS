@@ -6,6 +6,19 @@ pub(crate) fn port_list_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn port_list_create_metadata_sql() -> &'static str {
+    "INSERT INTO port_lists
+        (uuid, owner, name, comment, predefined, creation_time, modification_time)
+     VALUES (make_uuid(), $1, $2, $3, 0, m_now(), m_now())
+     RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn port_list_create_range_sql() -> &'static str {
+    "INSERT INTO port_ranges
+        (uuid, port_list, type, start, \"end\", comment, exclude)
+     VALUES (make_uuid(), $1, $2, $3, $4, $5, 0);"
+}
+
 pub(crate) fn port_list_write_state_sql() -> &'static str {
     "SELECT id::integer, coalesce(predefined, 0)::integer
        FROM port_lists
@@ -44,7 +57,7 @@ pub(crate) fn port_list_update_metadata_sql() -> &'static str {
             comment = coalesce($3, comment),
             modification_time = m_now()
       WHERE id = $1
-      RETURNING uuid::text;"
+      RETURNING id::integer, uuid::text;"
 }
 
 pub(crate) fn port_list_live_target_count_sql() -> &'static str {

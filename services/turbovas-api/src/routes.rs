@@ -23,7 +23,8 @@ use crate::{
     operating_systems::*,
     overrides::*,
     port_list_writes::{
-        delete_port_list, hard_delete_port_list, patch_port_list, restore_port_list,
+        create_port_list, delete_port_list, hard_delete_port_list, patch_port_list,
+        restore_port_list,
     },
     port_lists::*,
     report_applications::report_applications,
@@ -263,6 +264,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/port-lists/:port_list_id/trash",
                 delete(hard_delete_port_list),
             )
+            .route("/api/v1/port-lists", post(create_port_list))
             .route("/api/v1/schedules/:schedule_id", patch(patch_schedule))
             .route("/api/v1/schedules/:schedule_id", delete(delete_schedule))
             .route(

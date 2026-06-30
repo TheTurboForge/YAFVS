@@ -16,13 +16,16 @@ use crate::{
     port_list_payloads::PortListAssetDetail,
     port_list_write_sql::*,
     port_list_write_validation::{
-        PortListPatchRequest, ValidatedPortListPatch, validate_port_list_patch_request,
+        PortListCreateRequest, PortListPatchRequest, ValidatedPortListCreate,
+        ValidatedPortListPatch, validate_port_list_create_request,
+        validate_port_list_patch_request,
     },
     port_lists::load_port_list_asset_detail,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PortListWriteRecord {
+    internal_id: i32,
     uuid: String,
 }
 
@@ -30,6 +33,64 @@ pub(crate) struct PortListWriteRecord {
 pub(crate) struct PortListTrashWriteRecord {
     internal_id: i32,
     uuid: String,
+}
+
+pub(crate) async fn create_port_list(
+    State(state): State<AppState>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<PortListCreateRequest>,
+) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
+    let operator = require_port_list_write_operator(operator)?;
+    let request = validate_port_list_create_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_port_list_write_db_error(error, "begin create port list transaction")
+    })?;
+    let owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE port_lists, port_lists_trash, port_ranges IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_port_list_write_db_error(error, "lock port list tables for create"))?;
+    ensure_unique_port_list_name(&tx, &request.name, -1).await?;
+    let record = execute_port_list_create_transaction(&tx, owner_id, &request).await?;
+    tx.commit().await.map_err(|error| {
+        map_port_list_write_db_error(error, "commit create port list transaction")
+    })?;
+    Ok((
+        StatusCode::CREATED,
+        Json(load_port_list_asset_detail(&client, &record.uuid).await?),
+    ))
+}
+
+pub(crate) async fn execute_port_list_create_transaction(
+    tx: &Transaction<'_>,
+    owner_id: i32,
+    request: &ValidatedPortListCreate,
+) -> Result<PortListWriteRecord, ApiError> {
+    let record = query_port_list_write_record(
+        tx,
+        port_list_create_metadata_sql(),
+        &[&owner_id, &request.name, &request.comment],
+        "insert port list metadata",
+    )
+    .await?;
+    for range in &request.port_ranges {
+        execute_port_list_write_sql(
+            tx,
+            port_list_create_range_sql(),
+            &[
+                &record.internal_id,
+                &range.protocol_id,
+                &range.start,
+                &range.end,
+                &range.comment,
+            ],
+            "insert port list range",
+        )
+        .await?;
+    }
+    Ok(record)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -450,7 +511,10 @@ pub(crate) async fn execute_port_list_restore_transaction(
         "delete port list trash metadata after restore",
     )
     .await?;
-    Ok(PortListWriteRecord { uuid: record.uuid })
+    Ok(PortListWriteRecord {
+        internal_id: record.internal_id,
+        uuid: record.uuid,
+    })
 }
 
 pub(crate) async fn execute_port_list_hard_delete_transaction(
@@ -536,7 +600,10 @@ async fn query_port_list_write_record(
     tx.query_opt(sql, params)
         .await
         .map_err(|error| map_port_list_write_db_error(error, action))?
-        .map(|row| PortListWriteRecord { uuid: row.get(0) })
+        .map(|row| PortListWriteRecord {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
         .ok_or(ApiError::NotFound)
 }
 

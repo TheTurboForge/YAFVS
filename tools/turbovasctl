@@ -507,6 +507,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "operating-system-asset-list-read",
         "override-metadata-detail-read",
         "override-metadata-list-read",
+        "port-list-create",
         "port-list-metadata-detail-read",
         "port-list-hard-delete",
         "port-list-metadata-list-read",
@@ -592,7 +593,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "nvt-rich-detail",
         "operating-system-writes-deletes-and-rich-history",
         "override-writes-exports-trash-and-result-expansion",
-        "port-list-create-range-import-export",
+        "port-list-range-import-export",
         "raw-report-generation-xml-export-retention-and-mutations",
         "report-config-export",
         "report-format-import-export-verify-writes-and-deletes",
@@ -690,6 +691,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("delete", "/filters/{filter_id}"): "direct-write",
     ("post", "/filters/{filter_id}/restore"): "direct-write",
     ("delete", "/filters/{filter_id}/trash"): "direct-write",
+    ("post", "/port-lists"): "direct-write",
     ("patch", "/port-lists/{port_list_id}"): "direct-write",
     ("delete", "/port-lists/{port_list_id}"): "direct-write",
     ("delete", "/port-lists/{port_list_id}/trash"): "direct-write",
@@ -836,22 +838,31 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "override-metadata-detail-read",
     },
     ("get", "/port-lists"): {
-        "x-turbovas-inherited-still-owns": "port-list-create-range-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "port-list-metadata-list-read",
     },
+    ("post", "/port-lists"): {
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "port-list-create",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
+    },
     ("get", "/port-lists/{port_list_id}"): {
-        "x-turbovas-inherited-still-owns": "port-list-create-range-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "port-list-metadata-detail-read",
     },
     ("patch", "/port-lists/{port_list_id}"): {
-        "x-turbovas-inherited-still-owns": "port-list-create-range-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "port-list-metadata-modify",
     },
     ("delete", "/port-lists/{port_list_id}"): {
-        "x-turbovas-inherited-still-owns": "port-list-create-range-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -860,7 +871,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("post", "/port-lists/{port_list_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "port-list-create-range-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -869,7 +880,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/port-lists/{port_list_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "port-list-create-range-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -6655,6 +6666,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA Port List detail (migrated through gsad same-origin proxy)", "read-only port-list automation"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/port-lists",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native typed port-list creation"],
+            },
+            {
                 "method": "patch",
                 "endpoint": "/api/v1/port-lists/{port_list_id}",
                 "status": "implemented_direct_write_control",
@@ -7287,7 +7305,9 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "owner": "services/turbovas-api/src/port_list_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
         "symbols": (
+            "pub(crate) struct PortListCreateRequest",
             "pub(crate) struct PortListPatchRequest",
+            "pub(crate) fn validate_port_list_create_request",
             "pub(crate) fn validate_port_list_patch_request",
         ),
     },
@@ -7295,6 +7315,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "owner": "services/turbovas-api/src/port_list_write_sql.rs",
         "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
         "symbols": (
+            "pub(crate) fn port_list_create_metadata_sql",
+            "pub(crate) fn port_list_create_range_sql",
             "pub(crate) fn port_list_write_state_sql",
             "pub(crate) fn port_list_unique_name_sql",
             "pub(crate) fn port_list_update_metadata_sql",
@@ -11942,7 +11964,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.schedule-write-post-cleanup",
             "native-api-direct.port-list-predefined-patch-denied",
             "native-api-direct.port-list-predefined-delete-denied",
-            "native-api-direct.port-list-fixture",
+            "native-api-direct.port-list-write-create",
             "native-api-direct.port-list-write-delete",
             "native-api-direct.port-list-write-post-delete",
             "native-api-direct.port-list-write-restore",
@@ -12532,28 +12554,34 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             findings.append(native_api_probe_finding("warn", "native-api-direct.port-list-predefined-patch-denied", "Direct write-control smoke could not find a predefined port-list fixture for the no-mutation patch guard.", port_list_fixture, direct_native_api_display_command("/api/v1/port-lists?page_size=1", token=token, env=env), port_list_fixture_json, {"http_status": port_list_fixture_status, "port_list_id": predefined_port_list_id, **summarize_native_api_response(port_list_fixture_json)}))
             findings.append(native_api_probe_finding("warn", "native-api-direct.port-list-predefined-delete-denied", "Direct write-control smoke could not find a predefined port-list fixture for the no-mutation delete guard.", port_list_fixture, direct_native_api_display_command("/api/v1/port-lists?page_size=1", token=token, env=env), port_list_fixture_json, {"http_status": port_list_fixture_status, "port_list_id": predefined_port_list_id, **summarize_native_api_response(port_list_fixture_json)}))
 
-        port_list_fixture_sql = (
-            "WITH owner_row AS (SELECT id FROM users WHERE uuid = "
-            f"{sql_literal(admin_uuid or '')}), "
-            "inserted_port_list AS (INSERT INTO port_lists "
-            "(uuid, owner, name, comment, predefined, creation_time, modification_time) "
-            "SELECT make_uuid(), id, "
-            f"{sql_literal(port_list_name)}, 'TurboVAS direct write smoke temporary port list', 0, m_now(), m_now() "
-            "FROM owner_row RETURNING id, uuid), "
-            "inserted_range AS (INSERT INTO port_ranges "
-            "(uuid, port_list, type, start, \"end\", comment, exclude) "
-            "SELECT make_uuid(), id, 0, 65000, 65001, 'TurboVAS direct write smoke temporary range', 0 "
-            "FROM inserted_port_list RETURNING port_list) "
-            "SELECT uuid FROM inserted_port_list;"
+        port_list_create_body = json.dumps(
+            {
+                "name": port_list_name,
+                "comment": "TurboVAS direct write smoke temporary port list",
+                "port_ranges": [
+                    {
+                        "protocol": "tcp",
+                        "start": 65000,
+                        "end": 65001,
+                        "comment": "TurboVAS direct write smoke temporary range",
+                    }
+                ],
+            },
+            separators=(",", ":"),
         )
-        created_port_list = psql(repo_root, port_list_fixture_sql)
-        port_list_id = psql_value(created_port_list) or None
-        port_list_fixture_ok = created_port_list.returncode == 0 and bool(port_list_id)
-        port_list_fixture_finding = process_step_finding("pass" if port_list_fixture_ok else "fail", "native-api-direct.port-list-fixture", "Direct write-control smoke created a temporary non-predefined port-list fixture." if port_list_fixture_ok else "Direct write-control smoke failed to create a temporary non-predefined port-list fixture.", created_port_list, ["psql", "fixed-port-list-fixture"])
-        port_list_fixture_details = port_list_fixture_finding.setdefault("details", {})
-        if isinstance(port_list_fixture_details, dict):
-            port_list_fixture_details.update({"port_list_id": port_list_id, "port_list_name": port_list_name})
-        findings.append(port_list_fixture_finding)
+        created_port_list = direct_native_api_curl(
+            repo_root,
+            "/api/v1/port-lists",
+            token=token,
+            env=env,
+            method="POST",
+            body=port_list_create_body,
+            extra_headers=content_type,
+        )
+        created_port_list_json, created_port_list_status = parse_json_output_with_http_status(created_port_list)
+        port_list_id = created_port_list_json.get("id") if isinstance(created_port_list_json, dict) else None
+        port_list_fixture_ok = created_port_list.returncode == 0 and created_port_list_status == 201 and isinstance(port_list_id, str) and created_port_list_json.get("name") == port_list_name
+        findings.append(native_api_probe_finding("pass" if port_list_fixture_ok else "fail", "native-api-direct.port-list-write-create", "Direct write-control created a temporary non-predefined port list through the native API." if port_list_fixture_ok else "Direct write-control failed to create a temporary non-predefined port list through the native API.", created_port_list, direct_native_api_display_command("/api/v1/port-lists", token=token, env=env, method="POST", body=port_list_create_body, extra_headers=content_type), created_port_list_json, {"http_status": created_port_list_status, "port_list_id": port_list_id, "port_list_name": port_list_name, **summarize_native_api_response(created_port_list_json)}))
 
         if port_list_id:
             port_list_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="DELETE")
@@ -12737,6 +12765,7 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     artifact_dir.mkdir(parents=True, exist_ok=True)
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
+    content_type = (("Content-Type", "application/json"),)
     env = native_api_direct_runtime_env(repo_root)
     token_from_env = bool(env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
     token_source = "environment" if token_from_env else "runtime-secret-file"
@@ -13028,6 +13057,23 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_filter_hard_delete_json, disabled_filter_hard_delete_status = parse_json_output_with_http_status(disabled_filter_hard_delete)
     disabled_filter_hard_delete_ok = disabled_filter_hard_delete.returncode == 0 and disabled_filter_hard_delete_status == 405 and isinstance(disabled_filter_hard_delete_json, dict) and disabled_filter_hard_delete_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_filter_hard_delete_ok else "fail", "native-api-direct.filter-hard-delete-disabled", "Direct native API rejects saved-filter hard deletes while direct write-control is disabled." if disabled_filter_hard_delete_ok else "Direct native API did not reject a saved-filter hard delete while direct write-control is disabled.", disabled_filter_hard_delete, direct_native_api_display_command("/api/v1/filters/00000000-0000-0000-0000-000000000000/trash", token=token, env=env, method="DELETE"), disabled_filter_hard_delete_json, {"http_status": disabled_filter_hard_delete_status, **summarize_native_api_response(disabled_filter_hard_delete_json)}))
+
+    disabled_port_list_create_body = json.dumps(
+        {"name": "disabled-write-port-list", "port_ranges": [{"protocol": "tcp", "start": 80, "end": 80}]},
+        separators=(",", ":"),
+    )
+    disabled_port_list_create = direct_native_api_curl(
+        repo_root,
+        "/api/v1/port-lists",
+        token=token,
+        env=env,
+        method="POST",
+        body=disabled_port_list_create_body,
+        extra_headers=content_type,
+    )
+    disabled_port_list_create_json, disabled_port_list_create_status = parse_json_output_with_http_status(disabled_port_list_create)
+    disabled_port_list_create_ok = disabled_port_list_create.returncode == 0 and disabled_port_list_create_status == 405 and isinstance(disabled_port_list_create_json, dict) and disabled_port_list_create_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_port_list_create_ok else "fail", "native-api-direct.port-list-create-disabled", "Direct native API rejects port-list creates while direct write-control is disabled." if disabled_port_list_create_ok else "Direct native API did not reject a port-list create while direct write-control is disabled.", disabled_port_list_create, direct_native_api_display_command("/api/v1/port-lists", token=token, env=env, method="POST", body=disabled_port_list_create_body, extra_headers=content_type), disabled_port_list_create_json, {"http_status": disabled_port_list_create_status, **summarize_native_api_response(disabled_port_list_create_json)}))
 
     disabled_port_list_patch = direct_native_api_curl(
         repo_root,

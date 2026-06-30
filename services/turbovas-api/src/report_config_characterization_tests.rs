@@ -357,7 +357,7 @@ fn native_direct_api_exposes_only_report_config_create_write_control() {
             "{method} /api/v1/report-configs must remain closed"
         );
     }
-    for method in [Method::POST, Method::DELETE, Method::PUT] {
+    for method in [Method::POST, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(
                 &method,
@@ -374,6 +374,14 @@ fn native_direct_api_exposes_only_report_config_create_write_control() {
             true,
         ),
         "PATCH /api/v1/report-configs/{{id}} is now native direct write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(
+            &Method::DELETE,
+            "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc",
+            true,
+        ),
+        "DELETE /api/v1/report-configs/{{id}} is now native direct write-control for trash moves"
     );
     assert!(
         direct_api_v1_method_is_allowed(
@@ -402,19 +410,20 @@ fn openapi_documents_report_config_create_and_patch_as_direct_write_control() {
     assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(
-        list.contains("x-turbovas-inherited-still-owns: report-config-delete-trash-restore-export")
+        list.contains("x-turbovas-inherited-still-owns: report-config-hard-delete-restore-export")
     );
 
     let detail = openapi_path_block("/report-configs/{report_config_id}");
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
-    assert!(!detail.contains("delete:"));
+    assert!(detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-replaces: report-config-metadata-param-modify"));
+    assert!(detail.contains("x-turbovas-replaces: report-config-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(
         detail
-            .contains("x-turbovas-inherited-still-owns: report-config-delete-trash-restore-export")
+            .contains("x-turbovas-inherited-still-owns: report-config-hard-delete-restore-export")
     );
 
     let clone = openapi_path_block("/report-configs/{report_config_id}/clone");
@@ -423,7 +432,6 @@ fn openapi_documents_report_config_create_and_patch_as_direct_write_control() {
     assert!(clone.contains("x-turbovas-replaces: report-config-clone"));
     assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(
-        clone
-            .contains("x-turbovas-inherited-still-owns: report-config-delete-trash-restore-export")
+        clone.contains("x-turbovas-inherited-still-owns: report-config-hard-delete-restore-export")
     );
 }

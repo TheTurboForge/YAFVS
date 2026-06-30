@@ -409,3 +409,30 @@ fn report_config_clone_sql_copies_metadata_params_and_active_tag_links() {
     assert!(tags.contains("resource_location = 0"));
     assert!(tags.contains("SELECT tag, resource_type, $2, $3, resource_location"));
 }
+
+#[test]
+fn report_config_delete_sql_moves_metadata_params_and_tags_to_trash() {
+    let alert_guard = report_config_in_use_by_alerts_sql();
+    assert!(alert_guard.contains("SELECT 0::bigint"));
+
+    let trash = report_config_trash_insert_sql();
+    assert!(trash.contains("INSERT INTO report_configs_trash"));
+    assert!(trash.contains("SELECT uuid, owner, name, comment"));
+    assert!(trash.contains("FROM report_configs"));
+    assert!(trash.contains("WHERE id = $1"));
+    assert!(trash.contains("RETURNING id::integer, uuid::text"));
+
+    let params = report_config_trash_params_insert_sql();
+    assert!(params.contains("INSERT INTO report_config_params_trash"));
+    assert!(params.contains("SELECT $1, name, value"));
+    assert!(params.contains("WHERE report_config = $2"));
+
+    let tags = report_config_tag_locations_to_trash_sql();
+    assert!(tags.contains("UPDATE tag_resources"));
+    assert!(tags.contains("resource_location = 1"));
+    assert!(tags.contains("resource_type = 'report_config'"));
+    assert!(tags.contains("resource = $2"));
+
+    assert!(report_config_delete_params_sql().contains("DELETE FROM report_config_params"));
+    assert!(report_config_delete_metadata_sql().contains("DELETE FROM report_configs"));
+}

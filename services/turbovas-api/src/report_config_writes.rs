@@ -109,6 +109,32 @@ pub(crate) async fn clone_report_config(
     ))
 }
 
+pub(crate) async fn delete_report_config(
+    State(state): State<AppState>,
+    Path(report_config_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_report_config_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_report_config_write_db_error(error, "begin delete report config transaction")
+    })?;
+    resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute("LOCK TABLE report_configs IN SHARE ROW EXCLUSIVE MODE;")
+        .await
+        .map_err(|error| {
+            map_report_config_write_db_error(error, "lock report configs for delete")
+        })?;
+    let state = load_report_config_write_state(&tx, &report_config_id).await?;
+    ensure_report_config_not_in_use_by_alerts(&tx, state.internal_id).await?;
+    execute_report_config_trash_transaction(&tx, state.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_report_config_write_db_error(error, "commit delete report config transaction")
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub(crate) async fn patch_report_config(
     State(state): State<AppState>,
     Path(report_config_id): Path<String>,
@@ -286,6 +312,68 @@ pub(crate) async fn execute_report_config_create_transaction(
     .await?;
     replace_report_config_params(tx, record.internal_id, &request.params).await?;
     Ok(record)
+}
+
+pub(crate) async fn execute_report_config_trash_transaction(
+    tx: &Transaction<'_>,
+    report_config_internal_id: i32,
+) -> Result<ReportConfigWriteRecord, ApiError> {
+    let record = query_report_config_write_record(
+        tx,
+        report_config_trash_insert_sql(),
+        &[&report_config_internal_id],
+        "move report config metadata to trash",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_trash_params_insert_sql(),
+        &[&record.internal_id, &report_config_internal_id],
+        "move report config params to trash",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_tag_locations_to_trash_sql(),
+        &[&record.internal_id, &report_config_internal_id],
+        "move report config tag links to trash",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_delete_params_sql(),
+        &[&report_config_internal_id],
+        "delete live report config params after trash move",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_delete_metadata_sql(),
+        &[&report_config_internal_id],
+        "delete live report config after trash move",
+    )
+    .await?;
+    Ok(record)
+}
+
+async fn ensure_report_config_not_in_use_by_alerts(
+    tx: &Transaction<'_>,
+    _report_config_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(report_config_in_use_by_alerts_sql(), &[])
+        .await
+        .map_err(|error| {
+            map_report_config_write_db_error(error, "check report config alert usage")
+        })?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "report config is still referenced by an alert".to_string(),
+        ))
+    }
 }
 
 pub(crate) async fn execute_report_config_clone_transaction(
@@ -524,6 +612,39 @@ pub(crate) fn report_config_by_internal_id_sql() -> &'static str {
 
 pub(crate) fn report_config_delete_params_sql() -> &'static str {
     "DELETE FROM report_config_params WHERE report_config = $1;"
+}
+
+pub(crate) fn report_config_delete_metadata_sql() -> &'static str {
+    "DELETE FROM report_configs WHERE id = $1;"
+}
+
+pub(crate) fn report_config_in_use_by_alerts_sql() -> &'static str {
+    "SELECT 0::bigint;"
+}
+
+pub(crate) fn report_config_trash_insert_sql() -> &'static str {
+    "INSERT INTO report_configs_trash
+        (uuid, owner, name, comment, creation_time, modification_time, report_format_id)
+     SELECT uuid, owner, name, comment, creation_time, modification_time, report_format_id
+       FROM report_configs
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn report_config_trash_params_insert_sql() -> &'static str {
+    "INSERT INTO report_config_params_trash (report_config, name, value)
+     SELECT $1, name, value
+       FROM report_config_params
+      WHERE report_config = $2;"
+}
+
+pub(crate) fn report_config_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 1,
+            resource = $1
+      WHERE resource_type = 'report_config'
+        AND resource = $2
+        AND resource_location = 0;"
 }
 
 pub(crate) fn report_config_insert_param_sql() -> &'static str {

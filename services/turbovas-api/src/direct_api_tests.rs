@@ -375,6 +375,16 @@ fn direct_api_method_classifier_gates_scope_writes_on_write_control_flag() {
         true
     ));
     assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc",
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/report-configs/not-a-uuid",
+        true
+    ));
+    assert!(direct_api_v1_method_is_allowed(
         &Method::PATCH,
         "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc",
         true

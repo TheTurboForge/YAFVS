@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod alert_payloads;
 mod alerts;
 mod app_state;
 mod auth;

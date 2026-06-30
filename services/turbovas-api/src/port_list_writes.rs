@@ -12,10 +12,11 @@ use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     errors::ApiError,
+    port_list_payloads::PortListAssetDetail,
     port_list_write_validation::{
         PortListPatchRequest, ValidatedPortListPatch, validate_port_list_patch_request,
     },
-    port_lists::{PortListAssetDetail, load_port_list_asset_detail},
+    port_lists::load_port_list_asset_detail,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

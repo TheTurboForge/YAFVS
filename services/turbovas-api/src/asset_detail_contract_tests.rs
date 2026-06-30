@@ -565,15 +565,15 @@ fn schedule_user_tags_are_detail_only_active_schedule_tags() {
 
 #[test]
 fn port_list_user_tags_are_detail_only_active_port_list_tags() {
-    let source = include_str!("port_lists.rs");
-    let port_list_payload = source
+    let payloads = include_str!("port_list_payloads.rs");
+    let port_list_payload = payloads
         .split_once("struct PortListAssetItem {")
         .expect("port list payload struct must exist")
         .1
         .split_once("struct PortListAssetDetail")
         .expect("port list payload struct must precede detail payload")
         .0;
-    let port_list_detail_payload = source
+    let port_list_detail_payload = payloads
         .split_once("struct PortListAssetDetail {")
         .expect("port list detail payload struct must exist")
         .1

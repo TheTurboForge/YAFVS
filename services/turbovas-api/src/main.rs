@@ -12,6 +12,7 @@ mod cve_catalog;
 mod direct_api;
 mod errors;
 mod feeds;
+mod filter_writes;
 mod filters;
 mod formatters;
 mod host_asset_payloads;

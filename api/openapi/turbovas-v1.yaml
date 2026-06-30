@@ -724,9 +724,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-list-read
-      x-turbovas-inherited-still-owns: saved-filter-writes-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-term-type-create-delete-trash-alert-linkage
       summary: List saved filters
-      description: Read-only saved-filter metadata backed by gvmd/PostgreSQL. Filter terms are operator configuration data and remain available only through authenticated operator access.
+      description: Saved-filter metadata backed by gvmd/PostgreSQL. Native direct write-control can patch filter name/comment metadata; filter term/type changes, create, delete, trash, settings cleanup, and alert-linked semantics remain inherited while their native contracts are designed. Filter terms are operator configuration data and remain available only through authenticated operator access.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -759,8 +759,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-detail-read
-      x-turbovas-inherited-still-owns: saved-filter-writes-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-term-type-create-delete-trash-alert-linkage
       summary: Read one saved filter
+      description: Saved-filter detail backed by gvmd/PostgreSQL. Native direct write-control can patch only name/comment metadata. Term/type changes, create, delete, trash, settings cleanup, and alert-linked semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -778,6 +779,60 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchFiltersByFilterId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: saved-filter-metadata-modify
+      x-turbovas-inherited-still-owns: saved-filter-term-type-create-delete-trash-alert-linkage
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Patch saved filter metadata
+      description: Direct write-control endpoint for changing a saved filter name or comment. Filter term/type changes, create, delete, trash, settings cleanup, and alert-linked semantics remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/FilterId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                comment:
+                  type: string
+      responses:
+        '200':
+          description: Updated saved filter detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':

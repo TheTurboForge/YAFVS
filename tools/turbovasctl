@@ -332,7 +332,7 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "gsa-session-http-transport",
     "report-export-delete-or-rich-context",
     "report-format-config-write-or-export",
-    "saved-filter-write-or-alert-linkage",
+    "saved-filter-term-type-delete-or-alert-linkage",
     "scan-config-preference-write-or-export",
     "scanner-control-or-credential",
     "scope-report-generation",
@@ -531,6 +531,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "result-list-and-effective-overrides-read",
         "saved-filter-metadata-detail-read",
         "saved-filter-metadata-list-read",
+        "saved-filter-metadata-modify",
         "scan-config-family-summary-read",
         "scan-config-metadata-detail-info-tags-and-task-backlink-read",
         "scan-config-metadata-list-read",
@@ -586,7 +587,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "result-tags-exports-and-actions",
         "result-exports-and-actions",
         "retention-mutations",
-        "saved-filter-writes-and-alert-linkage",
+        "saved-filter-term-type-create-delete-trash-alert-linkage",
         "scanner-control-credentials-writes-and-deletes",
         "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "scan-config-preferences-export-import-writes-and-deletes",
@@ -667,6 +668,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/scopes"): "direct-write",
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
+    ("patch", "/filters/{filter_id}"): "direct-write",
     ("post", "/tags"): "direct-write",
     ("patch", "/tags/{tag_id}"): "direct-write",
     ("delete", "/tags/{tag_id}"): "direct-write",
@@ -689,14 +691,23 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "feed-status-read",
     },
     ("get", "/filters"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-writes-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-delete-trash-alert-linkage",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-list-read",
     },
     ("get", "/filters/{filter_id}"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-writes-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-delete-trash-alert-linkage",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-detail-read",
+    },
+    ("patch", "/filters/{filter_id}"): {
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-delete-trash-alert-linkage",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "saved-filter-metadata-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/cert-bund-advisories"): {
         "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
@@ -2532,7 +2543,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "schedules.js":
         return "schedule-write-or-export", "GSA schedule writes, calendar changes, exports, and deletes remain inherited."
     if name == "filter.ts":
-        return "saved-filter-write-or-alert-linkage", "Saved-filter writes and alert linkage remain inherited."
+        return "saved-filter-term-type-delete-or-alert-linkage", "Saved-filter term/type changes, create/delete/trash behavior, settings cleanup, and alert linkage remain inherited."
     if name == "tag.ts":
         return "tag-write-or-resource-actions", "Tag writes and unsupported resource actions remain inherited."
     if name == "user.ts":
@@ -6398,6 +6409,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/filters/{filter_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Filter detail (migrated through gsad same-origin proxy)", "read-only filter metadata automation"],
+            },
+            {
+                "method": "patch",
+                "endpoint": "/api/v1/filters/{filter_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native saved-filter name/comment metadata modification"],
             },
             {
                 "endpoint": "/api/v1/feeds",
@@ -11552,6 +11570,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scope-write-disabled",
             "native-api-direct.report-config-write-disabled",
             "native-api-direct.report-config-patch-disabled",
+            "native-api-direct.filter-patch-disabled",
             "native-api-direct.port-list-patch-disabled",
             "native-api-direct.schedule-patch-disabled",
             "native-api-direct.override-patch-disabled",
@@ -11572,6 +11591,11 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-write-update",
             "native-api-direct.report-config-write-cleanup",
             "native-api-direct.report-config-write-post-cleanup",
+            "native-api-direct.filter-fixture",
+            "native-api-direct.filter-write-update",
+            "native-api-direct.filter-write-restore",
+            "native-api-direct.filter-write-cleanup",
+            "native-api-direct.filter-write-post-cleanup",
             "native-api-direct.schedule-fixture",
             "native-api-direct.schedule-write-update",
             "native-api-direct.schedule-write-restore",
@@ -11674,12 +11698,15 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     scope_id: str | None = None
     tag_id: str | None = None
     tag_resource_id: str | None = None
+    filter_id: str | None = None
+    filter_original_comment = "TurboVAS direct write smoke original saved-filter comment"
     report_config_id: str | None = None
     report_config_format_id: str | None = None
     predefined_port_list_id: str | None = None
     schedule_id: str | None = None
     schedule_original_comment = ""
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
+    filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
     if aggregate_status(findings) != "fail":
@@ -11836,6 +11863,62 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             missing_format_json, missing_format_status = parse_json_output_with_http_status(missing_format)
             missing_format_ok = missing_format.returncode == 0 and missing_format_status == 404 and isinstance(missing_format_json, dict) and missing_format_json.get("error", {}).get("code") == "not_found"
             findings.append(native_api_probe_finding("pass" if missing_format_ok else "fail", "native-api-direct.report-config-missing-format-denied", "Direct write-control rejects report-config creation for a missing report format without creating state." if missing_format_ok else "Direct write-control did not reject missing report-format report-config creation as expected.", missing_format, direct_native_api_display_command("/api/v1/report-configs", token=token, env=env, method="POST", body=missing_format_body, extra_headers=content_type), missing_format_json, {"http_status": missing_format_status, **summarize_native_api_response(missing_format_json)}))
+
+        filter_fixture_sql = (
+            "WITH inserted_filter AS (INSERT INTO filters "
+            "(uuid, name, owner, comment, type, term, creation_time, modification_time) "
+            f"VALUES (make_uuid(), {sql_literal(filter_name)}, "
+            f"(SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid or '')}), "
+            f"{sql_literal(filter_original_comment)}, 'task', '', m_now(), m_now()) "
+            "RETURNING uuid::text) SELECT uuid FROM inserted_filter;"
+        )
+        filter_fixture = psql(repo_root, filter_fixture_sql)
+        filter_id = psql_value(filter_fixture) or None
+        filter_fixture_ok = filter_fixture.returncode == 0 and bool(filter_id)
+        filter_fixture_finding = process_step_finding("pass" if filter_fixture_ok else "fail", "native-api-direct.filter-fixture", "Direct write-control smoke created a temporary saved-filter fixture." if filter_fixture_ok else "Direct write-control smoke failed to create a temporary saved-filter fixture.", filter_fixture, ["psql", "fixed-filter-smoke-fixture"])
+        filter_fixture_details = filter_fixture_finding.setdefault("details", {})
+        if isinstance(filter_fixture_details, dict):
+            filter_fixture_details.update({"filter_id": filter_id, "filter_name": filter_name})
+        findings.append(filter_fixture_finding)
+
+        if filter_id:
+            filter_patch_comment = "TurboVAS direct write smoke updated saved-filter comment"
+            filter_patch_body = json.dumps(
+                {"comment": filter_patch_comment},
+                separators=(",", ":"),
+            )
+            filter_patch = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="PATCH", body=filter_patch_body, extra_headers=content_type)
+            filter_patch_json, filter_patch_status = parse_json_output_with_http_status(filter_patch)
+            filter_patch_ok = filter_patch.returncode == 0 and filter_patch_status == 200 and isinstance(filter_patch_json, dict) and filter_patch_json.get("id") == filter_id and filter_patch_json.get("comment") == filter_patch_comment
+            findings.append(native_api_probe_finding("pass" if filter_patch_ok else "fail", "native-api-direct.filter-write-update", "Direct write-control patched saved-filter comment metadata." if filter_patch_ok else "Direct write-control failed to patch saved-filter comment metadata.", filter_patch, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="PATCH", body=filter_patch_body, extra_headers=content_type), filter_patch_json, {"http_status": filter_patch_status, "filter_id": filter_id, **summarize_native_api_response(filter_patch_json)}))
+
+            filter_restore_body = json.dumps(
+                {"comment": filter_original_comment},
+                separators=(",", ":"),
+            )
+            filter_restore = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="PATCH", body=filter_restore_body, extra_headers=content_type)
+            filter_restore_json, filter_restore_status = parse_json_output_with_http_status(filter_restore)
+            filter_restore_ok = filter_restore.returncode == 0 and filter_restore_status == 200 and isinstance(filter_restore_json, dict) and filter_restore_json.get("id") == filter_id and filter_restore_json.get("comment") == filter_original_comment
+            findings.append(native_api_probe_finding("pass" if filter_restore_ok else "fail", "native-api-direct.filter-write-restore", "Direct write-control restored the saved-filter comment after reversible metadata patching." if filter_restore_ok else "Direct write-control failed to restore the saved-filter comment after metadata patching.", filter_restore, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="PATCH", body=filter_restore_body, extra_headers=content_type), filter_restore_json, {"http_status": filter_restore_status, "filter_id": filter_id, **summarize_native_api_response(filter_restore_json)}))
+
+            filter_cleanup_sql = (
+                "WITH deleted_filter AS (DELETE FROM filters "
+                f"WHERE uuid = {sql_literal(filter_id)} AND name = {sql_literal(filter_name)} RETURNING id) "
+                "SELECT count(*) FROM deleted_filter;"
+            )
+            filter_cleanup = psql(repo_root, filter_cleanup_sql)
+            filter_cleanup_deleted = psql_value(filter_cleanup)
+            filter_cleanup_ok = filter_cleanup.returncode == 0 and filter_cleanup_deleted == "1"
+            filter_cleanup_finding = process_step_finding("pass" if filter_cleanup_ok else "fail", "native-api-direct.filter-write-cleanup", "Direct write-control smoke removed the temporary saved-filter fixture through fixed cleanup SQL." if filter_cleanup_ok else "Direct write-control smoke failed to clean up the temporary saved-filter fixture.", filter_cleanup, ["psql", "fixed-filter-smoke-cleanup"])
+            filter_cleanup_details = filter_cleanup_finding.setdefault("details", {})
+            if isinstance(filter_cleanup_details, dict):
+                filter_cleanup_details.update({"filter_id": filter_id, "deleted_count": filter_cleanup_deleted})
+            findings.append(filter_cleanup_finding)
+
+            filter_post_cleanup = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env)
+            filter_post_cleanup_json, filter_post_cleanup_status = parse_json_output_with_http_status(filter_post_cleanup)
+            filter_post_cleanup_ok = filter_post_cleanup.returncode == 0 and filter_post_cleanup_status == 404 and isinstance(filter_post_cleanup_json, dict) and filter_post_cleanup_json.get("error", {}).get("code") == "not_found"
+            findings.append(native_api_probe_finding("pass" if filter_post_cleanup_ok else "fail", "native-api-direct.filter-write-post-cleanup", "Direct API confirms the temporary saved-filter fixture is gone after cleanup." if filter_post_cleanup_ok else "Direct API did not confirm the temporary saved-filter fixture was removed.", filter_post_cleanup, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env), filter_post_cleanup_json, {"http_status": filter_post_cleanup_status, "filter_id": filter_id, **summarize_native_api_response(filter_post_cleanup_json)}))
 
         schedule_fixture = direct_native_api_curl(repo_root, "/api/v1/schedules?page_size=1", token=token, env=env)
         schedule_fixture_json, schedule_fixture_status = parse_json_output_with_http_status(schedule_fixture)
@@ -12218,6 +12301,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_report_config_patch_json, disabled_report_config_patch_status = parse_json_output_with_http_status(disabled_report_config_patch)
     disabled_report_config_patch_ok = disabled_report_config_patch.returncode == 0 and disabled_report_config_patch_status == 405 and isinstance(disabled_report_config_patch_json, dict) and disabled_report_config_patch_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_report_config_patch_ok else "fail", "native-api-direct.report-config-patch-disabled", "Direct native API rejects report-config patches while direct write-control is disabled." if disabled_report_config_patch_ok else "Direct native API did not reject a report-config patch while direct write-control is disabled.", disabled_report_config_patch, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_report_config_patch_json, {"http_status": disabled_report_config_patch_status, **summarize_native_api_response(disabled_report_config_patch_json)}))
+
+    disabled_filter_patch = direct_native_api_curl(
+        repo_root,
+        "/api/v1/filters/00000000-0000-0000-0000-000000000000",
+        token=token,
+        env=env,
+        method="PATCH",
+    )
+    disabled_filter_patch_json, disabled_filter_patch_status = parse_json_output_with_http_status(disabled_filter_patch)
+    disabled_filter_patch_ok = disabled_filter_patch.returncode == 0 and disabled_filter_patch_status == 405 and isinstance(disabled_filter_patch_json, dict) and disabled_filter_patch_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_filter_patch_ok else "fail", "native-api-direct.filter-patch-disabled", "Direct native API rejects saved-filter patches while direct write-control is disabled." if disabled_filter_patch_ok else "Direct native API did not reject a saved-filter patch while direct write-control is disabled.", disabled_filter_patch, direct_native_api_display_command("/api/v1/filters/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_filter_patch_json, {"http_status": disabled_filter_patch_status, **summarize_native_api_response(disabled_filter_patch_json)}))
 
     disabled_port_list_patch = direct_native_api_curl(
         repo_root,

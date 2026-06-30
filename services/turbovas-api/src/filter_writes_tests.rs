@@ -3,6 +3,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use crate::{
+    errors::ApiError,
+    filter_write_validation::{
+        FilterPatchRequest, MAX_FILTER_TEXT_BYTES, ValidatedFilterPatch,
+        validate_filter_patch_request,
+    },
+};
+
+fn patch_request(name: Option<&str>, comment: Option<&str>) -> FilterPatchRequest {
+    FilterPatchRequest {
+        name: name.map(str::to_string),
+        comment: comment.map(str::to_string),
+    }
+}
 
 #[test]
 fn filter_create_plan_keeps_normalization_before_insert() {
@@ -17,6 +31,105 @@ fn filter_create_plan_keeps_normalization_before_insert() {
             FilterWriteStep::InsertFilter,
         ]
     );
+}
+
+#[test]
+fn filter_patch_request_trims_metadata_fields() {
+    assert_eq!(
+        validate_filter_patch_request(patch_request(
+            Some("  Results filter  "),
+            Some("  operator-visible note  "),
+        ))
+        .unwrap(),
+        ValidatedFilterPatch {
+            name: Some("Results filter".to_string()),
+            comment: Some("operator-visible note".to_string()),
+        }
+    );
+}
+
+#[test]
+fn filter_patch_request_requires_at_least_one_field() {
+    assert!(matches!(
+        validate_filter_patch_request(patch_request(None, None)),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn filter_patch_request_rejects_blank_name() {
+    assert!(matches!(
+        validate_filter_patch_request(patch_request(Some("   "), None)),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn filter_patch_request_allows_blank_comment_to_clear_comment() {
+    assert_eq!(
+        validate_filter_patch_request(patch_request(None, Some("   "))).unwrap(),
+        ValidatedFilterPatch {
+            name: None,
+            comment: Some(String::new()),
+        }
+    );
+}
+
+#[test]
+fn filter_patch_request_rejects_control_characters() {
+    assert!(matches!(
+        validate_filter_patch_request(patch_request(Some("bad\nname"), None)),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_filter_patch_request(patch_request(None, Some("bad\u{0}comment"))),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn filter_patch_request_rejects_term_type_and_unknown_fields() {
+    for request in [
+        serde_json::json!({"name": "Results filter", "term": "rows=100"}),
+        serde_json::json!({"name": "Results filter", "type": "result"}),
+        serde_json::json!({"name": "Results filter", "trash": true}),
+    ] {
+        assert!(serde_json::from_value::<FilterPatchRequest>(request).is_err());
+    }
+}
+
+#[test]
+fn filter_patch_request_rejects_oversized_metadata_fields() {
+    let oversized = "a".repeat(MAX_FILTER_TEXT_BYTES + 1);
+    assert!(matches!(
+        validate_filter_patch_request(FilterPatchRequest {
+            name: Some(oversized),
+            comment: None,
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn filter_patch_sql_is_metadata_only() {
+    let sql = filter_update_metadata_sql();
+    assert!(sql.contains("UPDATE filters"));
+    assert!(sql.contains("name = coalesce($2, name)"));
+    assert!(sql.contains("comment = coalesce($3, comment)"));
+    assert!(sql.contains("modification_time = m_now()"));
+    for forbidden in ["term", "type", "alert", "settings", "filters_trash"] {
+        assert!(
+            !sql.contains(forbidden),
+            "filter metadata patch SQL must not touch {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn filter_patch_uniqueness_checks_live_and_trash_names() {
+    let sql = filter_unique_name_sql();
+    assert!(sql.contains("FROM filters WHERE name = $1 AND id != $2"));
+    assert!(sql.contains("FROM filters_trash WHERE name = $1"));
 }
 
 #[test]

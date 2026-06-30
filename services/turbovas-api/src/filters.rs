@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use serde::Serialize;
-use tokio_postgres::Row;
+use tokio_postgres::{Client, Row};
 
 use axum::{
     Json,
@@ -145,8 +145,15 @@ pub(crate) async fn filter_asset_detail(
     State(state): State<AppState>,
     Path(filter_id): Path<String>,
 ) -> Result<Json<FilterAssetItem>, ApiError> {
-    parse_uuid(&filter_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_filter_asset_detail(&client, &filter_id).await?))
+}
+
+pub(crate) async fn load_filter_asset_detail(
+    client: &Client,
+    filter_id: &str,
+) -> Result<FilterAssetItem, ApiError> {
+    parse_uuid(&filter_id)?;
     let row = client
         .query_opt(
             r#"SELECT f.id AS internal_id,
@@ -205,5 +212,5 @@ pub(crate) async fn filter_asset_detail(
         .iter()
         .map(filter_alert_from_row)
         .collect();
-    Ok(Json(filter_asset_from_row(&row, alerts)))
+    Ok(filter_asset_from_row(&row, alerts))
 }

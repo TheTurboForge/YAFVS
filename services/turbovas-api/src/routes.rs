@@ -15,6 +15,7 @@ use crate::{
     cpe_catalog::*,
     cve_catalog::*,
     feeds::feeds,
+    filter_writes::patch_filter,
     filters::*,
     host_assets::*,
     metrics::*,
@@ -224,6 +225,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/report-configs/:report_config_id",
                 patch(patch_report_config),
             )
+            .route("/api/v1/filters/:filter_id", patch(patch_filter))
             .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))
             .route("/api/v1/schedules/:schedule_id", patch(patch_schedule))
             .route("/api/v1/tags", post(create_tag))

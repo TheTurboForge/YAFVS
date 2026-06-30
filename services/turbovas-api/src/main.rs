@@ -46,6 +46,7 @@ mod report_applications;
 mod report_config_payloads;
 #[cfg(test)]
 mod report_config_write_plans;
+mod report_config_write_sql;
 mod report_config_write_validation;
 mod report_config_writes;
 mod report_configs;

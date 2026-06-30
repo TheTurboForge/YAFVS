@@ -321,6 +321,18 @@ class TurboVASCtlTests(unittest.TestCase):
                     "details": {"http_status": 405, "response_json": {"error": {"code": "method_not_allowed"}}},
                 },
                 {
+                    "status": "pass",
+                    "check": "native-api-direct.schedule-patch-disabled",
+                    "message": "Direct native API rejects schedule patches while direct write-control is disabled.",
+                    "details": {"http_status": 405, "response_json": {"error": {"code": "method_not_allowed"}}},
+                },
+                {
+                    "status": "pass",
+                    "check": "native-api-direct.override-patch-disabled",
+                    "message": "Direct native API rejects override patches while direct write-control is disabled.",
+                    "details": {"http_status": 405, "response_json": {"error": {"code": "method_not_allowed"}}},
+                },
+                {
                     "status": "warn",
                     "check": "native-api.internal-smoke",
                     "message": "Internal smoke skipped optional detail probes.",
@@ -332,7 +344,7 @@ class TurboVASCtlTests(unittest.TestCase):
         compact = turbovasctl.direct_smoke_status_only_result(result)
 
         self.assertEqual(compact["status"], "warn")
-        self.assertEqual(compact["details"]["finding_count"], 6)
+        self.assertEqual(compact["details"]["finding_count"], 8)
         self.assertEqual(compact["details"]["non_pass_count"], 1)
         self.assertEqual(compact["details"]["artifact_count"], 2)
         self.assertEqual(compact["details"]["important_checks"]["native-api-direct.valid-token"], "pass")
@@ -340,6 +352,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(compact["details"]["important_checks"]["native-api-direct.report-config-write-disabled"], "pass")
         self.assertEqual(compact["details"]["important_checks"]["native-api-direct.report-config-patch-disabled"], "pass")
         self.assertEqual(compact["details"]["important_checks"]["native-api-direct.port-list-patch-disabled"], "pass")
+        self.assertEqual(compact["details"]["important_checks"]["native-api-direct.schedule-patch-disabled"], "pass")
+        self.assertEqual(compact["details"]["important_checks"]["native-api-direct.override-patch-disabled"], "pass")
         self.assertEqual(compact["details"]["important_checks"]["native-api.internal-smoke"], "warn")
         self.assertEqual(len(compact["findings"]), 1)
         self.assertEqual(compact["findings"][0]["check"], "native-api.internal-smoke")

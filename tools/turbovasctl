@@ -11437,6 +11437,8 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-write-disabled",
             "native-api-direct.report-config-patch-disabled",
             "native-api-direct.port-list-patch-disabled",
+            "native-api-direct.schedule-patch-disabled",
+            "native-api-direct.override-patch-disabled",
             "native-api-direct.tag-write-disabled",
             "native-api-direct.tag-delete-disabled",
             "native-api-direct.write-control-operator",
@@ -12065,6 +12067,28 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_port_list_patch_json, disabled_port_list_patch_status = parse_json_output_with_http_status(disabled_port_list_patch)
     disabled_port_list_patch_ok = disabled_port_list_patch.returncode == 0 and disabled_port_list_patch_status == 405 and isinstance(disabled_port_list_patch_json, dict) and disabled_port_list_patch_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_port_list_patch_ok else "fail", "native-api-direct.port-list-patch-disabled", "Direct native API rejects port-list patches while direct write-control is disabled." if disabled_port_list_patch_ok else "Direct native API did not reject a port-list patch while direct write-control is disabled.", disabled_port_list_patch, direct_native_api_display_command("/api/v1/port-lists/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_port_list_patch_json, {"http_status": disabled_port_list_patch_status, **summarize_native_api_response(disabled_port_list_patch_json)}))
+
+    disabled_schedule_patch = direct_native_api_curl(
+        repo_root,
+        "/api/v1/schedules/00000000-0000-0000-0000-000000000000",
+        token=token,
+        env=env,
+        method="PATCH",
+    )
+    disabled_schedule_patch_json, disabled_schedule_patch_status = parse_json_output_with_http_status(disabled_schedule_patch)
+    disabled_schedule_patch_ok = disabled_schedule_patch.returncode == 0 and disabled_schedule_patch_status == 405 and isinstance(disabled_schedule_patch_json, dict) and disabled_schedule_patch_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_schedule_patch_ok else "fail", "native-api-direct.schedule-patch-disabled", "Direct native API rejects schedule patches while direct write-control is disabled." if disabled_schedule_patch_ok else "Direct native API did not reject a schedule patch while direct write-control is disabled.", disabled_schedule_patch, direct_native_api_display_command("/api/v1/schedules/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_schedule_patch_json, {"http_status": disabled_schedule_patch_status, **summarize_native_api_response(disabled_schedule_patch_json)}))
+
+    disabled_override_patch = direct_native_api_curl(
+        repo_root,
+        "/api/v1/overrides/00000000-0000-0000-0000-000000000000",
+        token=token,
+        env=env,
+        method="PATCH",
+    )
+    disabled_override_patch_json, disabled_override_patch_status = parse_json_output_with_http_status(disabled_override_patch)
+    disabled_override_patch_ok = disabled_override_patch.returncode == 0 and disabled_override_patch_status == 405 and isinstance(disabled_override_patch_json, dict) and disabled_override_patch_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_override_patch_ok else "fail", "native-api-direct.override-patch-disabled", "Direct native API rejects override patches while direct write-control is disabled." if disabled_override_patch_ok else "Direct native API did not reject an override patch while direct write-control is disabled.", disabled_override_patch, direct_native_api_display_command("/api/v1/overrides/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_override_patch_json, {"http_status": disabled_override_patch_status, **summarize_native_api_response(disabled_override_patch_json)}))
 
     disabled_tag_write = direct_native_api_curl(
         repo_root,

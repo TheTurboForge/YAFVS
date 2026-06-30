@@ -303,6 +303,12 @@ class TurboVASCtlTests(unittest.TestCase):
                     "details": {"http_status": 405, "response_json": {"error": {"code": "method_not_allowed"}}},
                 },
                 {
+                    "status": "pass",
+                    "check": "native-api-direct.report-config-write-disabled",
+                    "message": "Direct native API rejects report-config writes while direct write-control is disabled.",
+                    "details": {"http_status": 405, "response_json": {"error": {"code": "method_not_allowed"}}},
+                },
+                {
                     "status": "warn",
                     "check": "native-api.internal-smoke",
                     "message": "Internal smoke skipped optional detail probes.",
@@ -314,11 +320,12 @@ class TurboVASCtlTests(unittest.TestCase):
         compact = turbovasctl.direct_smoke_status_only_result(result)
 
         self.assertEqual(compact["status"], "warn")
-        self.assertEqual(compact["details"]["finding_count"], 3)
+        self.assertEqual(compact["details"]["finding_count"], 4)
         self.assertEqual(compact["details"]["non_pass_count"], 1)
         self.assertEqual(compact["details"]["artifact_count"], 2)
         self.assertEqual(compact["details"]["important_checks"]["native-api-direct.valid-token"], "pass")
         self.assertEqual(compact["details"]["important_checks"]["native-api-direct.scope-write-disabled"], "pass")
+        self.assertEqual(compact["details"]["important_checks"]["native-api-direct.report-config-write-disabled"], "pass")
         self.assertEqual(compact["details"]["important_checks"]["native-api.internal-smoke"], "warn")
         self.assertEqual(len(compact["findings"]), 1)
         self.assertEqual(compact["findings"][0]["check"], "native-api.internal-smoke")

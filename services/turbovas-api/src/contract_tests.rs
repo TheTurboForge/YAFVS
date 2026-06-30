@@ -1223,7 +1223,7 @@ fn scope_report_retention_plan_remains_dry_run_read_only_preview() {
 
 #[test]
 fn scope_report_metrics_reads_persisted_snapshot_tables_and_not_live_results() {
-    let source = include_str!("metrics_payloads.rs");
+    let source = include_str!("metrics.rs");
     let start = "pub(crate) async fn scope_report_metrics(";
     let end = "\n}\n\npub(crate) async fn report_metrics";
     let body = source

@@ -17,7 +17,7 @@ use crate::{
     feeds::feeds,
     filters::*,
     host_assets::*,
-    metrics_payloads::*,
+    metrics::*,
     nvt_catalog::*,
     operating_systems::*,
     overrides::*,

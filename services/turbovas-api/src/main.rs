@@ -113,6 +113,7 @@ mod scope_writes;
 mod startup;
 mod tag_payloads;
 mod tag_resource_helpers;
+mod tag_write_db;
 #[cfg(test)]
 mod tag_write_plans;
 mod tag_write_sql;

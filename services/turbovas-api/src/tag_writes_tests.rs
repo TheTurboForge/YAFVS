@@ -4,8 +4,10 @@
 
 use super::*;
 use crate::tag_write_plans::*;
+use crate::tag_write_sql::*;
 use crate::tag_write_validation::{
-    MAX_TAG_RESOURCE_ID_BYTES, MAX_TAG_RESOURCE_WRITE_IDS, default_tag_active,
+    MAX_TAG_RESOURCE_ID_BYTES, MAX_TAG_RESOURCE_WRITE_IDS, TagResourceUpdateAction,
+    ValidatedTagCreate, ValidatedTagPatch, ValidatedTagResourceUpdate, default_tag_active,
 };
 
 #[test]

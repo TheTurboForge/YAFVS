@@ -10,11 +10,8 @@ use serde::Deserialize;
 use tokio_postgres::{Row, Transaction, types::ToSql};
 
 use crate::{
-    app_state::AppState,
-    auth::DirectApiOperator,
-    errors::ApiError,
-    path_ids::parse_uuid,
-    schedules::{ScheduleAssetDetail, load_schedule_asset_detail},
+    app_state::AppState, auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid,
+    schedule_payloads::ScheduleAssetDetail, schedules::load_schedule_asset_detail,
 };
 
 const MAX_SCHEDULE_TEXT_BYTES: usize = 4096;

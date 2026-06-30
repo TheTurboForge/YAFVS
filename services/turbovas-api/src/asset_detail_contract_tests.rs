@@ -531,7 +531,7 @@ fn scan_config_task_references_are_non_hidden_config_backlinks_only() {
 
 #[test]
 fn schedule_user_tags_are_detail_only_active_schedule_tags() {
-    let source = include_str!("schedules.rs");
+    let source = include_str!("schedule_payloads.rs");
     let schedule_list_payload = source
         .split_once("struct ScheduleAssetItem {")
         .expect("schedule list payload struct must exist")

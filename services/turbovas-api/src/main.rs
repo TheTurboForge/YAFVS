@@ -62,6 +62,7 @@ mod runtime;
 mod scan_config_payloads;
 mod scan_configs;
 mod scanner_assets;
+mod schedule_payloads;
 mod schedule_writes;
 mod schedules;
 mod scope_payload_rows;

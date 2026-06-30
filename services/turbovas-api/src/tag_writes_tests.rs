@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use crate::tag_write_plans::*;
 use crate::tag_write_validation::{MAX_TAG_RESOURCE_WRITE_IDS, default_tag_active};
 
 #[test]

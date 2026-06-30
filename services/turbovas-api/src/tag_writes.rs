@@ -46,38 +46,6 @@ struct TagResourceWriteRecord {
     uuid: String,
 }
 
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TagWriteOperation {
-    CreateMetadata,
-    PatchMetadata,
-    DeleteMetadata,
-    UpdateResourceAssignments,
-}
-
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TagWriteStep {
-    ResolveOperatorOwner,
-    VerifyResourceTypeSupported,
-    VerifyTagExists,
-    VerifyTagUnassigned,
-    VerifyResourceExists,
-    InsertMetadata,
-    UpdateMetadata,
-    DeleteMetadata,
-    InsertResourceAssignment,
-    DeleteResourceAssignment,
-    TouchMetadata,
-}
-
-#[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct TagWriteTransactionPlan {
-    pub(crate) operation: TagWriteOperation,
-    pub(crate) steps: Vec<TagWriteStep>,
-}
-
 pub(crate) async fn create_tag(
     State(state): State<AppState>,
     operator: Option<Extension<DirectApiOperator>>,
@@ -179,65 +147,6 @@ fn require_tag_write_operator(
         return Err(ApiError::Forbidden);
     };
     Ok(operator)
-}
-
-#[cfg(test)]
-pub(crate) fn tag_resource_update_transaction_plan(
-    request: &ValidatedTagResourceUpdate,
-) -> TagWriteTransactionPlan {
-    TagWriteTransactionPlan {
-        operation: TagWriteOperation::UpdateResourceAssignments,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyTagExists,
-            TagWriteStep::VerifyResourceTypeSupported,
-            TagWriteStep::VerifyResourceExists,
-            match request.action {
-                TagResourceUpdateAction::Add => TagWriteStep::InsertResourceAssignment,
-                TagResourceUpdateAction::Remove => TagWriteStep::DeleteResourceAssignment,
-            },
-            TagWriteStep::TouchMetadata,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn tag_create_transaction_plan(
-    _request: &ValidatedTagCreate,
-) -> TagWriteTransactionPlan {
-    TagWriteTransactionPlan {
-        operation: TagWriteOperation::CreateMetadata,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyResourceTypeSupported,
-            TagWriteStep::InsertMetadata,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn tag_patch_transaction_plan(_request: &ValidatedTagPatch) -> TagWriteTransactionPlan {
-    TagWriteTransactionPlan {
-        operation: TagWriteOperation::PatchMetadata,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyTagExists,
-            TagWriteStep::UpdateMetadata,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn tag_delete_transaction_plan() -> TagWriteTransactionPlan {
-    TagWriteTransactionPlan {
-        operation: TagWriteOperation::DeleteMetadata,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyTagExists,
-            TagWriteStep::VerifyTagUnassigned,
-            TagWriteStep::DeleteMetadata,
-        ],
-    }
 }
 
 pub(crate) async fn execute_tag_create_transaction(

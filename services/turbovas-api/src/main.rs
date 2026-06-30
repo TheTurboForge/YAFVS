@@ -44,6 +44,8 @@ mod port_lists;
 mod query;
 mod report_applications;
 mod report_config_payloads;
+#[cfg(test)]
+mod report_config_write_plans;
 mod report_config_write_validation;
 mod report_config_writes;
 mod report_configs;
@@ -87,11 +89,15 @@ mod scope_report_results;
 mod scope_report_retention;
 mod scope_report_tls_certificates;
 mod scope_reports;
+#[cfg(test)]
+mod scope_write_plans;
 mod scope_write_validation;
 mod scope_writes;
 mod startup;
 mod tag_payloads;
 mod tag_resource_helpers;
+#[cfg(test)]
+mod tag_write_plans;
 mod tag_write_validation;
 mod tag_writes;
 mod tags;

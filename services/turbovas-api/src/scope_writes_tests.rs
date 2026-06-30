@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use crate::scope_write_plans::*;
 
 #[test]
 fn scope_create_request_normalizes_defaults_and_membership_ids() {

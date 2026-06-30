@@ -153,9 +153,11 @@ pub(crate) async fn patch_port_list(
         map_port_list_write_db_error(error, "begin patch port list transaction")
     })?;
     resolve_port_list_write_operator_owner(&tx, &operator).await?;
-    tx.batch_execute("LOCK TABLE port_lists, port_lists_trash IN SHARE ROW EXCLUSIVE MODE;")
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, "lock port lists for patch"))?;
+    tx.batch_execute(
+        "LOCK TABLE port_lists, port_lists_trash, port_ranges, targets, targets_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_port_list_write_db_error(error, "lock port list tables for patch"))?;
     let state = load_port_list_write_state(&tx, &port_list_id).await?;
     if state.predefined {
         return Err(ApiError::Conflict(
@@ -164,6 +166,10 @@ pub(crate) async fn patch_port_list(
     }
     if let Some(name) = request.name.as_ref() {
         ensure_unique_port_list_name(&tx, name, state.internal_id).await?;
+    }
+    if request.port_ranges.is_some() {
+        ensure_port_list_not_in_use_by_live_targets(&tx, state.internal_id).await?;
+        ensure_port_list_not_in_use_by_live_location_trash_targets(&tx, state.internal_id).await?;
     }
     let record = execute_port_list_patch_transaction(&tx, state.internal_id, &request).await?;
     tx.commit().await.map_err(|error| {
@@ -384,13 +390,38 @@ pub(crate) async fn execute_port_list_patch_transaction(
     port_list_internal_id: i32,
     request: &ValidatedPortListPatch,
 ) -> Result<PortListWriteRecord, ApiError> {
-    query_port_list_write_record(
+    let record = query_port_list_write_record(
         tx,
         port_list_update_metadata_sql(),
         &[&port_list_internal_id, &request.name, &request.comment],
         "update port list metadata",
     )
-    .await
+    .await?;
+    if let Some(ranges) = request.port_ranges.as_ref() {
+        execute_port_list_write_sql(
+            tx,
+            port_list_delete_ranges_sql(),
+            &[&port_list_internal_id],
+            "delete existing port list ranges before replacement",
+        )
+        .await?;
+        for range in ranges {
+            execute_port_list_write_sql(
+                tx,
+                port_list_create_range_sql(),
+                &[
+                    &port_list_internal_id,
+                    &range.protocol_id,
+                    &range.start,
+                    &range.end,
+                    &range.comment,
+                ],
+                "insert replacement port list range",
+            )
+            .await?;
+        }
+    }
+    Ok(record)
 }
 
 pub(crate) async fn execute_port_list_trash_transaction(
@@ -447,6 +478,29 @@ pub(crate) async fn execute_port_list_trash_transaction(
     )
     .await?;
     Ok(record)
+}
+
+async fn ensure_port_list_not_in_use_by_live_location_trash_targets(
+    tx: &Transaction<'_>,
+    port_list_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(
+            port_list_live_location_trash_target_count_sql(),
+            &[&port_list_internal_id],
+        )
+        .await
+        .map_err(|error| {
+            map_port_list_write_db_error(error, "check live port list trash target usage")
+        })?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "port list is still referenced by a trash target".to_string(),
+        ))
+    }
 }
 
 pub(crate) async fn execute_port_list_clone_transaction(

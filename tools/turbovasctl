@@ -459,6 +459,7 @@ OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
         "destructive-mutation",
         "export-generation",
         "feed-control",
+        "metadata-and-range-write",
         "metadata-write",
         "metadata-delete",
         "resource-assignment-write",
@@ -512,7 +513,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "port-list-metadata-detail-read",
         "port-list-hard-delete",
         "port-list-metadata-list-read",
-        "port-list-metadata-modify",
+        "port-list-metadata-and-range-modify",
         "port-list-restore",
         "port-list-trash-move",
         "raw-report-application-evidence-read",
@@ -876,7 +877,8 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("patch", "/port-lists/{port_list_id}"): {
         "x-turbovas-inherited-still-owns": "port-list-range-import-export",
         "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "port-list-metadata-modify",
+        "x-turbovas-replaces": "port-list-metadata-and-range-modify",
+        "x-turbovas-side-effect": "metadata-and-range-write",
     },
     ("delete", "/port-lists/{port_list_id}"): {
         "x-turbovas-inherited-still-owns": "port-list-range-import-export",
@@ -12116,6 +12118,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.port-list-predefined-patch-denied",
             "native-api-direct.port-list-predefined-delete-denied",
             "native-api-direct.port-list-write-create",
+            "native-api-direct.port-list-write-range-replace",
             "native-api-direct.port-list-write-clone",
             "native-api-direct.port-list-write-hard-delete-clone",
             "native-api-direct.port-list-write-post-hard-delete-clone",
@@ -12816,6 +12819,25 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         findings.append(native_api_probe_finding("pass" if port_list_fixture_ok else "fail", "native-api-direct.port-list-write-create", "Direct write-control created a temporary non-predefined port list through the native API." if port_list_fixture_ok else "Direct write-control failed to create a temporary non-predefined port list through the native API.", created_port_list, direct_native_api_display_command("/api/v1/port-lists", token=token, env=env, method="POST", body=port_list_create_body, extra_headers=content_type), created_port_list_json, {"http_status": created_port_list_status, "port_list_id": port_list_id, "port_list_name": port_list_name, **summarize_native_api_response(created_port_list_json)}))
 
         if port_list_id:
+            port_list_range_patch_body = json.dumps(
+                {
+                    "port_ranges": [
+                        {
+                            "protocol": "udp",
+                            "start": 65002,
+                            "end": 65002,
+                            "comment": "TurboVAS direct write smoke replacement range",
+                        }
+                    ],
+                },
+                separators=(",", ":"),
+            )
+            port_list_range_patch = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type)
+            port_list_range_patch_json, port_list_range_patch_status = parse_json_output_with_http_status(port_list_range_patch)
+            port_list_range_patch_ranges = port_list_range_patch_json.get("port_ranges") if isinstance(port_list_range_patch_json, dict) else None
+            port_list_range_patch_ok = port_list_range_patch.returncode == 0 and port_list_range_patch_status == 200 and isinstance(port_list_range_patch_json, dict) and port_list_range_patch_json.get("id") == port_list_id and isinstance(port_list_range_patch_ranges, list) and len(port_list_range_patch_ranges) == 1 and port_list_range_patch_ranges[0].get("protocol") == "udp" and port_list_range_patch_ranges[0].get("start") == 65002 and port_list_range_patch_ranges[0].get("end") == 65002
+            findings.append(native_api_probe_finding("pass" if port_list_range_patch_ok else "fail", "native-api-direct.port-list-write-range-replace", "Direct write-control replaced the temporary port list range set." if port_list_range_patch_ok else "Direct write-control failed to replace the temporary port list range set.", port_list_range_patch, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type), port_list_range_patch_json, {"http_status": port_list_range_patch_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_patch_json)}))
+
             port_list_clone_body = json.dumps(
                 {"name": port_list_clone_name, "comment": "TurboVAS direct write smoke cloned temporary port list"},
                 separators=(",", ":"),

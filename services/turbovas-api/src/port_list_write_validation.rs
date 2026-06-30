@@ -16,6 +16,8 @@ pub(crate) struct PortListPatchRequest {
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+    #[serde(default)]
+    pub(crate) port_ranges: Option<Vec<PortListCreateRangeRequest>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +52,7 @@ pub(crate) struct PortListCreateRangeRequest {
 pub(crate) struct ValidatedPortListPatch {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
+    pub(crate) port_ranges: Option<Vec<ValidatedPortListCreateRange>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -79,31 +82,7 @@ pub(crate) fn validate_port_list_create_request(
     let name = normalize_required_port_list_text(request.name, "name")?;
     let comment =
         normalize_optional_port_list_text(request.comment, "comment")?.unwrap_or_default();
-    if request.port_ranges.is_empty() {
-        return Err(ApiError::BadRequest(
-            "port list create request must include at least one port range".to_string(),
-        ));
-    }
-    if request.port_ranges.len() > MAX_PORT_LIST_CREATE_RANGES {
-        return Err(ApiError::BadRequest(format!(
-            "port list create request may include at most {MAX_PORT_LIST_CREATE_RANGES} ranges"
-        )));
-    }
-    let mut port_ranges = request
-        .port_ranges
-        .into_iter()
-        .map(validate_port_list_create_range)
-        .collect::<Result<Vec<_>, _>>()?;
-    port_ranges.sort_by_key(|range| (range.protocol_id, range.start, range.end));
-    for pair in port_ranges.windows(2) {
-        let previous = &pair[0];
-        let current = &pair[1];
-        if previous.protocol_id == current.protocol_id && previous.end >= current.start {
-            return Err(ApiError::BadRequest(
-                "port list create request contains overlapping ranges".to_string(),
-            ));
-        }
-    }
+    let port_ranges = validate_port_list_ranges(request.port_ranges, "port list create request")?;
     Ok(ValidatedPortListCreate {
         name,
         comment,
@@ -145,11 +124,16 @@ fn validate_port_list_create_range(
 pub(crate) fn validate_port_list_patch_request(
     request: PortListPatchRequest,
 ) -> Result<ValidatedPortListPatch, ApiError> {
+    let port_ranges = request
+        .port_ranges
+        .map(|ranges| validate_port_list_ranges(ranges, "port list patch request"))
+        .transpose()?;
     let validated = ValidatedPortListPatch {
         name: normalize_optional_required_port_list_text(request.name, "name")?,
         comment: normalize_optional_port_list_text(request.comment, "comment")?,
+        port_ranges,
     };
-    if validated.name.is_none() && validated.comment.is_none() {
+    if validated.name.is_none() && validated.comment.is_none() && validated.port_ranges.is_none() {
         return Err(ApiError::BadRequest(
             "port list patch request must include at least one field".to_string(),
         ));
@@ -164,6 +148,37 @@ pub(crate) fn validate_port_list_clone_request(
         name: normalize_optional_required_port_list_text(request.name, "name")?,
         comment: normalize_optional_port_list_text(request.comment, "comment")?,
     })
+}
+
+fn validate_port_list_ranges(
+    ranges: Vec<PortListCreateRangeRequest>,
+    request_name: &str,
+) -> Result<Vec<ValidatedPortListCreateRange>, ApiError> {
+    if ranges.is_empty() {
+        return Err(ApiError::BadRequest(format!(
+            "{request_name} must include at least one port range"
+        )));
+    }
+    if ranges.len() > MAX_PORT_LIST_CREATE_RANGES {
+        return Err(ApiError::BadRequest(format!(
+            "{request_name} may include at most {MAX_PORT_LIST_CREATE_RANGES} ranges"
+        )));
+    }
+    let mut ranges = ranges
+        .into_iter()
+        .map(validate_port_list_create_range)
+        .collect::<Result<Vec<_>, _>>()?;
+    ranges.sort_by_key(|range| (range.protocol_id, range.start, range.end));
+    for pair in ranges.windows(2) {
+        let previous = &pair[0];
+        let current = &pair[1];
+        if previous.protocol_id == current.protocol_id && previous.end >= current.start {
+            return Err(ApiError::BadRequest(format!(
+                "{request_name} contains overlapping ranges"
+            )));
+        }
+    }
+    Ok(ranges)
 }
 
 fn normalize_optional_required_port_list_text(

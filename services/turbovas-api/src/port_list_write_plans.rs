@@ -60,16 +60,29 @@ pub(crate) fn port_list_create_transaction_plan() -> PortListWriteTransactionPla
     }
 }
 
-pub(crate) fn port_list_patch_transaction_plan() -> PortListWriteTransactionPlan {
+pub(crate) fn port_list_patch_transaction_plan(
+    replaces_ranges: bool,
+) -> PortListWriteTransactionPlan {
+    let mut steps = vec![
+        PortListWriteStep::ResolveOperatorOwner,
+        PortListWriteStep::VerifyExistingPortListMutable,
+        PortListWriteStep::VerifyNotPredefined,
+        PortListWriteStep::VerifyUniqueLiveAndTrashName,
+    ];
+    if replaces_ranges {
+        steps.extend([
+            PortListWriteStep::ValidatePortRanges,
+            PortListWriteStep::VerifyTargetDeleteSafety,
+            PortListWriteStep::VerifyTrashTargetDeleteSafety,
+        ]);
+    }
+    steps.push(PortListWriteStep::UpdatePortListMetadata);
+    if replaces_ranges {
+        steps.push(PortListWriteStep::ReplacePortRanges);
+    }
     PortListWriteTransactionPlan {
         operation: PortListWriteOperation::Patch,
-        steps: vec![
-            PortListWriteStep::ResolveOperatorOwner,
-            PortListWriteStep::VerifyExistingPortListMutable,
-            PortListWriteStep::VerifyNotPredefined,
-            PortListWriteStep::VerifyUniqueLiveAndTrashName,
-            PortListWriteStep::UpdatePortListMetadata,
-        ],
+        steps,
     }
 }
 

@@ -14,6 +14,15 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequ
     PortListPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+        port_ranges: None,
+    }
+}
+
+fn patch_request_with_ranges(ranges: Vec<PortListCreateRangeRequest>) -> PortListPatchRequest {
+    PortListPatchRequest {
+        name: None,
+        comment: None,
+        port_ranges: Some(ranges),
     }
 }
 
@@ -220,14 +229,45 @@ fn port_list_patch_request_trims_metadata_fields() {
         ValidatedPortListPatch {
             name: Some("Web ports".to_string()),
             comment: Some("operator-visible note".to_string()),
+            port_ranges: None,
         }
     );
+}
+
+#[test]
+fn port_list_patch_request_accepts_replacement_ranges() {
+    let validated = validate_port_list_patch_request(patch_request_with_ranges(vec![
+        create_range("udp", 53, 53),
+        create_range("tcp", 443, 443),
+    ]))
+    .expect("valid range replacement patch");
+    let ranges = validated.port_ranges.expect("replacement ranges");
+    assert_eq!(ranges.len(), 2);
+    assert_eq!(ranges[0].protocol_id, 0);
+    assert_eq!(ranges[0].start, 443);
+    assert_eq!(ranges[1].protocol_id, 1);
+    assert_eq!(ranges[1].start, 53);
 }
 
 #[test]
 fn port_list_patch_request_requires_at_least_one_field() {
     assert!(matches!(
         validate_port_list_patch_request(patch_request(None, None)),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn port_list_patch_request_rejects_empty_or_overlapping_replacement_ranges() {
+    assert!(matches!(
+        validate_port_list_patch_request(patch_request_with_ranges(vec![])),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_port_list_patch_request(patch_request_with_ranges(vec![
+            create_range("tcp", 80, 90),
+            create_range("tcp", 90, 100),
+        ])),
         Err(ApiError::BadRequest(_))
     ));
 }
@@ -247,6 +287,7 @@ fn port_list_patch_request_allows_blank_comment_to_clear_comment() {
         ValidatedPortListPatch {
             name: None,
             comment: Some(String::new()),
+            port_ranges: None,
         }
     );
 }
@@ -276,6 +317,7 @@ fn port_list_patch_request_rejects_oversized_metadata_fields() {
         validate_port_list_patch_request(PortListPatchRequest {
             name: Some(oversized),
             comment: None,
+            port_ranges: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -290,6 +332,28 @@ fn port_list_patch_sql_is_metadata_only() {
     assert!(sql.contains("modification_time = m_now()"));
     assert!(!sql.contains("port_ranges"));
     assert!(!sql.contains("predefined"));
+}
+
+#[test]
+fn port_list_patch_range_sql_replaces_live_ranges_only() {
+    let live_target_guard = port_list_live_target_count_sql();
+    assert!(live_target_guard.contains("FROM targets"));
+    assert!(live_target_guard.contains("WHERE port_list = $1"));
+
+    let trash_target_guard = port_list_live_location_trash_target_count_sql();
+    assert!(trash_target_guard.contains("FROM targets_trash"));
+    assert!(trash_target_guard.contains("port_list_location = 0"));
+
+    let delete = port_list_delete_ranges_sql();
+    assert!(delete.contains("DELETE FROM port_ranges WHERE port_list = $1"));
+
+    let insert = port_list_create_range_sql();
+    assert!(insert.contains("INSERT INTO port_ranges"));
+    assert!(insert.contains("VALUES (make_uuid(), $1, $2, $3, $4, $5, 0)"));
+    for sql in [delete, insert] {
+        assert!(!sql.contains("port_ranges_trash"));
+        assert!(!sql.contains("targets"));
+    }
 }
 
 #[test]
@@ -414,13 +478,31 @@ fn port_list_patch_name_uniqueness_checks_live_and_trash_names() {
 #[test]
 fn port_list_patch_plan_stays_metadata_only_and_blocks_predefined_lists() {
     assert_eq!(
-        port_list_patch_transaction_plan().steps,
+        port_list_patch_transaction_plan(false).steps,
         vec![
             PortListWriteStep::ResolveOperatorOwner,
             PortListWriteStep::VerifyExistingPortListMutable,
             PortListWriteStep::VerifyNotPredefined,
             PortListWriteStep::VerifyUniqueLiveAndTrashName,
             PortListWriteStep::UpdatePortListMetadata,
+        ]
+    );
+}
+
+#[test]
+fn port_list_patch_plan_replaces_ranges_only_after_reference_safety_checks() {
+    assert_eq!(
+        port_list_patch_transaction_plan(true).steps,
+        vec![
+            PortListWriteStep::ResolveOperatorOwner,
+            PortListWriteStep::VerifyExistingPortListMutable,
+            PortListWriteStep::VerifyNotPredefined,
+            PortListWriteStep::VerifyUniqueLiveAndTrashName,
+            PortListWriteStep::ValidatePortRanges,
+            PortListWriteStep::VerifyTargetDeleteSafety,
+            PortListWriteStep::VerifyTrashTargetDeleteSafety,
+            PortListWriteStep::UpdatePortListMetadata,
+            PortListWriteStep::ReplacePortRanges,
         ]
     );
 }

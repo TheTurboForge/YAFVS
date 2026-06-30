@@ -2517,9 +2517,9 @@ class TurboVASCtlTests(unittest.TestCase):
             "port-list-clone",
             "port-list-create",
             "port-list-hard-delete",
+            "port-list-metadata-and-range-modify",
             "port-list-metadata-detail-read",
             "port-list-metadata-list-read",
-            "port-list-metadata-modify",
             "port-list-restore",
             "port-list-trash-move",
             "raw-report-application-evidence-read",
@@ -6502,9 +6502,13 @@ db2:keys=5,expires=0,avg_ttl=0
                     payload = json.loads(body)
                     self.assertEqual(payload["port_ranges"][0]["protocol"], "tcp")
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": payload["name"]}) + "\n201", "")
+                if method == "PATCH" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}"):
+                    payload = json.loads(body)
+                    self.assertEqual(payload["port_ranges"][0]["protocol"], "udp")
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "turbovas-direct-write-smoke-port-list-1-1", "predefined": False, "port_ranges": [{"protocol": "udp", "start": 65002, "end": 65002}]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}/clone"):
                     payload = json.loads(body)
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_clone_uuid, "name": payload["name"], "predefined": False, "port_ranges": [{"protocol": "tcp", "start": 65000, "end": 65001}]}) + "\n201", "")
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_clone_uuid, "name": payload["name"], "predefined": False, "port_ranges": [{"protocol": "udp", "start": 65002, "end": 65002}]}) + "\n201", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_clone_uuid}/trash"):
                     return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_clone_uuid}"):
@@ -6626,6 +6630,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.port-list-predefined-patch-denied"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-predefined-delete-denied"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-create"], "pass")
+        self.assertEqual(checks["native-api-direct.port-list-write-range-replace"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-clone"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-hard-delete-clone"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-post-hard-delete-clone"], "pass")

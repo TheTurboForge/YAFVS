@@ -341,7 +341,8 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-replaces: port-list-metadata-modify"));
+    assert!(detail.contains("x-turbovas-replaces: port-list-metadata-and-range-modify"));
+    assert!(detail.contains("x-turbovas-side-effect: metadata-and-range-write"));
     assert!(detail.contains("x-turbovas-replaces: port-list-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(detail.contains("x-turbovas-inherited-still-owns: port-list-range-import-export"));

@@ -98,6 +98,13 @@ pub(crate) fn port_list_live_target_count_sql() -> &'static str {
       WHERE port_list = $1;"
 }
 
+pub(crate) fn port_list_live_location_trash_target_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM targets_trash
+      WHERE port_list = $1
+        AND port_list_location = 0;"
+}
+
 pub(crate) fn port_list_trash_target_count_sql() -> &'static str {
     "SELECT count(*)::bigint
        FROM targets_trash

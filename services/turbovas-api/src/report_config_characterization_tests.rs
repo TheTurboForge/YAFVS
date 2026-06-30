@@ -10,7 +10,7 @@ const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c")
 const MANAGE_SQL_REPORT_CONFIGS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
-const REPORT_CONFIGS_RS: &str = include_str!("report_configs.rs");
+const REPORT_CONFIG_PAYLOADS_RS: &str = include_str!("report_config_payloads.rs");
 
 fn inherited_function(source: &str, name: &str) -> String {
     let marker = format!("\n{name} (");
@@ -215,7 +215,7 @@ fn inherited_delete_and_restore_report_config_are_alert_guarded_trash_permission
 
 #[test]
 fn native_report_config_reads_are_metadata_only_and_do_not_generate_reports_or_touch_secrets() {
-    let detail_loader = source_function(REPORT_CONFIGS_RS, "report_config_asset_from_row");
+    let detail_loader = source_function(REPORT_CONFIG_PAYLOADS_RS, "report_config_asset_from_row");
     for required in [
         "JOIN alert_method_data",
         "report_format_params rfp",
@@ -248,7 +248,7 @@ fn native_report_config_reads_are_metadata_only_and_do_not_generate_reports_or_t
 
 #[test]
 fn native_report_config_report_format_list_values_are_type_gated() {
-    let param_loader = source_function(REPORT_CONFIGS_RS, "report_config_param_from_row");
+    let param_loader = source_function(REPORT_CONFIG_PAYLOADS_RS, "report_config_param_from_row");
     assert_eq!(
         param_loader.matches("if param_type_int == 5").count(),
         2,

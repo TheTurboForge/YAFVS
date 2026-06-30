@@ -527,6 +527,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "report-config-metadata-list-read",
         "report-config-metadata-param-create",
         "report-config-metadata-param-modify",
+        "report-config-restore",
         "report-config-trash-move",
         "result-detail-metadata-tags-and-overrides-read",
         "report-format-metadata-detail-read",
@@ -587,7 +588,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "port-list-create-range-import-export-restore-and-hard-delete",
         "port-list-import-export-writes-and-deletes",
         "raw-report-generation-xml-export-retention-and-mutations",
-        "report-config-hard-delete-restore-export",
+        "report-config-hard-delete-export",
         "report-format-import-export-verify-writes-and-deletes",
         "result-tags-exports-and-actions",
         "result-exports-and-actions",
@@ -673,6 +674,11 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/scopes"): "direct-write",
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
+    ("post", "/report-configs"): "direct-write",
+    ("patch", "/report-configs/{report_config_id}"): "direct-write",
+    ("delete", "/report-configs/{report_config_id}"): "direct-write",
+    ("post", "/report-configs/{report_config_id}/clone"): "direct-write",
+    ("post", "/report-configs/{report_config_id}/restore"): "direct-write",
     ("patch", "/filters/{filter_id}"): "direct-write",
     ("delete", "/filters/{filter_id}"): "direct-write",
     ("post", "/tags"): "direct-write",
@@ -929,34 +935,39 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "schedule-trash-move",
     },
     ("get", "/report-configs"): {
-        "x-turbovas-inherited-still-owns": "report-config-hard-delete-restore-export",
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-config-metadata-list-read",
     },
     ("post", "/report-configs"): {
-        "x-turbovas-inherited-still-owns": "report-config-hard-delete-restore-export",
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "report-config-metadata-param-create",
     },
     ("get", "/report-configs/{report_config_id}"): {
-        "x-turbovas-inherited-still-owns": "report-config-hard-delete-restore-export",
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-config-metadata-detail-read",
     },
     ("patch", "/report-configs/{report_config_id}"): {
-        "x-turbovas-inherited-still-owns": "report-config-hard-delete-restore-export",
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "report-config-metadata-param-modify",
     },
     ("delete", "/report-configs/{report_config_id}"): {
-        "x-turbovas-inherited-still-owns": "report-config-hard-delete-restore-export",
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "report-config-trash-move",
     },
     ("post", "/report-configs/{report_config_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "report-config-hard-delete-restore-export",
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "report-config-clone",
+    },
+    ("post", "/report-configs/{report_config_id}/restore"): {
+        "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "report-config-restore",
     },
     ("get", "/report-formats"): {
         "x-turbovas-inherited-still-owns": "report-format-import-export-verify-writes-and-deletes",
@@ -6628,6 +6639,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native report-config clone"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/report-configs/{report_config_id}/restore",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native report-config restore from trash"],
+            },
+            {
                 "endpoint": "/api/v1/report-formats",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Report Formats list (migrated through gsad same-origin proxy)", "read-only report-format automation", "native-api-request helper"],
@@ -11733,6 +11751,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scope-write-disabled",
             "native-api-direct.report-config-write-disabled",
             "native-api-direct.report-config-patch-disabled",
+            "native-api-direct.report-config-restore-disabled",
             "native-api-direct.filter-patch-disabled",
             "native-api-direct.filter-delete-disabled",
             "native-api-direct.port-list-patch-disabled",
@@ -11759,6 +11778,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-write-clone",
             "native-api-direct.report-config-write-delete-original",
             "native-api-direct.report-config-write-post-delete-original",
+            "native-api-direct.report-config-write-restore-original",
             "native-api-direct.report-config-write-delete-clone",
             "native-api-direct.report-config-write-post-delete-clone",
             "native-api-direct.report-config-write-cleanup",
@@ -12048,6 +12068,12 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     report_config_after_delete_json, report_config_after_delete_status = parse_json_output_with_http_status(report_config_after_delete)
                     report_config_after_delete_ok = report_config_after_delete.returncode == 0 and report_config_after_delete_status == 404 and isinstance(report_config_after_delete_json, dict) and report_config_after_delete_json.get("error", {}).get("code") == "not_found"
                     findings.append(native_api_probe_finding("pass" if report_config_after_delete_ok else "fail", f"native-api-direct.report-config-write-post-delete-{delete_label}", f"Direct API confirms the temporary {delete_label} report config is gone from live detail after delete." if report_config_after_delete_ok else f"Direct API still exposes the temporary {delete_label} report config as live after delete.", report_config_after_delete, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env), report_config_after_delete_json, {"http_status": report_config_after_delete_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_after_delete_json)}))
+
+                    if delete_label == "original":
+                        report_config_restore = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}/restore", token=token, env=env, method="POST")
+                        report_config_restore_json, report_config_restore_status = parse_json_output_with_http_status(report_config_restore)
+                        report_config_restore_ok = report_config_restore.returncode == 0 and report_config_restore_status == 200 and isinstance(report_config_restore_json, dict) and report_config_restore_json.get("id") == delete_report_config_id and report_config_restore_json.get("name") == report_config_name
+                        findings.append(native_api_probe_finding("pass" if report_config_restore_ok else "fail", "native-api-direct.report-config-write-restore-original", "Direct write-control restored the temporary original report config from trash." if report_config_restore_ok else "Direct write-control failed to restore the temporary original report config from trash.", report_config_restore, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}/restore", token=token, env=env, method="POST"), report_config_restore_json, {"http_status": report_config_restore_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_restore_json)}))
 
                 cleanup_targets = [
                     f"(uuid = {sql_literal(report_config_id)} AND name = {sql_literal(report_config_name)})"
@@ -12622,6 +12648,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_report_config_patch_json, disabled_report_config_patch_status = parse_json_output_with_http_status(disabled_report_config_patch)
     disabled_report_config_patch_ok = disabled_report_config_patch.returncode == 0 and disabled_report_config_patch_status == 405 and isinstance(disabled_report_config_patch_json, dict) and disabled_report_config_patch_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_report_config_patch_ok else "fail", "native-api-direct.report-config-patch-disabled", "Direct native API rejects report-config patches while direct write-control is disabled." if disabled_report_config_patch_ok else "Direct native API did not reject a report-config patch while direct write-control is disabled.", disabled_report_config_patch, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_report_config_patch_json, {"http_status": disabled_report_config_patch_status, **summarize_native_api_response(disabled_report_config_patch_json)}))
+
+    disabled_report_config_restore = direct_native_api_curl(
+        repo_root,
+        "/api/v1/report-configs/00000000-0000-0000-0000-000000000000/restore",
+        token=token,
+        env=env,
+        method="POST",
+    )
+    disabled_report_config_restore_json, disabled_report_config_restore_status = parse_json_output_with_http_status(disabled_report_config_restore)
+    disabled_report_config_restore_ok = disabled_report_config_restore.returncode == 0 and disabled_report_config_restore_status == 405 and isinstance(disabled_report_config_restore_json, dict) and disabled_report_config_restore_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_report_config_restore_ok else "fail", "native-api-direct.report-config-restore-disabled", "Direct native API rejects report-config restores while direct write-control is disabled." if disabled_report_config_restore_ok else "Direct native API did not reject a report-config restore while direct write-control is disabled.", disabled_report_config_restore, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000/restore", token=token, env=env, method="POST"), disabled_report_config_restore_json, {"http_status": disabled_report_config_restore_status, **summarize_native_api_response(disabled_report_config_restore_json)}))
 
     disabled_report_config_delete = direct_native_api_curl(
         repo_root,

@@ -55,6 +55,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "schedules", _]
             | ["", "api", "v1", "report-configs", _]
             | ["", "api", "v1", "report-configs", _, "clone"]
+            | ["", "api", "v1", "report-configs", _, "restore"]
             | ["", "api", "v1", "report-formats", _]
             | ["", "api", "v1", "reports", _]
             | ["", "api", "v1", "reports", _, "results"]
@@ -130,6 +131,17 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::POST, ["", "api", "v1", "report-configs", report_config_id, "clone"]) => {
             direct_api_write_id_segment_is_allowed(report_config_id)
         }
+        (
+            &Method::POST,
+            [
+                "",
+                "api",
+                "v1",
+                "report-configs",
+                report_config_id,
+                "restore",
+            ],
+        ) => direct_api_write_id_segment_is_allowed(report_config_id),
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "filters", filter_id]) => {
             direct_api_write_id_segment_is_allowed(filter_id)
         }

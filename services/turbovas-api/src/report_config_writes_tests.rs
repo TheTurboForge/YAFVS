@@ -381,6 +381,16 @@ fn report_config_write_transaction_plans_keep_validation_before_mutation() {
             ReportConfigWriteStep::MoveReportConfigToTrash,
         ]
     );
+
+    assert_eq!(
+        report_config_restore_transaction_plan().steps,
+        vec![
+            ReportConfigWriteStep::ResolveOperatorOwner,
+            ReportConfigWriteStep::VerifyTrashReportConfigRestorable,
+            ReportConfigWriteStep::VerifyUniqueLiveName,
+            ReportConfigWriteStep::RestoreReportConfigFromTrash,
+        ]
+    );
 }
 
 #[test]
@@ -435,4 +445,45 @@ fn report_config_delete_sql_moves_metadata_params_and_tags_to_trash() {
 
     assert!(report_config_delete_params_sql().contains("DELETE FROM report_config_params"));
     assert!(report_config_delete_metadata_sql().contains("DELETE FROM report_configs"));
+}
+
+#[test]
+fn report_config_restore_sql_moves_metadata_params_and_tags_to_live() {
+    let state = report_config_trash_state_sql();
+    assert!(state.contains("FROM report_configs_trash"));
+    assert!(state.contains("WHERE uuid = $1"));
+    assert!(state.contains("owner::integer"));
+
+    let owner_name = report_config_unique_live_owner_name_sql();
+    assert!(owner_name.contains("FROM report_configs"));
+    assert!(owner_name.contains("name = $1"));
+    assert!(owner_name.contains("owner = $2"));
+
+    let uuid_conflict = report_config_live_uuid_conflict_sql();
+    assert!(uuid_conflict.contains("FROM report_configs"));
+    assert!(uuid_conflict.contains("uuid = $1"));
+
+    let restore = report_config_restore_metadata_sql();
+    assert!(restore.contains("INSERT INTO report_configs"));
+    assert!(restore.contains("SELECT uuid, owner, name, comment"));
+    assert!(restore.contains("FROM report_configs_trash"));
+    assert!(restore.contains("WHERE id = $1"));
+    assert!(restore.contains("RETURNING id::integer, uuid::text"));
+
+    let params = report_config_restore_params_sql();
+    assert!(params.contains("INSERT INTO report_config_params"));
+    assert!(params.contains("SELECT $2, name, value"));
+    assert!(params.contains("FROM report_config_params_trash"));
+    assert!(params.contains("WHERE report_config = $1"));
+
+    let tags = report_config_tag_locations_to_live_sql();
+    assert!(tags.contains("UPDATE tag_resources"));
+    assert!(tags.contains("resource_location = 0"));
+    assert!(tags.contains("resource_type = 'report_config'"));
+    assert!(tags.contains("resource = $1"));
+
+    assert!(
+        report_config_delete_trash_params_sql().contains("DELETE FROM report_config_params_trash")
+    );
+    assert!(report_config_delete_trash_metadata_sql().contains("DELETE FROM report_configs_trash"));
 }

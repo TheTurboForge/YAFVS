@@ -12,6 +12,7 @@ pub(crate) enum ReportConfigWriteOperation {
     Patch,
     Clone,
     Delete,
+    Restore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,12 +29,26 @@ pub(crate) enum ReportConfigWriteStep {
     UpdateReportConfigMetadata,
     ReplaceReportConfigParams,
     MoveReportConfigToTrash,
+    VerifyTrashReportConfigRestorable,
+    RestoreReportConfigFromTrash,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ReportConfigWriteTransactionPlan {
     pub(crate) operation: ReportConfigWriteOperation,
     pub(crate) steps: Vec<ReportConfigWriteStep>,
+}
+
+pub(crate) fn report_config_restore_transaction_plan() -> ReportConfigWriteTransactionPlan {
+    ReportConfigWriteTransactionPlan {
+        operation: ReportConfigWriteOperation::Restore,
+        steps: vec![
+            ReportConfigWriteStep::ResolveOperatorOwner,
+            ReportConfigWriteStep::VerifyTrashReportConfigRestorable,
+            ReportConfigWriteStep::VerifyUniqueLiveName,
+            ReportConfigWriteStep::RestoreReportConfigFromTrash,
+        ],
+    }
 }
 
 pub(crate) fn report_config_create_transaction_plan(

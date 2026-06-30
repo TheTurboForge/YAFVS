@@ -40,6 +40,14 @@ struct ReportConfigWriteState {
     report_format_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReportConfigTrashState {
+    internal_id: i32,
+    uuid: String,
+    name: String,
+    owner_id: i32,
+}
+
 pub(crate) async fn create_report_config(
     State(state): State<AppState>,
     operator: Option<Extension<DirectApiOperator>>,
@@ -136,6 +144,35 @@ pub(crate) async fn delete_report_config(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub(crate) async fn restore_report_config(
+    State(state): State<AppState>,
+    Path(report_config_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<Json<ReportConfigAssetItem>, ApiError> {
+    let operator = require_report_config_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_report_config_write_db_error(error, "begin restore report config transaction")
+    })?;
+    resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE report_configs, report_configs_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_report_config_write_db_error(error, "lock report configs for restore"))?;
+    let trash = load_report_config_trash_state(&tx, &report_config_id).await?;
+    ensure_unique_live_report_config_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
+    ensure_report_config_uuid_not_live(&tx, &trash.uuid).await?;
+    let record = execute_report_config_restore_transaction(&tx, trash.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_report_config_write_db_error(error, "commit restore report config transaction")
+    })?;
+
+    Ok(Json(
+        load_report_config_asset_detail(&client, &record.uuid).await?,
+    ))
+}
+
 pub(crate) async fn patch_report_config(
     State(state): State<AppState>,
     Path(report_config_id): Path<String>,
@@ -170,6 +207,50 @@ pub(crate) async fn patch_report_config(
     Ok(Json(
         load_report_config_asset_detail(&client, &record.uuid).await?,
     ))
+}
+
+async fn ensure_unique_live_report_config_name_for_owner(
+    tx: &Transaction<'_>,
+    name: &str,
+    owner_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(
+            report_config_unique_live_owner_name_sql(),
+            &[&name, &owner_id],
+        )
+        .await
+        .map_err(|error| {
+            map_report_config_write_db_error(error, "check report config restore name conflict")
+        })?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "report config with the same owner and name already exists".to_string(),
+        ))
+    }
+}
+
+async fn ensure_report_config_uuid_not_live(
+    tx: &Transaction<'_>,
+    report_config_id: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(report_config_live_uuid_conflict_sql(), &[&report_config_id])
+        .await
+        .map_err(|error| {
+            map_report_config_write_db_error(error, "check report config restore UUID conflict")
+        })?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "live report config with the same id already exists".to_string(),
+        ))
+    }
 }
 
 fn require_report_config_write_operator(
@@ -315,6 +396,48 @@ pub(crate) async fn execute_report_config_create_transaction(
     Ok(record)
 }
 
+pub(crate) async fn execute_report_config_restore_transaction(
+    tx: &Transaction<'_>,
+    trash_report_config_internal_id: i32,
+) -> Result<ReportConfigWriteRecord, ApiError> {
+    let record = query_report_config_write_record(
+        tx,
+        report_config_restore_metadata_sql(),
+        &[&trash_report_config_internal_id],
+        "restore report config metadata from trash",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_restore_params_sql(),
+        &[&trash_report_config_internal_id, &record.internal_id],
+        "restore report config params from trash",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_tag_locations_to_live_sql(),
+        &[&trash_report_config_internal_id, &record.internal_id],
+        "restore report config tag links from trash",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_delete_trash_params_sql(),
+        &[&trash_report_config_internal_id],
+        "delete report config trash params after restore",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_delete_trash_metadata_sql(),
+        &[&trash_report_config_internal_id],
+        "delete report config trash metadata after restore",
+    )
+    .await?;
+    Ok(record)
+}
+
 pub(crate) async fn execute_report_config_trash_transaction(
     tx: &Transaction<'_>,
     report_config_internal_id: i32,
@@ -355,6 +478,23 @@ pub(crate) async fn execute_report_config_trash_transaction(
     )
     .await?;
     Ok(record)
+}
+
+async fn load_report_config_trash_state(
+    tx: &Transaction<'_>,
+    report_config_id: &str,
+) -> Result<ReportConfigTrashState, ApiError> {
+    let report_config_id = parse_uuid(report_config_id)?.to_string();
+    tx.query_opt(report_config_trash_state_sql(), &[&report_config_id])
+        .await
+        .map_err(|error| map_report_config_write_db_error(error, "load report config trash state"))?
+        .map(|row| ReportConfigTrashState {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+            name: row.get(2),
+            owner_id: row.get(3),
+        })
+        .ok_or(ApiError::NotFound)
 }
 
 async fn ensure_report_config_not_in_use_by_alerts(

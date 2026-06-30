@@ -6,7 +6,7 @@ use std::{env, fs::File, io::Read};
 
 use axum::{
     extract::{Request, State},
-    http::{HeaderName, HeaderValue, Method, StatusCode, Uri, header},
+    http::{HeaderName, HeaderValue, StatusCode, Uri, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -20,6 +20,9 @@ use crate::{
     request_ids::{attach_request_id_header, request_id_from_headers},
     request_shapes::direct_api_request_shape_is_allowed_for_method,
 };
+
+#[cfg(test)]
+use axum::http::Method;
 
 pub(crate) use crate::direct_api_contract::{
     direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed,

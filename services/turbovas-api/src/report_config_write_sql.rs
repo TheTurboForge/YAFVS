@@ -10,9 +10,31 @@ pub(crate) fn report_config_write_state_sql() -> &'static str {
       WHERE uuid = $1;"
 }
 
+pub(crate) fn report_config_trash_state_sql() -> &'static str {
+    "SELECT id::integer,
+            uuid::text,
+            coalesce(name, '')::text,
+            owner::integer
+       FROM report_configs_trash
+      WHERE uuid = $1;"
+}
+
 pub(crate) fn report_config_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer, uuid::text, coalesce(name, '')::text
        FROM users
+      WHERE uuid = $1;"
+}
+
+pub(crate) fn report_config_unique_live_owner_name_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM report_configs
+      WHERE name = $1
+        AND owner = $2;"
+}
+
+pub(crate) fn report_config_live_uuid_conflict_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM report_configs
       WHERE uuid = $1;"
 }
 
@@ -112,6 +134,39 @@ pub(crate) fn report_config_tag_locations_to_trash_sql() -> &'static str {
       WHERE resource_type = 'report_config'
         AND resource = $2
         AND resource_location = 0;"
+}
+
+pub(crate) fn report_config_restore_metadata_sql() -> &'static str {
+    "INSERT INTO report_configs
+        (uuid, owner, name, comment, creation_time, modification_time, report_format_id)
+     SELECT uuid, owner, name, comment, creation_time, modification_time, report_format_id
+       FROM report_configs_trash
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn report_config_restore_params_sql() -> &'static str {
+    "INSERT INTO report_config_params (report_config, name, value)
+     SELECT $2, name, value
+       FROM report_config_params_trash
+      WHERE report_config = $1;"
+}
+
+pub(crate) fn report_config_tag_locations_to_live_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 0,
+            resource = $2
+      WHERE resource_type = 'report_config'
+        AND resource = $1
+        AND resource_location = 1;"
+}
+
+pub(crate) fn report_config_delete_trash_params_sql() -> &'static str {
+    "DELETE FROM report_config_params_trash WHERE report_config = $1;"
+}
+
+pub(crate) fn report_config_delete_trash_metadata_sql() -> &'static str {
+    "DELETE FROM report_configs_trash WHERE id = $1;"
 }
 
 pub(crate) fn report_config_insert_param_sql() -> &'static str {

@@ -12,7 +12,7 @@ use crate::{
     errors::ApiError,
     formatters::unix_ts_to_rfc3339,
     path_ids::parse_uuid,
-    scope_payloads::{
+    scope_payload_rows::{
         ScopeReportRetentionPlan, ScopeReportRetentionPolicyPreview, ScopeReportRetentionSummary,
         ScopeSummary, scope_report_retention_source_from_row,
     },

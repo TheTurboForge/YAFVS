@@ -13,11 +13,8 @@ use serde::Deserialize;
 use tokio_postgres::{Row, Transaction, types::ToSql};
 
 use crate::{
-    app_state::AppState,
-    auth::DirectApiOperator,
-    errors::ApiError,
-    path_ids::parse_uuid,
-    scope_payloads::{ScopeItem, load_scope_detail},
+    app_state::AppState, auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid,
+    scope_payload_rows::ScopeItem, scope_payloads::load_scope_detail,
 };
 
 const MAX_SCOPE_TEXT_BYTES: usize = 4096;

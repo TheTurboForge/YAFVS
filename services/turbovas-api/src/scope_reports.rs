@@ -13,7 +13,7 @@ use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
     query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
-    scope_payloads::*,
+    scope_payload_rows::*,
 };
 
 pub(crate) async fn scope_reports(

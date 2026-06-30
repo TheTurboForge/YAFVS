@@ -112,6 +112,8 @@ mod scope_write_sql;
 mod scope_write_validation;
 mod scope_writes;
 mod startup;
+#[cfg(test)]
+mod tag_characterization_tests;
 mod tag_payloads;
 mod tag_resource_helpers;
 mod tag_write_db;

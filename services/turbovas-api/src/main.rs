@@ -34,6 +34,7 @@ mod report_evidence_payloads;
 mod report_formats;
 mod report_helpers;
 mod report_payloads;
+mod report_ports;
 mod request_ids;
 mod request_shapes;
 mod result_payloads;

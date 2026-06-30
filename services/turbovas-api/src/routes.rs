@@ -28,6 +28,7 @@ use crate::{
     report_evidence_handlers::*,
     report_formats::*,
     report_payloads::*,
+    report_ports::report_ports,
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
     result_payloads::*,
     scan_configs::*,

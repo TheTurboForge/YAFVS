@@ -6844,6 +6844,13 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "invalid_write_control_metadata_count": len(openapi_contract.get("write_control_contract", {}).get("invalid_write_control_metadata", [])) if isinstance(openapi_contract.get("write_control_contract", {}), dict) else 0,
         "invalid_write_control_path_parameter_count": len(openapi_contract.get("write_control_contract", {}).get("invalid_write_control_path_parameters", [])) if isinstance(openapi_contract.get("write_control_contract", {}), dict) else 0,
     }
+    module_ownership = summary.get("module_ownership", {})
+    compact_module_ownership = {
+        "alignment_status": module_ownership.get("alignment_status", "unknown") if isinstance(module_ownership, dict) else "unknown",
+        "checked_symbol_count": module_ownership.get("checked_symbol_count", 0) if isinstance(module_ownership, dict) else 0,
+        "missing_owner_symbol_count": len(module_ownership.get("missing_owner_symbols", [])) if isinstance(module_ownership, dict) else 0,
+        "misplaced_symbol_count": len(module_ownership.get("misplaced_symbols", [])) if isinstance(module_ownership, dict) else 0,
+    }
     return {
         "total_items": summary.get("total_items", 0),
         "by_category": by_category,
@@ -6856,6 +6863,7 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "direct_api_contract": compact_direct_contract,
         "browser_proxy_contract": compact_browser_proxy_contract,
         "openapi_contract": compact_openapi_contract,
+        "module_ownership": compact_module_ownership,
         "next_replacement_candidates": summary.get("next_replacement_candidates", []),
     }
 
@@ -6881,6 +6889,7 @@ def compact_native_tooling_finding_details(summary: dict[str, Any]) -> dict[str,
         "direct_api_contract": compact["direct_api_contract"],
         "browser_proxy_contract": compact["browser_proxy_contract"],
         "openapi_contract": compact["openapi_contract"],
+        "module_ownership": compact["module_ownership"],
     }
 
 
@@ -6889,6 +6898,7 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
     direct_contract = compact["direct_api_contract"]
     browser_proxy_contract = compact["browser_proxy_contract"]
     openapi_contract = compact["openapi_contract"]
+    module_ownership = compact["module_ownership"]
     return {
         "total_items": compact["total_items"],
         "implemented_native_endpoint_count": compact["implemented_native_endpoint_count"],
@@ -6962,6 +6972,12 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "invalid_write_control_metadata_count": openapi_contract.get("invalid_write_control_metadata_count", 0),
             "invalid_write_control_path_parameter_count": openapi_contract.get("invalid_write_control_path_parameter_count", 0),
         },
+        "module_ownership": {
+            "alignment_status": module_ownership.get("alignment_status", "unknown"),
+            "checked_symbol_count": module_ownership.get("checked_symbol_count", 0),
+            "missing_owner_symbol_count": module_ownership.get("missing_owner_symbol_count", 0),
+            "misplaced_symbol_count": module_ownership.get("misplaced_symbol_count", 0),
+        },
     }
 
 
@@ -6976,6 +6992,81 @@ def native_tooling_status_only_findings(findings: list[dict[str, Any]]) -> list[
             "Native tooling state passed; no non-pass findings.",
         )
     ]
+
+
+NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
+    {
+        "owner": "services/turbovas-api/src/report_config_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/report_config_writes.rs",),
+        "symbols": (
+            "pub(crate) struct ReportConfigCreateRequest",
+            "pub(crate) struct ReportConfigPatchRequest",
+            "pub(crate) fn validate_report_config_create_request",
+            "pub(crate) fn validate_report_config_patch_request",
+            "pub(crate) fn validate_report_config_param_values",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/port_list_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
+        "symbols": (
+            "pub(crate) struct PortListPatchRequest",
+            "pub(crate) fn validate_port_list_patch_request",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/tag_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/tag_writes.rs",),
+        "symbols": (
+            "pub(crate) struct TagCreateRequest",
+            "pub(crate) struct TagPatchRequest",
+            "pub(crate) struct TagResourceUpdateRequest",
+            "pub(crate) fn validate_tag_create_request",
+            "pub(crate) fn validate_tag_patch_request",
+            "pub(crate) fn validate_tag_resource_update_request",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/scope_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/scope_writes.rs",),
+        "symbols": (
+            "pub(crate) struct ScopeCreateRequest",
+            "pub(crate) struct ScopePatchRequest",
+            "pub(crate) fn validate_scope_create_request",
+            "pub(crate) fn validate_scope_patch_request",
+        ),
+    },
+)
+
+
+def native_api_module_ownership_summary(repo_root: Path) -> dict[str, Any]:
+    missing_owner_symbols: list[dict[str, str]] = []
+    misplaced_symbols: list[dict[str, str]] = []
+    checked_symbol_count = 0
+    for contract in NATIVE_API_MODULE_OWNERSHIP_CONTRACTS:
+        owner = str(contract["owner"])
+        owner_path = repo_root / owner
+        owner_source = owner_path.read_text(encoding="utf-8", errors="ignore") if owner_path.is_file() else ""
+        forbidden_sources = []
+        for forbidden in contract.get("forbidden", ()):
+            forbidden_path = repo_root / str(forbidden)
+            source = forbidden_path.read_text(encoding="utf-8", errors="ignore") if forbidden_path.is_file() else ""
+            forbidden_sources.append((str(forbidden), source))
+        for symbol in contract.get("symbols", ()):
+            checked_symbol_count += 1
+            symbol_text = str(symbol)
+            if symbol_text not in owner_source:
+                missing_owner_symbols.append({"owner": owner, "symbol": symbol_text})
+            for forbidden, source in forbidden_sources:
+                if symbol_text in source:
+                    misplaced_symbols.append({"path": forbidden, "owner": owner, "symbol": symbol_text})
+    return {
+        "alignment_status": "pass" if not missing_owner_symbols and not misplaced_symbols else "warn",
+        "checked_symbol_count": checked_symbol_count,
+        "contract_count": len(NATIVE_API_MODULE_OWNERSHIP_CONTRACTS),
+        "missing_owner_symbols": missing_owner_symbols,
+        "misplaced_symbols": misplaced_symbols,
+    }
 
 
 def native_api_browser_access_from_status(status: str | None) -> str:
@@ -7902,6 +7993,7 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
     summary = summarize_native_tooling(items, repo_root)
     annotate_native_tooling_direct_api(summary, repo_root)
     summary["openapi_contract"] = native_api_openapi_contract_summary(repo_root)
+    summary["module_ownership"] = native_api_module_ownership_summary(repo_root)
     endpoints = summary.get("implemented_native_endpoints", [])
     summary["browser_proxy_contract"] = native_api_browser_proxy_contract_summary(repo_root, [item for item in endpoints if isinstance(item, dict)])
     unknown_count = summary["by_category"]["unknown"]["count"]
@@ -7911,12 +8003,15 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
     browser_proxy_alignment_status = browser_proxy_contract.get("alignment_status", "warn") if isinstance(browser_proxy_contract, dict) else "warn"
     openapi_contract = summary.get("openapi_contract", {})
     openapi_alignment_status = openapi_contract.get("alignment_status", "warn") if isinstance(openapi_contract, dict) else "warn"
+    module_ownership = summary.get("module_ownership", {})
+    module_ownership_alignment_status = module_ownership.get("alignment_status", "warn") if isinstance(module_ownership, dict) else "warn"
     summary_details = compact_native_tooling_finding_details(summary)
     low_noise = compact or summary_only or status_only
     finding_details = summary_details if compact or low_noise else summary
     direct_finding_details = summary_details["direct_api_contract"] if low_noise else direct_contract
     browser_proxy_finding_details = summary_details["browser_proxy_contract"] if low_noise else browser_proxy_contract
     openapi_finding_details = summary_details["openapi_contract"] if low_noise else openapi_contract
+    module_ownership_finding_details = summary_details["module_ownership"] if low_noise else module_ownership
     unknown_finding_details = {"count": unknown_count} if low_noise else {"paths": summary["by_category"]["unknown"]["paths"]}
     findings = [
         finding("pass", "native-tooling.inventory", f"Classified {len(items)} inherited tooling dependency surface(s).", details=finding_details),
@@ -7943,6 +8038,14 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
             if openapi_alignment_status == "pass"
             else "Native API OpenAPI operation IDs, x-turbovas exposure/migration fields, shared Error responses, or collection query contracts need attention.",
             details=openapi_finding_details,
+        ),
+        finding(
+            contract_drift_status(module_ownership_alignment_status),
+            "native-tooling.module-ownership",
+            "Native API moved validation symbols remain in their owner modules."
+            if module_ownership_alignment_status == "pass"
+            else "Native API moved validation symbols drifted out of their owner modules.",
+            details=module_ownership_finding_details,
         ),
         finding("warn" if unknown_count else "pass", "native-tooling.unknown", f"{unknown_count} inherited tooling surface(s) are outside the current classification map." if unknown_count else "No inherited tooling surfaces were left unclassified.", details=unknown_finding_details),
         finding("pass", "native-tooling.end-state", "End-state remains full removal of required python-gvm and gvm-tools dependence after native API replacements land."),

@@ -1847,8 +1847,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("implemented_native_endpoints", details)
         self.assertNotIn("candidate_for_removal_paths", details)
         self.assertNotIn("next_replacement_candidates", details)
-        self.assertNotIn("paths", summary["findings"][4]["details"])
-        self.assertEqual(summary["findings"][4]["details"], {"count": 0})
+        findings = {item["check"]: item for item in summary["findings"]}
+        self.assertNotIn("paths", findings["native-tooling.unknown"]["details"])
+        self.assertEqual(findings["native-tooling.unknown"]["details"], {"count": 0})
         self.assertLess(len(json.dumps(summary)), len(json.dumps(compact)))
 
     def test_native_tooling_state_status_only_is_chat_safe(self):
@@ -1867,6 +1868,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "direct_api_contract",
                 "browser_proxy_contract",
                 "openapi_contract",
+                "module_ownership",
             },
         )
         self.assertEqual(status_only["details"]["candidate_for_removal_review"]["safe_removal_count"], 0)
@@ -2098,6 +2100,53 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn(
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["rust_direct_allowlist_endpoints"],
+        )
+
+    def test_native_tooling_state_tracks_module_ownership_alignment(self):
+        root = Path(__file__).resolve().parents[2]
+        result = turbovasctl.command_native_tooling_state(root)
+        details = result["details"]
+        findings = {item["check"]: item for item in result["findings"]}
+
+        self.assertEqual(details["module_ownership"]["alignment_status"], "pass")
+        self.assertEqual(details["module_ownership"]["misplaced_symbols"], [])
+        self.assertEqual(details["module_ownership"]["missing_owner_symbols"], [])
+        self.assertEqual(findings["native-tooling.module-ownership"]["status"], "pass")
+
+    def test_native_api_module_ownership_reports_missing_and_misplaced_symbols(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            owner = root / "services" / "turbovas-api" / "src" / "owner.rs"
+            forbidden = root / "services" / "turbovas-api" / "src" / "handler.rs"
+            owner.parent.mkdir(parents=True)
+            owner.write_text("pub(crate) struct OwnedSymbol;\n", encoding="utf-8")
+            forbidden.write_text("pub(crate) struct DriftedSymbol;\n", encoding="utf-8")
+            contract = (
+                {
+                    "owner": "services/turbovas-api/src/owner.rs",
+                    "forbidden": ("services/turbovas-api/src/handler.rs",),
+                    "symbols": ("pub(crate) struct OwnedSymbol", "pub(crate) struct DriftedSymbol"),
+                },
+            )
+
+            with unittest.mock.patch.object(turbovasctl, "NATIVE_API_MODULE_OWNERSHIP_CONTRACTS", contract):
+                summary = turbovasctl.native_api_module_ownership_summary(root)
+
+        self.assertEqual(summary["alignment_status"], "warn")
+        self.assertEqual(summary["checked_symbol_count"], 2)
+        self.assertEqual(
+            summary["missing_owner_symbols"],
+            [{"owner": "services/turbovas-api/src/owner.rs", "symbol": "pub(crate) struct DriftedSymbol"}],
+        )
+        self.assertEqual(
+            summary["misplaced_symbols"],
+            [
+                {
+                    "path": "services/turbovas-api/src/handler.rs",
+                    "owner": "services/turbovas-api/src/owner.rs",
+                    "symbol": "pub(crate) struct DriftedSymbol",
+                }
+            ],
         )
 
     def test_openapi_direct_operation_templates_are_method_aware(self):

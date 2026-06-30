@@ -27,6 +27,7 @@ use crate::{
     report_errors::report_errors,
     report_evidence_handlers::*,
     report_formats::*,
+    report_operating_systems::report_operating_systems,
     report_payloads::*,
     report_ports::report_ports,
     report_tls_certificates::report_tls_certificates,

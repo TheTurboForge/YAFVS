@@ -33,6 +33,7 @@ mod report_evidence_handlers;
 mod report_evidence_payloads;
 mod report_formats;
 mod report_helpers;
+mod report_operating_systems;
 mod report_payloads;
 mod report_ports;
 mod report_tls_certificates;

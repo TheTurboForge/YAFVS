@@ -152,6 +152,44 @@ fn tag_resource_update_request_is_explicit_ids_only() {
 }
 
 #[test]
+fn tag_resource_update_request_rejects_implicit_selection_and_bad_ids() {
+    assert!(serde_json::from_str::<TagResourceUpdateRequest>(r#"{"action":"add"}"#).is_err());
+    assert!(
+        serde_json::from_str::<TagResourceUpdateRequest>(
+            r#"{"action":"add","resource_type":"target","resource_ids":["12345678-1234-1234-1234-123456789abc"]}"#,
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_str::<TagResourceUpdateRequest>(
+            r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resource_filter":"name~prod"}"#,
+        )
+        .is_err()
+    );
+    assert!(matches!(
+        validate_tag_resource_update_request(TagResourceUpdateRequest {
+            action: TagResourceUpdateAction::Add,
+            resource_ids: vec!["12345678-1234-1234-1234-123456789abc/../x".to_string()],
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn tag_resource_direct_write_support_is_narrower_than_read_support() {
+    assert!(ensure_tag_resource_direct_write_type_is_supported("target").is_ok());
+    assert!(ensure_tag_resource_direct_write_type_is_supported("task").is_ok());
+    assert!(matches!(
+        ensure_tag_resource_direct_write_type_is_supported("cve"),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        ensure_tag_resource_direct_write_type_is_supported("alert"),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
 fn tag_write_plans_are_metadata_only() {
     let create = ValidatedTagCreate {
         name: "owner:x".to_string(),

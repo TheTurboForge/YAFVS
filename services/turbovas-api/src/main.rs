@@ -26,6 +26,7 @@ mod overrides;
 mod path_ids;
 mod port_lists;
 mod query;
+mod report_applications;
 mod report_configs;
 mod report_cves;
 mod report_errors;

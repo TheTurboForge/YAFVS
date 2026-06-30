@@ -3048,6 +3048,20 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(compact["details"]["focus"], "schedule")
         self.assertEqual(compact["details"]["focus_terms"], ["schedule"])
         self.assertEqual(compact["details"]["focus_match_count"], 1)
+        self.assertEqual(
+            compact["details"]["focus_rows"],
+            [
+                {
+                    "method": "get",
+                    "endpoint": "/api/v1/schedules",
+                    "direct_access": "scriptable_read",
+                    "browser_access": "browser_proxied",
+                    "x_turbovas_replaces": "schedule-metadata-list-read",
+                    "x_turbovas_inherited_still_owns": "schedule-writes-exports-and-deletes",
+                }
+            ],
+        )
+        self.assertFalse(compact["details"]["focus_rows_truncated"])
         self.assertNotIn("items", compact["details"])
 
     def test_native_api_migration_matrix_focus_accepts_repeated_terms(self):
@@ -3135,6 +3149,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(compact["details"]["focus"], " schedule , no-such-term ")
         self.assertEqual(compact["details"]["focus_terms"], ["schedule", "no-such-term"])
         self.assertEqual(compact["details"]["focus_match_count"], 0)
+        self.assertEqual(compact["details"]["focus_rows"], [])
+        self.assertFalse(compact["details"]["focus_rows_truncated"])
         self.assertTrue(any(finding["check"] == "native-api-migration-matrix.focus" for finding in compact["findings"]))
 
     def test_native_api_migration_matrix_focus_parser_accepts_terms(self):

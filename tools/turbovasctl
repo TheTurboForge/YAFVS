@@ -7567,6 +7567,19 @@ def native_api_migration_matrix_remaining_surface(rows: list[dict[str, Any]]) ->
     }
 
 
+def native_api_migration_matrix_compact_focus_row(row: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "method",
+        "endpoint",
+        "status",
+        "direct_access",
+        "browser_access",
+        "x_turbovas_replaces",
+        "x_turbovas_inherited_still_owns",
+    )
+    return {key: row[key] for key in keys if row.get(key) is not None}
+
+
 def native_api_migration_matrix_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     rows = details.get("items") if isinstance(details.get("items"), list) else []
@@ -7583,6 +7596,13 @@ def native_api_migration_matrix_status_only_result(result: dict[str, Any]) -> di
     if details.get("focus_terms") is not None:
         compact["details"]["focus_terms"] = details["focus_terms"]
         compact["details"]["focus_match_count"] = details.get("focus_match_count", 0)
+        focus_row_limit = 20
+        compact["details"]["focus_rows"] = [
+            native_api_migration_matrix_compact_focus_row(row)
+            for row in rows[:focus_row_limit]
+            if isinstance(row, dict)
+        ]
+        compact["details"]["focus_rows_truncated"] = len(rows) > focus_row_limit
     compact["findings"] = non_pass or [
         finding(
             "pass",

@@ -5,6 +5,7 @@
 use axum::{
     Json,
     extract::{Extension, Path, State},
+    http::StatusCode,
 };
 use serde::Deserialize;
 use tokio_postgres::{Row, Transaction, types::ToSql};
@@ -38,8 +39,41 @@ pub(crate) struct ScheduleWriteRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScheduleTrashWriteRecord {
+    internal_id: i32,
+    uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ScheduleWriteState {
     internal_id: i32,
+}
+
+pub(crate) async fn delete_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_schedule_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, "begin delete schedule transaction"))?;
+    resolve_schedule_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE schedules, schedules_trash, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_schedule_write_db_error(error, "lock schedule tables for delete"))?;
+    let state = load_schedule_write_state(&tx, &schedule_id).await?;
+    ensure_schedule_not_in_use_by_live_tasks(&tx, state.internal_id).await?;
+    execute_schedule_trash_transaction(&tx, state.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_schedule_write_db_error(error, "commit delete schedule transaction")
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
@@ -48,6 +82,66 @@ pub(crate) enum ScheduleWriteOperation {
     Create,
     Patch,
     Delete,
+}
+
+pub(crate) async fn execute_schedule_trash_transaction(
+    tx: &Transaction<'_>,
+    schedule_internal_id: i32,
+) -> Result<ScheduleTrashWriteRecord, ApiError> {
+    let record = query_schedule_trash_write_record(
+        tx,
+        schedule_trash_insert_sql(),
+        &[&schedule_internal_id],
+        "move schedule metadata to trash",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_task_relink_sql(),
+        &[&record.internal_id, &schedule_internal_id],
+        "relink tasks to trashed schedule",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_tag_locations_to_trash_sql(),
+        &[&record.internal_id, &schedule_internal_id],
+        "move live schedule tag links to trash",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_trash_tag_locations_to_trash_sql(),
+        &[&record.internal_id, &schedule_internal_id],
+        "move trashed tag links to schedule trash id",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_delete_metadata_sql(),
+        &[&schedule_internal_id],
+        "delete live schedule after trash move",
+    )
+    .await?;
+    Ok(record)
+}
+
+async fn ensure_schedule_not_in_use_by_live_tasks(
+    tx: &Transaction<'_>,
+    schedule_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(schedule_live_task_count_sql(), &[&schedule_internal_id])
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, "check schedule task usage"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "schedule is still referenced by a live task".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -67,6 +161,33 @@ pub(crate) enum ScheduleWriteStep {
     MoveScheduleToTrash,
     RelocateTasks,
     RelocatePermissionsAndTags,
+}
+
+async fn query_schedule_trash_write_record(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<ScheduleTrashWriteRecord, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, action))?
+        .map(|row| ScheduleTrashWriteRecord {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
+async fn execute_schedule_write_sql(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<u64, ApiError> {
+    tx.execute(sql, params)
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, action))
 }
 
 #[cfg(test)]

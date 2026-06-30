@@ -6,6 +6,55 @@ pub(crate) fn schedule_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn schedule_live_task_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM tasks
+      WHERE schedule = $1
+        AND schedule_location = 0
+        AND hidden = 0;"
+}
+
+pub(crate) fn schedule_trash_insert_sql() -> &'static str {
+    "INSERT INTO schedules_trash
+        (uuid, owner, name, comment, first_time, period, period_months,
+         byday, duration, timezone, creation_time, modification_time, icalendar)
+     SELECT uuid, owner, name, comment, first_time, period, period_months,
+            byday, duration, timezone, creation_time, modification_time, icalendar
+       FROM schedules
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn schedule_task_relink_sql() -> &'static str {
+    "UPDATE tasks
+        SET schedule = $1,
+            schedule_location = 1
+      WHERE schedule = $2
+        AND schedule_location = 0;"
+}
+
+pub(crate) fn schedule_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 1,
+            resource = $1
+      WHERE resource_type = 'schedule'
+        AND resource = $2
+        AND resource_location = 0;"
+}
+
+pub(crate) fn schedule_trash_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources_trash
+        SET resource_location = 1,
+            resource = $1
+      WHERE resource_type = 'schedule'
+        AND resource = $2
+        AND resource_location = 0;"
+}
+
+pub(crate) fn schedule_delete_metadata_sql() -> &'static str {
+    "DELETE FROM schedules WHERE id = $1;"
+}
+
 pub(crate) fn schedule_write_state_sql() -> &'static str {
     "SELECT id::integer
        FROM schedules

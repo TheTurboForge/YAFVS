@@ -163,6 +163,38 @@ fn schedule_patch_uniqueness_checks_live_and_trash_names() {
 }
 
 #[test]
+fn schedule_delete_sql_moves_metadata_tasks_and_tags_to_trash() {
+    assert!(schedule_live_task_count_sql().contains("hidden = 0"));
+    assert!(schedule_live_task_count_sql().contains("schedule_location = 0"));
+
+    let trash_insert = schedule_trash_insert_sql();
+    assert!(trash_insert.contains("INSERT INTO schedules_trash"));
+    assert!(trash_insert.contains("FROM schedules"));
+    assert!(trash_insert.contains("RETURNING id::integer, uuid::text"));
+
+    let task_relink = schedule_task_relink_sql();
+    assert!(task_relink.contains("UPDATE tasks"));
+    assert!(task_relink.contains("schedule_location = 1"));
+    assert!(task_relink.contains("WHERE schedule = $2"));
+    assert!(task_relink.contains("schedule_location = 0"));
+
+    for sql in [
+        schedule_tag_locations_to_trash_sql(),
+        schedule_trash_tag_locations_to_trash_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'schedule'"));
+        assert!(sql.contains("resource_location = 1"));
+        assert!(sql.contains("resource = $1"));
+        assert!(sql.contains("resource = $2"));
+    }
+
+    assert_eq!(
+        schedule_delete_metadata_sql(),
+        "DELETE FROM schedules WHERE id = $1;"
+    );
+}
+
+#[test]
 fn schedule_delete_plan_keeps_task_and_trash_side_effects_explicit() {
     assert_eq!(
         schedule_delete_transaction_plan().steps,

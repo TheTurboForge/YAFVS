@@ -35,6 +35,7 @@ use crate::{
     scope_report_cves::scope_report_cves,
     scope_report_errors::scope_report_errors,
     scope_report_handlers::*,
+    scope_report_operating_systems::scope_report_operating_systems,
     scope_report_ports::scope_report_ports,
     scope_report_results::scope_report_results,
     scope_report_retention::scope_report_retention_plan,

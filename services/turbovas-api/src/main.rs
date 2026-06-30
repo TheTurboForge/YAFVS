@@ -45,6 +45,7 @@ mod scope_payloads;
 mod scope_report_cves;
 mod scope_report_errors;
 mod scope_report_handlers;
+mod scope_report_operating_systems;
 mod scope_report_ports;
 mod scope_report_results;
 mod scope_report_retention;

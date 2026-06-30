@@ -10,6 +10,8 @@ const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c")
 const MANAGE_SQL_FILTERS: &str = include_str!("../../../components/gvmd/src/manage_sql_filters.c");
 const MANAGE_SQL_PERMISSIONS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_permissions.c");
+const MANAGE_SQL_RESOURCES: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_resources.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -157,6 +159,20 @@ fn inherited_modify_filter_has_alert_linked_type_guards() {
 }
 
 #[test]
+fn inherited_copy_filter_copies_term_type_and_active_tags() {
+    let copy_filter = inherited_function(MANAGE_SQL_FILTERS, "copy_filter");
+    assert!(copy_filter.contains("copy_resource"));
+    assert!(copy_filter.contains("\"filter\""));
+    assert!(copy_filter.contains("\"term, type\""));
+    assert!(copy_filter.contains("1, new_filter"));
+
+    let resources = inherited_function(MANAGE_SQL_RESOURCES, "copy_resource_lock");
+    assert!(resources.contains("INSERT INTO tag_resources"));
+    assert!(resources.contains("resource_type = '%s' AND resource = %llu"));
+    assert!(resources.contains("LOCATION_TABLE"));
+}
+
+#[test]
 fn inherited_delete_filter_is_trash_permissions_tags_and_alert_linked() {
     let delete_filter = inherited_function(MANAGE_SQL_FILTERS, "delete_filter");
     for required in [
@@ -218,6 +234,11 @@ fn native_direct_api_allows_only_filter_metadata_patch_trash_move_restore_and_ha
     ));
     assert!(direct_api_v1_method_is_allowed(
         &Method::POST,
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc/clone",
+        true,
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
         "/api/v1/filters/12345678-1234-1234-1234-123456789abc/restore",
         true,
     ));
@@ -239,6 +260,11 @@ fn native_direct_api_allows_only_filter_metadata_patch_trash_move_restore_and_ha
     assert!(!direct_api_v1_method_is_allowed(
         &Method::DELETE,
         "/api/v1/filters/12345678-1234-1234-1234-123456789abc",
+        false,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc/clone",
         false,
     ));
     for method in [Method::PUT] {

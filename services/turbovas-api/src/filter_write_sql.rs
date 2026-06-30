@@ -108,6 +108,31 @@ pub(crate) fn filter_update_metadata_sql() -> &'static str {
       RETURNING uuid::text;"
 }
 
+pub(crate) fn filter_clone_metadata_sql() -> &'static str {
+    "INSERT INTO filters
+        (uuid, owner, name, comment, type, term, creation_time, modification_time)
+     SELECT make_uuid(),
+            $2,
+            coalesce($3, uniquify('filter', name, $2, ' Clone')),
+            coalesce($4, comment),
+            type,
+            term,
+            m_now(),
+            m_now()
+       FROM filters
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn filter_clone_tags_sql() -> &'static str {
+    "INSERT INTO tag_resources (tag, resource_type, resource, resource_uuid, resource_location)
+     SELECT tag, resource_type, $2, $3, resource_location
+       FROM tag_resources
+      WHERE resource_type = 'filter'
+        AND resource = $1
+        AND resource_location = 0;"
+}
+
 pub(crate) fn filter_unique_live_owner_name_sql() -> &'static str {
     "SELECT count(*)::bigint
        FROM filters

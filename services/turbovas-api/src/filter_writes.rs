@@ -16,7 +16,8 @@ use crate::{
     filter_payloads::FilterAssetItem,
     filter_write_sql::*,
     filter_write_validation::{
-        FilterPatchRequest, ValidatedFilterPatch, validate_filter_patch_request,
+        FilterCloneRequest, FilterPatchRequest, ValidatedFilterClone, ValidatedFilterPatch,
+        validate_filter_clone_request, validate_filter_patch_request,
     },
     filters::load_filter_asset_detail,
     path_ids::parse_uuid,
@@ -24,6 +25,12 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FilterWriteRecord {
+    uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FilterCloneWriteRecord {
+    internal_id: i32,
     uuid: String,
 }
 
@@ -72,6 +79,40 @@ pub(crate) async fn delete_filter(
         .map_err(|error| map_filter_write_db_error(error, "commit delete filter transaction"))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn clone_filter(
+    State(state): State<AppState>,
+    Path(filter_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<FilterCloneRequest>,
+) -> Result<(StatusCode, Json<FilterAssetItem>), ApiError> {
+    let operator = require_filter_write_operator(operator)?;
+    let request = validate_filter_clone_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "begin clone filter transaction"))?;
+    let owner_id = resolve_filter_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE filters, filters_trash, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_filter_write_db_error(error, "lock filter tables for clone"))?;
+    let source = load_filter_write_state(&tx, &filter_id).await?;
+    if let Some(name) = request.name.as_ref() {
+        ensure_unique_filter_name(&tx, name, -1).await?;
+    }
+    let record =
+        execute_filter_clone_transaction(&tx, source.internal_id, owner_id, &request).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "commit clone filter transaction"))?;
+    Ok((
+        StatusCode::CREATED,
+        Json(load_filter_asset_detail(&client, &record.uuid).await?),
+    ))
 }
 
 pub(crate) async fn restore_filter(
@@ -132,6 +173,7 @@ pub(crate) async fn hard_delete_filter(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FilterWriteOperation {
     Create,
+    Clone,
     Patch,
     Delete,
     Restore,
@@ -216,6 +258,22 @@ async fn ensure_filter_not_in_use_by_trash_alerts(
     }
 }
 
+async fn query_filter_clone_write_record(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<FilterCloneWriteRecord, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_filter_write_db_error(error, action))?
+        .map(|row| FilterCloneWriteRecord {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
 async fn ensure_filter_not_in_use_by_alerts(
     tx: &Transaction<'_>,
     filter_internal_id: i32,
@@ -250,6 +308,8 @@ pub(crate) enum FilterWriteStep {
     VerifyExistingFilterMutable,
     VerifyAlertLinkedTypeChangeAllowed,
     InsertFilter,
+    CloneFilterMetadata,
+    CloneFilterTags,
     UpdateFilterMetadata,
     MoveFilterToTrash,
     RestoreFilterFromTrash,
@@ -419,6 +479,38 @@ pub(crate) async fn execute_filter_hard_delete_transaction(
     Ok(())
 }
 
+pub(crate) async fn execute_filter_clone_transaction(
+    tx: &Transaction<'_>,
+    source_filter_internal_id: i32,
+    owner_id: i32,
+    request: &ValidatedFilterClone,
+) -> Result<FilterWriteRecord, ApiError> {
+    let record = query_filter_clone_write_record(
+        tx,
+        filter_clone_metadata_sql(),
+        &[
+            &source_filter_internal_id,
+            &owner_id,
+            &request.name,
+            &request.comment,
+        ],
+        "clone filter metadata",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_clone_tags_sql(),
+        &[
+            &source_filter_internal_id,
+            &record.internal_id,
+            &record.uuid,
+        ],
+        "clone filter tags",
+    )
+    .await?;
+    Ok(FilterWriteRecord { uuid: record.uuid })
+}
+
 #[cfg(test)]
 pub(crate) fn filter_hard_delete_transaction_plan() -> FilterWriteTransactionPlan {
     FilterWriteTransactionPlan {
@@ -430,6 +522,27 @@ pub(crate) fn filter_hard_delete_transaction_plan() -> FilterWriteTransactionPla
             FilterWriteStep::RemoveTrashTagLinks,
             FilterWriteStep::HardDeleteFilterFromTrash,
         ],
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn filter_clone_transaction_plan(
+    request: &ValidatedFilterClone,
+) -> FilterWriteTransactionPlan {
+    let mut steps = vec![
+        FilterWriteStep::ResolveOperatorOwner,
+        FilterWriteStep::VerifyExistingFilterMutable,
+    ];
+    if request.name.is_some() {
+        steps.push(FilterWriteStep::VerifyUniqueLiveName);
+    }
+    steps.extend([
+        FilterWriteStep::CloneFilterMetadata,
+        FilterWriteStep::CloneFilterTags,
+    ]);
+    FilterWriteTransactionPlan {
+        operation: FilterWriteOperation::Clone,
+        steps,
     }
 }
 

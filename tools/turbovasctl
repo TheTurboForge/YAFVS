@@ -538,6 +538,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "report-format-metadata-detail-read",
         "report-format-metadata-list-read",
         "result-list-and-effective-overrides-read",
+        "saved-filter-clone",
         "saved-filter-hard-delete",
         "saved-filter-metadata-detail-read",
         "saved-filter-metadata-list-read",
@@ -692,6 +693,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/report-configs/{report_config_id}/restore"): "direct-write",
     ("patch", "/filters/{filter_id}"): "direct-write",
     ("delete", "/filters/{filter_id}"): "direct-write",
+    ("post", "/filters/{filter_id}/clone"): "direct-write",
     ("post", "/filters/{filter_id}/restore"): "direct-write",
     ("delete", "/filters/{filter_id}/trash"): "direct-write",
     ("post", "/port-lists"): "direct-write",
@@ -752,6 +754,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "saved-filter-trash-move",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-delete",
+    },
+    ("post", "/filters/{filter_id}/clone"): {
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-alert-linkage",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "saved-filter-clone",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/filters/{filter_id}/restore"): {
         "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-alert-linkage",
@@ -6601,6 +6612,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "method": "post",
+                "endpoint": "/api/v1/filters/{filter_id}/clone",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native saved-filter clone"],
+            },
+            {
+                "method": "post",
                 "endpoint": "/api/v1/filters/{filter_id}/restore",
                 "status": "implemented_direct_write_control",
                 "direct_access": "direct_write_control",
@@ -11981,6 +11999,10 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.filter-fixture",
             "native-api-direct.filter-write-update",
             "native-api-direct.filter-write-restore",
+            "native-api-direct.filter-write-clone",
+            "native-api-direct.filter-write-delete-clone",
+            "native-api-direct.filter-write-hard-delete-clone",
+            "native-api-direct.filter-write-post-hard-delete-clone",
             "native-api-direct.filter-write-delete",
             "native-api-direct.filter-write-trash-restore",
             "native-api-direct.filter-write-delete-after-restore",
@@ -12112,6 +12134,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     tag_id: str | None = None
     tag_resource_id: str | None = None
     filter_id: str | None = None
+    filter_clone_id: str | None = None
     filter_original_comment = "TurboVAS direct write smoke original saved-filter comment"
     report_config_id: str | None = None
     report_config_clone_id: str | None = None
@@ -12129,6 +12152,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     schedule_icalendar = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20300101T000000Z\nDURATION:PT1H\nRRULE:FREQ=DAILY\nEND:VEVENT\nEND:VCALENDAR"
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
+    filter_clone_name = f"{filter_name}-clone"
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
     report_config_clone_name = f"{report_config_name}-clone"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
@@ -12431,6 +12455,35 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             filter_restore_ok = filter_restore.returncode == 0 and filter_restore_status == 200 and isinstance(filter_restore_json, dict) and filter_restore_json.get("id") == filter_id and filter_restore_json.get("comment") == filter_original_comment
             findings.append(native_api_probe_finding("pass" if filter_restore_ok else "fail", "native-api-direct.filter-write-restore", "Direct write-control restored the saved-filter comment after reversible metadata patching." if filter_restore_ok else "Direct write-control failed to restore the saved-filter comment after metadata patching.", filter_restore, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="PATCH", body=filter_restore_body, extra_headers=content_type), filter_restore_json, {"http_status": filter_restore_status, "filter_id": filter_id, **summarize_native_api_response(filter_restore_json)}))
 
+            filter_clone_body = json.dumps(
+                {
+                    "name": filter_clone_name,
+                    "comment": "TurboVAS direct write smoke cloned saved-filter comment",
+                },
+                separators=(",", ":"),
+            )
+            filter_clone = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}/clone", token=token, env=env, method="POST", body=filter_clone_body, extra_headers=content_type)
+            filter_clone_json, filter_clone_status = parse_json_output_with_http_status(filter_clone)
+            filter_clone_id = filter_clone_json.get("id") if isinstance(filter_clone_json, dict) and isinstance(filter_clone_json.get("id"), str) else None
+            filter_clone_ok = filter_clone.returncode == 0 and filter_clone_status == 201 and bool(filter_clone_id) and filter_clone_id != filter_id and filter_clone_json.get("name") == filter_clone_name and filter_clone_json.get("comment") == "TurboVAS direct write smoke cloned saved-filter comment"
+            findings.append(native_api_probe_finding("pass" if filter_clone_ok else "fail", "native-api-direct.filter-write-clone", "Direct write-control cloned the temporary saved-filter fixture." if filter_clone_ok else "Direct write-control failed to clone the temporary saved-filter fixture.", filter_clone, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}/clone", token=token, env=env, method="POST", body=filter_clone_body, extra_headers=content_type), filter_clone_json, {"http_status": filter_clone_status, "filter_id": filter_id, "filter_clone_id": filter_clone_id, **summarize_native_api_response(filter_clone_json)}))
+
+            if filter_clone_id:
+                filter_clone_delete = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_clone_id)}", token=token, env=env, method="DELETE")
+                filter_clone_delete_json, filter_clone_delete_status = parse_json_output_with_http_status(filter_clone_delete)
+                filter_clone_delete_ok = filter_clone_delete.returncode == 0 and filter_clone_delete_status == 204
+                findings.append(native_api_probe_finding("pass" if filter_clone_delete_ok else "fail", "native-api-direct.filter-write-delete-clone", "Direct write-control moved the temporary saved-filter clone to trash." if filter_clone_delete_ok else "Direct write-control failed to move the temporary saved-filter clone to trash.", filter_clone_delete, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_clone_id)}", token=token, env=env, method="DELETE"), filter_clone_delete_json, {"http_status": filter_clone_delete_status, "filter_clone_id": filter_clone_id, **summarize_native_api_response(filter_clone_delete_json)}))
+
+                filter_clone_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_clone_id)}/trash", token=token, env=env, method="DELETE")
+                filter_clone_hard_delete_json, filter_clone_hard_delete_status = parse_json_output_with_http_status(filter_clone_hard_delete)
+                filter_clone_hard_delete_ok = filter_clone_hard_delete.returncode == 0 and filter_clone_hard_delete_status == 204
+                findings.append(native_api_probe_finding("pass" if filter_clone_hard_delete_ok else "fail", "native-api-direct.filter-write-hard-delete-clone", "Direct write-control hard-deleted the temporary saved-filter clone from trash." if filter_clone_hard_delete_ok else "Direct write-control failed to hard-delete the temporary saved-filter clone from trash.", filter_clone_hard_delete, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_clone_id)}/trash", token=token, env=env, method="DELETE"), filter_clone_hard_delete_json, {"http_status": filter_clone_hard_delete_status, "filter_clone_id": filter_clone_id, **summarize_native_api_response(filter_clone_hard_delete_json)}))
+
+                filter_clone_post_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_clone_id)}", token=token, env=env)
+                filter_clone_post_hard_delete_json, filter_clone_post_hard_delete_status = parse_json_output_with_http_status(filter_clone_post_hard_delete)
+                filter_clone_post_hard_delete_ok = filter_clone_post_hard_delete.returncode == 0 and filter_clone_post_hard_delete_status == 404 and isinstance(filter_clone_post_hard_delete_json, dict) and filter_clone_post_hard_delete_json.get("error", {}).get("code") == "not_found"
+                findings.append(native_api_probe_finding("pass" if filter_clone_post_hard_delete_ok else "fail", "native-api-direct.filter-write-post-hard-delete-clone", "Direct API confirms the temporary saved-filter clone is gone after hard delete." if filter_clone_post_hard_delete_ok else "Direct API did not confirm the temporary saved-filter clone was removed by hard delete.", filter_clone_post_hard_delete, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_clone_id)}", token=token, env=env), filter_clone_post_hard_delete_json, {"http_status": filter_clone_post_hard_delete_status, "filter_clone_id": filter_clone_id, **summarize_native_api_response(filter_clone_post_hard_delete_json)}))
+
             filter_delete = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="DELETE")
             filter_delete_json, filter_delete_status = parse_json_output_with_http_status(filter_delete)
             filter_delete_ok = filter_delete.returncode == 0 and filter_delete_status == 204
@@ -12458,10 +12511,12 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
 
             filter_cleanup_sql = (
                 "WITH live_filter AS (SELECT id FROM filters "
-                f"WHERE uuid = {sql_literal(filter_id)} AND name = {sql_literal(filter_name)}), "
+                f"WHERE (uuid = {sql_literal(filter_id)} AND name = {sql_literal(filter_name)}) "
+                f"OR (uuid = {sql_literal(filter_clone_id or '')} AND name = {sql_literal(filter_clone_name)})), "
                 "trash_filter AS (SELECT id FROM filters_trash "
-                f"WHERE uuid = {sql_literal(filter_id)} AND name = {sql_literal(filter_name)}), "
-                f"deleted_settings AS (DELETE FROM settings WHERE name ILIKE '% Filter' AND value = {sql_literal(filter_id)}), "
+                f"WHERE (uuid = {sql_literal(filter_id)} AND name = {sql_literal(filter_name)}) "
+                f"OR (uuid = {sql_literal(filter_clone_id or '')} AND name = {sql_literal(filter_clone_name)})), "
+                f"deleted_settings AS (DELETE FROM settings WHERE name ILIKE '% Filter' AND value IN ({sql_literal(filter_id)}, {sql_literal(filter_clone_id or '')})), "
                 "deleted_live_tags AS (DELETE FROM tag_resources WHERE resource_type = 'filter' AND resource IN (SELECT id FROM live_filter)), "
                 "deleted_trash_tags AS (DELETE FROM tag_resources_trash WHERE resource_type = 'filter' AND resource IN (SELECT id FROM trash_filter)), "
                 "deleted_live AS (DELETE FROM filters WHERE id IN (SELECT id FROM live_filter) RETURNING id), "
@@ -12474,7 +12529,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             filter_cleanup_finding = process_step_finding("pass" if filter_cleanup_ok else "fail", "native-api-direct.filter-write-cleanup", "Direct write-control smoke removed the temporary saved-filter fixture through fixed cleanup SQL." if filter_cleanup_ok else "Direct write-control smoke failed to clean up the temporary saved-filter fixture.", filter_cleanup, ["psql", "fixed-filter-smoke-cleanup"])
             filter_cleanup_details = filter_cleanup_finding.setdefault("details", {})
             if isinstance(filter_cleanup_details, dict):
-                filter_cleanup_details.update({"filter_id": filter_id, "deleted_count": filter_cleanup_deleted})
+                filter_cleanup_details.update({"filter_id": filter_id, "filter_clone_id": filter_clone_id, "deleted_count": filter_cleanup_deleted})
             findings.append(filter_cleanup_finding)
 
             filter_post_cleanup = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env)

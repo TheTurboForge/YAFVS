@@ -15,7 +15,9 @@ use crate::{
     cpe_catalog::*,
     cve_catalog::*,
     feeds::feeds,
-    filter_writes::{delete_filter, hard_delete_filter, patch_filter, restore_filter},
+    filter_writes::{
+        clone_filter, delete_filter, hard_delete_filter, patch_filter, restore_filter,
+    },
     filters::*,
     host_assets::*,
     metrics::*,
@@ -251,6 +253,7 @@ pub(crate) fn direct_native_api_router(
             )
             .route("/api/v1/filters/:filter_id", patch(patch_filter))
             .route("/api/v1/filters/:filter_id", delete(delete_filter))
+            .route("/api/v1/filters/:filter_id/clone", post(clone_filter))
             .route("/api/v1/filters/:filter_id/restore", post(restore_filter))
             .route(
                 "/api/v1/filters/:filter_id/trash",

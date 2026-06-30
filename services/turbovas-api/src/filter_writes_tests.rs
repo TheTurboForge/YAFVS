@@ -6,16 +6,113 @@ use super::*;
 use crate::{
     errors::ApiError,
     filter_write_validation::{
-        FilterPatchRequest, MAX_FILTER_TEXT_BYTES, ValidatedFilterPatch,
-        validate_filter_patch_request,
+        FilterCloneRequest, FilterPatchRequest, MAX_FILTER_TEXT_BYTES, ValidatedFilterPatch,
+        validate_filter_clone_request, validate_filter_patch_request,
     },
 };
+
+fn clone_request(name: Option<&str>, comment: Option<&str>) -> FilterCloneRequest {
+    FilterCloneRequest {
+        name: name.map(str::to_string),
+        comment: comment.map(str::to_string),
+    }
+}
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> FilterPatchRequest {
     FilterPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn filter_clone_request_accepts_default_or_metadata_override() {
+    let default =
+        validate_filter_clone_request(clone_request(None, None)).expect("default clone metadata");
+    assert_eq!(default.name, None);
+    assert_eq!(default.comment, None);
+
+    let named = validate_filter_clone_request(clone_request(
+        Some("  Operator filter copy  "),
+        Some("  copied note  "),
+    ))
+    .expect("named clone");
+    assert_eq!(named.name.as_deref(), Some("Operator filter copy"));
+    assert_eq!(named.comment.as_deref(), Some("copied note"));
+
+    let clear_comment = validate_filter_clone_request(clone_request(None, Some("   ")))
+        .expect("blank comment clears comment");
+    assert_eq!(clear_comment.comment.as_deref(), Some(""));
+}
+
+#[test]
+fn filter_clone_request_rejects_blank_name_control_characters_and_term_type_fields() {
+    assert!(matches!(
+        validate_filter_clone_request(clone_request(Some("   "), None)),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_filter_clone_request(clone_request(Some("bad\nname"), None)),
+        Err(ApiError::BadRequest(_))
+    ));
+    for request in [
+        serde_json::json!({"name": "copy", "term": "rows=100"}),
+        serde_json::json!({"name": "copy", "type": "result"}),
+        serde_json::json!({"name": "copy", "alerts": []}),
+    ] {
+        assert!(serde_json::from_value::<FilterCloneRequest>(request).is_err());
+    }
+}
+
+#[test]
+fn filter_clone_sql_copies_term_type_and_tags_without_term_mutation() {
+    let metadata = filter_clone_metadata_sql();
+    assert!(metadata.contains("INSERT INTO filters"));
+    assert!(metadata.contains("coalesce($3, uniquify('filter', name, $2, ' Clone'))"));
+    assert!(metadata.contains("coalesce($4, comment)"));
+    assert!(metadata.contains("type,"));
+    assert!(metadata.contains("term,"));
+    assert!(metadata.contains("FROM filters"));
+    assert!(metadata.contains("WHERE id = $1"));
+
+    let tags = filter_clone_tags_sql();
+    assert!(tags.contains("INSERT INTO tag_resources"));
+    assert!(tags.contains("resource_type = 'filter'"));
+    assert!(tags.contains("resource_location = 0"));
+
+    for sql in [metadata, tags] {
+        assert!(!sql.contains("filters_trash"));
+        assert!(!sql.contains("alert"));
+        assert!(!sql.contains("DELETE"));
+    }
+}
+
+#[test]
+fn filter_clone_plan_copies_metadata_and_tags_after_optional_name_check() {
+    let named = validate_filter_clone_request(clone_request(Some("copy"), None))
+        .expect("valid named clone");
+    assert_eq!(
+        filter_clone_transaction_plan(&named).steps,
+        vec![
+            FilterWriteStep::ResolveOperatorOwner,
+            FilterWriteStep::VerifyExistingFilterMutable,
+            FilterWriteStep::VerifyUniqueLiveName,
+            FilterWriteStep::CloneFilterMetadata,
+            FilterWriteStep::CloneFilterTags,
+        ]
+    );
+
+    let default =
+        validate_filter_clone_request(clone_request(None, None)).expect("valid default clone");
+    assert_eq!(
+        filter_clone_transaction_plan(&default).steps,
+        vec![
+            FilterWriteStep::ResolveOperatorOwner,
+            FilterWriteStep::VerifyExistingFilterMutable,
+            FilterWriteStep::CloneFilterMetadata,
+            FilterWriteStep::CloneFilterTags,
+        ]
+    );
 }
 
 #[test]

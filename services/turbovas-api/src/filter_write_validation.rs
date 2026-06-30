@@ -17,8 +17,23 @@ pub(crate) struct FilterPatchRequest {
     pub(crate) comment: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FilterCloneRequest {
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedFilterPatch {
+    pub(crate) name: Option<String>,
+    pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedFilterClone {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
 }
@@ -36,6 +51,15 @@ pub(crate) fn validate_filter_patch_request(
         ));
     }
     Ok(validated)
+}
+
+pub(crate) fn validate_filter_clone_request(
+    request: FilterCloneRequest,
+) -> Result<ValidatedFilterClone, ApiError> {
+    Ok(ValidatedFilterClone {
+        name: normalize_optional_required_filter_text(request.name, "name")?,
+        comment: normalize_optional_filter_text(request.comment, "comment")?,
+    })
 }
 
 fn normalize_optional_required_filter_text(

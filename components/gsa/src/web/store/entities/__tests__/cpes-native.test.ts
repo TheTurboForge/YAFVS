@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -85,6 +86,7 @@ describe('native API CPE catalog', () => {
         deprecated_by: 'cpe:/a:example:lightllm:1.2.0',
         cve_refs: 1,
         cves: [{id: 'CVE-2026-26220', severity: 9.8}],
+        references: [{url: 'https://example.test/cpe'}],
         user_tags: [
           {
             id: '7523f0c6-bf41-42b2-b92f-441776f777ac',
@@ -106,6 +108,9 @@ describe('native API CPE catalog', () => {
     expect(cpe.deprecated).toEqual(true);
     expect(cpe.deprecatedBy).toEqual('cpe:/a:example:lightllm:1.2.0');
     expect(cpe.cves).toEqual([{id: 'CVE-2026-26220', severity: 9.8}]);
+    expect(cpe.references).toEqual([
+      {text: 'https://example.test/cpe', url: 'https://example.test/cpe'},
+    ]);
     expect(cpe.userTags).toHaveLength(1);
     expect(cpe.userTags[0].id).toEqual('7523f0c6-bf41-42b2-b92f-441776f777ac');
     expect(cpe.userTags[0].name).toEqual('Native tag');

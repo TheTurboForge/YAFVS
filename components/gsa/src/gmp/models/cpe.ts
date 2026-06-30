@@ -1,4 +1,5 @@
-/* SPDX-FileCopyrightText: 2024 Greenbone AG
+/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * SPDX-FileCopyrightText: 2024 Greenbone AG
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -52,12 +53,18 @@ interface Cve {
   severity: number | undefined;
 }
 
+interface CpeReference {
+  text?: string;
+  url: string;
+}
+
 interface CpeProperties extends ModelProperties {
   cpeNameId?: string;
   cveRefs?: number;
   cves?: Cve[];
   deprecated?: boolean;
   deprecatedBy?: string;
+  references?: CpeReference[];
   severity?: number;
   title?: string;
   updateTime?: Date;
@@ -71,6 +78,7 @@ class Cpe extends Model {
   readonly cves: Cve[];
   readonly deprecated: boolean;
   readonly deprecatedBy?: string;
+  readonly references: CpeReference[];
   readonly severity?: number;
   readonly title?: string;
   readonly updateTime?: Date;
@@ -81,6 +89,7 @@ class Cpe extends Model {
     cves = [],
     deprecated = false,
     deprecatedBy,
+    references = [],
     title,
     severity,
     updateTime,
@@ -93,6 +102,7 @@ class Cpe extends Model {
     this.cves = cves;
     this.deprecated = deprecated;
     this.deprecatedBy = deprecatedBy;
+    this.references = references;
     this.title = title;
     this.severity = severity;
     this.updateTime = updateTime;
@@ -117,6 +127,15 @@ class Cpe extends Model {
       }));
     } else {
       ret.cves = [];
+    }
+
+    if (isDefined(cpeElement?.references?.reference)) {
+      ret.references = map(cpeElement.references.reference, reference => ({
+        text: reference.__text,
+        url: reference._href,
+      }));
+    } else {
+      ret.references = [];
     }
 
     if (isDefined(cpeElement?.nvd_id)) {

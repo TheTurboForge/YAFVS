@@ -2,9 +2,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::collections::HashSet;
+
 use axum::{
     Json,
     extract::{Path, State},
+};
+use quick_xml::{
+    Reader,
+    events::{BytesStart, Event},
 };
 use serde::Serialize;
 use tokio_postgres::Row;
@@ -22,6 +28,8 @@ use crate::{
     query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
     user_tags::{ReportUserTag, catalog_user_tags, catalog_user_tags_for_aliases_and_row_id},
 };
+
+const MAX_CPE_REFERENCE_COUNT: usize = 128;
 
 #[derive(Debug, Serialize)]
 struct CatalogEpssItem {
@@ -125,6 +133,11 @@ pub(crate) struct CatalogCpeCveItem {
     severity: f64,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct CatalogCpeReference {
+    pub(crate) url: String,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct CatalogCpeItem {
     id: String,
@@ -146,6 +159,8 @@ pub(crate) struct CatalogCpeItem {
 pub(crate) struct CatalogCpeDetail {
     #[serde(flatten)]
     pub(crate) item: CatalogCpeItem,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) references: Vec<CatalogCpeReference>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) user_tags: Vec<ReportUserTag>,
 }
@@ -272,6 +287,7 @@ pub(crate) async fn cpe_catalog_detail(
             ApiError::Database
         })?
         .map(|row| row.get("deprecated_by"));
+    let references = cpe_references(&client, &cpe_name).await?;
 
     let cpe_tag_ids = vec![cpe_uuid, cpe_name.clone()];
     let user_tags = catalog_user_tags_for_aliases_and_row_id(
@@ -283,8 +299,85 @@ pub(crate) async fn cpe_catalog_detail(
     .await?;
     Ok(Json(CatalogCpeDetail {
         item: catalog_cpe_from_row(&row, cves, deprecated_by),
+        references,
         user_tags,
     }))
+}
+
+async fn cpe_references(
+    client: &tokio_postgres::Client,
+    cpe_name: &str,
+) -> Result<Vec<CatalogCpeReference>, ApiError> {
+    let details_xml = client
+        .query_opt(
+            r#"SELECT coalesce(details_xml, '') AS details_xml
+                 FROM scap.cpe_details
+                WHERE cpe_id = $1
+                LIMIT 1;"#,
+            &[&cpe_name],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "CPE catalog reference query failed");
+            ApiError::Database
+        })?
+        .map(|row| row.get::<_, String>("details_xml"))
+        .unwrap_or_default();
+
+    Ok(cpe_references_from_details_xml(&details_xml))
+}
+
+fn cpe_references_from_details_xml(details_xml: &str) -> Vec<CatalogCpeReference> {
+    let mut reader = Reader::from_str(details_xml);
+    reader.config_mut().trim_text(true);
+    let mut references = Vec::new();
+    let mut seen = HashSet::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(event)) | Ok(Event::Empty(event))
+                if xml_local_name(event.name().as_ref()) == b"reference" =>
+            {
+                push_cpe_reference_href(&event, &reader, &mut references, &mut seen);
+                if references.len() >= MAX_CPE_REFERENCE_COUNT {
+                    break;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(error) => {
+                tracing::warn!(%error, "CPE details XML parse failed");
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    references
+}
+
+fn push_cpe_reference_href(
+    event: &BytesStart<'_>,
+    reader: &Reader<&[u8]>,
+    references: &mut Vec<CatalogCpeReference>,
+    seen: &mut HashSet<String>,
+) {
+    for attribute in event.attributes().flatten() {
+        if xml_local_name(attribute.key.as_ref()) != b"href" {
+            continue;
+        }
+        let Ok(value) = attribute.decode_and_unescape_value(reader.decoder()) else {
+            continue;
+        };
+        let url = value.trim().to_string();
+        if !url.is_empty() && seen.insert(url.clone()) {
+            references.push(CatalogCpeReference { url });
+        }
+        break;
+    }
+}
+
+fn xml_local_name(name: &[u8]) -> &[u8] {
+    name.rsplit(|byte| *byte == b':').next().unwrap_or(name)
 }
 
 pub(crate) async fn cve_catalog(
@@ -967,5 +1060,70 @@ pub(crate) fn nvt_catalog_detail_from_row(
         impact: row.get("impact"),
         detection: row.get("detection"),
         user_tags,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_cpe_reference_hrefs_from_details_xml() {
+        let references = cpe_references_from_details_xml(
+            r#"<cpe-item>
+                 <references>
+                   <reference href="https://example.test/one">one</reference>
+                   <ns:reference ns:href="https://example.test/two" />
+                   <reference href="https://example.test/one">duplicate</reference>
+                   <reference href="   " />
+                 </references>
+               </cpe-item>"#,
+        );
+
+        assert_eq!(
+            references,
+            vec![
+                CatalogCpeReference {
+                    url: "https://example.test/one".to_string()
+                },
+                CatalogCpeReference {
+                    url: "https://example.test/two".to_string()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn caps_cpe_reference_hrefs_from_details_xml() {
+        let mut xml = String::from("<cpe-item><references>");
+        for index in 0..(MAX_CPE_REFERENCE_COUNT + 4) {
+            xml.push_str(&format!(
+                r#"<reference href="https://example.test/{index}" />"#
+            ));
+        }
+        xml.push_str("</references></cpe-item>");
+
+        let references = cpe_references_from_details_xml(&xml);
+
+        assert_eq!(references.len(), MAX_CPE_REFERENCE_COUNT);
+        assert_eq!(references[0].url, "https://example.test/0");
+        assert_eq!(
+            references[MAX_CPE_REFERENCE_COUNT - 1].url,
+            format!("https://example.test/{}", MAX_CPE_REFERENCE_COUNT - 1)
+        );
+    }
+
+    #[test]
+    fn returns_partial_cpe_references_for_malformed_details_xml() {
+        let references = cpe_references_from_details_xml(
+            r#"<cpe-item><references><reference href="https://example.test/one"><broken"#,
+        );
+
+        assert_eq!(
+            references,
+            vec![CatalogCpeReference {
+                url: "https://example.test/one".to_string()
+            }]
+        );
     }
 }

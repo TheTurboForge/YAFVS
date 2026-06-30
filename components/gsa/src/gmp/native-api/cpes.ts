@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -32,6 +33,10 @@ interface NativeCatalogCpeCvePayload {
   severity?: number;
 }
 
+interface NativeCatalogCpeReferencePayload {
+  url?: string;
+}
+
 interface NativeUserTagPayload {
   id: string;
   name: string;
@@ -50,6 +55,7 @@ interface NativeCatalogCpePayload {
   severity?: number;
   cve_refs?: number;
   cves?: NativeCatalogCpeCvePayload[];
+  references?: NativeCatalogCpeReferencePayload[];
   user_tags?: NativeUserTagPayload[];
   created_at?: string;
   modified_at?: string;
@@ -144,6 +150,16 @@ const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
   })),
 });
 
+const nativeCpeReferencesElement = (
+  references: NativeCatalogCpeReferencePayload[] = [],
+) => {
+  const referenceElements = references
+    .map(reference => stringValue(reference.url))
+    .filter(url => url.length > 0)
+    .map(url => ({__text: url, _href: url}));
+  return referenceElements.length > 0 ? {reference: referenceElements} : undefined;
+};
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -192,6 +208,7 @@ const nativeCpeToModel = (
           },
         })),
       },
+      references: detail ? nativeCpeReferencesElement(item.references ?? []) : undefined,
     },
     user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
   });

@@ -916,6 +916,10 @@ fn cpe_catalog_detail_resolves_deprecated_by_by_cpe_name() {
     assert!(cpe_detail_source.contains("FROM scap.cpes_deprecated_by"));
     assert!(cpe_detail_source.contains("WHERE cpe = $1"));
     assert!(cpe_detail_source.contains("&[&cpe_name]"));
+    assert!(cpe_detail_source.contains("cpe_references(&client, &cpe_name).await?"));
+    assert!(source.contains("FROM scap.cpe_details"));
+    assert!(source.contains("WHERE cpe_id = $1"));
+    assert!(source.contains("cpe_references_from_details_xml"));
 }
 
 #[test]

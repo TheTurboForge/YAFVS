@@ -224,6 +224,7 @@ paths:
       x-turbovas-replaces: cpe-catalog-detail-read
       x-turbovas-inherited-still-owns: scap-rich-context
       summary: Read one Security Information CPE
+      description: Read-only CPE catalog detail backed by SCAP feed metadata in gvmd/PostgreSQL. Native detail includes normalized CVE references, deprecation metadata, user tags, and bounded SCAP reference URLs extracted from feed detail XML. Export and remaining rich/raw SCAP context stay inherited.
       parameters:
         - $ref: '#/components/parameters/CpeId'
       responses:
@@ -5614,11 +5615,22 @@ components:
         updated_at:
           type: string
           format: date-time
+    CatalogCpeReference:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
     CatalogCpeDetail:
       allOf:
         - $ref: '#/components/schemas/CatalogCpe'
         - type: object
           properties:
+            references:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogCpeReference'
             user_tags:
               type: array
               items:

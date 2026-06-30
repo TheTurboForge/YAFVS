@@ -12,58 +12,22 @@ use quick_xml::{
     Reader,
     events::{BytesStart, Event},
 };
-use serde::Serialize;
-use tokio_postgres::{Client, Row};
+use tokio_postgres::Client;
 
 use crate::{
     app_state::AppState,
     collections::{CPE_CATALOG_DEFAULT_SORT, CPE_CATALOG_SORT_FIELDS},
+    cpe_catalog_payloads::{
+        CatalogCpeDetail, CatalogCpeItem, CatalogCpeReference, catalog_cpe_cve_from_row,
+        catalog_cpe_from_row,
+    },
     errors::ApiError,
-    formatters::unix_ts_to_rfc3339,
     path_ids::validate_cpe_id,
     query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
-    user_tags::{ReportUserTag, catalog_user_tags_for_aliases_and_row_id},
+    user_tags::catalog_user_tags_for_aliases_and_row_id,
 };
 
 const MAX_CPE_REFERENCE_COUNT: usize = 128;
-
-#[derive(Debug, Serialize)]
-pub(crate) struct CatalogCpeCveItem {
-    id: String,
-    severity: f64,
-}
-
-#[derive(Debug, Serialize, PartialEq, Eq)]
-pub(crate) struct CatalogCpeReference {
-    pub(crate) url: String,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct CatalogCpeItem {
-    id: String,
-    name: String,
-    comment: String,
-    title: String,
-    cpe_name_id: String,
-    deprecated: bool,
-    deprecated_by: Option<String>,
-    severity: f64,
-    cve_refs: i64,
-    cves: Vec<CatalogCpeCveItem>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct CatalogCpeDetail {
-    #[serde(flatten)]
-    pub(crate) item: CatalogCpeItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) references: Vec<CatalogCpeReference>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) user_tags: Vec<ReportUserTag>,
-}
 
 pub(crate) async fn cpe_catalog(
     State(state): State<AppState>,
@@ -278,36 +242,6 @@ fn push_cpe_reference_href(
 
 fn xml_local_name(name: &[u8]) -> &[u8] {
     name.rsplit(|byte| *byte == b':').next().unwrap_or(name)
-}
-
-pub(crate) fn catalog_cpe_cve_from_row(row: &Row) -> CatalogCpeCveItem {
-    CatalogCpeCveItem {
-        id: row.get("id"),
-        severity: row.get("severity"),
-    }
-}
-
-pub(crate) fn catalog_cpe_from_row(
-    row: &Row,
-    cves: Vec<CatalogCpeCveItem>,
-    deprecated_by: Option<String>,
-) -> CatalogCpeItem {
-    let deprecated_int: i32 = row.get("deprecated_int");
-    CatalogCpeItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        title: row.get("title"),
-        cpe_name_id: row.get("cpe_name_id"),
-        deprecated: deprecated_int != 0,
-        deprecated_by,
-        severity: row.get("severity"),
-        cve_refs: row.get("cve_refs"),
-        cves,
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
 }
 
 #[cfg(test)]

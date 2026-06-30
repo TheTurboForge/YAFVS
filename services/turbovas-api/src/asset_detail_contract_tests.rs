@@ -108,6 +108,7 @@ fn task_detail_contract_includes_db_owned_schedule_lifecycle_metadata() {
 fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
     let cve_source = include_str!("cve_catalog.rs");
     let cpe_source = include_str!("cpe_catalog.rs");
+    let cpe_payload_source = include_str!("cpe_catalog_payloads.rs");
     let cve_item_payload = cve_source
         .split_once("struct CatalogCveItem {")
         .expect("CVE catalog payload must exist")
@@ -115,7 +116,7 @@ fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
         .split_once("struct CatalogCveDetail")
         .expect("CVE catalog payload must precede detail payload")
         .0;
-    let cpe_item_payload = cpe_source
+    let cpe_item_payload = cpe_payload_source
         .split_once("struct CatalogCpeItem {")
         .expect("CPE catalog payload must exist")
         .1
@@ -154,7 +155,7 @@ fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
     assert!(!cve_item_payload.contains("user_tags"));
     assert!(!cpe_item_payload.contains("user_tags"));
     assert!(cve_source.contains("struct CatalogCveDetail"));
-    assert!(cpe_source.contains("struct CatalogCpeDetail"));
+    assert!(cpe_payload_source.contains("struct CatalogCpeDetail"));
     assert!(cve_detail_source.contains("catalog_user_tags(&client, \"cve\", &cve_id).await?"));
     assert!(cpe_detail_source.contains("catalog_user_tags_for_aliases_and_row_id("));
     assert!(cpe_detail_source.contains("Some(cpe_internal_id)"));

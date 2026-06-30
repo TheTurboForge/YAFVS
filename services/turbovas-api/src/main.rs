@@ -10,6 +10,7 @@ mod cert_advisories;
 mod cert_advisory_payloads;
 mod collections;
 mod cpe_catalog;
+mod cpe_catalog_payloads;
 mod cve_catalog;
 mod direct_api;
 mod errors;

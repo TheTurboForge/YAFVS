@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use crate::port_list_write_plans::*;
 use crate::port_list_write_validation::{
     MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, PortListCloneRequest,
     PortListCreateRangeRequest, PortListCreateRequest, validate_port_list_clone_request,

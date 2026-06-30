@@ -188,17 +188,6 @@ pub(crate) async fn restore_schedule(
     ))
 }
 
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ScheduleWriteOperation {
-    Create,
-    Clone,
-    Patch,
-    Delete,
-    Restore,
-    HardDelete,
-}
-
 pub(crate) async fn execute_schedule_trash_transaction(
     tx: &Transaction<'_>,
     schedule_internal_id: i32,
@@ -257,31 +246,6 @@ async fn ensure_schedule_not_in_use_by_live_tasks(
             "schedule is still referenced by a live task".to_string(),
         ))
     }
-}
-
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ScheduleWriteStep {
-    ResolveOperatorOwner,
-    VerifyExistingScheduleMutable,
-    ResolveTimezone,
-    ValidateTimezone,
-    ParseICalendar,
-    DeriveScheduleFields,
-    VerifyUniqueLiveName,
-    VerifyTaskDeleteSafety,
-    VerifyTrashTaskDeleteSafety,
-    InsertSchedule,
-    CloneScheduleMetadata,
-    CloneScheduleTags,
-    UpdateScheduleMetadata,
-    RefreshTaskNextTimes,
-    MoveScheduleToTrash,
-    RestoreScheduleFromTrash,
-    RemoveTrashTagLinks,
-    HardDeleteScheduleFromTrash,
-    RelocateTasks,
-    RelocatePermissionsAndTags,
 }
 
 async fn ensure_schedule_not_in_use_by_trash_tasks(
@@ -381,13 +345,6 @@ async fn ensure_schedule_uuid_not_live(
             "schedule with the same id already exists".to_string(),
         ))
     }
-}
-
-#[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ScheduleWriteTransactionPlan {
-    pub(crate) operation: ScheduleWriteOperation,
-    pub(crate) steps: Vec<ScheduleWriteStep>,
 }
 
 pub(crate) fn validate_schedule_patch_request(
@@ -629,27 +586,6 @@ pub(crate) async fn execute_schedule_restore_transaction(
     Ok(ScheduleWriteRecord { uuid: record.uuid })
 }
 
-#[cfg(test)]
-pub(crate) fn schedule_clone_transaction_plan(
-    request: &ValidatedScheduleClone,
-) -> ScheduleWriteTransactionPlan {
-    let mut steps = vec![
-        ScheduleWriteStep::ResolveOperatorOwner,
-        ScheduleWriteStep::VerifyExistingScheduleMutable,
-    ];
-    if request.name.is_some() {
-        steps.push(ScheduleWriteStep::VerifyUniqueLiveName);
-    }
-    steps.extend([
-        ScheduleWriteStep::CloneScheduleMetadata,
-        ScheduleWriteStep::CloneScheduleTags,
-    ]);
-    ScheduleWriteTransactionPlan {
-        operation: ScheduleWriteOperation::Clone,
-        steps,
-    }
-}
-
 pub(crate) async fn execute_schedule_hard_delete_transaction(
     tx: &Transaction<'_>,
     schedule_trash_internal_id: i32,
@@ -691,21 +627,6 @@ async fn query_schedule_write_record(
         .ok_or(ApiError::NotFound)
 }
 
-#[cfg(test)]
-pub(crate) fn schedule_restore_transaction_plan() -> ScheduleWriteTransactionPlan {
-    ScheduleWriteTransactionPlan {
-        operation: ScheduleWriteOperation::Restore,
-        steps: vec![
-            ScheduleWriteStep::ResolveOperatorOwner,
-            ScheduleWriteStep::VerifyExistingScheduleMutable,
-            ScheduleWriteStep::VerifyUniqueLiveName,
-            ScheduleWriteStep::RestoreScheduleFromTrash,
-            ScheduleWriteStep::RelocateTasks,
-            ScheduleWriteStep::RelocatePermissionsAndTags,
-        ],
-    }
-}
-
 fn schedule_write_record_from_row(row: Row) -> ScheduleWriteRecord {
     ScheduleWriteRecord { uuid: row.get(0) }
 }
@@ -713,80 +634,6 @@ fn schedule_write_record_from_row(row: Row) -> ScheduleWriteRecord {
 fn map_schedule_write_db_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
     tracing::warn!(%error, action, "schedule write database operation failed");
     ApiError::Database
-}
-
-#[cfg(test)]
-pub(crate) fn schedule_create_transaction_plan() -> ScheduleWriteTransactionPlan {
-    ScheduleWriteTransactionPlan {
-        operation: ScheduleWriteOperation::Create,
-        steps: vec![
-            ScheduleWriteStep::ResolveOperatorOwner,
-            ScheduleWriteStep::ResolveTimezone,
-            ScheduleWriteStep::ValidateTimezone,
-            ScheduleWriteStep::ParseICalendar,
-            ScheduleWriteStep::DeriveScheduleFields,
-            ScheduleWriteStep::VerifyUniqueLiveName,
-            ScheduleWriteStep::InsertSchedule,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn schedule_hard_delete_transaction_plan() -> ScheduleWriteTransactionPlan {
-    ScheduleWriteTransactionPlan {
-        operation: ScheduleWriteOperation::HardDelete,
-        steps: vec![
-            ScheduleWriteStep::ResolveOperatorOwner,
-            ScheduleWriteStep::VerifyExistingScheduleMutable,
-            ScheduleWriteStep::VerifyTrashTaskDeleteSafety,
-            ScheduleWriteStep::RemoveTrashTagLinks,
-            ScheduleWriteStep::HardDeleteScheduleFromTrash,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn schedule_patch_transaction_plan(
-    changes_calendar: bool,
-) -> ScheduleWriteTransactionPlan {
-    let mut steps = vec![
-        ScheduleWriteStep::ResolveOperatorOwner,
-        ScheduleWriteStep::VerifyExistingScheduleMutable,
-    ];
-    if changes_calendar {
-        steps.extend([
-            ScheduleWriteStep::ResolveTimezone,
-            ScheduleWriteStep::ValidateTimezone,
-            ScheduleWriteStep::ParseICalendar,
-            ScheduleWriteStep::DeriveScheduleFields,
-        ]);
-    }
-    steps.extend([
-        ScheduleWriteStep::VerifyUniqueLiveName,
-        ScheduleWriteStep::UpdateScheduleMetadata,
-    ]);
-    if changes_calendar {
-        steps.push(ScheduleWriteStep::RefreshTaskNextTimes);
-    }
-    ScheduleWriteTransactionPlan {
-        operation: ScheduleWriteOperation::Patch,
-        steps,
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn schedule_delete_transaction_plan() -> ScheduleWriteTransactionPlan {
-    ScheduleWriteTransactionPlan {
-        operation: ScheduleWriteOperation::Delete,
-        steps: vec![
-            ScheduleWriteStep::ResolveOperatorOwner,
-            ScheduleWriteStep::VerifyExistingScheduleMutable,
-            ScheduleWriteStep::VerifyTaskDeleteSafety,
-            ScheduleWriteStep::MoveScheduleToTrash,
-            ScheduleWriteStep::RelocateTasks,
-            ScheduleWriteStep::RelocatePermissionsAndTags,
-        ],
-    }
 }
 
 #[cfg(test)]

@@ -169,17 +169,6 @@ pub(crate) async fn hard_delete_filter(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FilterWriteOperation {
-    Create,
-    Clone,
-    Patch,
-    Delete,
-    Restore,
-    HardDelete,
-}
-
 pub(crate) async fn execute_filter_trash_transaction(
     tx: &Transaction<'_>,
     filter_internal_id: i32,
@@ -297,30 +286,6 @@ async fn ensure_filter_not_in_use_by_alerts(
     }
 }
 
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FilterWriteStep {
-    ResolveOperatorOwner,
-    NormalizeFilterType,
-    ValidateFilterSubtype,
-    CleanFilterTerm,
-    VerifyUniqueLiveName,
-    VerifyExistingFilterMutable,
-    VerifyAlertLinkedTypeChangeAllowed,
-    InsertFilter,
-    CloneFilterMetadata,
-    CloneFilterTags,
-    UpdateFilterMetadata,
-    MoveFilterToTrash,
-    RestoreFilterFromTrash,
-    VerifyTrashAlertDeleteSafety,
-    RemoveTrashTagLinks,
-    HardDeleteFilterFromTrash,
-    RelocateTrashAlerts,
-    RelocatePermissionsAndTags,
-    CleanupFilterSettings,
-}
-
 async fn query_filter_trash_write_record(
     tx: &Transaction<'_>,
     sql: &str,
@@ -400,13 +365,6 @@ async fn ensure_filter_uuid_not_live(
             "filter with the same id already exists".to_string(),
         ))
     }
-}
-
-#[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct FilterWriteTransactionPlan {
-    pub(crate) operation: FilterWriteOperation,
-    pub(crate) steps: Vec<FilterWriteStep>,
 }
 
 pub(crate) async fn execute_filter_restore_transaction(
@@ -511,41 +469,6 @@ pub(crate) async fn execute_filter_clone_transaction(
     Ok(FilterWriteRecord { uuid: record.uuid })
 }
 
-#[cfg(test)]
-pub(crate) fn filter_hard_delete_transaction_plan() -> FilterWriteTransactionPlan {
-    FilterWriteTransactionPlan {
-        operation: FilterWriteOperation::HardDelete,
-        steps: vec![
-            FilterWriteStep::ResolveOperatorOwner,
-            FilterWriteStep::VerifyExistingFilterMutable,
-            FilterWriteStep::VerifyTrashAlertDeleteSafety,
-            FilterWriteStep::RemoveTrashTagLinks,
-            FilterWriteStep::HardDeleteFilterFromTrash,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn filter_clone_transaction_plan(
-    request: &ValidatedFilterClone,
-) -> FilterWriteTransactionPlan {
-    let mut steps = vec![
-        FilterWriteStep::ResolveOperatorOwner,
-        FilterWriteStep::VerifyExistingFilterMutable,
-    ];
-    if request.name.is_some() {
-        steps.push(FilterWriteStep::VerifyUniqueLiveName);
-    }
-    steps.extend([
-        FilterWriteStep::CloneFilterMetadata,
-        FilterWriteStep::CloneFilterTags,
-    ]);
-    FilterWriteTransactionPlan {
-        operation: FilterWriteOperation::Clone,
-        steps,
-    }
-}
-
 pub(crate) async fn patch_filter(
     State(state): State<AppState>,
     Path(filter_id): Path<String>,
@@ -572,21 +495,6 @@ pub(crate) async fn patch_filter(
         .await
         .map_err(|error| map_filter_write_db_error(error, "commit patch filter transaction"))?;
     Ok(Json(load_filter_asset_detail(&client, &record.uuid).await?))
-}
-
-#[cfg(test)]
-pub(crate) fn filter_restore_transaction_plan() -> FilterWriteTransactionPlan {
-    FilterWriteTransactionPlan {
-        operation: FilterWriteOperation::Restore,
-        steps: vec![
-            FilterWriteStep::ResolveOperatorOwner,
-            FilterWriteStep::VerifyExistingFilterMutable,
-            FilterWriteStep::VerifyUniqueLiveName,
-            FilterWriteStep::RestoreFilterFromTrash,
-            FilterWriteStep::RelocateTrashAlerts,
-            FilterWriteStep::RelocatePermissionsAndTags,
-        ],
-    }
 }
 
 fn require_filter_write_operator(
@@ -676,59 +584,6 @@ async fn query_filter_write_record(
 fn map_filter_write_db_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
     tracing::warn!(%error, action, "filter write database operation failed");
     ApiError::Database
-}
-
-#[cfg(test)]
-pub(crate) fn filter_create_transaction_plan() -> FilterWriteTransactionPlan {
-    FilterWriteTransactionPlan {
-        operation: FilterWriteOperation::Create,
-        steps: vec![
-            FilterWriteStep::ResolveOperatorOwner,
-            FilterWriteStep::NormalizeFilterType,
-            FilterWriteStep::ValidateFilterSubtype,
-            FilterWriteStep::CleanFilterTerm,
-            FilterWriteStep::VerifyUniqueLiveName,
-            FilterWriteStep::InsertFilter,
-        ],
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn filter_patch_transaction_plan(
-    changes_filter_type: bool,
-) -> FilterWriteTransactionPlan {
-    let mut steps = vec![
-        FilterWriteStep::ResolveOperatorOwner,
-        FilterWriteStep::VerifyExistingFilterMutable,
-        FilterWriteStep::NormalizeFilterType,
-        FilterWriteStep::ValidateFilterSubtype,
-        FilterWriteStep::CleanFilterTerm,
-    ];
-    if changes_filter_type {
-        steps.push(FilterWriteStep::VerifyAlertLinkedTypeChangeAllowed);
-    }
-    steps.extend([
-        FilterWriteStep::VerifyUniqueLiveName,
-        FilterWriteStep::UpdateFilterMetadata,
-    ]);
-    FilterWriteTransactionPlan {
-        operation: FilterWriteOperation::Patch,
-        steps,
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn filter_delete_transaction_plan() -> FilterWriteTransactionPlan {
-    FilterWriteTransactionPlan {
-        operation: FilterWriteOperation::Delete,
-        steps: vec![
-            FilterWriteStep::ResolveOperatorOwner,
-            FilterWriteStep::VerifyExistingFilterMutable,
-            FilterWriteStep::MoveFilterToTrash,
-            FilterWriteStep::CleanupFilterSettings,
-            FilterWriteStep::RelocatePermissionsAndTags,
-        ],
-    }
 }
 
 #[cfg(test)]

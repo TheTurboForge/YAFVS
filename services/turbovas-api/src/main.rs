@@ -18,6 +18,8 @@ mod direct_api_contract;
 mod errors;
 mod feeds;
 mod filter_payloads;
+#[cfg(test)]
+mod filter_write_plans;
 mod filter_write_sql;
 mod filter_write_validation;
 mod filter_writes;
@@ -40,6 +42,8 @@ mod override_writes;
 mod overrides;
 mod path_ids;
 mod port_list_payloads;
+#[cfg(test)]
+mod port_list_write_plans;
 mod port_list_write_sql;
 mod port_list_write_validation;
 mod port_list_writes;
@@ -78,6 +82,8 @@ mod scan_configs;
 mod scanner_asset_payloads;
 mod scanner_assets;
 mod schedule_payloads;
+#[cfg(test)]
+mod schedule_write_plans;
 mod schedule_write_sql;
 mod schedule_writes;
 mod schedules;

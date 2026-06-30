@@ -7,13 +7,14 @@ use axum::{
     extract::{Extension, Path, State},
     http::StatusCode,
 };
-use tokio_postgres::{Transaction, types::ToSql};
+use tokio_postgres::Transaction;
 
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     errors::ApiError,
     port_list_payloads::PortListAssetDetail,
+    port_list_write_db::*,
     port_list_write_sql::*,
     port_list_write_validation::{
         PortListCloneRequest, PortListCreateRequest, PortListPatchRequest, ValidatedPortListClone,
@@ -22,18 +23,6 @@ use crate::{
     },
     port_lists::load_port_list_asset_detail,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PortListWriteRecord {
-    internal_id: i32,
-    uuid: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PortListTrashWriteRecord {
-    internal_id: i32,
-    uuid: String,
-}
 
 pub(crate) async fn create_port_list(
     State(state): State<AppState>,
@@ -124,20 +113,6 @@ pub(crate) async fn clone_port_list(
         StatusCode::CREATED,
         Json(load_port_list_asset_detail(&client, &record.uuid).await?),
     ))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PortListTrashWriteState {
-    internal_id: i32,
-    uuid: String,
-    name: String,
-    owner_id: i32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PortListWriteState {
-    internal_id: i32,
-    predefined: bool,
 }
 
 pub(crate) async fn patch_port_list(
@@ -266,125 +241,6 @@ pub(crate) async fn restore_port_list(
     ))
 }
 
-fn require_port_list_write_operator(
-    operator: Option<Extension<DirectApiOperator>>,
-) -> Result<DirectApiOperator, ApiError> {
-    let Some(Extension(operator)) = operator else {
-        tracing::warn!("port list write request missing direct API operator context");
-        return Err(ApiError::Forbidden);
-    };
-    Ok(operator)
-}
-
-async fn resolve_port_list_write_operator_owner(
-    tx: &Transaction<'_>,
-    operator: &DirectApiOperator,
-) -> Result<i32, ApiError> {
-    tx.query_opt(
-        port_list_write_operator_owner_sql(),
-        &[&operator.user_uuid()],
-    )
-    .await
-    .map_err(|error| map_port_list_write_db_error(error, "resolve port list write operator"))?
-    .map(|row| row.get(0))
-    .ok_or_else(|| {
-        tracing::warn!("direct API port list write operator does not resolve to a database user");
-        ApiError::Forbidden
-    })
-}
-
-async fn load_port_list_write_state(
-    tx: &Transaction<'_>,
-    port_list_id: &str,
-) -> Result<PortListWriteState, ApiError> {
-    let port_list_id = crate::path_ids::parse_uuid(port_list_id)?.to_string();
-    tx.query_opt(port_list_write_state_sql(), &[&port_list_id])
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, "load port list write state"))?
-        .map(|row| PortListWriteState {
-            internal_id: row.get(0),
-            predefined: row.get::<_, i32>(1) != 0,
-        })
-        .ok_or(ApiError::NotFound)
-}
-
-async fn load_port_list_trash_state(
-    tx: &Transaction<'_>,
-    port_list_id: &str,
-) -> Result<PortListTrashWriteState, ApiError> {
-    let port_list_id = crate::path_ids::parse_uuid(port_list_id)?.to_string();
-    tx.query_opt(port_list_trash_state_sql(), &[&port_list_id])
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, "load port list trash state"))?
-        .map(|row| PortListTrashWriteState {
-            internal_id: row.get(0),
-            uuid: row.get(1),
-            name: row.get(2),
-            owner_id: row.get(3),
-        })
-        .ok_or(ApiError::NotFound)
-}
-
-async fn ensure_unique_port_list_name(
-    tx: &Transaction<'_>,
-    name: &str,
-    except_internal_id: i32,
-) -> Result<(), ApiError> {
-    let count: i64 = tx
-        .query_one(port_list_unique_name_sql(), &[&name, &except_internal_id])
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, "check port list name uniqueness"))?
-        .get(0);
-    if count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "port list with the same name already exists".to_string(),
-        ))
-    }
-}
-
-async fn ensure_unique_live_port_list_name_for_owner(
-    tx: &Transaction<'_>,
-    name: &str,
-    owner_id: i32,
-) -> Result<(), ApiError> {
-    let count: i64 = tx
-        .query_one(port_list_unique_live_owner_name_sql(), &[&name, &owner_id])
-        .await
-        .map_err(|error| {
-            map_port_list_write_db_error(error, "check port list restore name conflict")
-        })?
-        .get(0);
-    if count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "port list with the same owner and name already exists".to_string(),
-        ))
-    }
-}
-
-async fn ensure_port_list_uuid_not_live(
-    tx: &Transaction<'_>,
-    port_list_id: &str,
-) -> Result<(), ApiError> {
-    let count: i64 = tx
-        .query_one(port_list_live_uuid_conflict_sql(), &[&port_list_id])
-        .await
-        .map_err(|error| {
-            map_port_list_write_db_error(error, "check port list restore UUID conflict")
-        })?
-        .get(0);
-    if count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "live port list with the same id already exists".to_string(),
-        ))
-    }
-}
-
 pub(crate) async fn execute_port_list_patch_transaction(
     tx: &Transaction<'_>,
     port_list_internal_id: i32,
@@ -478,29 +334,6 @@ pub(crate) async fn execute_port_list_trash_transaction(
     )
     .await?;
     Ok(record)
-}
-
-async fn ensure_port_list_not_in_use_by_live_location_trash_targets(
-    tx: &Transaction<'_>,
-    port_list_internal_id: i32,
-) -> Result<(), ApiError> {
-    let count: i64 = tx
-        .query_one(
-            port_list_live_location_trash_target_count_sql(),
-            &[&port_list_internal_id],
-        )
-        .await
-        .map_err(|error| {
-            map_port_list_write_db_error(error, "check live port list trash target usage")
-        })?
-        .get(0);
-    if count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "port list is still referenced by a trash target".to_string(),
-        ))
-    }
 }
 
 pub(crate) async fn execute_port_list_clone_transaction(
@@ -634,93 +467,6 @@ pub(crate) async fn execute_port_list_hard_delete_transaction(
     )
     .await?;
     Ok(())
-}
-
-async fn ensure_port_list_not_in_use_by_live_targets(
-    tx: &Transaction<'_>,
-    port_list_internal_id: i32,
-) -> Result<(), ApiError> {
-    let count: i64 = tx
-        .query_one(port_list_live_target_count_sql(), &[&port_list_internal_id])
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, "check port list target usage"))?
-        .get(0);
-    if count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "port list is still referenced by a live target".to_string(),
-        ))
-    }
-}
-
-async fn ensure_port_list_not_in_use_by_trash_targets(
-    tx: &Transaction<'_>,
-    port_list_internal_id: i32,
-) -> Result<(), ApiError> {
-    let count: i64 = tx
-        .query_one(
-            port_list_trash_target_count_sql(),
-            &[&port_list_internal_id],
-        )
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, "check port list trash target usage"))?
-        .get(0);
-    if count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "port list is still referenced by a trash target".to_string(),
-        ))
-    }
-}
-
-async fn query_port_list_write_record(
-    tx: &Transaction<'_>,
-    sql: &str,
-    params: &[&(dyn ToSql + Sync)],
-    action: &'static str,
-) -> Result<PortListWriteRecord, ApiError> {
-    tx.query_opt(sql, params)
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, action))?
-        .map(|row| PortListWriteRecord {
-            internal_id: row.get(0),
-            uuid: row.get(1),
-        })
-        .ok_or(ApiError::NotFound)
-}
-
-async fn query_port_list_trash_write_record(
-    tx: &Transaction<'_>,
-    sql: &str,
-    params: &[&(dyn ToSql + Sync)],
-    action: &'static str,
-) -> Result<PortListTrashWriteRecord, ApiError> {
-    tx.query_opt(sql, params)
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, action))?
-        .map(|row| PortListTrashWriteRecord {
-            internal_id: row.get(0),
-            uuid: row.get(1),
-        })
-        .ok_or(ApiError::NotFound)
-}
-
-async fn execute_port_list_write_sql(
-    tx: &Transaction<'_>,
-    sql: &str,
-    params: &[&(dyn ToSql + Sync)],
-    action: &'static str,
-) -> Result<u64, ApiError> {
-    tx.execute(sql, params)
-        .await
-        .map_err(|error| map_port_list_write_db_error(error, action))
-}
-
-fn map_port_list_write_db_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
-    tracing::warn!(%error, action, "port list write database operation failed");
-    ApiError::Database
 }
 
 #[cfg(test)]

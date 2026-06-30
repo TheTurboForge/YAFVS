@@ -11563,7 +11563,9 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.tag-write-update",
             "native-api-direct.tag-resource-fixture",
             "native-api-direct.tag-resource-add",
+            "native-api-direct.tag-resource-in-use-after-add",
             "native-api-direct.tag-resource-remove",
+            "native-api-direct.tag-resource-in-use-after-remove",
             "native-api-direct.tag-write-query-denied",
             "native-api-direct.tag-delete-body-denied",
             "native-api-direct.tag-write-delete",
@@ -11854,6 +11856,11 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 tag_resource_add_ok = tag_resource_add.returncode == 0 and tag_resource_add_status == 200 and isinstance(tag_resource_add_json, dict) and tag_resource_add_json.get("id") == tag_id and tag_resource_add_json.get("resource_count") == 1
                 findings.append(native_api_probe_finding("pass" if tag_resource_add_ok else "fail", "native-api-direct.tag-resource-add", "Direct write-control added an explicit temporary tag resource assignment." if tag_resource_add_ok else "Direct write-control failed to add an explicit temporary tag resource assignment.", tag_resource_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=tag_resource_add_body, extra_headers=content_type), tag_resource_add_json, {"http_status": tag_resource_add_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_resource_add_json)}))
 
+                tag_after_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env)
+                tag_after_add_json, tag_after_add_status = parse_json_output_with_http_status(tag_after_add)
+                tag_after_add_ok = tag_after_add.returncode == 0 and tag_after_add_status == 200 and isinstance(tag_after_add_json, dict) and tag_after_add_json.get("id") == tag_id and tag_after_add_json.get("resource_count") == 1 and tag_after_add_json.get("in_use") is True
+                findings.append(native_api_probe_finding("pass" if tag_after_add_ok else "fail", "native-api-direct.tag-resource-in-use-after-add", "Direct API reports the temporary tag in use after assigning a resource." if tag_after_add_ok else "Direct API did not report the temporary tag in use after assigning a resource.", tag_after_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env), tag_after_add_json, {"http_status": tag_after_add_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_after_add_json)}))
+
                 tag_resource_remove_body = json.dumps(
                     {"action": "remove", "resource_ids": [tag_resource_id]},
                     separators=(",", ":"),
@@ -11862,6 +11869,11 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 tag_resource_remove_json, tag_resource_remove_status = parse_json_output_with_http_status(tag_resource_remove)
                 tag_resource_remove_ok = tag_resource_remove.returncode == 0 and tag_resource_remove_status == 200 and isinstance(tag_resource_remove_json, dict) and tag_resource_remove_json.get("id") == tag_id and tag_resource_remove_json.get("resource_count") == 0
                 findings.append(native_api_probe_finding("pass" if tag_resource_remove_ok else "fail", "native-api-direct.tag-resource-remove", "Direct write-control removed the explicit temporary tag resource assignment." if tag_resource_remove_ok else "Direct write-control failed to remove the explicit temporary tag resource assignment.", tag_resource_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=tag_resource_remove_body, extra_headers=content_type), tag_resource_remove_json, {"http_status": tag_resource_remove_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_resource_remove_json)}))
+
+                tag_after_remove = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env)
+                tag_after_remove_json, tag_after_remove_status = parse_json_output_with_http_status(tag_after_remove)
+                tag_after_remove_ok = tag_after_remove.returncode == 0 and tag_after_remove_status == 200 and isinstance(tag_after_remove_json, dict) and tag_after_remove_json.get("id") == tag_id and tag_after_remove_json.get("resource_count") == 0 and tag_after_remove_json.get("in_use") is False
+                findings.append(native_api_probe_finding("pass" if tag_after_remove_ok else "fail", "native-api-direct.tag-resource-in-use-after-remove", "Direct API reports the temporary tag not in use after removing its resource." if tag_after_remove_ok else "Direct API did not report the temporary tag not in use after removing its resource.", tag_after_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env), tag_after_remove_json, {"http_status": tag_after_remove_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_after_remove_json)}))
 
             patch_body = json.dumps(
                 {"comment": "TurboVAS direct write smoke updated temporary tag", "value": "updated", "active": False},

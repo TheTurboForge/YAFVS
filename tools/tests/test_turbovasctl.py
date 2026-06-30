@@ -5957,6 +5957,8 @@ db2:keys=5,expires=0,avg_ttl=0
             commands: list[tuple[str, ...]] = []
             envs: list[dict[str, str]] = []
             probes: list[tuple[str, str]] = []
+            tag_resource_count = {"value": 0}
+            tag_deleted = {"value": False}
 
             def fake_run_command(command, *_args, **kwargs):
                 commands.append(tuple(command))
@@ -6013,7 +6015,11 @@ db2:keys=5,expires=0,avg_ttl=0
                     payload = json.loads(body)
                     self.assertEqual(payload["resource_ids"], [report_format_uuid])
                     count = 1 if payload["action"] == "add" else 0
+                    tag_resource_count["value"] = count
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "resource_count": count}) + "\n200", "")
+                if method == "GET" and path.startswith("/api/v1/tags/") and not tag_deleted["value"]:
+                    count = tag_resource_count["value"]
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "resource_count": count, "in_use": count > 0}) + "\n200", "")
                 if method == "PATCH" and path.startswith("/api/v1/tags/"):
                     if "?" in path:
                         return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"request_too_large"}}\n413', "")
@@ -6021,6 +6027,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 if method == "DELETE" and path.startswith("/api/v1/tags/") and body is not None:
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"request_too_large"}}\n413', "")
                 if method == "DELETE" and path.startswith("/api/v1/tags/"):
+                    tag_deleted["value"] = True
                     return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
 
@@ -6053,14 +6060,16 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.port-list-predefined-patch-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-add"], "pass")
+        self.assertEqual(checks["native-api-direct.tag-resource-in-use-after-add"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-remove"], "pass")
+        self.assertEqual(checks["native-api-direct.tag-resource-in-use-after-remove"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-query-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-delete-body-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-delete"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-post-delete"], "pass")
         self.assertEqual(checks["native-api-direct.write-control-restore"], "pass")
-        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "PATCH", "DELETE", "DELETE", "GET", "POST", "POST", "PATCH", "GET", "GET", "PATCH", "GET", "POST", "POST", "PATCH", "PATCH", "DELETE", "DELETE", "GET"])
+        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "PATCH", "DELETE", "DELETE", "GET", "POST", "POST", "PATCH", "GET", "GET", "PATCH", "GET", "POST", "GET", "POST", "GET", "PATCH", "PATCH", "DELETE", "DELETE", "GET"])
         rendered = json.dumps(result, sort_keys=True)
         self.assertNotIn(token, rendered)
         self.assertTrue(any(env.get(turbovasctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) == "1" for env in envs))

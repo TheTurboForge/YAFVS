@@ -374,6 +374,16 @@ fn direct_api_method_classifier_gates_scope_writes_on_write_control_flag() {
         "/api/v1/report-configs/not-a-uuid",
         true
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc",
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/port-lists/not-a-uuid",
+        true
+    ));
 }
 #[test]
 fn direct_api_bearer_token_rejects_empty_file_source() {

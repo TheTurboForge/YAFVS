@@ -509,6 +509,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "override-metadata-list-read",
         "port-list-metadata-detail-read",
         "port-list-metadata-list-read",
+        "port-list-metadata-modify",
         "raw-report-application-evidence-read",
         "raw-report-cve-evidence-read",
         "raw-report-detail-summary-read",
@@ -576,6 +577,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "nvt-rich-detail",
         "operating-system-writes-deletes-and-rich-history",
         "override-writes-exports-trash-and-result-expansion",
+        "port-list-import-export-range-trash-restore-delete",
         "port-list-import-export-writes-and-deletes",
         "raw-report-generation-xml-export-retention-and-mutations",
         "report-config-delete-trash-restore-clone-export",
@@ -774,6 +776,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "port-list-import-export-writes-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "port-list-metadata-detail-read",
+    },
+    ("patch", "/port-lists/{port_list_id}"): {
+        "x-turbovas-inherited-still-owns": "port-list-import-export-range-trash-restore-delete",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "port-list-metadata-modify",
     },
     ("get", "/hosts"): {
         "x-turbovas-inherited-still-owns": "host-target-creation-tags-writes-and-rich-history",
@@ -6458,6 +6465,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA Port List detail (migrated through gsad same-origin proxy)", "read-only port-list automation"],
             },
             {
+                "method": "patch",
+                "endpoint": "/api/v1/port-lists/{port_list_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native port-list name/comment metadata modification"],
+            },
+            {
                 "endpoint": "/api/v1/schedules",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Schedules list (migrated through gsad same-origin proxy)", "read-only schedule automation", "native-api-request helper"],
@@ -11414,6 +11428,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scope-write-disabled",
             "native-api-direct.report-config-write-disabled",
             "native-api-direct.report-config-patch-disabled",
+            "native-api-direct.port-list-patch-disabled",
             "native-api-direct.tag-write-disabled",
             "native-api-direct.tag-delete-disabled",
             "native-api-direct.write-control-operator",
@@ -11431,6 +11446,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-write-update",
             "native-api-direct.report-config-write-cleanup",
             "native-api-direct.report-config-write-post-cleanup",
+            "native-api-direct.port-list-predefined-patch-denied",
             "native-api-direct.tag-write-update",
             "native-api-direct.tag-resource-fixture",
             "native-api-direct.tag-resource-add",
@@ -11529,6 +11545,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     tag_resource_id: str | None = None
     report_config_id: str | None = None
     report_config_format_id: str | None = None
+    predefined_port_list_id: str | None = None
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
@@ -11687,6 +11704,24 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             missing_format_ok = missing_format.returncode == 0 and missing_format_status == 404 and isinstance(missing_format_json, dict) and missing_format_json.get("error", {}).get("code") == "not_found"
             findings.append(native_api_probe_finding("pass" if missing_format_ok else "fail", "native-api-direct.report-config-missing-format-denied", "Direct write-control rejects report-config creation for a missing report format without creating state." if missing_format_ok else "Direct write-control did not reject missing report-format report-config creation as expected.", missing_format, direct_native_api_display_command("/api/v1/report-configs", token=token, env=env, method="POST", body=missing_format_body, extra_headers=content_type), missing_format_json, {"http_status": missing_format_status, **summarize_native_api_response(missing_format_json)}))
 
+        port_list_fixture = direct_native_api_curl(repo_root, "/api/v1/port-lists?page_size=1", token=token, env=env)
+        port_list_fixture_json, port_list_fixture_status = parse_json_output_with_http_status(port_list_fixture)
+        port_list_items = port_list_fixture_json.get("items", []) if isinstance(port_list_fixture_json, dict) else []
+        if port_list_items and isinstance(port_list_items[0], dict) and isinstance(port_list_items[0].get("id"), str):
+            predefined_port_list_id = port_list_items[0]["id"]
+        predefined_port_list = bool(port_list_items and isinstance(port_list_items[0], dict) and port_list_items[0].get("predefined") is True)
+        if predefined_port_list_id and predefined_port_list:
+            port_list_patch_body = json.dumps(
+                {"comment": "TurboVAS direct write smoke must not mutate predefined port lists"},
+                separators=(",", ":"),
+            )
+            port_list_patch = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(predefined_port_list_id)}", token=token, env=env, method="PATCH", body=port_list_patch_body, extra_headers=content_type)
+            port_list_patch_json, port_list_patch_status = parse_json_output_with_http_status(port_list_patch)
+            port_list_patch_ok = port_list_patch.returncode == 0 and port_list_patch_status == 409 and isinstance(port_list_patch_json, dict) and port_list_patch_json.get("error", {}).get("code") == "conflict"
+            findings.append(native_api_probe_finding("pass" if port_list_patch_ok else "fail", "native-api-direct.port-list-predefined-patch-denied", "Direct write-control rejects predefined port-list metadata patches without mutating state." if port_list_patch_ok else "Direct write-control did not reject a predefined port-list metadata patch as expected.", port_list_patch, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(predefined_port_list_id)}", token=token, env=env, method="PATCH", body=port_list_patch_body, extra_headers=content_type), port_list_patch_json, {"http_status": port_list_patch_status, "port_list_id": predefined_port_list_id, **summarize_native_api_response(port_list_patch_json)}))
+        else:
+            findings.append(native_api_probe_finding("warn", "native-api-direct.port-list-predefined-patch-denied", "Direct write-control smoke could not find a predefined port-list fixture for the no-mutation patch guard.", port_list_fixture, direct_native_api_display_command("/api/v1/port-lists?page_size=1", token=token, env=env), port_list_fixture_json, {"http_status": port_list_fixture_status, "port_list_id": predefined_port_list_id, **summarize_native_api_response(port_list_fixture_json)}))
+
         if tag_id:
             tag_resource = direct_native_api_curl(repo_root, "/api/v1/report-formats?page_size=1", token=token, env=env)
             tag_resource_json, tag_resource_status = parse_json_output_with_http_status(tag_resource)
@@ -11780,6 +11815,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         "temporary_report_config_id": report_config_id,
         "temporary_report_config_name": report_config_name,
         "temporary_report_config_format_id": report_config_format_id,
+        "predefined_port_list_id": predefined_port_list_id,
         "temporary_tag_id": tag_id,
         "temporary_tag_name": tag_name,
         "temporary_tag_resource_id": tag_resource_id,
@@ -12010,6 +12046,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_report_config_patch_json, disabled_report_config_patch_status = parse_json_output_with_http_status(disabled_report_config_patch)
     disabled_report_config_patch_ok = disabled_report_config_patch.returncode == 0 and disabled_report_config_patch_status == 405 and isinstance(disabled_report_config_patch_json, dict) and disabled_report_config_patch_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_report_config_patch_ok else "fail", "native-api-direct.report-config-patch-disabled", "Direct native API rejects report-config patches while direct write-control is disabled." if disabled_report_config_patch_ok else "Direct native API did not reject a report-config patch while direct write-control is disabled.", disabled_report_config_patch, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_report_config_patch_json, {"http_status": disabled_report_config_patch_status, **summarize_native_api_response(disabled_report_config_patch_json)}))
+
+    disabled_port_list_patch = direct_native_api_curl(
+        repo_root,
+        "/api/v1/port-lists/00000000-0000-0000-0000-000000000000",
+        token=token,
+        env=env,
+        method="PATCH",
+    )
+    disabled_port_list_patch_json, disabled_port_list_patch_status = parse_json_output_with_http_status(disabled_port_list_patch)
+    disabled_port_list_patch_ok = disabled_port_list_patch.returncode == 0 and disabled_port_list_patch_status == 405 and isinstance(disabled_port_list_patch_json, dict) and disabled_port_list_patch_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_port_list_patch_ok else "fail", "native-api-direct.port-list-patch-disabled", "Direct native API rejects port-list patches while direct write-control is disabled." if disabled_port_list_patch_ok else "Direct native API did not reject a port-list patch while direct write-control is disabled.", disabled_port_list_patch, direct_native_api_display_command("/api/v1/port-lists/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_port_list_patch_json, {"http_status": disabled_port_list_patch_status, **summarize_native_api_response(disabled_port_list_patch_json)}))
 
     disabled_tag_write = direct_native_api_curl(
         repo_root,

@@ -181,8 +181,17 @@ pub(crate) async fn port_list_asset_detail(
     State(state): State<AppState>,
     Path(port_list_id): Path<String>,
 ) -> Result<Json<PortListAssetDetail>, ApiError> {
-    parse_uuid(&port_list_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(
+        load_port_list_asset_detail(&client, &port_list_id).await?,
+    ))
+}
+
+pub(crate) async fn load_port_list_asset_detail(
+    client: &tokio_postgres::Client,
+    port_list_id: &str,
+) -> Result<PortListAssetDetail, ApiError> {
+    parse_uuid(&port_list_id)?;
     let row = client
         .query_opt(
             r#"SELECT pl.id AS internal_id,
@@ -260,10 +269,10 @@ pub(crate) async fn port_list_asset_detail(
         .map(port_list_target_from_row)
         .collect();
     let user_tags = port_list_user_tags(&client, &port_list_id).await?;
-    Ok(Json(port_list_asset_detail_payload(
+    Ok(port_list_asset_detail_payload(
         port_list_asset_from_row(&row, ranges, targets),
         user_tags,
-    )))
+    ))
 }
 
 pub(crate) fn port_list_user_tags_sql() -> &'static str {

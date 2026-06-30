@@ -1261,7 +1261,7 @@ paths:
       x-turbovas-replaces: port-list-metadata-list-read
       x-turbovas-inherited-still-owns: port-list-import-export-writes-and-deletes
       summary: List port lists
-      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Create, modify, import, export, and delete operations remain on inherited compatibility paths while native write semantics are designed.
+      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can patch port-list name/comment metadata; create, range changes, import, export, delete, trash, and restore operations remain on inherited compatibility paths while native safety contracts are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1312,6 +1312,50 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchPortListsByPortListId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: port-list-metadata-modify
+      x-turbovas-inherited-still-owns: port-list-import-export-range-trash-restore-delete
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Patch port-list metadata
+      description: Direct write-control endpoint for changing a port-list name or comment. Port ranges, predefined lists, create, import, export, delete, trash, restore, and scanner-facing range semantics remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/PortListId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortListPatchRequest'
+      responses:
+        '200':
+          description: Port-list metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortListAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -3702,6 +3746,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PortListAsset'
+    PortListPatchRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
     ScheduleAssetCollection:
       type: object
       required: [page, items]

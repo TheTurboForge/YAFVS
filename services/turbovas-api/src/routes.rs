@@ -21,6 +21,7 @@ use crate::{
     nvt_catalog::*,
     operating_systems::*,
     overrides::*,
+    port_list_writes::patch_port_list,
     port_lists::*,
     report_applications::report_applications,
     report_config_writes::{create_report_config, patch_report_config},
@@ -222,6 +223,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/report-configs/:report_config_id",
                 patch(patch_report_config),
             )
+            .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))
             .route("/api/v1/tags", post(create_tag))
             .route("/api/v1/tags/:tag_id", patch(patch_tag))
             .route("/api/v1/tags/:tag_id", delete(delete_tag))

@@ -214,7 +214,7 @@ fn inherited_restore_port_list_moves_ranges_targets_permissions_and_tags_back_to
 }
 
 #[test]
-fn native_direct_api_keeps_port_list_writes_closed_until_full_contract_lands() {
+fn native_direct_api_allows_only_port_list_metadata_patch_under_write_control() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/port-lists",
@@ -231,7 +231,17 @@ fn native_direct_api_keeps_port_list_writes_closed_until_full_contract_lands() {
             "{method} /api/v1/port-lists must remain closed"
         );
     }
-    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc",
+        false,
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc",
+        true,
+    ));
+    for method in [Method::POST, Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(
                 &method,
@@ -244,7 +254,7 @@ fn native_direct_api_keeps_port_list_writes_closed_until_full_contract_lands() {
 }
 
 #[test]
-fn openapi_documents_port_lists_as_read_only_until_write_contract_lands() {
+fn openapi_documents_port_list_metadata_patch_boundary() {
     let list = openapi_path_block("/port-lists");
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
@@ -257,12 +267,13 @@ fn openapi_documents_port_lists_as_read_only_until_write_contract_lands() {
 
     let detail = openapi_path_block("/port-lists/{port_list_id}");
     assert!(detail.contains("get:"));
-    assert!(!detail.contains("patch:"));
+    assert!(detail.contains("patch:"));
     assert!(!detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(
-        detail.contains(
-            "x-turbovas-inherited-still-owns: port-list-import-export-writes-and-deletes"
-        )
-    );
+    assert!(detail.contains("x-turbovas-exposure: direct-write"));
+    assert!(detail.contains("x-turbovas-replaces: port-list-metadata-modify"));
+    assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(detail.contains(
+        "x-turbovas-inherited-still-owns: port-list-import-export-range-trash-restore-delete"
+    ));
 }

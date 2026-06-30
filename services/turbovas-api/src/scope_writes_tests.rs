@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use crate::scope_write_db::{ensure_scope_is_mutable, ensure_scope_write_references_visible};
 use crate::scope_write_plans::*;
+use crate::scope_write_sql::*;
+use crate::scope_write_validation::{ValidatedScopeCreate, ValidatedScopePatch};
 
 #[test]
 fn scope_create_request_normalizes_defaults_and_membership_ids() {
@@ -289,7 +292,7 @@ fn scope_write_execution_helpers_stay_private_transaction_scaffold() {
     let _patch = execute_scope_patch_transaction;
     let _delete = execute_scope_delete_transaction;
 
-    let source = include_str!("scope_writes.rs");
+    let source = include_str!("scope_write_db.rs");
     let create_body = source
         .split_once("pub(crate) async fn execute_scope_create_transaction")
         .expect("create executor must exist")
@@ -385,8 +388,8 @@ fn scope_write_handlers_require_operator_transactions_and_payload_reload() {
         .split_once("pub(crate) async fn delete_scope")
         .expect("delete handler must exist")
         .1
-        .split_once("fn require_scope_write_operator")
-        .expect("delete handler must precede operator guard")
+        .split_once("fn scope_write_location_headers")
+        .expect("delete handler must precede location header helper")
         .0;
 
     for body in [create_body, patch_body, delete_body] {

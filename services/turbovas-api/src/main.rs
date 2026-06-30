@@ -105,6 +105,7 @@ mod scope_report_results;
 mod scope_report_retention;
 mod scope_report_tls_certificates;
 mod scope_reports;
+mod scope_write_db;
 #[cfg(test)]
 mod scope_write_plans;
 mod scope_write_sql;

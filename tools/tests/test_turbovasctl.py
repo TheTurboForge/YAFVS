@@ -2602,7 +2602,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "nvt-rich-detail",
             "operating-system-writes-deletes-and-rich-history",
             "override-writes-exports-trash-and-result-expansion",
-            "port-list-range-import-export",
+            "port-list-import-export",
             "raw-report-generation-xml-export-retention-and-mutations",
             "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
             "report-config-export",

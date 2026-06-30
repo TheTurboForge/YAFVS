@@ -95,4 +95,6 @@ mod contract_tests;
 #[cfg(test)]
 mod filter_characterization_tests;
 #[cfg(test)]
+mod port_list_characterization_tests;
+#[cfg(test)]
 mod schedule_characterization_tests;

@@ -12,6 +12,7 @@ mod collections;
 mod cpe_catalog;
 mod cpe_catalog_payloads;
 mod cve_catalog;
+mod cve_catalog_payloads;
 mod direct_api;
 mod errors;
 mod feeds;

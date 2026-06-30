@@ -19,14 +19,11 @@ use crate::{
 #[test]
 fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
     let source = include_str!("cve_catalog.rs");
-    let cve_source = source;
+    let cve_payload_source = include_str!("cve_catalog_payloads.rs");
     let detail_source = source
         .split_once("async fn cve_catalog_detail")
         .expect("CVE catalog detail handler must exist")
-        .1
-        .split_once("fn split_catalog_products")
-        .expect("CVE catalog detail/reference handlers must precede row helpers")
-        .0;
+        .1;
     let list_source = source
         .split_once("async fn cve_catalog(")
         .expect("CVE catalog list handler must exist")
@@ -34,12 +31,12 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
         .split_once("async fn cve_catalog_detail")
         .expect("CVE catalog list handler must precede detail handler")
         .0;
-    let payload_source = cve_source
+    let payload_source = cve_payload_source
         .split_once("struct CatalogCveItem {")
         .expect("CVE catalog payload must exist")
         .1
-        .split_once("pub(crate) async fn cve_catalog")
-        .expect("CVE catalog payload must precede CVE list handler")
+        .split_once("struct CatalogCveDetail")
+        .expect("CVE catalog item payload must precede detail payload")
         .0;
 
     assert!(payload_source.contains("cert_refs: Vec<CatalogCveCertReference>"));
@@ -107,9 +104,10 @@ fn task_detail_contract_includes_db_owned_schedule_lifecycle_metadata() {
 #[test]
 fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
     let cve_source = include_str!("cve_catalog.rs");
+    let cve_payload_source = include_str!("cve_catalog_payloads.rs");
     let cpe_source = include_str!("cpe_catalog.rs");
     let cpe_payload_source = include_str!("cpe_catalog_payloads.rs");
-    let cve_item_payload = cve_source
+    let cve_item_payload = cve_payload_source
         .split_once("struct CatalogCveItem {")
         .expect("CVE catalog payload must exist")
         .1
@@ -154,7 +152,7 @@ fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
 
     assert!(!cve_item_payload.contains("user_tags"));
     assert!(!cpe_item_payload.contains("user_tags"));
-    assert!(cve_source.contains("struct CatalogCveDetail"));
+    assert!(cve_payload_source.contains("struct CatalogCveDetail"));
     assert!(cpe_payload_source.contains("struct CatalogCpeDetail"));
     assert!(cve_detail_source.contains("catalog_user_tags(&client, \"cve\", &cve_id).await?"));
     assert!(cpe_detail_source.contains("catalog_user_tags_for_aliases_and_row_id("));

@@ -25,7 +25,7 @@ use crate::{
     port_list_writes::patch_port_list,
     port_lists::*,
     report_applications::report_applications,
-    report_config_writes::{create_report_config, patch_report_config},
+    report_config_writes::{clone_report_config, create_report_config, patch_report_config},
     report_configs::*,
     report_cves::report_cves,
     report_errors::report_errors,
@@ -224,6 +224,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/report-configs/:report_config_id",
                 patch(patch_report_config),
+            )
+            .route(
+                "/api/v1/report-configs/:report_config_id/clone",
+                post(clone_report_config),
             )
             .route("/api/v1/filters/:filter_id", patch(patch_filter))
             .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))

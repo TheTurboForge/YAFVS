@@ -76,6 +76,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/report-configs/:report_config_id/clone",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/filters/:filter_id",
         safety_contract: "write-control-v1",

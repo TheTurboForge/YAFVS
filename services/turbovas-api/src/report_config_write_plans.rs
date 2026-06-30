@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::report_config_write_validation::{
-    ValidatedReportConfigCreate, ValidatedReportConfigPatch,
+    ValidatedReportConfigClone, ValidatedReportConfigCreate, ValidatedReportConfigPatch,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReportConfigWriteOperation {
     Create,
     Patch,
+    Clone,
     Delete,
 }
 
@@ -21,6 +22,9 @@ pub(crate) enum ReportConfigWriteStep {
     VerifyUniqueLiveName,
     VerifyExistingReportConfigMutable,
     InsertReportConfig,
+    CloneReportConfigMetadata,
+    CloneReportConfigParams,
+    CloneReportConfigTags,
     UpdateReportConfigMetadata,
     ReplaceReportConfigParams,
     MoveReportConfigToTrash,
@@ -69,6 +73,27 @@ pub(crate) fn report_config_patch_transaction_plan(
     }
     ReportConfigWriteTransactionPlan {
         operation: ReportConfigWriteOperation::Patch,
+        steps,
+    }
+}
+
+pub(crate) fn report_config_clone_transaction_plan(
+    request: &ValidatedReportConfigClone,
+) -> ReportConfigWriteTransactionPlan {
+    let mut steps = vec![
+        ReportConfigWriteStep::ResolveOperatorOwner,
+        ReportConfigWriteStep::VerifyExistingReportConfigMutable,
+    ];
+    if request.name.is_some() {
+        steps.push(ReportConfigWriteStep::VerifyUniqueLiveName);
+    }
+    steps.extend([
+        ReportConfigWriteStep::CloneReportConfigMetadata,
+        ReportConfigWriteStep::CloneReportConfigParams,
+        ReportConfigWriteStep::CloneReportConfigTags,
+    ]);
+    ReportConfigWriteTransactionPlan {
+        operation: ReportConfigWriteOperation::Clone,
         steps,
     }
 }

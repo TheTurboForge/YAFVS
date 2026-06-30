@@ -522,6 +522,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "raw-report-result-evidence-read",
         "raw-report-tls-certificate-evidence-read",
         "report-config-metadata-detail-read",
+        "report-config-clone",
         "report-config-metadata-list-read",
         "report-config-metadata-param-create",
         "report-config-metadata-param-modify",
@@ -582,7 +583,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "port-list-import-export-range-trash-restore-delete",
         "port-list-import-export-writes-and-deletes",
         "raw-report-generation-xml-export-retention-and-mutations",
-        "report-config-delete-trash-restore-clone-export",
+        "report-config-delete-trash-restore-export",
         "report-format-import-export-verify-writes-and-deletes",
         "result-tags-exports-and-actions",
         "result-exports-and-actions",
@@ -900,24 +901,29 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "schedule-metadata-modify",
     },
     ("get", "/report-configs"): {
-        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-clone-export",
+        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-config-metadata-list-read",
     },
     ("post", "/report-configs"): {
-        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-clone-export",
+        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "report-config-metadata-param-create",
     },
     ("get", "/report-configs/{report_config_id}"): {
-        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-clone-export",
+        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-config-metadata-detail-read",
     },
     ("patch", "/report-configs/{report_config_id}"): {
-        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-clone-export",
+        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "report-config-metadata-param-modify",
+    },
+    ("post", "/report-configs/{report_config_id}/clone"): {
+        "x-turbovas-inherited-still-owns": "report-config-delete-trash-restore-export",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "report-config-clone",
     },
     ("get", "/report-formats"): {
         "x-turbovas-inherited-still-owns": "report-format-import-export-verify-writes-and-deletes",
@@ -5952,6 +5958,12 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
         for item in endpoints
         if item.get("direct_access") == "scriptable_read" and isinstance(item.get("endpoint"), str)
     )
+    direct_path_allowed = sorted(
+        item["endpoint"]
+        for item in endpoints
+        if item.get("direct_access") in {"scriptable_read", "direct_write_control"}
+        and isinstance(item.get("endpoint"), str)
+    )
     internal_only = sorted(
         item["endpoint"]
         for item in endpoints
@@ -5975,6 +5987,9 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
     body_limit = rust_direct_api_body_limit_summary(repo_root)
     inventory_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in inventory}
     scriptable_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in scriptable}
+    direct_path_allowed_by_normalized = {
+        normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in direct_path_allowed
+    }
     openapi_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_marked}
     rust_route_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in rust_routes}
     rust_direct_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in rust_direct_allowed}
@@ -5982,8 +5997,14 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
     unexpected = [openapi_by_normalized[key] for key in sorted(set(openapi_by_normalized) - set(scriptable_by_normalized))]
     missing_rust_routes = [inventory_by_normalized[key] for key in sorted(set(inventory_by_normalized) - set(rust_route_by_normalized))]
     untracked_rust_routes = [rust_route_by_normalized[key] for key in sorted(set(rust_route_by_normalized) - set(inventory_by_normalized))]
-    missing_rust_direct = [scriptable_by_normalized[key] for key in sorted(set(scriptable_by_normalized) - set(rust_direct_by_normalized))]
-    unexpected_rust_direct = [rust_direct_by_normalized[key] for key in sorted(set(rust_direct_by_normalized) - set(scriptable_by_normalized))]
+    missing_rust_direct = [
+        direct_path_allowed_by_normalized[key]
+        for key in sorted(set(direct_path_allowed_by_normalized) - set(rust_direct_by_normalized))
+    ]
+    unexpected_rust_direct = [
+        rust_direct_by_normalized[key]
+        for key in sorted(set(rust_direct_by_normalized) - set(direct_path_allowed_by_normalized))
+    ]
     drift = (
         missing
         or unexpected
@@ -6535,6 +6556,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_direct_write_control",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native report-config metadata and parameter modification"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/report-configs/{report_config_id}/clone",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native report-config clone"],
             },
             {
                 "endpoint": "/api/v1/report-formats",
@@ -11589,6 +11617,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-missing-format-denied",
             "native-api-direct.report-config-write-create",
             "native-api-direct.report-config-write-update",
+            "native-api-direct.report-config-write-clone",
             "native-api-direct.report-config-write-cleanup",
             "native-api-direct.report-config-write-post-cleanup",
             "native-api-direct.filter-fixture",
@@ -11701,6 +11730,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     filter_id: str | None = None
     filter_original_comment = "TurboVAS direct write smoke original saved-filter comment"
     report_config_id: str | None = None
+    report_config_clone_id: str | None = None
     report_config_format_id: str | None = None
     predefined_port_list_id: str | None = None
     schedule_id: str | None = None
@@ -11708,6 +11738,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
+    report_config_clone_name = f"{report_config_name}-clone"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
@@ -11829,20 +11860,39 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 report_config_patch_ok = report_config_patch.returncode == 0 and report_config_patch_status == 200 and isinstance(report_config_patch_json, dict) and report_config_patch_json.get("id") == report_config_id and report_config_patch_json.get("comment") == "TurboVAS direct write smoke updated temporary report config"
                 findings.append(native_api_probe_finding("pass" if report_config_patch_ok else "fail", "native-api-direct.report-config-write-update", "Direct write-control patched temporary report config metadata." if report_config_patch_ok else "Direct write-control failed to patch temporary report config metadata.", report_config_patch, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}", token=token, env=env, method="PATCH", body=report_config_patch_body, extra_headers=content_type), report_config_patch_json, {"http_status": report_config_patch_status, "report_config_id": report_config_id, **summarize_native_api_response(report_config_patch_json)}))
 
+                report_config_clone_body = json.dumps({"name": report_config_clone_name}, separators=(",", ":"))
+                report_config_clone = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}/clone", token=token, env=env, method="POST", body=report_config_clone_body, extra_headers=content_type)
+                report_config_clone_json, report_config_clone_status = parse_json_output_with_http_status(report_config_clone)
+                report_config_clone_id = report_config_clone_json.get("id") if isinstance(report_config_clone_json, dict) and isinstance(report_config_clone_json.get("id"), str) else None
+                cloned_report_format = report_config_clone_json.get("report_format") if isinstance(report_config_clone_json, dict) else None
+                cloned_report_format_id = cloned_report_format.get("id") if isinstance(cloned_report_format, dict) else None
+                report_config_clone_ok = report_config_clone.returncode == 0 and report_config_clone_status == 201 and bool(report_config_clone_id) and report_config_clone_id != report_config_id and report_config_clone_json.get("name") == report_config_clone_name and cloned_report_format_id == report_config_format_id
+                findings.append(native_api_probe_finding("pass" if report_config_clone_ok else "fail", "native-api-direct.report-config-write-clone", "Direct write-control cloned the temporary report config." if report_config_clone_ok else "Direct write-control failed to clone the temporary report config.", report_config_clone, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}/clone", token=token, env=env, method="POST", body=report_config_clone_body, extra_headers=content_type), report_config_clone_json, {"http_status": report_config_clone_status, "report_config_id": report_config_id, "report_config_clone_id": report_config_clone_id, **summarize_native_api_response(report_config_clone_json)}))
+
+                cleanup_targets = [
+                    f"(uuid = {sql_literal(report_config_id)} AND name = {sql_literal(report_config_name)})"
+                ]
+                if report_config_clone_id:
+                    cleanup_targets.append(
+                        f"(uuid = {sql_literal(report_config_clone_id)} AND name = {sql_literal(report_config_clone_name)})"
+                    )
+                cleanup_target_where = " OR ".join(cleanup_targets)
+                expected_cleanup_deleted = str(1 + (1 if report_config_clone_id else 0))
                 cleanup_sql = (
                     "WITH target AS (SELECT id FROM report_configs "
-                    f"WHERE uuid = {sql_literal(report_config_id)} AND name = {sql_literal(report_config_name)}), "
+                    f"WHERE {cleanup_target_where}), "
+                    "deleted_tags AS (DELETE FROM tag_resources WHERE resource_type = 'report_config' AND resource IN (SELECT id FROM target)), "
                     "deleted_params AS (DELETE FROM report_config_params WHERE report_config IN (SELECT id FROM target)), "
                     "deleted_config AS (DELETE FROM report_configs WHERE id IN (SELECT id FROM target) RETURNING id) "
                     "SELECT count(*) FROM deleted_config;"
                 )
                 cleanup = psql(repo_root, cleanup_sql)
                 cleanup_deleted = psql_value(cleanup)
-                cleanup_ok = cleanup.returncode == 0 and cleanup_deleted == "1"
+                cleanup_ok = cleanup.returncode == 0 and cleanup_deleted == expected_cleanup_deleted
                 cleanup_finding = process_step_finding("pass" if cleanup_ok else "fail", "native-api-direct.report-config-write-cleanup", "Direct write-control smoke removed the temporary report config through fixed test cleanup SQL." if cleanup_ok else "Direct write-control smoke failed to clean up the temporary report config.", cleanup, ["psql", "fixed-report-config-smoke-cleanup"])
                 cleanup_details = cleanup_finding.setdefault("details", {})
                 if isinstance(cleanup_details, dict):
-                    cleanup_details.update({"report_config_id": report_config_id, "deleted_count": cleanup_deleted})
+                    cleanup_details.update({"report_config_id": report_config_id, "report_config_clone_id": report_config_clone_id, "deleted_count": cleanup_deleted})
                 findings.append(cleanup_finding)
 
                 report_config_post_cleanup = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}", token=token, env=env)
@@ -12068,7 +12118,9 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         "temporary_scope_id": scope_id,
         "temporary_scope_name": scope_name,
         "temporary_report_config_id": report_config_id,
+        "temporary_report_config_clone_id": report_config_clone_id,
         "temporary_report_config_name": report_config_name,
+        "temporary_report_config_clone_name": report_config_clone_name,
         "temporary_report_config_format_id": report_config_format_id,
         "predefined_port_list_id": predefined_port_list_id,
         "temporary_tag_id": tag_id,

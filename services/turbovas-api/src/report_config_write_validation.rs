@@ -20,6 +20,13 @@ pub(crate) struct ReportConfigParamWriteRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct ReportConfigCloneRequest {
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ReportConfigCreateRequest {
     pub(crate) name: String,
     pub(crate) report_format_id: String,
@@ -27,6 +34,11 @@ pub(crate) struct ReportConfigCreateRequest {
     pub(crate) comment: Option<String>,
     #[serde(default)]
     pub(crate) params: Vec<ReportConfigParamWriteRequest>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedReportConfigClone {
+    pub(crate) name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +50,14 @@ pub(crate) struct ReportConfigPatchRequest {
     pub(crate) comment: Option<String>,
     #[serde(default)]
     pub(crate) params: Option<Vec<ReportConfigParamWriteRequest>>,
+}
+
+pub(crate) fn validate_report_config_clone_request(
+    request: ReportConfigCloneRequest,
+) -> Result<ValidatedReportConfigClone, ApiError> {
+    Ok(ValidatedReportConfigClone {
+        name: normalize_optional_required_report_config_text(request.name, "name")?,
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]

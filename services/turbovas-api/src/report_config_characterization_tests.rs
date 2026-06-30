@@ -375,6 +375,22 @@ fn native_direct_api_exposes_only_report_config_create_write_control() {
         ),
         "PATCH /api/v1/report-configs/{{id}} is now native direct write-control"
     );
+    assert!(
+        direct_api_v1_method_is_allowed(
+            &Method::POST,
+            "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/clone",
+            true,
+        ),
+        "POST /api/v1/report-configs/{{id}}/clone is now native direct write-control"
+    );
+    assert!(
+        !direct_api_v1_method_is_allowed(
+            &Method::POST,
+            "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/clone",
+            false,
+        ),
+        "clone must stay closed without direct write-control enablement"
+    );
 }
 
 #[test]
@@ -385,9 +401,9 @@ fn openapi_documents_report_config_create_and_patch_as_direct_write_control() {
     assert!(list.contains("x-turbovas-exposure: direct-write"));
     assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains(
-        "x-turbovas-inherited-still-owns: report-config-delete-trash-restore-clone-export"
-    ));
+    assert!(
+        list.contains("x-turbovas-inherited-still-owns: report-config-delete-trash-restore-export")
+    );
 
     let detail = openapi_path_block("/report-configs/{report_config_id}");
     assert!(detail.contains("get:"));
@@ -396,7 +412,18 @@ fn openapi_documents_report_config_create_and_patch_as_direct_write_control() {
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-replaces: report-config-metadata-param-modify"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: report-config-delete-trash-restore-clone-export"
-    ));
+    assert!(
+        detail
+            .contains("x-turbovas-inherited-still-owns: report-config-delete-trash-restore-export")
+    );
+
+    let clone = openapi_path_block("/report-configs/{report_config_id}/clone");
+    assert!(clone.contains("post:"));
+    assert!(clone.contains("x-turbovas-exposure: direct-write"));
+    assert!(clone.contains("x-turbovas-replaces: report-config-clone"));
+    assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(
+        clone
+            .contains("x-turbovas-inherited-still-owns: report-config-delete-trash-restore-export")
+    );
 }

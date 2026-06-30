@@ -17,9 +17,10 @@ use crate::{
     path_ids::parse_uuid,
     report_config_payloads::ReportConfigAssetItem,
     report_config_write_validation::{
-        ReportConfigCreateRequest, ReportConfigFormatParam, ReportConfigFormatState,
-        ReportConfigPatchRequest, ValidatedReportConfigCreate, ValidatedReportConfigParamWrite,
-        ValidatedReportConfigPatch, validate_report_config_create_request,
+        ReportConfigCloneRequest, ReportConfigCreateRequest, ReportConfigFormatParam,
+        ReportConfigFormatState, ReportConfigPatchRequest, ValidatedReportConfigClone,
+        ValidatedReportConfigCreate, ValidatedReportConfigParamWrite, ValidatedReportConfigPatch,
+        validate_report_config_clone_request, validate_report_config_create_request,
         validate_report_config_param_values, validate_report_config_patch_request,
     },
     report_configs::load_report_config_asset_detail,
@@ -61,6 +62,43 @@ pub(crate) async fn create_report_config(
     let record = execute_report_config_create_transaction(&tx, owner_id, &request).await?;
     tx.commit().await.map_err(|error| {
         map_report_config_write_db_error(error, "commit create report config transaction")
+    })?;
+
+    let report_config = load_report_config_asset_detail(&client, &record.uuid).await?;
+    Ok((
+        StatusCode::CREATED,
+        report_config_write_location_headers(&record.uuid)?,
+        Json(report_config),
+    ))
+}
+
+pub(crate) async fn clone_report_config(
+    State(state): State<AppState>,
+    Path(report_config_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<ReportConfigCloneRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ReportConfigAssetItem>), ApiError> {
+    let operator = require_report_config_write_operator(operator)?;
+    let request = validate_report_config_clone_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_report_config_write_db_error(error, "begin clone report config transaction")
+    })?;
+    let owner_id = resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute("LOCK TABLE report_configs IN SHARE ROW EXCLUSIVE MODE;")
+        .await
+        .map_err(|error| {
+            map_report_config_write_db_error(error, "lock report configs for clone")
+        })?;
+    let source = load_report_config_write_state(&tx, &report_config_id).await?;
+    if let Some(name) = request.name.as_ref() {
+        ensure_unique_live_report_config_name(&tx, name, None).await?;
+    }
+    let record =
+        execute_report_config_clone_transaction(&tx, source.internal_id, owner_id, &request)
+            .await?;
+    tx.commit().await.map_err(|error| {
+        map_report_config_write_db_error(error, "commit clone report config transaction")
     })?;
 
     let report_config = load_report_config_asset_detail(&client, &record.uuid).await?;
@@ -247,6 +285,40 @@ pub(crate) async fn execute_report_config_create_transaction(
     )
     .await?;
     replace_report_config_params(tx, record.internal_id, &request.params).await?;
+    Ok(record)
+}
+
+pub(crate) async fn execute_report_config_clone_transaction(
+    tx: &Transaction<'_>,
+    source_report_config_internal_id: i32,
+    owner_id: i32,
+    request: &ValidatedReportConfigClone,
+) -> Result<ReportConfigWriteRecord, ApiError> {
+    let record = query_report_config_write_record(
+        tx,
+        report_config_clone_sql(),
+        &[&source_report_config_internal_id, &owner_id, &request.name],
+        "clone report config metadata",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_clone_params_sql(),
+        &[&source_report_config_internal_id, &record.internal_id],
+        "clone report config params",
+    )
+    .await?;
+    execute_report_config_write_sql(
+        tx,
+        report_config_clone_tags_sql(),
+        &[
+            &source_report_config_internal_id,
+            &record.internal_id,
+            &record.uuid,
+        ],
+        "clone report config tags",
+    )
+    .await?;
     Ok(record)
 }
 
@@ -458,6 +530,37 @@ pub(crate) fn report_config_insert_param_sql() -> &'static str {
     "INSERT INTO report_config_params (report_config, name, value)
      VALUES ($1, $2, $3)
      ON CONFLICT (report_config, name) DO UPDATE SET value = EXCLUDED.value;"
+}
+
+pub(crate) fn report_config_clone_sql() -> &'static str {
+    "INSERT INTO report_configs
+        (uuid, owner, name, comment, report_format_id, creation_time, modification_time)
+     SELECT make_uuid(),
+            $2,
+            coalesce($3, uniquify('report_config', name, $2, ' Clone')),
+            comment,
+            report_format_id,
+            m_now(),
+            m_now()
+       FROM report_configs
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn report_config_clone_params_sql() -> &'static str {
+    "INSERT INTO report_config_params (report_config, name, value)
+     SELECT $2, name, value
+       FROM report_config_params
+      WHERE report_config = $1;"
+}
+
+pub(crate) fn report_config_clone_tags_sql() -> &'static str {
+    "INSERT INTO tag_resources (tag, resource_type, resource, resource_uuid, resource_location)
+     SELECT tag, resource_type, $2, $3, resource_location
+       FROM tag_resources
+      WHERE resource_type = 'report_config'
+        AND resource = $1
+        AND resource_location = 0;"
 }
 
 #[cfg(test)]

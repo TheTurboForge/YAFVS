@@ -5,7 +5,7 @@
 use super::*;
 use crate::report_config_write_plans::*;
 use crate::report_config_write_validation::{
-    MAX_REPORT_CONFIG_PARAMS, ReportConfigParamWriteRequest,
+    MAX_REPORT_CONFIG_PARAMS, ReportConfigCloneRequest, ReportConfigParamWriteRequest,
 };
 
 #[test]
@@ -33,6 +33,24 @@ fn report_config_create_request_normalizes_metadata_and_params() {
     );
     assert_eq!(validated.params[0].name, "timezone");
     assert_eq!(validated.params[1].value, "line one\nline two");
+}
+
+#[test]
+fn report_config_clone_request_accepts_default_or_named_clone() {
+    let default = validate_report_config_clone_request(ReportConfigCloneRequest { name: None })
+        .expect("default clone name");
+    assert_eq!(default.name, None);
+
+    let named = validate_report_config_clone_request(ReportConfigCloneRequest {
+        name: Some("  Operator copy  ".to_string()),
+    })
+    .expect("named clone");
+    assert_eq!(named.name.as_deref(), Some("Operator copy"));
+
+    let empty = validate_report_config_clone_request(ReportConfigCloneRequest {
+        name: Some("   ".to_string()),
+    });
+    assert!(matches!(empty, Err(ApiError::BadRequest(_))));
 }
 
 #[test]
@@ -304,6 +322,36 @@ fn report_config_write_transaction_plans_keep_validation_before_mutation() {
         ]
     );
 
+    let clone = validate_report_config_clone_request(ReportConfigCloneRequest {
+        name: Some("copy".to_string()),
+    })
+    .expect("valid clone");
+    assert_eq!(
+        report_config_clone_transaction_plan(&clone).steps,
+        vec![
+            ReportConfigWriteStep::ResolveOperatorOwner,
+            ReportConfigWriteStep::VerifyExistingReportConfigMutable,
+            ReportConfigWriteStep::VerifyUniqueLiveName,
+            ReportConfigWriteStep::CloneReportConfigMetadata,
+            ReportConfigWriteStep::CloneReportConfigParams,
+            ReportConfigWriteStep::CloneReportConfigTags,
+        ]
+    );
+
+    let default_clone =
+        validate_report_config_clone_request(ReportConfigCloneRequest { name: None })
+            .expect("valid default clone");
+    assert_eq!(
+        report_config_clone_transaction_plan(&default_clone).steps,
+        vec![
+            ReportConfigWriteStep::ResolveOperatorOwner,
+            ReportConfigWriteStep::VerifyExistingReportConfigMutable,
+            ReportConfigWriteStep::CloneReportConfigMetadata,
+            ReportConfigWriteStep::CloneReportConfigParams,
+            ReportConfigWriteStep::CloneReportConfigTags,
+        ]
+    );
+
     let patch = validate_report_config_patch_request(ReportConfigPatchRequest {
         name: Some("renamed".to_string()),
         comment: None,
@@ -333,4 +381,31 @@ fn report_config_write_transaction_plans_keep_validation_before_mutation() {
             ReportConfigWriteStep::MoveReportConfigToTrash,
         ]
     );
+}
+
+#[test]
+fn report_config_clone_sql_copies_metadata_params_and_active_tag_links() {
+    let clone = report_config_clone_sql();
+    for required in [
+        "INSERT INTO report_configs",
+        "SELECT make_uuid()",
+        "coalesce($3, uniquify('report_config', name, $2, ' Clone'))",
+        "comment",
+        "report_format_id",
+        "WHERE id = $1",
+        "RETURNING id::integer, uuid::text",
+    ] {
+        assert!(clone.contains(required), "clone SQL missing {required}");
+    }
+
+    let params = report_config_clone_params_sql();
+    assert!(params.contains("INSERT INTO report_config_params"));
+    assert!(params.contains("SELECT $2, name, value"));
+    assert!(params.contains("WHERE report_config = $1"));
+
+    let tags = report_config_clone_tags_sql();
+    assert!(tags.contains("INSERT INTO tag_resources"));
+    assert!(tags.contains("resource_type = 'report_config'"));
+    assert!(tags.contains("resource_location = 0"));
+    assert!(tags.contains("SELECT tag, resource_type, $2, $3, resource_location"));
 }

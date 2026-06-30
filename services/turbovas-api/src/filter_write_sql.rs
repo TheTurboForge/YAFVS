@@ -6,6 +6,65 @@ pub(crate) fn filter_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn filter_live_alert_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM alerts
+      WHERE filter = $1;"
+}
+
+pub(crate) fn filter_alert_condition_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM alert_condition_data
+      WHERE name = 'filter_id'
+        AND data = (SELECT uuid FROM filters WHERE id = $1)
+        AND (SELECT condition IN (4, 5) FROM alerts WHERE id = alert);"
+}
+
+pub(crate) fn filter_settings_cleanup_sql() -> &'static str {
+    "DELETE FROM settings
+      WHERE name ILIKE '% Filter'
+        AND value = $1;"
+}
+
+pub(crate) fn filter_trash_insert_sql() -> &'static str {
+    "INSERT INTO filters_trash
+        (uuid, owner, name, comment, type, term, creation_time, modification_time)
+     SELECT uuid, owner, name, comment, type, term, creation_time, modification_time
+       FROM filters
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn filter_trash_alert_relink_sql() -> &'static str {
+    "UPDATE alerts_trash
+        SET filter = $1,
+            filter_location = 1
+      WHERE filter = $2
+        AND filter_location = 0;"
+}
+
+pub(crate) fn filter_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 1,
+            resource = $1
+      WHERE resource_type = 'filter'
+        AND resource = $2
+        AND resource_location = 0;"
+}
+
+pub(crate) fn filter_trash_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources_trash
+        SET resource_location = 1,
+            resource = $1
+      WHERE resource_type = 'filter'
+        AND resource = $2
+        AND resource_location = 0;"
+}
+
+pub(crate) fn filter_delete_metadata_sql() -> &'static str {
+    "DELETE FROM filters WHERE id = $1;"
+}
+
 pub(crate) fn filter_write_state_sql() -> &'static str {
     "SELECT id::integer
        FROM filters

@@ -162,6 +162,47 @@ fn filter_patch_plan_adds_alert_guard_only_for_type_changes() {
 }
 
 #[test]
+fn filter_delete_sql_guards_alerts_cleans_settings_and_moves_trash_links() {
+    assert!(filter_live_alert_count_sql().contains("FROM alerts"));
+    assert!(filter_live_alert_count_sql().contains("WHERE filter = $1"));
+
+    let condition_guard = filter_alert_condition_count_sql();
+    assert!(condition_guard.contains("FROM alert_condition_data"));
+    assert!(condition_guard.contains("name = 'filter_id'"));
+    assert!(condition_guard.contains("condition IN (4, 5)"));
+
+    let settings_cleanup = filter_settings_cleanup_sql();
+    assert!(settings_cleanup.contains("DELETE FROM settings"));
+    assert!(settings_cleanup.contains("name ILIKE '% Filter'"));
+    assert!(settings_cleanup.contains("value = $1"));
+
+    let trash_insert = filter_trash_insert_sql();
+    assert!(trash_insert.contains("INSERT INTO filters_trash"));
+    assert!(trash_insert.contains("FROM filters"));
+    assert!(trash_insert.contains("RETURNING id::integer, uuid::text"));
+
+    let alert_relink = filter_trash_alert_relink_sql();
+    assert!(alert_relink.contains("UPDATE alerts_trash"));
+    assert!(alert_relink.contains("filter_location = 1"));
+    assert!(alert_relink.contains("WHERE filter = $2"));
+
+    for sql in [
+        filter_tag_locations_to_trash_sql(),
+        filter_trash_tag_locations_to_trash_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'filter'"));
+        assert!(sql.contains("resource_location = 1"));
+        assert!(sql.contains("resource = $1"));
+        assert!(sql.contains("resource = $2"));
+    }
+
+    assert_eq!(
+        filter_delete_metadata_sql(),
+        "DELETE FROM filters WHERE id = $1;"
+    );
+}
+
+#[test]
 fn filter_delete_plan_keeps_trash_and_side_effects_explicit() {
     assert_eq!(
         filter_delete_transaction_plan().steps,

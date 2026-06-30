@@ -535,6 +535,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "saved-filter-metadata-detail-read",
         "saved-filter-metadata-list-read",
         "saved-filter-metadata-modify",
+        "saved-filter-trash-move",
         "scan-config-family-summary-read",
         "scan-config-metadata-detail-info-tags-and-task-backlink-read",
         "scan-config-metadata-list-read",
@@ -591,7 +592,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "result-tags-exports-and-actions",
         "result-exports-and-actions",
         "retention-mutations",
-        "saved-filter-term-type-create-delete-trash-alert-linkage",
+        "saved-filter-term-type-create-restore-hard-delete-alert-linkage",
         "scanner-control-credentials-writes-and-deletes",
         "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "scan-config-preferences-export-import-writes-and-deletes",
@@ -673,6 +674,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
     ("patch", "/filters/{filter_id}"): "direct-write",
+    ("delete", "/filters/{filter_id}"): "direct-write",
     ("post", "/tags"): "direct-write",
     ("patch", "/tags/{tag_id}"): "direct-write",
     ("delete", "/tags/{tag_id}"): "direct-write",
@@ -695,23 +697,32 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "feed-status-read",
     },
     ("get", "/filters"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-delete-trash-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-restore-hard-delete-alert-linkage",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-list-read",
     },
     ("get", "/filters/{filter_id}"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-delete-trash-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-restore-hard-delete-alert-linkage",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-detail-read",
     },
     ("patch", "/filters/{filter_id}"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-delete-trash-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-restore-hard-delete-alert-linkage",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
         "x-turbovas-replaces": "saved-filter-metadata-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
+    },
+    ("delete", "/filters/{filter_id}"): {
+        "x-turbovas-inherited-still-owns": "saved-filter-term-type-create-restore-hard-delete-alert-linkage",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "saved-filter-trash-move",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-delete",
     },
     ("get", "/cert-bund-advisories"): {
         "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
@@ -6461,6 +6472,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native saved-filter name/comment metadata modification"],
             },
             {
+                "method": "delete",
+                "endpoint": "/api/v1/filters/{filter_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native saved-filter live-to-trash move"],
+            },
+            {
                 "endpoint": "/api/v1/feeds",
                 "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "replacement_candidates": ["read-only feed inventory automation", "native-api-request helper"],
@@ -11699,6 +11717,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-write-disabled",
             "native-api-direct.report-config-patch-disabled",
             "native-api-direct.filter-patch-disabled",
+            "native-api-direct.filter-delete-disabled",
             "native-api-direct.port-list-patch-disabled",
             "native-api-direct.port-list-delete-disabled",
             "native-api-direct.schedule-patch-disabled",
@@ -11730,6 +11749,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.filter-fixture",
             "native-api-direct.filter-write-update",
             "native-api-direct.filter-write-restore",
+            "native-api-direct.filter-write-delete",
             "native-api-direct.filter-write-cleanup",
             "native-api-direct.filter-write-post-cleanup",
             "native-api-direct.schedule-fixture",
@@ -12138,8 +12158,13 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             filter_restore_ok = filter_restore.returncode == 0 and filter_restore_status == 200 and isinstance(filter_restore_json, dict) and filter_restore_json.get("id") == filter_id and filter_restore_json.get("comment") == filter_original_comment
             findings.append(native_api_probe_finding("pass" if filter_restore_ok else "fail", "native-api-direct.filter-write-restore", "Direct write-control restored the saved-filter comment after reversible metadata patching." if filter_restore_ok else "Direct write-control failed to restore the saved-filter comment after metadata patching.", filter_restore, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="PATCH", body=filter_restore_body, extra_headers=content_type), filter_restore_json, {"http_status": filter_restore_status, "filter_id": filter_id, **summarize_native_api_response(filter_restore_json)}))
 
+            filter_delete = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="DELETE")
+            filter_delete_json, filter_delete_status = parse_json_output_with_http_status(filter_delete)
+            filter_delete_ok = filter_delete.returncode == 0 and filter_delete_status == 204
+            findings.append(native_api_probe_finding("pass" if filter_delete_ok else "fail", "native-api-direct.filter-write-delete", "Direct write-control moved the temporary saved-filter fixture to trash." if filter_delete_ok else "Direct write-control failed to move the temporary saved-filter fixture to trash.", filter_delete, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env, method="DELETE"), filter_delete_json, {"http_status": filter_delete_status, "filter_id": filter_id, **summarize_native_api_response(filter_delete_json)}))
+
             filter_cleanup_sql = (
-                "WITH deleted_filter AS (DELETE FROM filters "
+                "WITH deleted_filter AS (DELETE FROM filters_trash "
                 f"WHERE uuid = {sql_literal(filter_id)} AND name = {sql_literal(filter_name)} RETURNING id) "
                 "SELECT count(*) FROM deleted_filter;"
             )
@@ -12602,6 +12627,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_filter_patch_json, disabled_filter_patch_status = parse_json_output_with_http_status(disabled_filter_patch)
     disabled_filter_patch_ok = disabled_filter_patch.returncode == 0 and disabled_filter_patch_status == 405 and isinstance(disabled_filter_patch_json, dict) and disabled_filter_patch_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_filter_patch_ok else "fail", "native-api-direct.filter-patch-disabled", "Direct native API rejects saved-filter patches while direct write-control is disabled." if disabled_filter_patch_ok else "Direct native API did not reject a saved-filter patch while direct write-control is disabled.", disabled_filter_patch, direct_native_api_display_command("/api/v1/filters/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_filter_patch_json, {"http_status": disabled_filter_patch_status, **summarize_native_api_response(disabled_filter_patch_json)}))
+
+    disabled_filter_delete = direct_native_api_curl(
+        repo_root,
+        "/api/v1/filters/00000000-0000-0000-0000-000000000000",
+        token=token,
+        env=env,
+        method="DELETE",
+    )
+    disabled_filter_delete_json, disabled_filter_delete_status = parse_json_output_with_http_status(disabled_filter_delete)
+    disabled_filter_delete_ok = disabled_filter_delete.returncode == 0 and disabled_filter_delete_status == 405 and isinstance(disabled_filter_delete_json, dict) and disabled_filter_delete_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_filter_delete_ok else "fail", "native-api-direct.filter-delete-disabled", "Direct native API rejects saved-filter deletes while direct write-control is disabled." if disabled_filter_delete_ok else "Direct native API did not reject a saved-filter delete while direct write-control is disabled.", disabled_filter_delete, direct_native_api_display_command("/api/v1/filters/00000000-0000-0000-0000-000000000000", token=token, env=env, method="DELETE"), disabled_filter_delete_json, {"http_status": disabled_filter_delete_status, **summarize_native_api_response(disabled_filter_delete_json)}))
 
     disabled_port_list_patch = direct_native_api_curl(
         repo_root,

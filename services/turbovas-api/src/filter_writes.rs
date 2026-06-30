@@ -5,6 +5,7 @@
 use axum::{
     Json,
     extract::{Extension, Path, State},
+    http::StatusCode,
 };
 use tokio_postgres::{Transaction, types::ToSql};
 
@@ -27,8 +28,42 @@ pub(crate) struct FilterWriteRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FilterTrashWriteRecord {
+    internal_id: i32,
+    uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct FilterWriteState {
     internal_id: i32,
+}
+
+pub(crate) async fn delete_filter(
+    State(state): State<AppState>,
+    Path(filter_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_filter_write_operator(operator)?;
+    let filter_uuid = parse_uuid(&filter_id)?.to_string();
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "begin delete filter transaction"))?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE filters, filters_trash, settings, alerts, alerts_trash, alert_condition_data, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_filter_write_db_error(error, "lock filter tables for delete"))?;
+    let state = load_filter_write_state(&tx, &filter_uuid).await?;
+    ensure_filter_not_in_use_by_alerts(&tx, state.internal_id).await?;
+    execute_filter_trash_transaction(&tx, state.internal_id, &filter_uuid).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "commit delete filter transaction"))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
@@ -37,6 +72,79 @@ pub(crate) enum FilterWriteOperation {
     Create,
     Patch,
     Delete,
+}
+
+pub(crate) async fn execute_filter_trash_transaction(
+    tx: &Transaction<'_>,
+    filter_internal_id: i32,
+    filter_uuid: &str,
+) -> Result<FilterTrashWriteRecord, ApiError> {
+    execute_filter_write_sql(
+        tx,
+        filter_settings_cleanup_sql(),
+        &[&filter_uuid],
+        "delete filter settings",
+    )
+    .await?;
+    let record = query_filter_trash_write_record(
+        tx,
+        filter_trash_insert_sql(),
+        &[&filter_internal_id],
+        "move filter metadata to trash",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_trash_alert_relink_sql(),
+        &[&record.internal_id, &filter_internal_id],
+        "relink trash alerts to trashed filter",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_tag_locations_to_trash_sql(),
+        &[&record.internal_id, &filter_internal_id],
+        "move live filter tag links to trash",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_trash_tag_locations_to_trash_sql(),
+        &[&record.internal_id, &filter_internal_id],
+        "move trashed tag links to filter trash id",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_delete_metadata_sql(),
+        &[&filter_internal_id],
+        "delete live filter after trash move",
+    )
+    .await?;
+    Ok(record)
+}
+
+async fn ensure_filter_not_in_use_by_alerts(
+    tx: &Transaction<'_>,
+    filter_internal_id: i32,
+) -> Result<(), ApiError> {
+    let direct_count: i64 = tx
+        .query_one(filter_live_alert_count_sql(), &[&filter_internal_id])
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "check direct alert filter usage"))?
+        .get(0);
+    let condition_count: i64 = tx
+        .query_one(filter_alert_condition_count_sql(), &[&filter_internal_id])
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "check alert condition filter usage"))?
+        .get(0);
+    if direct_count == 0 && condition_count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "filter is still referenced by an alert".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -54,6 +162,33 @@ pub(crate) enum FilterWriteStep {
     MoveFilterToTrash,
     RelocatePermissionsAndTags,
     CleanupFilterSettings,
+}
+
+async fn query_filter_trash_write_record(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<FilterTrashWriteRecord, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_filter_write_db_error(error, action))?
+        .map(|row| FilterTrashWriteRecord {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
+async fn execute_filter_write_sql(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<u64, ApiError> {
+    tx.execute(sql, params)
+        .await
+        .map_err(|error| map_filter_write_db_error(error, action))
 }
 
 #[cfg(test)]

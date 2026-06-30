@@ -8,6 +8,8 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_FILTERS: &str = include_str!("../../../components/gvmd/src/manage_sql_filters.c");
+const MANAGE_SQL_PERMISSIONS: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_permissions.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -18,6 +20,27 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn inherited_permission_location_helpers_are_currently_noops() {
+    let set_locations = inherited_function(MANAGE_SQL_PERMISSIONS, "permissions_set_locations");
+    for required in ["(void) type", "(void) old", "(void) new", "(void) to"] {
+        assert!(
+            set_locations.contains(required),
+            "permissions_set_locations should remain characterized as no-op until implemented: missing {required}"
+        );
+    }
+    assert!(!set_locations.contains("UPDATE permissions"));
+
+    let set_orphans = inherited_function(MANAGE_SQL_PERMISSIONS, "permissions_set_orphans");
+    for required in ["(void) type", "(void) resource", "(void) location"] {
+        assert!(
+            set_orphans.contains(required),
+            "permissions_set_orphans should remain characterized as no-op until implemented: missing {required}"
+        );
+    }
+    assert!(!set_orphans.contains("UPDATE permissions"));
 }
 
 fn openapi_path_block(path: &str) -> String {
@@ -160,7 +183,7 @@ fn inherited_delete_filter_is_trash_permissions_tags_and_alert_linked() {
 }
 
 #[test]
-fn native_direct_api_allows_only_filter_metadata_patch_under_write_control() {
+fn native_direct_api_allows_only_filter_metadata_patch_and_trash_move_under_write_control() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/filters",
@@ -187,7 +210,17 @@ fn native_direct_api_allows_only_filter_metadata_patch_under_write_control() {
         "/api/v1/filters/12345678-1234-1234-1234-123456789abc",
         true,
     ));
-    for method in [Method::POST, Method::DELETE, Method::PUT] {
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc",
+        true,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc",
+        false,
+    ));
+    for method in [Method::POST, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(
                 &method,
@@ -200,24 +233,25 @@ fn native_direct_api_allows_only_filter_metadata_patch_under_write_control() {
 }
 
 #[test]
-fn openapi_documents_filter_metadata_patch_boundary() {
+fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     let list = openapi_path_block("/filters");
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(list.contains(
-        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-delete-trash-alert-linkage"
+        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-restore-hard-delete-alert-linkage"
     ));
 
     let detail = openapi_path_block("/filters/{filter_id}");
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
-    assert!(!detail.contains("delete:"));
+    assert!(detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
     assert!(detail.contains("x-turbovas-replaces: saved-filter-metadata-modify"));
+    assert!(detail.contains("x-turbovas-replaces: saved-filter-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-delete-trash-alert-linkage"
+        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-restore-hard-delete-alert-linkage"
     ));
 }

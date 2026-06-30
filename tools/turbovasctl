@@ -7855,6 +7855,49 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
     return result
 
 
+def command_native_tooling_removal_review(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    summary = summarize_native_tooling(native_tooling_inventory(repo_root), repo_root)
+    review = summary.get("candidate_for_removal_review", {})
+    buckets = review.get("buckets", {}) if isinstance(review.get("buckets"), dict) else {}
+    bucket_counts = {
+        name: bucket.get("count", 0)
+        for name, bucket in sorted(buckets.items())
+        if isinstance(bucket, dict)
+    }
+    details: dict[str, Any] = {
+        "total": review.get("total", 0),
+        "safe_removal_count": review.get("safe_removal_count", 0),
+        "blocked_or_review_count": review.get("blocked_or_review_count", 0),
+        "bucket_counts": bucket_counts,
+    }
+    if not status_only:
+        details["buckets"] = [
+            {
+                "name": name,
+                "count": bucket.get("count", 0),
+                "paths": list(bucket.get("paths", [])),
+            }
+            for name, bucket in sorted(buckets.items())
+            if isinstance(bucket, dict)
+        ]
+    findings = [
+        finding(
+            "pass",
+            "native-tooling-removal-review.summary",
+            "Native tooling removal-review blockers summarized without dumping the full native-tooling inventory.",
+            details=details,
+        )
+    ]
+    result = make_result(
+        "native-tooling-removal-review",
+        repo_root,
+        "Inherited gvm-tools/python-gvm removal-review blockers summarized.",
+        findings,
+    )
+    result["details"] = details
+    return result
+
+
 def rust_migration_tool_state(repo_root: Path) -> list[dict[str, Any]]:
     states: list[dict[str, Any]] = []
     env = build_env(repo_root)
@@ -14952,6 +14995,8 @@ def build_parser() -> argparse.ArgumentParser:
     native_tooling_state.add_argument("--compact", action="store_true", help="omit full item and endpoint inventories, but keep review detail such as removal candidates")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
     native_tooling_state.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
+    native_tooling_removal_review = subparsers.add_parser("native-tooling-removal-review", parents=[common], help="summarize blocked inherited tooling removal candidates without full inventory output")
+    native_tooling_removal_review.add_argument("--status-only", action="store_true", help="emit removal-review counts without path lists")
     migration_matrix = subparsers.add_parser("native-api-migration-matrix", parents=[common], help="show native API migration metadata by endpoint")
     migration_matrix.add_argument("--compact", action="store_true", help="alias for --status-only; emit compact planning details and only non-pass findings")
     migration_matrix.add_argument("--status-only", action="store_true", help="emit summary/contract details and only non-pass findings for chat-safe API planning")
@@ -15098,6 +15143,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "native-tooling-state":
         result = command_native_tooling_state(repo_root, compact=args.compact, summary_only=args.summary, status_only=args.status_only)
+    elif args.command == "native-tooling-removal-review":
+        result = command_native_tooling_removal_review(repo_root, status_only=args.status_only)
     elif args.command == "native-api-migration-matrix":
         result = command_native_api_migration_matrix(repo_root, status_only=args.status_only or args.compact, focus=args.focus)
     elif args.command == "native-api-client-contract":

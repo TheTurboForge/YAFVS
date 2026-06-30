@@ -3965,6 +3965,26 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("direct feed", boundary)
         self.assertIn("inventory access", boundary)
 
+    def test_native_tooling_removal_review_summarizes_blockers_without_full_inventory(self):
+        root = Path(__file__).resolve().parents[2]
+        result = turbovasctl.command_native_tooling_removal_review(root)
+        status_only = turbovasctl.command_native_tooling_removal_review(root, status_only=True)
+
+        self.assertEqual(result["status"], "pass")
+        details = result["details"]
+        self.assertEqual(details["safe_removal_count"], 0)
+        self.assertGreater(details["blocked_or_review_count"], 0)
+        self.assertIn("write_or_mutation", details["bucket_counts"])
+        write_bucket = next(bucket for bucket in details["buckets"] if bucket["name"] == "write_or_mutation")
+        self.assertGreater(write_bucket["count"], 0)
+        self.assertIn("components/gvm-tools/scripts/create-tags-from-csv.gmp.py", write_bucket["paths"])
+        self.assertNotIn("items", details)
+        self.assertNotIn("implemented_native_endpoints", details)
+
+        status_details = status_only["details"]
+        self.assertIn("bucket_counts", status_details)
+        self.assertNotIn("buckets", status_details)
+
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")

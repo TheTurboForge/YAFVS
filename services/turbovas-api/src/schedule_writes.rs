@@ -11,7 +11,8 @@ use tokio_postgres::{Row, Transaction, types::ToSql};
 
 use crate::{
     app_state::AppState, auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid,
-    schedule_payloads::ScheduleAssetDetail, schedules::load_schedule_asset_detail,
+    schedule_payloads::ScheduleAssetDetail, schedule_write_sql::*,
+    schedules::load_schedule_asset_detail,
 };
 
 const MAX_SCHEDULE_TEXT_BYTES: usize = 4096;
@@ -251,32 +252,6 @@ fn schedule_write_record_from_row(row: Row) -> ScheduleWriteRecord {
 fn map_schedule_write_db_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
     tracing::warn!(%error, action, "schedule write database operation failed");
     ApiError::Database
-}
-
-pub(crate) fn schedule_write_operator_owner_sql() -> &'static str {
-    "SELECT id::integer FROM users WHERE uuid = $1;"
-}
-
-pub(crate) fn schedule_write_state_sql() -> &'static str {
-    "SELECT id::integer
-       FROM schedules
-      WHERE uuid = $1;"
-}
-
-pub(crate) fn schedule_unique_name_sql() -> &'static str {
-    "SELECT (
-        (SELECT count(*) FROM schedules WHERE name = $1 AND id != $2)
-        + (SELECT count(*) FROM schedules_trash WHERE name = $1)
-      )::bigint;"
-}
-
-pub(crate) fn schedule_update_metadata_sql() -> &'static str {
-    "UPDATE schedules
-        SET name = coalesce($2, name),
-            comment = coalesce($3, comment),
-            modification_time = m_now()
-      WHERE id = $1
-      RETURNING uuid::text;"
 }
 
 #[cfg(test)]

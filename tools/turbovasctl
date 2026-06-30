@@ -7097,6 +7097,33 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "owner": "services/turbovas-api/src/port_list_write_sql.rs",
+        "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
+        "symbols": (
+            "pub(crate) fn port_list_write_state_sql",
+            "pub(crate) fn port_list_unique_name_sql",
+            "pub(crate) fn port_list_update_metadata_sql",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/schedule_write_sql.rs",
+        "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
+        "symbols": (
+            "pub(crate) fn schedule_write_state_sql",
+            "pub(crate) fn schedule_unique_name_sql",
+            "pub(crate) fn schedule_update_metadata_sql",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/filter_write_sql.rs",
+        "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
+        "symbols": (
+            "pub(crate) fn filter_write_state_sql",
+            "pub(crate) fn filter_unique_name_sql",
+            "pub(crate) fn filter_update_metadata_sql",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/tag_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/tag_writes.rs",),
         "symbols": (

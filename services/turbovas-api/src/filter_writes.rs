@@ -13,6 +13,7 @@ use crate::{
     auth::DirectApiOperator,
     errors::ApiError,
     filter_payloads::FilterAssetItem,
+    filter_write_sql::*,
     filter_write_validation::{
         FilterPatchRequest, ValidatedFilterPatch, validate_filter_patch_request,
     },
@@ -177,32 +178,6 @@ async fn query_filter_write_record(
 fn map_filter_write_db_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
     tracing::warn!(%error, action, "filter write database operation failed");
     ApiError::Database
-}
-
-pub(crate) fn filter_write_operator_owner_sql() -> &'static str {
-    "SELECT id::integer FROM users WHERE uuid = $1;"
-}
-
-pub(crate) fn filter_write_state_sql() -> &'static str {
-    "SELECT id::integer
-       FROM filters
-      WHERE uuid = $1;"
-}
-
-pub(crate) fn filter_unique_name_sql() -> &'static str {
-    "SELECT (
-        (SELECT count(*) FROM filters WHERE name = $1 AND id != $2)
-        + (SELECT count(*) FROM filters_trash WHERE name = $1)
-      )::bigint;"
-}
-
-pub(crate) fn filter_update_metadata_sql() -> &'static str {
-    "UPDATE filters
-        SET name = coalesce($2, name),
-            comment = coalesce($3, comment),
-            modification_time = m_now()
-      WHERE id = $1
-      RETURNING uuid::text;"
 }
 
 #[cfg(test)]

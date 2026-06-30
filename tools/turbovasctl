@@ -11630,6 +11630,8 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.schedule-fixture",
             "native-api-direct.schedule-write-update",
             "native-api-direct.schedule-write-restore",
+            "native-api-direct.schedule-write-cleanup",
+            "native-api-direct.schedule-write-post-cleanup",
             "native-api-direct.port-list-predefined-patch-denied",
             "native-api-direct.tag-write-update",
             "native-api-direct.tag-resource-fixture",
@@ -11739,6 +11741,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     predefined_port_list_id: str | None = None
     schedule_id: str | None = None
     schedule_original_comment = ""
+    schedule_name = f"turbovas-direct-write-smoke-schedule-{int(time.time())}-{os.getpid()}"
+    schedule_icalendar = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20300101T000000Z\nDURATION:PT1H\nRRULE:FREQ=DAILY\nEND:VEVENT\nEND:VCALENDAR"
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
@@ -12027,14 +12031,24 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             filter_post_cleanup_ok = filter_post_cleanup.returncode == 0 and filter_post_cleanup_status == 404 and isinstance(filter_post_cleanup_json, dict) and filter_post_cleanup_json.get("error", {}).get("code") == "not_found"
             findings.append(native_api_probe_finding("pass" if filter_post_cleanup_ok else "fail", "native-api-direct.filter-write-post-cleanup", "Direct API confirms the temporary saved-filter fixture is gone after cleanup." if filter_post_cleanup_ok else "Direct API did not confirm the temporary saved-filter fixture was removed.", filter_post_cleanup, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env), filter_post_cleanup_json, {"http_status": filter_post_cleanup_status, "filter_id": filter_id, **summarize_native_api_response(filter_post_cleanup_json)}))
 
-        schedule_fixture = direct_native_api_curl(repo_root, "/api/v1/schedules?page_size=1", token=token, env=env)
-        schedule_fixture_json, schedule_fixture_status = parse_json_output_with_http_status(schedule_fixture)
-        schedule_items = schedule_fixture_json.get("items", []) if isinstance(schedule_fixture_json, dict) else []
-        if schedule_items and isinstance(schedule_items[0], dict) and isinstance(schedule_items[0].get("id"), str):
-            schedule_id = schedule_items[0]["id"]
-            schedule_original_comment = schedule_items[0].get("comment") if isinstance(schedule_items[0].get("comment"), str) else ""
-        schedule_fixture_ok = schedule_fixture.returncode == 0 and schedule_fixture_status == 200 and bool(schedule_id)
-        findings.append(native_api_probe_finding("pass" if schedule_fixture_ok else "warn", "native-api-direct.schedule-fixture", "Direct write-control smoke found a schedule fixture for reversible metadata patching." if schedule_fixture_ok else "Direct write-control smoke could not find a schedule fixture for reversible metadata patching.", schedule_fixture, direct_native_api_display_command("/api/v1/schedules?page_size=1", token=token, env=env), schedule_fixture_json, {"http_status": schedule_fixture_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_fixture_json)}))
+        schedule_fixture_sql = (
+            "WITH inserted_schedule AS (INSERT INTO schedules "
+            "(uuid, owner, name, comment, first_time, period, period_months, byday, duration, timezone, icalendar, creation_time, modification_time) "
+            "VALUES (make_uuid(), "
+            f"(SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid or '')}), "
+            f"{sql_literal(schedule_name)}, {sql_literal(schedule_original_comment)}, "
+            "1893456000, 86400, 0, 0, 3600, 'UTC', "
+            f"{sql_literal(schedule_icalendar)}, m_now(), m_now()) "
+            "RETURNING uuid::text) SELECT uuid FROM inserted_schedule;"
+        )
+        schedule_fixture = psql(repo_root, schedule_fixture_sql)
+        schedule_id = psql_value(schedule_fixture) or None
+        schedule_fixture_ok = schedule_fixture.returncode == 0 and bool(schedule_id)
+        schedule_fixture_finding = process_step_finding("pass" if schedule_fixture_ok else "fail", "native-api-direct.schedule-fixture", "Direct write-control smoke created a temporary unlinked schedule fixture for reversible metadata patching." if schedule_fixture_ok else "Direct write-control smoke failed to create a temporary unlinked schedule fixture for reversible metadata patching.", schedule_fixture, ["psql", "fixed-schedule-smoke-fixture"])
+        schedule_fixture_details = schedule_fixture_finding.setdefault("details", {})
+        if isinstance(schedule_fixture_details, dict):
+            schedule_fixture_details.update({"schedule_id": schedule_id, "schedule_name": schedule_name})
+        findings.append(schedule_fixture_finding)
 
         if schedule_id:
             schedule_patch_comment = "TurboVAS direct write smoke updated schedule comment"
@@ -12055,6 +12069,25 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             schedule_restore_json, schedule_restore_status = parse_json_output_with_http_status(schedule_restore)
             schedule_restore_ok = schedule_restore.returncode == 0 and schedule_restore_status == 200 and isinstance(schedule_restore_json, dict) and schedule_restore_json.get("id") == schedule_id and schedule_restore_json.get("comment") == schedule_original_comment
             findings.append(native_api_probe_finding("pass" if schedule_restore_ok else "fail", "native-api-direct.schedule-write-restore", "Direct write-control restored the schedule comment after reversible metadata patching." if schedule_restore_ok else "Direct write-control failed to restore the schedule comment after metadata patching.", schedule_restore, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env, method="PATCH", body=schedule_restore_body, extra_headers=content_type), schedule_restore_json, {"http_status": schedule_restore_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_restore_json)}))
+
+            schedule_cleanup_sql = (
+                "WITH deleted_schedule AS (DELETE FROM schedules "
+                f"WHERE uuid = {sql_literal(schedule_id)} AND name = {sql_literal(schedule_name)} RETURNING id) "
+                "SELECT count(*) FROM deleted_schedule;"
+            )
+            schedule_cleanup = psql(repo_root, schedule_cleanup_sql)
+            schedule_cleanup_deleted = psql_value(schedule_cleanup)
+            schedule_cleanup_ok = schedule_cleanup.returncode == 0 and schedule_cleanup_deleted == "1"
+            schedule_cleanup_finding = process_step_finding("pass" if schedule_cleanup_ok else "fail", "native-api-direct.schedule-write-cleanup", "Direct write-control smoke removed the temporary schedule fixture through fixed cleanup SQL." if schedule_cleanup_ok else "Direct write-control smoke failed to clean up the temporary schedule fixture.", schedule_cleanup, ["psql", "fixed-schedule-smoke-cleanup"])
+            schedule_cleanup_details = schedule_cleanup_finding.setdefault("details", {})
+            if isinstance(schedule_cleanup_details, dict):
+                schedule_cleanup_details.update({"schedule_id": schedule_id, "schedule_name": schedule_name, "deleted_count": schedule_cleanup_deleted})
+            findings.append(schedule_cleanup_finding)
+
+            schedule_post_cleanup = direct_native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env)
+            schedule_post_cleanup_json, schedule_post_cleanup_status = parse_json_output_with_http_status(schedule_post_cleanup)
+            schedule_post_cleanup_ok = schedule_post_cleanup.returncode == 0 and schedule_post_cleanup_status == 404 and isinstance(schedule_post_cleanup_json, dict) and schedule_post_cleanup_json.get("error", {}).get("code") == "not_found"
+            findings.append(native_api_probe_finding("pass" if schedule_post_cleanup_ok else "fail", "native-api-direct.schedule-write-post-cleanup", "Direct API confirms the temporary schedule fixture is gone after cleanup." if schedule_post_cleanup_ok else "Direct API did not confirm the temporary schedule fixture was removed.", schedule_post_cleanup, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env), schedule_post_cleanup_json, {"http_status": schedule_post_cleanup_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_post_cleanup_json)}))
 
         port_list_fixture = direct_native_api_curl(repo_root, "/api/v1/port-lists?page_size=1", token=token, env=env)
         port_list_fixture_json, port_list_fixture_status = parse_json_output_with_http_status(port_list_fixture)

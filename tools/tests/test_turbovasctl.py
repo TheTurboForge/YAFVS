@@ -6030,10 +6030,14 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess(command, 0, report_format_uuid + "\n", "")
                 if "INSERT INTO filters" in command_text:
                     return turbovasctl.subprocess.CompletedProcess(command, 0, filter_uuid + "\n", "")
+                if "INSERT INTO schedules" in command_text:
+                    return turbovasctl.subprocess.CompletedProcess(command, 0, schedule_uuid + "\n", "")
                 if any(part == "psql" for part in command):
                     if "DELETE FROM report_configs" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "2\n", "")
                     if "DELETE FROM report_formats" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
+                    if "DELETE FROM schedules" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                     return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                 return turbovasctl.subprocess.CompletedProcess(command, 0, "", "")
@@ -6082,6 +6086,8 @@ db2:keys=5,expires=0,avg_ttl=0
                 if method == "PATCH" and path.startswith("/api/v1/schedules/"):
                     payload = json.loads(body)
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": payload["comment"]}) + "\n200", "")
+                if method == "GET" and path.startswith("/api/v1/schedules/"):
+                    return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "GET" and path == "/api/v1/port-lists?page_size=1":
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": port_list_uuid, "name": "All IANA assigned TCP", "predefined": True}], "page": {"total": 1}}) + "\n200", "")
                 if method == "PATCH" and path.startswith("/api/v1/port-lists/"):
@@ -6146,6 +6152,8 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.schedule-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-restore"], "pass")
+        self.assertEqual(checks["native-api-direct.schedule-write-cleanup"], "pass")
+        self.assertEqual(checks["native-api-direct.schedule-write-post-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-predefined-patch-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-add"], "pass")
@@ -6158,7 +6166,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.tag-write-delete"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-post-delete"], "pass")
         self.assertEqual(checks["native-api-direct.write-control-restore"], "pass")
-        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "PATCH", "DELETE", "DELETE", "GET", "POST", "POST", "PATCH", "POST", "GET", "PATCH", "PATCH", "GET", "GET", "PATCH", "PATCH", "GET", "PATCH", "GET", "POST", "GET", "POST", "GET", "PATCH", "PATCH", "DELETE", "DELETE", "GET"])
+        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "PATCH", "DELETE", "DELETE", "GET", "POST", "POST", "PATCH", "POST", "GET", "PATCH", "PATCH", "GET", "PATCH", "PATCH", "GET", "GET", "PATCH", "GET", "POST", "GET", "POST", "GET", "PATCH", "PATCH", "DELETE", "DELETE", "GET"])
         rendered = json.dumps(result, sort_keys=True)
         self.assertNotIn(token, rendered)
         self.assertTrue(any(env.get(turbovasctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) == "1" for env in envs))

@@ -174,7 +174,8 @@ pub(crate) fn tag_resource_type_is_supported(resource_type: &str) -> bool {
 pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -> bool {
     matches!(
         resource_type,
-        "config"
+        "alert"
+            | "config"
             | "cert_bund_adv"
             | "cpe"
             | "cve"
@@ -381,7 +382,13 @@ mod tests {
         assert!(tag_resource_direct_write_id_must_be_uuid("target"));
         assert!(tag_resource_direct_write_id_must_be_uuid("task"));
 
-        assert!(tag_resource_active_lookup_sql("alert").is_err());
+        let alert_sql = tag_resource_active_lookup_sql("alert").unwrap();
+        assert!(alert_sql.contains("FROM alerts r"));
+        assert!(alert_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(tag_resource_direct_write_id_must_be_uuid("alert"));
+        assert!(!alert_sql.contains("alert_method_data"));
+        assert!(!alert_sql.contains("alert_event_data"));
+        assert!(!alert_sql.contains("alert_condition_data"));
         assert!(tag_resource_active_lookup_sql("credential").is_err());
     }
 

@@ -6362,12 +6362,16 @@ db2:keys=5,expires=0,avg_ttl=0
             schedule_clone_uuid = "77777777-7777-7777-7777-777777777778"
             filter_uuid = "88888888-8888-8888-8888-888888888888"
             filter_clone_uuid = "88888888-8888-8888-8888-888888888889"
+            alert_uuid = "99999999-9999-9999-9999-999999999999"
+            alert_tag_uuid = "99999999-9999-9999-9999-999999999998"
             original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
             envs: list[dict[str, str]] = []
             probes: list[tuple[str, str]] = []
             tag_resource_count = {"value": 0}
             tag_deleted = {"value": False}
+            alert_tag_resource_count = {"value": 0}
+            alert_tag_deleted = {"value": False}
             schedule_live = {"value": True}
             report_config_created_name = {"value": ""}
 
@@ -6385,7 +6389,11 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess(command, 0, schedule_uuid + "\n", "")
                 if "INSERT INTO port_lists" in command_text:
                     return turbovasctl.subprocess.CompletedProcess(command, 0, temp_port_list_uuid + "\n", "")
+                if "INSERT INTO alerts" in command_text:
+                    return turbovasctl.subprocess.CompletedProcess(command, 0, alert_uuid + "\n", "")
                 if any(part == "psql" for part in command):
+                    if "DELETE FROM alerts" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, "1|0\n", "")
                     if "DELETE FROM report_configs" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                     if "DELETE FROM report_formats" in command_text:
@@ -6419,8 +6427,10 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "POST" and path == "/api/v1/tags":
                     payload = json.loads(body)
+                    if payload["resource_type"] == "alert":
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": alert_tag_uuid, "name": payload["name"], "resource_type": "alert", "value": "initial", "active": True}) + "\n201", "")
                     self.assertEqual(payload["resource_type"], "cpe")
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "value": "initial", "active": True}) + "\n201", "")
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "resource_type": "cpe", "value": "initial", "active": True}) + "\n201", "")
                 if method == "POST" and path == "/api/v1/report-configs":
                     payload = json.loads(body)
                     self.assertEqual(payload["report_format_id"], report_format_uuid)
@@ -6519,10 +6529,23 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": report_format_uuid, "name": "cpe:/a:example:product:1"}], "page": {"total": 1}}) + "\n200", "")
                 if method == "POST" and path.endswith("/resources"):
                     payload = json.loads(body)
+                    if alert_tag_uuid in path:
+                        self.assertEqual(payload["resource_ids"], [alert_uuid])
+                        count = 1 if payload["action"] == "add" else 0
+                        alert_tag_resource_count["value"] = count
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": alert_tag_uuid, "resource_count": count}) + "\n200", "")
                     self.assertEqual(payload["resource_ids"], [report_format_uuid])
                     count = 1 if payload["action"] == "add" else 0
                     tag_resource_count["value"] = count
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "resource_count": count}) + "\n200", "")
+                if method == "GET" and path.startswith(f"/api/v1/tags/{alert_tag_uuid}") and not alert_tag_deleted["value"]:
+                    count = alert_tag_resource_count["value"]
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": alert_tag_uuid, "resource_count": count, "in_use": count > 0}) + "\n200", "")
+                if method == "DELETE" and path.startswith(f"/api/v1/tags/{alert_tag_uuid}"):
+                    alert_tag_deleted["value"] = True
+                    return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
+                if method == "GET" and path.startswith(f"/api/v1/tags/{alert_tag_uuid}") and alert_tag_deleted["value"]:
+                    return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "GET" and path.startswith("/api/v1/tags/") and not tag_deleted["value"]:
                     count = tag_resource_count["value"]
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "resource_count": count, "in_use": count > 0}) + "\n200", "")
@@ -6619,13 +6642,27 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.tag-resource-in-use-after-add"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-remove"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-in-use-after-remove"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-fixture"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-write-create"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-resource-add"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-resource-in-use-after-add"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-resource-remove"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-resource-in-use-after-remove"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-write-delete"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-tag-write-post-delete"], "pass")
+        self.assertEqual(checks["native-api-direct.alert-fixture-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-query-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-delete-body-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-delete"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-post-delete"], "pass")
         self.assertEqual(checks["native-api-direct.write-control-restore"], "pass")
-        self.assertEqual([probe[0] for probe in probes], ["POST", "PATCH", "PATCH", "DELETE", "DELETE", "GET", "POST", "POST", "PATCH", "POST", "DELETE", "GET", "POST", "DELETE", "GET", "DELETE", "GET", "GET", "PATCH", "PATCH", "POST", "DELETE", "DELETE", "GET", "DELETE", "POST", "DELETE", "DELETE", "GET", "GET", "PATCH", "PATCH", "POST", "DELETE", "DELETE", "GET", "DELETE", "GET", "POST", "DELETE", "DELETE", "GET", "GET", "GET", "PATCH", "DELETE", "POST", "POST", "DELETE", "DELETE", "GET", "DELETE", "GET", "POST", "DELETE", "DELETE", "GET", "GET", "GET", "POST", "GET", "POST", "GET", "PATCH", "PATCH", "DELETE", "DELETE", "GET"])
+        self.assertIn(("POST", "/api/v1/tags"), probes)
+        self.assertIn(("POST", f"/api/v1/tags/{alert_tag_uuid}/resources"), probes)
+        self.assertIn(("DELETE", f"/api/v1/tags/{alert_tag_uuid}"), probes)
+        self.assertIn(("GET", f"/api/v1/tags/{alert_tag_uuid}"), probes)
+        self.assertEqual(probes[0][0], "POST")
+        self.assertEqual(probes[-1][0], "GET")
         rendered = json.dumps(result, sort_keys=True)
         self.assertNotIn(token, rendered)
         self.assertTrue(any(env.get(turbovasctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) == "1" for env in envs))

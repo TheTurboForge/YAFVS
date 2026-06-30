@@ -12133,6 +12133,15 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.tag-resource-in-use-after-add",
             "native-api-direct.tag-resource-remove",
             "native-api-direct.tag-resource-in-use-after-remove",
+            "native-api-direct.alert-fixture",
+            "native-api-direct.alert-tag-write-create",
+            "native-api-direct.alert-tag-resource-add",
+            "native-api-direct.alert-tag-resource-in-use-after-add",
+            "native-api-direct.alert-tag-resource-remove",
+            "native-api-direct.alert-tag-resource-in-use-after-remove",
+            "native-api-direct.alert-tag-write-delete",
+            "native-api-direct.alert-tag-write-post-delete",
+            "native-api-direct.alert-fixture-cleanup",
             "native-api-direct.tag-write-query-denied",
             "native-api-direct.tag-delete-body-denied",
             "native-api-direct.tag-write-delete",
@@ -12225,6 +12234,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     scope_id: str | None = None
     tag_id: str | None = None
     tag_resource_id: str | None = None
+    alert_tag_id: str | None = None
+    alert_resource_id: str | None = None
     filter_id: str | None = None
     filter_clone_id: str | None = None
     filter_original_comment = "TurboVAS direct write smoke original saved-filter comment"
@@ -12250,6 +12261,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
     report_config_clone_name = f"{report_config_name}-clone"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
+    alert_name = f"turbovas-direct-write-smoke-alert-{int(time.time())}-{os.getpid()}"
+    alert_tag_name = f"turbovas-direct-write-smoke-alert-tag-{int(time.time())}-{os.getpid()}"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
         findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.direct-write.config", f"Compose direct write-control config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
@@ -12935,6 +12948,109 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 tag_after_remove_ok = tag_after_remove.returncode == 0 and tag_after_remove_status == 200 and isinstance(tag_after_remove_json, dict) and tag_after_remove_json.get("id") == tag_id and tag_after_remove_json.get("resource_count") == 0 and tag_after_remove_json.get("in_use") is False
                 findings.append(native_api_probe_finding("pass" if tag_after_remove_ok else "fail", "native-api-direct.tag-resource-in-use-after-remove", "Direct API reports the temporary tag not in use after removing its resource." if tag_after_remove_ok else "Direct API did not report the temporary tag not in use after removing its resource.", tag_after_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env), tag_after_remove_json, {"http_status": tag_after_remove_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_after_remove_json)}))
 
+            alert_fixture_sql = (
+                "WITH owner_row AS (SELECT id FROM users "
+                f"WHERE uuid = {sql_literal(admin_uuid or '')}), "
+                "inserted_alert AS (INSERT INTO alerts "
+                "(uuid, owner, name, comment, event, condition, method, active, creation_time, modification_time) "
+                "SELECT make_uuid(), id, "
+                f"{sql_literal(alert_name)}, "
+                "'TurboVAS direct write smoke temporary alert metadata fixture', "
+                "1, 1, 1, 1, m_now(), m_now() "
+                "FROM owner_row RETURNING uuid) "
+                "SELECT uuid FROM inserted_alert;"
+            )
+            alert_fixture = psql(repo_root, alert_fixture_sql)
+            alert_resource_id = psql_value(alert_fixture) or None
+            alert_fixture_ok = alert_fixture.returncode == 0 and bool(alert_resource_id)
+            alert_fixture_finding = process_step_finding("pass" if alert_fixture_ok else "fail", "native-api-direct.alert-fixture", "Direct write-control smoke created a temporary redacted alert metadata fixture." if alert_fixture_ok else "Direct write-control smoke failed to create a temporary alert metadata fixture for tag assignment.", alert_fixture, ["psql", "fixed-alert-smoke-fixture"])
+            alert_fixture_details = alert_fixture_finding.setdefault("details", {})
+            if isinstance(alert_fixture_details, dict):
+                alert_fixture_details.update({"alert_id": alert_resource_id, "alert_name": alert_name})
+            findings.append(alert_fixture_finding)
+
+            if alert_resource_id:
+                alert_tag_create_body = json.dumps(
+                    {
+                        "name": alert_tag_name,
+                        "resource_type": "alert",
+                        "comment": "TurboVAS direct write smoke temporary alert tag",
+                        "value": "initial",
+                        "active": True,
+                    },
+                    separators=(",", ":"),
+                )
+                alert_tag_create = direct_native_api_curl(repo_root, "/api/v1/tags", token=token, env=env, method="POST", body=alert_tag_create_body, extra_headers=content_type)
+                alert_tag_create_json, alert_tag_create_status = parse_json_output_with_http_status(alert_tag_create)
+                alert_tag_id = alert_tag_create_json.get("id") if isinstance(alert_tag_create_json, dict) and isinstance(alert_tag_create_json.get("id"), str) else None
+                alert_tag_create_ok = alert_tag_create.returncode == 0 and alert_tag_create_status == 201 and bool(alert_tag_id) and alert_tag_create_json.get("name") == alert_tag_name and alert_tag_create_json.get("resource_type") == "alert"
+                findings.append(native_api_probe_finding("pass" if alert_tag_create_ok else "fail", "native-api-direct.alert-tag-write-create", "Direct write-control created a temporary alert tag." if alert_tag_create_ok else "Direct write-control failed to create a temporary alert tag.", alert_tag_create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=alert_tag_create_body, extra_headers=content_type), alert_tag_create_json, {"http_status": alert_tag_create_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_create_json)}))
+
+            if alert_tag_id and alert_resource_id:
+                alert_tag_resource_add_body = json.dumps(
+                    {"action": "add", "resource_ids": [alert_resource_id]},
+                    separators=(",", ":"),
+                )
+                alert_tag_resource_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}/resources", token=token, env=env, method="POST", body=alert_tag_resource_add_body, extra_headers=content_type)
+                alert_tag_resource_add_json, alert_tag_resource_add_status = parse_json_output_with_http_status(alert_tag_resource_add)
+                alert_tag_resource_add_ok = alert_tag_resource_add.returncode == 0 and alert_tag_resource_add_status == 200 and isinstance(alert_tag_resource_add_json, dict) and alert_tag_resource_add_json.get("id") == alert_tag_id and alert_tag_resource_add_json.get("resource_count") == 1
+                findings.append(native_api_probe_finding("pass" if alert_tag_resource_add_ok else "fail", "native-api-direct.alert-tag-resource-add", "Direct write-control added an explicit temporary alert tag assignment." if alert_tag_resource_add_ok else "Direct write-control failed to add an explicit temporary alert tag assignment.", alert_tag_resource_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}/resources", token=token, env=env, method="POST", body=alert_tag_resource_add_body, extra_headers=content_type), alert_tag_resource_add_json, {"http_status": alert_tag_resource_add_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_resource_add_json)}))
+
+                alert_tag_after_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env)
+                alert_tag_after_add_json, alert_tag_after_add_status = parse_json_output_with_http_status(alert_tag_after_add)
+                alert_tag_after_add_ok = alert_tag_after_add.returncode == 0 and alert_tag_after_add_status == 200 and isinstance(alert_tag_after_add_json, dict) and alert_tag_after_add_json.get("id") == alert_tag_id and alert_tag_after_add_json.get("resource_count") == 1 and alert_tag_after_add_json.get("in_use") is True
+                findings.append(native_api_probe_finding("pass" if alert_tag_after_add_ok else "fail", "native-api-direct.alert-tag-resource-in-use-after-add", "Direct API reports the temporary alert tag in use after assigning an alert." if alert_tag_after_add_ok else "Direct API did not report the temporary alert tag in use after assigning an alert.", alert_tag_after_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env), alert_tag_after_add_json, {"http_status": alert_tag_after_add_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_after_add_json)}))
+
+                alert_tag_resource_remove_body = json.dumps(
+                    {"action": "remove", "resource_ids": [alert_resource_id]},
+                    separators=(",", ":"),
+                )
+                alert_tag_resource_remove = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}/resources", token=token, env=env, method="POST", body=alert_tag_resource_remove_body, extra_headers=content_type)
+                alert_tag_resource_remove_json, alert_tag_resource_remove_status = parse_json_output_with_http_status(alert_tag_resource_remove)
+                alert_tag_resource_remove_ok = alert_tag_resource_remove.returncode == 0 and alert_tag_resource_remove_status == 200 and isinstance(alert_tag_resource_remove_json, dict) and alert_tag_resource_remove_json.get("id") == alert_tag_id and alert_tag_resource_remove_json.get("resource_count") == 0
+                findings.append(native_api_probe_finding("pass" if alert_tag_resource_remove_ok else "fail", "native-api-direct.alert-tag-resource-remove", "Direct write-control removed the explicit temporary alert tag assignment." if alert_tag_resource_remove_ok else "Direct write-control failed to remove the explicit temporary alert tag assignment.", alert_tag_resource_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}/resources", token=token, env=env, method="POST", body=alert_tag_resource_remove_body, extra_headers=content_type), alert_tag_resource_remove_json, {"http_status": alert_tag_resource_remove_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_resource_remove_json)}))
+
+                alert_tag_after_remove = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env)
+                alert_tag_after_remove_json, alert_tag_after_remove_status = parse_json_output_with_http_status(alert_tag_after_remove)
+                alert_tag_after_remove_ok = alert_tag_after_remove.returncode == 0 and alert_tag_after_remove_status == 200 and isinstance(alert_tag_after_remove_json, dict) and alert_tag_after_remove_json.get("id") == alert_tag_id and alert_tag_after_remove_json.get("resource_count") == 0 and alert_tag_after_remove_json.get("in_use") is False
+                findings.append(native_api_probe_finding("pass" if alert_tag_after_remove_ok else "fail", "native-api-direct.alert-tag-resource-in-use-after-remove", "Direct API reports the temporary alert tag not in use after removing its alert." if alert_tag_after_remove_ok else "Direct API did not report the temporary alert tag not in use after removing its alert.", alert_tag_after_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env), alert_tag_after_remove_json, {"http_status": alert_tag_after_remove_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_after_remove_json)}))
+
+                alert_tag_delete = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env, method="DELETE")
+                alert_tag_delete_json, alert_tag_delete_status = parse_json_output_with_http_status(alert_tag_delete)
+                alert_tag_delete_ok = alert_tag_delete.returncode == 0 and alert_tag_delete_status == 204
+                findings.append(native_api_probe_finding("pass" if alert_tag_delete_ok else "fail", "native-api-direct.alert-tag-write-delete", "Direct write-control deleted the temporary alert tag after removing its assignment." if alert_tag_delete_ok else "Direct write-control failed to delete the temporary alert tag after removing its assignment.", alert_tag_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env, method="DELETE"), alert_tag_delete_json, {"http_status": alert_tag_delete_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_delete_json)}))
+
+                alert_tag_post_delete = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env)
+                alert_tag_post_delete_json, alert_tag_post_delete_status = parse_json_output_with_http_status(alert_tag_post_delete)
+                alert_tag_post_delete_ok = alert_tag_post_delete.returncode == 0 and alert_tag_post_delete_status == 404 and isinstance(alert_tag_post_delete_json, dict) and alert_tag_post_delete_json.get("error", {}).get("code") == "not_found"
+                findings.append(native_api_probe_finding("pass" if alert_tag_post_delete_ok else "fail", "native-api-direct.alert-tag-write-post-delete", "Direct API confirms the temporary alert tag is gone after delete." if alert_tag_post_delete_ok else "Direct API did not confirm the temporary alert tag was deleted.", alert_tag_post_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env), alert_tag_post_delete_json, {"http_status": alert_tag_post_delete_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_post_delete_json)}))
+
+            if alert_resource_id:
+                alert_cleanup_sql = (
+                    "WITH live_alert AS (SELECT id FROM alerts "
+                    f"WHERE uuid = {sql_literal(alert_resource_id)} AND name = {sql_literal(alert_name)}), "
+                    "live_tag AS (SELECT id FROM tags "
+                    f"WHERE (uuid = {sql_literal(alert_tag_id or '')} OR name = {sql_literal(alert_tag_name)}) AND resource_type = 'alert'), "
+                    "deleted_live_tag_resources AS (DELETE FROM tag_resources WHERE resource_type = 'alert' "
+                    "AND (resource IN (SELECT id FROM live_alert) OR tag IN (SELECT id FROM live_tag))), "
+                    "deleted_trash_tag_resources AS (DELETE FROM tag_resources_trash WHERE resource_type = 'alert' "
+                    "AND (resource IN (SELECT id FROM live_alert) OR tag IN (SELECT id FROM live_tag))), "
+                    "deleted_method_data AS (DELETE FROM alert_method_data WHERE alert IN (SELECT id FROM live_alert)), "
+                    "deleted_event_data AS (DELETE FROM alert_event_data WHERE alert IN (SELECT id FROM live_alert)), "
+                    "deleted_condition_data AS (DELETE FROM alert_condition_data WHERE alert IN (SELECT id FROM live_alert)), "
+                    "deleted_tag AS (DELETE FROM tags WHERE id IN (SELECT id FROM live_tag) RETURNING id), "
+                    "deleted_alert AS (DELETE FROM alerts WHERE id IN (SELECT id FROM live_alert) RETURNING id) "
+                    "SELECT (SELECT count(*) FROM deleted_alert) || '|' || (SELECT count(*) FROM deleted_tag);"
+                )
+                alert_cleanup = psql(repo_root, alert_cleanup_sql)
+                alert_cleanup_deleted = psql_value(alert_cleanup)
+                alert_cleanup_ok = alert_cleanup.returncode == 0 and alert_cleanup_deleted in {"1|0", "1|1"}
+                alert_cleanup_finding = process_step_finding("pass" if alert_cleanup_ok else "fail", "native-api-direct.alert-fixture-cleanup", "Direct write-control smoke removed the temporary alert fixture and any alert-tag residue." if alert_cleanup_ok else "Direct write-control smoke failed to clean up the temporary alert fixture or alert-tag residue.", alert_cleanup, ["psql", "fixed-alert-smoke-cleanup"])
+                alert_cleanup_details = alert_cleanup_finding.setdefault("details", {})
+                if isinstance(alert_cleanup_details, dict):
+                    alert_cleanup_details.update({"alert_id": alert_resource_id, "alert_name": alert_name, "alert_tag_id": alert_tag_id, "alert_tag_name": alert_tag_name, "deleted_counts": alert_cleanup_deleted})
+                findings.append(alert_cleanup_finding)
+
             patch_body = json.dumps(
                 {"comment": "TurboVAS direct write smoke updated temporary tag", "value": "updated", "active": False},
                 separators=(",", ":"),
@@ -13014,6 +13130,10 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         "temporary_tag_id": tag_id,
         "temporary_tag_name": tag_name,
         "temporary_tag_resource_id": tag_resource_id,
+        "temporary_alert_id": alert_resource_id,
+        "temporary_alert_name": alert_name,
+        "temporary_alert_tag_id": alert_tag_id,
+        "temporary_alert_tag_name": alert_tag_name,
         "token_value_reported": False,
     }
     write_json_artifact(artifact_dir, "native-api-direct-write-smoke.json" if result["status"] != "fail" else "native-api-direct-write-smoke-failed.json", result)

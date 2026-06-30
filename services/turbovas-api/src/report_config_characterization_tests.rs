@@ -9,6 +9,7 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_REPORT_CONFIGS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
+const GMP_REPORT_CONFIGS: &str = include_str!("../../../components/gvmd/src/gmp_report_configs.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 const REPORT_CONFIG_PAYLOADS_RS: &str = include_str!("report_config_payloads.rs");
 
@@ -226,6 +227,60 @@ fn inherited_delete_and_restore_report_config_are_alert_guarded_trash_permission
         assert!(
             restore_report_config.contains(required),
             "restore_report_config missing {required}"
+        );
+    }
+}
+
+#[test]
+fn inherited_gmp_report_config_parser_contract_is_copy_or_metadata_param_write() {
+    let params_from_entity = inherited_function(GMP_REPORT_CONFIGS, "params_from_entity");
+    for required in [
+        "strcmp (entity_name (param_entity), \"param\") == 0",
+        "param_name = entity_child (param_entity, \"name\")",
+        "g_strstrip (g_strdup (entity_text (param_name)))",
+        "strcmp (param->name, \"\") == 0",
+        "param_value = entity_child (param_entity, \"value\")",
+        "entity_attribute (param_value, \"use_default\")",
+        "array_add (params, param)",
+    ] {
+        assert!(
+            params_from_entity.contains(required),
+            "params_from_entity missing {required}"
+        );
+    }
+
+    let create_run = inherited_function(GMP_REPORT_CONFIGS, "create_report_config_run");
+    for required in [
+        "copy = entity_child (entity, \"copy\")",
+        "copy_report_config (name ? entity_text (name) : NULL",
+        "report_format = entity_child (entity, \"report_format\")",
+        "entity_attribute (report_format, \"id\")",
+        "A NAME element is required",
+        "The NAME element must not be empty",
+        "A REPORT_FORMAT element with an ID attribute",
+        "params = params_from_entity (entity)",
+        "create_report_config (name->text",
+        "Parameter validation failed: %s",
+    ] {
+        assert!(
+            create_run.contains(required),
+            "create_report_config_run missing {required}"
+        );
+    }
+
+    let modify_run = inherited_function(GMP_REPORT_CONFIGS, "modify_report_config_run");
+    for required in [
+        "entity_attribute(entity, \"report_config_id\")",
+        "A report_config_id attribute is required",
+        "The NAME element must not be empty",
+        "params = params_from_entity (entity)",
+        "modify_report_config (report_config_id",
+        "Cannot modify params of",
+        "Parameter validation failed: %s",
+    ] {
+        assert!(
+            modify_run.contains(required),
+            "modify_report_config_run missing {required}"
         );
     }
 }

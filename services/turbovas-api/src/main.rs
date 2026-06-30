@@ -24,6 +24,7 @@ mod metrics;
 mod metrics_payloads;
 mod nvt_catalog;
 mod nvt_payloads;
+mod operating_system_payloads;
 mod operating_systems;
 mod operator_identity;
 #[cfg(test)]

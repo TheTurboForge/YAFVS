@@ -98,6 +98,8 @@ export interface NativeNvtResponse {
 const NVT_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   family: 'family',
+  category: 'category',
+  discovery: 'discovery',
   created: 'created',
   modified: 'modified',
   cve: 'cve',
@@ -112,6 +114,8 @@ const NVT_SORT_FIELDS: Record<string, string> = {
 const NVT_FILTER_FIELDS = [
   'search',
   'family',
+  'category',
+  'discovery',
   'name',
   'cve',
   'qod_type',

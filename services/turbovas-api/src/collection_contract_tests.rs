@@ -303,7 +303,16 @@ const ASSET_CATALOG_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         path: "/api/v1/nvts",
         default_sort: NVT_CATALOG_DEFAULT_SORT,
         allowed_sort_fields: NVT_CATALOG_SORT_FIELDS,
-        filter_fields: &["oid", "name", "family", "cve", "qod_type", "solution_type"],
+        filter_fields: &[
+            "oid",
+            "name",
+            "family",
+            "category",
+            "discovery",
+            "cve",
+            "qod_type",
+            "solution_type",
+        ],
         tie_breakers: &["name", "oid"],
     },
     CollectionContract {
@@ -506,6 +515,8 @@ fn asset_catalog_collection_contracts_define_sort_filter_and_tie_breakers() {
     assert!(sort_field_names(CVE_CATALOG_SORT_FIELDS).contains(&"epss_score"));
     assert!(sort_field_names(CERT_ADVISORY_SORT_FIELDS).contains(&"cves"));
     assert!(sort_field_names(NVT_CATALOG_SORT_FIELDS).contains(&"solution_type"));
+    assert!(sort_field_names(NVT_CATALOG_SORT_FIELDS).contains(&"category"));
+    assert!(sort_field_names(NVT_CATALOG_SORT_FIELDS).contains(&"discovery"));
     assert!(sort_field_names(OPERATING_SYSTEM_ASSET_SORT_FIELDS).contains(&"latest_severity"));
     assert!(sort_clause("created_at", CPE_CATALOG_SORT_FIELDS).is_err());
 }

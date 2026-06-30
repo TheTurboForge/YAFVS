@@ -265,6 +265,8 @@ pub(crate) const NVT_CATALOG_SORT_FIELDS: &[(&str, &str)] = &[
     ("oid", "oid"),
     ("name", "name"),
     ("family", "family"),
+    ("category", "category"),
+    ("discovery", "discovery"),
     ("created", "created_at_unix"),
     ("modified", "modified_at_unix"),
     ("cve", "cve_refs"),

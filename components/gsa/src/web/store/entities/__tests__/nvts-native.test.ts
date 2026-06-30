@@ -5,8 +5,13 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import Filter from 'gmp/models/filter';
 import Nvt from 'gmp/models/nvt';
-import {fetchNativeNvt, fetchNativeNvts} from 'gmp/native-api/nvts';
+import {
+  fetchNativeNvt,
+  fetchNativeNvts,
+  nativeNvtsQueryFromFilter,
+} from 'gmp/native-api/nvts';
 import {loadEntity} from 'web/store/entities/nvts';
 
 const createGmp = ({
@@ -22,6 +27,21 @@ afterEach(() => {
 });
 
 describe('native API NVT catalog', () => {
+  test('maps NVT category and discovery filters to native query fields', () => {
+    expect(nativeNvtsQueryFromFilter(Filter.fromString('category=3')).filter).toEqual(
+      'category=3',
+    );
+    expect(nativeNvtsQueryFromFilter(Filter.fromString('discovery=1')).filter).toEqual(
+      'discovery=1',
+    );
+    expect(nativeNvtsQueryFromFilter(Filter.fromString('sort=category')).sort).toEqual(
+      'category',
+    );
+    expect(nativeNvtsQueryFromFilter(Filter.fromString('sort-reverse=discovery')).sort).toEqual(
+      '-discovery',
+    );
+  });
+
   test('fetches top-level NVTs as inherited models', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

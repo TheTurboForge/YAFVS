@@ -60,6 +60,8 @@ pub(crate) async fn nvt_catalog(
                FROM nvts n
               WHERE ($2 = ''
                      OR ($1 = 'family' AND lower(n.family) = lower($2))
+                     OR ($1 = 'category' AND lower(coalesce(n.category, '')) = lower($2))
+                     OR ($1 = 'discovery' AND coalesce(n.discovery, 0)::text = $2)
                      OR ($1 = 'name' AND lower(n.name) LIKE '%' || lower($2) || '%')
                      OR ($1 = 'cve' AND lower(coalesce(n.cve, '')) LIKE '%' || lower($2) || '%')
                      OR ($1 = 'qod_type' AND lower(coalesce(n.qod_type, '')) = lower($2))
@@ -130,7 +132,15 @@ pub(crate) async fn nvt_catalog(
 }
 
 fn nvt_filter_parts(raw: &str) -> (&'static str, String) {
-    for key in ["family", "name", "cve", "qod_type", "solution_type"] {
+    for key in [
+        "family",
+        "category",
+        "discovery",
+        "name",
+        "cve",
+        "qod_type",
+        "solution_type",
+    ] {
         if let Some(value) = raw.strip_prefix(&format!("{key}=")) {
             return (key, value.trim_matches('"').to_string());
         }

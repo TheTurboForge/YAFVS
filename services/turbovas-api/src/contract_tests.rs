@@ -1086,6 +1086,7 @@ fn collection_handlers_use_api_query_contract_extractor() {
         include_str!("overrides.rs"),
         include_str!("port_lists.rs"),
         include_str!("report_configs.rs"),
+        include_str!("report_cves.rs"),
         include_str!("report_errors.rs"),
         include_str!("report_formats.rs"),
         include_str!("report_payloads.rs"),

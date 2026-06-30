@@ -23,6 +23,7 @@ use crate::{
     overrides::*,
     port_lists::*,
     report_configs::*,
+    report_cves::report_cves,
     report_errors::report_errors,
     report_evidence_handlers::*,
     report_formats::*,

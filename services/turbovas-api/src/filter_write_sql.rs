@@ -20,6 +20,21 @@ pub(crate) fn filter_alert_condition_count_sql() -> &'static str {
         AND (SELECT condition IN (4, 5) FROM alerts WHERE id = alert);"
 }
 
+pub(crate) fn filter_trash_alert_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM alerts_trash
+      WHERE filter = $1
+        AND filter_location = 1;"
+}
+
+pub(crate) fn filter_trash_alert_condition_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM alert_condition_data_trash
+      WHERE name = 'filter_id'
+        AND data = (SELECT uuid FROM filters_trash WHERE id = $1)
+        AND (SELECT condition IN (4, 5) FROM alerts_trash WHERE id = alert);"
+}
+
 pub(crate) fn filter_settings_cleanup_sql() -> &'static str {
     "DELETE FROM settings
       WHERE name ILIKE '% Filter'
@@ -143,4 +158,18 @@ pub(crate) fn filter_trash_tag_locations_to_live_sql() -> &'static str {
 
 pub(crate) fn filter_delete_trash_metadata_sql() -> &'static str {
     "DELETE FROM filters_trash WHERE id = $1;"
+}
+
+pub(crate) fn filter_trash_tag_delete_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE resource_type = 'filter'
+        AND resource = $1
+        AND resource_location = 1;"
+}
+
+pub(crate) fn filter_trash_tag_trash_delete_sql() -> &'static str {
+    "DELETE FROM tag_resources_trash
+      WHERE resource_type = 'filter'
+        AND resource = $1
+        AND resource_location = 1;"
 }

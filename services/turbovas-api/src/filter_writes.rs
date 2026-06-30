@@ -102,6 +102,32 @@ pub(crate) async fn restore_filter(
     Ok(Json(load_filter_asset_detail(&client, &record.uuid).await?))
 }
 
+pub(crate) async fn hard_delete_filter(
+    State(state): State<AppState>,
+    Path(filter_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_filter_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_filter_write_db_error(error, "begin hard-delete filter transaction")
+    })?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE filters_trash, alerts_trash, alert_condition_data_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_filter_write_db_error(error, "lock filter trash tables for hard delete"))?;
+    let trash = load_filter_trash_state(&tx, &filter_id).await?;
+    ensure_filter_not_in_use_by_trash_alerts(&tx, trash.internal_id).await?;
+    execute_filter_hard_delete_transaction(&tx, trash.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_filter_write_db_error(error, "commit hard-delete filter transaction")
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FilterWriteOperation {
@@ -109,6 +135,7 @@ pub(crate) enum FilterWriteOperation {
     Patch,
     Delete,
     Restore,
+    HardDelete,
 }
 
 pub(crate) async fn execute_filter_trash_transaction(
@@ -161,6 +188,34 @@ pub(crate) async fn execute_filter_trash_transaction(
     Ok(record)
 }
 
+async fn ensure_filter_not_in_use_by_trash_alerts(
+    tx: &Transaction<'_>,
+    filter_internal_id: i32,
+) -> Result<(), ApiError> {
+    let direct_count: i64 = tx
+        .query_one(filter_trash_alert_count_sql(), &[&filter_internal_id])
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "check trash alert filter usage"))?
+        .get(0);
+    let condition_count: i64 = tx
+        .query_one(
+            filter_trash_alert_condition_count_sql(),
+            &[&filter_internal_id],
+        )
+        .await
+        .map_err(|error| {
+            map_filter_write_db_error(error, "check trash alert condition filter usage")
+        })?
+        .get(0);
+    if direct_count == 0 && condition_count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "filter is still referenced by a trash alert".to_string(),
+        ))
+    }
+}
+
 async fn ensure_filter_not_in_use_by_alerts(
     tx: &Transaction<'_>,
     filter_internal_id: i32,
@@ -198,6 +253,9 @@ pub(crate) enum FilterWriteStep {
     UpdateFilterMetadata,
     MoveFilterToTrash,
     RestoreFilterFromTrash,
+    VerifyTrashAlertDeleteSafety,
+    RemoveTrashTagLinks,
+    HardDeleteFilterFromTrash,
     RelocateTrashAlerts,
     RelocatePermissionsAndTags,
     CleanupFilterSettings,
@@ -331,6 +389,48 @@ pub(crate) async fn execute_filter_restore_transaction(
     )
     .await?;
     Ok(FilterWriteRecord { uuid: record.uuid })
+}
+
+pub(crate) async fn execute_filter_hard_delete_transaction(
+    tx: &Transaction<'_>,
+    filter_trash_internal_id: i32,
+) -> Result<(), ApiError> {
+    execute_filter_write_sql(
+        tx,
+        filter_trash_tag_delete_sql(),
+        &[&filter_trash_internal_id],
+        "delete filter trash tag links",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_trash_tag_trash_delete_sql(),
+        &[&filter_trash_internal_id],
+        "delete trashed tag links to filter trash id",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_delete_trash_metadata_sql(),
+        &[&filter_trash_internal_id],
+        "delete filter trash metadata for hard delete",
+    )
+    .await?;
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn filter_hard_delete_transaction_plan() -> FilterWriteTransactionPlan {
+    FilterWriteTransactionPlan {
+        operation: FilterWriteOperation::HardDelete,
+        steps: vec![
+            FilterWriteStep::ResolveOperatorOwner,
+            FilterWriteStep::VerifyExistingFilterMutable,
+            FilterWriteStep::VerifyTrashAlertDeleteSafety,
+            FilterWriteStep::RemoveTrashTagLinks,
+            FilterWriteStep::HardDeleteFilterFromTrash,
+        ],
+    }
 }
 
 pub(crate) async fn patch_filter(

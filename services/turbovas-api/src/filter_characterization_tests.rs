@@ -183,7 +183,8 @@ fn inherited_delete_filter_is_trash_permissions_tags_and_alert_linked() {
 }
 
 #[test]
-fn native_direct_api_allows_only_filter_metadata_patch_and_trash_move_under_write_control() {
+fn native_direct_api_allows_only_filter_metadata_patch_trash_move_restore_and_hard_delete_under_write_control()
+ {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/filters",
@@ -220,9 +221,19 @@ fn native_direct_api_allows_only_filter_metadata_patch_and_trash_move_under_writ
         "/api/v1/filters/12345678-1234-1234-1234-123456789abc/restore",
         true,
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc/trash",
+        true,
+    ));
     assert!(!direct_api_v1_method_is_allowed(
         &Method::POST,
         "/api/v1/filters/12345678-1234-1234-1234-123456789abc/restore",
+        false,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc/trash",
         false,
     ));
     assert!(!direct_api_v1_method_is_allowed(
@@ -248,9 +259,11 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains(
-        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-hard-delete-alert-linkage"
-    ));
+    assert!(
+        list.contains(
+            "x-turbovas-inherited-still-owns: saved-filter-term-type-create-alert-linkage"
+        )
+    );
 
     let detail = openapi_path_block("/filters/{filter_id}");
     assert!(detail.contains("get:"));
@@ -261,16 +274,32 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(detail.contains("x-turbovas-replaces: saved-filter-metadata-modify"));
     assert!(detail.contains("x-turbovas-replaces: saved-filter-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-hard-delete-alert-linkage"
-    ));
+    assert!(
+        detail.contains(
+            "x-turbovas-inherited-still-owns: saved-filter-term-type-create-alert-linkage"
+        )
+    );
 
     let restore = openapi_path_block("/filters/{filter_id}/restore");
     assert!(restore.contains("post:"));
     assert!(restore.contains("x-turbovas-exposure: direct-write"));
     assert!(restore.contains("x-turbovas-replaces: saved-filter-restore"));
     assert!(restore.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(restore.contains(
-        "x-turbovas-inherited-still-owns: saved-filter-term-type-create-hard-delete-alert-linkage"
-    ));
+    assert!(
+        restore.contains(
+            "x-turbovas-inherited-still-owns: saved-filter-term-type-create-alert-linkage"
+        )
+    );
+
+    let hard_delete = openapi_path_block("/filters/{filter_id}/trash");
+    assert!(hard_delete.contains("delete:"));
+    assert!(hard_delete.contains("operationId: deleteFiltersByFilterIdTrash"));
+    assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
+    assert!(hard_delete.contains("x-turbovas-replaces: saved-filter-hard-delete"));
+    assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(
+        hard_delete.contains(
+            "x-turbovas-inherited-still-owns: saved-filter-term-type-create-alert-linkage"
+        )
+    );
 }

@@ -19,6 +19,33 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> FilterPatchReques
 }
 
 #[test]
+fn filter_hard_delete_sql_guards_trash_alerts_and_deletes_only_trash_metadata_and_tags() {
+    let direct_guard = filter_trash_alert_count_sql();
+    assert!(direct_guard.contains("FROM alerts_trash"));
+    assert!(direct_guard.contains("WHERE filter = $1"));
+    assert!(direct_guard.contains("filter_location = 1"));
+
+    let condition_guard = filter_trash_alert_condition_count_sql();
+    assert!(condition_guard.contains("FROM alert_condition_data_trash"));
+    assert!(condition_guard.contains("name = 'filter_id'"));
+    assert!(condition_guard.contains("FROM filters_trash WHERE id = $1"));
+    assert!(condition_guard.contains("condition IN (4, 5)"));
+
+    for sql in [
+        filter_trash_tag_delete_sql(),
+        filter_trash_tag_trash_delete_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'filter'"));
+        assert!(sql.contains("resource_location = 1"));
+        assert!(sql.contains("resource = $1"));
+    }
+
+    let metadata_delete = filter_delete_trash_metadata_sql();
+    assert_eq!(metadata_delete, "DELETE FROM filters_trash WHERE id = $1;");
+    assert!(!metadata_delete.contains("DELETE FROM filters WHERE"));
+}
+
+#[test]
 fn filter_create_plan_keeps_normalization_before_insert() {
     assert_eq!(
         filter_create_transaction_plan().steps,
@@ -29,6 +56,20 @@ fn filter_create_plan_keeps_normalization_before_insert() {
             FilterWriteStep::CleanFilterTerm,
             FilterWriteStep::VerifyUniqueLiveName,
             FilterWriteStep::InsertFilter,
+        ]
+    );
+}
+
+#[test]
+fn filter_hard_delete_plan_keeps_trash_safety_and_side_effects_explicit() {
+    assert_eq!(
+        filter_hard_delete_transaction_plan().steps,
+        vec![
+            FilterWriteStep::ResolveOperatorOwner,
+            FilterWriteStep::VerifyExistingFilterMutable,
+            FilterWriteStep::VerifyTrashAlertDeleteSafety,
+            FilterWriteStep::RemoveTrashTagLinks,
+            FilterWriteStep::HardDeleteFilterFromTrash,
         ]
     );
 }

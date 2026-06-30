@@ -32,6 +32,7 @@ use crate::{
     scanner_assets::*,
     schedules::*,
     scope_payloads::*,
+    scope_report_cves::scope_report_cves,
     scope_report_errors::scope_report_errors,
     scope_report_handlers::*,
     scope_report_results::scope_report_results,

@@ -42,6 +42,7 @@ mod scan_configs;
 mod scanner_assets;
 mod schedules;
 mod scope_payloads;
+mod scope_report_cves;
 mod scope_report_errors;
 mod scope_report_handlers;
 mod scope_report_results;

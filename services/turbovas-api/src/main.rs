@@ -7,6 +7,7 @@ mod alerts;
 mod app_state;
 mod auth;
 mod cert_advisories;
+mod cert_advisory_payloads;
 mod collections;
 mod cpe_catalog;
 mod cve_catalog;

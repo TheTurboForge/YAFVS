@@ -6,17 +6,18 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use serde::Serialize;
-use tokio_postgres::Row;
 
 use crate::{
     app_state::AppState,
+    cert_advisory_payloads::{
+        CertBundAdvisoryDetail, CertBundAdvisoryItem, DfnCertAdvisoryDetail, DfnCertAdvisoryItem,
+        cert_bund_advisory_from_row, dfn_cert_advisory_from_row,
+    },
     collections::{CERT_ADVISORY_DEFAULT_SORT, CERT_ADVISORY_SORT_FIELDS},
     errors::ApiError,
-    formatters::unix_ts_to_rfc3339,
     path_ids::validate_advisory_id,
     query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
-    user_tags::{ReportUserTag, catalog_user_tags},
+    user_tags::catalog_user_tags,
 };
 
 pub(crate) async fn dfn_cert_advisories(
@@ -215,82 +216,4 @@ pub(crate) async fn cert_bund_advisory_detail(
         item: cert_bund_advisory_from_row(&row),
         user_tags,
     }))
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct DfnCertAdvisoryItem {
-    id: String,
-    name: String,
-    comment: String,
-    title: String,
-    summary: String,
-    severity: f64,
-    cve_refs: i64,
-    cves: Vec<String>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct DfnCertAdvisoryDetail {
-    #[serde(flatten)]
-    pub(crate) item: DfnCertAdvisoryItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) user_tags: Vec<ReportUserTag>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct CertBundAdvisoryItem {
-    id: String,
-    name: String,
-    comment: String,
-    title: String,
-    summary: String,
-    severity: f64,
-    cve_refs: i64,
-    cves: Vec<String>,
-    created_at: Option<String>,
-    modified_at: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct CertBundAdvisoryDetail {
-    #[serde(flatten)]
-    pub(crate) item: CertBundAdvisoryItem,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) user_tags: Vec<ReportUserTag>,
-}
-
-pub(crate) fn dfn_cert_advisory_from_row(row: &Row) -> DfnCertAdvisoryItem {
-    DfnCertAdvisoryItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        title: row.get("title"),
-        summary: row.get("summary"),
-        severity: row.get("severity"),
-        cve_refs: row.get("cve_refs"),
-        cves: row.get("cves"),
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-pub(crate) fn cert_bund_advisory_from_row(row: &Row) -> CertBundAdvisoryItem {
-    CertBundAdvisoryItem {
-        id: row.get("id"),
-        name: row.get("name"),
-        comment: row.get("comment"),
-        title: row.get("title"),
-        summary: row.get("summary"),
-        severity: row.get("severity"),
-        cve_refs: row.get("cve_refs"),
-        cves: row.get("cves"),
-        created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
-        modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-        updated_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
 }

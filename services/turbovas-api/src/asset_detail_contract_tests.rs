@@ -242,7 +242,7 @@ fn nvt_detail_user_tags_are_detail_only_active_info_tags() {
 #[test]
 fn cert_advisory_detail_user_tags_use_resolved_uuid_only() {
     let source = include_str!("cert_advisories.rs");
-    let payload_source = include_str!("cert_advisories.rs");
+    let payload_source = include_str!("cert_advisory_payloads.rs");
     let cert_bund_item_payload = payload_source
         .split_once("struct CertBundAdvisoryItem {")
         .expect("CERT-Bund advisory payload must exist")
@@ -260,10 +260,7 @@ fn cert_advisory_detail_user_tags_use_resolved_uuid_only() {
     let cert_bund_detail_source = source
         .split_once("pub(crate) async fn cert_bund_advisory_detail")
         .expect("CERT-Bund detail handler must exist")
-        .1
-        .split_once("#[derive(Debug, Serialize)]")
-        .expect("CERT-Bund detail handler must precede payload structs")
-        .0;
+        .1;
     let dfn_cert_detail_source = source
         .split_once("pub(crate) async fn dfn_cert_advisory_detail")
         .expect("DFN-CERT detail handler must exist")

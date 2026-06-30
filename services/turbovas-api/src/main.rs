@@ -92,6 +92,7 @@ mod scope_report_tls_certificates;
 mod scope_reports;
 #[cfg(test)]
 mod scope_write_plans;
+mod scope_write_sql;
 mod scope_write_validation;
 mod scope_writes;
 mod startup;

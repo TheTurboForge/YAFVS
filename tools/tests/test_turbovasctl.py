@@ -1862,7 +1862,7 @@ class TurboVASCtlTests(unittest.TestCase):
         contract = details["direct_api_contract"]
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertGreater(contract["scriptable_read_count"], 0)
-        self.assertGreater(contract["internal_only_count"], 0)
+        self.assertEqual(contract["internal_only_count"], 0)
 
     def test_native_tooling_state_summary_is_low_noise(self):
         root = Path(__file__).resolve().parents[2]
@@ -1934,8 +1934,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 89)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 72)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 90)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 73)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 17)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 17)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2061,7 +2061,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 72)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 73)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 17)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -2116,7 +2116,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(endpoints["/api/v1/reports/{report_id}/results"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/scope-reports/{scope_report_id}"]["direct_access"], "scriptable_read")
         self.assertEqual(endpoints["/api/v1/tags/resource-names/{resource_type}"]["direct_access"], "scriptable_read")
-        self.assertEqual(endpoints["/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"]["direct_access"], "internal_only")
+        self.assertEqual(endpoints["/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"]["direct_access"], "scriptable_read")
         expected_scriptable = {
             f"/api/v1{path}"
             for (method, path), exposure in turbovasctl.OPENAPI_REQUIRED_EXPOSURE.items()
@@ -2136,15 +2136,15 @@ class TurboVASCtlTests(unittest.TestCase):
             set(contract["scriptable_read_endpoints"]),
             {item["endpoint"] for item in details["implemented_native_endpoints"] if item["direct_access"] == "scriptable_read"},
         )
-        self.assertNotIn(
+        self.assertIn(
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["openapi_marked_direct_endpoints"],
         )
         self.assertIn("/api/v1/reports", contract["rust_route_endpoints"])
         self.assertIn("/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan", contract["rust_route_endpoints"])
         self.assertIn("/api/v1/reports", contract["rust_direct_allowlist_endpoints"])
-        self.assertNotIn(
-            "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+        self.assertIn(
+            "/api/v1/scopes/{}/reports/{}/retention-plan",
             contract["rust_direct_allowlist_endpoints"],
         )
 
@@ -2255,11 +2255,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/reports/{}", contract["gsad_proxy_allowlist_endpoints"])
         self.assertIn("/api/v1/scopes/{}/reports/{}/metrics", contract["gsad_proxy_allowlist_endpoints"])
         self.assertNotIn("/api/v1/scopes/{}/reports/{}/retention-plan", contract["gsad_proxy_allowlist_endpoints"])
-        self.assertIn(
+        self.assertNotIn(
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["internal_only_endpoints"],
         )
-        self.assertIn(
+        self.assertNotIn(
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["openapi_internal_only_endpoints"],
         )
@@ -2618,8 +2618,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
         self.assertEqual(details["operation_count"], 90)
-        self.assertEqual(details["direct_operation_count"], 89)
-        self.assertEqual(details["direct_read_operation_count"], 72)
+        self.assertEqual(details["direct_operation_count"], 90)
+        self.assertEqual(details["direct_read_operation_count"], 73)
         self.assertEqual(
             details["non_get_direct_operations"],
             ["PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/resources", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}"],
@@ -3080,11 +3080,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-clone-export-trash")
 
         retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
-        self.assertEqual(retention["status"], "implemented_internal")
-        self.assertEqual(retention["browser_access"], "internal_only")
-        self.assertEqual(retention["direct_access"], "internal_only")
-        self.assertFalse(retention["openapi_direct_marker"])
-        self.assertEqual(retention["x_turbovas_exposure"], "internal-only")
+        self.assertEqual(retention["status"], "implemented_internal_and_scriptable_read")
+        self.assertEqual(retention["browser_access"], "not_browser_proxied")
+        self.assertEqual(retention["direct_access"], "scriptable_read")
+        self.assertTrue(retention["openapi_direct_marker"])
+        self.assertEqual(retention["x_turbovas_exposure"], "direct-read")
         self.assertEqual(retention["x_turbovas_maturity"], "preview-read")
         self.assertEqual(retention["x_turbovas_replaces"], "none")
         self.assertEqual(retention["x_turbovas_inherited_still_owns"], "retention-mutations")
@@ -4400,11 +4400,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/scopes/{scope_id}/reports/{scope_report_id}/retention-plan:", openapi)
         operations = {(item["method"], item["path"]): item for item in turbovasctl.openapi_contract_operations(root)}
         retention = operations[("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
-        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-exposure"], "internal-only")
+        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(retention["x_turbovas_values"]["x-turbovas-maturity"], "preview-read")
         self.assertEqual(retention["x_turbovas_values"]["x-turbovas-replaces"], "none")
         self.assertEqual(retention["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "retention-mutations")
-        self.assertNotIn("x-turbovas-direct", retention["x_turbovas_fields"])
+        self.assertIn("x-turbovas-direct", retention["x_turbovas_fields"])
         self.assertIn("ScopeReportRetentionPlan", openapi)
         self.assertIn("detail_compacted", openapi)
         self.assertIn("aggregate_only", openapi)
@@ -4573,7 +4573,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('/operating-systems/{os_id}:', openapi)
         self.assertIn("#/components/parameters/OperatingSystemId", openapi)
         self.assertIn('/api/v1/operating-systems/{os_id}', native_tooling)
-        self.assertIn('"status": "implemented_internal"', native_tooling)
+        self.assertIn('"status": "implemented_internal_and_browser_proxied"', native_tooling)
         self.assertIn('native-api.operating-system-detail', native_tooling)
 
     def test_host_asset_detail_contract_is_internal_bounded_and_safe_metadata_only(self):
@@ -6644,10 +6644,10 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(parsed["error"]["code"], "unauthorized")
         self.assertEqual(headers["x-request-id"], "tv-123")
 
-    def test_direct_native_api_direct_smoke_tracks_internal_only_denial(self):
+    def test_direct_native_api_direct_smoke_tracks_retention_plan_preview(self):
         root = Path(__file__).resolve().parents[2]
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
-        self.assertIn("native-api-direct.internal-only-retention-plan", native_tooling)
+        self.assertIn("native-api-direct.scope-report-retention-plan", native_tooling)
         self.assertIn("native-api-direct.request-shape-guard", native_tooling)
         self.assertIn("native-api-direct.request-id-unauthorized", native_tooling)
         self.assertIn("native-api-direct.request-id-client", native_tooling)

@@ -258,7 +258,7 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
     assert!(direct_api_v1_path_is_allowed(
         "/api/v1/scope-reports/scope-report-id"
     ));
-    assert!(!direct_api_v1_path_is_allowed(
+    assert!(direct_api_v1_path_is_allowed(
         "/api/v1/scopes/scope-id/reports/report-id/retention-plan"
     ));
     assert!(!direct_api_v1_path_is_allowed(

@@ -669,7 +669,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/tls-certificates"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/errors"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/metrics"): "direct-read",
-    ("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"): "internal-only",
+    ("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"): "direct-read",
     ("post", "/scopes"): "direct-write",
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
@@ -1254,6 +1254,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/scopes/{}/reports/{}/tls-certificates",
         "/api/v1/scopes/{}/reports/{}/errors",
         "/api/v1/scopes/{}/reports/{}/metrics",
+        "/api/v1/scopes/{}/reports/{}/retention-plan",
     }
 )
 NATIVE_TOOLING_SCAN_PREFIXES = (
@@ -6834,8 +6835,8 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
-                "status": "implemented_internal",
-                "replacement_candidates": ["B-143 non-destructive retention preview scaffold", "runtime-native-api-smoke validation"],
+                "status": "implemented_internal_and_scriptable_read",
+                "replacement_candidates": ["B-143 non-destructive retention preview scaffold", "runtime-native-api-smoke validation", "direct native retention-plan preview automation"],
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}/metrics",
@@ -7255,6 +7256,8 @@ def native_api_browser_access_from_status(status: str | None) -> str:
         return "browser_proxied"
     if status == "implemented_internal":
         return "internal_only"
+    if status == "implemented_internal_and_scriptable_read":
+        return "not_browser_proxied"
     if status == "implemented_direct_write_control":
         return "not_browser_proxied"
     return "unknown"
@@ -11786,7 +11789,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.write-control-restore",
             "native-api-direct.positive-allowlist",
             "native-api-direct.internal-only-scope-report-detail",
-            "native-api-direct.internal-only-retention-plan",
+            "native-api-direct.scope-report-retention-plan",
             "native-api.internal-smoke",
         )
         if check in checks
@@ -12863,17 +12866,19 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
         retention_direct_json, retention_direct_status = parse_json_output_with_http_status(retention_direct)
         retention_direct_ok = (
             retention_direct.returncode == 0
-            and retention_direct_status == 404
+            and retention_direct_status == 200
             and isinstance(retention_direct_json, dict)
-            and retention_direct_json.get("error", {}).get("code") == "not_found"
+            and retention_direct_json.get("id") == selected_scope_report.get("id")
+            and retention_direct_json.get("policy", {}).get("mode") == "dry_run_preview"
+            and retention_direct_json.get("policy", {}).get("destructive_actions") is False
         )
         findings.append(
             native_api_probe_finding(
                 "pass" if retention_direct_ok else "fail",
-                "native-api-direct.internal-only-retention-plan",
-                "Direct native API denies the internal-only retention preview with JSON 404."
+                "native-api-direct.scope-report-retention-plan",
+                "Direct native API exposes the non-destructive scope-report retention preview."
                 if retention_direct_ok
-                else "Direct native API did not deny the internal-only retention preview correctly.",
+                else "Direct native API scope-report retention preview failed or returned an unexpected payload.",
                 retention_direct,
                 direct_native_api_display_command(retention_path, token=token, env=env),
                 retention_direct_json,
@@ -12881,7 +12886,7 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
             )
         )
     else:
-        findings.append(finding("warn", "native-api-direct.internal-only-retention-plan", "No scope report exists yet, so the direct internal-only retention preview denial probe was skipped."))
+        findings.append(finding("warn", "native-api-direct.scope-report-retention-plan", "No scope report exists yet, so the direct retention preview probe was skipped."))
 
     internal = command_runtime_native_api_smoke(repo_root)
     findings.append(finding(internal["status"], "native-api.internal-smoke", internal["summary"], details={"status": internal["status"], "artifacts": internal.get("artifacts", [])}))

@@ -307,6 +307,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
                         | "tls-certificates"
                         | "errors"
                         | "metrics"
+                        | "retention-plan"
                 )
                 && !scope_id.is_empty()
                 && !scope_report_id.is_empty()

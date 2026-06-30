@@ -59,7 +59,7 @@ fn scope_report_retention_preview_marks_only_non_latest_sources() {
     assert!(!upper_sql.contains("INSERT"));
     assert!(!upper_sql.contains("UPDATE"));
     assert!(!upper_sql.contains("DELETE"));
-    assert!(!direct_api_v1_path_is_allowed(
+    assert!(direct_api_v1_path_is_allowed(
         "/api/v1/scopes/scope-id/reports/report-id/retention-plan"
     ));
 }

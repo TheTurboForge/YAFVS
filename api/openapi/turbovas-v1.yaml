@@ -3173,7 +3173,8 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdRetentionPlan
       summary: Preview non-destructive scope report retention state
       description: Read-only dry-run scaffold for future tiered raw-report detail retention. It does not compact, delete, or mutate report evidence.
-      x-turbovas-exposure: internal-only
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
       x-turbovas-maturity: preview-read
       x-turbovas-replaces: none
       x-turbovas-inherited-still-owns: retention-mutations

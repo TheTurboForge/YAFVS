@@ -125,7 +125,7 @@ fn direct_api_allowlist_tracks_registered_get_routes_and_write_contracts() {
         .into_iter()
         .filter(|route| route.path.starts_with("/api/v1/"))
         .collect::<Vec<_>>();
-    let internal_only_routes = ["/api/v1/scopes/:scope_id/reports/:scope_report_id/retention-plan"];
+    let internal_only_routes: [&str; 0] = [];
 
     assert!(api_routes.len() > 40, "expected the native API route table");
     for route in api_routes {

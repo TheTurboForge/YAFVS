@@ -35,6 +35,7 @@ mod report_formats;
 mod report_helpers;
 mod report_payloads;
 mod report_ports;
+mod report_tls_certificates;
 mod request_ids;
 mod request_shapes;
 mod result_payloads;

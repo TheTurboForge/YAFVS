@@ -29,6 +29,7 @@ use crate::{
     report_formats::*,
     report_payloads::*,
     report_ports::report_ports,
+    report_tls_certificates::report_tls_certificates,
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
     result_payloads::*,
     scan_configs::*,

@@ -6026,13 +6026,15 @@ db2:keys=5,expires=0,avg_ttl=0
                 if isinstance(env, dict):
                     envs.append(dict(env))
                 command_text = " ".join(command)
-                if "FROM report_formats" in command_text:
+                if "INSERT INTO report_formats" in command_text:
                     return turbovasctl.subprocess.CompletedProcess(command, 0, report_format_uuid + "\n", "")
                 if "INSERT INTO filters" in command_text:
                     return turbovasctl.subprocess.CompletedProcess(command, 0, filter_uuid + "\n", "")
                 if any(part == "psql" for part in command):
                     if "DELETE FROM report_configs" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "2\n", "")
+                    if "DELETE FROM report_formats" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                     return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                 return turbovasctl.subprocess.CompletedProcess(command, 0, "", "")
 
@@ -6135,6 +6137,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.report-config-write-clone"], "pass")
         self.assertEqual(checks["native-api-direct.report-config-write-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.report-config-write-post-cleanup"], "pass")
+        self.assertEqual(checks["native-api-direct.report-config-format-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.filter-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.filter-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.filter-write-restore"], "pass")

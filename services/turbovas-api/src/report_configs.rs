@@ -25,13 +25,13 @@ pub(crate) async fn report_config_assets(
     let sort_sql = sort_clause(&params.sort, REPORT_CONFIG_SORT_FIELDS)?;
     let sql = format!(
         r#"SELECT count(*) OVER()::bigint AS total,
-                  rc.id::bigint AS internal_id,
+                  rc.id::integer AS internal_id,
                   rc.uuid AS id,
                   coalesce(rc.name, '') AS name,
                   coalesce(rc.comment, '') AS comment,
                   coalesce(u.name, '') AS owner_name,
                   coalesce(rc.report_format_id, '') AS report_format_id,
-                  coalesce(rf.id, 0)::bigint AS report_format_rowid,
+                  coalesce(rf.id, 0)::integer AS report_format_rowid,
                   coalesce(rf.name, '') AS report_format_name,
                   CASE WHEN coalesce(rf.name, '') = '' THEN 1 ELSE 0 END AS orphan,
                   coalesce(rc.creation_time, 0)::bigint AS created_at_unix,
@@ -85,13 +85,13 @@ pub(crate) async fn load_report_config_asset_detail(
     parse_uuid(&report_config_id)?;
     let row = client
         .query_opt(
-            r#"SELECT rc.id::bigint AS internal_id,
+            r#"SELECT rc.id::integer AS internal_id,
                       rc.uuid AS id,
                       coalesce(rc.name, '') AS name,
                       coalesce(rc.comment, '') AS comment,
                       coalesce(u.name, '') AS owner_name,
                       coalesce(rc.report_format_id, '') AS report_format_id,
-                      coalesce(rf.id, 0)::bigint AS report_format_rowid,
+                      coalesce(rf.id, 0)::integer AS report_format_rowid,
                       coalesce(rf.name, '') AS report_format_name,
                       CASE WHEN coalesce(rf.name, '') = '' THEN 1 ELSE 0 END AS orphan,
                       coalesce(rc.creation_time, 0)::bigint AS created_at_unix,

@@ -122,7 +122,7 @@ async fn report_config_param_from_row(
     client: &Client,
     row: &Row,
 ) -> Result<ReportConfigParamItem, ApiError> {
-    let param_type_int: i64 = row.get("type_int");
+    let param_type_int = i64::from(row.get::<_, i32>("type_int"));
     let value = row.get::<_, String>("value");
     let default = row.get::<_, String>("default_value");
     let value_report_formats = if param_type_int == 5 {
@@ -136,7 +136,7 @@ async fn report_config_param_from_row(
         Vec::new()
     };
     let options = if param_type_int == 2 || param_type_int == 6 {
-        let param_id: i64 = row.get("format_param_id");
+        let param_id: i32 = row.get("format_param_id");
         let rows = client
             .query(
                 r#"SELECT coalesce(value, '') AS value
@@ -174,8 +174,8 @@ pub(crate) async fn report_config_asset_from_row(
     row: &Row,
 ) -> Result<ReportConfigAssetItem, ApiError> {
     let report_config_id: String = row.get("id");
-    let internal_id: i64 = row.get("internal_id");
-    let report_format_rowid: i64 = row.get("report_format_rowid");
+    let internal_id: i32 = row.get("internal_id");
+    let report_format_rowid: i32 = row.get("report_format_rowid");
     let alerts: Vec<ReportConfigValueReference> = client
         .query(
             r#"SELECT a.uuid AS id,

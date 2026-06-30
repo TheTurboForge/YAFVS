@@ -11616,10 +11616,12 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.report-config-fixture",
             "native-api-direct.report-config-missing-format-denied",
             "native-api-direct.report-config-write-create",
+            "native-api-direct.report-config-residue-cleanup",
             "native-api-direct.report-config-write-update",
             "native-api-direct.report-config-write-clone",
             "native-api-direct.report-config-write-cleanup",
             "native-api-direct.report-config-write-post-cleanup",
+            "native-api-direct.report-config-format-cleanup",
             "native-api-direct.filter-fixture",
             "native-api-direct.filter-write-update",
             "native-api-direct.filter-write-restore",
@@ -11732,6 +11734,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     report_config_id: str | None = None
     report_config_clone_id: str | None = None
     report_config_format_id: str | None = None
+    report_config_format_fixture_created = False
+    report_config_format_name = f"turbovas-direct-write-smoke-report-format-{int(time.time())}-{os.getpid()}"
     predefined_port_list_id: str | None = None
     schedule_id: str | None = None
     schedule_original_comment = ""
@@ -11822,17 +11826,31 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         findings.append(native_api_probe_finding("pass" if create_ok else "fail", "native-api-direct.tag-write-create", "Direct write-control created a temporary unassigned tag." if create_ok else "Direct write-control failed to create a temporary unassigned tag.", create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type), create_json, {"http_status": create_status, "tag_id": tag_id, **summarize_native_api_response(create_json)}))
 
         report_config_fixture_sql = (
-            "SELECT rf.uuid FROM report_formats rf "
-            "WHERE EXISTS (SELECT 1 FROM report_format_params rfp WHERE rfp.report_format = rf.id) "
-            "ORDER BY rf.name ASC, rf.id ASC LIMIT 1;"
+            "WITH owner_row AS (SELECT id FROM users "
+            f"WHERE uuid = {sql_literal(admin_uuid or '')}), "
+            "inserted_format AS (INSERT INTO report_formats "
+            "(uuid, owner, name, extension, content_type, summary, description, "
+            "trust, trust_time, flags, predefined, report_type, creation_time, modification_time) "
+            "SELECT make_uuid(), id, "
+            f"{sql_literal(report_config_format_name)}, 'txt', 'text/plain', "
+            "'TurboVAS direct write smoke temporary report format', "
+            "'Temporary configurable report format used by runtime-native-api-direct-write-smoke.', "
+            "1, m_now(), 0, 0, 'all', m_now(), m_now() "
+            "FROM owner_row RETURNING id, uuid), "
+            "inserted_param AS (INSERT INTO report_format_params "
+            "(report_format, name, type, value, type_min, type_max, type_regex, fallback) "
+            "SELECT id, 'smoke_param', 3, '', 0, 4096, '', '' "
+            "FROM inserted_format RETURNING report_format) "
+            "SELECT uuid FROM inserted_format;"
         )
         report_config_fixture = psql(repo_root, report_config_fixture_sql)
         report_config_format_id = psql_value(report_config_fixture) or None
         report_config_fixture_ok = report_config_fixture.returncode == 0 and bool(report_config_format_id)
-        fixture_finding = process_step_finding("pass" if report_config_fixture_ok else "warn", "native-api-direct.report-config-fixture", "Direct write-control smoke found a configurable report-format fixture." if report_config_fixture_ok else "Direct write-control smoke could not find a configurable report-format fixture for positive report-config creation; running a no-mutation missing-format probe instead.", report_config_fixture, ["psql", "fixed-report-config-format-fixture"])
+        report_config_format_fixture_created = report_config_fixture_ok
+        fixture_finding = process_step_finding("pass" if report_config_fixture_ok else "fail", "native-api-direct.report-config-fixture", "Direct write-control smoke created a temporary configurable report-format fixture." if report_config_fixture_ok else "Direct write-control smoke failed to create a temporary configurable report-format fixture for positive report-config creation.", report_config_fixture, ["psql", "fixed-report-config-format-fixture"])
         fixture_details = fixture_finding.setdefault("details", {})
         if isinstance(fixture_details, dict):
-            fixture_details.update({"report_format_id": report_config_format_id})
+            fixture_details.update({"report_format_id": report_config_format_id, "report_format_name": report_config_format_name})
         findings.append(fixture_finding)
 
         if report_config_format_id:
@@ -11913,6 +11931,45 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             missing_format_json, missing_format_status = parse_json_output_with_http_status(missing_format)
             missing_format_ok = missing_format.returncode == 0 and missing_format_status == 404 and isinstance(missing_format_json, dict) and missing_format_json.get("error", {}).get("code") == "not_found"
             findings.append(native_api_probe_finding("pass" if missing_format_ok else "fail", "native-api-direct.report-config-missing-format-denied", "Direct write-control rejects report-config creation for a missing report format without creating state." if missing_format_ok else "Direct write-control did not reject missing report-format report-config creation as expected.", missing_format, direct_native_api_display_command("/api/v1/report-configs", token=token, env=env, method="POST", body=missing_format_body, extra_headers=content_type), missing_format_json, {"http_status": missing_format_status, **summarize_native_api_response(missing_format_json)}))
+
+        if report_config_format_fixture_created and report_config_format_id and not report_config_id:
+            report_config_residue_cleanup_sql = (
+                "WITH target AS (SELECT id FROM report_configs "
+                f"WHERE name IN ({sql_literal(report_config_name)}, {sql_literal(report_config_clone_name)})), "
+                "deleted_tags AS (DELETE FROM tag_resources WHERE resource_type = 'report_config' AND resource IN (SELECT id FROM target)), "
+                "deleted_params AS (DELETE FROM report_config_params WHERE report_config IN (SELECT id FROM target)), "
+                "deleted_config AS (DELETE FROM report_configs WHERE id IN (SELECT id FROM target) RETURNING id) "
+                "SELECT count(*) FROM deleted_config;"
+            )
+            report_config_residue_cleanup = psql(repo_root, report_config_residue_cleanup_sql)
+            report_config_residue_cleanup_deleted = psql_value(report_config_residue_cleanup)
+            report_config_residue_cleanup_ok = report_config_residue_cleanup.returncode == 0
+            report_config_residue_cleanup_finding = process_step_finding("pass" if report_config_residue_cleanup_ok else "fail", "native-api-direct.report-config-residue-cleanup", "Direct write-control smoke cleaned any temporary report-config residue by deterministic name after an incomplete create response." if report_config_residue_cleanup_ok else "Direct write-control smoke failed to clean possible temporary report-config residue after an incomplete create response.", report_config_residue_cleanup, ["psql", "fixed-report-config-residue-cleanup"])
+            report_config_residue_cleanup_details = report_config_residue_cleanup_finding.setdefault("details", {})
+            if isinstance(report_config_residue_cleanup_details, dict):
+                report_config_residue_cleanup_details.update({"report_config_name": report_config_name, "report_config_clone_name": report_config_clone_name, "deleted_count": report_config_residue_cleanup_deleted})
+            findings.append(report_config_residue_cleanup_finding)
+
+        if report_config_format_fixture_created and report_config_format_id:
+            report_config_format_cleanup_sql = (
+                "WITH target AS (SELECT id FROM report_formats "
+                f"WHERE uuid = {sql_literal(report_config_format_id)} "
+                f"AND name = {sql_literal(report_config_format_name)}), "
+                "deleted_options AS (DELETE FROM report_format_param_options "
+                "WHERE report_format_param IN "
+                "(SELECT id FROM report_format_params WHERE report_format IN (SELECT id FROM target))), "
+                "deleted_params AS (DELETE FROM report_format_params WHERE report_format IN (SELECT id FROM target)), "
+                "deleted_format AS (DELETE FROM report_formats WHERE id IN (SELECT id FROM target) RETURNING id) "
+                "SELECT count(*) FROM deleted_format;"
+            )
+            report_config_format_cleanup = psql(repo_root, report_config_format_cleanup_sql)
+            report_config_format_cleanup_deleted = psql_value(report_config_format_cleanup)
+            report_config_format_cleanup_ok = report_config_format_cleanup.returncode == 0 and report_config_format_cleanup_deleted == "1"
+            report_config_format_cleanup_finding = process_step_finding("pass" if report_config_format_cleanup_ok else "fail", "native-api-direct.report-config-format-cleanup", "Direct write-control smoke removed the temporary report-format fixture through fixed cleanup SQL." if report_config_format_cleanup_ok else "Direct write-control smoke failed to clean up the temporary report-format fixture.", report_config_format_cleanup, ["psql", "fixed-report-config-format-cleanup"])
+            report_config_format_cleanup_details = report_config_format_cleanup_finding.setdefault("details", {})
+            if isinstance(report_config_format_cleanup_details, dict):
+                report_config_format_cleanup_details.update({"report_format_id": report_config_format_id, "report_format_name": report_config_format_name, "deleted_count": report_config_format_cleanup_deleted})
+            findings.append(report_config_format_cleanup_finding)
 
         filter_fixture_sql = (
             "WITH inserted_filter AS (INSERT INTO filters "

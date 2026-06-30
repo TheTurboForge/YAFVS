@@ -66,6 +66,7 @@ mod scope_report_tls_certificates;
 mod scope_reports;
 mod scope_writes;
 mod startup;
+mod tag_payloads;
 mod tag_resource_helpers;
 mod tag_writes;
 mod tags;

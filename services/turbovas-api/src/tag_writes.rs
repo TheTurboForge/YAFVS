@@ -16,11 +16,11 @@ use crate::{
     auth::DirectApiOperator,
     errors::ApiError,
     path_ids::parse_uuid,
+    tag_payloads::{TagAssetItem, tag_asset_from_row},
     tag_resource_helpers::{
         tag_resource_active_lookup_sql, tag_resource_direct_write_type_is_supported,
         tag_resource_type_is_supported,
     },
-    tags::{TagAssetItem, tag_asset_from_row},
 };
 
 const MAX_TAG_TEXT_BYTES: usize = 4096;

@@ -18,6 +18,8 @@ mod metrics_payloads;
 mod nvt_payloads;
 mod operating_systems;
 mod operator_identity;
+#[cfg(test)]
+mod override_characterization_tests;
 mod overrides;
 mod path_ids;
 mod port_lists;

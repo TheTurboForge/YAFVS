@@ -71,6 +71,12 @@ pub(crate) fn filter_write_state_sql() -> &'static str {
       WHERE uuid = $1;"
 }
 
+pub(crate) fn filter_trash_state_sql() -> &'static str {
+    "SELECT id::integer, uuid::text, name, owner::integer
+       FROM filters_trash
+      WHERE uuid = $1;"
+}
+
 pub(crate) fn filter_unique_name_sql() -> &'static str {
     "SELECT (
         (SELECT count(*) FROM filters WHERE name = $1 AND id != $2)
@@ -85,4 +91,56 @@ pub(crate) fn filter_update_metadata_sql() -> &'static str {
             modification_time = m_now()
       WHERE id = $1
       RETURNING uuid::text;"
+}
+
+pub(crate) fn filter_unique_live_owner_name_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM filters
+      WHERE name = $1
+        AND owner = $2;"
+}
+
+pub(crate) fn filter_live_uuid_conflict_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM filters
+      WHERE uuid = $1;"
+}
+
+pub(crate) fn filter_restore_metadata_sql() -> &'static str {
+    "INSERT INTO filters
+        (uuid, owner, name, comment, type, term, creation_time, modification_time)
+     SELECT uuid, owner, name, comment, type, term, creation_time, modification_time
+       FROM filters_trash
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn filter_trash_alert_relink_to_live_sql() -> &'static str {
+    "UPDATE alerts_trash
+        SET filter = $2,
+            filter_location = 0
+      WHERE filter = $1
+        AND filter_location = 1;"
+}
+
+pub(crate) fn filter_tag_locations_to_live_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 0,
+            resource = $2
+      WHERE resource_type = 'filter'
+        AND resource = $1
+        AND resource_location = 1;"
+}
+
+pub(crate) fn filter_trash_tag_locations_to_live_sql() -> &'static str {
+    "UPDATE tag_resources_trash
+        SET resource_location = 0,
+            resource = $2
+      WHERE resource_type = 'filter'
+        AND resource = $1
+        AND resource_location = 1;"
+}
+
+pub(crate) fn filter_delete_trash_metadata_sql() -> &'static str {
+    "DELETE FROM filters_trash WHERE id = $1;"
 }

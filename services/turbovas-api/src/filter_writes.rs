@@ -38,6 +38,14 @@ struct FilterWriteState {
     internal_id: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FilterTrashWriteState {
+    internal_id: i32,
+    uuid: String,
+    name: String,
+    owner_id: i32,
+}
+
 pub(crate) async fn delete_filter(
     State(state): State<AppState>,
     Path(filter_id): Path<String>,
@@ -66,12 +74,41 @@ pub(crate) async fn delete_filter(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub(crate) async fn restore_filter(
+    State(state): State<AppState>,
+    Path(filter_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<Json<FilterAssetItem>, ApiError> {
+    let operator = require_filter_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "begin restore filter transaction"))?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE filters, filters_trash, alerts_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_filter_write_db_error(error, "lock filter tables for restore"))?;
+    let trash = load_filter_trash_state(&tx, &filter_id).await?;
+    ensure_unique_live_filter_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
+    ensure_filter_uuid_not_live(&tx, &trash.uuid).await?;
+    let record = execute_filter_restore_transaction(&tx, trash.internal_id).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "commit restore filter transaction"))?;
+
+    Ok(Json(load_filter_asset_detail(&client, &record.uuid).await?))
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FilterWriteOperation {
     Create,
     Patch,
     Delete,
+    Restore,
 }
 
 pub(crate) async fn execute_filter_trash_transaction(
@@ -160,6 +197,8 @@ pub(crate) enum FilterWriteStep {
     InsertFilter,
     UpdateFilterMetadata,
     MoveFilterToTrash,
+    RestoreFilterFromTrash,
+    RelocateTrashAlerts,
     RelocatePermissionsAndTags,
     CleanupFilterSettings,
 }
@@ -180,6 +219,23 @@ async fn query_filter_trash_write_record(
         .ok_or(ApiError::NotFound)
 }
 
+async fn load_filter_trash_state(
+    tx: &Transaction<'_>,
+    filter_id: &str,
+) -> Result<FilterTrashWriteState, ApiError> {
+    let filter_id = parse_uuid(filter_id)?.to_string();
+    tx.query_opt(filter_trash_state_sql(), &[&filter_id])
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "load filter trash state"))?
+        .map(|row| FilterTrashWriteState {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+            name: row.get(2),
+            owner_id: row.get(3),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
 async fn execute_filter_write_sql(
     tx: &Transaction<'_>,
     sql: &str,
@@ -191,11 +247,90 @@ async fn execute_filter_write_sql(
         .map_err(|error| map_filter_write_db_error(error, action))
 }
 
+async fn ensure_unique_live_filter_name_for_owner(
+    tx: &Transaction<'_>,
+    name: &str,
+    owner_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(filter_unique_live_owner_name_sql(), &[&name, &owner_id])
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "check live filter name uniqueness"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "filter with the same name already exists".to_string(),
+        ))
+    }
+}
+
+async fn ensure_filter_uuid_not_live(
+    tx: &Transaction<'_>,
+    filter_uuid: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(filter_live_uuid_conflict_sql(), &[&filter_uuid])
+        .await
+        .map_err(|error| map_filter_write_db_error(error, "check live filter uuid conflict"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "filter with the same id already exists".to_string(),
+        ))
+    }
+}
+
 #[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct FilterWriteTransactionPlan {
     pub(crate) operation: FilterWriteOperation,
     pub(crate) steps: Vec<FilterWriteStep>,
+}
+
+pub(crate) async fn execute_filter_restore_transaction(
+    tx: &Transaction<'_>,
+    filter_trash_internal_id: i32,
+) -> Result<FilterWriteRecord, ApiError> {
+    let record = query_filter_trash_write_record(
+        tx,
+        filter_restore_metadata_sql(),
+        &[&filter_trash_internal_id],
+        "restore filter metadata from trash",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_trash_alert_relink_to_live_sql(),
+        &[&filter_trash_internal_id, &record.internal_id],
+        "relink trash alerts to restored filter",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_tag_locations_to_live_sql(),
+        &[&filter_trash_internal_id, &record.internal_id],
+        "move filter tag links to live",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_trash_tag_locations_to_live_sql(),
+        &[&filter_trash_internal_id, &record.internal_id],
+        "move trashed tag links to restored filter",
+    )
+    .await?;
+    execute_filter_write_sql(
+        tx,
+        filter_delete_trash_metadata_sql(),
+        &[&filter_trash_internal_id],
+        "delete filter trash metadata after restore",
+    )
+    .await?;
+    Ok(FilterWriteRecord { uuid: record.uuid })
 }
 
 pub(crate) async fn patch_filter(
@@ -224,6 +359,21 @@ pub(crate) async fn patch_filter(
         .await
         .map_err(|error| map_filter_write_db_error(error, "commit patch filter transaction"))?;
     Ok(Json(load_filter_asset_detail(&client, &record.uuid).await?))
+}
+
+#[cfg(test)]
+pub(crate) fn filter_restore_transaction_plan() -> FilterWriteTransactionPlan {
+    FilterWriteTransactionPlan {
+        operation: FilterWriteOperation::Restore,
+        steps: vec![
+            FilterWriteStep::ResolveOperatorOwner,
+            FilterWriteStep::VerifyExistingFilterMutable,
+            FilterWriteStep::VerifyUniqueLiveName,
+            FilterWriteStep::RestoreFilterFromTrash,
+            FilterWriteStep::RelocateTrashAlerts,
+            FilterWriteStep::RelocatePermissionsAndTags,
+        ],
+    }
 }
 
 fn require_filter_write_operator(

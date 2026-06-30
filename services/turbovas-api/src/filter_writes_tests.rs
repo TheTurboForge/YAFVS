@@ -34,6 +34,68 @@ fn filter_create_plan_keeps_normalization_before_insert() {
 }
 
 #[test]
+fn filter_restore_sql_moves_metadata_trash_alerts_and_tags_to_live() {
+    let state = filter_trash_state_sql();
+    assert!(state.contains("FROM filters_trash"));
+    assert!(state.contains("uuid = $1"));
+
+    let restore = filter_restore_metadata_sql();
+    assert!(restore.contains("INSERT INTO filters"));
+    assert!(restore.contains("SELECT uuid, owner, name, comment, type, term"));
+    assert!(restore.contains("FROM filters_trash"));
+    assert!(restore.contains("WHERE id = $1"));
+    assert!(restore.contains("RETURNING id::integer, uuid::text"));
+
+    let alert_relink = filter_trash_alert_relink_to_live_sql();
+    assert!(alert_relink.contains("UPDATE alerts_trash"));
+    assert!(alert_relink.contains("filter_location = 0"));
+    assert!(alert_relink.contains("WHERE filter = $1"));
+    assert!(alert_relink.contains("filter_location = 1"));
+
+    for sql in [
+        filter_tag_locations_to_live_sql(),
+        filter_trash_tag_locations_to_live_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'filter'"));
+        assert!(sql.contains("resource_location = 0"));
+        assert!(sql.contains("resource = $1"));
+        assert!(sql.contains("resource = $2"));
+    }
+
+    assert_eq!(
+        filter_delete_trash_metadata_sql(),
+        "DELETE FROM filters_trash WHERE id = $1;"
+    );
+}
+
+#[test]
+fn filter_restore_checks_live_owner_name_and_uuid_conflicts() {
+    let unique_name = filter_unique_live_owner_name_sql();
+    assert!(unique_name.contains("FROM filters"));
+    assert!(unique_name.contains("WHERE name = $1"));
+    assert!(unique_name.contains("owner = $2"));
+
+    let uuid_conflict = filter_live_uuid_conflict_sql();
+    assert!(uuid_conflict.contains("FROM filters"));
+    assert!(uuid_conflict.contains("WHERE uuid = $1"));
+}
+
+#[test]
+fn filter_restore_plan_keeps_trash_relocation_explicit() {
+    assert_eq!(
+        filter_restore_transaction_plan().steps,
+        vec![
+            FilterWriteStep::ResolveOperatorOwner,
+            FilterWriteStep::VerifyExistingFilterMutable,
+            FilterWriteStep::VerifyUniqueLiveName,
+            FilterWriteStep::RestoreFilterFromTrash,
+            FilterWriteStep::RelocateTrashAlerts,
+            FilterWriteStep::RelocatePermissionsAndTags,
+        ]
+    );
+}
+
+#[test]
 fn filter_patch_request_trims_metadata_fields() {
     assert_eq!(
         validate_filter_patch_request(patch_request(

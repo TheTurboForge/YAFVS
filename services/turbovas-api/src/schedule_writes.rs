@@ -49,6 +49,14 @@ struct ScheduleWriteState {
     internal_id: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScheduleTrashWriteState {
+    internal_id: i32,
+    uuid: String,
+    name: String,
+    owner_id: i32,
+}
+
 pub(crate) async fn delete_schedule(
     State(state): State<AppState>,
     Path(schedule_id): Path<String>,
@@ -76,12 +84,42 @@ pub(crate) async fn delete_schedule(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub(crate) async fn restore_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<Json<ScheduleAssetDetail>, ApiError> {
+    let operator = require_schedule_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_schedule_write_db_error(error, "begin restore schedule transaction")
+    })?;
+    resolve_schedule_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE schedules, schedules_trash, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_schedule_write_db_error(error, "lock schedule tables for restore"))?;
+    let trash = load_schedule_trash_state(&tx, &schedule_id).await?;
+    ensure_unique_live_schedule_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
+    ensure_schedule_uuid_not_live(&tx, &trash.uuid).await?;
+    let record = execute_schedule_restore_transaction(&tx, trash.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_schedule_write_db_error(error, "commit restore schedule transaction")
+    })?;
+
+    Ok(Json(
+        load_schedule_asset_detail(&client, &record.uuid).await?,
+    ))
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScheduleWriteOperation {
     Create,
     Patch,
     Delete,
+    Restore,
 }
 
 pub(crate) async fn execute_schedule_trash_transaction(
@@ -159,6 +197,7 @@ pub(crate) enum ScheduleWriteStep {
     UpdateScheduleMetadata,
     RefreshTaskNextTimes,
     MoveScheduleToTrash,
+    RestoreScheduleFromTrash,
     RelocateTasks,
     RelocatePermissionsAndTags,
 }
@@ -179,6 +218,23 @@ async fn query_schedule_trash_write_record(
         .ok_or(ApiError::NotFound)
 }
 
+async fn load_schedule_trash_state(
+    tx: &Transaction<'_>,
+    schedule_id: &str,
+) -> Result<ScheduleTrashWriteState, ApiError> {
+    let schedule_id = parse_uuid(schedule_id)?.to_string();
+    tx.query_opt(schedule_trash_state_sql(), &[&schedule_id])
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, "load schedule trash state"))?
+        .map(|row| ScheduleTrashWriteState {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+            name: row.get(2),
+            owner_id: row.get(3),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
 async fn execute_schedule_write_sql(
     tx: &Transaction<'_>,
     sql: &str,
@@ -188,6 +244,43 @@ async fn execute_schedule_write_sql(
     tx.execute(sql, params)
         .await
         .map_err(|error| map_schedule_write_db_error(error, action))
+}
+
+async fn ensure_unique_live_schedule_name_for_owner(
+    tx: &Transaction<'_>,
+    name: &str,
+    owner_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(schedule_unique_live_owner_name_sql(), &[&name, &owner_id])
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, "check live schedule name uniqueness"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "schedule with the same name already exists".to_string(),
+        ))
+    }
+}
+
+async fn ensure_schedule_uuid_not_live(
+    tx: &Transaction<'_>,
+    schedule_uuid: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(schedule_live_uuid_conflict_sql(), &[&schedule_uuid])
+        .await
+        .map_err(|error| map_schedule_write_db_error(error, "check live schedule uuid conflict"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "schedule with the same id already exists".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -353,6 +446,48 @@ pub(crate) async fn execute_schedule_patch_transaction(
     .await
 }
 
+pub(crate) async fn execute_schedule_restore_transaction(
+    tx: &Transaction<'_>,
+    schedule_trash_internal_id: i32,
+) -> Result<ScheduleWriteRecord, ApiError> {
+    let record = query_schedule_trash_write_record(
+        tx,
+        schedule_restore_metadata_sql(),
+        &[&schedule_trash_internal_id],
+        "restore schedule metadata",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_task_relink_to_live_sql(),
+        &[&schedule_trash_internal_id, &record.internal_id],
+        "relink trash tasks to restored schedule",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_tag_locations_to_live_sql(),
+        &[&schedule_trash_internal_id, &record.internal_id],
+        "move schedule tag links to live",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_trash_tag_locations_to_live_sql(),
+        &[&schedule_trash_internal_id, &record.internal_id],
+        "move trashed tag links to restored schedule",
+    )
+    .await?;
+    execute_schedule_write_sql(
+        tx,
+        schedule_delete_trash_metadata_sql(),
+        &[&schedule_trash_internal_id],
+        "delete schedule trash metadata after restore",
+    )
+    .await?;
+    Ok(ScheduleWriteRecord { uuid: record.uuid })
+}
+
 async fn query_schedule_write_record(
     tx: &Transaction<'_>,
     sql: &str,
@@ -364,6 +499,21 @@ async fn query_schedule_write_record(
         .map_err(|error| map_schedule_write_db_error(error, action))?
         .map(schedule_write_record_from_row)
         .ok_or(ApiError::NotFound)
+}
+
+#[cfg(test)]
+pub(crate) fn schedule_restore_transaction_plan() -> ScheduleWriteTransactionPlan {
+    ScheduleWriteTransactionPlan {
+        operation: ScheduleWriteOperation::Restore,
+        steps: vec![
+            ScheduleWriteStep::ResolveOperatorOwner,
+            ScheduleWriteStep::VerifyExistingScheduleMutable,
+            ScheduleWriteStep::VerifyUniqueLiveName,
+            ScheduleWriteStep::RestoreScheduleFromTrash,
+            ScheduleWriteStep::RelocateTasks,
+            ScheduleWriteStep::RelocatePermissionsAndTags,
+        ],
+    }
 }
 
 fn schedule_write_record_from_row(row: Row) -> ScheduleWriteRecord {

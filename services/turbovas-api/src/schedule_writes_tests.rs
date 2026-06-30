@@ -13,6 +13,49 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> SchedulePatchRequ
 }
 
 #[test]
+fn schedule_restore_sql_moves_metadata_tasks_and_tags_to_live() {
+    let state = schedule_trash_state_sql();
+    assert!(state.contains("FROM schedules_trash"));
+    assert!(state.contains("uuid = $1"));
+    assert!(state.contains("owner::integer"));
+
+    let unique_name = schedule_unique_live_owner_name_sql();
+    assert!(unique_name.contains("FROM schedules"));
+    assert!(unique_name.contains("name = $1"));
+    assert!(unique_name.contains("owner = $2"));
+
+    let uuid_conflict = schedule_live_uuid_conflict_sql();
+    assert!(uuid_conflict.contains("FROM schedules"));
+    assert!(uuid_conflict.contains("uuid = $1"));
+
+    let restore = schedule_restore_metadata_sql();
+    assert!(restore.contains("INSERT INTO schedules"));
+    assert!(restore.contains("FROM schedules_trash"));
+    assert!(restore.contains("RETURNING id::integer, uuid::text"));
+
+    let task_relink = schedule_task_relink_to_live_sql();
+    assert!(task_relink.contains("UPDATE tasks"));
+    assert!(task_relink.contains("schedule_location = 0"));
+    assert!(task_relink.contains("WHERE schedule = $1"));
+    assert!(task_relink.contains("schedule_location = 1"));
+
+    for sql in [
+        schedule_tag_locations_to_live_sql(),
+        schedule_trash_tag_locations_to_live_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'schedule'"));
+        assert!(sql.contains("resource_location = 0"));
+        assert!(sql.contains("resource = $1"));
+        assert!(sql.contains("resource = $2"));
+    }
+
+    assert_eq!(
+        schedule_delete_trash_metadata_sql(),
+        "DELETE FROM schedules_trash WHERE id = $1;"
+    );
+}
+
+#[test]
 fn schedule_create_plan_keeps_calendar_validation_before_insert() {
     assert_eq!(
         schedule_create_transaction_plan().steps,
@@ -24,6 +67,21 @@ fn schedule_create_plan_keeps_calendar_validation_before_insert() {
             ScheduleWriteStep::DeriveScheduleFields,
             ScheduleWriteStep::VerifyUniqueLiveName,
             ScheduleWriteStep::InsertSchedule,
+        ]
+    );
+}
+
+#[test]
+fn schedule_restore_plan_keeps_task_and_tag_side_effects_explicit() {
+    assert_eq!(
+        schedule_restore_transaction_plan().steps,
+        vec![
+            ScheduleWriteStep::ResolveOperatorOwner,
+            ScheduleWriteStep::VerifyExistingScheduleMutable,
+            ScheduleWriteStep::VerifyUniqueLiveName,
+            ScheduleWriteStep::RestoreScheduleFromTrash,
+            ScheduleWriteStep::RelocateTasks,
+            ScheduleWriteStep::RelocatePermissionsAndTags,
         ]
     );
 }

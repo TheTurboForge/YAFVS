@@ -1531,9 +1531,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: schedule-metadata-list-read
-      x-turbovas-inherited-still-owns: schedule-create-calendar-export-restore-and-hard-delete
+      x-turbovas-inherited-still-owns: schedule-create-calendar-export-hard-delete
       summary: List schedules
-      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Native direct write-control can patch schedule name/comment metadata and move unlinked live schedules to trash; create, calendar mutation, clone, export, restore, hard delete, and task next-time recalculation remain on inherited compatibility paths while native safety contracts are designed.
+      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Native direct write-control can patch schedule name/comment metadata, move unlinked live schedules to trash, and restore trashed schedules; create, calendar mutation, clone, export, hard delete, and task next-time recalculation remain on inherited compatibility paths while native safety contracts are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1565,7 +1565,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: schedule-metadata-detail-read
-      x-turbovas-inherited-still-owns: schedule-create-calendar-export-restore-and-hard-delete
+      x-turbovas-inherited-still-owns: schedule-create-calendar-export-hard-delete
       summary: Read one schedule
       parameters:
         - $ref: '#/components/parameters/ScheduleId'
@@ -1596,13 +1596,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: schedule-metadata-modify
-      x-turbovas-inherited-still-owns: schedule-create-calendar-export-restore-and-hard-delete
+      x-turbovas-inherited-still-owns: schedule-create-calendar-export-hard-delete
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Patch schedule metadata
-      description: Direct write-control endpoint for changing a schedule name or comment. Calendar data, timezone changes, task next-time recalculation, create, clone, export, restore, and hard-delete semantics remain inherited.
+      description: Direct write-control endpoint for changing a schedule name or comment. Calendar data, timezone changes, task next-time recalculation, create, clone, export, and hard-delete semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScheduleId'
       requestBody:
@@ -1640,18 +1640,57 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: schedule-trash-move
-      x-turbovas-inherited-still-owns: schedule-create-calendar-export-restore-and-hard-delete
+      x-turbovas-inherited-still-owns: schedule-create-calendar-export-hard-delete
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Move schedule to trash
-      description: Direct write-control endpoint for moving an unlinked live schedule to trash. Schedules referenced by live tasks are rejected; restore, hard delete, export, clone, create, and calendar mutation remain inherited.
+      description: Direct write-control endpoint for moving an unlinked live schedule to trash. Schedules referenced by live tasks are rejected; hard delete, export, clone, create, and calendar mutation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScheduleId'
       responses:
         '204':
           description: Schedule moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /schedules/{schedule_id}/restore:
+    post:
+      operationId: postSchedulesByScheduleIdRestore
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: schedule-restore
+      x-turbovas-inherited-still-owns: schedule-create-calendar-export-hard-delete
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Restore a trashed schedule
+      description: Direct write-control endpoint for restoring a trashed schedule and its trash-task/tag references back to live state. The restored schedule keeps its original id and owner. Restore is rejected when a live schedule with the same id already exists or when the original owner already has a live schedule with the same name. Create, calendar mutation, clone, export, and hard delete remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      responses:
+        '200':
+          description: Schedule restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleAssetDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

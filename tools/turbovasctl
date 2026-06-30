@@ -546,6 +546,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "schedule-metadata-detail-read",
         "schedule-metadata-list-read",
         "schedule-metadata-modify",
+        "schedule-restore",
         "schedule-trash-move",
         "scope-detail-membership-read",
         "scope-list-read",
@@ -598,7 +599,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "scan-config-preferences-export-import-writes-and-deletes",
         "scap-rich-context",
-        "schedule-create-calendar-export-restore-and-hard-delete",
+        "schedule-create-calendar-export-hard-delete",
         "scope-report-generation",
         "scope-report-generation-retention-and-mutations",
         "tag-security-info-filter-actions-clone-export-trash",
@@ -684,6 +685,9 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/port-lists/{port_list_id}"): "direct-write",
     ("delete", "/port-lists/{port_list_id}"): "direct-write",
     ("post", "/port-lists/{port_list_id}/restore"): "direct-write",
+    ("patch", "/schedules/{schedule_id}"): "direct-write",
+    ("delete", "/schedules/{schedule_id}"): "direct-write",
+    ("post", "/schedules/{schedule_id}/restore"): "direct-write",
     ("post", "/tags"): "direct-write",
     ("patch", "/tags/{tag_id}"): "direct-write",
     ("delete", "/tags/{tag_id}"): "direct-write",
@@ -927,24 +931,29 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "trashcan-count-summary-read",
     },
     ("get", "/schedules"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-restore-and-hard-delete",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-hard-delete",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-list-read",
     },
     ("get", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-restore-and-hard-delete",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-hard-delete",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-detail-read",
     },
     ("patch", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-restore-and-hard-delete",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-hard-delete",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-metadata-modify",
     },
     ("delete", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-restore-and-hard-delete",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-hard-delete",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-trash-move",
+    },
+    ("post", "/schedules/{schedule_id}/restore"): {
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export-hard-delete",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "schedule-restore",
     },
     ("get", "/report-configs"): {
         "x-turbovas-inherited-still-owns": "report-config-hard-delete-export",
@@ -6626,6 +6635,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native schedule live-to-trash move"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/schedules/{schedule_id}/restore",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native schedule restore from trash"],
+            },
+            {
                 "endpoint": "/api/v1/report-configs",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Report Configs list (migrated through gsad same-origin proxy)", "read-only report-config automation", "native-api-request helper"],
@@ -11784,6 +11800,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.port-list-restore-disabled",
             "native-api-direct.schedule-patch-disabled",
             "native-api-direct.schedule-delete-disabled",
+            "native-api-direct.schedule-restore-disabled",
             "native-api-direct.override-patch-disabled",
             "native-api-direct.tag-write-disabled",
             "native-api-direct.tag-delete-disabled",
@@ -11819,6 +11836,8 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.schedule-write-update",
             "native-api-direct.schedule-write-restore",
             "native-api-direct.schedule-write-delete",
+            "native-api-direct.schedule-write-post-delete",
+            "native-api-direct.schedule-write-trash-restore",
             "native-api-direct.schedule-write-cleanup",
             "native-api-direct.schedule-write-post-cleanup",
             "native-api-direct.port-list-predefined-patch-denied",
@@ -12303,15 +12322,27 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             schedule_delete_ok = schedule_delete.returncode == 0 and schedule_delete_status == 204
             findings.append(native_api_probe_finding("pass" if schedule_delete_ok else "fail", "native-api-direct.schedule-write-delete", "Direct write-control moved the temporary schedule fixture to trash." if schedule_delete_ok else "Direct write-control failed to move the temporary schedule fixture to trash.", schedule_delete, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env, method="DELETE"), schedule_delete_json, {"http_status": schedule_delete_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_delete_json)}))
 
+            schedule_post_delete = direct_native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env)
+            schedule_post_delete_json, schedule_post_delete_status = parse_json_output_with_http_status(schedule_post_delete)
+            schedule_post_delete_ok = schedule_post_delete.returncode == 0 and schedule_post_delete_status == 404 and isinstance(schedule_post_delete_json, dict) and schedule_post_delete_json.get("error", {}).get("code") == "not_found"
+            findings.append(native_api_probe_finding("pass" if schedule_post_delete_ok else "fail", "native-api-direct.schedule-write-post-delete", "Direct API confirms the temporary schedule is no longer live after delete." if schedule_post_delete_ok else "Direct API did not confirm the temporary schedule left live state after delete.", schedule_post_delete, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env), schedule_post_delete_json, {"http_status": schedule_post_delete_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_post_delete_json)}))
+
+            schedule_trash_restore = direct_native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}/restore", token=token, env=env, method="POST")
+            schedule_trash_restore_json, schedule_trash_restore_status = parse_json_output_with_http_status(schedule_trash_restore)
+            schedule_trash_restore_ok = schedule_trash_restore.returncode == 0 and schedule_trash_restore_status == 200 and isinstance(schedule_trash_restore_json, dict) and schedule_trash_restore_json.get("id") == schedule_id and schedule_trash_restore_json.get("comment") == schedule_original_comment
+            findings.append(native_api_probe_finding("pass" if schedule_trash_restore_ok else "fail", "native-api-direct.schedule-write-trash-restore", "Direct write-control restored the temporary schedule from trash." if schedule_trash_restore_ok else "Direct write-control failed to restore the temporary schedule from trash.", schedule_trash_restore, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}/restore", token=token, env=env, method="POST"), schedule_trash_restore_json, {"http_status": schedule_trash_restore_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_trash_restore_json)}))
+
             schedule_cleanup_sql = (
-                "WITH deleted_schedule AS (DELETE FROM schedules_trash "
+                "WITH deleted_live_schedule AS (DELETE FROM schedules "
+                f"WHERE uuid = {sql_literal(schedule_id)} AND name = {sql_literal(schedule_name)} RETURNING id), "
+                "deleted_trash_schedule AS (DELETE FROM schedules_trash "
                 f"WHERE uuid = {sql_literal(schedule_id)} AND name = {sql_literal(schedule_name)} RETURNING id) "
-                "SELECT count(*) FROM deleted_schedule;"
+                "SELECT ((SELECT count(*) FROM deleted_live_schedule) + (SELECT count(*) FROM deleted_trash_schedule));"
             )
             schedule_cleanup = psql(repo_root, schedule_cleanup_sql)
             schedule_cleanup_deleted = psql_value(schedule_cleanup)
             schedule_cleanup_ok = schedule_cleanup.returncode == 0 and schedule_cleanup_deleted == "1"
-            schedule_cleanup_finding = process_step_finding("pass" if schedule_cleanup_ok else "fail", "native-api-direct.schedule-write-cleanup", "Direct write-control smoke removed the temporary schedule fixture through fixed cleanup SQL." if schedule_cleanup_ok else "Direct write-control smoke failed to clean up the temporary schedule fixture.", schedule_cleanup, ["psql", "fixed-schedule-smoke-cleanup"])
+            schedule_cleanup_finding = process_step_finding("pass" if schedule_cleanup_ok else "fail", "native-api-direct.schedule-write-cleanup", "Direct write-control smoke removed the temporary schedule fixture from live/trash state through fixed cleanup SQL." if schedule_cleanup_ok else "Direct write-control smoke failed to clean up the temporary schedule fixture from live/trash state.", schedule_cleanup, ["psql", "fixed-schedule-smoke-cleanup"])
             schedule_cleanup_details = schedule_cleanup_finding.setdefault("details", {})
             if isinstance(schedule_cleanup_details, dict):
                 schedule_cleanup_details.update({"schedule_id": schedule_id, "schedule_name": schedule_name, "deleted_count": schedule_cleanup_deleted})
@@ -12849,6 +12880,17 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_schedule_delete_json, disabled_schedule_delete_status = parse_json_output_with_http_status(disabled_schedule_delete)
     disabled_schedule_delete_ok = disabled_schedule_delete.returncode == 0 and disabled_schedule_delete_status == 405 and isinstance(disabled_schedule_delete_json, dict) and disabled_schedule_delete_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_schedule_delete_ok else "fail", "native-api-direct.schedule-delete-disabled", "Direct native API rejects schedule deletes while direct write-control is disabled." if disabled_schedule_delete_ok else "Direct native API did not reject a schedule delete while direct write-control is disabled.", disabled_schedule_delete, direct_native_api_display_command("/api/v1/schedules/00000000-0000-0000-0000-000000000000", token=token, env=env, method="DELETE"), disabled_schedule_delete_json, {"http_status": disabled_schedule_delete_status, **summarize_native_api_response(disabled_schedule_delete_json)}))
+
+    disabled_schedule_restore = direct_native_api_curl(
+        repo_root,
+        "/api/v1/schedules/00000000-0000-0000-0000-000000000000/restore",
+        token=token,
+        env=env,
+        method="POST",
+    )
+    disabled_schedule_restore_json, disabled_schedule_restore_status = parse_json_output_with_http_status(disabled_schedule_restore)
+    disabled_schedule_restore_ok = disabled_schedule_restore.returncode == 0 and disabled_schedule_restore_status == 405 and isinstance(disabled_schedule_restore_json, dict) and disabled_schedule_restore_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_schedule_restore_ok else "fail", "native-api-direct.schedule-restore-disabled", "Direct native API rejects schedule restores while direct write-control is disabled." if disabled_schedule_restore_ok else "Direct native API did not reject a schedule restore while direct write-control is disabled.", disabled_schedule_restore, direct_native_api_display_command("/api/v1/schedules/00000000-0000-0000-0000-000000000000/restore", token=token, env=env, method="POST"), disabled_schedule_restore_json, {"http_status": disabled_schedule_restore_status, **summarize_native_api_response(disabled_schedule_restore_json)}))
 
     disabled_override_patch = direct_native_api_curl(
         repo_root,

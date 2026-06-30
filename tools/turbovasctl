@@ -7463,13 +7463,29 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
     }
 
 
-def native_api_migration_matrix_focus_terms(focus: str | None = None) -> list[str]:
+def native_api_migration_matrix_focus_values(focus: str | Iterable[str] | None = None) -> list[str]:
     if not focus:
         return []
-    return [term.strip().lower() for term in focus.split(",") if term.strip()]
+    if isinstance(focus, str):
+        return [focus]
+    return [value for value in focus if value]
 
 
-def native_api_migration_matrix_filter_rows(rows: list[dict[str, Any]], focus: str | None = None) -> list[dict[str, Any]]:
+def native_api_migration_matrix_focus_label(focus: str | Iterable[str] | None = None) -> str | None:
+    values = native_api_migration_matrix_focus_values(focus)
+    if not values:
+        return None
+    return ", ".join(values)
+
+
+def native_api_migration_matrix_focus_terms(focus: str | Iterable[str] | None = None) -> list[str]:
+    terms: list[str] = []
+    for value in native_api_migration_matrix_focus_values(focus):
+        terms.extend(term.strip().lower() for term in value.split(",") if term.strip())
+    return terms
+
+
+def native_api_migration_matrix_filter_rows(rows: list[dict[str, Any]], focus: str | Iterable[str] | None = None) -> list[dict[str, Any]]:
     terms = native_api_migration_matrix_focus_terms(focus)
     if not terms:
         return rows
@@ -7577,14 +7593,15 @@ def native_api_migration_matrix_status_only_result(result: dict[str, Any]) -> di
     return compact
 
 
-def command_native_api_migration_matrix(repo_root: Path, status_only: bool = False, focus: str | None = None) -> dict[str, Any]:
+def command_native_api_migration_matrix(repo_root: Path, status_only: bool = False, focus: str | Iterable[str] | None = None) -> dict[str, Any]:
     focus_terms = native_api_migration_matrix_focus_terms(focus)
+    focus_label = native_api_migration_matrix_focus_label(focus)
     rows = native_api_migration_matrix_filter_rows(native_api_migration_matrix_rows(repo_root), focus)
     contract = native_api_migration_matrix_contract_summary(rows)
     summary = native_api_migration_matrix_summary(rows)
     details = {"summary": summary, "contract": contract, "items": rows}
-    if focus:
-        details["focus"] = focus
+    if focus_label:
+        details["focus"] = focus_label
     if focus_terms:
         details["focus_terms"] = focus_terms
         details["focus_match_count"] = len(rows)
@@ -7636,7 +7653,7 @@ def command_native_api_migration_matrix(repo_root: Path, status_only: bool = Fal
                 "warn",
                 "native-api-migration-matrix.focus",
                 "Native API migration matrix focus terms matched zero rows.",
-                details={"focus": focus, "focus_terms": focus_terms},
+                details={"focus": focus_label, "focus_terms": focus_terms},
             )
         )
     result = make_result("native-api-migration-matrix", repo_root, "Native API migration matrix collected.", findings)
@@ -15052,7 +15069,7 @@ def build_parser() -> argparse.ArgumentParser:
     migration_matrix = subparsers.add_parser("native-api-migration-matrix", parents=[common], help="show native API migration metadata by endpoint")
     migration_matrix.add_argument("--compact", action="store_true", help="alias for --status-only; emit compact planning details and only non-pass findings")
     migration_matrix.add_argument("--status-only", action="store_true", help="emit summary/contract details and only non-pass findings for chat-safe API planning")
-    migration_matrix.add_argument("--focus", help="comma-separated terms used to keep only matching migration rows")
+    migration_matrix.add_argument("--focus", action="append", help="comma-separated terms used to keep only matching migration rows; may be repeated")
     native_api_client_contract = subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
     native_api_client_contract.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe generated-client checks")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")

@@ -3050,6 +3050,61 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(compact["details"]["focus_match_count"], 1)
         self.assertNotIn("items", compact["details"])
 
+    def test_native_api_migration_matrix_focus_accepts_repeated_terms(self):
+        root = Path(__file__).resolve().parents[2]
+        rows = [
+            {
+                "endpoint": "/api/v1/schedules",
+                "method": "get",
+                "inventory_endpoint": "/api/v1/schedules",
+                "openapi_path": "/schedules",
+                "direct_access": "scriptable_read",
+                "browser_access": "browser_proxied",
+                "openapi_direct_marker": True,
+                "x_turbovas_exposure": "direct-read",
+                "x_turbovas_maturity": "live-read",
+                "x_turbovas_replaces": "schedule-metadata-list-read",
+                "x_turbovas_inherited_still_owns": "schedule-writes-exports-and-deletes",
+                "replacement_candidates": ["read-only schedule automation"],
+            },
+            {
+                "endpoint": "/api/v1/alerts",
+                "method": "get",
+                "inventory_endpoint": "/api/v1/alerts",
+                "openapi_path": "/alerts",
+                "direct_access": "scriptable_read",
+                "browser_access": "browser_proxied",
+                "openapi_direct_marker": True,
+                "x_turbovas_exposure": "direct-read",
+                "x_turbovas_maturity": "live-read",
+                "x_turbovas_replaces": "alert-metadata-list-read",
+                "x_turbovas_inherited_still_owns": "alert-detail-delivery-control",
+                "replacement_candidates": ["alert list automation"],
+            },
+            {
+                "endpoint": "/api/v1/reports",
+                "method": "get",
+                "inventory_endpoint": "/api/v1/reports",
+                "openapi_path": "/reports",
+                "direct_access": "scriptable_read",
+                "browser_access": "browser_proxied",
+                "openapi_direct_marker": True,
+                "x_turbovas_exposure": "direct-read",
+                "x_turbovas_maturity": "live-read",
+                "x_turbovas_replaces": "raw-report-list-read",
+                "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                "replacement_candidates": ["runtime-report-summary helper"],
+            },
+        ]
+
+        with unittest.mock.patch.object(turbovasctl, "native_api_migration_matrix_rows", return_value=rows):
+            result = turbovasctl.command_native_api_migration_matrix(root, focus=["schedule", "alert"])
+
+        self.assertEqual(result["details"]["focus"], "schedule, alert")
+        self.assertEqual(result["details"]["focus_terms"], ["schedule", "alert"])
+        self.assertEqual(result["details"]["focus_match_count"], 2)
+        self.assertEqual([row["endpoint"] for row in result["details"]["items"]], ["/api/v1/schedules", "/api/v1/alerts"])
+
     def test_native_api_migration_matrix_focus_warns_on_zero_matches(self):
         root = Path(__file__).resolve().parents[2]
         rows = [
@@ -3085,7 +3140,12 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_native_api_migration_matrix_focus_parser_accepts_terms(self):
         args = turbovasctl.build_parser().parse_args(["--json", "native-api-migration-matrix", "--focus", "schedule,trash"])
 
-        self.assertEqual(args.focus, "schedule,trash")
+        self.assertEqual(args.focus, ["schedule,trash"])
+
+    def test_native_api_migration_matrix_focus_parser_accepts_repeated_terms(self):
+        args = turbovasctl.build_parser().parse_args(["--json", "native-api-migration-matrix", "--focus", "schedule,trash", "--focus", "alerts"])
+
+        self.assertEqual(args.focus, ["schedule,trash", "alerts"])
 
     def test_native_api_migration_matrix_fails_on_contract_drift(self):
         root = Path(__file__).resolve().parents[2]

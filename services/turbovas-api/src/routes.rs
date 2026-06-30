@@ -63,7 +63,7 @@ use crate::{
     scope_report_tls_certificates::scope_report_tls_certificates,
     scope_reports::*,
     scope_writes::{create_scope, delete_scope, patch_scope},
-    tag_writes::{create_tag, delete_tag, patch_tag, update_tag_resources},
+    tag_writes::{clone_tag, create_tag, delete_tag, patch_tag, update_tag_resources},
     tags::*,
     task_targets::*,
     timezones::timezones,
@@ -290,6 +290,7 @@ pub(crate) fn direct_native_api_router(
             .route("/api/v1/tags", post(create_tag))
             .route("/api/v1/tags/:tag_id", patch(patch_tag))
             .route("/api/v1/tags/:tag_id", delete(delete_tag))
+            .route("/api/v1/tags/:tag_id/clone", post(clone_tag))
             .route("/api/v1/tags/:tag_id/resources", post(update_tag_resources))
     } else {
         router

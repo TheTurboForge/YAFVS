@@ -2096,7 +2096,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
         self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 74)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 29)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 30)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
@@ -2128,10 +2128,11 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/schedules/{schedule_id}/restore",
                 "POST /api/v1/scopes",
                 "POST /api/v1/tags",
+                "POST /api/v1/tags/{tag_id}/clone",
                 "POST /api/v1/tags/{tag_id}/resources",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 29)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 30)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
@@ -2163,6 +2164,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/schedules/{schedule_id}/restore",
                 "POST /api/v1/scopes",
                 "POST /api/v1/tags",
+                "POST /api/v1/tags/{tag_id}/clone",
                 "POST /api/v1/tags/{tag_id}/resources",
             ],
         )
@@ -2458,12 +2460,12 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 103)
+        self.assertEqual(contract["operation_count"], 104)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
             contract["operations_with_request_bodies"],
-            ["PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /scopes", "PATCH /scopes/{scope_id}"],
+            ["PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /scopes", "PATCH /scopes/{scope_id}"],
         )
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
@@ -2579,6 +2581,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "scope-report-result-evidence-read",
             "scope-report-tls-certificate-evidence-read",
             "tag-active-resource-assignment-write",
+            "tag-clone",
             "tag-metadata-delete",
             "tag-metadata-read",
             "tag-metadata-write",
@@ -2617,7 +2620,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "schedule-create-calendar-export",
             "scope-report-generation",
             "scope-report-generation-retention-and-mutations",
-            "tag-security-info-filter-actions-clone-export-trash",
+            "tag-security-info-filter-actions-export-trash",
             "target-credential-secrets-writes-and-deletes",
             "task-scan-control-writes-and-deletes",
             "tls-certificate-export-delete-and-rich-history",
@@ -2692,12 +2695,12 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass")
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 103)
-        self.assertEqual(details["direct_operation_count"], 103)
+        self.assertEqual(details["operation_count"], 104)
+        self.assertEqual(details["direct_operation_count"], 104)
         self.assertEqual(details["direct_read_operation_count"], 74)
         self.assertEqual(
             details["non_get_direct_operations"],
-            ["PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}"],
+            ["PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}"],
         )
         self.assertIn("/api/v1", details["servers"])
         self.assertIn("http://127.0.0.1:19080/api/v1", details["servers"])
@@ -2724,10 +2727,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 29)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 29)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 29)
-        self.assertEqual(status_only["details"]["operation_request_body_count"], 15)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 30)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 30)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 30)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 16)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
@@ -2907,11 +2910,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 103)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 103)
-        self.assertEqual(details["summary"]["inventory_rows"], 103)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 103)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 103)
+        self.assertEqual(details["summary"]["total_rows"], 104)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 104)
+        self.assertEqual(details["summary"]["inventory_rows"], 104)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 104)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 104)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -3166,21 +3169,29 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tags["x_turbovas_maturity"], "live-read")
         self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-clone-export-trash")
+        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-export-trash")
 
         tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
         self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-clone-export-trash")
+        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-export-trash")
 
         tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
         self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
-        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-clone-export-trash")
+        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-export-trash")
+
+        tag_clone = rows[("post", "/api/v1/tags/{tag_id}/clone")]
+        self.assertEqual(tag_clone["status"], "implemented_direct_write_control")
+        self.assertEqual(tag_clone["direct_access"], "direct_write_control")
+        self.assertEqual(tag_clone["x_turbovas_maturity"], "live-write")
+        self.assertEqual(tag_clone["x_turbovas_exposure"], "direct-write")
+        self.assertEqual(tag_clone["x_turbovas_replaces"], "tag-clone")
+        self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-security-info-filter-actions-export-trash")
 
         retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
         self.assertEqual(retention["status"], "implemented_internal_and_scriptable_read")

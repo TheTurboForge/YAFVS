@@ -16,12 +16,14 @@ use crate::{
     },
     tag_write_sql::*,
     tag_write_validation::{
-        TagResourceUpdateAction, ValidatedTagCreate, ValidatedTagPatch, ValidatedTagResourceUpdate,
+        TagResourceUpdateAction, ValidatedTagClone, ValidatedTagCreate, ValidatedTagPatch,
+        ValidatedTagResourceUpdate,
     },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TagWriteRecord {
+    pub(crate) internal_id: i32,
     pub(crate) uuid: String,
 }
 
@@ -185,6 +187,33 @@ pub(crate) async fn execute_tag_resource_update_transaction(
     Ok(())
 }
 
+pub(crate) async fn execute_tag_clone_transaction(
+    tx: &Transaction<'_>,
+    source_tag_internal_id: i32,
+    owner_id: i32,
+    request: &ValidatedTagClone,
+) -> Result<TagWriteRecord, ApiError> {
+    let record = query_tag_write_record(
+        tx,
+        tag_clone_metadata_sql(),
+        &[
+            &source_tag_internal_id,
+            &owner_id,
+            &request.name,
+            &request.comment,
+        ],
+        "clone tag metadata",
+    )
+    .await?;
+    tx.execute(
+        tag_clone_resources_sql(),
+        &[&source_tag_internal_id, &record.internal_id],
+    )
+    .await
+    .map_err(|error| map_tag_write_db_error(error, "clone tag resources"))?;
+    Ok(record)
+}
+
 pub(crate) async fn execute_tag_delete_transaction(
     tx: &Transaction<'_>,
     tag_internal_id: i32,
@@ -265,7 +294,10 @@ async fn query_tag_write_record(
 }
 
 fn tag_write_record_from_row(row: &Row) -> TagWriteRecord {
-    TagWriteRecord { uuid: row.get(1) }
+    TagWriteRecord {
+        internal_id: row.get(0),
+        uuid: row.get(1),
+    }
 }
 
 pub(crate) fn map_tag_write_db_error(

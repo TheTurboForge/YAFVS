@@ -220,15 +220,19 @@ fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_res
         "/api/v1/tags/12345678-1234-1234-1234-123456789abc/resources",
         true
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/tags/12345678-1234-1234-1234-123456789abc/clone",
+        true
+    ));
 
     for path in [
-        "/api/v1/tags/12345678-1234-1234-1234-123456789abc/clone",
         "/api/v1/tags/12345678-1234-1234-1234-123456789abc/restore",
         "/api/v1/tags/12345678-1234-1234-1234-123456789abc/hard-delete",
     ] {
         assert!(
             !direct_api_v1_method_is_allowed(&Method::POST, path, true),
-            "{path} must remain closed until tag trash/clone semantics are designed"
+            "{path} must remain closed until tag trash semantics are designed"
         );
     }
 }
@@ -238,11 +242,13 @@ fn openapi_tag_contract_records_remaining_inherited_tail() {
     for path in ["/tags", "/tags/{tag_id}", "/tags/{tag_id}/resources"] {
         let block = openapi_path_block(path);
         assert!(block.contains(
-            "x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash"
+            "x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash"
         ));
     }
+    let clone_block = openapi_path_block("/tags/{tag_id}/clone");
+    assert!(clone_block.contains("x-turbovas-replaces: tag-clone"));
+    assert!(clone_block.contains("x-turbovas-safety-contract: write-control-v1"));
     let delete_block = openapi_path_block("/tags/{tag_id}");
     assert!(delete_block.contains("Delete unassigned tag metadata"));
     assert!(delete_block.contains("trash behavior"));
-    assert!(delete_block.contains("clone/copy"));
 }

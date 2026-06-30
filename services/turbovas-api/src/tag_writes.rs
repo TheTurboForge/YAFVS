@@ -15,8 +15,9 @@ use crate::{
     tag_payloads::TagAssetItem,
     tag_write_db::*,
     tag_write_validation::{
-        TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest, validate_tag_create_request,
-        validate_tag_patch_request, validate_tag_resource_update_request,
+        TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
+        validate_tag_clone_request, validate_tag_create_request, validate_tag_patch_request,
+        validate_tag_resource_update_request,
     },
 };
 
@@ -66,6 +67,38 @@ pub(crate) async fn patch_tag(
         .map_err(|error| map_tag_write_db_error(error, "commit patch tag transaction"))?;
 
     Ok(Json(load_tag_write_detail(&client, &record.uuid).await?))
+}
+
+pub(crate) async fn clone_tag(
+    State(state): State<AppState>,
+    Path(tag_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<TagCloneRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
+    let operator = require_tag_write_operator(operator)?;
+    let request = validate_tag_clone_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "begin clone tag transaction"))?;
+    let owner_id = resolve_tag_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "lock tag tables for clone"))?;
+    let source = load_tag_write_state(&tx, &tag_id).await?;
+    ensure_tag_resource_direct_write_type_is_supported(&source.resource_type)?;
+    let record = execute_tag_clone_transaction(&tx, source.internal_id, owner_id, &request).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "commit clone tag transaction"))?;
+
+    let tag = load_tag_write_detail(&client, &record.uuid).await?;
+    Ok((
+        StatusCode::CREATED,
+        tag_write_location_headers(&record.uuid)?,
+        Json(tag),
+    ))
 }
 
 pub(crate) async fn delete_tag(

@@ -3,12 +3,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::tag_write_validation::{
-    TagResourceUpdateAction, ValidatedTagCreate, ValidatedTagPatch, ValidatedTagResourceUpdate,
+    TagResourceUpdateAction, ValidatedTagClone, ValidatedTagCreate, ValidatedTagPatch,
+    ValidatedTagResourceUpdate,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TagWriteOperation {
     CreateMetadata,
+    CloneMetadataAndAssignments,
     PatchMetadata,
     DeleteMetadata,
     UpdateResourceAssignments,
@@ -22,6 +24,7 @@ pub(crate) enum TagWriteStep {
     VerifyTagUnassigned,
     VerifyResourceExists,
     InsertMetadata,
+    CopyResourceAssignments,
     UpdateMetadata,
     DeleteMetadata,
     InsertResourceAssignment,
@@ -63,6 +66,19 @@ pub(crate) fn tag_create_transaction_plan(
             TagWriteStep::ResolveOperatorOwner,
             TagWriteStep::VerifyResourceTypeSupported,
             TagWriteStep::InsertMetadata,
+        ],
+    }
+}
+
+pub(crate) fn tag_clone_transaction_plan(_request: &ValidatedTagClone) -> TagWriteTransactionPlan {
+    TagWriteTransactionPlan {
+        operation: TagWriteOperation::CloneMetadataAndAssignments,
+        steps: vec![
+            TagWriteStep::ResolveOperatorOwner,
+            TagWriteStep::VerifyTagExists,
+            TagWriteStep::VerifyResourceTypeSupported,
+            TagWriteStep::InsertMetadata,
+            TagWriteStep::CopyResourceAssignments,
         ],
     }
 }

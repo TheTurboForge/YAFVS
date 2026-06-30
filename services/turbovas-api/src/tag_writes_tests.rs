@@ -6,8 +6,9 @@ use super::*;
 use crate::tag_write_plans::*;
 use crate::tag_write_sql::*;
 use crate::tag_write_validation::{
-    MAX_TAG_RESOURCE_ID_BYTES, MAX_TAG_RESOURCE_WRITE_IDS, TagResourceUpdateAction,
-    ValidatedTagCreate, ValidatedTagPatch, ValidatedTagResourceUpdate, default_tag_active,
+    MAX_TAG_RESOURCE_ID_BYTES, MAX_TAG_RESOURCE_WRITE_IDS, TagCloneRequest,
+    TagResourceUpdateAction, ValidatedTagClone, ValidatedTagCreate, ValidatedTagPatch,
+    ValidatedTagResourceUpdate, default_tag_active,
 };
 
 #[test]
@@ -35,12 +36,67 @@ fn tag_create_request_normalizes_metadata_only_contract() {
 }
 
 #[test]
+fn tag_clone_request_accepts_optional_metadata_overrides() {
+    let request: TagCloneRequest =
+        serde_json::from_str(r#"{"name":"  cloned tag  ","comment":" copied "}"#)
+            .expect("valid tag clone request");
+    let validated = validate_tag_clone_request(request).expect("valid clone request");
+    assert_eq!(validated.name.as_deref(), Some("cloned tag"));
+    assert_eq!(validated.comment.as_deref(), Some("copied"));
+
+    let default_clone = validate_tag_clone_request(TagCloneRequest {
+        name: None,
+        comment: None,
+    })
+    .expect("empty clone request uses inherited-style generated name");
+    assert_eq!(default_clone.name, None);
+    assert_eq!(default_clone.comment, None);
+}
+
+#[test]
+fn tag_clone_request_rejects_unknown_fields_empty_name_and_bad_text() {
+    assert!(serde_json::from_str::<TagCloneRequest>(r#"{"resource_ids":[]}"#).is_err());
+    assert!(matches!(
+        validate_tag_clone_request(TagCloneRequest {
+            name: Some(" ".to_string()),
+            comment: None,
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_tag_clone_request(TagCloneRequest {
+            name: None,
+            comment: Some("bad\ncomment".to_string()),
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
 fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
     assert!(
         serde_json::from_str::<TagCreateRequest>(
             r#"{"name":"x","resource_type":"task","resource_ids":[]}"#
         )
         .is_err()
+    );
+
+    let clone = ValidatedTagClone {
+        name: None,
+        comment: Some("copied".to_string()),
+    };
+    assert_eq!(
+        tag_clone_transaction_plan(&clone),
+        TagWriteTransactionPlan {
+            operation: TagWriteOperation::CloneMetadataAndAssignments,
+            steps: vec![
+                TagWriteStep::ResolveOperatorOwner,
+                TagWriteStep::VerifyTagExists,
+                TagWriteStep::VerifyResourceTypeSupported,
+                TagWriteStep::InsertMetadata,
+                TagWriteStep::CopyResourceAssignments,
+            ],
+        }
     );
 
     let empty_name = TagCreateRequest {
@@ -309,6 +365,24 @@ fn tag_write_sql_uses_parameterized_metadata_queries_only() {
 
     let touch = tag_touch_metadata_sql();
     assert!(touch.contains("UPDATE tags SET modification_time"));
+
+    let clone = tag_clone_metadata_sql();
+    assert!(clone.contains("INSERT INTO tags"));
+    assert!(clone.contains("coalesce($3, uniquify('tag', name, $2, ' Clone'))"));
+    assert!(clone.contains("coalesce($4, comment)"));
+    assert!(clone.contains("value"));
+    assert!(clone.contains("resource_type"));
+    assert!(clone.contains("active"));
+    assert!(clone.contains("WHERE id = $1"));
+
+    let clone_resources = tag_clone_resources_sql();
+    assert!(clone_resources.contains("INSERT INTO tag_resources"));
+    assert!(
+        clone_resources
+            .contains("SELECT $2, resource_type, resource, resource_uuid, resource_location")
+    );
+    assert!(clone_resources.contains("FROM tag_resources"));
+    assert!(clone_resources.contains("WHERE tag = $1"));
 }
 
 #[test]

@@ -15,6 +15,30 @@ pub(crate) fn tag_insert_metadata_sql() -> &'static str {
      RETURNING id::integer, uuid::text;"
 }
 
+pub(crate) fn tag_clone_metadata_sql() -> &'static str {
+    "INSERT INTO tags
+        (uuid, owner, name, comment, value, resource_type, active, creation_time, modification_time)
+     SELECT make_uuid(),
+            $2,
+            coalesce($3, uniquify('tag', name, $2, ' Clone')),
+            coalesce($4, comment),
+            value,
+            resource_type,
+            active,
+            m_now(),
+            m_now()
+       FROM tags
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn tag_clone_resources_sql() -> &'static str {
+    "INSERT INTO tag_resources (tag, resource_type, resource, resource_uuid, resource_location)
+     SELECT $2, resource_type, resource, resource_uuid, resource_location
+       FROM tag_resources
+      WHERE tag = $1;"
+}
+
 pub(crate) fn tag_update_metadata_sql() -> &'static str {
     "UPDATE tags
         SET name = coalesce($2, name),

@@ -1091,9 +1091,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-read
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       summary: List tags
-      description: Read-only tag metadata backed by gvmd/PostgreSQL. Security-information tag assignment, filter-based resource actions, clone, export, delete, and trash behavior remain on inherited compatibility paths while native resource semantics are designed.
+      description: Read-only tag metadata backed by gvmd/PostgreSQL. Security-information tag assignment, filter-based resource actions, export, delete, and trash behavior remain on inherited compatibility paths while native resource semantics are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1124,13 +1124,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-write
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Create tag metadata
-      description: Direct write-control endpoint for creating tag metadata only. Security-information tag assignment, resource filters, clone/copy, export, assigned-resource delete, and trash behavior remain on inherited compatibility paths.
+      description: Direct write-control endpoint for creating tag metadata only. Security-information tag assignment, resource filters, export, assigned-resource delete, and trash behavior remain on inherited compatibility paths.
       requestBody:
         required: true
         content:
@@ -1170,7 +1170,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-resource-name-read
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       parameters:
         - name: resource_type
           in: path
@@ -1210,7 +1210,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-read
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       summary: Read one tag
       parameters:
         - $ref: '#/components/parameters/TagId'
@@ -1241,13 +1241,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-write
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update tag metadata
-      description: Direct write-control endpoint for updating tag name, comment, value, and active state only. Resource type changes, security-information tag assignment, resource filters, clone/copy, export, assigned-resource delete, and trash behavior remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating tag name, comment, value, and active state only. Resource type changes, security-information tag assignment, resource filters, export, assigned-resource delete, and trash behavior remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -1283,13 +1283,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-delete
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Delete unassigned tag metadata
-      description: Direct write-control endpoint for deleting only tags that have no assigned resources. Security-information tag assignment, trash behavior, clone/copy, export, and filter-based resource actions remain on inherited compatibility paths.
+      description: Direct write-control endpoint for deleting only tags that have no assigned resources. Security-information tag assignment, trash behavior, export, and filter-based resource actions remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -1311,6 +1311,54 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /tags/{tag_id}/clone:
+    post:
+      operationId: postTagsByTagIdClone
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: tag-clone
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Clone tag metadata and assignments
+      description: Direct write-control endpoint for copying an existing live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes, filter-based bulk actions, export, assigned-resource delete, and trash behavior remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/TagId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagCloneRequest'
+      responses:
+        '201':
+          description: Tag cloned
+          headers:
+            Location:
+              description: Path of the cloned tag resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tags/{tag_id}/resources:
     get:
       operationId: getTagsByTagIdResources
@@ -1318,9 +1366,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-resource-reference-read
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       summary: List assigned tag resource references
-      description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Security-information resource mutation, filter-based bulk actions, clone/copy, export, trash behavior, credentials, users, permissions, reports, results, and other unsafe resource classes remain on inherited compatibility paths.
+      description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Security-information resource mutation, filter-based bulk actions, export, trash behavior, credentials, users, permissions, reports, results, and other unsafe resource classes remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
         - $ref: '#/components/parameters/Page'
@@ -1354,13 +1402,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-active-resource-assignment-write
-      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export-trash
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: resource-assignment-write
       summary: Add or remove active tag resource assignments
-      description: Direct write-control endpoint for adding or removing explicit resource assignments for the tag's existing resource type. UUID-backed resource types, including redacted alert metadata rows, use UUID ids; catalog-backed security-information types use their exact public ids such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. It supports only native-safe active-table resource types and explicit resource_ids. Alert delivery, method/event/condition payloads, filter-based bulk actions, set/replace semantics, trash resources, clone/copy, export, credentials, users, reports, and results remain inherited.
+      description: Direct write-control endpoint for adding or removing explicit resource assignments for the tag's existing resource type. UUID-backed resource types, including redacted alert metadata rows, use UUID ids; catalog-backed security-information types use their exact public ids such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. It supports only native-safe active-table resource types and explicit resource_ids. Alert delivery, method/event/condition payloads, filter-based bulk actions, set/replace semantics, trash resources, export, credentials, users, reports, and results remain inherited.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -4605,6 +4653,18 @@ components:
       type: object
       additionalProperties: false
       description: Optional metadata overrides for a cloned saved filter. Empty object uses the inherited-style unique Clone name and copies the source comment, term, and type.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+    TagCloneRequest:
+      type: object
+      additionalProperties: false
+      description: Optional metadata overrides for a cloned tag. Empty object uses the inherited-style unique Clone name and copies the source comment, value, resource type, active state, and resource assignments for native-safe resource types.
       properties:
         name:
           type: string

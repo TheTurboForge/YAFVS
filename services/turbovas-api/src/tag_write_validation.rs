@@ -26,6 +26,15 @@ pub(crate) struct TagCreateRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct TagCloneRequest {
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TagPatchRequest {
     #[serde(default)]
     pub(crate) name: Option<String>,
@@ -35,6 +44,12 @@ pub(crate) struct TagPatchRequest {
     pub(crate) value: Option<String>,
     #[serde(default)]
     pub(crate) active: Option<bool>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedTagClone {
+    pub(crate) name: Option<String>,
+    pub(crate) comment: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -151,6 +166,15 @@ pub(crate) fn validate_tag_patch_request(
     } else {
         Ok(validated)
     }
+}
+
+pub(crate) fn validate_tag_clone_request(
+    request: TagCloneRequest,
+) -> Result<ValidatedTagClone, ApiError> {
+    Ok(ValidatedTagClone {
+        name: normalize_optional_required_tag_text(request.name, "name")?,
+        comment: normalize_optional_tag_text(request.comment, "comment")?,
+    })
 }
 
 fn normalize_required_tag_text(value: String, field_name: &str) -> Result<String, ApiError> {

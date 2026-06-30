@@ -574,6 +574,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scope-report-result-evidence-read",
         "scope-report-tls-certificate-evidence-read",
         "tag-active-resource-assignment-write",
+        "tag-clone",
         "tag-metadata-read",
         "tag-metadata-delete",
         "tag-metadata-write",
@@ -613,7 +614,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "schedule-create-calendar-export",
         "scope-report-generation",
         "scope-report-generation-retention-and-mutations",
-        "tag-security-info-filter-actions-clone-export-trash",
+        "tag-security-info-filter-actions-export-trash",
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
         "tls-certificate-export-delete-and-rich-history",
@@ -713,6 +714,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/tags/{tag_id}"): "direct-write",
     ("delete", "/tags/{tag_id}"): "direct-write",
     ("post", "/tags/{tag_id}/resources"): "direct-write",
+    ("post", "/tags/{tag_id}/clone"): "direct-write",
 }
 OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts"): {
@@ -962,44 +964,49 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/tags/resource-names/{resource_type}"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-resource-name-read",
     },
     ("get", "/tags"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-metadata-read",
     },
     ("get", "/tags/{tag_id}"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-metadata-read",
     },
     ("post", "/tags"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-metadata-write",
     },
     ("patch", "/tags/{tag_id}"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-metadata-write",
     },
     ("delete", "/tags/{tag_id}"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-metadata-delete",
     },
     ("get", "/tags/{tag_id}/resources"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-resource-reference-read",
     },
     ("post", "/tags/{tag_id}/resources"): {
-        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-clone-export-trash",
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-active-resource-assignment-write",
+    },
+    ("post", "/tags/{tag_id}/clone"): {
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export-trash",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "tag-clone",
     },
     ("get", "/trashcan/summary"): {
         "x-turbovas-inherited-still-owns": "trashcan-row-data-and-mutations",
@@ -7057,6 +7064,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native explicit tag resource assignment updates"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/tags/{tag_id}/clone",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native tag clone with copied resource assignments"],
+            },
+            {
                 "endpoint": "/api/v1/targets",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA target list reads (migrated through gsad same-origin proxy)", "read-only target automation", "native-api-request helper"],
@@ -12236,6 +12250,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     started_write_control = False
     scope_id: str | None = None
     tag_id: str | None = None
+    tag_clone_id: str | None = None
     tag_resource_id: str | None = None
     alert_tag_id: str | None = None
     alert_resource_id: str | None = None
@@ -12264,6 +12279,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
     report_config_clone_name = f"{report_config_name}-clone"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
+    tag_clone_name = f"{tag_name}-clone"
     alert_name = f"turbovas-direct-write-smoke-alert-{int(time.time())}-{os.getpid()}"
     alert_tag_name = f"turbovas-direct-write-smoke-alert-tag-{int(time.time())}-{os.getpid()}"
     if aggregate_status(findings) != "fail":
@@ -12956,6 +12972,36 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 tag_after_add_ok = tag_after_add.returncode == 0 and tag_after_add_status == 200 and isinstance(tag_after_add_json, dict) and tag_after_add_json.get("id") == tag_id and tag_after_add_json.get("resource_count") == 1 and tag_after_add_json.get("in_use") is True
                 findings.append(native_api_probe_finding("pass" if tag_after_add_ok else "fail", "native-api-direct.tag-resource-in-use-after-add", "Direct API reports the temporary tag in use after assigning a resource." if tag_after_add_ok else "Direct API did not report the temporary tag in use after assigning a resource.", tag_after_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env), tag_after_add_json, {"http_status": tag_after_add_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_after_add_json)}))
 
+                tag_clone_body = json.dumps(
+                    {"name": tag_clone_name, "comment": "TurboVAS direct write smoke cloned temporary tag"},
+                    separators=(",", ":"),
+                )
+                tag_clone = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}/clone", token=token, env=env, method="POST", body=tag_clone_body, extra_headers=content_type)
+                tag_clone_json, tag_clone_status = parse_json_output_with_http_status(tag_clone)
+                tag_clone_id = tag_clone_json.get("id") if isinstance(tag_clone_json, dict) and isinstance(tag_clone_json.get("id"), str) else None
+                tag_clone_ok = tag_clone.returncode == 0 and tag_clone_status == 201 and bool(tag_clone_id) and tag_clone_id != tag_id and tag_clone_json.get("name") == tag_clone_name and tag_clone_json.get("comment") == "TurboVAS direct write smoke cloned temporary tag" and tag_clone_json.get("resource_type") == "cpe" and tag_clone_json.get("resource_count") == 1
+                findings.append(native_api_probe_finding("pass" if tag_clone_ok else "fail", "native-api-direct.tag-write-clone", "Direct write-control cloned the temporary tag and copied its resource assignment." if tag_clone_ok else "Direct write-control failed to clone the temporary tag with copied resource assignment.", tag_clone, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/clone", token=token, env=env, method="POST", body=tag_clone_body, extra_headers=content_type), tag_clone_json, {"http_status": tag_clone_status, "tag_id": tag_id, "tag_clone_id": tag_clone_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_clone_json)}))
+
+                if tag_clone_id:
+                    tag_clone_resource_remove_body = json.dumps(
+                        {"action": "remove", "resource_ids": [tag_resource_id]},
+                        separators=(",", ":"),
+                    )
+                    tag_clone_resource_remove = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_clone_id)}/resources", token=token, env=env, method="POST", body=tag_clone_resource_remove_body, extra_headers=content_type)
+                    tag_clone_resource_remove_json, tag_clone_resource_remove_status = parse_json_output_with_http_status(tag_clone_resource_remove)
+                    tag_clone_resource_remove_ok = tag_clone_resource_remove.returncode == 0 and tag_clone_resource_remove_status == 200 and isinstance(tag_clone_resource_remove_json, dict) and tag_clone_resource_remove_json.get("id") == tag_clone_id and tag_clone_resource_remove_json.get("resource_count") == 0
+                    findings.append(native_api_probe_finding("pass" if tag_clone_resource_remove_ok else "fail", "native-api-direct.tag-clone-resource-remove", "Direct write-control removed the copied resource assignment from the temporary tag clone." if tag_clone_resource_remove_ok else "Direct write-control failed to remove the copied resource assignment from the temporary tag clone.", tag_clone_resource_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_clone_id)}/resources", token=token, env=env, method="POST", body=tag_clone_resource_remove_body, extra_headers=content_type), tag_clone_resource_remove_json, {"http_status": tag_clone_resource_remove_status, "tag_clone_id": tag_clone_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_clone_resource_remove_json)}))
+
+                    tag_clone_delete = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_clone_id)}", token=token, env=env, method="DELETE")
+                    tag_clone_delete_json, tag_clone_delete_status = parse_json_output_with_http_status(tag_clone_delete)
+                    tag_clone_delete_ok = tag_clone_delete.returncode == 0 and tag_clone_delete_status == 204
+                    findings.append(native_api_probe_finding("pass" if tag_clone_delete_ok else "fail", "native-api-direct.tag-clone-delete", "Direct write-control deleted the temporary tag clone after removing its copied assignment." if tag_clone_delete_ok else "Direct write-control failed to delete the temporary tag clone after removing its copied assignment.", tag_clone_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_clone_id)}", token=token, env=env, method="DELETE"), tag_clone_delete_json, {"http_status": tag_clone_delete_status, "tag_clone_id": tag_clone_id, **summarize_native_api_response(tag_clone_delete_json)}))
+
+                    tag_clone_post_delete = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_clone_id)}", token=token, env=env)
+                    tag_clone_post_delete_json, tag_clone_post_delete_status = parse_json_output_with_http_status(tag_clone_post_delete)
+                    tag_clone_post_delete_ok = tag_clone_post_delete.returncode == 0 and tag_clone_post_delete_status == 404 and isinstance(tag_clone_post_delete_json, dict) and tag_clone_post_delete_json.get("error", {}).get("code") == "not_found"
+                    findings.append(native_api_probe_finding("pass" if tag_clone_post_delete_ok else "fail", "native-api-direct.tag-clone-post-delete", "Direct API confirms the temporary tag clone is gone after delete." if tag_clone_post_delete_ok else "Direct API did not confirm the temporary tag clone was deleted.", tag_clone_post_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_clone_id)}", token=token, env=env), tag_clone_post_delete_json, {"http_status": tag_clone_post_delete_status, "tag_clone_id": tag_clone_id, **summarize_native_api_response(tag_clone_post_delete_json)}))
+
                 tag_resource_remove_body = json.dumps(
                     {"action": "remove", "resource_ids": [tag_resource_id]},
                     separators=(",", ":"),
@@ -13150,7 +13196,9 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         "temporary_schedule_name": schedule_name,
         "temporary_schedule_clone_name": schedule_clone_name,
         "temporary_tag_id": tag_id,
+        "temporary_tag_clone_id": tag_clone_id,
         "temporary_tag_name": tag_name,
+        "temporary_tag_clone_name": tag_clone_name,
         "temporary_tag_resource_id": tag_resource_id,
         "temporary_alert_id": alert_resource_id,
         "temporary_alert_name": alert_name,

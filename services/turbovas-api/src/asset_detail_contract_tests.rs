@@ -18,6 +18,9 @@ use crate::{
     query::sort_clause,
     scan_config_query_sql::{scan_config_asset_detail_sql, scan_config_task_references_sql},
     scanner_asset_query_sql::{scanner_asset_detail_sql, scanner_task_references_sql},
+    tls_certificate_query_sql::{
+        tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_sources_sql,
+    },
     user_tags::catalog_user_tags_sql,
 };
 
@@ -468,14 +471,26 @@ fn tls_certificate_detail_contract_excludes_certificate_bytes() {
         .split_once("pub(crate) async fn tls_certificate_asset_export")
         .expect("TLS certificate detail handler must precede export handler")
         .0;
+    let list_sql = tls_certificate_assets_sql("subject_dn ASC");
+    let detail_sql = tls_certificate_asset_detail_sql();
+    let sources_sql = tls_certificate_sources_sql();
+    let combined_sql = format!("{list_sql}\n{detail_sql}\n{sources_sql}");
 
-    assert!(detail_source.contains("valid_int"));
-    assert!(detail_source.contains("trust_int"));
-    assert!(detail_source.contains("time_status"));
-    assert!(detail_source.contains("host_asset_id"));
+    assert!(detail_source.contains("tls_certificate_asset_detail_sql()"));
+    assert!(detail_source.contains("tls_certificate_sources_sql()"));
     assert!(detail_source.contains("tls_certificate_user_tags"));
-    assert!(!detail_source.contains("c.certificate"));
-    assert!(!detail_source.contains("certificate_format"));
+    for required in ["valid_int", "trust_int", "time_status", "host_asset_id"] {
+        assert!(combined_sql.contains(required));
+    }
+    for forbidden in [
+        "c.certificate",
+        "certificate_format",
+        "private_key",
+        "password",
+    ] {
+        assert!(!detail_source.contains(forbidden));
+        assert!(!combined_sql.contains(forbidden));
+    }
 }
 
 #[test]

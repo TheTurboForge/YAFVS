@@ -171,6 +171,7 @@ mod task_writes;
 mod task_writes_tests;
 mod timezones;
 mod tls_certificate_payloads;
+mod tls_certificate_query_sql;
 mod tls_certificates;
 mod trashcan;
 mod user_tags;

@@ -8,7 +8,8 @@ use crate::{
     target_write_sql::*,
     target_write_validation::{
         MAX_TARGET_HOSTS, MAX_TARGET_TEXT_BYTES, TargetCloneRequest, TargetCreateRequest,
-        TargetPatchRequest, validate_alive_tests, validate_target_clone_request,
+        TargetCredentialLinkPatchRequest, TargetCredentialsPatchRequest, TargetPatchRequest,
+        ValidatedCredentialPatchAction, validate_alive_tests, validate_target_clone_request,
         validate_target_create_request, validate_target_patch_request,
     },
 };
@@ -27,6 +28,28 @@ fn create_request() -> TargetCreateRequest {
     }
 }
 
+fn credential_link(id: &str, port: Option<i32>) -> TargetCredentialLinkPatchRequest {
+    TargetCredentialLinkPatchRequest {
+        id: id.to_string(),
+        port,
+    }
+}
+
+fn credentials_patch_request(credentials: TargetCredentialsPatchRequest) -> TargetPatchRequest {
+    TargetPatchRequest {
+        name: None,
+        comment: None,
+        alive_tests: None,
+        allow_simultaneous_ips: None,
+        reverse_lookup_only: None,
+        reverse_lookup_unify: None,
+        port_list_id: None,
+        hosts: None,
+        exclude_hosts: None,
+        credentials: Some(credentials),
+    }
+}
+
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> TargetPatchRequest {
     TargetPatchRequest {
         name: name.map(str::to_string),
@@ -38,7 +61,109 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> TargetPatchReques
         port_list_id: None,
         hosts: None,
         exclude_hosts: None,
+        credentials: None,
     }
+}
+
+#[test]
+fn target_patch_request_validates_credential_link_actions() {
+    let ssh_id = "12345678-1234-1234-1234-123456789abc";
+    let elevate_id = "12345678-1234-1234-1234-123456789abd";
+    let validated =
+        validate_target_patch_request(credentials_patch_request(TargetCredentialsPatchRequest {
+            ssh: Some(
+                crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
+                    credential_link(ssh_id, None),
+                ),
+            ),
+            ssh_elevate: Some(
+                crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
+                    credential_link(elevate_id, None),
+                ),
+            ),
+            smb: Some(crate::target_write_validation::TargetCredentialPatchFieldRequest::Clear),
+            ..Default::default()
+        }))
+        .expect("valid credential link patch");
+    assert!(validated.changes_credential_links());
+    assert!(!validated.changes_task_in_use_guarded_scan_inputs());
+    match validated.credentials.ssh {
+        Some(ValidatedCredentialPatchAction::Set(link)) => {
+            assert_eq!(link.id, ssh_id);
+            assert_eq!(link.port, Some(22));
+        }
+        _ => panic!("ssh credential should be set"),
+    }
+    match validated.credentials.ssh_elevate {
+        Some(ValidatedCredentialPatchAction::Set(link)) => {
+            assert_eq!(link.id, elevate_id);
+            assert_eq!(link.port, None);
+        }
+        _ => panic!("elevate credential should be set"),
+    }
+    assert!(matches!(
+        validated.credentials.smb,
+        Some(ValidatedCredentialPatchAction::Clear)
+    ));
+}
+
+#[test]
+fn target_patch_request_rejects_unsafe_credential_link_shapes() {
+    assert!(matches!(
+        validate_target_patch_request(credentials_patch_request(
+            TargetCredentialsPatchRequest::default()
+        )),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(credentials_patch_request(TargetCredentialsPatchRequest {
+            ssh: Some(
+                crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
+                    credential_link("12345678-1234-1234-1234-123456789abc", Some(0)),
+                )
+            ),
+            ..Default::default()
+        })),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(credentials_patch_request(TargetCredentialsPatchRequest {
+            smb: Some(
+                crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
+                    credential_link("12345678-1234-1234-1234-123456789abc", Some(445)),
+                )
+            ),
+            ..Default::default()
+        })),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(credentials_patch_request(TargetCredentialsPatchRequest {
+            snmp: Some(
+                crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
+                    credential_link("not-a-uuid", None),
+                )
+            ),
+            ..Default::default()
+        })),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn target_patch_request_deserializes_null_credential_link_as_clear() {
+    let request = serde_json::json!({
+        "credentials": {
+            "ssh": null
+        }
+    });
+    let request = serde_json::from_value::<TargetPatchRequest>(request)
+        .expect("explicit null credential link should deserialize");
+    let validated = validate_target_patch_request(request).expect("clear credential link patch");
+    assert!(matches!(
+        validated.credentials.ssh,
+        Some(ValidatedCredentialPatchAction::Clear)
+    ));
 }
 
 #[test]
@@ -94,6 +219,7 @@ fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
         port_list_id: None,
         hosts: None,
         exclude_hosts: None,
+        credentials: None,
     }
 }
 
@@ -123,6 +249,7 @@ fn scan_settings_patch_request(
         port_list_id: None,
         hosts: None,
         exclude_hosts: None,
+        credentials: None,
     }
 }
 
@@ -137,6 +264,7 @@ fn port_list_patch_request(port_list_id: &str) -> TargetPatchRequest {
         port_list_id: Some(port_list_id.to_string()),
         hosts: None,
         exclude_hosts: None,
+        credentials: None,
     }
 }
 
@@ -156,6 +284,7 @@ fn hosts_patch_request(hosts: &[&str], exclude_hosts: &[&str]) -> TargetPatchReq
                 .map(|value| value.to_string())
                 .collect(),
         ),
+        credentials: None,
     }
 }
 
@@ -227,6 +356,7 @@ fn target_patch_request_rejects_oversized_metadata_fields() {
             port_list_id: None,
             hosts: None,
             exclude_hosts: None,
+            credentials: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -257,6 +387,7 @@ fn target_patch_request_validates_simple_host_lists() {
             port_list_id: None,
             hosts: None,
             exclude_hosts: Some(vec!["192.0.2.1".to_string()]),
+            credentials: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -546,4 +677,32 @@ fn target_patch_state_and_uniqueness_are_live_metadata_only() {
     assert!(assignable_port_list.contains("FROM port_lists"));
     assert!(assignable_port_list.contains("owner::integer"));
     assert!(assignable_port_list.contains("coalesce(predefined, 0)::integer"));
+}
+
+#[test]
+fn target_credential_link_sql_is_reference_only_and_secret_free() {
+    let assignable = target_assignable_credential_state_sql();
+    assert!(assignable.contains("FROM credentials"));
+    assert!(assignable.contains("owner::integer"));
+    assert!(assignable.contains("type"));
+    assert!(!assignable.contains("credentials_data"));
+    assert!(!assignable.contains("secret"));
+    assert!(!assignable.contains("password"));
+
+    let current = target_current_credential_sql();
+    assert!(current.contains("FROM targets_login_data"));
+    assert!(current.contains("target = $1"));
+    assert!(current.contains("type = $2"));
+
+    let delete = target_delete_login_data_by_type_sql();
+    assert!(delete.contains("DELETE FROM targets_login_data"));
+    assert!(delete.contains("target = $1"));
+    assert!(delete.contains("type = $2"));
+
+    let insert = target_insert_login_data_sql();
+    assert!(insert.contains("INSERT INTO targets_login_data"));
+    assert!(insert.contains("target, type, credential, port"));
+    assert!(!insert.contains("credentials_data"));
+    assert!(!insert.contains("secret"));
+    assert!(!insert.contains("password"));
 }

@@ -37,6 +37,12 @@ pub(crate) struct AssignableTargetPortList {
     pub(crate) internal_id: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AssignableTargetCredential {
+    pub(crate) internal_id: i32,
+    pub(crate) credential_type: String,
+}
+
 pub(crate) fn require_target_write_operator(
     operator: Option<Extension<DirectApiOperator>>,
 ) -> Result<DirectApiOperator, ApiError> {
@@ -142,6 +148,58 @@ pub(crate) async fn ensure_unique_target_name(
             "target with the same name already exists".to_string(),
         ))
     }
+}
+
+pub(crate) async fn load_assignable_target_credential(
+    tx: &Transaction<'_>,
+    credential_id: &str,
+    operator_owner_id: i32,
+    allowed_types: &[&str],
+    field_name: &'static str,
+) -> Result<AssignableTargetCredential, ApiError> {
+    let credential_id = parse_uuid(credential_id)?.to_string();
+    let Some(row) = tx
+        .query_opt(target_assignable_credential_state_sql(), &[&credential_id])
+        .await
+        .map_err(|error| map_target_write_db_error(error, "load target credential reference"))?
+    else {
+        return Err(ApiError::NotFound);
+    };
+    let internal_id: i32 = row.get(0);
+    let owner_id: i32 = row.get(1);
+    let credential_type: String = row.get(2);
+    if owner_id != operator_owner_id {
+        tracing::warn!(
+            credential_owner_id = owner_id,
+            operator_owner_id,
+            field_name,
+            "direct API target write operator cannot assign credential"
+        );
+        return Err(ApiError::Forbidden);
+    }
+    if !allowed_types.contains(&credential_type.as_str()) {
+        return Err(ApiError::BadRequest(format!(
+            "{field_name} credential has unsupported type {credential_type}"
+        )));
+    }
+    Ok(AssignableTargetCredential {
+        internal_id,
+        credential_type,
+    })
+}
+
+pub(crate) async fn load_current_target_credential_internal_id(
+    tx: &Transaction<'_>,
+    target_internal_id: i32,
+    credential_use: &'static str,
+) -> Result<Option<i32>, ApiError> {
+    tx.query_opt(
+        target_current_credential_sql(),
+        &[&target_internal_id, &credential_use],
+    )
+    .await
+    .map_err(|error| map_target_write_db_error(error, "load current target credential"))
+    .map(|row| row.map(|row| row.get(0)))
 }
 
 pub(crate) async fn ensure_target_not_in_use_for_delete(

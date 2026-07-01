@@ -56,6 +56,39 @@ pub(crate) struct TargetPatchRequest {
     pub(crate) hosts: Option<Vec<String>>,
     #[serde(default)]
     pub(crate) exclude_hosts: Option<Vec<String>>,
+    #[serde(default)]
+    pub(crate) credentials: Option<TargetCredentialsPatchRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TargetCredentialLinkPatchRequest {
+    pub(crate) id: String,
+    #[serde(default)]
+    pub(crate) port: Option<i32>,
+}
+
+#[derive(Debug)]
+pub(crate) enum TargetCredentialPatchFieldRequest {
+    Set(TargetCredentialLinkPatchRequest),
+    Clear,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TargetCredentialsPatchRequest {
+    #[serde(default, deserialize_with = "deserialize_credential_patch_field")]
+    pub(crate) ssh: Option<TargetCredentialPatchFieldRequest>,
+    #[serde(default, deserialize_with = "deserialize_credential_patch_field")]
+    pub(crate) ssh_elevate: Option<TargetCredentialPatchFieldRequest>,
+    #[serde(default, deserialize_with = "deserialize_credential_patch_field")]
+    pub(crate) smb: Option<TargetCredentialPatchFieldRequest>,
+    #[serde(default, deserialize_with = "deserialize_credential_patch_field")]
+    pub(crate) esxi: Option<TargetCredentialPatchFieldRequest>,
+    #[serde(default, deserialize_with = "deserialize_credential_patch_field")]
+    pub(crate) snmp: Option<TargetCredentialPatchFieldRequest>,
+    #[serde(default, deserialize_with = "deserialize_credential_patch_field")]
+    pub(crate) krb5: Option<TargetCredentialPatchFieldRequest>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -88,6 +121,29 @@ pub(crate) struct ValidatedTargetPatch {
     pub(crate) port_list_id: Option<String>,
     pub(crate) hosts: Option<String>,
     pub(crate) exclude_hosts: Option<String>,
+    pub(crate) credentials: ValidatedTargetCredentialsPatch,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedCredentialLinkPatch {
+    pub(crate) id: String,
+    pub(crate) port: Option<i32>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ValidatedCredentialPatchAction {
+    Set(ValidatedCredentialLinkPatch),
+    Clear,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct ValidatedTargetCredentialsPatch {
+    pub(crate) ssh: Option<ValidatedCredentialPatchAction>,
+    pub(crate) ssh_elevate: Option<ValidatedCredentialPatchAction>,
+    pub(crate) smb: Option<ValidatedCredentialPatchAction>,
+    pub(crate) esxi: Option<ValidatedCredentialPatchAction>,
+    pub(crate) snmp: Option<ValidatedCredentialPatchAction>,
+    pub(crate) krb5: Option<ValidatedCredentialPatchAction>,
 }
 
 pub(crate) fn validate_target_clone_request(
@@ -127,6 +183,32 @@ impl ValidatedTargetPatch {
             || self.port_list_id.is_some()
             || self.hosts.is_some()
     }
+
+    pub(crate) fn changes_credential_links(&self) -> bool {
+        self.credentials.has_changes()
+    }
+
+    pub(crate) fn changes_target_metadata_or_scan_inputs(&self) -> bool {
+        self.name.is_some()
+            || self.comment.is_some()
+            || self.alive_test.is_some()
+            || self.allow_simultaneous_ips.is_some()
+            || self.reverse_lookup_only.is_some()
+            || self.reverse_lookup_unify.is_some()
+            || self.port_list_id.is_some()
+            || self.hosts.is_some()
+    }
+}
+
+impl ValidatedTargetCredentialsPatch {
+    pub(crate) fn has_changes(&self) -> bool {
+        self.ssh.is_some()
+            || self.ssh_elevate.is_some()
+            || self.smb.is_some()
+            || self.esxi.is_some()
+            || self.snmp.is_some()
+            || self.krb5.is_some()
+    }
 }
 
 fn validate_uuid(value: String, field_name: &str) -> Result<String, ApiError> {
@@ -150,6 +232,7 @@ pub(crate) fn validate_target_patch_request(
         port_list_id: validate_optional_uuid(request.port_list_id, "port_list_id")?,
         hosts: None,
         exclude_hosts: None,
+        credentials: validate_credentials_patch(request.credentials)?,
     };
     let (hosts, exclude_hosts) = validate_target_host_lists(request.hosts, request.exclude_hosts)?;
     let validated = ValidatedTargetPatch {
@@ -165,12 +248,89 @@ pub(crate) fn validate_target_patch_request(
         && validated.reverse_lookup_unify.is_none()
         && validated.port_list_id.is_none()
         && validated.hosts.is_none()
+        && !validated.credentials.has_changes()
     {
         return Err(ApiError::BadRequest(
             "target patch request must include at least one field".to_string(),
         ));
     }
     Ok(validated)
+}
+
+fn validate_credentials_patch(
+    request: Option<TargetCredentialsPatchRequest>,
+) -> Result<ValidatedTargetCredentialsPatch, ApiError> {
+    let Some(request) = request else {
+        return Ok(ValidatedTargetCredentialsPatch::default());
+    };
+    let patch = ValidatedTargetCredentialsPatch {
+        ssh: validate_credential_patch_action(request.ssh, "credentials.ssh", true)?,
+        ssh_elevate: validate_credential_patch_action(
+            request.ssh_elevate,
+            "credentials.ssh_elevate",
+            false,
+        )?,
+        smb: validate_credential_patch_action(request.smb, "credentials.smb", false)?,
+        esxi: validate_credential_patch_action(request.esxi, "credentials.esxi", false)?,
+        snmp: validate_credential_patch_action(request.snmp, "credentials.snmp", false)?,
+        krb5: validate_credential_patch_action(request.krb5, "credentials.krb5", false)?,
+    };
+    if !patch.has_changes() {
+        return Err(ApiError::BadRequest(
+            "credentials patch must include at least one credential field".to_string(),
+        ));
+    }
+    Ok(patch)
+}
+
+fn validate_credential_patch_action(
+    action: Option<TargetCredentialPatchFieldRequest>,
+    field_name: &str,
+    allow_port: bool,
+) -> Result<Option<ValidatedCredentialPatchAction>, ApiError> {
+    let Some(action) = action else {
+        return Ok(None);
+    };
+    let request = match action {
+        TargetCredentialPatchFieldRequest::Clear => {
+            return Ok(Some(ValidatedCredentialPatchAction::Clear));
+        }
+        TargetCredentialPatchFieldRequest::Set(request) => request,
+    };
+    let port = match (allow_port, request.port) {
+        (true, None) => Some(22),
+        (true, Some(port)) if (1..=65535).contains(&port) => Some(port),
+        (true, Some(_)) => {
+            return Err(ApiError::BadRequest(format!(
+                "{field_name}.port must be between 1 and 65535"
+            )));
+        }
+        (false, None) => None,
+        (false, Some(_)) => {
+            return Err(ApiError::BadRequest(format!(
+                "{field_name}.port is only supported for ssh"
+            )));
+        }
+    };
+    Ok(Some(ValidatedCredentialPatchAction::Set(
+        ValidatedCredentialLinkPatch {
+            id: validate_uuid(request.id, &format!("{field_name}.id"))?,
+            port,
+        },
+    )))
+}
+
+fn deserialize_credential_patch_field<'de, D>(
+    deserializer: D,
+) -> Result<Option<TargetCredentialPatchFieldRequest>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let request = Option::<TargetCredentialLinkPatchRequest>::deserialize(deserializer)?;
+    Ok(Some(match request {
+        Some(request) => TargetCredentialPatchFieldRequest::Set(request),
+        None => TargetCredentialPatchFieldRequest::Clear,
+    }))
 }
 
 fn validate_target_host_lists(

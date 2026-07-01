@@ -100,6 +100,26 @@ pub(crate) fn target_assignable_port_list_state_sql() -> &'static str {
       WHERE uuid = $1;"
 }
 
+pub(crate) fn target_assignable_credential_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer,
+            type
+       FROM credentials
+      WHERE uuid = $1;"
+}
+
+pub(crate) fn target_current_credential_sql() -> &'static str {
+    "SELECT credential::integer
+       FROM targets_login_data
+      WHERE target = $1
+        AND type = $2
+      LIMIT 1;"
+}
+
+pub(crate) fn target_uuid_by_internal_id_sql() -> &'static str {
+    "SELECT uuid::text FROM targets WHERE id = $1;"
+}
+
 pub(crate) fn target_update_metadata_sql() -> &'static str {
     "UPDATE targets
         SET name = coalesce($2, name),
@@ -154,6 +174,17 @@ pub(crate) fn target_clone_login_data_sql() -> &'static str {
      SELECT $2, type, credential, port
        FROM targets_login_data
       WHERE target = $1;"
+}
+
+pub(crate) fn target_delete_login_data_by_type_sql() -> &'static str {
+    "DELETE FROM targets_login_data
+      WHERE target = $1
+        AND type = $2;"
+}
+
+pub(crate) fn target_insert_login_data_sql() -> &'static str {
+    "INSERT INTO targets_login_data (target, type, credential, port)
+     VALUES ($1, $2, $3, $4);"
 }
 
 pub(crate) fn target_clone_tags_sql() -> &'static str {

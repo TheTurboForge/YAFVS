@@ -424,11 +424,13 @@ fn native_target_broad_mutation_routes_remain_closed() {
             "{path} OpenAPI block must keep {replacement}"
         );
         assert!(block.contains(
-            "x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation"
+            "x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation"
         ));
     }
     let detail = openapi_path_block("/targets/{target_id}");
-    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-simple-scan-inputs-modify"));
+    assert!(detail.contains(
+        "x-turbovas-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify"
+    ));
     assert!(detail.contains("x-turbovas-replaces: target-trash-move"));
     for forbidden in ["post:", "/clone", "/restore", "/trash"] {
         assert!(

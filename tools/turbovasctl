@@ -618,7 +618,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "target-hard-delete",
         "target-list-read",
         "target-metadata-export-read",
-        "target-metadata-and-simple-scan-inputs-modify",
+        "target-metadata-simple-scan-inputs-and-credential-links-modify",
         "target-restore",
         "target-trash-move",
         "task-metadata-modify",
@@ -659,8 +659,8 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "scope-report-generation",
         "scope-report-generation-retention-and-mutations",
         "tag-security-info-filter-actions-export",
-        "target-export-credential-link-and-secret-mutation",
-        "target-credential-secrets-create-delete-restore-export-and-credential-link-mutation",
+        "target-export-and-credential-secret-mutation",
+        "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
         "tls-certificate-export-delete-and-rich-history",
@@ -1447,12 +1447,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scope-metadata-membership-write",
     },
     ("get", "/targets"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-list-read",
     },
     ("post", "/targets"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1461,26 +1461,26 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-detail-summary-read",
     },
     ("get", "/targets/{target_id}/export"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-metadata-export-read",
     },
     ("patch", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
-        "x-turbovas-replaces": "target-metadata-and-simple-scan-inputs-modify",
+        "x-turbovas-replaces": "target-metadata-simple-scan-inputs-and-credential-links-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1489,7 +1489,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("post", "/targets/{target_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1498,7 +1498,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/targets/{target_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1507,7 +1507,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/targets/{target_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "target-export-credential-link-and-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -7727,7 +7727,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/targets/{target_id}",
                 "status": "implemented_direct_write_control",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native target name/comment metadata patch"],
+                "replacement_candidates": ["direct native target metadata, bounded scan-input, and credential-link patch"],
             },
             {
                 "method": "post",
@@ -13300,8 +13300,10 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     credential_updated_comment = "TurboVAS direct write smoke updated credential metadata"
     target_id: str | None = None
     target_clone_id: str | None = None
+    target_credential_id: str | None = None
     target_name = f"turbovas-direct-write-smoke-target-{int(time.time())}-{os.getpid()}"
     target_clone_name = f"{target_name}-clone"
+    target_credential_name = f"{target_name}-credential"
     target_updated_comment = "TurboVAS direct write smoke updated target metadata"
     task_id: str | None = None
     task_name = f"turbovas-direct-write-smoke-task-{int(time.time())}-{os.getpid()}"
@@ -14402,6 +14404,50 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 target_patch_ok = target_patch.returncode == 0 and target_patch_status == 200 and isinstance(target_patch_json, dict) and target_patch_json.get("id") == target_id and target_patch_json.get("comment") == target_updated_comment and target_state_before and target_state_before == target_state_after
                 findings.append(native_api_probe_finding("pass" if target_patch_ok else "fail", "native-api-direct.target-write-update", "Direct write-control patched target metadata without changing hosts, port-list, alive-test, reverse-DNS, or credential links." if target_patch_ok else "Direct write-control failed to patch target metadata or changed adjacent target state.", target_patch, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_patch_body, extra_headers=content_type), target_patch_json, {"http_status": target_patch_status, "target_id": target_id, "state_checksum_before": target_state_before, "state_checksum_after": target_state_after, **summarize_native_api_response(target_patch_json)}))
 
+                target_credential_fixture_sql = (
+                    "WITH inserted AS (INSERT INTO credentials "
+                    "(uuid, owner, name, comment, creation_time, modification_time, type, allow_insecure) "
+                    f"SELECT make_uuid(), id, {sql_literal(target_credential_name)}, 'TurboVAS direct write smoke temporary target credential', m_now(), m_now(), 'up', 0 "
+                    f"FROM users WHERE uuid = {sql_literal(admin_uuid or '')} RETURNING id, uuid), "
+                    "inserted_data AS (INSERT INTO credentials_data (credential, type, value) "
+                    "SELECT id, 'username', 'turbovas-direct-write-smoke-target-user' FROM inserted "
+                    "UNION ALL SELECT id, 'password', 'turbovas-direct-write-smoke-target-secret' FROM inserted RETURNING credential) "
+                    "SELECT uuid FROM inserted;"
+                )
+                target_credential_fixture = psql(repo_root, target_credential_fixture_sql)
+                target_credential_id = psql_value(target_credential_fixture)
+                target_credential_fixture_ok = target_credential_fixture.returncode == 0 and bool(target_credential_id)
+                target_credential_fixture_finding = process_step_finding("pass" if target_credential_fixture_ok else "fail", "native-api-direct.target-credential-fixture", "Direct write-control smoke created a temporary credential fixture for target credential-link mutation." if target_credential_fixture_ok else "Direct write-control smoke failed to create a temporary target credential fixture.", target_credential_fixture, ["psql", "fixed-target-credential-smoke-fixture"])
+                target_credential_fixture_details = target_credential_fixture_finding.setdefault("details", {})
+                if isinstance(target_credential_fixture_details, dict):
+                    target_credential_fixture_details.update({"credential_id": target_credential_id, "credential_name": target_credential_name, "target_id": target_id})
+                findings.append(target_credential_fixture_finding)
+
+                if target_credential_id:
+                    target_credential_secret_sql = (
+                        "SELECT md5(string_agg(type || '=' || value, ',' ORDER BY type, value)) "
+                        "FROM credentials_data "
+                        f"WHERE credential = (SELECT id FROM credentials WHERE uuid = {sql_literal(target_credential_id)});"
+                    )
+                    target_credential_secret_before = psql_value(psql(repo_root, target_credential_secret_sql))
+                    target_credential_patch_body = json.dumps({"credentials": {"ssh": {"id": target_credential_id}}}, separators=(",", ":"))
+                    target_credential_patch = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_patch_body, extra_headers=content_type)
+                    target_credential_patch_json, target_credential_patch_status = parse_json_output_with_http_status(target_credential_patch)
+                    target_credential_link_state = psql_value(psql(repo_root, "SELECT count(*)::text || '|' || coalesce(max(port)::text, '') FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND credential = (SELECT id FROM credentials WHERE uuid = {sql_literal(target_credential_id)}) AND type = 'ssh';"))
+                    target_credential_secret_after = psql_value(psql(repo_root, target_credential_secret_sql))
+                    target_credential_response_credentials = target_credential_patch_json.get("credentials") if isinstance(target_credential_patch_json, dict) else None
+                    target_credential_response_ssh = target_credential_response_credentials.get("ssh") if isinstance(target_credential_response_credentials, dict) else None
+                    target_credential_patch_ok = target_credential_patch.returncode == 0 and target_credential_patch_status == 200 and isinstance(target_credential_response_ssh, dict) and target_credential_response_ssh.get("id") == target_credential_id and target_credential_response_ssh.get("port") == 22 and target_credential_link_state == "1|22" and target_credential_secret_before and target_credential_secret_before == target_credential_secret_after
+                    findings.append(native_api_probe_finding("pass" if target_credential_patch_ok else "fail", "native-api-direct.target-credential-link-update", "Direct write-control patched a target SSH credential reference without touching credential secret rows." if target_credential_patch_ok else "Direct write-control failed to patch the target SSH credential reference safely.", target_credential_patch, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_patch_body, extra_headers=content_type), target_credential_patch_json, {"http_status": target_credential_patch_status, "target_id": target_id, "credential_id": target_credential_id, "link_state": target_credential_link_state, "secret_checksum_before": target_credential_secret_before, "secret_checksum_after": target_credential_secret_after, **summarize_native_api_response(target_credential_patch_json)}))
+
+                    target_credential_clear_body = json.dumps({"credentials": {"ssh": None}}, separators=(",", ":"))
+                    target_credential_clear = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_clear_body, extra_headers=content_type)
+                    target_credential_clear_json, target_credential_clear_status = parse_json_output_with_http_status(target_credential_clear)
+                    target_credential_clear_count = psql_value(psql(repo_root, "SELECT count(*)::text FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND type = 'ssh';"))
+                    target_credential_clear_credentials = target_credential_clear_json.get("credentials") if isinstance(target_credential_clear_json, dict) else None
+                    target_credential_clear_ok = target_credential_clear.returncode == 0 and target_credential_clear_status == 200 and isinstance(target_credential_clear_credentials, dict) and target_credential_clear_credentials.get("ssh") is None and target_credential_clear_count == "0"
+                    findings.append(native_api_probe_finding("pass" if target_credential_clear_ok else "fail", "native-api-direct.target-credential-link-clear", "Direct write-control cleared the target SSH credential reference without deleting the credential." if target_credential_clear_ok else "Direct write-control failed to clear the target SSH credential reference safely.", target_credential_clear, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_clear_body, extra_headers=content_type), target_credential_clear_json, {"http_status": target_credential_clear_status, "target_id": target_id, "credential_id": target_credential_id, "credential_link_count": target_credential_clear_count, **summarize_native_api_response(target_credential_clear_json)}))
+
                 target_non_alive_state_sql = (
                     "SELECT md5(coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') || '|' || "
                     "coalesce(port_list::text, '') || '|' || coalesce(reverse_lookup_only::text, '') || '|' || "
@@ -14549,6 +14595,15 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     target_hosts_denied_ok = target_hosts_denied.returncode == 0 and target_hosts_denied_status == 409 and target_hosts_before_in_use_denial and target_hosts_before_in_use_denial == target_hosts_after_in_use_denial
                     findings.append(native_api_probe_finding("pass" if target_hosts_denied_ok else "fail", "native-api-direct.target-hosts-in-use-denied", "Direct write-control rejected target host-list changes while a live task references the target." if target_hosts_denied_ok else "Direct write-control did not reject target host-list changes for a target referenced by a live task.", target_hosts_denied, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_hosts_denied_body, extra_headers=content_type), target_hosts_denied_json, {"http_status": target_hosts_denied_status, "target_id": target_id, "state_before": target_hosts_before_in_use_denial, "state_after": target_hosts_after_in_use_denial, **summarize_native_api_response(target_hosts_denied_json)}))
 
+                    if target_credential_id:
+                        target_credential_before_in_use_denial = psql_value(psql(repo_root, "SELECT count(*)::text FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND type = 'ssh';"))
+                        target_credential_denied_body = json.dumps({"credentials": {"ssh": {"id": target_credential_id}}}, separators=(",", ":"))
+                        target_credential_denied = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_denied_body, extra_headers=content_type)
+                        target_credential_denied_json, target_credential_denied_status = parse_json_output_with_http_status(target_credential_denied)
+                        target_credential_after_in_use_denial = psql_value(psql(repo_root, "SELECT count(*)::text FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND type = 'ssh';"))
+                        target_credential_denied_ok = target_credential_denied.returncode == 0 and target_credential_denied_status == 409 and target_credential_before_in_use_denial == "0" and target_credential_before_in_use_denial == target_credential_after_in_use_denial
+                        findings.append(native_api_probe_finding("pass" if target_credential_denied_ok else "fail", "native-api-direct.target-credential-link-in-use-denied", "Direct write-control rejected target credential-link changes while a live task references the target." if target_credential_denied_ok else "Direct write-control did not reject target credential-link changes for a target referenced by a live task.", target_credential_denied, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_denied_body, extra_headers=content_type), target_credential_denied_json, {"http_status": target_credential_denied_status, "target_id": target_id, "credential_id": target_credential_id, "state_before": target_credential_before_in_use_denial, "state_after": target_credential_after_in_use_denial, **summarize_native_api_response(target_credential_denied_json)}))
+
                     task_state_sql = (
                         "SELECT md5(coalesce(target::text, '') || '|' || coalesce(config::text, '') || '|' || "
                         "coalesce(schedule::text, '') || '|' || coalesce(scanner::text, '') || '|' || "
@@ -14641,6 +14696,25 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 if isinstance(target_cleanup_details, dict):
                     target_cleanup_details.update({"target_id": target_id, "target_clone_id": target_clone_id, "target_name": target_name, "deleted_counts": target_cleanup_deleted})
                 findings.append(target_cleanup_finding)
+
+                if target_credential_id:
+                    target_credential_cleanup_sql = (
+                        "WITH live_credential AS (SELECT id FROM credentials "
+                        f"WHERE uuid = {sql_literal(target_credential_id)} AND name = {sql_literal(target_credential_name)}), "
+                        "deleted_target_links AS (DELETE FROM targets_login_data WHERE credential IN (SELECT id FROM live_credential)), "
+                        "deleted_trash_target_links AS (DELETE FROM targets_trash_login_data WHERE credential IN (SELECT id FROM live_credential)), "
+                        "deleted_data AS (DELETE FROM credentials_data WHERE credential IN (SELECT id FROM live_credential)), "
+                        "deleted_credential AS (DELETE FROM credentials WHERE id IN (SELECT id FROM live_credential) RETURNING id) "
+                        "SELECT count(*) FROM deleted_credential;"
+                    )
+                    target_credential_cleanup = psql(repo_root, target_credential_cleanup_sql)
+                    target_credential_cleanup_deleted = psql_value(target_credential_cleanup)
+                    target_credential_cleanup_ok = target_credential_cleanup.returncode == 0 and target_credential_cleanup_deleted == "1"
+                    target_credential_cleanup_finding = process_step_finding("pass" if target_credential_cleanup_ok else "fail", "native-api-direct.target-credential-fixture-cleanup", "Direct write-control smoke removed the temporary target credential fixture and any target-link residue." if target_credential_cleanup_ok else "Direct write-control smoke failed to clean up the temporary target credential fixture.", target_credential_cleanup, ["psql", "fixed-target-credential-smoke-cleanup"])
+                    target_credential_cleanup_details = target_credential_cleanup_finding.setdefault("details", {})
+                    if isinstance(target_credential_cleanup_details, dict):
+                        target_credential_cleanup_details.update({"credential_id": target_credential_id, "credential_name": target_credential_name, "deleted_count": target_credential_cleanup_deleted})
+                    findings.append(target_credential_cleanup_finding)
 
             patch_body = json.dumps(
                 {"comment": "TurboVAS direct write smoke updated temporary tag", "value": "updated", "active": False},

@@ -4262,9 +4262,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: target-list-read
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       summary: List scan targets
-      description: Read-only target metadata backed by gvmd/PostgreSQL. Native direct write-control can create operator-owned target metadata with explicit safe scan inputs, patch target name/comment metadata and bounded scan inputs, clone an owned target with existing credential references, move an unscoped target to trash, restore it, and hard-delete trash metadata. Credential-link mutation, task/control semantics, file export, and credential secret material remain inherited.
+      description: Read-only target metadata backed by gvmd/PostgreSQL. Native direct write-control can create operator-owned target metadata with explicit safe scan inputs, patch target name/comment metadata, bounded scan inputs, and credential-link references, clone an owned target with existing credential references, move an unscoped target to trash, restore it, and hard-delete trash metadata. Create-time credential links, task/control semantics, file export, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4295,13 +4295,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: target-create
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Create target metadata and bounded scan inputs
-      description: Direct write-control endpoint for creating an operator-owned target with name, comment, existing port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, and simultaneous-IP behavior only. CIDR/range host grammar, inline port-list creation, credential-link mutation, task/control semantics, file export, and credential secret material remain inherited.
+      description: Direct write-control endpoint for creating an operator-owned target with name, comment, existing port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, and simultaneous-IP behavior only. CIDR/range host grammar, inline port-list creation, create-time credential links, task/control semantics, file export, and credential secret material remain inherited; credential links may be changed later through target PATCH.
       requestBody:
         required: true
         content:
@@ -4345,9 +4345,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: target-detail-summary-read
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       summary: Read one scan target summary
-      description: Read-only target metadata backed by gvmd/PostgreSQL. Detail includes safe credential references already visible in the inherited UI. Native direct write-control can create operator-owned target metadata, patch target name/comment metadata plus bounded scan inputs, including simple explicit host lists, clone an owned target with existing credential references, move an unscoped target to trash, restore it, and hard-delete trash metadata. Credential-link mutation, task/control semantics, file export, and credential secret material remain inherited.
+      description: Read-only target metadata backed by gvmd/PostgreSQL. Detail includes safe credential references already visible in the inherited UI. Native direct write-control can create operator-owned target metadata, patch target name/comment metadata plus bounded scan inputs and credential-link references, clone an owned target with existing credential references, move an unscoped target to trash, restore it, and hard-delete trash metadata. Create-time credential links, task/control semantics, file export, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -4376,14 +4376,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: target-metadata-and-simple-scan-inputs-modify
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update target metadata and bounded scan inputs
-      description: Direct write-control endpoint for updating target name, comment, port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, and simultaneous-IP behavior only. Host-list, port-list, reverse-DNS, and simultaneous-IP changes are rejected while the target is referenced by live tasks, matching inherited safety semantics. CIDR/range host grammar, credential-link mutation, task/control semantics, file export, and credential secret material remain inherited.
+      description: Direct write-control endpoint for updating target name, comment, port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, simultaneous-IP behavior, and credential-link references. Host-list, port-list, reverse-DNS, simultaneous-IP, and credential-link changes are rejected while the target is referenced by live tasks, matching inherited safety semantics. CIDR/range host grammar, task/control semantics, file export, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       requestBody:
@@ -4421,7 +4421,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: target-trash-move
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -4458,9 +4458,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: target-metadata-export-read
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       summary: Export scan target metadata
-      description: Scriptable metadata export for one target, backed by the same redacted target detail payload. Credential references include id/name/type/port only; credential secret material, credential-link mutation, task/control semantics, and inherited file-export formats remain outside this endpoint.
+      description: Scriptable metadata export for one target, backed by the same redacted target detail payload. Credential references include id/name/type/port only; credential secret material, credential-link writes, task/control semantics, and inherited file-export formats remain outside this read endpoint.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -4491,7 +4491,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: target-clone
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -4543,7 +4543,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: target-restore
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -4584,13 +4584,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: target-hard-delete
-      x-turbovas-inherited-still-owns: target-export-credential-link-and-secret-mutation
+      x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Hard-delete a trashed target
-      description: Direct write-control endpoint for permanently deleting an operator-owned trashed target. Trash-side task references block hard-delete. This route deletes trash target metadata, trash credential-link references, and target tag links only; live targets are never deleted through this route and credential secret material is never copied or exposed. Credential-link mutation, task/control semantics, export, and credential secret material remain inherited.
+      description: Direct write-control endpoint for permanently deleting an operator-owned trashed target. Trash-side task references block hard-delete. This route deletes trash target metadata, trash credential-link references, and target tag links only; live targets are never deleted through this route and credential secret material is never copied or exposed. Task/control semantics, export, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -5721,6 +5721,52 @@ components:
           items:
             type: string
             maxLength: 4096
+        credentials:
+          $ref: '#/components/schemas/TargetCredentialsPatchRequest'
+    TargetCredentialLinkPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Existing credential to assign. The credential must be owned by the direct operator and have a type allowed for the selected target credential use.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: SSH authentication port. Only supported for credentials.ssh; omitted SSH ports default to 22.
+    TargetCredentialsPatchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Target credential reference patch. Each present field sets that credential use to an existing credential reference; null clears that credential use. Secret material is never accepted or returned. Credential-link changes are rejected while the target is referenced by a live task.
+      properties:
+        ssh:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        ssh_elevate:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        smb:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        esxi:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        snmp:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        krb5:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
     TargetCloneRequest:
       type: object
       additionalProperties: false

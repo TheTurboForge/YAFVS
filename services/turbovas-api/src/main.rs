@@ -78,6 +78,7 @@ mod report_config_write_sql;
 mod report_config_write_validation;
 mod report_config_writes;
 mod report_configs;
+mod report_cve_query_sql;
 mod report_cves;
 mod report_errors;
 mod report_evidence_payloads;

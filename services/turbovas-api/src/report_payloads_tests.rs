@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::report_payloads::raw_report_sql;
+use crate::{report_cve_query_sql::report_cves_sql, report_payloads::raw_report_sql};
 
 #[test]
 fn raw_report_payload_exposes_report_progress_without_control_paths() {
@@ -18,6 +18,32 @@ fn raw_report_payload_exposes_report_progress_without_control_paths() {
         assert!(
             !upper_sql.contains(forbidden),
             "raw report read SQL must not include control/mutation path: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn raw_report_cve_sql_is_report_scoped_positive_vulnerability_read_only() {
+    let sql = report_cves_sql("max_severity DESC");
+    let upper_sql = sql.to_ascii_uppercase();
+
+    for required in [
+        "SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)",
+        "JOIN results r ON r.report = sr.id",
+        "JOIN vt_refs vr ON vr.vt_oid = r.nvt AND vr.type = 'cve'",
+        "WHERE coalesce(r.severity, 0) > 0",
+        "count(*) OVER()::bigint AS total",
+        "ORDER BY max_severity DESC, id ASC LIMIT $3 OFFSET $4",
+    ] {
+        assert!(
+            sql.contains(required),
+            "raw report CVE SQL missing {required}"
+        );
+    }
+    for forbidden in ["INSERT ", "UPDATE ", "DELETE ", "START_TASK", "STOP_TASK"] {
+        assert!(
+            !upper_sql.contains(forbidden),
+            "raw report CVE SQL must not include control/mutation path: {forbidden}"
         );
     }
 }

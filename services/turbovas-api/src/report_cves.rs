@@ -16,6 +16,7 @@ use crate::{
         ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
         normalize_collection_query, sort_clause,
     },
+    report_cve_query_sql::report_cves_sql,
     report_evidence_payloads::{CveItem, cve_from_row},
     report_helpers::raw_report_exists,
 };
@@ -28,30 +29,7 @@ pub(crate) async fn report_cves(
     parse_uuid(&report_id)?;
     let params = normalize_collection_query(query, REPORT_CVE_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_CVE_SORT_FIELDS)?;
-    let sql = format!(
-        "WITH selected_report AS (\n\
-             SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)\n\
-         ),\n\
-         cve_rows AS (\n\
-             SELECT vr.ref_id AS id,\n\
-                    count(DISTINCT lower(coalesce(nullif(r.host, ''), r.hostname, '')))::bigint AS affected_system_count,\n\
-                    count(DISTINCT r.uuid)::bigint AS result_count,\n\
-                    max(coalesce(r.severity, 0))::double precision AS max_severity,\n\
-                    array_remove(array_agg(DISTINCT sr.uuid), NULL) AS source_report_ids\n\
-               FROM selected_report sr\n\
-               JOIN results r ON r.report = sr.id\n\
-               JOIN vt_refs vr ON vr.vt_oid = r.nvt AND vr.type = 'cve'\n\
-              WHERE coalesce(r.severity, 0) > 0\n\
-                AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''\n\
-              GROUP BY vr.ref_id\n\
-         ),\n\
-         filtered AS (\n\
-             SELECT * FROM cve_rows\n\
-              WHERE ($2 = '' OR lower(id) LIKE '%' || lower($2) || '%')\n\
-         )\n\
-         SELECT count(*) OVER()::bigint AS total, * FROM filtered\n\
-          ORDER BY {sort_sql}, id ASC LIMIT $3 OFFSET $4;"
-    );
+    let sql = report_cves_sql(&sort_sql);
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
         .query(

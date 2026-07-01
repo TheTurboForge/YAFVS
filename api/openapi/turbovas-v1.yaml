@@ -2870,6 +2870,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /report-configs/{report_config_id}/export:
+    get:
+      operationId: getReportConfigsByReportConfigIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: report-config-metadata-export-read
+      x-turbovas-inherited-still-owns: report-config-export
+      summary: Export report-config metadata
+      description: Read-only metadata export for one live report config, backed by the same PostgreSQL loader as report-config detail. This endpoint returns the native JSON metadata/parameter payload only; inherited compatibility paths still own XML/file export and any broader report-config export semantics.
+      parameters:
+        - $ref: '#/components/parameters/ReportConfigId'
+      responses:
+        '200':
+          description: Report-config metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportConfigAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /report-configs/{report_config_id}/clone:
     post:
       operationId: postReportConfigsByReportConfigIdClone

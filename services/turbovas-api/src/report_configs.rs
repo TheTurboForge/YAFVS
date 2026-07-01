@@ -78,6 +78,16 @@ pub(crate) async fn report_config_asset_detail(
     ))
 }
 
+pub(crate) async fn export_report_config_metadata(
+    State(state): State<AppState>,
+    Path(report_config_id): Path<String>,
+) -> Result<Json<ReportConfigAssetItem>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(
+        load_report_config_asset_detail(&client, &report_config_id).await?,
+    ))
+}
+
 pub(crate) async fn load_report_config_asset_detail(
     client: &Client,
     report_config_id: &str,

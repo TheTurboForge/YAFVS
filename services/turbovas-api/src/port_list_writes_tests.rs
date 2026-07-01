@@ -42,6 +42,15 @@ fn create_request(name: &str, ranges: Vec<PortListCreateRangeRequest>) -> PortLi
 }
 
 #[test]
+fn port_list_write_rejects_operator_owner_mismatch() {
+    assert!(ensure_port_list_owner_matches_operator(7, 7).is_ok());
+    assert!(matches!(
+        ensure_port_list_owner_matches_operator(7, 8),
+        Err(ApiError::Forbidden)
+    ));
+}
+
+#[test]
 fn port_list_clone_request_accepts_default_or_metadata_override() {
     let default = validate_port_list_clone_request(clone_request(None, None))
         .expect("default clone metadata");
@@ -325,6 +334,9 @@ fn port_list_patch_request_rejects_oversized_metadata_fields() {
 
 #[test]
 fn port_list_patch_sql_is_metadata_only() {
+    let state = port_list_write_state_sql();
+    assert!(state.contains("owner::integer"));
+
     let sql = port_list_update_metadata_sql();
     assert!(sql.contains("UPDATE port_lists"));
     assert!(sql.contains("name = coalesce"));

@@ -101,6 +101,7 @@ pub(crate) async fn clone_port_list(
     .await
     .map_err(|error| map_port_list_write_db_error(error, "lock port list tables for clone"))?;
     let source = load_port_list_write_state(&tx, &port_list_id).await?;
+    ensure_port_list_owner_matches_operator(source.owner_id, owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_port_list_name(&tx, name, -1).await?;
     }
@@ -127,13 +128,14 @@ pub(crate) async fn patch_port_list(
     let tx = client.transaction().await.map_err(|error| {
         map_port_list_write_db_error(error, "begin patch port list transaction")
     })?;
-    resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE port_lists, port_lists_trash, port_ranges, targets, targets_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_port_list_write_db_error(error, "lock port list tables for patch"))?;
     let state = load_port_list_write_state(&tx, &port_list_id).await?;
+    ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;
     if state.predefined {
         return Err(ApiError::Conflict(
             "predefined port lists cannot be patched".to_string(),
@@ -165,13 +167,14 @@ pub(crate) async fn delete_port_list(
     let tx = client.transaction().await.map_err(|error| {
         map_port_list_write_db_error(error, "begin delete port list transaction")
     })?;
-    resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE port_lists, port_lists_trash, port_ranges, port_ranges_trash, targets, targets_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_port_list_write_db_error(error, "lock port list tables for delete"))?;
     let state = load_port_list_write_state(&tx, &port_list_id).await?;
+    ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;
     if state.predefined {
         return Err(ApiError::Conflict(
             "predefined port lists cannot be deleted".to_string(),
@@ -196,13 +199,14 @@ pub(crate) async fn hard_delete_port_list(
     let tx = client.transaction().await.map_err(|error| {
         map_port_list_write_db_error(error, "begin hard-delete port list transaction")
     })?;
-    resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE port_lists_trash, port_ranges_trash, targets_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_port_list_write_db_error(error, "lock port list trash tables for hard delete"))?;
     let trash = load_port_list_trash_state(&tx, &port_list_id).await?;
+    ensure_port_list_owner_matches_operator(trash.owner_id, operator_owner_id)?;
     ensure_port_list_not_in_use_by_trash_targets(&tx, trash.internal_id).await?;
     execute_port_list_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -222,13 +226,14 @@ pub(crate) async fn restore_port_list(
     let tx = client.transaction().await.map_err(|error| {
         map_port_list_write_db_error(error, "begin restore port list transaction")
     })?;
-    resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE port_lists, port_lists_trash, port_ranges, port_ranges_trash, targets_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_port_list_write_db_error(error, "lock port list tables for restore"))?;
     let trash = load_port_list_trash_state(&tx, &port_list_id).await?;
+    ensure_port_list_owner_matches_operator(trash.owner_id, operator_owner_id)?;
     ensure_unique_live_port_list_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
     ensure_port_list_uuid_not_live(&tx, &trash.uuid).await?;
     let record = execute_port_list_restore_transaction(&tx, trash.internal_id).await?;

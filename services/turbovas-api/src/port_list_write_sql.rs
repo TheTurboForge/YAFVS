@@ -52,7 +52,9 @@ pub(crate) fn port_list_clone_tags_sql() -> &'static str {
 }
 
 pub(crate) fn port_list_write_state_sql() -> &'static str {
-    "SELECT id::integer, coalesce(predefined, 0)::integer
+    "SELECT id::integer,
+            owner::integer,
+            coalesce(predefined, 0)::integer
        FROM port_lists
       WHERE uuid = $1;"
 }

@@ -32,6 +32,7 @@ pub(crate) struct PortListTrashWriteState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PortListWriteState {
     pub(crate) internal_id: i32,
+    pub(crate) owner_id: i32,
     pub(crate) predefined: bool,
 }
 
@@ -72,9 +73,26 @@ pub(crate) async fn load_port_list_write_state(
         .map_err(|error| map_port_list_write_db_error(error, "load port list write state"))?
         .map(|row| PortListWriteState {
             internal_id: row.get(0),
-            predefined: row.get::<_, i32>(1) != 0,
+            owner_id: row.get(1),
+            predefined: row.get::<_, i32>(2) != 0,
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) fn ensure_port_list_owner_matches_operator(
+    port_list_owner_id: i32,
+    operator_owner_id: i32,
+) -> Result<(), ApiError> {
+    if port_list_owner_id == operator_owner_id {
+        Ok(())
+    } else {
+        tracing::warn!(
+            port_list_owner_id,
+            operator_owner_id,
+            "direct API port list write owner mismatch"
+        );
+        Err(ApiError::Forbidden)
+    }
 }
 
 pub(crate) async fn load_port_list_trash_state(

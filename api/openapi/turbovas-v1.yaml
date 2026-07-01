@@ -1125,6 +1125,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /credentials/{credential_id}/export:
+    get:
+      operationId: getCredentialsByCredentialIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: credential-redacted-metadata-export-read
+      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      summary: Export redacted credential metadata
+      description: Direct native JSON metadata export for one credential backed by the same redacted credential detail payload. This export includes credential identity, type label, owner, timestamps, allow-insecure flag, and target/scanner backlinks, but never credential secrets, credential secret values, credential-store secret selectors, private keys, passwords, certificates, downloads, clone/restore/delete behavior, or inherited secret export semantics.
+      parameters:
+        - $ref: '#/components/parameters/CredentialId'
+      responses:
+        '200':
+          description: Redacted credential metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /filters:
     get:
       operationId: getFilters

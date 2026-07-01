@@ -70,6 +70,7 @@ fn credential_routes_are_direct_read_only_allowlisted() {
     for path in [
         "/api/v1/credentials",
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/export",
     ] {
         assert!(
             direct_api_v1_path_is_allowed(path),
@@ -80,12 +81,15 @@ fn credential_routes_are_direct_read_only_allowlisted() {
             "GET {path} must be method-allowlisted without write control"
         );
         let patch_allowed = direct_api_v1_method_is_allowed(&Method::PATCH, path, true);
-        if path == "/api/v1/credentials" {
-            assert!(!patch_allowed, "credential list PATCH must remain closed");
-        } else {
+        if path == "/api/v1/credentials/12345678-1234-1234-1234-123456789abc" {
             assert!(
                 patch_allowed,
                 "credential detail PATCH must be direct write-control allowlisted"
+            );
+        } else {
+            assert!(
+                !patch_allowed,
+                "credential non-detail PATCH must remain closed"
             );
         }
     }
@@ -99,6 +103,10 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "/credentials/{credential_id}",
             "credential-redacted-metadata-detail-read",
         ),
+        (
+            "/credentials/{credential_id}/export",
+            "credential-redacted-metadata-export-read",
+        ),
     ] {
         let block = openapi_path_block(path);
         for required in [
@@ -109,7 +117,7 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "credential-secrets-writes-and-deletes",
             "credential secrets",
             "credential-store secret selectors",
-            "export/download behavior",
+            "secret",
         ] {
             assert!(
                 block.contains(required),

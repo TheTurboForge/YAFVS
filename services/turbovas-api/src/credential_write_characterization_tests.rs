@@ -294,7 +294,6 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
 
     for path in [
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/download",
-        "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/export",
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/clone",
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/restore",
     ] {
@@ -314,6 +313,10 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
             "/credentials/{credential_id}",
             "credential-redacted-metadata-detail-read",
         ),
+        (
+            "/credentials/{credential_id}/export",
+            "credential-redacted-metadata-export-read",
+        ),
     ] {
         let block = openapi_path_block(path);
         for required in [
@@ -322,9 +325,19 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
             "credential-secrets-writes-and-deletes",
             "credential secrets",
             "credential-store secret selectors",
-            "export/download behavior",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
+        }
+        if path == "/credentials/{credential_id}/export" {
+            assert!(
+                block.contains("inherited secret export semantics"),
+                "{path} must distinguish redacted metadata export from inherited secret export"
+            );
+        } else {
+            assert!(
+                block.contains("export/download behavior"),
+                "{path} must leave inherited export/download behavior out of native reads"
+            );
         }
         for forbidden in ["    post:", "    put:", "    delete:"] {
             assert!(

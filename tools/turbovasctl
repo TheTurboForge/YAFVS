@@ -498,6 +498,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
         "cert-bund-advisory-metadata-export-read",
+        "credential-redacted-metadata-export-read",
         "credential-redacted-metadata-detail-read",
         "credential-redacted-metadata-list-read",
         "credential-metadata-modify",
@@ -1113,6 +1114,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "credential-redacted-metadata-detail-read",
     },
+    ("get", "/credentials/{credential_id}/export"): {
+        "x-turbovas-inherited-still-owns": "credential-secrets-writes-and-deletes",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "credential-redacted-metadata-export-read",
+    },
     ("patch", "/credentials/{credential_id}"): {
         "x-turbovas-inherited-still-owns": "credential-secrets-writes-and-deletes",
         "x-turbovas-maturity": "live-write",
@@ -1660,6 +1666,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/scanners/{}/export",
         "/api/v1/credentials",
         "/api/v1/credentials/{}",
+        "/api/v1/credentials/{}/export",
         "/api/v1/filters",
         "/api/v1/filters/{}",
         "/api/v1/filters/{}/export",
@@ -7150,6 +7157,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/credentials/{credential_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Credential detail redacted metadata (migrated through gsad same-origin proxy)", "read-only credential metadata automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/credentials/{credential_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["direct native JSON credential redacted metadata export", "read-only credential metadata automation"],
             },
             {
                 "method": "patch",

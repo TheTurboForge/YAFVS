@@ -15,7 +15,7 @@ use crate::{
     cert_advisories::*,
     cpe_catalog::*,
     credential_writes::patch_credential,
-    credentials::{credential_asset_detail, credential_assets},
+    credentials::{credential_asset_detail, credential_asset_export, credential_assets},
     cve_catalog::*,
     feeds::feeds,
     filter_writes::{
@@ -153,6 +153,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route(
             "/api/v1/credentials/:credential_id",
             get(credential_asset_detail),
+        )
+        .route(
+            "/api/v1/credentials/:credential_id/export",
+            get(credential_asset_export),
         )
         .route("/api/v1/scan-configs", get(scan_config_assets))
         .route(

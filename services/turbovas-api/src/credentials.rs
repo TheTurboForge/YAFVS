@@ -70,6 +70,13 @@ pub(crate) async fn credential_asset_detail(
     ))
 }
 
+pub(crate) async fn credential_asset_export(
+    State(state): State<AppState>,
+    Path(credential_id): Path<String>,
+) -> Result<Json<CredentialAssetItem>, ApiError> {
+    credential_asset_detail(State(state), Path(credential_id)).await
+}
+
 pub(crate) async fn load_credential_asset_detail(
     client: &Client,
     credential_id: &str,

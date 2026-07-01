@@ -14,7 +14,10 @@ use crate::{
     },
     errors::ApiError,
     path_ids::parse_uuid,
-    query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
+    query::{
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
+        normalize_collection_query, sort_clause,
+    },
     report_evidence_payloads::{TlsCertificateItem, tls_certificate_from_row},
     scope_report_lookup::scope_report_exists,
 };
@@ -106,7 +109,23 @@ pub(crate) async fn scope_report_tls_certificates(
     if rows.is_empty() && !scope_report_exists(&client, &scope_report_id, &scope_id).await? {
         return Err(ApiError::NotFound);
     }
-    let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    let total = collection_total_with_empty_page_probe_params(
+        &client,
+        &rows,
+        &sql,
+        &params,
+        &[
+            &scope_report_id,
+            &scope_id,
+            &params.filter,
+            &probe_page_size,
+            &probe_offset,
+        ],
+        "scope report TLS certificate list",
+    )
+    .await?;
     let items = rows.iter().map(tls_certificate_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),

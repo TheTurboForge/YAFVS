@@ -12,7 +12,10 @@ use crate::{
     collections::*,
     errors::ApiError,
     path_ids::parse_uuid,
-    query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
+    query::{
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
+        normalize_collection_query, sort_clause,
+    },
     scope_payload_rows::*,
 };
 
@@ -123,7 +126,9 @@ pub(crate) async fn scope_reports(
             tracing::warn!(%error, "scope report query failed");
             ApiError::Database
         })?;
-    let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
+    let total =
+        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "scope report list")
+            .await?;
     let items = rows.iter().map(scope_report_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),

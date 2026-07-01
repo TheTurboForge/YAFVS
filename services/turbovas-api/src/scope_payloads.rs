@@ -13,7 +13,10 @@ use crate::{
     collections::{SCOPE_DEFAULT_SORT, SCOPE_SORT_FIELDS},
     errors::ApiError,
     path_ids::parse_uuid,
-    query::{ApiQuery, Collection, CollectionQuery, normalize_collection_query, sort_clause},
+    query::{
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
+        normalize_collection_query, sort_clause,
+    },
     scope_payload_rows::{
         ScopeCandidateHost, ScopeEntity, ScopeItem, ScopeReportReference,
         scope_candidate_host_from_row, scope_entity_from_row, scope_from_row,
@@ -44,7 +47,8 @@ pub(crate) async fn scopes(
             tracing::warn!(%error, "scope list query failed");
             ApiError::Database
         })?;
-    let total = rows.first().map(|row| row.get::<_, i64>(0)).unwrap_or(0);
+    let total =
+        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "scope list").await?;
     let items = rows
         .iter()
         .map(|row| scope_from_row(row, Vec::new(), Vec::new(), Vec::new(), Vec::new()))

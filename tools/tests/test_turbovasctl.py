@@ -5064,6 +5064,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('HostAssetDetailMetadata', openapi)
         self.assertIn('/api/v1/hosts/{host_id}', native_tooling)
         self.assertIn('/api/v1/hosts/{host_id}/export', native_tooling)
+        self.assertIn('GSA top-level Host metadata export', native_tooling)
         self.assertIn('native-api.host-detail', native_tooling)
 
     def test_tls_certificate_asset_detail_contract_is_internal_and_source_only(self):

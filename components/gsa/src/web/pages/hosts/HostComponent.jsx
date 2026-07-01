@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {useState} from 'react';
+import {exportNativeHostMetadata} from 'gmp/native-api/hosts';
 import {map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
 import {shorten} from 'gmp/utils/string';
@@ -14,6 +16,15 @@ import HostDialog from 'web/pages/hosts/Dialog';
 import TargetComponent from 'web/pages/targets/TargetComponent';
 import PropTypes from 'web/utils/PropTypes';
 import SelectionType from 'web/utils/SelectionType';
+
+const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const exportHost = (gmp, host) => {
+  if (canUseNativeApi(gmp)) {
+    return exportNativeHostMetadata(gmp, host.id);
+  }
+  return gmp.host.export(host);
+};
 
 const HostComponent = ({
   children,
@@ -100,6 +111,8 @@ const HostComponent = ({
 
   return (
     <EntityComponent
+      download={entity => exportHost(gmp, entity)}
+      downloadOptions={canUseNativeApi(gmp) ? {extension: 'json'} : undefined}
       name="host"
       onCreateError={onCreateError}
       onCreated={onCreated}

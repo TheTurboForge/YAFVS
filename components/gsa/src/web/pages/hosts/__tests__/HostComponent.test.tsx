@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, expect, test, testing} from '@gsa/testing';
+import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {rendererWith, screen} from 'web/testing';
 
 import CollectionCounts from 'gmp/collection/collection-counts';
@@ -131,7 +132,21 @@ const host = Host.fromElement({
   },
 } as ModelElement) as Host;
 
+const nativeHostPayload = {
+  asset: {
+    id: '12345',
+    name: 'Foo',
+    comment: 'bar',
+    severity: 10.0,
+  },
+  identifiers: [],
+  operating_systems: [],
+  details: [],
+};
+
 const createGmp = ({
+  buildUrl,
+  exportHost = testing.fn().mockResolvedValue({data: '<host id="12345"/>'}),
   getHost = testing.fn().mockResolvedValue({data: host}),
   getPermissions = testing.fn().mockResolvedValue({
     data: [],
@@ -145,8 +160,17 @@ const createGmp = ({
     .mockResolvedValue(currentSettingsDefaultResponse),
   getCredentials = testing.fn().mockResolvedValue({data: []}),
   getPortLists = testing.fn().mockResolvedValue({data: []}),
+}: {
+  buildUrl?: (path: string, params?: unknown) => string;
+  exportHost?: ReturnType<typeof testing.fn>;
+  getHost?: ReturnType<typeof testing.fn>;
+  getPermissions?: ReturnType<typeof testing.fn>;
+  currentSettings?: ReturnType<typeof testing.fn>;
+  getCredentials?: ReturnType<typeof testing.fn>;
+  getPortLists?: ReturnType<typeof testing.fn>;
 } = {}) => ({
-  host: {get: getHost},
+  buildUrl,
+  host: {export: exportHost, get: getHost},
   permissions: {get: getPermissions},
   credentials: {
     getAll: getCredentials,
@@ -160,10 +184,63 @@ const createGmp = ({
     reloadInterval: -1,
     severityRating: SEVERITY_RATING_CVSS_3,
   },
-  session: createSession(),
+  session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('HostWithTargetComponent tests', () => {
+  test('should use native metadata export for downloads', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue(nativeHostPayload),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const exportHost = testing.fn().mockResolvedValue({data: '<host/>'});
+    const buildUrl = testing.fn(
+      (path: string, _params: unknown) => `https://turbovas.example/${path}`,
+    );
+    const gmp = createGmp({buildUrl, exportHost});
+    let downloadClick: (host: Host) => void = () => {};
+    const onDownloaded = testing.fn();
+    const onDownloadError = testing.fn();
+
+    rendererWith({gmp, capabilities: true}).render(
+      <HostWithTargetComponent
+        onDownloadError={onDownloadError}
+        onDownloaded={onDownloaded}
+        onTargetCreateError={testing.fn()}
+        onTargetCreated={testing.fn()}
+      >
+        {({download}) => {
+          downloadClick = download;
+          return <div data-testid="child">Ready</div>;
+        }}
+      </HostWithTargetComponent>,
+    );
+
+    await screen.findByTestId('child');
+    downloadClick(host);
+    await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
+
+    expect(exportHost).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/hosts/12345/export', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      'https://turbovas.example/api/v1/hosts/12345/export',
+      expect.objectContaining({credentials: 'include'}),
+    );
+    expect(onDownloaded).toHaveBeenCalledWith({
+      filename: 'host-12345.json',
+      data: `${JSON.stringify(nativeHostPayload, null, 2)}\n`,
+    });
+    expect(onDownloadError).not.toHaveBeenCalled();
+  });
+
   test('should call onInteraction and display HostDialog when edit is triggered', () => {
     const gmp = createGmp();
     const onTargetCreated = testing.fn();

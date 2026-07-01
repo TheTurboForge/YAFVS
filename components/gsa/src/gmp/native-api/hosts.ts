@@ -5,6 +5,7 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import type Filter from 'gmp/models/filter';
 import Host from 'gmp/models/host';
@@ -345,4 +346,16 @@ export const fetchNativeHost = async (
   return {
     host: nativeHostToModel(payload.asset, payload),
   };
+};
+
+export const exportNativeHostMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeHostDetailPayload>(
+    gmp,
+    `api/v1/hosts/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };

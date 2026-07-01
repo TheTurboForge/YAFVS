@@ -149,6 +149,8 @@ async fn main() -> Result<(), ApiError> {
 }
 
 #[cfg(test)]
+mod alert_write_characterization_tests;
+#[cfg(test)]
 mod asset_detail_contract_tests;
 #[cfg(test)]
 mod collection_contract_tests;

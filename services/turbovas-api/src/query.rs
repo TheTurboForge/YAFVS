@@ -8,7 +8,7 @@ use axum::{
 };
 use deadpool_postgres::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use tokio_postgres::Row;
+use tokio_postgres::{Row, types::ToSql};
 
 use crate::{
     collections::{
@@ -98,6 +98,27 @@ pub(crate) async fn collection_total_with_empty_page_probe(
     params: &NormalizedQuery,
     log_context: &'static str,
 ) -> Result<i64, ApiError> {
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    collection_total_with_empty_page_probe_params(
+        client,
+        rows,
+        sql,
+        params,
+        &[&params.filter, &probe_page_size, &probe_offset],
+        log_context,
+    )
+    .await
+}
+
+pub(crate) async fn collection_total_with_empty_page_probe_params(
+    client: &Client,
+    rows: &[Row],
+    sql: &str,
+    params: &NormalizedQuery,
+    probe_params: &[&(dyn ToSql + Sync)],
+    log_context: &'static str,
+) -> Result<i64, ApiError> {
     if let Some(row) = rows.first() {
         return Ok(row.get::<_, i64>("total"));
     }
@@ -105,15 +126,10 @@ pub(crate) async fn collection_total_with_empty_page_probe(
         return Ok(0);
     }
 
-    let probe_page_size = 1_i64;
-    let probe_offset = 0_i64;
-    let probe_rows = client
-        .query(sql, &[&params.filter, &probe_page_size, &probe_offset])
-        .await
-        .map_err(|error| {
-            tracing::warn!(%error, %log_context, "collection first-page total probe failed");
-            ApiError::Database
-        })?;
+    let probe_rows = client.query(sql, probe_params).await.map_err(|error| {
+        tracing::warn!(%error, %log_context, "collection first-page total probe failed");
+        ApiError::Database
+    })?;
     Ok(probe_rows
         .first()
         .map(|row| row.get::<_, i64>("total"))

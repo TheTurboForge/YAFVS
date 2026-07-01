@@ -35,7 +35,7 @@ pub(crate) async fn patch_target(
         .await
         .map_err(|error| map_target_write_db_error(error, "begin patch target transaction"))?;
     let operator_owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
-    tx.batch_execute("LOCK TABLE targets IN SHARE ROW EXCLUSIVE MODE;")
+    tx.batch_execute("LOCK TABLE targets, port_lists IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_target_write_db_error(error, "lock targets for patch"))?;
     let target_state = load_target_write_state(&tx, &target_id).await?;
@@ -44,10 +44,25 @@ pub(crate) async fn patch_target(
         ensure_unique_target_name(&tx, name, target_state.internal_id, target_state.owner_id)
             .await?;
     }
+    let port_list_internal_id = if let Some(port_list_id) = request.port_list_id.as_ref() {
+        Some(
+            load_assignable_target_port_list(&tx, port_list_id, operator_owner_id)
+                .await?
+                .internal_id,
+        )
+    } else {
+        None
+    };
     if request.changes_task_in_use_guarded_scan_settings() {
         ensure_target_not_in_use_for_scan_settings(&tx, target_state.internal_id).await?;
     }
-    let record = execute_target_patch_transaction(&tx, target_state.internal_id, &request).await?;
+    let record = execute_target_patch_transaction(
+        &tx,
+        target_state.internal_id,
+        &request,
+        &port_list_internal_id,
+    )
+    .await?;
     tx.commit()
         .await
         .map_err(|error| map_target_write_db_error(error, "commit patch target transaction"))?;
@@ -59,6 +74,7 @@ pub(crate) async fn execute_target_patch_transaction(
     tx: &Transaction<'_>,
     target_internal_id: i32,
     request: &ValidatedTargetPatch,
+    port_list_internal_id: &Option<i32>,
 ) -> Result<TargetWriteRecord, ApiError> {
     query_target_write_record(
         tx,
@@ -71,6 +87,7 @@ pub(crate) async fn execute_target_patch_transaction(
             &request.allow_simultaneous_ips,
             &request.reverse_lookup_only,
             &request.reverse_lookup_unify,
+            port_list_internal_id,
         ],
         "update target metadata",
     )

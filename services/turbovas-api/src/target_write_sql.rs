@@ -29,6 +29,14 @@ pub(crate) fn target_in_use_sql() -> &'static str {
         AND hidden = 0;"
 }
 
+pub(crate) fn target_assignable_port_list_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer,
+            coalesce(predefined, 0)::integer
+       FROM port_lists
+      WHERE uuid = $1;"
+}
+
 pub(crate) fn target_update_metadata_sql() -> &'static str {
     "UPDATE targets
         SET name = coalesce($2, name),
@@ -37,6 +45,7 @@ pub(crate) fn target_update_metadata_sql() -> &'static str {
             allow_simultaneous_ips = coalesce($5, allow_simultaneous_ips),
             reverse_lookup_only = coalesce($6, reverse_lookup_only),
             reverse_lookup_unify = coalesce($7, reverse_lookup_unify),
+            port_list = coalesce($8, port_list),
             modification_time = m_now()
       WHERE id = $1
       RETURNING uuid::text;"

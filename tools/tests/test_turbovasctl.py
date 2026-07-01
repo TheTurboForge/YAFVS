@@ -2622,7 +2622,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "tag-trash-move",
             "target-detail-summary-read",
             "target-list-read",
-            "target-metadata-and-scan-settings-modify",
+            "target-metadata-and-scan-inputs-modify",
             "task-detail-summary-read",
             "task-list-read",
             "task-metadata-modify",
@@ -6489,6 +6489,10 @@ db2:keys=5,expires=0,avg_ttl=0
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "16\n", "")
                     if "SELECT allow_simultaneous_ips::text" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "0|1|1\n", "")
+                    if "SELECT pl.uuid::text FROM targets" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, port_list_uuid + "\n", "")
+                    if "SELECT coalesce(port_list::text" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, "42\n", "")
                     if "FROM tasks" in command_text and "md5" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "task-adjacent-state-checksum\n", "")
                     if "DELETE FROM credentials" in command_text:
@@ -6547,6 +6551,11 @@ db2:keys=5,expires=0,avg_ttl=0
                     if "alive_tests" in payload:
                         self.assertEqual(payload["alive_tests"], ["TCP-SYN Service Ping"])
                         return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "comment": target_updated_comment, "alive_tests": payload["alive_tests"]}) + "\n200", "")
+                    if "port_list_id" in payload:
+                        self.assertEqual(payload["port_list_id"], port_list_uuid)
+                        if target_in_use["value"]:
+                            return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"conflict"}}\n409', "")
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "port_list": {"id": port_list_uuid, "name": "All IANA assigned TCP"}}) + "\n200", "")
                     if "allow_simultaneous_ips" in payload or "reverse_lookup_only" in payload or "reverse_lookup_unify" in payload:
                         if target_in_use["value"]:
                             return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"conflict"}}\n409', "")
@@ -6848,8 +6857,10 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.target-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.target-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.target-alive-test-update"], "pass")
+        self.assertEqual(checks["native-api-direct.target-port-list-update"], "pass")
         self.assertEqual(checks["native-api-direct.target-scan-settings-update"], "pass")
         self.assertEqual(checks["native-api-direct.target-scan-settings-in-use-denied"], "pass")
+        self.assertEqual(checks["native-api-direct.target-port-list-in-use-denied"], "pass")
         self.assertEqual(checks["native-api-direct.target-fixture-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-query-denied"], "pass")

@@ -20,6 +20,7 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> TargetPatchReques
         allow_simultaneous_ips: None,
         reverse_lookup_only: None,
         reverse_lookup_unify: None,
+        port_list_id: None,
     }
 }
 
@@ -31,6 +32,7 @@ fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
         allow_simultaneous_ips: None,
         reverse_lookup_only: None,
         reverse_lookup_unify: None,
+        port_list_id: None,
     }
 }
 
@@ -46,6 +48,19 @@ fn scan_settings_patch_request(
         allow_simultaneous_ips,
         reverse_lookup_only,
         reverse_lookup_unify,
+        port_list_id: None,
+    }
+}
+
+fn port_list_patch_request(port_list_id: &str) -> TargetPatchRequest {
+    TargetPatchRequest {
+        name: None,
+        comment: None,
+        alive_tests: None,
+        allow_simultaneous_ips: None,
+        reverse_lookup_only: None,
+        reverse_lookup_unify: None,
+        port_list_id: Some(port_list_id.to_string()),
     }
 }
 
@@ -114,6 +129,7 @@ fn target_patch_request_rejects_oversized_metadata_fields() {
             allow_simultaneous_ips: None,
             reverse_lookup_only: None,
             reverse_lookup_unify: None,
+            port_list_id: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -135,6 +151,21 @@ fn target_patch_request_validates_guarded_scan_settings() {
     let alive_only = validate_target_patch_request(alive_patch_request(&["ICMP Ping"]))
         .expect("alive-only patch");
     assert!(!alive_only.changes_task_in_use_guarded_scan_settings());
+
+    let port_list = validate_target_patch_request(port_list_patch_request(
+        "12345678-1234-1234-1234-123456789abc",
+    ))
+    .expect("valid port-list reference patch");
+    assert_eq!(
+        port_list.port_list_id.as_deref(),
+        Some("12345678-1234-1234-1234-123456789abc")
+    );
+    assert!(port_list.changes_task_in_use_guarded_scan_settings());
+
+    assert!(matches!(
+        validate_target_patch_request(port_list_patch_request("not-a-uuid")),
+        Err(ApiError::BadRequest(_))
+    ));
 }
 
 #[test]
@@ -186,6 +217,7 @@ fn target_patch_sql_is_metadata_only() {
     assert!(sql.contains("allow_simultaneous_ips = coalesce($5, allow_simultaneous_ips)"));
     assert!(sql.contains("reverse_lookup_only = coalesce($6, reverse_lookup_only)"));
     assert!(sql.contains("reverse_lookup_unify = coalesce($7, reverse_lookup_unify)"));
+    assert!(sql.contains("port_list = coalesce($8, port_list)"));
     assert!(sql.contains("modification_time = m_now()"));
     assert!(sql.contains("RETURNING uuid::text"));
     for forbidden in [
@@ -193,10 +225,8 @@ fn target_patch_sql_is_metadata_only() {
         "targets_trash",
         "tasks",
         "credentials",
-        "port_lists",
         "hosts =",
         "exclude_hosts",
-        "port_list",
         "ssh",
         "smb",
         "snmp",
@@ -233,4 +263,9 @@ fn target_patch_state_and_uniqueness_are_live_metadata_only() {
     assert!(in_use.contains("target_location = 0"));
     assert!(in_use.contains("hidden = 0"));
     assert!(!in_use.contains("targets_login_data"));
+
+    let assignable_port_list = target_assignable_port_list_state_sql();
+    assert!(assignable_port_list.contains("FROM port_lists"));
+    assert!(assignable_port_list.contains("owner::integer"));
+    assert!(assignable_port_list.contains("coalesce(predefined, 0)::integer"));
 }

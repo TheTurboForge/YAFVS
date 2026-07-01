@@ -18,6 +18,11 @@ pub(crate) struct TargetWriteState {
     pub(crate) owner_id: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AssignableTargetPortList {
+    pub(crate) internal_id: i32,
+}
+
 pub(crate) fn require_target_write_operator(
     operator: Option<Extension<DirectApiOperator>>,
 ) -> Result<DirectApiOperator, ApiError> {
@@ -96,6 +101,34 @@ pub(crate) async fn ensure_target_not_in_use_for_scan_settings(
             "target scan settings cannot be changed while the target is used by a live task"
                 .to_string(),
         ))
+    }
+}
+
+pub(crate) async fn load_assignable_target_port_list(
+    tx: &Transaction<'_>,
+    port_list_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTargetPortList, ApiError> {
+    let port_list_id = parse_uuid(port_list_id)?.to_string();
+    let Some(row) = tx
+        .query_opt(target_assignable_port_list_state_sql(), &[&port_list_id])
+        .await
+        .map_err(|error| map_target_write_db_error(error, "load target port list reference"))?
+    else {
+        return Err(ApiError::NotFound);
+    };
+    let internal_id: i32 = row.get(0);
+    let owner_id: i32 = row.get(1);
+    let predefined = row.get::<_, i32>(2) != 0;
+    if predefined || owner_id == operator_owner_id {
+        Ok(AssignableTargetPortList { internal_id })
+    } else {
+        tracing::warn!(
+            port_list_owner_id = owner_id,
+            operator_owner_id,
+            "direct API target write operator cannot assign port list"
+        );
+        Err(ApiError::Forbidden)
     }
 }
 

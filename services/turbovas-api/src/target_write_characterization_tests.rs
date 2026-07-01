@@ -395,7 +395,7 @@ fn native_target_broad_mutation_routes_remain_closed() {
         ));
     }
     let detail = openapi_path_block("/targets/{target_id}");
-    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-scan-settings-modify"));
+    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-scan-inputs-modify"));
     for forbidden in ["post:", "delete:", "/clone", "/restore", "/trash"] {
         assert!(
             !detail.contains(forbidden),

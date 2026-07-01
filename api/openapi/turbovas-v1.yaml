@@ -2260,9 +2260,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-list-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-delete-trash
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-trash-hard-delete
       summary: List scan configs
-      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can patch name/comment metadata for non-predefined scan configs; preference values, NVT selector expansion, family edit payloads, import/export, scanner control, create, delete, restore, and selector/preference mutations remain inherited while native contracts are designed.
+      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can patch name/comment metadata for non-predefined scan configs, move live scan configs to trash when no live task references remain, and restore trashed scan configs when their scanner is live; preference values, NVT selector expansion, family edit payloads, import/export, scanner control, create, hard-delete, and selector/preference mutations remain inherited while native contracts are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2301,9 +2301,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-detail-info-tags-and-task-backlink-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-delete-trash
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-trash-hard-delete
       summary: Read one scan config metadata record
-      description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Native direct write-control can patch name/comment metadata for non-predefined scan configs; preferences, import/export, scanner control, create, delete, restore, and selector/preference mutations remain inherited while native contracts are designed.
+      description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Native direct write-control can patch name/comment metadata for non-predefined scan configs and move eligible live scan configs to trash; preferences, import/export, scanner control, create, hard-delete, and selector/preference mutations remain inherited while native contracts are designed.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -2333,13 +2333,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-metadata-modify
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-delete-trash
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-trash-hard-delete
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Patch scan-config metadata
-      description: Direct write-control endpoint for changing a non-predefined scan config name or comment. Preference values, NVT selector/family selection, import/export, create, delete, restore, scanner control, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for changing a non-predefined scan config name or comment. Preference values, NVT selector/family selection, import/export, create, hard-delete, scanner control, and cache recalculation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -2371,6 +2371,79 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteScanConfigsByScanConfigId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scan-config-trash-move
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-trash-hard-delete
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Move scan config to trash
+      description: Direct write-control endpoint for moving a live scan config to trash. Scan configs referenced by non-hidden live tasks are rejected; hidden/trash task links, preferences, and tag links are relinked to the trash row. Hard-delete, create, import/export, selector/preference mutation, scanner control, and cache recalculation remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+      responses:
+        '204':
+          description: Scan config moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scan-configs/{scan_config_id}/restore:
+    post:
+      operationId: postScanConfigsByScanConfigIdRestore
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scan-config-restore
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-trash-hard-delete
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Restore a scan config from trash
+      description: Direct write-control endpoint for restoring a trashed scan config when no live config with the same id or name exists and the associated scanner is not in the trash. Preferences, task links, and tag links are relinked to the restored live row. Hard-delete, create, import/export, selector/preference mutation, scanner control, and cache recalculation remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+      responses:
+        '200':
+          description: Scan config restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanConfigAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs/{scan_config_id}/families:
     get:
       operationId: getScanConfigsByScanConfigIdFamilies
@@ -2378,7 +2451,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-delete-trash
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create-trash-hard-delete
       summary: Read scan config NVT family selection summary
       description: Read-only expansion of the NVT Families detail tab. Scanner preferences, NVT preferences, selector edit payloads, import/export, and writes remain on inherited compatibility paths.
       parameters:

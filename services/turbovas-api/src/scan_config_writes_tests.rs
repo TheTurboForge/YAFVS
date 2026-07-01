@@ -79,6 +79,7 @@ fn scan_config_patch_sql_is_metadata_only() {
     assert!(sql.contains("name = coalesce($2, name)"));
     assert!(sql.contains("comment = coalesce($3, comment)"));
     assert!(sql.contains("modification_time = m_now()"));
+    assert!(sql.contains("RETURNING id::integer, uuid::text"));
     for forbidden in [
         "nvt_selector",
         "family_count",
@@ -109,4 +110,86 @@ fn scan_config_patch_uniqueness_checks_live_and_trash_names() {
     let sql = scan_config_unique_name_sql();
     assert!(sql.contains("FROM configs WHERE name = $1 AND id != $2"));
     assert!(sql.contains("FROM configs_trash WHERE name = $1"));
+}
+
+#[test]
+fn scan_config_trash_sql_copies_metadata_preferences_and_relinks_dependents() {
+    let insert = scan_config_trash_insert_sql();
+    assert!(insert.contains("INSERT INTO configs_trash"));
+    assert!(insert.contains("nvt_selector"));
+    assert!(insert.contains("scanner_location, usage_type"));
+    assert!(insert.contains("modification_time, 0, usage_type"));
+    assert!(insert.contains("RETURNING id::integer, uuid::text"));
+
+    let prefs = scan_config_preferences_trash_insert_sql();
+    assert!(prefs.contains("INSERT INTO config_preferences_trash"));
+    assert!(prefs.contains("SELECT $1, type, name, value, default_value"));
+    assert!(prefs.contains("FROM config_preferences"));
+
+    let tasks = scan_config_task_relink_to_trash_sql();
+    assert!(tasks.contains("UPDATE tasks"));
+    assert!(tasks.contains("config_location = 1"));
+    assert!(tasks.contains("config_location = 0"));
+
+    let live_tags = scan_config_tag_locations_to_trash_sql();
+    assert!(live_tags.contains("UPDATE tag_resources"));
+    assert!(live_tags.contains("resource_type = 'config'"));
+    assert!(live_tags.contains("resource_location = 1"));
+
+    let trash_tags = scan_config_trash_tag_locations_to_trash_sql();
+    assert!(trash_tags.contains("UPDATE tag_resources_trash"));
+    assert!(trash_tags.contains("resource_type = 'config'"));
+    assert!(trash_tags.contains("resource_location = 1"));
+
+    assert!(scan_config_delete_preferences_sql().contains("DELETE FROM config_preferences"));
+    assert!(scan_config_delete_metadata_sql().contains("DELETE FROM configs"));
+}
+
+#[test]
+fn scan_config_restore_sql_copies_metadata_preferences_and_relinks_dependents() {
+    let state = scan_config_trash_state_sql();
+    assert!(state.contains("FROM configs_trash"));
+    assert!(state.contains("coalesce(scanner_location, 0)::integer"));
+    assert!(state.contains("coalesce(usage_type, 'scan') = 'scan'"));
+
+    let name_conflict = scan_config_unique_live_name_sql();
+    assert!(name_conflict.contains("FROM configs"));
+    assert!(name_conflict.contains("name = $1"));
+    assert!(!name_conflict.contains("owner ="));
+
+    let restore = scan_config_restore_metadata_sql();
+    assert!(restore.contains("INSERT INTO configs"));
+    assert!(restore.contains("nvt_selector"));
+    assert!(restore.contains("FROM configs_trash"));
+    assert!(restore.contains("RETURNING id::integer, uuid::text"));
+
+    let prefs = scan_config_preferences_restore_sql();
+    assert!(prefs.contains("INSERT INTO config_preferences"));
+    assert!(prefs.contains("FROM config_preferences_trash"));
+
+    let tasks = scan_config_task_relink_to_live_sql();
+    assert!(tasks.contains("UPDATE tasks"));
+    assert!(tasks.contains("config_location = 0"));
+    assert!(tasks.contains("config_location = 1"));
+
+    let live_tags = scan_config_tag_locations_to_live_sql();
+    assert!(live_tags.contains("UPDATE tag_resources"));
+    assert!(live_tags.contains("resource_location = 0"));
+
+    let trash_tags = scan_config_trash_tag_locations_to_live_sql();
+    assert!(trash_tags.contains("UPDATE tag_resources_trash"));
+    assert!(trash_tags.contains("resource_location = 0"));
+
+    assert!(
+        scan_config_delete_trash_preferences_sql().contains("DELETE FROM config_preferences_trash")
+    );
+    assert!(scan_config_delete_trash_metadata_sql().contains("DELETE FROM configs_trash"));
+}
+
+#[test]
+fn scan_config_delete_guard_blocks_live_task_references_only() {
+    let sql = scan_config_live_task_count_sql();
+    assert!(sql.contains("FROM tasks"));
+    assert!(sql.contains("config_location = 0"));
+    assert!(sql.contains("hidden = 0"));
 }

@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {useState} from 'react';
+import type Response from 'gmp/http/response';
 import {type Duration, type Date} from 'gmp/models/date';
 import {
   type default as Event,
@@ -12,16 +14,19 @@ import {
 } from 'gmp/models/event';
 import type Schedule from 'gmp/models/schedule';
 import {isDefined} from 'gmp/utils/identity';
+import {exportNativeScheduleMetadata} from 'gmp/native-api/schedules';
 import EntityComponent from 'web/entity/EntityComponent';
 import {type EntityCloneResponse} from 'web/entity/hooks/useEntityClone';
 import {type EntityCreateResponse} from 'web/entity/hooks/useEntityCreate';
 import {type OnDownloadedFunc} from 'web/entity/hooks/useEntityDownload';
+import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import useUserTimezone from 'web/hooks/useUserTimezone';
 import ScheduleDialog from 'web/pages/schedules/ScheduleDialog';
 
 interface ScheduleRenderProps {
   create: () => void;
+  download: (schedule: Schedule) => Promise<void>;
   edit: (schedule: Schedule) => void;
 }
 
@@ -39,6 +44,22 @@ interface ScheduleComponentProps {
   onSaveError?: (error: Error) => void;
 }
 
+const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
+  typeof gmp?.buildUrl === 'function';
+
+interface ScheduleExportGmp {
+  schedule: {
+    export: (schedule: Schedule) => Promise<Response<string | ArrayBuffer>>;
+  };
+}
+
+const exportSchedule = (gmp: ReturnType<typeof useGmp>, schedule: Schedule) => {
+  if (canUseNativeApi(gmp)) {
+    return exportNativeScheduleMetadata(gmp, schedule.id as string);
+  }
+  return (gmp as unknown as ScheduleExportGmp).schedule.export(schedule);
+};
+
 const ScheduleComponent = ({
   children,
   onCloned,
@@ -52,6 +73,7 @@ const ScheduleComponent = ({
   onSaved,
   onSaveError,
 }: ScheduleComponentProps) => {
+  const gmp = useGmp();
   const [_] = useTranslation();
   const [timezone] = useUserTimezone();
 
@@ -126,6 +148,8 @@ const ScheduleComponent = ({
 
   return (
     <EntityComponent<Schedule>
+      download={schedule => exportSchedule(gmp, schedule)}
+      downloadOptions={canUseNativeApi(gmp) ? {extension: 'json'} : undefined}
       name="schedule"
       onCloneError={onCloneError}
       onCloned={onCloned}

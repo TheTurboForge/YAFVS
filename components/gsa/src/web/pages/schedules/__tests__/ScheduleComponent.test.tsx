@@ -1,10 +1,11 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {describe, expect, test, testing} from '@gsa/testing';
-import {fireEvent, rendererWith, screen} from 'web/testing';
+import {fireEvent, rendererWith, screen, wait} from 'web/testing';
 import date, {duration} from 'gmp/models/date';
 import Event from 'gmp/models/event';
 import Schedule from 'gmp/models/schedule';
@@ -14,8 +15,18 @@ import ScheduleComponent from 'web/pages/schedules/ScheduleComponent';
 
 const createGmp = ({
   currentSettings = testing.fn().mockResolvedValue({}),
+  exportSchedule = testing.fn().mockResolvedValue({data: '<schedule id="123"/>'}),
+  native = false,
 } = {}) => ({
-  session: createSession({timezone: 'UTC'}),
+  ...(native
+    ? {
+        buildUrl: testing.fn(
+          (path, _params) => `https://turbovas.example/${path}`,
+        ),
+      }
+    : {}),
+  session: {...createSession({timezone: 'UTC'}), token: 'test-token'},
+  schedule: {export: exportSchedule},
   user: {currentSettings},
 });
 
@@ -129,5 +140,65 @@ describe('ScheduleComponent tests', () => {
     expect(screen.getByRole('textbox', {name: 'Comment'})).toHaveValue(
       'This is a test schedule',
     );
+  });
+
+  test('should use native metadata export for downloads', async () => {
+    const nativePayload = {
+      id: '123',
+      name: 'Native Schedule',
+      comment: 'native metadata',
+      timezone: 'UTC',
+    };
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue(nativePayload),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({
+      currentSettings: testing.fn().mockResolvedValue({
+        data: {
+          detailsexportfilename: {
+            id: 'details-export-filename',
+            name: 'Details Export File Name',
+            value: '%T-%U',
+          },
+        },
+      }),
+      native: true,
+    });
+    const schedule = new Schedule({id: '123', name: 'Native Schedule'});
+    const onDownloaded = testing.fn();
+    const onDownloadError = testing.fn();
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <ScheduleComponent
+        onDownloadError={onDownloadError}
+        onDownloaded={onDownloaded}
+      >
+        {({download}) => (
+          <Button data-testid="button" onClick={() => download(schedule)} />
+        )}
+      </ScheduleComponent>,
+    );
+
+    await wait();
+    fireEvent.click(screen.getByTestId('button'));
+    await wait();
+
+    expect(gmp.schedule.export).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/schedules/123/export', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      'https://turbovas.example/api/v1/schedules/123/export',
+      expect.objectContaining({credentials: 'include'}),
+    );
+    expect(onDownloaded).toHaveBeenCalledWith({
+      filename: 'schedule-123.json',
+      data: `${JSON.stringify(nativePayload, null, 2)}\n`,
+    });
+    expect(onDownloadError).not.toHaveBeenCalled();
   });
 });

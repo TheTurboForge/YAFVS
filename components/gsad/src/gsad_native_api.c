@@ -290,6 +290,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *port_list_export_suffix = "/export";
   const gchar *schedules_path = "/api/v1/schedules";
   const gchar *schedule_prefix = "/api/v1/schedules/";
+  const gchar *schedule_export_suffix = "/export";
   const gchar *timezones_path = "/api/v1/timezones";
   const gchar *report_configs_path = "/api/v1/report-configs";
   const gchar *report_config_prefix = "/api/v1/report-configs/";
@@ -540,6 +541,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, schedule_prefix))
     {
       const gchar *id = path + strlen (schedule_prefix);
+      if (g_str_has_suffix (id, schedule_export_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (schedule_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import NvtsCommand from 'gmp/commands/nvts';
 import {
   createAggregatesResponse,
@@ -11,6 +12,11 @@ import {
   createInfoEntitiesResponse,
 } from 'gmp/commands/testing';
 import Nvt from 'gmp/models/nvt';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('NvtsCommand tests', () => {
   test('should fetch nvts with default params', async () => {
@@ -113,6 +119,53 @@ describe('NvtsCommand tests', () => {
         oid: '2.3.4',
       }),
     ]);
+  });
+
+  test('should fetch nvts through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1, sort: '-created', filter: 'ssh'},
+        items: [
+          {
+            id: '1.3.6.1.4.1.25623.1.0.10330',
+            oid: '1.3.6.1.4.1.25623.1.0.10330',
+            name: 'SSH Default Credentials',
+            family: 'Brute force attacks',
+            severity: 7.5,
+            qod: 80,
+            qod_type: 'remote_banner',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new NvtsCommand(fakeHttp);
+    const result = await cmd.get({filter: 'first=1 rows=25 search=ssh'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data[0].id).toEqual('1.3.6.1.4.1.25623.1.0.10330');
+    expect(result.data[0].family).toEqual('Brute force attacks');
+    expect(result.data[0].severity).toEqual(7.5);
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/nvts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'created',
+      filter: 'ssh',
+    });
   });
 
   test('should fetch severity aggregates', async () => {

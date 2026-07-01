@@ -1,13 +1,29 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import InfoEntitiesCommand from 'gmp/commands/info-entities';
+import type {
+  HttpCommandInputParams,
+  HttpCommandOptions,
+} from 'gmp/commands/http';
+import {
+  canUseNativeApi,
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import type Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import Nvt from 'gmp/models/nvt';
+import {
+  fetchNativeNvts,
+  nativeNvtsQueryFromFilter,
+} from 'gmp/native-api/nvts';
 import {isDefined} from 'gmp/utils/identity';
 
 const infoFilter = (info: Element) => isDefined(info.nvt);
@@ -15,6 +31,53 @@ const infoFilter = (info: Element) => isDefined(info.nvt);
 class NvtsCommand extends InfoEntitiesCommand<Nvt> {
   constructor(http: Http) {
     super(http, 'nvt', Nvt, infoFilter);
+  }
+
+  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
+    if (!canUseNativeApi(this.http)) {
+      return super.get(params, options);
+    }
+
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeNvts(
+      this.http,
+      nativeNvtsQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.nvts, {
+      filter,
+      counts: nativeResponse.counts,
+    });
+  }
+
+  async getAll(
+    params: HttpCommandInputParams = {},
+    options?: HttpCommandOptions,
+  ) {
+    if (!canUseNativeApi(this.http)) {
+      return super.getAll(params, options);
+    }
+
+    const filter = filterFromCommandParams(params).all();
+    const nvts: Nvt[] = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; nvts.length < total; page += 1) {
+      const nativeResponse = await fetchNativeNvts(this.http, {
+        ...nativeNvtsQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      nvts.push(...nativeResponse.nvts);
+      total = nativeResponse.page.total;
+      if (nativeResponse.nvts.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      nvts,
+      nativeCollectionMeta(filter, nvts, Number.isFinite(total) ? total : 0),
+    );
   }
 
   getFamilyAggregates({filter}: {filter?: Filter} = {}) {

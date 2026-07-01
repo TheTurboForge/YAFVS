@@ -10,6 +10,9 @@ const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c")
 const MANAGE_SQL_REPORT_CONFIGS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
 const GMP_REPORT_CONFIGS: &str = include_str!("../../../components/gvmd/src/gmp_report_configs.c");
+const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSA_ENTITY_TS: &str = include_str!("../../../components/gsa/src/gmp/commands/entity.ts");
+const GSA_ENTITIES_TS: &str = include_str!("../../../components/gsa/src/gmp/commands/entities.ts");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 const REPORT_CONFIG_PAYLOADS_RS: &str = include_str!("report_config_payloads.rs");
 
@@ -281,6 +284,74 @@ fn inherited_gmp_report_config_parser_contract_is_copy_or_metadata_param_write()
         assert!(
             modify_run.contains(required),
             "modify_report_config_run missing {required}"
+        );
+    }
+}
+
+#[test]
+fn inherited_report_config_export_is_generic_xml_metadata_export_not_report_generation() {
+    let single_export = inherited_function(GSAD_GMP_C, "export_report_config_gmp");
+    assert!(single_export.contains("export_resource (connection, \"report_config\""));
+
+    let many_export = inherited_function(GSAD_GMP_C, "export_report_configs_gmp");
+    assert!(many_export.contains("export_many (connection, \"report_config\""));
+
+    let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
+    for required in [
+        "resource_type",
+        "bulk_select",
+        "bulk_selected:",
+        "first=1 rows=-1 uuid=",
+        "params_add (params, \"filter\"",
+        "return export_many (connection, type",
+    ] {
+        assert!(
+            bulk_export.contains(required),
+            "bulk_export_gmp missing {required}"
+        );
+    }
+
+    for required in [
+        "async export({id}: EntityCommandParams)",
+        "cmd: 'bulk_export'",
+        "resource_type: this.name",
+        "bulk_select: BULK_SELECT_BY_IDS",
+        "['bulk_selected:' + id]: 1",
+    ] {
+        assert!(
+            GSA_ENTITY_TS.contains(required),
+            "single entity export missing {required}"
+        );
+    }
+
+    for required in [
+        "exportByIds(ids: string[])",
+        "cmd: 'bulk_export'",
+        "resource_type: this.name",
+        "bulk_select: BULK_SELECT_BY_IDS",
+        "data['bulk_selected:' + id] = 1",
+    ] {
+        assert!(
+            GSA_ENTITIES_TS.contains(required),
+            "bulk entity export missing {required}"
+        );
+    }
+
+    for forbidden in [
+        "get_reports",
+        "report_format_id",
+        "config_id",
+        "apply_report_format",
+        "manage_send_report",
+        "report_id",
+    ] {
+        assert!(
+            !single_export.contains(forbidden),
+            "single report-config export must not include report-generation boundary {forbidden}"
+        );
+        assert!(
+            !many_export.contains(forbidden),
+            "multi report-config export must not include report-generation boundary {forbidden}"
         );
     }
 }

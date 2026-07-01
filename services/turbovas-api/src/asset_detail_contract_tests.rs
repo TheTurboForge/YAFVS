@@ -16,7 +16,7 @@ use crate::{
     },
     query::sort_clause,
     scan_config_query_sql::{scan_config_asset_detail_sql, scan_config_task_references_sql},
-    scanner_assets::scanner_task_references_sql,
+    scanner_asset_query_sql::{scanner_asset_detail_sql, scanner_task_references_sql},
     user_tags::catalog_user_tags_sql,
 };
 
@@ -496,18 +496,25 @@ fn scanner_detail_contract_excludes_certificate_and_secret_material() {
         .split_once("pub(crate) async fn scanner_asset_detail")
         .expect("scanner detail handler must exist")
         .1
-        .split_once("pub(crate) fn scanner_task_references_sql")
-        .expect("scanner detail handler must precede task-reference helper")
+        .split_once("pub(crate) async fn scanner_asset_export")
+        .expect("scanner detail handler must precede export wrapper")
         .0;
+    let sql = scanner_asset_detail_sql();
 
+    assert!(detail_source.contains("scanner_asset_detail_sql()"));
     assert!(detail_source.contains("scanner_task_references"));
     assert!(detail_source.contains("scanner_user_tags"));
-    assert!(!detail_source.contains("ca_pub"));
-    assert!(!detail_source.contains("credential_value"));
-    assert!(!detail_source.contains("private_key"));
-    assert!(!detail_source.contains("password"));
-    assert!(!detail_source.contains("secret"));
-    assert!(!detail_source.contains("certificate_info"));
+    for forbidden in [
+        "ca_pub",
+        "credential_value",
+        "private_key",
+        "password",
+        "secret",
+        "certificate_info",
+    ] {
+        assert!(!detail_source.contains(forbidden));
+        assert!(!sql.contains(forbidden));
+    }
     assert!(!detail_source.contains("send_scanner_info"));
 }
 

@@ -105,6 +105,7 @@ mod scan_config_write_validation;
 mod scan_config_writes;
 mod scan_configs;
 mod scanner_asset_payloads;
+mod scanner_asset_query_sql;
 mod scanner_assets;
 mod schedule_payloads;
 mod schedule_write_db;

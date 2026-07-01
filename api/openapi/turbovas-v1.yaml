@@ -717,6 +717,73 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /credentials:
+    get:
+      operationId: getCredentials
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: credential-redacted-metadata-list-read
+      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      summary: List redacted credential metadata
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Credential secrets, credential-store secret selectors, export/download behavior, and all credential writes are intentionally excluded.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Redacted credential metadata collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialAssetCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /credentials/{credential_id}:
+    get:
+      operationId: getCredentialsByCredentialId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: credential-redacted-metadata-detail-read
+      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      summary: Read one redacted credential metadata record
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Credential secrets, credential-store secret selectors, export/download behavior, and all credential writes are intentionally excluded.
+      parameters:
+        - $ref: '#/components/parameters/CredentialId'
+      responses:
+        '200':
+          description: Redacted credential metadata detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /filters:
     get:
       operationId: getFilters
@@ -4074,6 +4141,13 @@ components:
       schema:
         type: string
         format: uuid
+    CredentialId:
+      name: credential_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ScopeId:
       name: scope_id
       in: path
@@ -4550,6 +4624,70 @@ components:
               description: Active user tags attached directly to this scanner. Write/tag actions remain inherited.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
+    CredentialAssetCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialAsset'
+    CredentialUsageReference:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        use_type:
+          type: string
+          description: Non-secret relationship kind, such as target login-data type or scanner.
+        port:
+          type: integer
+          nullable: true
+          description: Non-secret credential-use port where the relationship records one.
+    CredentialAsset:
+      type: object
+      required: [id, name, owner, credential_type, allow_insecure, target_count, scanner_count, targets, scanners]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        owner:
+          type: string
+        credential_type:
+          type: string
+          description: Internal credential kind only; secret material is never returned by this native endpoint.
+        allow_insecure:
+          type: boolean
+        target_count:
+          type: integer
+        scanner_count:
+          type: integer
+        targets:
+          type: array
+          description: Target backlinks by id/name/use type only. Target host data and credential secret data are not returned here.
+          items:
+            $ref: '#/components/schemas/CredentialUsageReference'
+        scanners:
+          type: array
+          description: Scanner backlinks by id/name only. Scanner CA material and credential secret data are not returned here.
+          items:
+            $ref: '#/components/schemas/CredentialUsageReference'
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
     ScanConfigAssetCollection:
       type: object
       required: [page, items]

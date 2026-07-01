@@ -265,6 +265,8 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *tls_certificate_prefix = "/api/v1/tls-certificates/";
   const gchar *scanners_path = "/api/v1/scanners";
   const gchar *scanner_prefix = "/api/v1/scanners/";
+  const gchar *credentials_path = "/api/v1/credentials";
+  const gchar *credential_prefix = "/api/v1/credentials/";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *scan_config_families_suffix = "/families";
@@ -414,6 +416,15 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, scanner_prefix))
     {
       const gchar *id = path + strlen (scanner_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_strcmp0 (path, credentials_path) == 0)
+    return TRUE;
+
+  if (g_str_has_prefix (path, credential_prefix))
+    {
+      const gchar *id = path + strlen (credential_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

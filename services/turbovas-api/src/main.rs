@@ -11,6 +11,8 @@ mod cert_advisory_payloads;
 mod collections;
 mod cpe_catalog;
 mod cpe_catalog_payloads;
+mod credential_payloads;
+mod credentials;
 mod cve_catalog;
 mod cve_catalog_payloads;
 mod direct_api;
@@ -152,6 +154,8 @@ mod asset_detail_contract_tests;
 mod collection_contract_tests;
 #[cfg(test)]
 mod collection_query_contract_tests;
+#[cfg(test)]
+mod credential_contract_tests;
 #[cfg(test)]
 mod direct_api_contract_tests;
 #[cfg(test)]

@@ -180,6 +180,21 @@ pub(crate) const SCANNER_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
     ("credential", "credential_name"),
     ("modified", "modified_at_unix"),
 ];
+pub(crate) const CREDENTIAL_ASSET_DEFAULT_SORT: &str = "name";
+pub(crate) const CREDENTIAL_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("owner", "owner_name"),
+    ("type", "credential_type"),
+    ("credential_type", "credential_type"),
+    ("allow_insecure", "allow_insecure_int"),
+    ("targets", "target_count"),
+    ("target_count", "target_count"),
+    ("scanners", "scanner_count"),
+    ("scanner_count", "scanner_count"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+];
 pub(crate) const SCAN_CONFIG_ASSET_DEFAULT_SORT: &str = "name";
 pub(crate) const SCAN_CONFIG_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
     ("id", "id"),

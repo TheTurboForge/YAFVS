@@ -13,6 +13,7 @@ use crate::{
     app_state::{AppState, healthz},
     cert_advisories::*,
     cpe_catalog::*,
+    credentials::{credential_asset_detail, credential_assets},
     cve_catalog::*,
     feeds::feeds,
     filter_writes::{
@@ -114,6 +115,11 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         )
         .route("/api/v1/scanners", get(scanner_assets))
         .route("/api/v1/scanners/:scanner_id", get(scanner_asset_detail))
+        .route("/api/v1/credentials", get(credential_assets))
+        .route(
+            "/api/v1/credentials/:credential_id",
+            get(credential_asset_detail),
+        )
         .route("/api/v1/scan-configs", get(scan_config_assets))
         .route(
             "/api/v1/scan-configs/:scan_config_id",

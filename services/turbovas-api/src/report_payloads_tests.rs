@@ -5,6 +5,7 @@
 use crate::{
     report_cve_query_sql::report_cves_sql, report_payloads::raw_report_sql,
     report_port_query_sql::report_ports_sql,
+    report_tls_certificate_query_sql::report_tls_certificates_sql,
 };
 
 #[test]
@@ -21,6 +22,45 @@ fn raw_report_payload_exposes_report_progress_without_control_paths() {
         assert!(
             !upper_sql.contains(forbidden),
             "raw report read SQL must not include control/mutation path: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn raw_report_tls_certificate_sql_is_report_scoped_metadata_read_only() {
+    let sql = report_tls_certificates_sql("not_after_unix DESC");
+    let upper_sql = sql.to_ascii_uppercase();
+
+    for required in [
+        "SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)",
+        "JOIN report_hosts rh ON rh.report = sr.id",
+        "JOIN tls_certificate_origins origin",
+        "origin.origin_type = 'Report'",
+        "JOIN tls_certificate_sources src ON src.origin = origin.id",
+        "JOIN tls_certificates c ON c.id = src.tls_certificate",
+        "JOIN tls_certificate_locations loc ON loc.id = src.location",
+        "coalesce(c.sha256_fingerprint, '') AS fingerprint_sha256",
+        "count(*) OVER()::bigint AS total",
+        "ORDER BY not_after_unix DESC, id ASC LIMIT $3 OFFSET $4",
+    ] {
+        assert!(
+            sql.contains(required),
+            "raw report TLS certificate SQL missing {required}"
+        );
+    }
+    for forbidden in [
+        "INSERT ",
+        "UPDATE ",
+        "DELETE ",
+        "START_TASK",
+        "STOP_TASK",
+        "PRIVATE_KEY",
+        "CERTIFICATE_PEM",
+        "CERTIFICATE_BLOB",
+    ] {
+        assert!(
+            !upper_sql.contains(forbidden),
+            "raw report TLS certificate SQL must not include control/mutation or key material path: {forbidden}"
         );
     }
 }

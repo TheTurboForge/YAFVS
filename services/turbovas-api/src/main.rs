@@ -93,6 +93,7 @@ mod report_payloads;
 mod report_payloads_tests;
 mod report_port_query_sql;
 mod report_ports;
+mod report_tls_certificate_query_sql;
 mod report_tls_certificates;
 mod request_ids;
 mod request_shapes;

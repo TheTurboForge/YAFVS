@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {rendererWith, fireEvent, screen, wait, within} from 'web/testing';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
@@ -154,6 +154,8 @@ const override2 = Override.fromElement({
 });
 
 const createGmp = ({
+  buildUrl,
+  exportNvt = testing.fn().mockResolvedValue({data: '<nvt oid="12345"/>'}),
   getNvt = testing.fn().mockResolvedValue({
     data: nvt,
   }),
@@ -175,7 +177,9 @@ const createGmp = ({
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
 } = {}) => ({
+  buildUrl,
   nvt: {
+    export: exportNvt,
     get: getNvt,
   },
   settings: {
@@ -183,13 +187,21 @@ const createGmp = ({
     reloadInterval,
     enableEPSS: true,
   },
-  session: createSession({timezone: 'UTC'}),
+  session: {
+    ...createSession({timezone: 'UTC'}),
+    token: 'test-token',
+    jwt: 'jwt-token',
+  },
   user: {
     currentSettings,
   },
   overrides: {
     get: getOverrides,
   },
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('Nvt DetailsPage tests', () => {
@@ -389,5 +401,47 @@ describe('Nvt DetailsPage tests', () => {
     const userTagsTab = screen.getByRole('tab', {name: /^user tags/i});
     fireEvent.click(userTagsTab);
     expect(container).toHaveTextContent('No user tags available');
+  });
+
+  test('should use native metadata export for downloads', async () => {
+    const nativePayload = {
+      id: '12345',
+      oid: '12345',
+      name: 'foo',
+    };
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue(nativePayload),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const exportNvt = testing.fn().mockResolvedValue({data: '<nvt/>'});
+    const buildUrl = testing.fn(
+      (path, _params) => `https://turbovas.example/${path}`,
+    );
+    const gmp = createGmp({buildUrl, exportNvt});
+    const {render, store} = rendererWith({
+      capabilities: true,
+      gmp,
+      router: true,
+      store: true,
+    });
+
+    store.dispatch(entityLoadingActions.success('12345', nvt));
+    render(<DetailsPage id="12345" />);
+    await wait();
+
+    fetchMock.mockClear();
+    fireEvent.click(screen.getByTitle('Export NVT'));
+    await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
+
+    expect(exportNvt).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/nvts/12345/export', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      'https://turbovas.example/api/v1/nvts/12345/export',
+      expect.objectContaining({credentials: 'include'}),
+    );
   });
 });

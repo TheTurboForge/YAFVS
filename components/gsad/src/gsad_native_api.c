@@ -259,6 +259,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *dfn_cert_advisory_prefix = "/api/v1/dfn-cert-advisories/";
   const gchar *nvts_path = "/api/v1/nvts";
   const gchar *nvt_prefix = "/api/v1/nvts/";
+  const gchar *nvt_export_suffix = "/export";
   const gchar *operating_systems_path = "/api/v1/operating-systems";
   const gchar *operating_system_prefix = "/api/v1/operating-systems/";
   const gchar *operating_system_export_suffix = "/export";
@@ -399,6 +400,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, nvt_prefix))
     {
       const gchar *id = path + strlen (nvt_prefix);
+      if (g_str_has_suffix (id, nvt_export_suffix))
+        return is_nvt_oid_segment (id,
+                                   strlen (id)
+                                   - strlen (nvt_export_suffix));
       return is_nvt_oid_segment (id, strlen (id));
     }
 

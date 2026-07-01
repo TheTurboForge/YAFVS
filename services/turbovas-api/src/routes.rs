@@ -125,6 +125,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         )
         .route("/api/v1/scanners", get(scanner_assets))
         .route("/api/v1/scanners/:scanner_id", get(scanner_asset_detail))
+        .route(
+            "/api/v1/scanners/:scanner_id/export",
+            get(scanner_asset_export),
+        )
         .route("/api/v1/credentials", get(credential_assets))
         .route(
             "/api/v1/credentials/:credential_id",

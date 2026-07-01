@@ -246,9 +246,12 @@ inherited scanner type, safe credential references, relay metadata, and
 timestamps. Scanner detail adds active User Tags and non-hidden task backlinks
 for safe socket/builtin page-load reads. Inherited GMP remains the fallback for
 remote scanner certificate context and keeps CA/certificate data, credential
-download context, verify/export/download/delete/clone/edit actions, and scanner
-control behavior. Native scanner reads do not expose credential secret values,
-credential certificate metadata, or scanner CA material.
+download context, verify/file export/download/delete/clone/edit actions, and
+scanner control behavior. Direct scriptable
+`GET /api/v1/scanners/{scanner_id}/export` returns the same redacted scanner
+detail JSON for metadata export; it does not replace legacy scanner file export
+or scanner-control behavior. Native scanner reads do not expose credential
+secret values, credential certificate metadata, or scanner CA material.
 
 Native operating-system asset rows include the `oss.uuid` identity, CPE/name,
 title, latest/highest/average host severity, current best-OS host count, all

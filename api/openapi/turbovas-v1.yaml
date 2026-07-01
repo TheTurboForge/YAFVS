@@ -717,6 +717,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /scanners/{scanner_id}/export:
+    get:
+      operationId: getScannersByScannerIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scanner-metadata-export-read
+      x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes
+      summary: Export scanner metadata JSON
+      description: Direct scriptable scanner metadata export backed by gvmd/PostgreSQL. This returns the same redacted scanner detail JSON as the native detail read. Credential secrets, scanner CA material, credential certificate metadata, live scanner status, verify/control operations, file export/download behavior, and writes remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      responses:
+        '200':
+          description: Scanner metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /credentials:
     get:
       operationId: getCredentials

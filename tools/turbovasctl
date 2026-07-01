@@ -567,6 +567,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scan-config-restore",
         "scan-config-trash-move",
         "scanner-metadata-detail-info-tags-and-task-backlink-read",
+        "scanner-metadata-export-read",
         "scanner-metadata-list-read",
         "schedule-metadata-detail-read",
         "schedule-metadata-export-read",
@@ -1033,6 +1034,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scanner-metadata-detail-info-tags-and-task-backlink-read",
+    },
+    ("get", "/scanners/{scanner_id}/export"): {
+        "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "scanner-metadata-export-read",
     },
     ("get", "/credentials"): {
         "x-turbovas-inherited-still-owns": "credential-secrets-writes-and-deletes",
@@ -1575,6 +1581,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/tls-certificates/{}",
         "/api/v1/scanners",
         "/api/v1/scanners/{}",
+        "/api/v1/scanners/{}/export",
         "/api/v1/credentials",
         "/api/v1/credentials/{}",
         "/api/v1/filters",
@@ -7004,6 +7011,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/scanners/{scanner_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Scanner detail Information fields (migrated through gsad same-origin proxy)", "read-only scanner metadata automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["direct native JSON scanner metadata export", "read-only scanner metadata automation"],
             },
             {
                 "endpoint": "/api/v1/credentials",

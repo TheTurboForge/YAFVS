@@ -212,6 +212,11 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
         false,
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/export",
+        false,
+    ));
     for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, "/api/v1/scanners", true),
@@ -226,7 +231,7 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
             "{method} /api/v1/scanners/{{id}} must remain closed"
         );
     }
-    for action in ["verify", "export", "download", "trash"] {
+    for action in ["verify", "download", "trash"] {
         let path = format!("/api/v1/scanners/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
             !direct_api_v1_path_is_allowed(&path),

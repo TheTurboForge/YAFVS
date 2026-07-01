@@ -1964,8 +1964,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 131)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 84)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 132)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 85)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 47)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 47)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2097,7 +2097,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 84)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 85)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 47)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -2496,7 +2496,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 131)
+        self.assertEqual(contract["operation_count"], 132)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
@@ -2608,6 +2608,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "scan-config-restore",
             "scan-config-trash-move",
             "scanner-metadata-detail-info-tags-and-task-backlink-read",
+            "scanner-metadata-export-read",
             "scanner-metadata-list-read",
             "schedule-clone",
             "schedule-hard-delete",
@@ -2763,9 +2764,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 131)
-        self.assertEqual(details["direct_operation_count"], 131)
-        self.assertEqual(details["direct_read_operation_count"], 84)
+        self.assertEqual(details["operation_count"], 132)
+        self.assertEqual(details["direct_operation_count"], 132)
+        self.assertEqual(details["direct_read_operation_count"], 85)
         self.assertEqual(
             details["non_get_direct_operations"],
             ["PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}"],
@@ -2978,11 +2979,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 131)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 131)
-        self.assertEqual(details["summary"]["inventory_rows"], 131)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 131)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 131)
+        self.assertEqual(details["summary"]["total_rows"], 132)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 132)
+        self.assertEqual(details["summary"]["inventory_rows"], 132)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 132)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 132)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -3196,6 +3197,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/tls-certificates/{certificate_id}": ("getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-export-delete-and-rich-history"),
             "/api/v1/scanners": ("getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
+            "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", "scan-config-preferences-selector-import-export-create"),
             "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", "scan-config-preferences-selector-import-export-create"),
             "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preferences-selector-import-export-create"),
@@ -3660,7 +3662,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 131)
+        self.assertEqual(len(operation_ids), 132)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -4665,6 +4667,7 @@ class TurboVASCtlTests(unittest.TestCase):
         tls_certificate_detail = operations[("get", "/tls-certificates/{certificate_id}")]
         scanners = operations[("get", "/scanners")]
         scanner_detail = operations[("get", "/scanners/{scanner_id}")]
+        scanner_export = operations[("get", "/scanners/{scanner_id}/export")]
         scan_configs = operations[("get", "/scan-configs")]
         scan_config_detail = operations[("get", "/scan-configs/{scan_config_id}")]
         scan_config_families = operations[("get", "/scan-configs/{scan_config_id}/families")]
@@ -4700,6 +4703,7 @@ class TurboVASCtlTests(unittest.TestCase):
             (tls_certificate_detail, "getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-export-delete-and-rich-history"),
             (scanners, "getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
+            (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", "scan-config-preferences-selector-import-export-create"),
             (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", "scan-config-preferences-selector-import-export-create"),
             (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preferences-selector-import-export-create"),
@@ -5043,6 +5047,7 @@ class TurboVASCtlTests(unittest.TestCase):
         scanner_detail_source = api_source.split("async fn scanner_asset_detail", 1)[1].split("fn scanner_task_references_sql", 1)[0]
 
         self.assertIn('/api/v1/scanners/:scanner_id', route_source)
+        self.assertIn('/api/v1/scanners/:scanner_id/export', route_source)
         self.assertIn('let scanner_id = parse_uuid(&scanner_id)?.to_string();', scanner_detail_source)
         self.assertIn('WHERE s.uuid = $1', scanner_detail_source)
         self.assertIn('LEFT JOIN credentials c ON c.id = s.credential', scanner_detail_source)
@@ -5056,10 +5061,12 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn('private_key', scanner_detail_source)
         self.assertNotIn('certificate_info', scanner_detail_source)
         self.assertIn('/scanners/{scanner_id}:', openapi)
+        self.assertIn('/scanners/{scanner_id}/export:', openapi)
         self.assertIn("#/components/parameters/ScannerId", openapi)
         self.assertIn('ScannerAssetDetail', openapi)
         self.assertIn('ScannerTaskReference', openapi)
         self.assertIn('/api/v1/scanners/{scanner_id}', native_tooling)
+        self.assertIn('/api/v1/scanners/{scanner_id}/export', native_tooling)
         self.assertIn('native-api.scanner-detail', native_tooling)
 
     def test_redis_reference_summary_separates_scanner_and_generic_paths(self):

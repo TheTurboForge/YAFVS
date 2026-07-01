@@ -115,6 +115,13 @@ pub(crate) async fn scanner_asset_detail(
     }))
 }
 
+pub(crate) async fn scanner_asset_export(
+    state: State<AppState>,
+    path: Path<String>,
+) -> Result<Json<ScannerAssetDetail>, ApiError> {
+    scanner_asset_detail(state, path).await
+}
+
 pub(crate) fn scanner_task_references_sql() -> &'static str {
     r#"SELECT t.uuid AS id,
               coalesce(t.name, '') AS name,

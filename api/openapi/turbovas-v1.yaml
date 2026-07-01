@@ -516,6 +516,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /operating-systems/{os_id}/export:
+    get:
+      operationId: getOperatingSystemsByOsIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: operating-system-asset-metadata-export-read
+      x-turbovas-inherited-still-owns: operating-system-writes-deletes-and-rich-history
+      summary: Export operating-system metadata JSON
+      description: Direct scriptable operating-system metadata export backed by gvmd/PostgreSQL. This returns the same native operating-system detail JSON with aggregate host/severity metadata and active user tags. Operating-system writes, deletes, export, tag writes/actions, and richer history remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/OperatingSystemId'
+      responses:
+        '200':
+          description: Operating-system metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingSystemAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /hosts:
     get:
       operationId: getHosts

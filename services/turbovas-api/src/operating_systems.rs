@@ -179,6 +179,13 @@ pub(crate) async fn operating_system_asset_detail(
     Ok(Json(item))
 }
 
+pub(crate) async fn operating_system_asset_export(
+    state: State<AppState>,
+    path: Path<String>,
+) -> Result<Json<OperatingSystemAssetItem>, ApiError> {
+    operating_system_asset_detail(state, path).await
+}
+
 pub(crate) fn operating_system_user_tags_sql() -> &'static str {
     r#"SELECT t.uuid AS id,
               coalesce(t.name, '') AS name,

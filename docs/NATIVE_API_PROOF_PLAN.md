@@ -175,6 +175,7 @@ where it exists:
 - `GET /api/v1/cpes/{cpe_id}`
 - `GET /api/v1/operating-systems`
 - `GET /api/v1/operating-systems/{os_id}` metadata only
+- `GET /api/v1/operating-systems/{os_id}/export` metadata JSON only
 - `GET /api/v1/tls-certificates`
 - `GET /api/v1/tls-certificates/{certificate_id}` metadata/source detail only
 - `GET /api/v1/targets`

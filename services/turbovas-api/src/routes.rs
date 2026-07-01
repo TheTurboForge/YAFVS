@@ -116,6 +116,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             "/api/v1/operating-systems/:os_id",
             get(operating_system_asset_detail),
         )
+        .route(
+            "/api/v1/operating-systems/:os_id/export",
+            get(operating_system_asset_export),
+        )
         .route("/api/v1/hosts", get(host_assets))
         .route("/api/v1/hosts/:host_id", get(host_asset_detail))
         .route("/api/v1/hosts/:host_id/export", get(host_asset_export))

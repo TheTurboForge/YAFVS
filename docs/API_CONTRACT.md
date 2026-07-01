@@ -259,6 +259,9 @@ associated host count, and timestamps from gvmd/PostgreSQL asset tables. The
 detail endpoint returns the same bounded metadata plus active User Tags for one
 OS asset by UUID; delete, export, tag writes/actions, and other asset writes
 remain inherited until native write semantics are designed.
+Direct scriptable `GET /api/v1/operating-systems/{os_id}/export` returns the
+same native detail JSON for metadata export; it does not replace legacy OS
+asset export/delete/tag-action behavior.
 
 Native host asset detail rows use the `hosts.uuid` identity and return the
 existing host asset summary plus bounded safe metadata from `host_identifiers`,

@@ -1964,8 +1964,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 134)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 87)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 135)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 88)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 47)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 47)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2097,7 +2097,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 87)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 88)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 47)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -2496,7 +2496,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 134)
+        self.assertEqual(contract["operation_count"], 135)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
@@ -2555,6 +2555,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "nvt-catalog-list-read",
             "operating-system-asset-detail-info-read",
             "operating-system-asset-list-read",
+            "operating-system-asset-metadata-export-read",
             "override-metadata-detail-read",
             "override-metadata-list-read",
             "port-list-clone",
@@ -2766,9 +2767,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 134)
-        self.assertEqual(details["direct_operation_count"], 134)
-        self.assertEqual(details["direct_read_operation_count"], 87)
+        self.assertEqual(details["operation_count"], 135)
+        self.assertEqual(details["direct_operation_count"], 135)
+        self.assertEqual(details["direct_read_operation_count"], 88)
         self.assertEqual(
             details["non_get_direct_operations"],
             ["PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}"],
@@ -2981,11 +2982,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 134)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 134)
-        self.assertEqual(details["summary"]["inventory_rows"], 134)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 134)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 134)
+        self.assertEqual(details["summary"]["total_rows"], 135)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 135)
+        self.assertEqual(details["summary"]["inventory_rows"], 135)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 135)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 135)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -3193,6 +3194,7 @@ class TurboVASCtlTests(unittest.TestCase):
         expected_asset_metadata = {
             "/api/v1/operating-systems": ("getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
             "/api/v1/operating-systems/{os_id}": ("getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", "operating-system-writes-deletes-and-rich-history"),
+            "/api/v1/operating-systems/{os_id}/export": ("getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", "operating-system-writes-deletes-and-rich-history"),
             "/api/v1/hosts": ("getHosts", "host-asset-list-read", "host-target-creation-tags-writes-and-rich-history"),
             "/api/v1/hosts/{host_id}": ("getHostsByHostId", "host-asset-detail-info-read", "host-target-creation-tags-writes-and-rich-history"),
             "/api/v1/hosts/{host_id}/export": ("getHostsByHostIdExport", "host-asset-metadata-export-read", "host-target-creation-tags-writes-and-rich-history"),
@@ -3665,7 +3667,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 134)
+        self.assertEqual(len(operation_ids), 135)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -4664,6 +4666,7 @@ class TurboVASCtlTests(unittest.TestCase):
         nvt_detail = operations[("get", "/nvts/{nvt_id}")]
         operating_systems = operations[("get", "/operating-systems")]
         operating_system_detail = operations[("get", "/operating-systems/{os_id}")]
+        operating_system_export = operations[("get", "/operating-systems/{os_id}/export")]
         hosts = operations[("get", "/hosts")]
         host_detail = operations[("get", "/hosts/{host_id}")]
         host_export = operations[("get", "/hosts/{host_id}/export")]
@@ -4701,6 +4704,7 @@ class TurboVASCtlTests(unittest.TestCase):
         expected_asset_metadata = [
             (operating_systems, "getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
             (operating_system_detail, "getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", "operating-system-writes-deletes-and-rich-history"),
+            (operating_system_export, "getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", "operating-system-writes-deletes-and-rich-history"),
             (hosts, "getHosts", "host-asset-list-read", "host-target-creation-tags-writes-and-rich-history"),
             (host_detail, "getHostsByHostId", "host-asset-detail-info-read", "host-target-creation-tags-writes-and-rich-history"),
             (host_export, "getHostsByHostIdExport", "host-asset-metadata-export-read", "host-target-creation-tags-writes-and-rich-history"),
@@ -4988,11 +4992,14 @@ class TurboVASCtlTests(unittest.TestCase):
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/operating-systems/:os_id', route_source)
+        self.assertIn('/api/v1/operating-systems/:os_id/export', route_source)
         self.assertIn('parse_uuid(&os_id)?;', api_source)
         self.assertIn('WHERE oss.uuid = $1', api_source)
         self.assertIn('/operating-systems/{os_id}:', openapi)
+        self.assertIn('/operating-systems/{os_id}/export:', openapi)
         self.assertIn("#/components/parameters/OperatingSystemId", openapi)
         self.assertIn('/api/v1/operating-systems/{os_id}', native_tooling)
+        self.assertIn('/api/v1/operating-systems/{os_id}/export', native_tooling)
         self.assertIn('"status": "implemented_internal_and_browser_proxied"', native_tooling)
         self.assertIn('native-api.operating-system-detail', native_tooling)
 

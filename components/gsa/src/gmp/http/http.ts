@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -18,6 +19,7 @@ import {
   type Data,
   type UrlParams as Params,
   type HttpMethod as HttpMethod,
+  type UrlParams,
 } from 'gmp/http/utils';
 import _ from 'gmp/locale';
 import logger from 'gmp/log';
@@ -54,7 +56,7 @@ class Http {
   readonly apiProtocol?: string;
 
   private errorHandlers: Array<ErrorHandler>;
-  private readonly session: Session;
+  readonly session: Session;
 
   private static readonly XHR = globalThis.XMLHttpRequest;
 
@@ -77,6 +79,14 @@ class Http {
     return {
       token: this.session.token,
     };
+  }
+
+  buildUrl(path: string, params?: UrlParams) {
+    let url = buildServerUrl(this.apiServer, path, this.apiProtocol);
+    if (isDefined(params)) {
+      url += '?' + buildUrlParams(params);
+    }
+    return url;
   }
 
   request<TSuccessData = string, TSuccessMeta extends Meta = Meta>(

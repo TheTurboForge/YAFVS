@@ -207,7 +207,7 @@ pub(crate) async fn update_tag_resources(
     let state = load_tag_write_state(&tx, &tag_id).await?;
     ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;
     ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;
-    execute_tag_resource_update_transaction(&tx, &state, &request).await?;
+    execute_tag_resource_update_transaction(&tx, &state, operator_owner_id, &request).await?;
     tx.commit()
         .await
         .map_err(|error| map_tag_write_db_error(error, "commit tag resource transaction"))?;

@@ -45,6 +45,21 @@ fn tag_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn tag_resource_write_rejects_owner_mismatch_for_owner_bearing_types() {
+    assert!(ensure_tag_resource_owner_matches_operator("target", Some(7), 7).is_ok());
+    assert!(matches!(
+        ensure_tag_resource_owner_matches_operator("target", Some(7), 8),
+        Err(ApiError::Forbidden)
+    ));
+    assert!(matches!(
+        ensure_tag_resource_owner_matches_operator("target", None, 8),
+        Err(ApiError::Forbidden)
+    ));
+    assert!(ensure_tag_resource_owner_matches_operator("cve", None, 8).is_ok());
+    assert!(ensure_tag_resource_owner_matches_operator("nvt", None, 8).is_ok());
+}
+
+#[test]
 fn tag_clone_request_accepts_optional_metadata_overrides() {
     let request: TagCloneRequest =
         serde_json::from_str(r#"{"name":"  cloned tag  ","comment":" copied "}"#)
@@ -341,6 +356,7 @@ fn tag_write_plans_are_metadata_only() {
                 TagWriteStep::VerifyOwnerMatch,
                 TagWriteStep::VerifyResourceTypeSupported,
                 TagWriteStep::VerifyResourceExists,
+                TagWriteStep::VerifyResourceOwnerMatch,
                 TagWriteStep::DeleteResourceAssignment,
                 TagWriteStep::TouchMetadata,
             ],

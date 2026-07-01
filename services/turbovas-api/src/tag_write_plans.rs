@@ -23,6 +23,7 @@ pub(crate) enum TagWriteStep {
     VerifyResourceTypeSupported,
     VerifyTagExists,
     VerifyResourceExists,
+    VerifyResourceOwnerMatch,
     InsertMetadata,
     InsertTrashMetadata,
     CopyResourceAssignments,
@@ -51,6 +52,7 @@ pub(crate) fn tag_resource_update_transaction_plan(
             TagWriteStep::VerifyOwnerMatch,
             TagWriteStep::VerifyResourceTypeSupported,
             TagWriteStep::VerifyResourceExists,
+            TagWriteStep::VerifyResourceOwnerMatch,
             match request.action {
                 TagResourceUpdateAction::Add => TagWriteStep::InsertResourceAssignment,
                 TagResourceUpdateAction::Remove => TagWriteStep::DeleteResourceAssignment,

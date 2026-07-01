@@ -201,6 +201,24 @@ pub(crate) fn tag_resource_direct_write_id_must_be_uuid(resource_type: &str) -> 
     )
 }
 
+pub(crate) fn tag_resource_direct_write_requires_owner_match(resource_type: &str) -> bool {
+    matches!(
+        resource_type,
+        "alert"
+            | "config"
+            | "host"
+            | "os"
+            | "port_list"
+            | "report_config"
+            | "report_format"
+            | "scanner"
+            | "schedule"
+            | "target"
+            | "task"
+            | "tls_certificate"
+    )
+}
+
 pub(crate) fn tag_resource_active_lookup_sql(resource_type: &str) -> Result<String, ApiError> {
     if !tag_resource_direct_write_type_is_supported(resource_type) {
         return Err(ApiError::BadRequest(format!(
@@ -215,12 +233,19 @@ pub(crate) fn tag_resource_active_lookup_sql(resource_type: &str) -> Result<Stri
     };
 
     Ok(format!(
-        r#"SELECT r.id::integer, ({id_expr})::text
+        r#"SELECT r.id::integer,
+                  ({id_expr})::text,
+                  {owner_expr} AS owner_id
              FROM {table} r
             WHERE lower(({id_expr})::text) = lower($1){extra_where}
             LIMIT 1;"#,
         table = spec.table,
         id_expr = spec.id_expr,
+        owner_expr = if tag_resource_direct_write_requires_owner_match(resource_type) {
+            "r.owner::integer"
+        } else {
+            "NULL::integer"
+        },
     ))
 }
 
@@ -351,15 +376,19 @@ mod tests {
         let target_sql = tag_resource_active_lookup_sql("target").unwrap();
         assert!(target_sql.contains("FROM targets r"));
         assert!(target_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(target_sql.contains("r.owner::integer AS owner_id"));
 
         let task_sql = tag_resource_active_lookup_sql("task").unwrap();
         assert!(task_sql.contains("coalesce(r.usage_type, 'scan') = 'scan'"));
         assert!(task_sql.contains("coalesce(r.hidden, 0) = 0"));
+        assert!(tag_resource_direct_write_requires_owner_match("task"));
 
         let cpe_sql = tag_resource_active_lookup_sql("cpe").unwrap();
         assert!(cpe_sql.contains("FROM scap.cpes r"));
         assert!(cpe_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(cpe_sql.contains("NULL::integer AS owner_id"));
         assert!(!tag_resource_direct_write_id_must_be_uuid("cpe"));
+        assert!(!tag_resource_direct_write_requires_owner_match("cpe"));
 
         let cve_sql = tag_resource_active_lookup_sql("cve").unwrap();
         assert!(cve_sql.contains("FROM scap.cves r"));
@@ -385,6 +414,7 @@ mod tests {
         let alert_sql = tag_resource_active_lookup_sql("alert").unwrap();
         assert!(alert_sql.contains("FROM alerts r"));
         assert!(alert_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(alert_sql.contains("r.owner::integer AS owner_id"));
         assert!(tag_resource_direct_write_id_must_be_uuid("alert"));
         assert!(!alert_sql.contains("alert_method_data"));
         assert!(!alert_sql.contains("alert_event_data"));

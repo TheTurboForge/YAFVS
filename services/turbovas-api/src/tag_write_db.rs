@@ -12,6 +12,7 @@ use crate::{
     tag_payloads::{TagAssetItem, tag_asset_from_row},
     tag_resource_helpers::{
         tag_resource_active_lookup_sql, tag_resource_direct_write_id_must_be_uuid,
+        tag_resource_direct_write_requires_owner_match,
         tag_resource_direct_write_type_is_supported,
     },
     tag_write_sql::*,
@@ -48,6 +49,7 @@ pub(crate) struct TagTrashWriteState {
 struct TagResourceWriteRecord {
     internal_id: i32,
     uuid: String,
+    owner_id: Option<i32>,
 }
 
 pub(crate) fn ensure_tag_owner_matches_operator(
@@ -63,6 +65,36 @@ pub(crate) fn ensure_tag_owner_matches_operator(
             "direct API tag write owner mismatch"
         );
         Err(ApiError::Forbidden)
+    }
+}
+
+pub(crate) fn ensure_tag_resource_owner_matches_operator(
+    resource_type: &str,
+    resource_owner_id: Option<i32>,
+    operator_owner_id: i32,
+) -> Result<(), ApiError> {
+    if !tag_resource_direct_write_requires_owner_match(resource_type) {
+        return Ok(());
+    }
+    match resource_owner_id {
+        Some(owner_id) if owner_id == operator_owner_id => Ok(()),
+        Some(owner_id) => {
+            tracing::warn!(
+                resource_type,
+                resource_owner_id = owner_id,
+                operator_owner_id,
+                "direct API tag resource write owner mismatch"
+            );
+            Err(ApiError::Forbidden)
+        }
+        None => {
+            tracing::warn!(
+                resource_type,
+                operator_owner_id,
+                "direct API tag resource write missing owner on owner-bearing resource type"
+            );
+            Err(ApiError::Forbidden)
+        }
     }
 }
 
@@ -304,11 +336,17 @@ pub(crate) async fn execute_tag_hard_delete_transaction(
 pub(crate) async fn execute_tag_resource_update_transaction(
     tx: &Transaction<'_>,
     state: &TagWriteState,
+    operator_owner_id: i32,
     request: &ValidatedTagResourceUpdate,
 ) -> Result<(), ApiError> {
     for resource_id in &request.resource_ids {
         let resource =
             resolve_tag_resource_write_record(tx, &state.resource_type, resource_id).await?;
+        ensure_tag_resource_owner_matches_operator(
+            &state.resource_type,
+            resource.owner_id,
+            operator_owner_id,
+        )?;
         match request.action {
             TagResourceUpdateAction::Add => {
                 tx.execute(
@@ -411,6 +449,7 @@ async fn resolve_tag_resource_write_record(
         .map(|row| TagResourceWriteRecord {
             internal_id: row.get(0),
             uuid: row.get(1),
+            owner_id: row.get(2),
         })
         .ok_or(ApiError::NotFound)
 }

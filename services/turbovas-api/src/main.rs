@@ -150,6 +150,7 @@ mod target_writes;
 #[cfg(test)]
 mod target_writes_tests;
 mod task_handlers;
+mod task_query_sql;
 mod task_target_payloads;
 mod task_targets;
 mod task_write_db;

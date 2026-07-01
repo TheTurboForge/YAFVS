@@ -54,7 +54,7 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   create/update and unassigned-tag delete, selected alert metadata patches,
   credential name/comment metadata patches, and target name/comment metadata
   patches are currently native; tag
-  resource-assignment filter actions, assigned-resource delete/trash behavior,
+  resource-assignment filter actions, set/replace semantics, tag trash behavior,
   clone/copy, export, target host/exclude/port-list/alive-test/reverse-DNS/
   credential-link writes, credential secrets, and credential create/clone/delete
   semantics remain inherited.

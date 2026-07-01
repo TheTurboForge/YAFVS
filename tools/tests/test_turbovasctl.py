@@ -2498,12 +2498,12 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 140)
+        self.assertEqual(contract["operation_count"], 145)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
             contract["operations_with_request_bodies"],
-            ["PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "PATCH /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /scopes", "PATCH /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "POST /targets/{target_id}/clone", "PATCH /tasks/{task_id}"],
+            ["PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "PATCH /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /scopes", "PATCH /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "POST /targets/{target_id}/clone", "PATCH /tasks/{task_id}"],
         )
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
@@ -2533,177 +2533,179 @@ class TurboVASCtlTests(unittest.TestCase):
             {operation["x_turbovas_values"]["x-turbovas-maturity"] for operation in turbovasctl.openapi_contract_operations(root)}
         )
         self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
-        expected_replaces_values = [
-            "alert-metadata-detail-read",
-            "alert-metadata-export-read",
-            "alert-metadata-list-read",
-            "alert-metadata-modify",
-            "cert-bund-advisory-catalog-detail-read",
-            "cert-bund-advisory-list-read",
-            "cpe-catalog-detail-read",
-            "cpe-catalog-list-read",
-            "credential-metadata-modify",
-            "credential-redacted-metadata-detail-read",
-            "credential-redacted-metadata-list-read",
-            "cve-catalog-detail-epss-reference-configuration-read",
-            "cve-catalog-list-read",
-            "cve-catalog-metadata-export-read",
-            "dfn-cert-advisory-catalog-detail-read",
-            "dfn-cert-advisory-list-read",
-            "feed-status-read",
-            "host-asset-detail-info-read",
-            "host-asset-list-read",
-            "host-asset-metadata-export-read",
-            "none",
-            "nvt-catalog-detail-read",
-            "nvt-catalog-list-read",
-            "nvt-catalog-metadata-export-read",
-            "operating-system-asset-detail-info-read",
-            "operating-system-asset-list-read",
-            "operating-system-asset-metadata-export-read",
-            "override-metadata-detail-read",
-            "override-metadata-export-read",
-            "override-metadata-list-read",
-            "port-list-clone",
-            "port-list-create",
-            "port-list-hard-delete",
-            "port-list-metadata-and-range-modify",
-            "port-list-metadata-detail-read",
-            "port-list-metadata-export-read",
-            "port-list-metadata-list-read",
-            "port-list-restore",
-            "port-list-trash-move",
-            "raw-report-application-evidence-read",
-            "raw-report-cve-evidence-read",
-            "raw-report-detail-summary-read",
-            "raw-report-error-message-evidence-read",
-            "raw-report-host-evidence-read",
-            "raw-report-list-read",
-            "raw-report-metrics-read",
-            "raw-report-operating-system-evidence-read",
-            "raw-report-port-evidence-read",
-            "raw-report-result-evidence-read",
-            "raw-report-tls-certificate-evidence-read",
-            "report-config-clone",
-            "report-config-hard-delete",
-            "report-config-metadata-detail-read",
-            "report-config-metadata-export-read",
-            "report-config-metadata-list-read",
-            "report-config-metadata-param-create",
-            "report-config-metadata-param-modify",
-            "report-config-restore",
-            "report-config-trash-move",
-            "report-format-metadata-detail-read",
-            "report-format-metadata-export-read",
-            "report-format-metadata-list-read",
-            "result-detail-metadata-tags-and-overrides-read",
-            "result-list-and-effective-overrides-read",
-            "saved-filter-clone",
-            "saved-filter-create",
-            "saved-filter-hard-delete",
-            "saved-filter-metadata-detail-read",
-            "saved-filter-metadata-export-read",
-            "saved-filter-metadata-list-read",
-            "saved-filter-metadata-modify",
-            "saved-filter-restore",
-            "saved-filter-trash-move",
-            "scan-config-clone",
-            "scan-config-family-summary-read",
-            "scan-config-hard-delete",
-            "scan-config-metadata-detail-info-tags-and-task-backlink-read",
-            "scan-config-metadata-export-read",
-            "scan-config-metadata-list-read",
-            "scan-config-metadata-modify",
-            "scan-config-restore",
-            "scan-config-trash-move",
-            "scanner-metadata-detail-info-tags-and-task-backlink-read",
-            "scanner-metadata-export-read",
-            "scanner-metadata-list-read",
-            "schedule-clone",
-            "schedule-hard-delete",
-            "schedule-metadata-detail-read",
-            "schedule-metadata-export-read",
-            "schedule-metadata-list-read",
-            "schedule-metadata-modify",
-            "schedule-restore",
-            "schedule-trash-move",
-            "scope-detail-membership-read",
-            "scope-list-read",
-            "scope-metadata-membership-write",
-            "scope-report-application-evidence-read",
-            "scope-report-cve-evidence-read",
-            "scope-report-detail-summary-read",
-            "scope-report-error-message-evidence-read",
-            "scope-report-host-evidence-read",
-            "scope-report-list-read",
-            "scope-report-metrics-read",
-            "scope-report-operating-system-evidence-read",
-            "scope-report-port-evidence-read",
-            "scope-report-result-evidence-read",
-            "scope-report-tls-certificate-evidence-read",
-            "tag-active-resource-assignment-write",
-            "tag-clone",
-            "tag-hard-delete",
-            "tag-metadata-export-read",
-            "tag-metadata-read",
-            "tag-metadata-write",
-            "tag-resource-name-read",
-            "tag-resource-reference-read",
-            "tag-restore",
-            "tag-trash-move",
-            "target-clone",
-            "target-create",
-            "target-detail-summary-read",
-            "target-hard-delete",
-            "target-list-read",
-            "target-metadata-and-simple-scan-inputs-modify",
-            "target-metadata-export-read",
-            "target-restore",
-            "target-trash-move",
-            "task-detail-summary-read",
-            "task-list-read",
-            "task-metadata-export-read",
-            "task-metadata-modify",
-            "timezone-list-read",
-            "tls-certificate-asset-detail-info-read",
-            "tls-certificate-asset-list-read",
-            "tls-certificate-asset-metadata-export-read",
-            "trashcan-count-summary-read",
-            "vulnerability-list-read",
-        ]
-        expected_inherited_still_owns_values = [
-            "alert-detail-delivery-control",
-            "cert-advisory-rich-detail-export",
-            "credential-secrets-writes-and-deletes",
-            "feed-sync-import-control",
-            "host-target-creation-tags-writes-and-rich-history",
-            "nvt-rich-detail",
-            "operating-system-writes-deletes-and-rich-history",
-            "override-writes-exports-trash-and-result-expansion",
-            "port-list-import-export",
-            "raw-report-generation-xml-export-retention-and-mutations",
-            "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
-            "report-config-export",
-            "report-format-import-export-verify-writes-and-deletes",
-            "result-exports-and-actions",
-            "result-tags-exports-and-actions",
-            "retention-mutations",
-            "saved-filter-export-and-alert-linkage",
-            "scan-config-preferences-selector-import-export-create",
-            "scanner-control-credentials-writes-and-deletes",
-            "scap-rich-context",
-            "schedule-create-calendar-export",
-            "scope-report-generation",
-            "scope-report-generation-retention-and-mutations",
-            "tag-filter-actions-export-and-assigned-resource-delete",
-            "target-credential-secrets-create-delete-restore-export-and-credential-link-mutation",
-            "target-credential-secrets-writes-and-deletes",
-            "target-export-credential-link-and-secret-mutation",
-            "task-scan-control-writes-and-deletes",
-            "tls-certificate-export-delete-and-rich-history",
-            "trashcan-row-data-and-mutations",
-            "vulnerability-exports-and-actions",
-        ]
+        expected_replaces_values = ['alert-metadata-detail-read',
+         'alert-metadata-export-read',
+         'alert-metadata-list-read',
+         'alert-metadata-modify',
+         'cert-bund-advisory-catalog-detail-read',
+         'cert-bund-advisory-list-read',
+         'cert-bund-advisory-metadata-export-read',
+         'cpe-catalog-detail-read',
+         'cpe-catalog-list-read',
+         'credential-metadata-modify',
+         'credential-redacted-metadata-detail-read',
+         'credential-redacted-metadata-export-read',
+         'credential-redacted-metadata-list-read',
+         'cve-catalog-detail-epss-reference-configuration-read',
+         'cve-catalog-list-read',
+         'cve-catalog-metadata-export-read',
+         'dfn-cert-advisory-catalog-detail-read',
+         'dfn-cert-advisory-list-read',
+         'dfn-cert-advisory-metadata-export-read',
+         'feed-status-read',
+         'host-asset-detail-info-read',
+         'host-asset-list-read',
+         'host-asset-metadata-export-read',
+         'none',
+         'nvt-catalog-detail-read',
+         'nvt-catalog-list-read',
+         'nvt-catalog-metadata-export-read',
+         'operating-system-asset-detail-info-read',
+         'operating-system-asset-list-read',
+         'operating-system-asset-metadata-export-read',
+         'override-metadata-detail-read',
+         'override-metadata-export-read',
+         'override-metadata-list-read',
+         'port-list-clone',
+         'port-list-create',
+         'port-list-hard-delete',
+         'port-list-metadata-and-range-modify',
+         'port-list-metadata-detail-read',
+         'port-list-metadata-export-read',
+         'port-list-metadata-list-read',
+         'port-list-restore',
+         'port-list-trash-move',
+         'raw-report-application-evidence-read',
+         'raw-report-cve-evidence-read',
+         'raw-report-detail-summary-read',
+         'raw-report-error-message-evidence-read',
+         'raw-report-host-evidence-read',
+         'raw-report-list-read',
+         'raw-report-metrics-read',
+         'raw-report-operating-system-evidence-read',
+         'raw-report-port-evidence-read',
+         'raw-report-result-evidence-read',
+         'raw-report-tls-certificate-evidence-read',
+         'report-config-clone',
+         'report-config-hard-delete',
+         'report-config-metadata-detail-read',
+         'report-config-metadata-export-read',
+         'report-config-metadata-list-read',
+         'report-config-metadata-param-create',
+         'report-config-metadata-param-modify',
+         'report-config-restore',
+         'report-config-trash-move',
+         'report-format-metadata-detail-read',
+         'report-format-metadata-export-read',
+         'report-format-metadata-list-read',
+         'result-detail-metadata-tags-and-overrides-read',
+         'result-list-and-effective-overrides-read',
+         'result-metadata-export-read',
+         'saved-filter-clone',
+         'saved-filter-create',
+         'saved-filter-hard-delete',
+         'saved-filter-metadata-detail-read',
+         'saved-filter-metadata-export-read',
+         'saved-filter-metadata-list-read',
+         'saved-filter-metadata-modify',
+         'saved-filter-restore',
+         'saved-filter-trash-move',
+         'scan-config-clone',
+         'scan-config-family-summary-read',
+         'scan-config-hard-delete',
+         'scan-config-metadata-detail-info-tags-and-task-backlink-read',
+         'scan-config-metadata-export-read',
+         'scan-config-metadata-list-read',
+         'scan-config-metadata-modify',
+         'scan-config-restore',
+         'scan-config-trash-move',
+         'scanner-metadata-detail-info-tags-and-task-backlink-read',
+         'scanner-metadata-export-read',
+         'scanner-metadata-list-read',
+         'scanner-metadata-modify',
+         'schedule-clone',
+         'schedule-hard-delete',
+         'schedule-metadata-detail-read',
+         'schedule-metadata-export-read',
+         'schedule-metadata-list-read',
+         'schedule-metadata-modify',
+         'schedule-restore',
+         'schedule-trash-move',
+         'scope-detail-membership-read',
+         'scope-list-read',
+         'scope-metadata-membership-write',
+         'scope-report-application-evidence-read',
+         'scope-report-cve-evidence-read',
+         'scope-report-detail-summary-read',
+         'scope-report-error-message-evidence-read',
+         'scope-report-host-evidence-read',
+         'scope-report-list-read',
+         'scope-report-metrics-read',
+         'scope-report-operating-system-evidence-read',
+         'scope-report-port-evidence-read',
+         'scope-report-result-evidence-read',
+         'scope-report-tls-certificate-evidence-read',
+         'tag-active-resource-assignment-write',
+         'tag-clone',
+         'tag-hard-delete',
+         'tag-metadata-export-read',
+         'tag-metadata-read',
+         'tag-metadata-write',
+         'tag-resource-name-read',
+         'tag-resource-reference-read',
+         'tag-restore',
+         'tag-trash-move',
+         'target-clone',
+         'target-create',
+         'target-detail-summary-read',
+         'target-hard-delete',
+         'target-list-read',
+         'target-metadata-export-read',
+         'target-metadata-simple-scan-inputs-and-credential-links-modify',
+         'target-restore',
+         'target-trash-move',
+         'task-detail-summary-read',
+         'task-list-read',
+         'task-metadata-export-read',
+         'task-metadata-modify',
+         'timezone-list-read',
+         'tls-certificate-asset-detail-info-read',
+         'tls-certificate-asset-list-read',
+         'tls-certificate-asset-metadata-export-read',
+         'trashcan-count-summary-read',
+         'vulnerability-list-read']
+        expected_inherited_still_owns_values = ['alert-detail-delivery-control',
+         'cert-advisory-rich-detail-export',
+         'credential-secrets-writes-and-deletes',
+         'feed-sync-import-control',
+         'host-target-creation-tags-writes-and-rich-history',
+         'nvt-rich-detail',
+         'operating-system-writes-deletes-and-rich-history',
+         'override-writes-exports-trash-and-result-expansion',
+         'port-list-import-export',
+         'raw-report-generation-xml-export-retention-and-mutations',
+         'remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes',
+         'report-config-export',
+         'report-format-import-export-verify-writes-and-deletes',
+         'result-actions-bulk-export-tag-and-override-workflows',
+         'result-exports-and-actions',
+         'result-tags-exports-and-actions',
+         'retention-mutations',
+         'saved-filter-export-and-alert-linkage',
+         'scan-config-preferences-selector-import-export-create',
+         'scanner-control-credentials-writes-and-deletes',
+         'scap-rich-context',
+         'schedule-create-calendar-export',
+         'scope-report-generation',
+         'scope-report-generation-retention-and-mutations',
+         'tag-filter-actions-and-file-export',
+         'target-credential-secrets-create-delete-restore-export',
+         'target-credential-secrets-writes-and-deletes',
+         'target-export-and-credential-secret-mutation',
+         'task-scan-control-writes-and-deletes',
+         'tls-certificate-export-delete-and-rich-history',
+         'trashcan-row-data-and-mutations',
+         'vulnerability-exports-and-actions']
         self.assertEqual(contract["allowed_replaces_values"], expected_replaces_values)
         actual_replaces_values = sorted(
             {
@@ -2774,12 +2776,12 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 140)
-        self.assertEqual(details["direct_operation_count"], 140)
-        self.assertEqual(details["direct_read_operation_count"], 93)
+        self.assertEqual(details["operation_count"], 145)
+        self.assertEqual(details["direct_operation_count"], 145)
+        self.assertEqual(details["direct_read_operation_count"], 97)
         self.assertEqual(
             details["non_get_direct_operations"],
-            ["PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}"],
+            ["PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}"],
         )
         self.assertIn("/api/v1", details["servers"])
         self.assertIn("http://127.0.0.1:19080/api/v1", details["servers"])
@@ -2806,10 +2808,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 47)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 47)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 47)
-        self.assertEqual(status_only["details"]["operation_request_body_count"], 25)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 48)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 48)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 48)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 26)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
@@ -3268,21 +3270,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tags["x_turbovas_maturity"], "live-read")
         self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-filter-actions-export-and-assigned-resource-delete")
+        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-file-export")
 
         tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
         self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-filter-actions-export-and-assigned-resource-delete")
+        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-file-export")
 
         tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
         self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
-        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-filter-actions-export-and-assigned-resource-delete")
+        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-file-export")
 
         tag_clone = rows[("post", "/api/v1/tags/{tag_id}/clone")]
         self.assertEqual(tag_clone["status"], "implemented_direct_write_control")
@@ -3290,7 +3292,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_clone["x_turbovas_maturity"], "live-write")
         self.assertEqual(tag_clone["x_turbovas_exposure"], "direct-write")
         self.assertEqual(tag_clone["x_turbovas_replaces"], "tag-clone")
-        self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-filter-actions-export-and-assigned-resource-delete")
+        self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-file-export")
 
         tag_restore = rows[("post", "/api/v1/tags/{tag_id}/restore")]
         self.assertEqual(tag_restore["status"], "implemented_direct_write_control")
@@ -3677,7 +3679,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 140)
+        self.assertEqual(len(operation_ids), 145)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -3772,6 +3774,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "PATCH /alerts/{alert_id}",
                 "GET /cert-bund-advisories",
                 "GET /cert-bund-advisories/{cert_bund_advisory_id}",
+                "GET /cert-bund-advisories/{cert_bund_advisory_id}/export",
                 "GET /cpes",
                 "GET /cpes/{cpe_id}",
                 "GET /cves",
@@ -3779,6 +3782,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /cves/{cve_id}/export",
                 "GET /dfn-cert-advisories",
                 "GET /dfn-cert-advisories/{dfn_cert_advisory_id}",
+                "GET /dfn-cert-advisories/{dfn_cert_advisory_id}/export",
                 "GET /feeds",
                 "GET /nvts",
                 "GET /nvts/{nvt_id}",
@@ -3810,6 +3814,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /tls-certificates/{certificate_id}",
                 "GET /scanners",
                 "GET /scanners/{scanner_id}",
+                "PATCH /scanners/{scanner_id}",
                 "GET /credentials",
                 "GET /credentials/{credential_id}",
                 "PATCH /credentials/{credential_id}",
@@ -3837,6 +3842,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /reports/{report_id}/tls-certificates",
                 "GET /reports/{report_id}/errors",
                 "GET /reports/{report_id}/metrics",
+                "GET /results/{result_id}/export",
                 "GET /scope-reports",
                 "GET /scope-reports/{scope_report_id}",
                 "GET /timezones",
@@ -4777,7 +4783,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-replaces"], "tag-resource-name-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-filter-actions-export-and-assigned-resource-delete")
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-filter-actions-and-file-export")
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(trashcan_summary["operation_id"], "getTrashcanSummary")
         self.assertIn("x-turbovas-direct", trashcan_summary["x_turbovas_fields"])
@@ -5016,12 +5022,13 @@ class TurboVASCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         route_source = (root / "services" / "turbovas-api" / "src" / "routes.rs").read_text(encoding="utf-8")
         api_source = (root / "services" / "turbovas-api" / "src" / "operating_systems.rs").read_text(encoding="utf-8")
+        query_source = (root / "services" / "turbovas-api" / "src" / "operating_system_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/operating-systems/:os_id', route_source)
         self.assertIn('/api/v1/operating-systems/:os_id/export', route_source)
         self.assertIn('parse_uuid(&os_id)?;', api_source)
-        self.assertIn('WHERE oss.uuid = $1', api_source)
+        self.assertIn('WHERE oss.uuid = $1', query_source)
         self.assertIn('/operating-systems/{os_id}:', openapi)
         self.assertIn('/operating-systems/{os_id}/export:', openapi)
         self.assertIn("#/components/parameters/OperatingSystemId", openapi)
@@ -5035,19 +5042,20 @@ class TurboVASCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         route_source = (root / "services" / "turbovas-api" / "src" / "routes.rs").read_text(encoding="utf-8")
         api_source = (root / "services" / "turbovas-api" / "src" / "host_assets.rs").read_text(encoding="utf-8")
+        query_source = (root / "services" / "turbovas-api" / "src" / "host_asset_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/hosts/:host_id', route_source)
         self.assertIn('/api/v1/hosts/:host_id/export', route_source)
         self.assertIn('parse_uuid(&host_id)?;', api_source)
         self.assertIn('WHERE h.uuid = $1', api_source)
-        self.assertIn("JOIN host_identifiers hi ON hi.host = h.id", api_source)
-        self.assertIn("AND hi.name IN ('ip', 'hostname', 'DNS-via-TargetDefinition', 'MAC', 'OS')", api_source)
-        self.assertIn("JOIN host_oss ho ON ho.host = h.id", api_source)
-        self.assertIn("JOIN oss ON oss.id = ho.os", api_source)
-        self.assertIn("AND hd.name IN ('best_os_cpe', 'best_os_txt', 'traceroute')", api_source)
-        self.assertIn("left(coalesce(hi.source_data, ''), 512)", api_source)
-        self.assertIn("left(coalesce(hd.value, ''), 4096)", api_source)
+        self.assertIn("JOIN host_identifiers hi ON hi.host = h.id", query_source)
+        self.assertIn("AND hi.name IN ('ip', 'hostname', 'DNS-via-TargetDefinition', 'MAC', 'OS')", query_source)
+        self.assertIn("JOIN host_oss ho ON ho.host = h.id", query_source)
+        self.assertIn("JOIN oss ON oss.id = ho.os", query_source)
+        self.assertIn("AND hd.name IN ('best_os_cpe', 'best_os_txt', 'traceroute')", query_source)
+        self.assertIn("left(coalesce(hi.source_data, ''), 512)", query_source)
+        self.assertIn("left(coalesce(hd.value, ''), 4096)", query_source)
         self.assertIn('/hosts/{host_id}:', openapi)
         self.assertIn('/hosts/{host_id}/export:', openapi)
         self.assertIn("#/components/parameters/HostId", openapi)
@@ -5063,6 +5071,7 @@ class TurboVASCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         route_source = (root / "services" / "turbovas-api" / "src" / "routes.rs").read_text(encoding="utf-8")
         tls_source = (root / "services" / "turbovas-api" / "src" / "tls_certificates.rs").read_text(encoding="utf-8")
+        tls_query_source = (root / "services" / "turbovas-api" / "src" / "tls_certificate_query_sql.rs").read_text(encoding="utf-8")
         tls_payload_source = (root / "services" / "turbovas-api" / "src" / "tls_certificate_payloads.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         tls_detail_source = tls_source.split("async fn tls_certificate_asset_detail", 1)[1].split("fn tls_certificate_sources", 1)[0]
@@ -5070,8 +5079,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/tls-certificates/:certificate_id', route_source)
         self.assertIn('/api/v1/tls-certificates/:certificate_id/export', route_source)
         self.assertIn('parse_uuid(&certificate_id)?;', tls_detail_source)
-        self.assertIn('WHERE c.uuid = $1', tls_detail_source)
-        self.assertIn('JOIN tls_certificate_sources src ON src.tls_certificate = c.id', tls_detail_source)
+        self.assertIn('WHERE c.uuid = $1', tls_query_source)
+        self.assertIn('JOIN tls_certificate_sources src ON src.tls_certificate = c.id', tls_query_source)
         self.assertIn('TlsCertificateSourceItem', tls_payload_source)
         self.assertNotIn('c.certificate', tls_detail_source)
         self.assertIn('/tls-certificates/{certificate_id}:', openapi)
@@ -5088,16 +5097,17 @@ class TurboVASCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         route_source = (root / "services" / "turbovas-api" / "src" / "routes.rs").read_text(encoding="utf-8")
         api_source = (root / "services" / "turbovas-api" / "src" / "scanner_assets.rs").read_text(encoding="utf-8")
+        query_source = (root / "services" / "turbovas-api" / "src" / "scanner_asset_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         scanner_detail_source = api_source.split("async fn scanner_asset_detail", 1)[1].split("fn scanner_task_references_sql", 1)[0]
 
         self.assertIn('/api/v1/scanners/:scanner_id', route_source)
         self.assertIn('/api/v1/scanners/:scanner_id/export', route_source)
         self.assertIn('let scanner_id = parse_uuid(&scanner_id)?.to_string();', scanner_detail_source)
-        self.assertIn('WHERE s.uuid = $1', scanner_detail_source)
-        self.assertIn('LEFT JOIN credentials c ON c.id = s.credential', scanner_detail_source)
-        self.assertIn('nullif(c.uuid, \'\') AS credential_id', scanner_detail_source)
-        self.assertIn('nullif(c.name, \'\') AS credential_name', scanner_detail_source)
+        self.assertIn('WHERE s.uuid = $1', query_source)
+        self.assertIn('LEFT JOIN credentials c ON c.id = s.credential', query_source)
+        self.assertIn('nullif(c.uuid, \'\') AS credential_id', query_source)
+        self.assertIn('nullif(c.name, \'\') AS credential_name', query_source)
         self.assertIn('scanner_task_references(&client, &scanner_id)', scanner_detail_source)
         self.assertIn('scanner_user_tags(&client, &scanner_id)', scanner_detail_source)
         self.assertNotIn('ca_pub', scanner_detail_source)
@@ -6616,6 +6626,7 @@ db2:keys=5,expires=0,avg_ttl=0
             schedule_live = {"value": True}
             report_config_created_name = {"value": ""}
             target_in_use = {"value": False}
+            target_credential_link_count = {"value": 0}
 
             def fake_run_command(command, *_args, **kwargs):
                 commands.append(tuple(command))
@@ -6649,8 +6660,11 @@ db2:keys=5,expires=0,avg_ttl=0
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "192.0.2.42, 192.0.2.43|192.0.2.43|16|1|1|0|0\n", "")
                     if "md5" in command_text and "targets_login_data" in command_text and "FROM targets" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "target-adjacent-state-checksum\n", "")
+                    if "SELECT count(*)::text || '|' || coalesce(max(port)::text" in command_text:
+                        value = "1|22" if target_credential_link_count["value"] else "0|"
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, value + "\n", "")
                     if "SELECT count(*)::text FROM targets_login_data" in command_text:
-                        return turbovasctl.subprocess.CompletedProcess(command, 0, "0\n", "")
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, str(target_credential_link_count["value"]) + "\n", "")
                     if "SELECT alive_test::text FROM targets" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "16\n", "")
                     if "SELECT allow_simultaneous_ips::text" in command_text:
@@ -6745,6 +6759,15 @@ db2:keys=5,expires=0,avg_ttl=0
                         self.assertEqual(payload["reverse_lookup_only"], True)
                         self.assertEqual(payload["reverse_lookup_unify"], True)
                         return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "allow_simultaneous_ips": False, "reverse_lookup_only": True, "reverse_lookup_unify": True}) + "\n200", "")
+                    if "credentials" in payload:
+                        if target_in_use["value"]:
+                            return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"conflict"}}\n409', "")
+                        if payload["credentials"].get("ssh") is None:
+                            target_credential_link_count["value"] = 0
+                            return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "credentials": {"ssh": None}}) + "\n200", "")
+                        self.assertEqual(payload["credentials"], {"ssh": {"id": credential_uuid}})
+                        target_credential_link_count["value"] = 1
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "credentials": {"ssh": {"id": credential_uuid, "port": 22}}}) + "\n200", "")
                     self.assertEqual(payload["comment"], target_updated_comment)
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "comment": payload["comment"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/targets/{target_uuid}/clone"):

@@ -1730,9 +1730,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-read
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       summary: List tags
-      description: Read-only tag metadata backed by gvmd/PostgreSQL. Explicit native resource assignment supports native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions, set/replace semantics, assigned-resource delete, and inherited file export remain compatibility paths while their native contracts are designed.
+      description: Read-only tag metadata backed by gvmd/PostgreSQL. Explicit native resource assignment supports native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions, set/replace semantics, and inherited file export remain compatibility paths while their native contracts are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1763,13 +1763,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-write
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Create tag metadata
-      description: Direct write-control endpoint for creating tag metadata only. Explicit resource assignment happens through the native resource endpoint after creation; filter-based resource actions, set/replace semantics, assigned-resource delete, and inherited file export remain compatibility paths.
+      description: Direct write-control endpoint for creating tag metadata only. Explicit resource assignment happens through the native resource endpoint after creation; filter-based resource actions, set/replace semantics, and inherited file export remain compatibility paths.
       requestBody:
         required: true
         content:
@@ -1809,7 +1809,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-resource-name-read
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       parameters:
         - name: resource_type
           in: path
@@ -1849,7 +1849,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-read
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       summary: Read one tag
       parameters:
         - $ref: '#/components/parameters/TagId'
@@ -1880,13 +1880,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-metadata-write
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update tag metadata
-      description: Direct write-control endpoint for updating tag name, comment, value, and active state only. Resource type changes, filter-based resource actions, set/replace semantics, assigned-resource delete, and inherited file export remain compatibility paths.
+      description: Direct write-control endpoint for updating tag name, comment, value, and active state only. Resource type changes, filter-based resource actions, set/replace semantics, and inherited file export remain compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -1922,7 +1922,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-trash-move
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -1957,9 +1957,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-metadata-export-read
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       summary: Export tag metadata
-      description: Scriptable JSON metadata export for one tag. Explicit native resource assignment supports native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions, set/replace semantics, assigned-resource delete, and inherited file export remain compatibility paths.
+      description: Scriptable JSON metadata export for one tag. Explicit native resource assignment supports native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions, set/replace semantics, and inherited file export remain compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -1990,13 +1990,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-clone
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Clone tag metadata and assignments
-      description: Direct write-control endpoint for copying an existing live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes, filter-based bulk actions, export, and assigned-resource delete remain inherited.
+      description: Direct write-control endpoint for copying an existing live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes, filter-based bulk actions, and export remain inherited.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -2038,7 +2038,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-restore
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2077,7 +2077,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-hard-delete
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2110,7 +2110,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tag-resource-reference-read
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       summary: List assigned tag resource references
       description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Security-information resource mutation, filter-based bulk actions, export, trash behavior, credentials, users, permissions, reports, results, and other unsafe resource classes remain on inherited compatibility paths.
       parameters:
@@ -2146,7 +2146,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-active-resource-assignment-write
-      x-turbovas-inherited-still-owns: tag-filter-actions-export-and-assigned-resource-delete
+      x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1

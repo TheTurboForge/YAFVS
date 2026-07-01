@@ -390,7 +390,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "clean-sensor.gmp.py",
         "create-alerts-from-csv.gmp.py",
         "create-dummy-data.gmp.py",
-        "create-filters-from-csv.gmp.py",
         "create-report-format-from-csv.gmp.py",
         "create-schedules-from-csv.gmp.py",
         "create-tags-from-csv.gmp.py",

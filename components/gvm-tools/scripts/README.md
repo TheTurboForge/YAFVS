@@ -366,20 +366,6 @@ Creates credentials as specified in a csv-file. See credentials.csv for file for
 **Note**: create schedules, then credentials, then targets, then tasks and make sure to use the same names between the input csv-files.
 The sample files should serve as an example.
 
-## `create-filters-from-csv.gmp.py`
-
-Creates filters as specified in a csv-file. See filters.csv for file format/contents.
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket create-filters-from-csv.gmp.py ./filters.csv`
-
-- CSV-file; filterType, filterName, filterDescription, filterTerm, where
-    - filterType is one of Alert, Config (scan-config), Credential, Report, Scanner, Schedule, Target, or Task.
-    - filterName is the name of the filter.
-    - filterDescription is your description of the filter.
-    - FilterTerm is the actual term used to define the filter, such as \~Labnet.
-
 ## `create-tags-from-csv.gmp.py`
 
 Creates tags as specified in a csv-file. See tags.csv for file format/contents.

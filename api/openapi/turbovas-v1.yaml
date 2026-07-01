@@ -3620,7 +3620,7 @@ paths:
       x-turbovas-replaces: target-list-read
       x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       summary: List scan targets
-      description: Read-only target metadata backed by gvmd/PostgreSQL. Native direct write-control can patch target name/comment metadata and alive-test settings; target hosts, exclude hosts, port list, reverse-DNS settings, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
+      description: Read-only target metadata backed by gvmd/PostgreSQL. Native direct write-control can patch target name/comment metadata and bounded scan inputs; target credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3654,7 +3654,7 @@ paths:
       x-turbovas-replaces: target-detail-summary-read
       x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       summary: Read one scan target summary
-      description: Read-only target metadata backed by gvmd/PostgreSQL. Detail includes safe credential references already visible in the inherited UI. Native direct write-control can patch target name/comment metadata plus bounded scan inputs; target hosts, exclude hosts, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
+      description: Read-only target metadata backed by gvmd/PostgreSQL. Detail includes safe credential references already visible in the inherited UI. Native direct write-control can patch target name/comment metadata plus bounded scan inputs, including simple explicit host lists; target credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -3683,14 +3683,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: target-metadata-and-scan-inputs-modify
+      x-turbovas-replaces: target-metadata-and-simple-scan-inputs-modify
       x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update target metadata and bounded scan inputs
-      description: Direct write-control endpoint for updating target name, comment, port-list reference, alive-test bitfield, reverse-DNS flags, and simultaneous-IP behavior only. Port-list, reverse-DNS, and simultaneous-IP changes are rejected while the target is referenced by live tasks, matching inherited safety semantics. Target hosts, exclude hosts, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
+      description: Direct write-control endpoint for updating target name, comment, port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, and simultaneous-IP behavior only. Host-list, port-list, reverse-DNS, and simultaneous-IP changes are rejected while the target is referenced by live tasks, matching inherited safety semantics. CIDR/range host grammar, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       requestBody:
@@ -4723,6 +4723,19 @@ components:
           type: string
           format: uuid
           description: Port list to assign to the target. The referenced port list must be predefined or owned by the direct operator, and assignment is rejected while the target is referenced by a live task.
+        hosts:
+          type: array
+          maxItems: 4095
+          description: Simple explicit host entries to assign to the target. CIDR/range grammar remains inherited until separately implemented. Rejected while the target is referenced by a live task.
+          items:
+            type: string
+            maxLength: 4096
+        exclude_hosts:
+          type: array
+          description: Simple explicit host entries to exclude from hosts in the same request. Cannot fully exclude the target. Rejected while the target is referenced by a live task.
+          items:
+            type: string
+            maxLength: 4096
     TaskPatchRequest:
       type: object
       additionalProperties: false

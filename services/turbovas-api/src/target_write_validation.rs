@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use serde::Deserialize;
+use std::collections::HashSet;
 
 use crate::{errors::ApiError, path_ids::parse_uuid};
 
 pub(crate) const MAX_TARGET_TEXT_BYTES: usize = 4096;
+pub(crate) const MAX_TARGET_HOSTS: usize = 4095;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +27,10 @@ pub(crate) struct TargetPatchRequest {
     pub(crate) reverse_lookup_unify: Option<bool>,
     #[serde(default)]
     pub(crate) port_list_id: Option<String>,
+    #[serde(default)]
+    pub(crate) hosts: Option<Vec<String>>,
+    #[serde(default)]
+    pub(crate) exclude_hosts: Option<Vec<String>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,14 +42,17 @@ pub(crate) struct ValidatedTargetPatch {
     pub(crate) reverse_lookup_only: Option<i32>,
     pub(crate) reverse_lookup_unify: Option<i32>,
     pub(crate) port_list_id: Option<String>,
+    pub(crate) hosts: Option<String>,
+    pub(crate) exclude_hosts: Option<String>,
 }
 
 impl ValidatedTargetPatch {
-    pub(crate) fn changes_task_in_use_guarded_scan_settings(&self) -> bool {
+    pub(crate) fn changes_task_in_use_guarded_scan_inputs(&self) -> bool {
         self.allow_simultaneous_ips.is_some()
             || self.reverse_lookup_only.is_some()
             || self.reverse_lookup_unify.is_some()
             || self.port_list_id.is_some()
+            || self.hosts.is_some()
     }
 }
 
@@ -58,6 +67,14 @@ pub(crate) fn validate_target_patch_request(
         reverse_lookup_only: bool_option_to_int(request.reverse_lookup_only),
         reverse_lookup_unify: bool_option_to_int(request.reverse_lookup_unify),
         port_list_id: validate_optional_uuid(request.port_list_id, "port_list_id")?,
+        hosts: None,
+        exclude_hosts: None,
+    };
+    let (hosts, exclude_hosts) = validate_target_host_lists(request.hosts, request.exclude_hosts)?;
+    let validated = ValidatedTargetPatch {
+        hosts,
+        exclude_hosts,
+        ..validated
     };
     if validated.name.is_none()
         && validated.comment.is_none()
@@ -66,12 +83,128 @@ pub(crate) fn validate_target_patch_request(
         && validated.reverse_lookup_only.is_none()
         && validated.reverse_lookup_unify.is_none()
         && validated.port_list_id.is_none()
+        && validated.hosts.is_none()
     {
         return Err(ApiError::BadRequest(
             "target patch request must include at least one field".to_string(),
         ));
     }
     Ok(validated)
+}
+
+fn validate_target_host_lists(
+    hosts: Option<Vec<String>>,
+    exclude_hosts: Option<Vec<String>>,
+) -> Result<(Option<String>, Option<String>), ApiError> {
+    match (hosts, exclude_hosts) {
+        (None, None) => Ok((None, None)),
+        (None, Some(_)) => Err(ApiError::BadRequest(
+            "exclude_hosts requires hosts in the same patch request".to_string(),
+        )),
+        (Some(hosts), exclude_hosts) => {
+            let normalized_hosts = normalize_simple_host_list(hosts, "hosts")?;
+            if normalized_hosts.is_empty() {
+                return Err(ApiError::BadRequest("hosts is required".to_string()));
+            }
+            if normalized_hosts.len() > MAX_TARGET_HOSTS {
+                return Err(ApiError::BadRequest(format!(
+                    "hosts may contain at most {MAX_TARGET_HOSTS} entries"
+                )));
+            }
+            let normalized_excludes =
+                normalize_simple_host_list(exclude_hosts.unwrap_or_default(), "exclude_hosts")?;
+            let host_set: HashSet<&str> = normalized_hosts.iter().map(String::as_str).collect();
+            let excluded_count = normalized_excludes
+                .iter()
+                .filter(|entry| host_set.contains(entry.as_str()))
+                .count();
+            if normalized_hosts.len().saturating_sub(excluded_count) == 0 {
+                return Err(ApiError::BadRequest(
+                    "hosts cannot be fully excluded".to_string(),
+                ));
+            }
+            Ok((
+                Some(normalized_hosts.join(", ")),
+                Some(normalized_excludes.join(", ")),
+            ))
+        }
+    }
+}
+
+fn normalize_simple_host_list(
+    values: Vec<String>,
+    field_name: &str,
+) -> Result<Vec<String>, ApiError> {
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::new();
+    for value in values {
+        let value = normalize_simple_host_entry(value, field_name)?;
+        if value.is_empty() {
+            continue;
+        }
+        if seen.insert(value.clone()) {
+            normalized.push(value);
+        }
+    }
+    Ok(normalized)
+}
+
+fn normalize_simple_host_entry(value: String, field_name: &str) -> Result<String, ApiError> {
+    let value = value.trim();
+    if value.len() > MAX_TARGET_TEXT_BYTES {
+        return Err(ApiError::BadRequest(format!(
+            "{field_name} entries must be at most {MAX_TARGET_TEXT_BYTES} bytes"
+        )));
+    }
+    if value.chars().any(char::is_control) || value.contains(',') {
+        return Err(ApiError::BadRequest(format!(
+            "{field_name} entries must be simple host strings without separators or control characters"
+        )));
+    }
+    if !value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ':'))
+    {
+        return Err(ApiError::BadRequest(format!(
+            "{field_name} entries contain unsupported host characters"
+        )));
+    }
+    if value.contains('/') || looks_like_ipv4_range(value) {
+        return Err(ApiError::BadRequest(format!(
+            "{field_name} entries currently support only explicit hosts, not CIDR or range syntax"
+        )));
+    }
+    Ok(normalize_ipv4_address(value).unwrap_or_else(|| value.to_string()))
+}
+
+fn looks_like_ipv4_range(value: &str) -> bool {
+    let Some((left, right)) = value.split_once('-') else {
+        return false;
+    };
+    is_dotted_ipv4_candidate(left) && right.chars().all(|ch| ch.is_ascii_digit() || ch == '.')
+}
+
+fn is_dotted_ipv4_candidate(value: &str) -> bool {
+    let parts: Vec<&str> = value.split('.').collect();
+    parts.len() == 4
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+fn normalize_ipv4_address(value: &str) -> Option<String> {
+    if !is_dotted_ipv4_candidate(value) {
+        return None;
+    }
+    let mut octets = Vec::new();
+    for part in value.split('.') {
+        let octet = part.parse::<u16>().ok()?;
+        if octet > 255 {
+            return None;
+        }
+        octets.push(octet.to_string());
+    }
+    Some(octets.join("."))
 }
 
 fn bool_option_to_int(value: Option<bool>) -> Option<i32> {

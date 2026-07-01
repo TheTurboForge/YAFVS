@@ -7,7 +7,7 @@ use crate::{
     target_write_db::ensure_target_owner_matches_operator,
     target_write_sql::*,
     target_write_validation::{
-        MAX_TARGET_TEXT_BYTES, TargetPatchRequest, validate_alive_tests,
+        MAX_TARGET_HOSTS, MAX_TARGET_TEXT_BYTES, TargetPatchRequest, validate_alive_tests,
         validate_target_patch_request,
     },
 };
@@ -21,6 +21,8 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> TargetPatchReques
         reverse_lookup_only: None,
         reverse_lookup_unify: None,
         port_list_id: None,
+        hosts: None,
+        exclude_hosts: None,
     }
 }
 
@@ -33,6 +35,8 @@ fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
         reverse_lookup_only: None,
         reverse_lookup_unify: None,
         port_list_id: None,
+        hosts: None,
+        exclude_hosts: None,
     }
 }
 
@@ -49,6 +53,8 @@ fn scan_settings_patch_request(
         reverse_lookup_only,
         reverse_lookup_unify,
         port_list_id: None,
+        hosts: None,
+        exclude_hosts: None,
     }
 }
 
@@ -61,6 +67,27 @@ fn port_list_patch_request(port_list_id: &str) -> TargetPatchRequest {
         reverse_lookup_only: None,
         reverse_lookup_unify: None,
         port_list_id: Some(port_list_id.to_string()),
+        hosts: None,
+        exclude_hosts: None,
+    }
+}
+
+fn hosts_patch_request(hosts: &[&str], exclude_hosts: &[&str]) -> TargetPatchRequest {
+    TargetPatchRequest {
+        name: None,
+        comment: None,
+        alive_tests: None,
+        allow_simultaneous_ips: None,
+        reverse_lookup_only: None,
+        reverse_lookup_unify: None,
+        port_list_id: None,
+        hosts: Some(hosts.iter().map(|value| value.to_string()).collect()),
+        exclude_hosts: Some(
+            exclude_hosts
+                .iter()
+                .map(|value| value.to_string())
+                .collect(),
+        ),
     }
 }
 
@@ -130,7 +157,68 @@ fn target_patch_request_rejects_oversized_metadata_fields() {
             reverse_lookup_only: None,
             reverse_lookup_unify: None,
             port_list_id: None,
+            hosts: None,
+            exclude_hosts: None,
         }),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn target_patch_request_validates_simple_host_lists() {
+    let validated = validate_target_patch_request(hosts_patch_request(
+        &["  192.168.001.010  ", "host-one", "host-one", "2001:db8::1"],
+        &["192.168.1.10"],
+    ))
+    .expect("valid simple hosts patch");
+    assert_eq!(
+        validated.hosts.as_deref(),
+        Some("192.168.1.10, host-one, 2001:db8::1")
+    );
+    assert_eq!(validated.exclude_hosts.as_deref(), Some("192.168.1.10"));
+    assert!(validated.changes_task_in_use_guarded_scan_inputs());
+
+    assert!(matches!(
+        validate_target_patch_request(TargetPatchRequest {
+            name: None,
+            comment: None,
+            alive_tests: None,
+            allow_simultaneous_ips: None,
+            reverse_lookup_only: None,
+            reverse_lookup_unify: None,
+            port_list_id: None,
+            hosts: None,
+            exclude_hosts: Some(vec!["192.0.2.1".to_string()]),
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(hosts_patch_request(&["192.0.2.1/24"], &[])),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(hosts_patch_request(&["192.0.2.1-10"], &[])),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(hosts_patch_request(&["invalid-host-!!!"], &[])),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_target_patch_request(hosts_patch_request(&["192.0.2.1"], &["192.0.2.1"])),
+        Err(ApiError::BadRequest(_))
+    ));
+    let too_many = (0..=MAX_TARGET_HOSTS)
+        .map(|index| format!("host-{index}"))
+        .collect::<Vec<_>>();
+    let too_many_refs = too_many.iter().map(String::as_str).collect::<Vec<_>>();
+    assert!(matches!(
+        validate_target_patch_request(hosts_patch_request(&too_many_refs, &[])),
+        Err(ApiError::BadRequest(_))
+    ));
+    let oversized = "x".repeat(MAX_TARGET_TEXT_BYTES + 1);
+    assert!(matches!(
+        validate_target_patch_request(hosts_patch_request(&[oversized.as_str()], &[])),
         Err(ApiError::BadRequest(_))
     ));
 }
@@ -146,11 +234,11 @@ fn target_patch_request_validates_guarded_scan_settings() {
     assert_eq!(validated.allow_simultaneous_ips, Some(0));
     assert_eq!(validated.reverse_lookup_only, Some(1));
     assert_eq!(validated.reverse_lookup_unify, Some(0));
-    assert!(validated.changes_task_in_use_guarded_scan_settings());
+    assert!(validated.changes_task_in_use_guarded_scan_inputs());
 
     let alive_only = validate_target_patch_request(alive_patch_request(&["ICMP Ping"]))
         .expect("alive-only patch");
-    assert!(!alive_only.changes_task_in_use_guarded_scan_settings());
+    assert!(!alive_only.changes_task_in_use_guarded_scan_inputs());
 
     let port_list = validate_target_patch_request(port_list_patch_request(
         "12345678-1234-1234-1234-123456789abc",
@@ -160,7 +248,7 @@ fn target_patch_request_validates_guarded_scan_settings() {
         port_list.port_list_id.as_deref(),
         Some("12345678-1234-1234-1234-123456789abc")
     );
-    assert!(port_list.changes_task_in_use_guarded_scan_settings());
+    assert!(port_list.changes_task_in_use_guarded_scan_inputs());
 
     assert!(matches!(
         validate_target_patch_request(port_list_patch_request("not-a-uuid")),
@@ -218,6 +306,8 @@ fn target_patch_sql_is_metadata_only() {
     assert!(sql.contains("reverse_lookup_only = coalesce($6, reverse_lookup_only)"));
     assert!(sql.contains("reverse_lookup_unify = coalesce($7, reverse_lookup_unify)"));
     assert!(sql.contains("port_list = coalesce($8, port_list)"));
+    assert!(sql.contains("hosts = coalesce($9, hosts)"));
+    assert!(sql.contains("exclude_hosts = coalesce($10, exclude_hosts)"));
     assert!(sql.contains("modification_time = m_now()"));
     assert!(sql.contains("RETURNING uuid::text"));
     for forbidden in [
@@ -225,8 +315,6 @@ fn target_patch_sql_is_metadata_only() {
         "targets_trash",
         "tasks",
         "credentials",
-        "hosts =",
-        "exclude_hosts",
         "ssh",
         "smb",
         "snmp",

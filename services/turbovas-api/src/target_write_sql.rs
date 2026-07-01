@@ -46,6 +46,8 @@ pub(crate) fn target_update_metadata_sql() -> &'static str {
             reverse_lookup_only = coalesce($6, reverse_lookup_only),
             reverse_lookup_unify = coalesce($7, reverse_lookup_unify),
             port_list = coalesce($8, port_list),
+            hosts = coalesce($9, hosts),
+            exclude_hosts = coalesce($10, exclude_hosts),
             modification_time = m_now()
       WHERE id = $1
       RETURNING uuid::text;"

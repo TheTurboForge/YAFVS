@@ -53,8 +53,8 @@ pub(crate) async fn patch_target(
     } else {
         None
     };
-    if request.changes_task_in_use_guarded_scan_settings() {
-        ensure_target_not_in_use_for_scan_settings(&tx, target_state.internal_id).await?;
+    if request.changes_task_in_use_guarded_scan_inputs() {
+        ensure_target_not_in_use_for_scan_inputs(&tx, target_state.internal_id).await?;
     }
     let record = execute_target_patch_transaction(
         &tx,
@@ -88,6 +88,8 @@ pub(crate) async fn execute_target_patch_transaction(
             &request.reverse_lookup_only,
             &request.reverse_lookup_unify,
             port_list_internal_id,
+            &request.hosts,
+            &request.exclude_hosts,
         ],
         "update target metadata",
     )

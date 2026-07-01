@@ -149,6 +149,20 @@ fn inherited_target_alive_test_modify_is_not_task_in_use_guarded() {
     assert!(reverse_unify_block.contains("reverse_lookup_unify = '%i'"));
 
     assert!(modify[port_list_start..].contains("target_in_use (target)"));
+
+    let exclude_start = modify
+        .find("if (exclude_hosts)")
+        .expect("host/exclude-host modify block exists");
+    let reverse_only_start = modify
+        .find("if (reverse_lookup_only)")
+        .expect("reverse-lookup-only modify block exists");
+    let host_block = &modify[exclude_start..reverse_only_start];
+    assert!(host_block.contains("target_in_use (target)"));
+    assert!(host_block.contains("clean_hosts (hosts, &max)"));
+    assert!(host_block.contains("clean_hosts (exclude_hosts, NULL)"));
+    assert!(host_block.contains("manage_count_hosts (clean, clean_exclude)"));
+    assert!(host_block.contains("hosts = '%s'"));
+    assert!(host_block.contains("exclude_hosts = '%s'"));
 }
 
 #[test]
@@ -395,7 +409,7 @@ fn native_target_broad_mutation_routes_remain_closed() {
         ));
     }
     let detail = openapi_path_block("/targets/{target_id}");
-    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-scan-inputs-modify"));
+    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-simple-scan-inputs-modify"));
     for forbidden in ["post:", "delete:", "/clone", "/restore", "/trash"] {
         assert!(
             !detail.contains(forbidden),

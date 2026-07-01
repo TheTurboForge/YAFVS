@@ -592,7 +592,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tag-resource-reference-read",
         "target-detail-summary-read",
         "target-list-read",
-        "target-metadata-and-scan-inputs-modify",
+        "target-metadata-and-simple-scan-inputs-modify",
         "task-metadata-modify",
         "task-detail-summary-read",
         "task-list-read",
@@ -1318,7 +1318,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
-        "x-turbovas-replaces": "target-metadata-and-scan-inputs-modify",
+        "x-turbovas-replaces": "target-metadata-and-simple-scan-inputs-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
     },
@@ -12497,9 +12497,11 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.target-write-update",
             "native-api-direct.target-alive-test-update",
             "native-api-direct.target-port-list-update",
+            "native-api-direct.target-hosts-update",
             "native-api-direct.target-scan-settings-update",
             "native-api-direct.target-scan-settings-in-use-denied",
             "native-api-direct.target-port-list-in-use-denied",
+            "native-api-direct.target-hosts-in-use-denied",
             "native-api-direct.target-fixture-cleanup",
             "native-api-direct.task-fixture",
             "native-api-direct.task-write-update",
@@ -13756,6 +13758,23 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 else:
                     findings.append(native_api_probe_finding("warn", "native-api-direct.target-port-list-update", "Direct write-control smoke could not find a predefined port-list fixture for target port-list assignment.", port_list_fixture, direct_native_api_display_command("/api/v1/port-lists?page_size=1", token=token, env=env), port_list_fixture_json, {"http_status": port_list_fixture_status, "target_id": target_id, **summarize_native_api_response(port_list_fixture_json)}))
 
+                target_non_hosts_state_sql = (
+                    "SELECT md5(coalesce(port_list::text, '') || '|' || coalesce(alive_test::text, '') || '|' || "
+                    "coalesce(reverse_lookup_only::text, '') || '|' || coalesce(reverse_lookup_unify::text, '') || '|' || "
+                    "coalesce(allow_simultaneous_ips::text, '') || '|' || "
+                    "(SELECT count(*)::text FROM targets_login_data WHERE target = targets.id)) "
+                    "FROM targets "
+                    f"WHERE uuid = {sql_literal(target_id)};"
+                )
+                target_non_hosts_state_before = psql_value(psql(repo_root, target_non_hosts_state_sql))
+                target_hosts_patch_body = json.dumps({"hosts": ["192.0.2.42", "192.0.2.43", "192.0.2.42"], "exclude_hosts": ["192.0.2.43"]}, separators=(",", ":"))
+                target_hosts_patch = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_hosts_patch_body, extra_headers=content_type)
+                target_hosts_patch_json, target_hosts_patch_status = parse_json_output_with_http_status(target_hosts_patch)
+                target_hosts_values = psql_value(psql(repo_root, f"SELECT coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') FROM targets WHERE uuid = {sql_literal(target_id)};"))
+                target_non_hosts_state_after = psql_value(psql(repo_root, target_non_hosts_state_sql))
+                target_hosts_patch_ok = target_hosts_patch.returncode == 0 and target_hosts_patch_status == 200 and isinstance(target_hosts_patch_json, dict) and target_hosts_patch_json.get("id") == target_id and target_hosts_patch_json.get("hosts") == ["192.0.2.42", "192.0.2.43"] and target_hosts_patch_json.get("exclude_hosts") == ["192.0.2.43"] and target_hosts_values == "192.0.2.42, 192.0.2.43|192.0.2.43" and target_non_hosts_state_before and target_non_hosts_state_before == target_non_hosts_state_after
+                findings.append(native_api_probe_finding("pass" if target_hosts_patch_ok else "fail", "native-api-direct.target-hosts-update", "Direct write-control patched simple target hosts/exclude-hosts without changing port-list, scan-setting flags, alive-test, or credential links." if target_hosts_patch_ok else "Direct write-control failed to patch simple target hosts/exclude-hosts or changed adjacent target state.", target_hosts_patch, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_hosts_patch_body, extra_headers=content_type), target_hosts_patch_json, {"http_status": target_hosts_patch_status, "target_id": target_id, "host_values": target_hosts_values, "state_checksum_before": target_non_hosts_state_before, "state_checksum_after": target_non_hosts_state_after, **summarize_native_api_response(target_hosts_patch_json)}))
+
                 task_fixture_sql = (
                     "WITH live_target AS (SELECT id, owner FROM targets "
                     f"WHERE uuid = {sql_literal(target_id)} AND name = {sql_literal(target_name)}), "
@@ -13793,6 +13812,14 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         findings.append(native_api_probe_finding("pass" if target_port_list_denied_ok else "fail", "native-api-direct.target-port-list-in-use-denied", "Direct write-control rejected target port-list changes while a live task references the target." if target_port_list_denied_ok else "Direct write-control did not reject target port-list changes for a target referenced by a live task.", target_port_list_denied, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_port_list_denied_body, extra_headers=content_type), target_port_list_denied_json, {"http_status": target_port_list_denied_status, "target_id": target_id, "state_before": target_port_list_before_in_use_denial, "state_after": target_port_list_after_in_use_denial, **summarize_native_api_response(target_port_list_denied_json)}))
                     else:
                         findings.append(native_api_probe_finding("warn", "native-api-direct.target-port-list-in-use-denied", "Direct write-control smoke could not find a predefined port-list fixture for the target port-list in-use guard.", port_list_fixture, direct_native_api_display_command("/api/v1/port-lists?page_size=1", token=token, env=env), port_list_fixture_json, {"http_status": port_list_fixture_status, "target_id": target_id, **summarize_native_api_response(port_list_fixture_json)}))
+
+                    target_hosts_before_in_use_denial = psql_value(psql(repo_root, f"SELECT coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') FROM targets WHERE uuid = {sql_literal(target_id)};"))
+                    target_hosts_denied_body = json.dumps({"hosts": ["192.0.2.44"], "exclude_hosts": []}, separators=(",", ":"))
+                    target_hosts_denied = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_hosts_denied_body, extra_headers=content_type)
+                    target_hosts_denied_json, target_hosts_denied_status = parse_json_output_with_http_status(target_hosts_denied)
+                    target_hosts_after_in_use_denial = psql_value(psql(repo_root, f"SELECT coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') FROM targets WHERE uuid = {sql_literal(target_id)};"))
+                    target_hosts_denied_ok = target_hosts_denied.returncode == 0 and target_hosts_denied_status == 409 and target_hosts_before_in_use_denial and target_hosts_before_in_use_denial == target_hosts_after_in_use_denial
+                    findings.append(native_api_probe_finding("pass" if target_hosts_denied_ok else "fail", "native-api-direct.target-hosts-in-use-denied", "Direct write-control rejected target host-list changes while a live task references the target." if target_hosts_denied_ok else "Direct write-control did not reject target host-list changes for a target referenced by a live task.", target_hosts_denied, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_hosts_denied_body, extra_headers=content_type), target_hosts_denied_json, {"http_status": target_hosts_denied_status, "target_id": target_id, "state_before": target_hosts_before_in_use_denial, "state_after": target_hosts_after_in_use_denial, **summarize_native_api_response(target_hosts_denied_json)}))
 
                     task_state_sql = (
                         "SELECT md5(coalesce(target::text, '') || '|' || coalesce(config::text, '') || '|' || "

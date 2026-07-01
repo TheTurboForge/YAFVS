@@ -85,7 +85,7 @@ pub(crate) async fn ensure_unique_target_name(
     }
 }
 
-pub(crate) async fn ensure_target_not_in_use_for_scan_settings(
+pub(crate) async fn ensure_target_not_in_use_for_scan_inputs(
     tx: &Transaction<'_>,
     target_internal_id: i32,
 ) -> Result<(), ApiError> {

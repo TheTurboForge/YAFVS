@@ -22,6 +22,7 @@ import {
   type AliveTest,
   SCAN_CONFIG_DEFAULT,
 } from 'gmp/models/target';
+import {fetchNativeCredentials} from 'gmp/native-api/credentials';
 import {fetchNativePortLists} from 'gmp/native-api/port-lists';
 import {exportNativeTargetMetadata} from 'gmp/native-api/targets';
 import {first} from 'gmp/utils/array';
@@ -102,6 +103,7 @@ const exportTarget = (gmp: any, target: EntityCommandParams) => {
 };
 
 const NATIVE_PORT_LIST_PAGE_SIZE = 1000;
+const NATIVE_CREDENTIAL_PAGE_SIZE = 1000;
 
 const TargetComponent = ({
   children,
@@ -180,8 +182,35 @@ const TargetComponent = ({
   const [hostsFilter, setHostsFilter] = useState<Filter | undefined>(undefined);
 
   const loadCredentials = async () => {
-    const response = await gmp.credentials.getAll();
-    setCredentials(response.data);
+    if (!canUseNativeApi(gmp)) {
+      const response = await gmp.credentials.getAll();
+      setCredentials(response.data);
+      return;
+    }
+
+    const loadedCredentials: Credential[] = [];
+    let page = 1;
+    let total = Number.POSITIVE_INFINITY;
+
+    while (loadedCredentials.length < total) {
+      const response = await fetchNativeCredentials(gmp, {
+        page,
+        pageSize: NATIVE_CREDENTIAL_PAGE_SIZE,
+        sort: 'name',
+        filter: '',
+      });
+
+      loadedCredentials.push(...response.credentials);
+      total = response.counts.filtered;
+
+      if (response.credentials.length === 0) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    setCredentials(loadedCredentials);
   };
 
   const loadPortLists = async () => {

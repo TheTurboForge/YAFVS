@@ -75,7 +75,7 @@ describe('TargetComponent tests', () => {
     expect(screen.getByTestId('button')).toBeInTheDocument();
   });
 
-  test('should load port lists through the native API when available', async () => {
+  test('should load dialog credentials and port lists through the native API when available', async () => {
     const gmp = {
       ...createGmp(),
       buildUrl: testing.fn(
@@ -83,20 +83,28 @@ describe('TargetComponent tests', () => {
       ),
       session: createSession({token: 'test-token'}),
     };
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 1000, total: 1, sort: 'name', filter: ''},
-        items: [
-          {
-            id: DEFAULT_PORT_LIST_ID,
-            name: DEFAULT_PORT_LIST_NAME,
-            predefined: true,
-            port_count: {all: 7594, tcp: 7594, udp: 0},
-          },
-        ],
-      }),
-      ok: true,
-      status: 200,
+    const fetchMock = testing.fn((url: string) => {
+      const payload = url.endsWith('/credentials')
+        ? {
+            page: {page: 1, page_size: 1000, total: 0, sort: 'name', filter: ''},
+            items: [],
+          }
+        : {
+            page: {page: 1, page_size: 1000, total: 1, sort: 'name', filter: ''},
+            items: [
+              {
+                id: DEFAULT_PORT_LIST_ID,
+                name: DEFAULT_PORT_LIST_NAME,
+                predefined: true,
+                port_count: {all: 7594, tcp: 7594, udp: 0},
+              },
+            ],
+          };
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      });
     });
     testing.stubGlobal('fetch', fetchMock);
     const {render} = rendererWith({gmp, capabilities: true});
@@ -111,7 +119,15 @@ describe('TargetComponent tests', () => {
 
     await screen.findByText('New Target');
 
+    expect(gmp.credentials.getAll).not.toHaveBeenCalled();
     expect(gmp.portlists.getAll).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/credentials', {
+      token: 'test-token',
+      page: 1,
+      page_size: 1000,
+      sort: 'name',
+      filter: '',
+    });
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/port-lists', {
       token: 'test-token',
       page: 1,

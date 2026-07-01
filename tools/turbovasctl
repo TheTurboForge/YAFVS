@@ -6851,6 +6851,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("filter_prefix", "filter_export_suffix"),
         ("port_list_prefix", "port_list_export_suffix"),
         ("scan_config_prefix", "scan_config_families_suffix"),
+        ("tag_prefix", "tag_export_suffix"),
         ("tag_prefix", "tag_resources_suffix"),
         ("report_config_prefix", "report_config_export_suffix"),
     ):
@@ -7385,9 +7386,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/tags/{tag_id}/export",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
-                "replacement_candidates": ["direct native JSON tag metadata export", "read-only tag metadata automation"],
+                "replacement_candidates": ["GSA Tag metadata export (migrated through gsad same-origin proxy)", "direct native JSON tag metadata export", "read-only tag metadata automation"],
             },
             {
                 "endpoint": "/api/v1/tags/{tag_id}/resources",

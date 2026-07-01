@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import type QueryFilter from 'gmp/models/filter';
 import Model from 'gmp/models/model';
@@ -305,6 +307,18 @@ export const fetchNativeTag = async (
     {token: gmp.session.token},
   );
   return nativeTagToModel(payload);
+};
+
+export const exportNativeTagMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeTagPayload>(
+    gmp,
+    `api/v1/tags/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
 export const fetchNativeTagResources = async (

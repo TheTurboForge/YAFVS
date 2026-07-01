@@ -362,6 +362,53 @@ describe('TagComponent tests', () => {
     });
   });
 
+  test('should use native metadata export for downloads', async () => {
+    const nativePayload = {
+      id: '1234',
+      name: 'My Tag',
+      comment: 'native metadata',
+      active: true,
+      resource_type: 'task',
+      resource_count: 1,
+      value: 'Some Value',
+    };
+    const fetchMock = stubNativeFetch(nativePayload);
+    const gmp = createGmp({native: true});
+    const tag = new Tag({name: 'My Tag', id: '1234', resourceType: 'task'});
+    const onDownloaded = testing.fn();
+    const onDownloadError = testing.fn();
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <TagComponent
+        onDownloadError={onDownloadError}
+        onDownloaded={onDownloaded}
+      >
+        {({download}) => (
+          <Button data-testid="button" onClick={() => download(tag)} />
+        )}
+      </TagComponent>,
+    );
+
+    await wait();
+    fireEvent.click(screen.getByTestId('button'));
+    await wait();
+
+    expect(gmp.tag.export).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tags/1234/export', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      'https://turbovas.example/api/v1/tags/1234/export',
+      expect.objectContaining({credentials: 'include'}),
+    );
+    expect(onDownloaded).toHaveBeenCalledWith({
+      data: `${JSON.stringify(nativePayload, null, 2)}\n`,
+      filename: 'tag-1234.json',
+    });
+    expect(onDownloadError).not.toHaveBeenCalled();
+  });
+
   test('should allow to enable and disable a tag', async () => {
     const tag = new Tag({name: 'My Tag', id: '1234', resourceType: 'task'});
 

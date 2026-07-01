@@ -10,7 +10,11 @@ import {type EntityCommandParams} from 'gmp/commands/entity';
 import type Response from 'gmp/http/response';
 import type Model from 'gmp/models/model';
 import type Tag from 'gmp/models/tag';
-import {fetchNativeTag, fetchNativeTagResources} from 'gmp/native-api/tags';
+import {
+  exportNativeTagMetadata,
+  fetchNativeTag,
+  fetchNativeTagResources,
+} from 'gmp/native-api/tags';
 import {YES_VALUE} from 'gmp/parser';
 import {
   type EntityType,
@@ -122,6 +126,13 @@ const fetchTag = async (gmp, id: string): Promise<Tag> => {
   return response.data;
 };
 
+const exportTag = (gmp: ReturnType<typeof useGmp>, tag: Tag) => {
+  if (canUseNativeApi(gmp)) {
+    return exportNativeTagMetadata(gmp, tag.id as string);
+  }
+  return gmp.tag.export(tag as EntityCommandParams);
+};
+
 const fetchTagResources = async (
   gmp,
   tag: Tag,
@@ -211,7 +222,7 @@ const TagComponent = ({
   });
 
   const handleEntityDownload = useEntityDownload<Tag>(
-    (entity: EntityCommandParams) => gmp.tag.export(entity),
+    entity => exportTag(gmp, entity as Tag),
     {
       onDownloaded,
       onDownloadError,
@@ -233,7 +244,10 @@ const TagComponent = ({
     if (!isDefined(tag.id)) {
       throw new Error('Tag ID is required for download');
     }
-    await handleEntityDownload(tag);
+    await handleEntityDownload(
+      tag,
+      canUseNativeApi(gmp) ? {extension: 'json'} : undefined,
+    );
   };
 
   const handleEnableTag = async (tag: Tag): Promise<void> => {

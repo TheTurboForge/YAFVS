@@ -217,11 +217,13 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/export",
         false,
     ));
-    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+    for method in [Method::POST, Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, "/api/v1/scanners", true),
             "{method} /api/v1/scanners must remain closed"
         );
+    }
+    for method in [Method::POST, Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(
                 &method,
@@ -231,6 +233,16 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
             "{method} /api/v1/scanners/{{id}} must remain closed"
         );
     }
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
+        true,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
+        false,
+    ));
     for action in ["verify", "download", "trash"] {
         let path = format!("/api/v1/scanners/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
@@ -255,9 +267,20 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
 
     let detail = openapi_path_block("/scanners/{scanner_id}");
     assert!(detail.contains("get:"));
-    assert!(!detail.contains("patch:"));
+    assert!(detail.contains("patch:"));
     assert!(!detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
+    assert!(detail.contains("x-turbovas-exposure: direct-write"));
     assert!(detail.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
-    assert!(detail.contains("Credential secrets, scanner CA material, credential certificate metadata, live scanner status, verify/control operations, export/download behavior, and writes are intentionally excluded"));
+    assert!(
+        detail.contains("Native direct write-control can patch scanner name/comment metadata only")
+    );
+    for residual in [
+        "Credential secrets, scanner CA material, credential certificate metadata",
+        "live scanner status, verify/control operations",
+        "host/port/type/relay mutation",
+        "export/download behavior, create, clone, restore, and delete remain inherited",
+    ] {
+        assert!(detail.contains(residual), "detail docs missing {residual}");
+    }
 }

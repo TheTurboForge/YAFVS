@@ -957,7 +957,7 @@ paths:
       x-turbovas-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes
       summary: Read one scanner metadata record with safe backlinks
-      description: Read-only scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags and non-hidden task backlinks. Credential secrets, scanner CA material, credential certificate metadata, live scanner status, verify/control operations, export/download behavior, and writes are intentionally excluded.
+      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags and non-hidden task backlinks. Native direct write-control can patch scanner name/comment metadata only. Credential secrets, scanner CA material, credential certificate metadata, live scanner status, verify/control operations, host/port/type/relay mutation, export/download behavior, create, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -975,6 +975,52 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchScannersByScannerId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scanner-metadata-modify
+      x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Update scanner metadata
+      description: Direct write-control endpoint for updating scanner name and comment only on operator-owned non-built-in scanners. Scanner host, port, type, relay, CA material, credential links, live status, verify/control operations, export/download formats, create, clone, restore, and delete remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScannerPatchRequest'
+      responses:
+        '200':
+          description: Scanner metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -6449,6 +6495,19 @@ components:
           type: string
           maxLength: 4096
           description: New credential comment. Blank comments clear the comment after trimming.
+    ScannerPatchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 4096
+          description: New scanner name. Blank names are rejected after trimming.
+        comment:
+          type: string
+          maxLength: 4096
+          description: New scanner comment. Blank comments clear the comment after trimming.
     SchedulePatchRequest:
       type: object
       minProperties: 1

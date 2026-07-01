@@ -118,6 +118,10 @@ mod scan_configs;
 mod scanner_asset_payloads;
 mod scanner_asset_query_sql;
 mod scanner_assets;
+mod scanner_write_db;
+mod scanner_write_sql;
+mod scanner_write_validation;
+mod scanner_writes;
 mod schedule_payloads;
 mod schedule_query_sql;
 mod schedule_write_db;
@@ -228,6 +232,8 @@ mod scan_config_characterization_tests;
 mod scan_config_writes_tests;
 #[cfg(test)]
 mod scanner_control_characterization_tests;
+#[cfg(test)]
+mod scanner_writes_tests;
 #[cfg(test)]
 mod schedule_characterization_tests;
 #[cfg(test)]

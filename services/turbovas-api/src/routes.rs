@@ -56,6 +56,7 @@ use crate::{
     },
     scan_configs::*,
     scanner_assets::*,
+    scanner_writes::patch_scanner,
     schedule_writes::{
         clone_schedule, delete_schedule, hard_delete_schedule, patch_schedule, restore_schedule,
     },
@@ -372,6 +373,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/credentials/:credential_id",
                 patch(patch_credential),
             )
+            .route("/api/v1/scanners/:scanner_id", patch(patch_scanner))
             .route("/api/v1/targets/:target_id", patch(patch_target))
             .route("/api/v1/targets", post(create_target))
             .route("/api/v1/targets/:target_id", delete(delete_target))

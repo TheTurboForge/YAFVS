@@ -580,6 +580,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scanner-metadata-detail-info-tags-and-task-backlink-read",
         "scanner-metadata-export-read",
         "scanner-metadata-list-read",
+        "scanner-metadata-modify",
         "schedule-metadata-detail-read",
         "schedule-metadata-export-read",
         "schedule-metadata-list-read",
@@ -706,6 +707,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/tls-certificates/{certificate_id}"): "direct-read",
     ("get", "/scanners"): "direct-read",
     ("get", "/scanners/{scanner_id}"): "direct-read",
+    ("patch", "/scanners/{scanner_id}"): "direct-write",
     ("get", "/credentials"): "direct-read",
     ("get", "/credentials/{credential_id}"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
@@ -1098,6 +1100,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scanner-metadata-detail-info-tags-and-task-backlink-read",
+    },
+    ("patch", "/scanners/{scanner_id}"): {
+        "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "scanner-metadata-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scanners/{scanner_id}/export"): {
         "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
@@ -6685,7 +6696,10 @@ def native_api_direct_contract_summary(repo_root: Path | None, endpoints: list[d
     rust_route_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in rust_routes}
     rust_direct_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in rust_direct_allowed}
     missing = [scriptable_by_normalized[key] for key in sorted(set(scriptable_by_normalized) - set(openapi_by_normalized))]
-    unexpected = [openapi_by_normalized[key] for key in sorted(set(openapi_by_normalized) - set(scriptable_by_normalized))]
+    unexpected = [
+        openapi_by_normalized[key]
+        for key in sorted(set(openapi_by_normalized) - set(direct_path_allowed_by_normalized))
+    ]
     missing_rust_routes = [inventory_by_normalized[key] for key in sorted(set(inventory_by_normalized) - set(rust_route_by_normalized))]
     untracked_rust_routes = [rust_route_by_normalized[key] for key in sorted(set(rust_route_by_normalized) - set(inventory_by_normalized))]
     missing_rust_direct = [
@@ -7141,6 +7155,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/scanners/{scanner_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Scanner detail Information fields (migrated through gsad same-origin proxy)", "read-only scanner metadata automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}",
+                "method": "patch",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native scanner name/comment metadata patch"],
+                "residual_inherited": [
+                    "Scanner host, port, type, relay, CA material, credential links, live status, verify/control operations, export/download formats, create, clone, restore, and delete remain inherited.",
+                    "Native PATCH is limited to operator-owned non-built-in scanner name/comment metadata."
+                ],
             },
             {
                 "endpoint": "/api/v1/scanners/{scanner_id}/export",

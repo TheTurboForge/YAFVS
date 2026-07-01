@@ -5,7 +5,7 @@
 use axum::http::Method;
 
 use crate::{
-    credentials::{
+    credential_query_sql::{
         credential_asset_detail_sql, credential_assets_sql, credential_scanner_references_sql,
         credential_target_references_sql,
     },

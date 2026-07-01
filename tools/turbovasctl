@@ -8237,6 +8237,16 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "owner": "services/turbovas-api/src/credential_query_sql.rs",
+        "forbidden": ("services/turbovas-api/src/credentials.rs",),
+        "symbols": (
+            "pub(crate) fn credential_assets_sql",
+            "pub(crate) fn credential_asset_detail_sql",
+            "pub(crate) fn credential_target_references_sql",
+            "pub(crate) fn credential_scanner_references_sql",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/tag_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/tag_writes.rs",),
         "symbols": (

@@ -275,6 +275,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *feeds_path = "/api/v1/feeds";
   const gchar *alerts_path = "/api/v1/alerts";
   const gchar *alert_prefix = "/api/v1/alerts/";
+  const gchar *alert_export_suffix = "/export";
   const gchar *tags_path = "/api/v1/tags";
   const gchar *tag_resource_names_prefix = "/api/v1/tags/resource-names/";
   const gchar *tag_prefix = "/api/v1/tags/";
@@ -459,6 +460,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, alert_prefix))
     {
       const gchar *id = path + strlen (alert_prefix);
+      if (g_str_has_suffix (id, alert_export_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (alert_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

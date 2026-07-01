@@ -317,6 +317,9 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
     assert!(direct_api_v1_path_is_allowed(
         "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/export"
     ));
+    assert!(direct_api_v1_path_is_allowed(
+        "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/export"
+    ));
     assert!(!direct_api_v1_path_is_allowed(
         "/api/v1/scopes//reports/report-id/results"
     ));

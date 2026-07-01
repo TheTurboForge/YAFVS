@@ -1480,7 +1480,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update alert metadata
-      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, test, create, clone, restore, and delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -1506,6 +1506,39 @@ paths:
           $ref: '#/components/responses/MethodNotAllowed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /alerts/{alert_id}/export:
+    get:
+      operationId: getAlertsByAlertIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: alert-metadata-export-read
+      x-turbovas-inherited-still-owns: alert-detail-delivery-control
+      summary: Export redacted alert metadata
+      description: Direct native JSON metadata export for one alert backed by gvmd/PostgreSQL. This export intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export semantics, test actions, and all alert mutations; task references are id/name metadata only.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200':
+          description: Redacted alert metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':

@@ -185,6 +185,14 @@ pub(crate) async fn alert_asset_detail(
     Ok(Json(load_alert_asset_detail(&client, &alert_id).await?))
 }
 
+pub(crate) async fn export_alert_metadata(
+    State(state): State<AppState>,
+    Path(alert_id): Path<String>,
+) -> Result<Json<AlertAssetItem>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_alert_asset_detail(&client, &alert_id).await?))
+}
+
 pub(crate) async fn load_alert_asset_detail(
     client: &tokio_postgres::Client,
     alert_id: &str,

@@ -493,6 +493,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
     {
         "alert-metadata-list-read",
         "alert-metadata-detail-read",
+        "alert-metadata-export-read",
         "alert-metadata-modify",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
@@ -675,6 +676,7 @@ OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES = {
 OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts"): "direct-read",
     ("get", "/alerts/{alert_id}"): "direct-read",
+    ("get", "/alerts/{alert_id}/export"): "direct-read",
     ("patch", "/alerts/{alert_id}"): "direct-write",
     ("get", "/cert-bund-advisories"): "direct-read",
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): "direct-read",
@@ -794,6 +796,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "alert-metadata-detail-read",
+    },
+    ("get", "/alerts/{alert_id}/export"): {
+        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "alert-metadata-export-read",
     },
     ("patch", "/alerts/{alert_id}"): {
         "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
@@ -1639,6 +1646,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/feeds",
         "/api/v1/alerts",
         "/api/v1/alerts/{}",
+        "/api/v1/alerts/{}/export",
         "/api/v1/tags",
         "/api/v1/tags/resource-names/{}",
         "/api/v1/tags/{}",
@@ -6796,6 +6804,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             templates.add(f"{value.rstrip('/')}/{{}}")
 
     for prefix_variable, suffix_variable in (
+        ("alert_prefix", "alert_export_suffix"),
         ("scan_config_prefix", "scan_config_families_suffix"),
         ("tag_prefix", "tag_resources_suffix"),
     ):
@@ -7268,6 +7277,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native alert name/comment metadata modification"],
                 "notes": [
                     "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, test, create, clone, restore, and delete remain inherited.",
+                ],
+            },
+            {
+                "endpoint": "/api/v1/alerts/{alert_id}/export",
+                "status": alert_detail_endpoint_status(repo_root),
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["direct native redacted alert metadata export", "native-api-request helper"],
+                "notes": [
+                    "Native JSON metadata export only; inherited XML export, alert delivery, and payload detail remain inherited.",
+                    "Task references are id/name metadata only.",
+                    "No alert active state, delivery/test, credentials, URLs, hosts, paths, email/message bodies, certificates, event data, condition data, or method payload data.",
                 ],
             },
             {

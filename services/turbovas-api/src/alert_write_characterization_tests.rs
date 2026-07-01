@@ -351,7 +351,6 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
 
     for path in [
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/test",
-        "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/export",
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/clone",
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/restore",
     ] {
@@ -364,6 +363,11 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
             "alert delivery/control path must not be reachable: {path}"
         );
     }
+
+    assert!(
+        direct_api_v1_path_is_allowed("/api/v1/alerts/12345678-1234-1234-1234-123456789abc/export"),
+        "redacted alert metadata export is scriptable native JSON"
+    );
 
     for (path, replaces, forbidden_methods) in [
         (
@@ -401,7 +405,7 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "x-turbovas-replaces: alert-metadata-modify",
         "x-turbovas-safety-contract: write-control-v1",
         "AlertPatchRequest",
-        "event/condition/method data, delivery payloads, credentials, destinations, task links, export, test, create, clone, restore, and delete remain on inherited compatibility paths",
+        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, clone, restore, and delete remain on inherited compatibility paths",
     ] {
         assert!(
             detail.contains(required),

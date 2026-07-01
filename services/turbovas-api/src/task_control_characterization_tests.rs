@@ -228,6 +228,33 @@ fn inherited_stop_response_maps_legacy_statuses_and_aborts_on_unexpected_error()
 }
 
 #[test]
+fn inherited_delete_response_maps_trash_and_scanner_error_cases() {
+    let delete_block = gmp_client_state_block("CLIENT_DELETE_TASK");
+    for required in [
+        "request_delete_task_uuid (delete_task_data->task_id",
+        "delete_task_data->ultimate",
+        "XML_OK (\"delete_task\")",
+        "\"deleted\"",
+        "XML_OK_REQUESTED (\"delete_task\")",
+        "\"requested for delete\"",
+        "Attempt to delete a hidden task",
+        "send_find_error_to_client",
+        "STATUS_ERROR_BUSY",
+        "Reports database is busy. Please try again later.",
+        "Permission denied",
+        "SEND_XML_SERVICE_DOWN (\"delete_task\")",
+        "No CA certificate",
+        "A task_id attribute is required",
+        "abort ();",
+    ] {
+        assert!(
+            delete_block.contains(required),
+            "CLIENT_DELETE_TASK missing {required}"
+        );
+    }
+}
+
+#[test]
 fn inherited_stop_task_is_permission_gated_finds_task_and_dispatches_by_scanner_type() {
     let stop_task = inherited_function(MANAGE_C, "stop_task");
     for required in [
@@ -295,8 +322,11 @@ fn inherited_stop_internal_only_requests_stop_for_active_task_statuses() {
 
 #[test]
 fn inherited_gsad_and_gmp_client_layers_proxy_start_stop_verbs() {
+    let gsad_delete = inherited_function(GSAD_GMP_C, "delete_task_gmp");
     let gsad_start = inherited_function(GSAD_GMP_C, "start_task_gmp");
     let gsad_stop = inherited_function(GSAD_GMP_C, "stop_task_gmp");
+    assert!(gsad_delete.contains("move_resource_to_trash"));
+    assert!(gsad_delete.contains("connection, \"task\", credentials, params"));
     assert!(
         gsad_start
             .contains("resource_action (connection, credentials, params, \"task\", \"start\"")
@@ -312,6 +342,7 @@ fn inherited_gsad_and_gmp_client_layers_proxy_start_stop_verbs() {
     assert!(gmp_stop.contains("<stop_task task_id=\\\"%s\\\"/>"));
     assert!(gmp_stop.contains("gmp_check_response_c (connection)"));
 
+    assert!(GSAD_VALIDATOR_C.contains("\"|(delete_task)\""));
     assert!(GSAD_VALIDATOR_C.contains("\"|(start_task)\""));
     assert!(GSAD_VALIDATOR_C.contains("\"|(stop_task)\""));
 }

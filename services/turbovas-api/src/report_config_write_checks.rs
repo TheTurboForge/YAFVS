@@ -25,6 +25,7 @@ pub(crate) struct ReportConfigWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReportConfigWriteState {
     pub(crate) internal_id: i32,
+    pub(crate) owner_id: i32,
     pub(crate) report_format_id: String,
 }
 
@@ -212,9 +213,26 @@ pub(crate) async fn load_report_config_write_state(
         .map_err(|error| map_report_config_write_db_error(error, "load report config write state"))?
         .map(|row| ReportConfigWriteState {
             internal_id: row.get(0),
-            report_format_id: row.get(2),
+            owner_id: row.get(2),
+            report_format_id: row.get(3),
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) fn ensure_report_config_owner_matches_operator(
+    report_config_owner_id: i32,
+    operator_owner_id: i32,
+) -> Result<(), ApiError> {
+    if report_config_owner_id == operator_owner_id {
+        Ok(())
+    } else {
+        tracing::warn!(
+            report_config_owner_id,
+            operator_owner_id,
+            "direct API report config write owner mismatch"
+        );
+        Err(ApiError::Forbidden)
+    }
 }
 
 pub(crate) async fn ensure_report_config_not_in_use_by_alerts(

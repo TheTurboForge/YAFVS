@@ -5,6 +5,7 @@
 pub(crate) fn report_config_write_state_sql() -> &'static str {
     "SELECT id::integer,
             uuid::text,
+            owner::integer,
             coalesce(report_format_id, '')::text
        FROM report_configs
       WHERE uuid = $1;"

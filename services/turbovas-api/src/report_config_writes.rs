@@ -65,7 +65,7 @@ pub(crate) async fn hard_delete_report_config(
     let tx = client.transaction().await.map_err(|error| {
         map_report_config_write_db_error(error, "begin hard-delete report config transaction")
     })?;
-    resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_report_config_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE report_configs_trash, report_config_params_trash, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
     )
@@ -74,6 +74,7 @@ pub(crate) async fn hard_delete_report_config(
         map_report_config_write_db_error(error, "lock report config trash tables for hard delete")
     })?;
     let trash = load_report_config_trash_state(&tx, &report_config_id).await?;
+    ensure_report_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;
     ensure_trash_report_config_not_in_use_by_alerts(&tx, trash.internal_id).await?;
     execute_report_config_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -130,13 +131,14 @@ pub(crate) async fn delete_report_config(
     let tx = client.transaction().await.map_err(|error| {
         map_report_config_write_db_error(error, "begin delete report config transaction")
     })?;
-    resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_report_config_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE report_configs IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| {
             map_report_config_write_db_error(error, "lock report configs for delete")
         })?;
     let state = load_report_config_write_state(&tx, &report_config_id).await?;
+    ensure_report_config_owner_matches_operator(state.owner_id, operator_owner_id)?;
     ensure_report_config_not_in_use_by_alerts(&tx, state.internal_id).await?;
     execute_report_config_trash_transaction(&tx, state.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -156,13 +158,14 @@ pub(crate) async fn restore_report_config(
     let tx = client.transaction().await.map_err(|error| {
         map_report_config_write_db_error(error, "begin restore report config transaction")
     })?;
-    resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_report_config_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE report_configs, report_configs_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_report_config_write_db_error(error, "lock report configs for restore"))?;
     let trash = load_report_config_trash_state(&tx, &report_config_id).await?;
+    ensure_report_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;
     ensure_unique_live_report_config_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
     ensure_report_config_uuid_not_live(&tx, &trash.uuid).await?;
     let record = execute_report_config_restore_transaction(&tx, trash.internal_id).await?;
@@ -187,13 +190,14 @@ pub(crate) async fn patch_report_config(
     let tx = client.transaction().await.map_err(|error| {
         map_report_config_write_db_error(error, "begin patch report config transaction")
     })?;
-    resolve_report_config_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_report_config_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE report_configs IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| {
             map_report_config_write_db_error(error, "lock report configs for patch")
         })?;
     let state = load_report_config_write_state(&tx, &report_config_id).await?;
+    ensure_report_config_owner_matches_operator(state.owner_id, operator_owner_id)?;
     if let Some(params) = request.params.as_ref() {
         let format = load_report_config_format_state(&tx, &state.report_format_id).await?;
         validate_report_config_param_values(params, &format)?;

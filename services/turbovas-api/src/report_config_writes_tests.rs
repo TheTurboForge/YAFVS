@@ -11,6 +11,15 @@ use crate::report_config_write_validation::{
 };
 
 #[test]
+fn report_config_write_rejects_operator_owner_mismatch() {
+    assert!(ensure_report_config_owner_matches_operator(7, 7).is_ok());
+    assert!(matches!(
+        ensure_report_config_owner_matches_operator(7, 8),
+        Err(ApiError::Forbidden)
+    ));
+}
+
+#[test]
 fn report_config_create_request_normalizes_metadata_and_params() {
     let request: ReportConfigCreateRequest = serde_json::from_str(
         r#"{
@@ -437,6 +446,9 @@ fn report_config_clone_sql_copies_metadata_params_and_active_tag_links() {
 fn report_config_delete_sql_moves_metadata_params_and_tags_to_trash() {
     let alert_guard = report_config_in_use_by_alerts_sql();
     assert!(alert_guard.contains("SELECT 0::bigint"));
+
+    let state = report_config_write_state_sql();
+    assert!(state.contains("owner::integer"));
 
     let trash = report_config_trash_insert_sql();
     assert!(trash.contains("INSERT INTO report_configs_trash"));

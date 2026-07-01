@@ -20,6 +20,33 @@ fn report_config_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn report_config_clone_handler_enforces_source_owner_check() {
+    let source = include_str!("report_config_writes.rs");
+    let clone_handler = source
+        .split_once("pub(crate) async fn clone_report_config")
+        .expect("clone report config handler must exist")
+        .1
+        .split_once("pub(crate) async fn delete_report_config")
+        .expect("delete handler must follow clone handler")
+        .0;
+
+    assert!(clone_handler.contains("let source = load_report_config_write_state"));
+    assert!(
+        clone_handler
+            .contains("ensure_report_config_owner_matches_operator(source.owner_id, owner_id)?;")
+    );
+    assert!(
+        clone_handler
+            .find("ensure_report_config_owner_matches_operator")
+            .unwrap()
+            < clone_handler
+                .find("execute_report_config_clone_transaction")
+                .unwrap(),
+        "clone source owner must be checked before cloning"
+    );
+}
+
+#[test]
 fn report_config_create_request_normalizes_metadata_and_params() {
     let request: ReportConfigCreateRequest = serde_json::from_str(
         r#"{

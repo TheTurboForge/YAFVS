@@ -52,6 +52,32 @@ fn filter_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn filter_clone_handler_enforces_source_owner_check() {
+    let source = include_str!("filter_writes.rs");
+    let clone_handler = source
+        .split_once("pub(crate) async fn clone_filter")
+        .expect("clone filter handler must exist")
+        .1
+        .split_once("pub(crate) async fn restore_filter")
+        .expect("restore handler must follow clone handler")
+        .0;
+
+    assert!(clone_handler.contains("let source = load_filter_write_state"));
+    assert!(
+        clone_handler.contains("ensure_filter_owner_matches_operator(source.owner_id, owner_id)?;")
+    );
+    assert!(
+        clone_handler
+            .find("ensure_filter_owner_matches_operator")
+            .unwrap()
+            < clone_handler
+                .find("execute_filter_clone_transaction")
+                .unwrap(),
+        "clone source owner must be checked before cloning"
+    );
+}
+
+#[test]
 fn filter_clone_request_accepts_default_or_metadata_override() {
     let default =
         validate_filter_clone_request(clone_request(None, None)).expect("default clone metadata");

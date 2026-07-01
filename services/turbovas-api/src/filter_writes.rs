@@ -101,6 +101,7 @@ pub(crate) async fn clone_filter(
     .await
     .map_err(|error| map_filter_write_db_error(error, "lock filter tables for clone"))?;
     let source = load_filter_write_state(&tx, &filter_id).await?;
+    ensure_filter_owner_matches_operator(source.owner_id, owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_filter_name(&tx, name, -1).await?;
     }

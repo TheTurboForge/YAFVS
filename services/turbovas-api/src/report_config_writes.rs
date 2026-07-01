@@ -103,6 +103,7 @@ pub(crate) async fn clone_report_config(
             map_report_config_write_db_error(error, "lock report configs for clone")
         })?;
     let source = load_report_config_write_state(&tx, &report_config_id).await?;
+    ensure_report_config_owner_matches_operator(source.owner_id, owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_live_report_config_name(&tx, name, None).await?;
     }

@@ -369,6 +369,8 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "export-csv-report.gmp.py",
         "export-pdf-report.gmp.py",
         "export-xml-report.gmp.py",
+    },
+    "monthly_report_semantics": {
         "monthly-report-gos24.10.gmp.py",
         "monthly-report-gos3.gmp.py",
         "monthly-report-gos4.gmp.py",
@@ -411,6 +413,7 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
     "compatibility_probe": "Inherited GMP compatibility probe; delete only after an equivalent native compatibility check exists or the probe is no longer needed.",
     "credential_or_account": "Credential/account-adjacent script; keep out of opportunistic removal until auth and secret handling are explicitly designed.",
     "export_or_report_generation": "Export or report-generation script; native read APIs do not replace file export, delivery, or generation semantics.",
+    "monthly_report_semantics": "Monthly report script; needs explicit native monthly aggregation semantics for host identity, report provenance, date windows, severity buckets, and GOS-version output before replacement/removal.",
     "scanner_or_task_control": "Scanner/task-control script; requires separate safety design before replacement or removal.",
     "write_or_mutation": "Write, mutation, destructive, or side-effecting script; not safe for read-only native API retirement.",
     "needs_review": "Script is still marked as a removal candidate but lacks a specific retirement-safety bucket.",

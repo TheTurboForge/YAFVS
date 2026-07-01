@@ -419,3 +419,15 @@ pub(crate) fn direct_native_api_router(
         MAX_DIRECT_API_WRITE_BODY_BYTES as usize,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn route_tables_build_without_conflicts() {
+        let base_router = native_api_router();
+        let _direct_read_router = direct_native_api_router(base_router, false);
+        let _direct_write_router = direct_native_api_router(native_api_router(), true);
+    }
+}

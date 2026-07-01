@@ -93,6 +93,16 @@ pub(crate) async fn schedule_asset_detail(
     ))
 }
 
+pub(crate) async fn export_schedule_metadata(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+) -> Result<Json<ScheduleAssetDetail>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(
+        load_schedule_asset_detail(&client, &schedule_id).await?,
+    ))
+}
+
 pub(crate) async fn load_schedule_asset_detail(
     client: &Client,
     schedule_id: &str,

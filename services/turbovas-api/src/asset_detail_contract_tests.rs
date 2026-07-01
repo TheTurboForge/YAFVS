@@ -594,13 +594,19 @@ fn port_list_user_tags_are_detail_only_active_port_list_tags() {
 fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
     let source = include_str!("scan_configs.rs");
     let detail_source = source
-        .split_once("pub(crate) async fn scan_config_asset_detail")
-        .expect("scan config detail handler must exist")
-        .1;
+        .split_once("pub(crate) async fn load_scan_config_asset_detail")
+        .expect("scan config detail loader must exist")
+        .1
+        .split_once("pub(crate) fn scan_config_task_references_sql")
+        .expect("scan config task-reference helper must follow detail loader")
+        .0;
     let routes = include_str!("routes.rs");
     let detail_route = routes
         .find("get(scan_config_asset_detail)")
         .expect("scan config detail route must exist");
+    let export_route = routes
+        .find("get(export_scan_config_metadata)")
+        .expect("scan config metadata export route must exist");
     let family_route = routes
         .find("get(scan_config_asset_families)")
         .expect("scan config family route must exist");
@@ -608,6 +614,7 @@ fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
     assert!(detail_source.contains("scan_config_task_references"));
     assert!(detail_source.contains("scan_config_user_tags"));
     assert!(detail_route < family_route);
+    assert!(detail_route < export_route);
     assert!(!detail_source.contains("preferences"));
     assert!(!detail_source.contains("nvt_selector"));
     assert!(!detail_source.contains("credential"));

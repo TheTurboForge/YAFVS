@@ -2440,6 +2440,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /schedules/{schedule_id}/export:
+    get:
+      operationId: getSchedulesByScheduleIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: schedule-metadata-export-read
+      x-turbovas-inherited-still-owns: schedule-create-calendar-export
+      summary: Export schedule metadata
+      description: Scriptable JSON metadata export for one schedule, including current calendar metadata and shallow task backlinks. Schedule create, calendar mutation, inherited file export, and task next-time recalculation remain compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      responses:
+        '200':
+          description: Schedule metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs:
     get:
       operationId: getScanConfigs
@@ -2735,6 +2768,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScanConfigFamilies'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scan-configs/{scan_config_id}/export:
+    get:
+      operationId: getScanConfigsByScanConfigIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scan-config-metadata-export-read
+      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      summary: Export scan-config metadata
+      description: Scriptable JSON metadata export for one scan config, including active User Tags and shallow task backlinks. Preference edit payloads, NVT selector/family mutation, import/export, scanner control, and create/import remain compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+      responses:
+        '200':
+          description: Scan-config metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanConfigAssetDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

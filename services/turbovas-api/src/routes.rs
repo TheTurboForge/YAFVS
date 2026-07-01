@@ -136,6 +136,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             get(scan_config_asset_detail),
         )
         .route(
+            "/api/v1/scan-configs/:scan_config_id/export",
+            get(export_scan_config_metadata),
+        )
+        .route(
             "/api/v1/scan-configs/:scan_config_id/families",
             get(scan_config_asset_families),
         )
@@ -169,6 +173,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         )
         .route("/api/v1/schedules", get(schedule_assets))
         .route("/api/v1/schedules/:schedule_id", get(schedule_asset_detail))
+        .route(
+            "/api/v1/schedules/:schedule_id/export",
+            get(export_schedule_metadata),
+        )
         .route("/api/v1/timezones", get(timezones))
         .route("/api/v1/report-configs", get(report_config_assets))
         .route(

@@ -111,6 +111,16 @@ pub(crate) async fn scan_config_asset_detail(
     ))
 }
 
+pub(crate) async fn export_scan_config_metadata(
+    State(state): State<AppState>,
+    Path(scan_config_id): Path<String>,
+) -> Result<Json<ScanConfigAssetDetail>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(
+        load_scan_config_asset_detail(&client, &scan_config_id).await?,
+    ))
+}
+
 pub(crate) async fn load_scan_config_asset_detail(
     client: &Client,
     scan_config_id: &str,

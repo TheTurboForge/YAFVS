@@ -4,7 +4,10 @@
 
 use axum::http::Method;
 
-use crate::direct_api::direct_api_v1_method_is_allowed;
+use crate::{
+    direct_api::direct_api_v1_method_is_allowed,
+    filter_query_sql::{filter_alert_backlinks_sql, filter_asset_detail_sql, filter_assets_sql},
+};
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_FILTERS: &str = include_str!("../../../components/gvmd/src/manage_sql_filters.c");
@@ -194,6 +197,44 @@ fn inherited_delete_filter_is_trash_permissions_tags_and_alert_linked() {
         assert!(
             delete_filter.contains(required),
             "delete_filter missing {required}"
+        );
+    }
+}
+
+#[test]
+fn native_filter_reads_are_metadata_and_alert_backlinks_only() {
+    let list = filter_assets_sql("name ASC");
+    let detail = filter_asset_detail_sql();
+    let backlinks = filter_alert_backlinks_sql();
+    let combined = format!("{list}\n{detail}\n{backlinks}");
+
+    for required in [
+        "FROM filters f",
+        "FROM alerts a",
+        "FROM alert_condition_data acd",
+        "acd.name = 'filter_id'",
+        "coalesce(f.term, '') AS term",
+        "count(DISTINCT alert_id)::bigint",
+    ] {
+        assert!(
+            combined.contains(required),
+            "filter read SQL missing {required}"
+        );
+    }
+    for forbidden in [
+        "INSERT INTO",
+        "UPDATE ",
+        "DELETE FROM",
+        "filters_trash",
+        "settings",
+        "permissions_set",
+        "tags_set",
+        "password",
+        "secret",
+    ] {
+        assert!(
+            !combined.contains(forbidden),
+            "native filter read SQL must not contain {forbidden}"
         );
     }
 }

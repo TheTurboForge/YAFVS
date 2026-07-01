@@ -8192,6 +8192,15 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "owner": "services/turbovas-api/src/filter_query_sql.rs",
+        "forbidden": ("services/turbovas-api/src/filters.rs",),
+        "symbols": (
+            "pub(crate) fn filter_assets_sql",
+            "pub(crate) fn filter_asset_detail_sql",
+            "pub(crate) fn filter_alert_backlinks_sql",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/filter_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
         "symbols": (

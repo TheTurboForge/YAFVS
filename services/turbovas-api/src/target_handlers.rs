@@ -56,8 +56,16 @@ pub(crate) async fn target_detail(
     Path(target_id): Path<String>,
 ) -> Result<Json<TargetItem>, ApiError> {
     parse_uuid(&target_id)?;
-    let sql = target_sql("lower(uuid) = lower($1)", "name ASC", "");
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_target_detail(&client, &target_id).await?))
+}
+
+pub(crate) async fn load_target_detail(
+    client: &tokio_postgres::Client,
+    target_id: &str,
+) -> Result<TargetItem, ApiError> {
+    parse_uuid(target_id)?;
+    let sql = target_sql("lower(uuid) = lower($1)", "name ASC", "");
     let row = client
         .query_opt(&sql, &[&target_id])
         .await
@@ -66,7 +74,7 @@ pub(crate) async fn target_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(target_from_row(&row)))
+    Ok(target_from_row(&row))
 }
 
 fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &str) -> String {

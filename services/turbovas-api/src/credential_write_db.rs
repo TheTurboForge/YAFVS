@@ -85,6 +85,18 @@ pub(crate) async fn ensure_unique_credential_name(
     }
 }
 
+pub(crate) fn ensure_credential_owner_matches_operator(
+    credential_owner_id: i32,
+    operator_owner_id: i32,
+) -> Result<(), ApiError> {
+    if credential_owner_id == operator_owner_id {
+        Ok(())
+    } else {
+        tracing::warn!("direct API credential write operator does not own credential");
+        Err(ApiError::Forbidden)
+    }
+}
+
 pub(crate) async fn query_credential_write_record(
     tx: &Transaction<'_>,
     sql: &str,

@@ -33,11 +33,12 @@ pub(crate) async fn patch_credential(
     let tx = client.transaction().await.map_err(|error| {
         map_credential_write_db_error(error, "begin patch credential transaction")
     })?;
-    resolve_credential_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_credential_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE credentials IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_credential_write_db_error(error, "lock credentials for patch"))?;
     let credential_state = load_credential_write_state(&tx, &credential_id).await?;
+    ensure_credential_owner_matches_operator(credential_state.owner_id, operator_owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_credential_name(
             &tx,

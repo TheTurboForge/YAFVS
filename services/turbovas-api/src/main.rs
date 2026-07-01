@@ -140,6 +140,12 @@ mod tag_write_validation;
 mod tag_writes;
 mod tags;
 mod target_handlers;
+mod target_write_db;
+mod target_write_sql;
+mod target_write_validation;
+mod target_writes;
+#[cfg(test)]
+mod target_writes_tests;
 mod task_handlers;
 mod task_target_payloads;
 mod task_targets;

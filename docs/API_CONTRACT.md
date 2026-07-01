@@ -58,17 +58,19 @@ The first API phase is read-only and report-focused:
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
 
-Scanner control, target/task writes, credential secret management, feed import,
-account management, and other high-consequence operations stay on the inherited
-path until separate native replacements are designed and proven. Direct
-credential write-control currently covers name/comment metadata only. Native
-target and scanner reads intentionally do not expose credential secret material.
+Scanner control, task writes, target host/credential/control writes, credential
+secret management, feed import, account management, and other high-consequence
+operations stay on the inherited path until separate native replacements are
+designed and proven. Direct credential and target write-control currently covers
+name/comment metadata only. Native target and scanner reads intentionally do not
+expose credential secret material.
 
 The browser integration remains same-origin and proxied through `gsad` while GSA
 reads migrate. Direct scriptable access is now a first-class development path:
-the direct listener is opt-in, bearer-token protected, read-only for v1, and
-bound explicitly by the runtime helper. Production exposure still needs the
-separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
+the direct listener is opt-in, bearer-token protected, limited to classified v1
+reads plus explicitly gated write-control routes, and bound explicitly by the
+runtime helper. Production exposure still needs the separate TLS/bootstrap/
+host-binding posture tracked outside this development API.
 
 ## Common Contract Rules
 
@@ -92,11 +94,14 @@ separate TLS/bootstrap/host-binding posture tracked outside this v1 read API.
   `POST /scopes`, `PATCH /scopes/{scope_id}`, and
   `DELETE /scopes/{scope_id}` for scope metadata/membership writes;
   `POST /tags`, `PATCH /tags/{tag_id}`, and `DELETE /tags/{tag_id}` for tag
-  metadata writes; and `POST /tags/{tag_id}/resources` for explicit add/remove
-  of UUID resource assignments for the tag's existing native-safe active-table
-  resource type. Tag delete is limited to unassigned tags; security-information
-  tag assignment, filter/bulk actions, trash behavior, clone/copy, and export
-  remain inherited. Other valid-token non-GET requests return JSON
+  metadata writes; `POST /tags/{tag_id}/resources` for explicit add/remove of
+  UUID resource assignments for the tag's existing native-safe active-table
+  resource type; and `PATCH /targets/{target_id}` for target name/comment
+  metadata only. Tag delete is limited to unassigned tags;
+  security-information tag assignment, filter/bulk actions, target host/exclude,
+  port-list, alive-test, reverse-DNS, credential-link, trash behavior,
+  clone/copy, and export remain inherited. Other valid-token non-GET requests
+  return JSON
   `405 method_not_allowed`.
 - Direct v1 browser boundary: direct responses do not emit browser CORS access
   headers. Browser product reads continue through the same-origin `gsad` path
@@ -219,11 +224,14 @@ Native target rows include target identity, host and exclude-host membership,
 alive-test labels, reverse-DNS flags, port-list reference, task references, and
 timestamps. They include safe credential metadata already visible in the
 inherited UI, such as credential UUID/name/type and SSH port, but never expose
-credential secret values. Native credential reads expose redacted metadata, and
-direct write-control may patch credential name/comment metadata only; credential
-secret material, store selectors, type/allow-insecure settings, scanner/target
-links, export/download, create/clone/restore/delete, and secret-bearing writes
-remain inherited.
+credential secret values. Direct write-control may patch target name/comment
+metadata only and validates that adjacent hosts, exclude hosts, port-list,
+alive-test, reverse-DNS, simultaneous-IP, and credential-link state are not part
+of that slice. Native credential reads expose redacted metadata, and direct
+write-control may patch credential name/comment metadata only; credential secret
+material, store selectors, type/allow-insecure settings, scanner/target links,
+export/download, create/clone/restore/delete, and secret-bearing writes remain
+inherited.
 
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
+    credential_write_db::ensure_credential_owner_matches_operator,
     credential_write_sql::*,
     credential_write_validation::{
         CredentialPatchRequest, MAX_CREDENTIAL_TEXT_BYTES, validate_credential_patch_request,
@@ -15,6 +16,15 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRe
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn credential_patch_rejects_operator_owner_mismatch() {
+    assert!(ensure_credential_owner_matches_operator(7, 7).is_ok());
+    assert!(matches!(
+        ensure_credential_owner_matches_operator(7, 8),
+        Err(ApiError::Forbidden)
+    ));
 }
 
 #[test]

@@ -3620,6 +3620,7 @@ paths:
       x-turbovas-replaces: target-list-read
       x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       summary: List scan targets
+      description: Read-only target metadata backed by gvmd/PostgreSQL. Native direct write-control can patch target name/comment metadata; target hosts, exclude hosts, port list, alive-test settings, reverse-DNS settings, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3653,6 +3654,7 @@ paths:
       x-turbovas-replaces: target-detail-summary-read
       x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
       summary: Read one scan target summary
+      description: Read-only target metadata backed by gvmd/PostgreSQL. Detail includes safe credential references already visible in the inherited UI. Native direct write-control can patch target name/comment metadata; target hosts, exclude hosts, port list, alive-test settings, reverse-DNS settings, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -3670,6 +3672,50 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchTargetsByTargetId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: target-metadata-modify
+      x-turbovas-inherited-still-owns: target-credential-secrets-writes-and-deletes
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Update target metadata
+      description: Direct write-control endpoint for updating target name and comment only. Target hosts, exclude hosts, port list, alive-test settings, reverse-DNS settings, credential links, task/control semantics, export, clone, delete, and credential secret material remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/TargetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetPatchRequest'
+      responses:
+        '200':
+          description: Target metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Target'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -4595,6 +4641,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Target'
+    TargetPatchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 4096
+          description: New target name. Blank names are rejected after trimming.
+        comment:
+          type: string
+          maxLength: 4096
+          description: New target comment. Blank comments clear the comment after trimming.
     TaskCollection:
       type: object
       required: [page, items]

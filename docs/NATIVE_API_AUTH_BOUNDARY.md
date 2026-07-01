@@ -40,7 +40,8 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
   approved direct scope metadata/membership write routes, tag metadata
   create/update and unassigned-tag delete routes, selected alert metadata
-  patches, and credential name/comment metadata patches.
+  patches, credential name/comment metadata patches, and target name/comment
+  metadata patches.
 - `/healthz` is unauthenticated for readiness. `/api/v1/...` on the direct
   listener requires `Authorization: Bearer <token>` and returns JSON `401`
   errors for missing or wrong tokens.
@@ -50,10 +51,12 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   enabled with a verified operator identity. The current direct write surface is
   limited to explicitly approved metadata/control routes. Scope
   create/update/delete metadata and membership routes, tag metadata
-  create/update and unassigned-tag delete, selected alert metadata patches, and
-  credential name/comment metadata patches are currently native; tag
+  create/update and unassigned-tag delete, selected alert metadata patches,
+  credential name/comment metadata patches, and target name/comment metadata
+  patches are currently native; tag
   resource-assignment filter actions, assigned-resource delete/trash behavior,
-  clone/copy, export, credential secrets, and credential create/clone/delete
+  clone/copy, export, target host/exclude/port-list/alive-test/reverse-DNS/
+  credential-link writes, credential secrets, and credential create/clone/delete
   semantics remain inherited.
 - The direct listener applies a fixed in-flight cap to authenticated direct
   `GET` requests and returns JSON `429 too_many_requests` with `X-Request-Id`
@@ -97,7 +100,8 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   tokens through container environment variables.
 - Keep direct v1 write-control limited to explicitly reviewed routes. Scanner
   control, credential secret/control paths, feed sync,
-  feed import/update/download/mirroring, account management, target/task writes,
+  feed import/update/download/mirroring, account management, task writes,
+  target host/exclude/port-list/alive-test/reverse-DNS/credential-link writes,
   alert delivery, security-information
   tag assignment, filter/bulk tag actions, trash, clone/copy, export, and
   destructive mutations stay inherited until native write/control designs are
@@ -114,6 +118,10 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   credential secret material, credential-store selectors, type/allow-insecure
   settings, scanner/target links, export/download, create/clone/restore/delete,
   and secret-bearing writes remain inherited.
+- Target name/comment metadata PATCH is direct write-control, while hosts,
+  exclude hosts, port-list references, alive-test behavior, reverse-DNS flags,
+  simultaneous-IP behavior, credential links, scanner/task control, clone,
+  export, delete, and target creation remain inherited.
 - Do not expose arbitrary GMP command forwarding through `/api/v1`.
 - Treat `X-Request-Id` as correlation metadata only. It is not authentication,
   authorization, operator identity, or a trusted audit principal.
@@ -188,9 +196,10 @@ available, plus continued internal native API smoke. Malformed HTTP framing can
 be rejected by the HTTP parser before native middleware; the smoke records that
 layer explicitly.
 The write-control smoke also proves that direct DELETE requests reject bodies,
-direct non-GET requests reject query strings before mutation, and explicit tag
+direct non-GET requests reject query strings before mutation, explicit tag
 resource add/remove can round-trip without residue for a native-safe active-table
-resource fixture.
+resource fixture, and target metadata PATCH preserves adjacent host, port-list,
+alive-test, reverse-DNS, simultaneous-IP, and credential-link state.
 `native-api-request --request-id` sends a safe `X-Request-Id` value for
 correlation; it is not an authentication or audit identity.
 Direct listener host/port env is locally shape-checked as part of the direct

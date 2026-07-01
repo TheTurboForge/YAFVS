@@ -114,12 +114,14 @@ listener. The direct write-control flag is
 `TURBOVAS_API_OPERATOR_UUID`, and currently enables only approved scope
 metadata/membership writes, tag metadata create/update, unassigned-tag delete,
 selected alert metadata patches, credential name/comment metadata patches, and
-explicit add/remove of resource assignments for selected native-safe active
-resource types. UUID-backed resources use UUIDs; catalog-backed security
-information resources use exact public IDs such as CPE URI, CVE name, NVT OID,
-or CERT/DFN advisory id. Alert delivery/control, filter/bulk actions, trash,
-clone/copy, export, credential secrets/control paths, users, reports, and
-results remain on inherited compatibility paths. Direct mode otherwise accepts
+target name/comment metadata patches, and explicit add/remove of resource
+assignments for selected native-safe active resource types. UUID-backed
+resources use UUIDs; catalog-backed security information resources use exact
+public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. Alert
+delivery/control, filter/bulk actions, trash, clone/copy, export, target
+host/exclude/port-list/alive-test/reverse-DNS/credential-link writes,
+credential secrets/control paths, users, reports, and results remain on
+inherited compatibility paths. Direct mode otherwise accepts
 only classified read-only `GET` requests.
 Use a request ID when a direct probe needs a visible correlation ID in
 responses/logs:

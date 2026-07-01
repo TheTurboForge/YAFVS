@@ -22,6 +22,15 @@ fn clone_request(name: Option<&str>, comment: Option<&str>) -> ScheduleCloneRequ
 }
 
 #[test]
+fn schedule_write_rejects_operator_owner_mismatch() {
+    assert!(ensure_schedule_owner_matches_operator(7, 7).is_ok());
+    assert!(matches!(
+        ensure_schedule_owner_matches_operator(7, 8),
+        Err(ApiError::Forbidden)
+    ));
+}
+
+#[test]
 fn schedule_clone_request_accepts_default_or_metadata_override() {
     let default =
         validate_schedule_clone_request(clone_request(None, None)).expect("default clone metadata");
@@ -343,6 +352,9 @@ fn schedule_patch_plan_refreshes_tasks_only_for_calendar_changes() {
 
 #[test]
 fn schedule_patch_sql_is_metadata_only() {
+    let state = schedule_write_state_sql();
+    assert!(state.contains("owner::integer"));
+
     let sql = schedule_update_metadata_sql();
     assert!(sql.contains("UPDATE schedules"));
     assert!(sql.contains("name = coalesce($2, name)"));

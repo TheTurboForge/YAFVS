@@ -63,7 +63,8 @@ pub(crate) fn schedule_delete_metadata_sql() -> &'static str {
 }
 
 pub(crate) fn schedule_write_state_sql() -> &'static str {
-    "SELECT id::integer
+    "SELECT id::integer,
+            owner::integer
        FROM schedules
       WHERE uuid = $1;"
 }

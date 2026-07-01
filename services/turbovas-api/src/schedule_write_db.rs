@@ -23,6 +23,7 @@ pub(crate) struct ScheduleTrashWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScheduleWriteState {
     pub(crate) internal_id: i32,
+    pub(crate) owner_id: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,8 +71,25 @@ pub(crate) async fn load_schedule_write_state(
         .map_err(|error| map_schedule_write_db_error(error, "load schedule write state"))?
         .map(|row| ScheduleWriteState {
             internal_id: row.get(0),
+            owner_id: row.get(1),
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) fn ensure_schedule_owner_matches_operator(
+    schedule_owner_id: i32,
+    operator_owner_id: i32,
+) -> Result<(), ApiError> {
+    if schedule_owner_id == operator_owner_id {
+        Ok(())
+    } else {
+        tracing::warn!(
+            schedule_owner_id,
+            operator_owner_id,
+            "direct API schedule write owner mismatch"
+        );
+        Err(ApiError::Forbidden)
+    }
 }
 
 pub(crate) async fn load_schedule_trash_state(

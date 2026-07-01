@@ -12,6 +12,7 @@ import {
   smb_credential_filter,
   vFire_credential_filter,
 } from 'gmp/models/credential';
+import {fetchNativeCredentials} from 'gmp/native-api/credentials';
 import {parseInt, parseSeverity, parseYesNo, NO_VALUE} from 'gmp/parser';
 import {first} from 'gmp/utils/array';
 import {selectSaveId} from 'gmp/utils/id';
@@ -81,6 +82,7 @@ const getValue = (data = {}, def = undefined) => {
 const filterResultsFilter = filter => filter.filter_type === 'result';
 const filterSecinfoFilter = filter => filter.filter_type === 'info';
 const ALERT_DIALOG_NATIVE_PAGE_SIZE = 500;
+const ALERT_CREDENTIAL_NATIVE_PAGE_SIZE = 500;
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
 
@@ -103,6 +105,24 @@ const fetchAllNativeDialogItems = async (fetchPage, key) => {
     }
   }
   return items;
+};
+
+export const fetchNativeAlertCredentials = async gmp => {
+  const credentials = [];
+  for (let page = 1; ; page += 1) {
+    const response = await fetchNativeCredentials(gmp, {
+      page,
+      pageSize: ALERT_CREDENTIAL_NATIVE_PAGE_SIZE,
+      sort: 'name',
+      filter: '',
+    });
+    credentials.push(...response.credentials);
+    const total = response.page?.total ?? credentials.length;
+    if (response.credentials.length === 0 || credentials.length >= total) {
+      break;
+    }
+  }
+  return credentials;
 };
 
 export const fetchNativeAlertDialogLookups = async gmp => {
@@ -141,6 +161,11 @@ const fetchAlertDialogLookups = gmp =>
   canUseNativeApi(gmp)
     ? fetchNativeAlertDialogLookups(gmp)
     : fetchInheritedAlertDialogLookups(gmp);
+
+const fetchAlertCredentials = gmp =>
+  canUseNativeApi(gmp)
+    ? fetchNativeAlertCredentials(gmp)
+    : gmp.credentials.getAll().then(r => r.data);
 
 const AlertComponent = ({
   children,
@@ -349,9 +374,8 @@ const AlertComponent = ({
         credentialId = response.data.id;
         setCredentialDialogVisible(false);
       })
-      .then(() => gmp.credentials.getAll())
-      .then(response => {
-        const {data: newCredentials} = response;
+      .then(() => fetchAlertCredentials(gmp))
+      .then(newCredentials => {
         setCredentials(newCredentials);
         if (String(credentialTypeRef.current) === 'scp') {
           setMethodDataScpCredential(credentialId);
@@ -454,7 +478,7 @@ const AlertComponent = ({
   };
 
   const openAlertDialog = async alertObj => {
-    const credentialsPromise = gmp.credentials.getAll().then(r => r.data);
+    const credentialsPromise = fetchAlertCredentials(gmp);
     const lookupsPromise = fetchAlertDialogLookups(gmp);
     loadDefaults();
 

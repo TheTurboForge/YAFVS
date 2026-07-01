@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,11 +7,26 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import {type CollectionList, parseCollectionList} from 'gmp/collection/parser';
 import EntitiesCommand from 'gmp/commands/entities';
+import type {
+  HttpCommandInputParams,
+  HttpCommandOptions,
+} from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
 import type {Element} from 'gmp/models/model';
 import {isArray, isDefined} from 'gmp/utils/identity';
+import {
+  canUseNativeApi,
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
+import {
+  fetchNativeFilters,
+  nativeFiltersQueryFromFilter,
+} from 'gmp/native-api/filters';
 
 interface FilterCountElement {
   page?: number;
@@ -80,6 +96,60 @@ const parseCollectionCountsFromResponse = (
 export class FiltersCommand extends EntitiesCommand<Filter> {
   constructor(http: Http) {
     super(http, 'filter', Filter);
+  }
+
+  async get(
+    params: HttpCommandInputParams = {},
+    options?: HttpCommandOptions,
+  ) {
+    if (!canUseNativeApi(this.http)) {
+      return super.get(params, options);
+    }
+
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeFilters(
+      this.http,
+      nativeFiltersQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.filters, {
+      filter,
+      counts: nativeResponse.counts,
+    });
+  }
+
+  async getAll(
+    params: HttpCommandInputParams = {},
+    options?: HttpCommandOptions,
+  ) {
+    if (!canUseNativeApi(this.http)) {
+      return super.getAll(params, options);
+    }
+
+    const filter = filterFromCommandParams(params).all();
+    const filters: Filter[] = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; filters.length < total; page += 1) {
+      const nativeResponse = await fetchNativeFilters(this.http, {
+        ...nativeFiltersQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      filters.push(...nativeResponse.filters);
+      total = nativeResponse.page.total;
+      if (nativeResponse.filters.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      filters,
+      nativeCollectionMeta(
+        filter,
+        filters,
+        Number.isFinite(total) ? total : 0,
+      ),
+    );
   }
 
   getEntitiesResponse(root: XmlResponseData): FiltersResponseElement {

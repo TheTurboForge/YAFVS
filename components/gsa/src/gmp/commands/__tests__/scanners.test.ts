@@ -1,15 +1,21 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ScannersCommand from 'gmp/commands/scanners';
 import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
 import Scanner, {
   OPENVAS_SCANNER_TYPE,
   OPENVASD_SCANNER_TYPE,
 } from 'gmp/models/scanner';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('ScannersCommand tests', () => {
   test('should fetch with default params', async () => {
@@ -82,5 +88,65 @@ describe('ScannersCommand tests', () => {
         scannerType: OPENVAS_SCANNER_TYPE,
       }),
     ]);
+  });
+
+  test('should fetch scanners through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'OpenVAS'},
+        items: [
+          {
+            id: '08b69003-5fc2-4037-a479-93b440211c73',
+            name: 'OpenVAS Default',
+            comment: 'native scanner metadata',
+            host: '/runtime/run/ospd/ospd-openvas.sock',
+            port: 0,
+            scanner_type: 2,
+            credential: {
+              id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
+              name: 'Scanner credential',
+            },
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScannersCommand(fakeHttp);
+    const result = await cmd.get({filter: 'first=1 rows=25 search=OpenVAS'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data[0].id).toEqual('08b69003-5fc2-4037-a479-93b440211c73');
+    expect(result.data[0].name).toEqual('OpenVAS Default');
+    expect(result.data[0].scannerType).toEqual('2');
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scanners', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'name',
+      filter: 'OpenVAS',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
   });
 });

@@ -122,6 +122,7 @@ const reloadInterval = 1;
 const manualUrl = 'test/';
 
 const createGmp = ({
+  buildUrl = undefined,
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
@@ -154,6 +155,7 @@ const createGmp = ({
   deleteConfig = testing.fn().mockResolvedValue(deleteConfigResponse),
   exportConfig = testing.fn().mockResolvedValue(exportConfigResponse),
 } = {}) => ({
+  buildUrl,
   nvtfamilies: {
     get: getNvtFamilies,
   },
@@ -176,7 +178,7 @@ const createGmp = ({
   settings: {
     manualUrl,
   },
-  session: createSession({timezone: 'CET'}),
+  session: {...createSession({timezone: 'CET'}), token: 'test-token'},
   user: {
     currentSettings,
   },
@@ -250,6 +252,53 @@ describe('ScanConfigDetailsPage tests', () => {
 
     expect(tasksRow.getByText('task2')).toBeInTheDocument();
     expect(tasksRow.getByText('task2')).toHaveAttribute('href', '/task/5678');
+  });
+
+  test('should use native metadata export for downloads', async () => {
+    const nativePayload = {
+      id: config.id,
+      name: 'foo',
+      comment: 'Some Comment',
+      family_count: 3,
+      nvt_count: 3,
+    };
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue(nativePayload),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const exportConfig = testing.fn().mockResolvedValue(new Response('xml'));
+    const buildUrl = testing.fn(
+      (path, _params) => `https://turbovas.example/${path}`,
+    );
+    const gmp = createGmp({buildUrl, exportConfig});
+
+    const {render, store} = rendererWith({
+      capabilities: true,
+      gmp,
+      router: true,
+      store: true,
+    });
+
+    store.dispatch(entityLoadingActions.success('12345', config));
+    render(<DetailsPage id="12345" />);
+    await wait();
+
+    fetchMock.mockClear();
+    const exportIcon = screen.getByTitle('Export Scan Config as XML');
+    fireEvent.click(exportIcon);
+    await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
+
+    expect(exportConfig).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith(
+      `api/v1/scan-configs/${config.id}/export`,
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      `https://turbovas.example/api/v1/scan-configs/${config.id}/export`,
+      expect.objectContaining({credentials: 'include'}),
+    );
   });
 
   test('should render nvt families tab', () => {

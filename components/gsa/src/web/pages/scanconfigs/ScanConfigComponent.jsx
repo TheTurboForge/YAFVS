@@ -5,6 +5,7 @@
  */
 
 import {useState} from 'react';
+import {exportNativeScanConfigMetadata} from 'gmp/native-api/scan-configs';
 import {fetchNativeScanners} from 'gmp/native-api/scanners';
 import {YES_VALUE} from 'gmp/parser';
 import {forEach} from 'gmp/utils/array';
@@ -24,6 +25,13 @@ import PropTypes from 'web/utils/PropTypes';
 const NATIVE_SCANNER_PAGE_SIZE = 500;
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const exportScanConfig = (gmp, scanConfig) => {
+  if (canUseNativeApi(gmp)) {
+    return exportNativeScanConfigMetadata(gmp, scanConfig.id);
+  }
+  return gmp.scanconfig.export(scanConfig);
+};
 
 export const createSelectedNvts = (configFamily, nvts) => {
   const selected = {};
@@ -409,6 +417,7 @@ const ScanConfigComponent = ({
   return (
     <>
       <EntityComponent
+        download={entity => exportScanConfig(gmp, entity)}
         name="scanconfig"
         onCloneError={onCloneError}
         onCloned={onCloned}

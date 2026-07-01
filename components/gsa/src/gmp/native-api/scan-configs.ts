@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import type QueryFilter from 'gmp/models/filter';
 import ScanConfig from 'gmp/models/scan-config';
@@ -356,4 +358,16 @@ export const fetchNativeScanConfigFamilies = async (
   return {
     scanConfig: nativeScanConfigFamiliesToModel(payload),
   };
+};
+
+export const exportNativeScanConfigMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeScanConfigPayload>(
+    gmp,
+    `api/v1/scan-configs/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };

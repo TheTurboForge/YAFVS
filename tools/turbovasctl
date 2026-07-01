@@ -6856,6 +6856,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("nvt_prefix", "nvt_export_suffix"),
         ("operating_system_prefix", "operating_system_export_suffix"),
         ("port_list_prefix", "port_list_export_suffix"),
+        ("scan_config_prefix", "scan_config_export_suffix"),
         ("scan_config_prefix", "scan_config_families_suffix"),
         ("scanner_prefix", "scanner_export_suffix"),
         ("schedule_prefix", "schedule_export_suffix"),
@@ -7229,9 +7230,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}/export",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
-                "replacement_candidates": ["direct native JSON scan-config metadata export", "read-only scan-config metadata automation"],
+                "replacement_candidates": ["GSA Scan Config detail metadata export (migrated through gsad same-origin proxy)", "direct native JSON scan-config metadata export", "read-only scan-config metadata automation"],
             },
             {
                 "method": "patch",

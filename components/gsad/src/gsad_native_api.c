@@ -260,6 +260,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *nvt_prefix = "/api/v1/nvts/";
   const gchar *operating_systems_path = "/api/v1/operating-systems";
   const gchar *operating_system_prefix = "/api/v1/operating-systems/";
+  const gchar *operating_system_export_suffix = "/export";
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *host_prefix = "/api/v1/hosts/";
   const gchar *tls_certificates_path = "/api/v1/tls-certificates";
@@ -400,6 +401,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, operating_system_prefix))
     {
       const gchar *id = path + strlen (operating_system_prefix);
+      if (g_str_has_suffix (id, operating_system_export_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (operating_system_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

@@ -6849,6 +6849,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     for prefix_variable, suffix_variable in (
         ("alert_prefix", "alert_export_suffix"),
         ("filter_prefix", "filter_export_suffix"),
+        ("operating_system_prefix", "operating_system_export_suffix"),
         ("port_list_prefix", "port_list_export_suffix"),
         ("scan_config_prefix", "scan_config_families_suffix"),
         ("schedule_prefix", "schedule_export_suffix"),
@@ -7117,9 +7118,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/operating-systems/{os_id}/export",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
-                "replacement_candidates": ["direct native JSON operating-system metadata export", "read-only operating-system asset automation"],
+                "replacement_candidates": ["GSA top-level Operating System metadata export (migrated through gsad same-origin proxy)", "direct native JSON operating-system metadata export", "read-only operating-system asset automation"],
             },
             {
                 "endpoint": "/api/v1/hosts",

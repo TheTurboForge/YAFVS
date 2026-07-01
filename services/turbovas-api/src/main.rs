@@ -10,6 +10,7 @@ mod alert_write_validation;
 mod alert_writes;
 mod alerts;
 mod app_state;
+mod asset_user_tag_query_sql;
 mod auth;
 mod cert_advisories;
 mod cert_advisory_payloads;

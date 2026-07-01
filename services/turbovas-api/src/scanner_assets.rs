@@ -9,6 +9,7 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    asset_user_tag_query_sql::scanner_user_tags_sql,
     collections::{SCANNER_ASSET_DEFAULT_SORT, SCANNER_ASSET_SORT_FIELDS},
     errors::ApiError,
     path_ids::parse_uuid,
@@ -154,21 +155,6 @@ async fn scanner_task_references(
             usage_type: row.get("usage_type"),
         })
         .collect())
-}
-
-pub(crate) fn scanner_user_tags_sql() -> &'static str {
-    r#"SELECT t.uuid AS id,
-              coalesce(t.name, '') AS name,
-              coalesce(t.value, '') AS value,
-              coalesce(t.comment, '') AS comment
-         FROM tags t
-         JOIN tag_resources tr ON tr.tag = t.id
-         JOIN scanners ON scanners.id = tr.resource
-        WHERE lower(scanners.uuid) = lower($1)
-          AND tr.resource_type = 'scanner'
-          AND tr.resource_location = 0
-          AND coalesce(t.active, 0) = 1
-        ORDER BY t.name ASC, t.uuid ASC;"#
 }
 
 async fn scanner_user_tags(

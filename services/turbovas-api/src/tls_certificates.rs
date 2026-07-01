@@ -9,6 +9,7 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    asset_user_tag_query_sql::tls_certificate_user_tags_sql,
     collections::{TLS_CERTIFICATE_ASSET_DEFAULT_SORT, TLS_CERTIFICATE_ASSET_SORT_FIELDS},
     errors::ApiError,
     path_ids::parse_uuid,
@@ -200,21 +201,6 @@ pub(crate) async fn tls_certificate_asset_export(
     path: Path<String>,
 ) -> Result<Json<TlsCertificateAssetDetail>, ApiError> {
     tls_certificate_asset_detail(state, path).await
-}
-
-pub(crate) fn tls_certificate_user_tags_sql() -> &'static str {
-    r#"SELECT t.uuid AS id,
-              coalesce(t.name, '') AS name,
-              coalesce(t.value, '') AS value,
-              coalesce(t.comment, '') AS comment
-         FROM tags t
-         JOIN tag_resources tr ON tr.tag = t.id
-         JOIN tls_certificates ON tls_certificates.id = tr.resource
-        WHERE lower(tls_certificates.uuid) = lower($1)
-          AND tr.resource_type = 'tls_certificate'
-          AND tr.resource_location = 0
-          AND coalesce(t.active, 0) = 1
-        ORDER BY t.name ASC, t.uuid ASC;"#
 }
 
 async fn tls_certificate_user_tags(

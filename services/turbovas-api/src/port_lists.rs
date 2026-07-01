@@ -9,6 +9,7 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    asset_user_tag_query_sql::port_list_user_tags_sql,
     collections::{PORT_LIST_DEFAULT_SORT, PORT_LIST_SORT_FIELDS},
     errors::ApiError,
     path_ids::parse_uuid,
@@ -200,21 +201,6 @@ pub(crate) async fn load_port_list_asset_detail(
         port_list_asset_from_row(&row, ranges, targets),
         user_tags,
     ))
-}
-
-pub(crate) fn port_list_user_tags_sql() -> &'static str {
-    r#"SELECT t.uuid AS id,
-              coalesce(t.name, '') AS name,
-              coalesce(t.value, '') AS value,
-              coalesce(t.comment, '') AS comment
-         FROM tags t
-         JOIN tag_resources tr ON tr.tag = t.id
-         JOIN port_lists pl ON pl.id = tr.resource
-        WHERE lower(pl.uuid) = lower($1)
-          AND tr.resource_type = 'port_list'
-          AND tr.resource_location = 0
-          AND coalesce(t.active, 0) = 1
-        ORDER BY t.name ASC, t.uuid ASC;"#
 }
 
 async fn port_list_user_tags(

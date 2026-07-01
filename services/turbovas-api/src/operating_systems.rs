@@ -9,6 +9,7 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    asset_user_tag_query_sql::operating_system_user_tags_sql,
     collections::{OPERATING_SYSTEM_ASSET_DEFAULT_SORT, OPERATING_SYSTEM_ASSET_SORT_FIELDS},
     errors::ApiError,
     operating_system_payloads::{OperatingSystemAssetItem, operating_system_asset_from_row},
@@ -191,21 +192,6 @@ pub(crate) async fn operating_system_asset_export(
     path: Path<String>,
 ) -> Result<Json<OperatingSystemAssetItem>, ApiError> {
     operating_system_asset_detail(state, path).await
-}
-
-pub(crate) fn operating_system_user_tags_sql() -> &'static str {
-    r#"SELECT t.uuid AS id,
-              coalesce(t.name, '') AS name,
-              coalesce(t.value, '') AS value,
-              coalesce(t.comment, '') AS comment
-         FROM tags t
-         JOIN tag_resources tr ON tr.tag = t.id
-         JOIN oss ON oss.id = tr.resource
-        WHERE lower(oss.uuid) = lower($1)
-          AND tr.resource_type = 'os'
-          AND tr.resource_location = 0
-          AND coalesce(t.active, 0) = 1
-        ORDER BY t.name ASC, t.uuid ASC;"#
 }
 
 async fn operating_system_user_tags(

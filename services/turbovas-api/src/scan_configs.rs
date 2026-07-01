@@ -10,6 +10,7 @@ use tokio_postgres::Client;
 
 use crate::{
     app_state::AppState,
+    asset_user_tag_query_sql::scan_config_user_tags_sql,
     collections::{SCAN_CONFIG_ASSET_DEFAULT_SORT, SCAN_CONFIG_ASSET_SORT_FIELDS},
     errors::ApiError,
     path_ids::parse_uuid,
@@ -21,9 +22,7 @@ use crate::{
         ScanConfigAssetDetail, ScanConfigAssetItem, ScanConfigTaskReference,
         scan_config_asset_from_row, scan_config_task_reference_from_row,
     },
-    scan_config_query_sql::{
-        scan_config_asset_detail_sql, scan_config_task_references_sql, scan_config_user_tags_sql,
-    },
+    scan_config_query_sql::{scan_config_asset_detail_sql, scan_config_task_references_sql},
     user_tags::ReportUserTag,
 };
 

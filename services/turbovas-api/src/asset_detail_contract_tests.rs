@@ -4,17 +4,15 @@
 
 use crate::{
     alert_query_sql::{alert_asset_detail_sql, alert_asset_tasks_sql, alert_assets_sql},
-    collections::{ALERT_DEFAULT_SORT, ALERT_SORT_FIELDS},
-    host_assets::host_user_tags_sql,
-    operating_systems::operating_system_user_tags_sql,
-    port_lists::port_list_user_tags_sql,
-    query::sort_clause,
-    scan_config_query_sql::{
-        scan_config_asset_detail_sql, scan_config_task_references_sql, scan_config_user_tags_sql,
+    asset_user_tag_query_sql::{
+        host_user_tags_sql, operating_system_user_tags_sql, port_list_user_tags_sql,
+        scan_config_user_tags_sql, scanner_user_tags_sql, schedule_user_tags_sql,
+        tls_certificate_user_tags_sql,
     },
-    scanner_assets::{scanner_task_references_sql, scanner_user_tags_sql},
-    schedules::schedule_user_tags_sql,
-    tls_certificates::tls_certificate_user_tags_sql,
+    collections::{ALERT_DEFAULT_SORT, ALERT_SORT_FIELDS},
+    query::sort_clause,
+    scan_config_query_sql::{scan_config_asset_detail_sql, scan_config_task_references_sql},
+    scanner_assets::scanner_task_references_sql,
     user_tags::catalog_user_tags_sql,
 };
 
@@ -398,8 +396,8 @@ fn tls_certificate_detail_contract_excludes_certificate_bytes() {
         .split_once("pub(crate) async fn tls_certificate_asset_detail")
         .expect("TLS certificate detail handler must exist")
         .1
-        .split_once("pub(crate) fn tls_certificate_user_tags_sql")
-        .expect("TLS certificate detail handler must precede tag helper")
+        .split_once("pub(crate) async fn tls_certificate_asset_export")
+        .expect("TLS certificate detail handler must precede export handler")
         .0;
 
     assert!(detail_source.contains("valid_int"));

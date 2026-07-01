@@ -44,18 +44,3 @@ pub(crate) fn scan_config_task_references_sql() -> &'static str {
           AND coalesce(t.hidden, 0) = 0
         ORDER BY t.name ASC, t.uuid ASC;"#
 }
-
-pub(crate) fn scan_config_user_tags_sql() -> &'static str {
-    r#"SELECT t.uuid AS id,
-              coalesce(t.name, '') AS name,
-              coalesce(t.value, '') AS value,
-              coalesce(t.comment, '') AS comment
-         FROM tags t
-         JOIN tag_resources tr ON tr.tag = t.id
-         JOIN configs c ON c.id = tr.resource
-        WHERE lower(c.uuid) = lower($1)
-          AND tr.resource_type = 'config'
-          AND tr.resource_location = 0
-          AND coalesce(t.active, 0) = 1
-        ORDER BY t.name ASC, t.uuid ASC;"#
-}

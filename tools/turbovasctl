@@ -8252,7 +8252,27 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "symbols": (
             "pub(crate) fn scan_config_asset_detail_sql",
             "pub(crate) fn scan_config_task_references_sql",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/asset_user_tag_query_sql.rs",
+        "forbidden": (
+            "services/turbovas-api/src/host_assets.rs",
+            "services/turbovas-api/src/operating_systems.rs",
+            "services/turbovas-api/src/port_lists.rs",
+            "services/turbovas-api/src/scan_configs.rs",
+            "services/turbovas-api/src/scanner_assets.rs",
+            "services/turbovas-api/src/schedules.rs",
+            "services/turbovas-api/src/tls_certificates.rs",
+        ),
+        "symbols": (
+            "pub(crate) fn host_user_tags_sql",
+            "pub(crate) fn operating_system_user_tags_sql",
+            "pub(crate) fn port_list_user_tags_sql",
             "pub(crate) fn scan_config_user_tags_sql",
+            "pub(crate) fn scanner_user_tags_sql",
+            "pub(crate) fn schedule_user_tags_sql",
+            "pub(crate) fn tls_certificate_user_tags_sql",
         ),
     },
     {

@@ -34,11 +34,12 @@ pub(crate) async fn patch_alert(
         .transaction()
         .await
         .map_err(|error| map_alert_write_db_error(error, "begin patch alert transaction"))?;
-    resolve_alert_write_operator_owner(&tx, &operator).await?;
+    let operator_owner_id = resolve_alert_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE alerts IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_alert_write_db_error(error, "lock alerts for patch"))?;
     let alert_state = load_alert_write_state(&tx, &alert_id).await?;
+    ensure_alert_owner_matches_operator(alert_state.owner_id, operator_owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_alert_name(&tx, name, alert_state.internal_id).await?;
     }

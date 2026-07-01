@@ -7,7 +7,7 @@ pub(crate) fn alert_write_operator_owner_sql() -> &'static str {
 }
 
 pub(crate) fn alert_write_state_sql() -> &'static str {
-    "SELECT id::integer
+    "SELECT id::integer, owner::integer
        FROM alerts
       WHERE uuid = $1;"
 }

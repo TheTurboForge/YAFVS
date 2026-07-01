@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
+    alert_write_db::ensure_alert_owner_matches_operator,
     alert_write_sql::*,
     alert_write_validation::{
         AlertPatchRequest, MAX_ALERT_TEXT_BYTES, validate_alert_patch_request,
@@ -15,6 +16,15 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> AlertPatchRequest
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn alert_patch_rejects_operator_owner_mismatch() {
+    assert!(ensure_alert_owner_matches_operator(7, 7).is_ok());
+    assert!(matches!(
+        ensure_alert_owner_matches_operator(7, 8),
+        Err(ApiError::Forbidden)
+    ));
 }
 
 #[test]
@@ -107,6 +117,7 @@ fn alert_patch_sql_is_metadata_only() {
 fn alert_patch_state_and_uniqueness_are_live_metadata_only() {
     let state = alert_write_state_sql();
     assert!(state.contains("FROM alerts"));
+    assert!(state.contains("owner::integer"));
     assert!(state.contains("WHERE uuid = $1"));
     assert!(!state.contains("alerts_trash"));
 

@@ -15,6 +15,7 @@ pub(crate) struct AlertWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AlertWriteState {
     pub(crate) internal_id: i32,
+    pub(crate) owner_id: i32,
 }
 
 pub(crate) fn require_alert_write_operator(
@@ -51,8 +52,25 @@ pub(crate) async fn load_alert_write_state(
         .map_err(|error| map_alert_write_db_error(error, "load alert write state"))?
         .map(|row| AlertWriteState {
             internal_id: row.get(0),
+            owner_id: row.get(1),
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) fn ensure_alert_owner_matches_operator(
+    alert_owner_id: i32,
+    operator_owner_id: i32,
+) -> Result<(), ApiError> {
+    if alert_owner_id == operator_owner_id {
+        Ok(())
+    } else {
+        tracing::warn!(
+            alert_owner_id,
+            operator_owner_id,
+            "direct API alert write owner mismatch"
+        );
+        Err(ApiError::Forbidden)
+    }
 }
 
 pub(crate) async fn ensure_unique_alert_name(

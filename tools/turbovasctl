@@ -518,6 +518,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "operating-system-asset-list-read",
         "operating-system-asset-metadata-export-read",
         "override-metadata-detail-read",
+        "override-metadata-export-read",
         "override-metadata-list-read",
         "port-list-clone",
         "port-list-create",
@@ -961,6 +962,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "override-writes-exports-trash-and-result-expansion",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-detail-read",
+    },
+    ("get", "/overrides/{override_id}/export"): {
+        "x-turbovas-inherited-still-owns": "override-writes-exports-trash-and-result-expansion",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "override-metadata-export-read",
     },
     ("get", "/port-lists"): {
         "x-turbovas-inherited-still-owns": "port-list-import-export",
@@ -1640,6 +1646,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/tags/{}/export",
         "/api/v1/overrides",
         "/api/v1/overrides/{}",
+        "/api/v1/overrides/{}/export",
         "/api/v1/port-lists",
         "/api/v1/port-lists/{}",
         "/api/v1/port-lists/{}/export",
@@ -7298,6 +7305,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/overrides/{override_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Override detail (migrated through gsad same-origin proxy)", "read-only override metadata automation"],
+            },
+            {
+                "endpoint": "/api/v1/overrides/{override_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "replacement_candidates": ["direct native JSON override metadata export", "read-only override metadata automation"],
             },
             {
                 "endpoint": "/api/v1/port-lists",

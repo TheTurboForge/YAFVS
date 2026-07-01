@@ -2037,6 +2037,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /overrides/{override_id}/export:
+    get:
+      operationId: getOverridesByOverrideIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: override-metadata-export-read
+      x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion
+      summary: Export one override as native JSON metadata
+      description: Direct scriptable override metadata export backed by the same PostgreSQL loader as override detail. This endpoint returns native JSON metadata only; inherited compatibility paths still own create, modify, clone, XML/file export, delete/trash, report-cache updates, and result-specific override expansion.
+      parameters:
+        - $ref: '#/components/parameters/OverrideId'
+      responses:
+        '200':
+          description: Override metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverrideAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /port-lists:
     get:
       operationId: getPortLists

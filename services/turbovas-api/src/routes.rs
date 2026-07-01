@@ -177,6 +177,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route("/api/v1/tags/:tag_id", get(tag_asset_detail))
         .route("/api/v1/overrides", get(override_assets))
         .route("/api/v1/overrides/:override_id", get(override_asset_detail))
+        .route(
+            "/api/v1/overrides/:override_id/export",
+            get(override_asset_export),
+        )
         .route("/api/v1/port-lists", get(port_list_assets))
         .route(
             "/api/v1/port-lists/:port_list_id",

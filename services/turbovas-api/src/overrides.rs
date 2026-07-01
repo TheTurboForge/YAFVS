@@ -166,3 +166,10 @@ pub(crate) async fn override_asset_detail(
         .ok_or(ApiError::NotFound)?;
     Ok(Json(override_asset_from_row(&row)))
 }
+
+pub(crate) async fn override_asset_export(
+    state: State<AppState>,
+    path: Path<String>,
+) -> Result<Json<OverrideAssetItem>, ApiError> {
+    override_asset_detail(state, path).await
+}

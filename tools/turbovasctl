@@ -592,7 +592,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tag-resource-reference-read",
         "target-detail-summary-read",
         "target-list-read",
-        "target-metadata-and-alive-test-modify",
+        "target-metadata-and-scan-settings-modify",
         "task-metadata-modify",
         "task-detail-summary-read",
         "task-list-read",
@@ -1318,7 +1318,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
-        "x-turbovas-replaces": "target-metadata-and-alive-test-modify",
+        "x-turbovas-replaces": "target-metadata-and-scan-settings-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
     },
@@ -12496,6 +12496,8 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.target-fixture",
             "native-api-direct.target-write-update",
             "native-api-direct.target-alive-test-update",
+            "native-api-direct.target-scan-settings-update",
+            "native-api-direct.target-scan-settings-in-use-denied",
             "native-api-direct.target-fixture-cleanup",
             "native-api-direct.task-fixture",
             "native-api-direct.task-write-update",
@@ -13715,13 +13717,29 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 target_alive_patch_ok = target_alive_patch.returncode == 0 and target_alive_patch_status == 200 and isinstance(target_alive_patch_json, dict) and target_alive_patch_json.get("id") == target_id and target_alive_patch_json.get("alive_tests") == ["TCP-SYN Service Ping"] and target_alive_bitfield == "16" and target_non_alive_state_before and target_non_alive_state_before == target_non_alive_state_after
                 findings.append(native_api_probe_finding("pass" if target_alive_patch_ok else "fail", "native-api-direct.target-alive-test-update", "Direct write-control patched target alive-test bitfield without changing hosts, port-list, reverse-DNS, or credential links." if target_alive_patch_ok else "Direct write-control failed to patch target alive-test bitfield or changed adjacent target state.", target_alive_patch, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_alive_patch_body, extra_headers=content_type), target_alive_patch_json, {"http_status": target_alive_patch_status, "target_id": target_id, "alive_test_bitfield": target_alive_bitfield, "state_checksum_before": target_non_alive_state_before, "state_checksum_after": target_non_alive_state_after, **summarize_native_api_response(target_alive_patch_json)}))
 
+                target_non_scan_settings_state_sql = (
+                    "SELECT md5(coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') || '|' || "
+                    "coalesce(port_list::text, '') || '|' || coalesce(alive_test::text, '') || '|' || "
+                    "(SELECT count(*)::text FROM targets_login_data WHERE target = targets.id)) "
+                    "FROM targets "
+                    f"WHERE uuid = {sql_literal(target_id)};"
+                )
+                target_non_scan_settings_state_before = psql_value(psql(repo_root, target_non_scan_settings_state_sql))
+                target_scan_settings_patch_body = json.dumps({"allow_simultaneous_ips": False, "reverse_lookup_only": True, "reverse_lookup_unify": True}, separators=(",", ":"))
+                target_scan_settings_patch = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_scan_settings_patch_body, extra_headers=content_type)
+                target_scan_settings_patch_json, target_scan_settings_patch_status = parse_json_output_with_http_status(target_scan_settings_patch)
+                target_scan_settings_values = psql_value(psql(repo_root, f"SELECT allow_simultaneous_ips::text || '|' || reverse_lookup_only::text || '|' || reverse_lookup_unify::text FROM targets WHERE uuid = {sql_literal(target_id)};"))
+                target_non_scan_settings_state_after = psql_value(psql(repo_root, target_non_scan_settings_state_sql))
+                target_scan_settings_patch_ok = target_scan_settings_patch.returncode == 0 and target_scan_settings_patch_status == 200 and isinstance(target_scan_settings_patch_json, dict) and target_scan_settings_patch_json.get("id") == target_id and target_scan_settings_patch_json.get("allow_simultaneous_ips") is False and target_scan_settings_patch_json.get("reverse_lookup_only") is True and target_scan_settings_patch_json.get("reverse_lookup_unify") is True and target_scan_settings_values == "0|1|1" and target_non_scan_settings_state_before and target_non_scan_settings_state_before == target_non_scan_settings_state_after
+                findings.append(native_api_probe_finding("pass" if target_scan_settings_patch_ok else "fail", "native-api-direct.target-scan-settings-update", "Direct write-control patched target reverse-DNS and simultaneous-IP settings without changing hosts, port-list, alive-test, or credential links." if target_scan_settings_patch_ok else "Direct write-control failed to patch target scan settings or changed adjacent target state.", target_scan_settings_patch, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_scan_settings_patch_body, extra_headers=content_type), target_scan_settings_patch_json, {"http_status": target_scan_settings_patch_status, "target_id": target_id, "scan_settings_values": target_scan_settings_values, "state_checksum_before": target_non_scan_settings_state_before, "state_checksum_after": target_non_scan_settings_state_after, **summarize_native_api_response(target_scan_settings_patch_json)}))
+
                 task_fixture_sql = (
                     "WITH live_target AS (SELECT id, owner FROM targets "
                     f"WHERE uuid = {sql_literal(target_id)} AND name = {sql_literal(target_name)}), "
                     "inserted AS (INSERT INTO tasks "
-                    "(uuid, owner, name, comment, target, hidden, usage_type, run_status, creation_time, modification_time) "
+                    "(uuid, owner, name, comment, target, target_location, hidden, usage_type, run_status, creation_time, modification_time) "
                     f"SELECT make_uuid(), owner, {sql_literal(task_name)}, 'TurboVAS direct write smoke temporary task', "
-                    "id, 0, 'scan', 0, m_now(), m_now() FROM live_target RETURNING id, uuid) "
+                    "id, 0, 0, 'scan', 0, m_now(), m_now() FROM live_target RETURNING id, uuid) "
                     "SELECT uuid FROM inserted;"
                 )
                 task_fixture = psql(repo_root, task_fixture_sql)
@@ -13734,6 +13752,14 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 findings.append(task_fixture_finding)
 
                 if task_id:
+                    target_scan_settings_before_in_use_denial = psql_value(psql(repo_root, f"SELECT allow_simultaneous_ips::text || '|' || reverse_lookup_only::text || '|' || reverse_lookup_unify::text FROM targets WHERE uuid = {sql_literal(target_id)};"))
+                    target_scan_settings_denied_body = json.dumps({"reverse_lookup_only": False}, separators=(",", ":"))
+                    target_scan_settings_denied = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_scan_settings_denied_body, extra_headers=content_type)
+                    target_scan_settings_denied_json, target_scan_settings_denied_status = parse_json_output_with_http_status(target_scan_settings_denied)
+                    target_scan_settings_after_in_use_denial = psql_value(psql(repo_root, f"SELECT allow_simultaneous_ips::text || '|' || reverse_lookup_only::text || '|' || reverse_lookup_unify::text FROM targets WHERE uuid = {sql_literal(target_id)};"))
+                    target_scan_settings_denied_ok = target_scan_settings_denied.returncode == 0 and target_scan_settings_denied_status == 409 and target_scan_settings_before_in_use_denial and target_scan_settings_before_in_use_denial == target_scan_settings_after_in_use_denial
+                    findings.append(native_api_probe_finding("pass" if target_scan_settings_denied_ok else "fail", "native-api-direct.target-scan-settings-in-use-denied", "Direct write-control rejected guarded target scan-setting changes while a live task references the target." if target_scan_settings_denied_ok else "Direct write-control did not reject guarded target scan-setting changes for a target referenced by a live task.", target_scan_settings_denied, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_scan_settings_denied_body, extra_headers=content_type), target_scan_settings_denied_json, {"http_status": target_scan_settings_denied_status, "target_id": target_id, "state_before": target_scan_settings_before_in_use_denial, "state_after": target_scan_settings_after_in_use_denial, **summarize_native_api_response(target_scan_settings_denied_json)}))
+
                     task_state_sql = (
                         "SELECT md5(coalesce(target::text, '') || '|' || coalesce(config::text, '') || '|' || "
                         "coalesce(schedule::text, '') || '|' || coalesce(scanner::text, '') || '|' || "

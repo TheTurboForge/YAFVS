@@ -17,6 +17,12 @@ pub(crate) struct TargetPatchRequest {
     pub(crate) comment: Option<String>,
     #[serde(default)]
     pub(crate) alive_tests: Option<Vec<String>>,
+    #[serde(default)]
+    pub(crate) allow_simultaneous_ips: Option<bool>,
+    #[serde(default)]
+    pub(crate) reverse_lookup_only: Option<bool>,
+    #[serde(default)]
+    pub(crate) reverse_lookup_unify: Option<bool>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -24,6 +30,17 @@ pub(crate) struct ValidatedTargetPatch {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
     pub(crate) alive_test: Option<i32>,
+    pub(crate) allow_simultaneous_ips: Option<i32>,
+    pub(crate) reverse_lookup_only: Option<i32>,
+    pub(crate) reverse_lookup_unify: Option<i32>,
+}
+
+impl ValidatedTargetPatch {
+    pub(crate) fn changes_task_in_use_guarded_scan_settings(&self) -> bool {
+        self.allow_simultaneous_ips.is_some()
+            || self.reverse_lookup_only.is_some()
+            || self.reverse_lookup_unify.is_some()
+    }
 }
 
 pub(crate) fn validate_target_patch_request(
@@ -33,13 +50,26 @@ pub(crate) fn validate_target_patch_request(
         name: normalize_optional_required_target_text(request.name, "name")?,
         comment: normalize_optional_target_text(request.comment, "comment")?,
         alive_test: validate_alive_tests(request.alive_tests)?,
+        allow_simultaneous_ips: bool_option_to_int(request.allow_simultaneous_ips),
+        reverse_lookup_only: bool_option_to_int(request.reverse_lookup_only),
+        reverse_lookup_unify: bool_option_to_int(request.reverse_lookup_unify),
     };
-    if validated.name.is_none() && validated.comment.is_none() && validated.alive_test.is_none() {
+    if validated.name.is_none()
+        && validated.comment.is_none()
+        && validated.alive_test.is_none()
+        && validated.allow_simultaneous_ips.is_none()
+        && validated.reverse_lookup_only.is_none()
+        && validated.reverse_lookup_unify.is_none()
+    {
         return Err(ApiError::BadRequest(
             "target patch request must include at least one field".to_string(),
         ));
     }
     Ok(validated)
+}
+
+fn bool_option_to_int(value: Option<bool>) -> Option<i32> {
+    value.map(i32::from)
 }
 
 fn normalize_optional_required_target_text(

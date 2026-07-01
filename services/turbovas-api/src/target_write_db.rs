@@ -80,6 +80,25 @@ pub(crate) async fn ensure_unique_target_name(
     }
 }
 
+pub(crate) async fn ensure_target_not_in_use_for_scan_settings(
+    tx: &Transaction<'_>,
+    target_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(target_in_use_sql(), &[&target_internal_id])
+        .await
+        .map_err(|error| map_target_write_db_error(error, "check target task references"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "target scan settings cannot be changed while the target is used by a live task"
+                .to_string(),
+        ))
+    }
+}
+
 pub(crate) fn ensure_target_owner_matches_operator(
     target_owner_id: i32,
     operator_owner_id: i32,

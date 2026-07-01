@@ -44,6 +44,9 @@ pub(crate) async fn patch_target(
         ensure_unique_target_name(&tx, name, target_state.internal_id, target_state.owner_id)
             .await?;
     }
+    if request.changes_task_in_use_guarded_scan_settings() {
+        ensure_target_not_in_use_for_scan_settings(&tx, target_state.internal_id).await?;
+    }
     let record = execute_target_patch_transaction(&tx, target_state.internal_id, &request).await?;
     tx.commit()
         .await
@@ -65,6 +68,9 @@ pub(crate) async fn execute_target_patch_transaction(
             &request.name,
             &request.comment,
             &request.alive_test,
+            &request.allow_simultaneous_ips,
+            &request.reverse_lookup_only,
+            &request.reverse_lookup_unify,
         ],
         "update target metadata",
     )

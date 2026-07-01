@@ -17,6 +17,9 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> TargetPatchReques
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
         alive_tests: None,
+        allow_simultaneous_ips: None,
+        reverse_lookup_only: None,
+        reverse_lookup_unify: None,
     }
 }
 
@@ -25,6 +28,24 @@ fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
         name: None,
         comment: None,
         alive_tests: Some(values.iter().map(|value| value.to_string()).collect()),
+        allow_simultaneous_ips: None,
+        reverse_lookup_only: None,
+        reverse_lookup_unify: None,
+    }
+}
+
+fn scan_settings_patch_request(
+    allow_simultaneous_ips: Option<bool>,
+    reverse_lookup_only: Option<bool>,
+    reverse_lookup_unify: Option<bool>,
+) -> TargetPatchRequest {
+    TargetPatchRequest {
+        name: None,
+        comment: None,
+        alive_tests: None,
+        allow_simultaneous_ips,
+        reverse_lookup_only,
+        reverse_lookup_unify,
     }
 }
 
@@ -90,9 +111,30 @@ fn target_patch_request_rejects_oversized_metadata_fields() {
             name: Some("x".repeat(MAX_TARGET_TEXT_BYTES + 1)),
             comment: None,
             alive_tests: None,
+            allow_simultaneous_ips: None,
+            reverse_lookup_only: None,
+            reverse_lookup_unify: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
+}
+
+#[test]
+fn target_patch_request_validates_guarded_scan_settings() {
+    let validated = validate_target_patch_request(scan_settings_patch_request(
+        Some(false),
+        Some(true),
+        Some(false),
+    ))
+    .expect("valid guarded target scan settings patch");
+    assert_eq!(validated.allow_simultaneous_ips, Some(0));
+    assert_eq!(validated.reverse_lookup_only, Some(1));
+    assert_eq!(validated.reverse_lookup_unify, Some(0));
+    assert!(validated.changes_task_in_use_guarded_scan_settings());
+
+    let alive_only = validate_target_patch_request(alive_patch_request(&["ICMP Ping"]))
+        .expect("alive-only patch");
+    assert!(!alive_only.changes_task_in_use_guarded_scan_settings());
 }
 
 #[test]
@@ -141,6 +183,9 @@ fn target_patch_sql_is_metadata_only() {
     assert!(sql.contains("name = coalesce($2, name)"));
     assert!(sql.contains("comment = coalesce($3, comment)"));
     assert!(sql.contains("alive_test = coalesce($4, alive_test)"));
+    assert!(sql.contains("allow_simultaneous_ips = coalesce($5, allow_simultaneous_ips)"));
+    assert!(sql.contains("reverse_lookup_only = coalesce($6, reverse_lookup_only)"));
+    assert!(sql.contains("reverse_lookup_unify = coalesce($7, reverse_lookup_unify)"));
     assert!(sql.contains("modification_time = m_now()"));
     assert!(sql.contains("RETURNING uuid::text"));
     for forbidden in [
@@ -152,8 +197,6 @@ fn target_patch_sql_is_metadata_only() {
         "hosts =",
         "exclude_hosts",
         "port_list",
-        "allow_simultaneous_ips",
-        "reverse_lookup",
         "ssh",
         "smb",
         "snmp",
@@ -183,4 +226,11 @@ fn target_patch_state_and_uniqueness_are_live_metadata_only() {
     assert!(unique.contains("owner = $3"));
     assert!(!unique.contains("targets_login_data"));
     assert!(!unique.contains("targets_trash"));
+
+    let in_use = target_in_use_sql();
+    assert!(in_use.contains("FROM tasks"));
+    assert!(in_use.contains("target = $1"));
+    assert!(in_use.contains("target_location = 0"));
+    assert!(in_use.contains("hidden = 0"));
+    assert!(!in_use.contains("targets_login_data"));
 }

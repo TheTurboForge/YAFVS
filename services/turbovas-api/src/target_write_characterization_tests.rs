@@ -130,6 +130,24 @@ fn inherited_target_alive_test_modify_is_not_task_in_use_guarded() {
         .expect("allow-simultaneous modify block exists");
     let allow_block = &modify[allow_start..alive_start];
     assert!(allow_block.contains("target_in_use (target)"));
+
+    let reverse_only_start = modify
+        .find("if (reverse_lookup_only)")
+        .expect("reverse-lookup-only modify block exists");
+    let reverse_unify_start = modify
+        .find("if (reverse_lookup_unify)")
+        .expect("reverse-lookup-unify modify block exists");
+    let commit_start = modify[reverse_unify_start..]
+        .find("sql_commit ();")
+        .map(|offset| reverse_unify_start + offset)
+        .expect("modify_target commit follows reverse lookup blocks");
+    let reverse_only_block = &modify[reverse_only_start..reverse_unify_start];
+    let reverse_unify_block = &modify[reverse_unify_start..commit_start];
+    assert!(reverse_only_block.contains("target_in_use (target)"));
+    assert!(reverse_only_block.contains("reverse_lookup_only = '%i'"));
+    assert!(reverse_unify_block.contains("target_in_use (target)"));
+    assert!(reverse_unify_block.contains("reverse_lookup_unify = '%i'"));
+
     assert!(modify[port_list_start..].contains("target_in_use (target)"));
 }
 
@@ -377,7 +395,7 @@ fn native_target_broad_mutation_routes_remain_closed() {
         ));
     }
     let detail = openapi_path_block("/targets/{target_id}");
-    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-alive-test-modify"));
+    assert!(detail.contains("x-turbovas-replaces: target-metadata-and-scan-settings-modify"));
     for forbidden in ["post:", "delete:", "/clone", "/restore", "/trash"] {
         assert!(
             !detail.contains(forbidden),

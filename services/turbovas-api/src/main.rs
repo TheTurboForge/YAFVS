@@ -86,6 +86,7 @@ mod scan_config_families;
 mod scan_config_payloads;
 mod scan_config_write_db;
 mod scan_config_write_sql;
+mod scan_config_write_transactions;
 mod scan_config_write_validation;
 mod scan_config_writes;
 mod scan_configs;

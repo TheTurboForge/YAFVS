@@ -112,6 +112,7 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         )
         .route("/api/v1/nvts", get(nvt_catalog))
         .route("/api/v1/nvts/:nvt_id", get(nvt_catalog_detail))
+        .route("/api/v1/nvts/:nvt_id/export", get(nvt_catalog_export))
         .route("/api/v1/operating-systems", get(operating_system_assets))
         .route(
             "/api/v1/operating-systems/:os_id",

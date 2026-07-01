@@ -482,6 +482,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /nvts/{nvt_id}/export:
+    get:
+      operationId: getNvtsByNvtIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: nvt-catalog-metadata-export-read
+      x-turbovas-inherited-still-owns: nvt-rich-detail
+      summary: Export one Security Information NVT as native JSON metadata
+      description: Direct scriptable NVT catalog metadata export backed by gvmd/PostgreSQL. This returns the same read-only native detail JSON as the NVT detail endpoint. Rich NVT detail, preference/config expansion, file export, scanner/feed control, and write semantics remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/NvtId'
+      responses:
+        '200':
+          description: NVT catalog metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NvtCatalogDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /operating-systems:
     get:
       operationId: getOperatingSystems

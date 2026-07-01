@@ -231,3 +231,10 @@ pub(crate) async fn nvt_catalog_detail(
     let user_tags = catalog_user_tags(&client, "nvt", &nvt_id).await?;
     Ok(Json(nvt_catalog_detail_from_row(&row, user_tags)))
 }
+
+pub(crate) async fn nvt_catalog_export(
+    state: State<AppState>,
+    path: Path<String>,
+) -> Result<Json<NvtCatalogDetail>, ApiError> {
+    nvt_catalog_detail(state, path).await
+}

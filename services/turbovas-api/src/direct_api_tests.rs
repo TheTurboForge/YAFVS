@@ -297,6 +297,9 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
         "/api/v1/cves/CVE-2025-1234/export"
     ));
     assert!(direct_api_v1_path_is_allowed(
+        "/api/v1/nvts/1.3.6.1.4.1.25623.1.0.100000/export"
+    ));
+    assert!(direct_api_v1_path_is_allowed(
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/export"
     ));
     assert!(direct_api_v1_path_is_allowed(

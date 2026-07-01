@@ -513,6 +513,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "none",
         "nvt-catalog-detail-read",
         "nvt-catalog-list-read",
+        "nvt-catalog-metadata-export-read",
         "operating-system-asset-detail-info-read",
         "operating-system-asset-list-read",
         "operating-system-asset-metadata-export-read",
@@ -686,6 +687,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/feeds"): "direct-read",
     ("get", "/nvts"): "direct-read",
     ("get", "/nvts/{nvt_id}"): "direct-read",
+    ("get", "/nvts/{nvt_id}/export"): "direct-read",
     ("get", "/operating-systems"): "direct-read",
     ("get", "/operating-systems/{os_id}"): "direct-read",
     ("get", "/hosts"): "direct-read",
@@ -929,6 +931,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "nvt-rich-detail",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "nvt-catalog-detail-read",
+    },
+    ("get", "/nvts/{nvt_id}/export"): {
+        "x-turbovas-inherited-still-owns": "nvt-rich-detail",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "nvt-catalog-metadata-export-read",
     },
     ("get", "/operating-systems"): {
         "x-turbovas-inherited-still-owns": "operating-system-writes-deletes-and-rich-history",
@@ -1605,6 +1612,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/dfn-cert-advisories/{}",
         "/api/v1/nvts",
         "/api/v1/nvts/{}",
+        "/api/v1/nvts/{}/export",
         "/api/v1/operating-systems",
         "/api/v1/operating-systems/{}",
         "/api/v1/operating-systems/{}/export",
@@ -6984,6 +6992,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/nvts/{nvt_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Security Information NVT detail Information fields (migrated through gsad same-origin proxy)", "read-only NVT catalog-detail automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/nvts/{nvt_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "replacement_candidates": ["direct native JSON NVT catalog metadata export", "read-only NVT catalog-detail automation"],
             },
             {
                 "endpoint": "/api/v1/cert-bund-advisories",

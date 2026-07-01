@@ -6715,7 +6715,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/filters/{filter_id}",
                 "status": "implemented_direct_write_control",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native saved-filter name/comment metadata modification"],
+                "replacement_candidates": ["direct native saved-filter name/comment/type/term metadata modification"],
             },
             {
                 "method": "delete",

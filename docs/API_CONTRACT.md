@@ -236,7 +236,10 @@ inherited.
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,
 maximum severity, and timestamps. Task creation, modification, deletion,
-start/stop, and other scanner-control actions remain on the inherited path.
+start/stop, file export, and other scanner-control actions remain on the
+inherited path. Direct scriptable `GET /api/v1/tasks/{task_id}/export` returns
+the same read-only task detail JSON for metadata export; it does not replace
+legacy task file export or lifecycle control.
 
 Native scanner metadata rows include scanner identity, host/socket, port,
 inherited scanner type, safe credential references, relay metadata, and

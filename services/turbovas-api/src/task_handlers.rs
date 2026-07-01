@@ -61,6 +61,14 @@ pub(crate) async fn task_detail(
     Ok(Json(load_task_detail(&client, &task_id).await?))
 }
 
+pub(crate) async fn task_export(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> Result<Json<TaskItem>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_task_detail(&client, &task_id).await?))
+}
+
 pub(crate) async fn load_task_detail(
     client: &tokio_postgres::Client,
     task_id: &str,

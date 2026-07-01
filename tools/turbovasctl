@@ -611,6 +611,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "target-restore",
         "target-trash-move",
         "task-metadata-modify",
+        "task-metadata-export-read",
         "task-detail-summary-read",
         "task-list-read",
         "tls-certificate-asset-detail-info-read",
@@ -698,6 +699,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/targets/{target_id}/restore"): "direct-write",
     ("delete", "/targets/{target_id}/trash"): "direct-write",
     ("patch", "/tasks/{task_id}"): "direct-write",
+    ("get", "/tasks/{task_id}/export"): "direct-read",
     ("get", "/scan-configs"): "direct-read",
     ("get", "/scan-configs/{scan_config_id}"): "direct-read",
     ("get", "/scan-configs/{scan_config_id}/export"): "direct-read",
@@ -1449,6 +1451,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "task-detail-summary-read",
     },
+    ("get", "/tasks/{task_id}/export"): {
+        "x-turbovas-inherited-still-owns": "task-scan-control-writes-and-deletes",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "task-metadata-export-read",
+    },
     ("patch", "/tasks/{task_id}"): {
         "x-turbovas-inherited-still-owns": "task-scan-control-writes-and-deletes",
         "x-turbovas-maturity": "live-write",
@@ -1618,6 +1625,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/targets/{}/export",
         "/api/v1/tasks",
         "/api/v1/tasks/{}",
+        "/api/v1/tasks/{}/export",
         "/api/v1/scope-reports",
         "/api/v1/scope-reports/{}",
         "/api/v1/scopes/{}/reports/{}/results",
@@ -7600,6 +7608,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/tasks/{task_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA task detail reads (migrated through gsad same-origin proxy)", "read-only task automation"],
+            },
+            {
+                "endpoint": "/api/v1/tasks/{task_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["direct native task metadata export without scanner control"],
             },
             {
                 "method": "patch",

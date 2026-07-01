@@ -180,6 +180,7 @@ where it exists:
 - `GET /api/v1/targets/{target_id}`
 - `GET /api/v1/tasks`
 - `GET /api/v1/tasks/{task_id}`
+- `GET /api/v1/tasks/{task_id}/export` metadata JSON only
 - `GET /api/v1/scanners`
 - `GET /api/v1/scanners/{scanner_id}` metadata, active User Tags, and task backlinks only
 - `GET /api/v1/scan-configs`
@@ -210,8 +211,10 @@ tabs and the high-value raw report evidence tabs. Target list/detail reads are
 also browser-proxied through the authenticated `gsad` same-origin boundary,
 including credential metadata that the inherited UI already displayed. Task
 list/detail reads are also browser-proxied with the read-only metadata required
-by the current operator view. Target writes, task writes/start/stop, credential
-material, and scanner-control semantics remain inherited. Scanner metadata list
+by the current operator view. Direct task metadata export reuses the task detail
+JSON for scriptable operator reads. Target writes, task writes/start/stop,
+task file export, credential material, and scanner-control semantics remain
+inherited. Scanner metadata list
 and safe socket/builtin detail page-load reads are browser-proxied, including
 active User Tags and non-hidden task backlinks. Remote scanner certificate
 context, verify/export/download, credential/certificate download context, and

@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {fireEvent, rendererWith, screen, within} from 'web/testing';
 import Cve from 'gmp/models/cve';
 import {createSession} from 'gmp/testing';
@@ -114,6 +115,7 @@ const reloadInterval = 1;
 const manualUrl = 'test/';
 
 const createGmp = ({
+  buildUrl,
   getCveResponse = new Response(cve),
   currentSettingsResponse = currentSettingsDefaultResponse,
   exportCveResponse = new Response({foo: 'bar'}),
@@ -121,6 +123,7 @@ const createGmp = ({
   currentSettings = testing.fn().mockResolvedValue(currentSettingsResponse),
   exportCve = testing.fn().mockResolvedValue(exportCveResponse),
 } = {}) => ({
+  buildUrl,
   cve: {
     get: getCve,
     export: exportCve,
@@ -130,10 +133,18 @@ const createGmp = ({
     manualUrl,
     enableEPSS: true,
   },
-  session: createSession({timezone: 'UTC'}),
+  session: {
+    ...createSession({timezone: 'UTC'}),
+    token: 'test-token',
+    jwt: 'jwt-token',
+  },
   user: {
     currentSettings,
   },
+});
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('CveDetailsPage tests', () => {
@@ -295,5 +306,47 @@ describe('CveDetailsPage tests', () => {
     const exportIcon = screen.getByTitle('Export CVE');
     fireEvent.click(exportIcon);
     expect(gmp.cve.export).toHaveBeenCalledWith(cve);
+  });
+
+  test('should use native metadata export for downloads', async () => {
+    const nativePayload = {
+      id: 'CVE-2020-9997',
+      name: 'CVE-2020-9997',
+      description: 'Native CVE metadata',
+    };
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue(nativePayload),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const exportCve = testing.fn().mockResolvedValue(new Response({}));
+    const buildUrl = testing.fn(
+      (path, _params) => `https://turbovas.example/${path}`,
+    );
+    const gmp = createGmp({buildUrl, exportCve});
+    const {render, store} = rendererWith({
+      gmp,
+      capabilities: true,
+      router: true,
+      store: true,
+    });
+
+    store.dispatch(entityLoadingActions.success('CVE-2020-9997', cve));
+    render(<CvePage id="CVE-2020-9997" />);
+
+    fetchMock.mockClear();
+    fireEvent.click(screen.getByTitle('Export CVE'));
+    await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
+
+    expect(exportCve).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith(
+      'api/v1/cves/CVE-2020-9997/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      'https://turbovas.example/api/v1/cves/CVE-2020-9997/export',
+      expect.objectContaining({credentials: 'include'}),
+    );
   });
 });

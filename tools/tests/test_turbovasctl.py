@@ -4669,6 +4669,7 @@ class TurboVASCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
         contract = (root / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
         boundary = (root / "docs" / "NATIVE_API_AUTH_BOUNDARY.md").read_text(encoding="utf-8")
+        native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         operations = {(item["method"], item["path"]): item for item in turbovasctl.openapi_contract_operations(root)}
         alerts = operations[("get", "/alerts")]
         alert_detail = operations[("get", "/alerts/{alert_id}")]
@@ -4725,6 +4726,8 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-inherited-still-owns"], inherited_still_owns)
+
+        self.assertIn('GSA CVE detail metadata export', native_tooling)
 
         expected_asset_metadata = [
             (operating_systems, "getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),

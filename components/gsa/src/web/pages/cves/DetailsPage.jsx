@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import React from 'react';
+import {exportNativeCveMetadata} from 'gmp/native-api/cves';
 import {isDefined} from 'gmp/utils/identity';
 import DateTime from 'web/components/date/DateTime';
 import {CveIcon} from 'web/components/icon';
@@ -31,11 +33,21 @@ import {EntityInfoTable} from 'web/entity/EntityInfo';
 import EntityPage from 'web/entity/EntityPage';
 import EntityTags from 'web/entity/Tags';
 import withEntityContainer from 'web/entity/withEntityContainer';
+import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import CveDetailsPageToolBarIcons from 'web/pages/cves/CveDetailsPageToolBarIcons';
 import CveDetails from 'web/pages/cves/Details';
 import {selector, loadEntity} from 'web/store/entities/cves';
 import PropTypes from 'web/utils/PropTypes';
+
+const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
+
+const exportCve = (gmp, cve) => {
+  if (canUseNativeApi(gmp)) {
+    return exportNativeCveMetadata(gmp, cve.id);
+  }
+  return gmp.cve.export(cve);
+};
 
 const Details = ({entity, links = true}) => {
   const [_] = useTranslation();
@@ -168,9 +180,12 @@ const CvePage = ({
   ...props
 }) => {
   const [_] = useTranslation();
+  const gmp = useGmp();
 
   return (
     <EntityComponent
+      download={entity => exportCve(gmp, entity)}
+      downloadOptions={canUseNativeApi(gmp) ? {extension: 'json'} : undefined}
       name="cve"
       onDownloadError={onError}
       onDownloaded={onDownloaded}

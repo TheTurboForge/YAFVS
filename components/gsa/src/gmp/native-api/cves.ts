@@ -5,6 +5,7 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import type Filter from 'gmp/models/filter';
 import Cve from 'gmp/models/cve';
@@ -293,4 +294,16 @@ export const fetchNativeCve = async (
     {token: gmp.session.token},
   );
   return nativeCveToModel(payload, {detail: true});
+};
+
+export const exportNativeCveMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeCatalogCvePayload>(
+    gmp,
+    `api/v1/cves/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };

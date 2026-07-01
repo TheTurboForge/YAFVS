@@ -252,6 +252,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *cpe_prefix = "/api/v1/cpes/";
   const gchar *cves_path = "/api/v1/cves";
   const gchar *cve_prefix = "/api/v1/cves/";
+  const gchar *cve_export_suffix = "/export";
   const gchar *cert_bund_advisories_path = "/api/v1/cert-bund-advisories";
   const gchar *cert_bund_advisory_prefix = "/api/v1/cert-bund-advisories/";
   const gchar *dfn_cert_advisories_path = "/api/v1/dfn-cert-advisories";
@@ -367,6 +368,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, cve_prefix))
     {
       const gchar *id = path + strlen (cve_prefix);
+      if (g_str_has_suffix (id, cve_export_suffix))
+        return is_cve_id_segment (id,
+                                  strlen (id)
+                                  - strlen (cve_export_suffix));
       return is_cve_id_segment (id, strlen (id));
     }
 

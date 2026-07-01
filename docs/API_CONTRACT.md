@@ -270,6 +270,9 @@ host create/save/delete, delete-identifier behavior, XML export, target creation
 from host, tag writes/actions, credential/privacy-sensitive identifiers, raw
 `report_host_details` expansion, report/result/port/application history,
 GMP-only `details=1` semantics, and all writes.
+Direct scriptable `GET /api/v1/hosts/{host_id}/export` returns the same native
+detail JSON for metadata export; it does not replace legacy host XML export or
+target-creation workflows.
 
 Native TLS certificate asset rows include the `tls_certificates.uuid` identity,
 subject and issuer distinguished names, serial and fingerprints, activation,

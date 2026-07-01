@@ -87,7 +87,8 @@ authenticated `gsad` proxy while inherited GMP context still owns retained
 actions and tag writes/actions. Active OS User Tags are included in the native
 detail payload.
 Host detail Information fields now read native metadata through the authenticated
-`gsad` proxy while inherited GMP context still owns writes, export, target
+`gsad` proxy while direct host metadata export reuses the same read-only detail
+JSON for scriptable operator reads. Inherited GMP context still owns writes, XML export, target
 creation, delete identifier, tag writes/actions, and GMP-only `details=1`
 behavior. The native metadata uses `hosts.uuid`, bounded safe identifier/source
 metadata, host OS associations, latest whitelisted host details, and active host

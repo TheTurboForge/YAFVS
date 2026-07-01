@@ -583,6 +583,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /hosts/{host_id}/export:
+    get:
+      operationId: getHostsByHostIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: host-asset-metadata-export-read
+      x-turbovas-inherited-still-owns: host-target-creation-tags-writes-and-rich-history
+      summary: Export host metadata JSON
+      description: Direct scriptable host metadata export backed by gvmd/PostgreSQL. This returns the same native host detail JSON with whitelisted identifiers, operating-system references, selected host detail fields, and active user tags. Host writes, delete-identifier behavior, XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/HostId'
+      responses:
+        '200':
+          description: Host metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tls-certificates:
     get:
       operationId: getTlsCertificates

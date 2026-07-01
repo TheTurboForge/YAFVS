@@ -315,6 +315,13 @@ pub(crate) async fn host_asset_detail(
     }))
 }
 
+pub(crate) async fn host_asset_export(
+    state: State<AppState>,
+    path: Path<String>,
+) -> Result<Json<HostAssetDetail>, ApiError> {
+    host_asset_detail(state, path).await
+}
+
 pub(crate) fn host_user_tags_sql() -> &'static str {
     r#"SELECT t.uuid AS id,
               coalesce(t.name, '') AS name,

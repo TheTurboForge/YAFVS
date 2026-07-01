@@ -118,6 +118,7 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         )
         .route("/api/v1/hosts", get(host_assets))
         .route("/api/v1/hosts/:host_id", get(host_asset_detail))
+        .route("/api/v1/hosts/:host_id/export", get(host_asset_export))
         .route("/api/v1/tls-certificates", get(tls_certificate_assets))
         .route(
             "/api/v1/tls-certificates/:certificate_id",

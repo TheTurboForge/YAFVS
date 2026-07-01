@@ -64,8 +64,10 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
     assert!(!list_source.contains("cve_references"));
     assert!(!list_source.contains("cve_cert_refs"));
     assert!(!list_source.contains("cve_nvt_refs"));
+    let detail_source_without_native_metadata_export =
+        detail_source.replace("cve_catalog_export", "cve_catalog_metadata_read");
     for inherited_workflow in ["export", "delete", "modify", "create"] {
-        assert!(!detail_source.contains(inherited_workflow));
+        assert!(!detail_source_without_native_metadata_export.contains(inherited_workflow));
     }
 }
 

@@ -181,6 +181,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /cves/{cve_id}/export:
+    get:
+      operationId: getCvesByCveIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: cve-catalog-metadata-export-read
+      x-turbovas-inherited-still-owns: scap-rich-context
+      summary: Export one Security Information CVE as native JSON metadata
+      description: Direct scriptable CVE catalog metadata export backed by gvmd/PostgreSQL. This returns the same read-only native detail JSON as the CVE detail endpoint, including EPSS, references, CERT/NVT links, SCAP configuration nodes, and user tags. Raw/rich SCAP feed context remains inherited.
+      parameters:
+        - $ref: '#/components/parameters/CveId'
+      responses:
+        '200':
+          description: CVE catalog metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogCveDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cpes:
     get:
       operationId: getCpes

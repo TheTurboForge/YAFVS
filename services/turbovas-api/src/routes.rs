@@ -99,6 +99,7 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route("/api/v1/cpes/*cpe_id", get(cpe_catalog_detail))
         .route("/api/v1/cves", get(cve_catalog))
         .route("/api/v1/cves/:cve_id", get(cve_catalog_detail))
+        .route("/api/v1/cves/:cve_id/export", get(cve_catalog_export))
         .route("/api/v1/cert-bund-advisories", get(cert_bund_advisories))
         .route(
             "/api/v1/cert-bund-advisories/*advisory_id",

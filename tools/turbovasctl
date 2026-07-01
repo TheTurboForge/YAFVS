@@ -503,6 +503,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "cpe-catalog-list-read",
         "cve-catalog-detail-epss-reference-configuration-read",
         "cve-catalog-list-read",
+        "cve-catalog-metadata-export-read",
         "dfn-cert-advisory-catalog-detail-read",
         "dfn-cert-advisory-list-read",
         "feed-status-read",
@@ -679,6 +680,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/cpes/{cpe_id}"): "direct-read",
     ("get", "/cves"): "direct-read",
     ("get", "/cves/{cve_id}"): "direct-read",
+    ("get", "/cves/{cve_id}/export"): "direct-read",
     ("get", "/dfn-cert-advisories"): "direct-read",
     ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}"): "direct-read",
     ("get", "/feeds"): "direct-read",
@@ -902,6 +904,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "scap-rich-context",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "cve-catalog-detail-epss-reference-configuration-read",
+    },
+    ("get", "/cves/{cve_id}/export"): {
+        "x-turbovas-inherited-still-owns": "scap-rich-context",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "cve-catalog-metadata-export-read",
     },
     ("get", "/dfn-cert-advisories"): {
         "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
@@ -1589,6 +1596,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/vulnerabilities",
         "/api/v1/cves",
         "/api/v1/cves/{}",
+        "/api/v1/cves/{}/export",
         "/api/v1/cpes",
         "/api/v1/cpes/{}",
         "/api/v1/cert-bund-advisories",
@@ -6951,6 +6959,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/cves/{cve_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Security Information CVE detail (migrated through gsad same-origin proxy)", "read-only CVE catalog automation"],
+            },
+            {
+                "endpoint": "/api/v1/cves/{cve_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "replacement_candidates": ["direct native JSON CVE catalog metadata export", "read-only CVE catalog automation"],
             },
             {
                 "endpoint": "/api/v1/cpes",

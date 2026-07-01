@@ -114,6 +114,13 @@ pub(crate) async fn cve_catalog_detail(
     Ok(Json(CatalogCveDetail { item, user_tags }))
 }
 
+pub(crate) async fn cve_catalog_export(
+    state: State<AppState>,
+    path: Path<String>,
+) -> Result<Json<CatalogCveDetail>, ApiError> {
+    cve_catalog_detail(state, path).await
+}
+
 async fn cve_configuration_nodes(
     client: &Client,
     cve_internal_id: i32,

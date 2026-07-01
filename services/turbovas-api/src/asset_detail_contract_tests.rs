@@ -10,6 +10,10 @@ use crate::{
         tls_certificate_user_tags_sql,
     },
     collections::{ALERT_DEFAULT_SORT, ALERT_SORT_FIELDS},
+    port_list_query_sql::{
+        port_list_asset_detail_sql, port_list_assets_sql, port_list_ranges_sql,
+        port_list_targets_sql,
+    },
     query::sort_clause,
     scan_config_query_sql::{scan_config_asset_detail_sql, scan_config_task_references_sql},
     scanner_assets::scanner_task_references_sql,
@@ -69,6 +73,36 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
     for inherited_workflow in ["export", "delete", "modify", "create"] {
         assert!(!detail_source_without_native_metadata_export.contains(inherited_workflow));
     }
+}
+
+#[test]
+fn port_list_read_sql_is_metadata_ranges_and_target_backlinks_only() {
+    let list_sql = port_list_assets_sql("name ASC");
+    let detail_sql = port_list_asset_detail_sql();
+    for sql in [&list_sql, detail_sql] {
+        assert!(sql.contains("FROM port_lists pl"));
+        assert!(sql.contains("FROM port_ranges pr"));
+        assert!(sql.contains("port_count_all"));
+        assert!(sql.contains("port_count_tcp"));
+        assert!(sql.contains("port_count_udp"));
+        assert!(!sql.contains("credential"));
+        assert!(!sql.contains("reports"));
+        assert!(!sql.contains("results"));
+        assert!(!sql.contains("xml"));
+        assert!(!sql.contains("export"));
+    }
+    assert!(list_sql.contains("count(*) OVER()::bigint AS total"));
+    assert!(list_sql.contains("ORDER BY name ASC, name ASC, id ASC LIMIT $2 OFFSET $3"));
+
+    let ranges_sql = port_list_ranges_sql();
+    assert!(ranges_sql.contains("FROM port_ranges pr"));
+    assert!(ranges_sql.contains("WHERE pr.port_list = $1"));
+    assert!(ranges_sql.contains("CASE WHEN pr.type = 1 THEN 'udp' ELSE 'tcp' END"));
+
+    let targets_sql = port_list_targets_sql();
+    assert!(targets_sql.contains("FROM targets t"));
+    assert!(targets_sql.contains("WHERE t.port_list = $1"));
+    assert!(!targets_sql.contains("credentials"));
 }
 
 #[test]

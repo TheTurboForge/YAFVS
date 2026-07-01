@@ -207,6 +207,27 @@ fn inherited_start_response_maps_report_id_and_legacy_error_cases() {
 }
 
 #[test]
+fn inherited_stop_response_maps_legacy_statuses_and_aborts_on_unexpected_error() {
+    let stop_block = gmp_client_state_block("CLIENT_STOP_TASK");
+    for required in [
+        "stop_task (stop_task_data->task_id)",
+        "XML_OK (\"stop_task\")",
+        "\"stopped\"",
+        "XML_OK_REQUESTED (\"stop_task\")",
+        "\"requested to stop\"",
+        "send_find_error_to_client (\"stop_task\", \"task\"",
+        "Permission denied",
+        "A task_id attribute is required",
+        "abort ();",
+    ] {
+        assert!(
+            stop_block.contains(required),
+            "CLIENT_STOP_TASK missing {required}"
+        );
+    }
+}
+
+#[test]
 fn inherited_stop_task_is_permission_gated_finds_task_and_dispatches_by_scanner_type() {
     let stop_task = inherited_function(MANAGE_C, "stop_task");
     for required in [

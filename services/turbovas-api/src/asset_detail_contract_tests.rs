@@ -24,7 +24,9 @@ use crate::{
         report_format_assets_sql, report_format_config_backlinks_sql,
         report_format_param_options_sql, report_format_params_sql,
     },
-    scan_config_query_sql::{scan_config_asset_detail_sql, scan_config_task_references_sql},
+    scan_config_query_sql::{
+        scan_config_asset_detail_sql, scan_config_asset_list_sql, scan_config_task_references_sql,
+    },
     scanner_asset_query_sql::{scanner_asset_detail_sql, scanner_task_references_sql},
     tls_certificate_query_sql::{
         tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_sources_sql,
@@ -783,6 +785,7 @@ fn port_list_user_tags_are_detail_only_active_port_list_tags() {
 #[test]
 fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
     let source = include_str!("scan_configs.rs");
+    let list_sql = scan_config_asset_list_sql("name ASC");
     let detail_sql = scan_config_asset_detail_sql();
     let detail_source = source
         .split_once("pub(crate) async fn load_scan_config_asset_detail")
@@ -804,11 +807,16 @@ fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
 
     assert!(detail_source.contains("scan_config_task_references"));
     assert!(detail_source.contains("scan_config_user_tags"));
+    assert!(list_sql.contains("FROM configs c"));
+    assert!(list_sql.contains("LEFT JOIN users u ON u.id = c.owner"));
+    assert!(list_sql.contains("coalesce(c.usage_type, 'scan') = 'scan'"));
+    assert!(list_sql.contains("deprecated_feed_data"));
+    assert!(list_sql.contains("ORDER BY name ASC, name ASC, id ASC LIMIT $2 OFFSET $3"));
     assert!(detail_sql.contains("FROM configs c"));
     assert!(detail_sql.contains("coalesce(c.usage_type, 'scan') = 'scan'"));
     assert!(detail_route < family_route);
     assert!(detail_route < export_route);
-    for sql_or_loader in [detail_source, detail_sql] {
+    for sql_or_loader in [detail_source, list_sql.as_str(), detail_sql] {
         assert!(!sql_or_loader.contains("preferences"));
         assert!(!sql_or_loader.contains("nvt_selector"));
         assert!(!sql_or_loader.contains("credential"));

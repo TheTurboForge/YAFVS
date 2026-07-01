@@ -9,7 +9,9 @@ use crate::{
     operating_systems::operating_system_user_tags_sql,
     port_lists::port_list_user_tags_sql,
     query::sort_clause,
-    scan_configs::{scan_config_task_references_sql, scan_config_user_tags_sql},
+    scan_config_query_sql::{
+        scan_config_asset_detail_sql, scan_config_task_references_sql, scan_config_user_tags_sql,
+    },
     scanner_assets::{scanner_task_references_sql, scanner_user_tags_sql},
     schedules::schedule_user_tags_sql,
     tls_certificates::tls_certificate_user_tags_sql,
@@ -595,12 +597,13 @@ fn port_list_user_tags_are_detail_only_active_port_list_tags() {
 #[test]
 fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
     let source = include_str!("scan_configs.rs");
+    let detail_sql = scan_config_asset_detail_sql();
     let detail_source = source
         .split_once("pub(crate) async fn load_scan_config_asset_detail")
         .expect("scan config detail loader must exist")
         .1
-        .split_once("pub(crate) fn scan_config_task_references_sql")
-        .expect("scan config task-reference helper must follow detail loader")
+        .split_once("async fn scan_config_task_references")
+        .expect("scan config task-reference loader must follow detail loader")
         .0;
     let routes = include_str!("routes.rs");
     let detail_route = routes
@@ -615,14 +618,18 @@ fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
 
     assert!(detail_source.contains("scan_config_task_references"));
     assert!(detail_source.contains("scan_config_user_tags"));
+    assert!(detail_sql.contains("FROM configs c"));
+    assert!(detail_sql.contains("coalesce(c.usage_type, 'scan') = 'scan'"));
     assert!(detail_route < family_route);
     assert!(detail_route < export_route);
-    assert!(!detail_source.contains("preferences"));
-    assert!(!detail_source.contains("nvt_selector"));
-    assert!(!detail_source.contains("credential"));
-    assert!(!detail_source.contains("password"));
-    assert!(!detail_source.contains("secret"));
-    assert!(!detail_source.contains("private_key"));
-    assert!(!detail_source.contains("export"));
-    assert!(!detail_source.contains("xml"));
+    for sql_or_loader in [detail_source, detail_sql] {
+        assert!(!sql_or_loader.contains("preferences"));
+        assert!(!sql_or_loader.contains("nvt_selector"));
+        assert!(!sql_or_loader.contains("credential"));
+        assert!(!sql_or_loader.contains("password"));
+        assert!(!sql_or_loader.contains("secret"));
+        assert!(!sql_or_loader.contains("private_key"));
+        assert!(!sql_or_loader.contains("export"));
+        assert!(!sql_or_loader.contains("xml"));
+    }
 }

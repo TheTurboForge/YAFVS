@@ -1984,19 +1984,31 @@ class TurboVASCtlTests(unittest.TestCase):
             {
                 "alignment_status",
                 "browser_proxied_count",
+                "browser_write_proxy_count",
+                "direct_write_control_count",
                 "openapi_internal_only_count",
                 "internal_only_count",
                 "gsad_proxy_allowlist_count",
+                "gsad_proxy_methods",
+                "write_proxy_boundary_status",
+                "write_proxy_requires_design",
                 "missing_gsad_proxy_allowlist_count",
                 "unexpected_gsad_proxy_allowlist_count",
                 "internal_only_gsad_proxy_allowlist_count",
                 "parse_error_count",
+                "method_parse_error_count",
             },
         )
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 0)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET"])
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
+        self.assertTrue(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["missing_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["unexpected_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["internal_only_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["parse_error_count"], 0)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["method_parse_error_count"], 0)
         self.assertEqual(
             set(status_only["details"]["openapi_contract"]),
             {
@@ -2348,6 +2360,14 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
+        self.assertEqual(contract["browser_write_proxy_count"], 0)
+        self.assertEqual(contract["direct_write_control_count"], 48)
+        self.assertEqual(contract["gsad_proxy_methods"], ["GET"])
+        self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
+        self.assertEqual(contract["write_proxy_boundary_status"], "pass")
+        self.assertTrue(contract["write_proxy_requires_design"])
+        self.assertEqual(contract["browser_write_proxy_operations"], [])
+        self.assertIn("POST /api/v1/tags", contract["direct_write_control_operations"])
         self.assertEqual(contract["missing_gsad_proxy_allowlist"], [])
         self.assertEqual(contract["unexpected_gsad_proxy_allowlist"], [])
         self.assertEqual(contract["internal_only_gsad_proxy_allowlist"], [])
@@ -2413,6 +2433,11 @@ class TurboVASCtlTests(unittest.TestCase):
                 "}\n",
                 encoding="utf-8",
             )
+            request_source = root / "components" / "gsad" / "src" / "gsad_http_handle_request.c"
+            request_source.write_text(
+                'gsad_http_url_handler_new ("^/api/v1/.+$", gsad_http_method_handler_new_get (native_api_get_handler));\n',
+                encoding="utf-8",
+            )
 
             summary = turbovasctl.native_api_browser_proxy_contract_summary(root, endpoints)
 
@@ -2425,6 +2450,44 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertNotIn("/api/v1/scopes/{scope_id}", summary["openapi_internal_only_endpoints"])
         self.assertEqual(summary["parse_errors"], [])
+
+    def test_native_tooling_state_reports_browser_write_proxy_boundary_drift(self):
+        endpoints = [
+            {
+                "endpoint": "/api/v1/tags",
+                "method": "post",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            proxy_source = root / "components" / "gsad" / "src" / "gsad_native_api.c"
+            proxy_source.parent.mkdir(parents=True)
+            proxy_source.write_text(
+                "static gboolean\n"
+                "native_api_path_is_allowed (const gchar *path)\n"
+                "{\n"
+                "  const gchar *tags_path = \"/api/v1/tags\";\n"
+                "  if (g_strcmp0 (path, tags_path) == 0)\n"
+                "    return TRUE;\n"
+                "  return FALSE;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            request_source = root / "components" / "gsad" / "src" / "gsad_http_handle_request.c"
+            request_source.write_text(
+                'gsad_http_url_handler_new ("^/api/v1/.+$", gsad_http_method_handler_new_get (native_api_get_handler));\n',
+                encoding="utf-8",
+            )
+
+            summary = turbovasctl.native_api_browser_proxy_contract_summary(root, endpoints)
+
+        self.assertEqual(summary["alignment_status"], "warn")
+        self.assertEqual(summary["write_proxy_boundary_status"], "warn")
+        self.assertEqual(summary["gsad_proxy_methods"], ["GET"])
+        self.assertEqual(summary["browser_write_proxy_operations"], ["POST /api/v1/tags"])
+        self.assertEqual(summary["direct_write_control_operations"], ["POST /api/v1/tags"])
 
     def test_native_tooling_state_reports_direct_api_contract_drift(self):
         endpoints = [

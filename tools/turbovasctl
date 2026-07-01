@@ -6901,6 +6901,24 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     return sorted(templates), errors
 
 
+def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], list[str]]:
+    if repo_root is None:
+        return [], ["missing_repo_root"]
+    relative_path = "components/gsad/src/gsad_http_handle_request.c"
+    try:
+        source = (repo_root / relative_path).read_text(encoding="utf-8")
+    except OSError:
+        return [], [f"missing_source:{relative_path}"]
+
+    if '"^/api/v1/.+$"' not in source:
+        return [], ["missing_native_api_url_handler"]
+
+    methods: set[str] = set()
+    if "gsad_http_method_handler_new_get (native_api_get_handler)" in source:
+        methods.add("GET")
+    return sorted(methods), [] if methods else ["missing_native_api_method_handler"]
+
+
 def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints: list[dict[str, Any]]) -> dict[str, Any]:
     browser_proxied = sorted(
         item["endpoint"]
@@ -6914,6 +6932,19 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         if isinstance(item.get("endpoint"), str)
         and native_api_browser_access_from_status(str(item.get("status", "unknown"))) == "internal_only"
     )
+    browser_write_proxied = sorted(
+        f"{str(item.get('method', '')).upper()} {item['endpoint']}"
+        for item in endpoints
+        if isinstance(item.get("endpoint"), str)
+        and str(item.get("method", "get")).lower() != "get"
+        and native_api_browser_access_from_status(str(item.get("status", "unknown"))) == "browser_proxied"
+    )
+    direct_write_control = sorted(
+        f"{str(item.get('method', '')).upper()} {item['endpoint']}"
+        for item in endpoints
+        if isinstance(item.get("endpoint"), str)
+        and item.get("direct_access") == "direct_write_control"
+    )
     openapi_internal_only = sorted(
         f"/api/v1{operation.get('path')}"
         for operation in openapi_contract_operations(repo_root)
@@ -6923,6 +6954,7 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         and operation["x_turbovas_values"].get("x-turbovas-exposure") == "internal-only"
     )
     gsad_allowed, parse_errors = native_api_gsad_proxy_allowlist_templates(repo_root)
+    gsad_methods, method_errors = native_api_gsad_proxy_methods(repo_root)
 
     browser_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in browser_proxied}
     internal_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_internal_only}
@@ -6932,14 +6964,23 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
     missing_gsad = [browser_by_normalized[key] for key in sorted(set(browser_by_normalized) - set(gsad_by_normalized))]
     internal_only_in_gsad = [internal_by_normalized[key] for key in sorted(set(internal_by_normalized) & set(gsad_by_normalized))]
     unexpected_gsad = [gsad_by_normalized[key] for key in sorted(set(gsad_by_normalized) - set(browser_by_normalized) - set(internal_by_normalized))]
-    drift = parse_errors or missing_gsad or unexpected_gsad or internal_only_in_gsad
+    write_boundary_drift = method_errors or (browser_write_proxied and gsad_methods == ["GET"])
+    drift = parse_errors or missing_gsad or unexpected_gsad or internal_only_in_gsad or write_boundary_drift
     return {
         "alignment_status": "pass" if not drift else "warn",
         "browser_proxied_count": len(browser_proxied),
+        "browser_write_proxy_count": len(browser_write_proxied),
+        "direct_write_control_count": len(direct_write_control),
         "internal_only_count": len(internal_only),
         "openapi_internal_only_count": len(openapi_internal_only),
         "gsad_proxy_allowlist_count": len(gsad_allowed),
+        "gsad_proxy_methods": gsad_methods,
+        "gsad_proxy_method_parse_errors": method_errors,
+        "write_proxy_boundary_status": "pass" if not write_boundary_drift else "warn",
+        "write_proxy_requires_design": bool(direct_write_control and gsad_methods == ["GET"]),
         "browser_proxied_endpoints": browser_proxied,
+        "browser_write_proxy_operations": browser_write_proxied,
+        "direct_write_control_operations": direct_write_control,
         "internal_only_endpoints": internal_only,
         "openapi_internal_only_endpoints": openapi_internal_only,
         "gsad_proxy_allowlist_endpoints": gsad_allowed,
@@ -7975,13 +8016,19 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
     compact_browser_proxy_contract = {
         "alignment_status": browser_proxy_contract.get("alignment_status", "unknown") if isinstance(browser_proxy_contract, dict) else "unknown",
         "browser_proxied_count": browser_proxy_contract.get("browser_proxied_count", 0) if isinstance(browser_proxy_contract, dict) else 0,
+        "browser_write_proxy_count": browser_proxy_contract.get("browser_write_proxy_count", 0) if isinstance(browser_proxy_contract, dict) else 0,
+        "direct_write_control_count": browser_proxy_contract.get("direct_write_control_count", 0) if isinstance(browser_proxy_contract, dict) else 0,
         "internal_only_count": browser_proxy_contract.get("internal_only_count", 0) if isinstance(browser_proxy_contract, dict) else 0,
         "openapi_internal_only_count": browser_proxy_contract.get("openapi_internal_only_count", 0) if isinstance(browser_proxy_contract, dict) else 0,
         "gsad_proxy_allowlist_count": browser_proxy_contract.get("gsad_proxy_allowlist_count", 0) if isinstance(browser_proxy_contract, dict) else 0,
+        "gsad_proxy_methods": browser_proxy_contract.get("gsad_proxy_methods", []) if isinstance(browser_proxy_contract, dict) else [],
+        "write_proxy_boundary_status": browser_proxy_contract.get("write_proxy_boundary_status", "unknown") if isinstance(browser_proxy_contract, dict) else "unknown",
+        "write_proxy_requires_design": browser_proxy_contract.get("write_proxy_requires_design", False) if isinstance(browser_proxy_contract, dict) else False,
         "missing_gsad_proxy_allowlist_count": len(browser_proxy_contract.get("missing_gsad_proxy_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "unexpected_gsad_proxy_allowlist_count": len(browser_proxy_contract.get("unexpected_gsad_proxy_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "internal_only_gsad_proxy_allowlist_count": len(browser_proxy_contract.get("internal_only_gsad_proxy_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "parse_error_count": len(browser_proxy_contract.get("parse_errors", [])) if isinstance(browser_proxy_contract, dict) else 0,
+        "method_parse_error_count": len(browser_proxy_contract.get("gsad_proxy_method_parse_errors", [])) if isinstance(browser_proxy_contract, dict) else 0,
     }
     openapi_contract = summary.get("openapi_contract", {})
     compact_openapi_contract = {
@@ -8114,13 +8161,19 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
         "browser_proxy_contract": {
             "alignment_status": browser_proxy_contract.get("alignment_status", "unknown"),
             "browser_proxied_count": browser_proxy_contract.get("browser_proxied_count", 0),
+            "browser_write_proxy_count": browser_proxy_contract.get("browser_write_proxy_count", 0),
+            "direct_write_control_count": browser_proxy_contract.get("direct_write_control_count", 0),
             "openapi_internal_only_count": browser_proxy_contract.get("openapi_internal_only_count", 0),
             "internal_only_count": browser_proxy_contract.get("internal_only_count", 0),
             "gsad_proxy_allowlist_count": browser_proxy_contract.get("gsad_proxy_allowlist_count", 0),
+            "gsad_proxy_methods": browser_proxy_contract.get("gsad_proxy_methods", []),
+            "write_proxy_boundary_status": browser_proxy_contract.get("write_proxy_boundary_status", "unknown"),
+            "write_proxy_requires_design": browser_proxy_contract.get("write_proxy_requires_design", False),
             "missing_gsad_proxy_allowlist_count": browser_proxy_contract.get("missing_gsad_proxy_allowlist_count", 0),
             "unexpected_gsad_proxy_allowlist_count": browser_proxy_contract.get("unexpected_gsad_proxy_allowlist_count", 0),
             "internal_only_gsad_proxy_allowlist_count": browser_proxy_contract.get("internal_only_gsad_proxy_allowlist_count", 0),
             "parse_error_count": browser_proxy_contract.get("parse_error_count", 0),
+            "method_parse_error_count": browser_proxy_contract.get("method_parse_error_count", 0),
         },
         "openapi_contract": {
             "alignment_status": openapi_contract.get("alignment_status", "unknown"),

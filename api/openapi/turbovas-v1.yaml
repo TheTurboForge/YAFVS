@@ -726,7 +726,7 @@ paths:
       x-turbovas-replaces: credential-redacted-metadata-list-read
       x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
       summary: List redacted credential metadata
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Credential secrets, credential-store secret selectors, export/download behavior, and all credential writes are intentionally excluded.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native direct write-control can patch credential name/comment metadata; credential secrets, credential-store secret selectors, credential type, allow_insecure, target/scanner links, export/download behavior, create, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -760,7 +760,7 @@ paths:
       x-turbovas-replaces: credential-redacted-metadata-detail-read
       x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
       summary: Read one redacted credential metadata record
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Credential secrets, credential-store secret selectors, export/download behavior, and all credential writes are intentionally excluded.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native direct write-control can patch credential name/comment metadata; credential secrets, credential-store secret selectors, credential type, allow_insecure, target/scanner links, export/download behavior, create, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:
@@ -778,6 +778,50 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchCredentialsByCredentialId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: credential-metadata-modify
+      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Update credential metadata
+      description: Direct write-control endpoint for updating credential name and comment only. Credential secrets, credential-store selectors, allow_insecure, credential type, target/scanner links, export, download, create, clone, restore, and delete remain on inherited compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/CredentialId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialPatchRequest'
+      responses:
+        '200':
+          description: Credential metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -5162,6 +5206,19 @@ components:
           type: string
           maxLength: 4096
           description: Optional saved-filter term stored as operator configuration data.
+    CredentialPatchRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 4096
+          description: New credential name. Blank names are rejected after trimming.
+        comment:
+          type: string
+          maxLength: 4096
+          description: New credential comment. Blank comments clear the comment after trimming.
     SchedulePatchRequest:
       type: object
       minProperties: 1

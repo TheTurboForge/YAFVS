@@ -79,10 +79,15 @@ fn credential_routes_are_direct_read_only_allowlisted() {
             direct_api_v1_method_is_allowed(&Method::GET, path, false),
             "GET {path} must be method-allowlisted without write control"
         );
-        assert!(
-            !direct_api_v1_method_is_allowed(&Method::PATCH, path, true),
-            "credential native reads must not accidentally allow write methods"
-        );
+        let patch_allowed = direct_api_v1_method_is_allowed(&Method::PATCH, path, true);
+        if path == "/api/v1/credentials" {
+            assert!(!patch_allowed, "credential list PATCH must remain closed");
+        } else {
+            assert!(
+                patch_allowed,
+                "credential detail PATCH must be direct write-control allowlisted"
+            );
+        }
     }
 }
 
@@ -102,12 +107,46 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "x-turbovas-maturity: live-read",
             replaces,
             "credential-secrets-writes-and-deletes",
-            "Credential secrets, credential-store secret selectors, export/download behavior, and all credential writes are intentionally excluded",
+            "credential secrets",
+            "credential-store secret selectors",
+            "export/download behavior",
         ] {
             assert!(
                 block.contains(required),
                 "{path} OpenAPI block missing {required}"
             );
         }
+    }
+}
+
+#[test]
+fn credential_patch_route_is_direct_write_control_metadata_only() {
+    let path = "/api/v1/credentials/12345678-1234-1234-1234-123456789abc";
+    assert!(
+        !direct_api_v1_method_is_allowed(&Method::PATCH, path, false),
+        "credential PATCH must be denied without direct write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::PATCH, path, true),
+        "credential PATCH must be direct write-control allowlisted"
+    );
+
+    let block = openapi_path_block("/credentials/{credential_id}");
+    for required in [
+        "    patch:",
+        "operationId: patchCredentialsByCredentialId",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: credential-metadata-modify",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-owner-semantics: preserve-existing-owner",
+        "x-turbovas-safety-contract: write-control-v1",
+        "x-turbovas-side-effect: metadata-write",
+        "CredentialPatchRequest",
+        "Credential secrets, credential-store selectors, allow_insecure, credential type, target/scanner links, export, download, create, clone, restore, and delete remain on inherited compatibility paths.",
+    ] {
+        assert!(
+            block.contains(required),
+            "credential patch block missing {required}"
+        );
     }
 }

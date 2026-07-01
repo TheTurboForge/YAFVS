@@ -58,10 +58,11 @@ The first API phase is read-only and report-focused:
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
 
-Scanner control, target/task writes, credential management, feed import,
+Scanner control, target/task writes, credential secret management, feed import,
 account management, and other high-consequence operations stay on the inherited
-path until separate native replacements are designed and proven. Native target
-and scanner reads intentionally do not expose credential secret material.
+path until separate native replacements are designed and proven. Direct
+credential write-control currently covers name/comment metadata only. Native
+target and scanner reads intentionally do not expose credential secret material.
 
 The browser integration remains same-origin and proxied through `gsad` while GSA
 reads migrate. Direct scriptable access is now a first-class development path:
@@ -218,7 +219,11 @@ Native target rows include target identity, host and exclude-host membership,
 alive-test labels, reverse-DNS flags, port-list reference, task references, and
 timestamps. They include safe credential metadata already visible in the
 inherited UI, such as credential UUID/name/type and SSH port, but never expose
-credential secret values.
+credential secret values. Native credential reads expose redacted metadata, and
+direct write-control may patch credential name/comment metadata only; credential
+secret material, store selectors, type/allow-insecure settings, scanner/target
+links, export/download, create/clone/restore/delete, and secret-bearing writes
+remain inherited.
 
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,

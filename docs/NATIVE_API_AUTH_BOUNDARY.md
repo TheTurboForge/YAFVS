@@ -38,8 +38,9 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - `TURBOVAS_API_DIRECT_WRITE_CONTROL` is the direct write-control enablement
   flag. It accepts only strict boolean values, requires
   `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
-  approved direct scope metadata/membership write routes plus tag metadata
-  create/update and unassigned-tag delete routes.
+  approved direct scope metadata/membership write routes, tag metadata
+  create/update and unassigned-tag delete routes, selected alert metadata
+  patches, and credential name/comment metadata patches.
 - `/healthz` is unauthenticated for readiness. `/api/v1/...` on the direct
   listener requires `Authorization: Bearer <token>` and returns JSON `401`
   errors for missing or wrong tokens.
@@ -47,10 +48,13 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   `405 method_not_allowed` unless the method/path pair is deliberately
   registered as direct write-control and `TURBOVAS_API_DIRECT_WRITE_CONTROL` is
   enabled with a verified operator identity. The current direct write surface is
-  limited to scope create/update/delete metadata and membership routes, plus
-  tag metadata create/update and unassigned-tag delete. Tag resource
-  assignment/filter actions, assigned-resource delete/trash behavior,
-  clone/copy, and export remain inherited.
+  limited to explicitly approved metadata/control routes. Scope
+  create/update/delete metadata and membership routes, tag metadata
+  create/update and unassigned-tag delete, selected alert metadata patches, and
+  credential name/comment metadata patches are currently native; tag
+  resource-assignment filter actions, assigned-resource delete/trash behavior,
+  clone/copy, export, credential secrets, and credential create/clone/delete
+  semantics remain inherited.
 - The direct listener applies a fixed in-flight cap to authenticated direct
   `GET` requests and returns JSON `429 too_many_requests` with `X-Request-Id`
   when the cap is reached. This is a coarse development pressure guard, not a
@@ -92,8 +96,9 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   direct API container for the opt-in helper. Do not pass generated runtime
   tokens through container environment variables.
 - Keep direct v1 write-control limited to explicitly reviewed routes. Scanner
-  control, credentials, feed sync, feed import/update/download/mirroring,
-  account management, target/task writes, alert delivery, security-information
+  control, credential secret/control paths, feed sync,
+  feed import/update/download/mirroring, account management, target/task writes,
+  alert delivery, security-information
   tag assignment, filter/bulk tag actions, trash, clone/copy, export, and
   destructive mutations stay inherited until native write/control designs are
   separately reviewed. Explicit tag add/remove for UUID resources on the tag's
@@ -105,6 +110,10 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   alert name/comment metadata PATCH is direct write-control, while alert
   delivery, method/event/condition payloads, active state, task links,
   credentials, export/test actions, and broad mutations remain inherited.
+- Credential name/comment metadata PATCH is direct write-control, while
+  credential secret material, credential-store selectors, type/allow-insecure
+  settings, scanner/target links, export/download, create/clone/restore/delete,
+  and secret-bearing writes remain inherited.
 - Do not expose arbitrary GMP command forwarding through `/api/v1`.
 - Treat `X-Request-Id` as correlation metadata only. It is not authentication,
   authorization, operator identity, or a trusted audit principal.

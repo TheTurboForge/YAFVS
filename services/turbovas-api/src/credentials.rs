@@ -66,7 +66,7 @@ pub(crate) async fn credential_asset_detail(
     ))
 }
 
-async fn load_credential_asset_detail(
+pub(crate) async fn load_credential_asset_detail(
     client: &Client,
     credential_id: &str,
 ) -> Result<CredentialAssetItem, ApiError> {

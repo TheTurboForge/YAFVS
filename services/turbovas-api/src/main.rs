@@ -16,6 +16,10 @@ mod collections;
 mod cpe_catalog;
 mod cpe_catalog_payloads;
 mod credential_payloads;
+mod credential_write_db;
+mod credential_write_sql;
+mod credential_write_validation;
+mod credential_writes;
 mod credentials;
 mod cve_catalog;
 mod cve_catalog_payloads;
@@ -167,6 +171,8 @@ mod collection_query_contract_tests;
 mod credential_contract_tests;
 #[cfg(test)]
 mod credential_write_characterization_tests;
+#[cfg(test)]
+mod credential_writes_tests;
 #[cfg(test)]
 mod direct_api_contract_tests;
 #[cfg(test)]

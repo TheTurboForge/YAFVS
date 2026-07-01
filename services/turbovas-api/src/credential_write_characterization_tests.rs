@@ -265,7 +265,7 @@ fn gsa_credential_command_still_carries_inherited_secret_write_download_surface(
 }
 
 #[test]
-fn native_credential_mutation_and_secret_transfer_routes_remain_closed() {
+fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
     for path in [
         "/api/v1/credentials",
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc",
@@ -278,10 +278,16 @@ fn native_credential_mutation_and_secret_transfer_routes_remain_closed() {
             direct_api_v1_method_is_allowed(&Method::GET, path, false),
             "credential read path must allow GET without write control: {path}"
         );
-        for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
+        for method in [Method::POST, Method::PUT, Method::DELETE] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, path, true),
                 "credential native mutation must remain closed for {method} {path}"
+            );
+        }
+        if path.ends_with("123456789abc") {
+            assert!(
+                direct_api_v1_method_is_allowed(&Method::PATCH, path, true),
+                "credential detail PATCH is now limited direct metadata write-control"
             );
         }
     }
@@ -314,15 +320,36 @@ fn native_credential_mutation_and_secret_transfer_routes_remain_closed() {
             "x-turbovas-exposure: direct-read",
             replaces,
             "credential-secrets-writes-and-deletes",
-            "Credential secrets, credential-store secret selectors, export/download behavior, and all credential writes are intentionally excluded",
+            "credential secrets",
+            "credential-store secret selectors",
+            "export/download behavior",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
         }
-        for forbidden in ["    post:", "    put:", "    patch:", "    delete:"] {
+        for forbidden in ["    post:", "    put:", "    delete:"] {
             assert!(
                 !block.contains(forbidden),
                 "{path} must not declare credential mutation method {forbidden}"
             );
+        }
+        if path == "/credentials/{credential_id}" {
+            assert!(block.contains("    patch:"));
+            for forbidden in [
+                "credential_store_id:",
+                "vault_id:",
+                "host_identifier:",
+                "password:",
+                "private_key:",
+                "community:",
+                "credential_type:",
+            ] {
+                assert!(
+                    !block.contains(forbidden),
+                    "credential patch OpenAPI must not expose secret/control field {forbidden}"
+                );
+            }
+        } else {
+            assert!(!block.contains("    patch:"));
         }
     }
 }

@@ -14,6 +14,7 @@ use crate::{
     app_state::{AppState, healthz},
     cert_advisories::*,
     cpe_catalog::*,
+    credential_writes::patch_credential,
     credentials::{credential_asset_detail, credential_assets},
     cve_catalog::*,
     feeds::feeds,
@@ -294,6 +295,10 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_filter),
             )
             .route("/api/v1/alerts/:alert_id", patch(patch_alert))
+            .route(
+                "/api/v1/credentials/:credential_id",
+                patch(patch_credential),
+            )
             .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))
             .route("/api/v1/port-lists/:port_list_id", delete(delete_port_list))
             .route(

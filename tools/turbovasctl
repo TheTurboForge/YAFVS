@@ -494,6 +494,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "cert-bund-advisory-list-read",
         "credential-redacted-metadata-detail-read",
         "credential-redacted-metadata-list-read",
+        "credential-metadata-modify",
         "cpe-catalog-detail-read",
         "cpe-catalog-list-read",
         "cve-catalog-detail-epss-reference-configuration-read",
@@ -666,6 +667,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/scanners/{scanner_id}"): "direct-read",
     ("get", "/credentials"): "direct-read",
     ("get", "/credentials/{credential_id}"): "direct-read",
+    ("patch", "/credentials/{credential_id}"): "direct-write",
     ("get", "/scan-configs"): "direct-read",
     ("get", "/scan-configs/{scan_config_id}"): "direct-read",
     ("patch", "/scan-configs/{scan_config_id}"): "direct-write",
@@ -993,6 +995,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "credential-secrets-writes-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "credential-redacted-metadata-detail-read",
+    },
+    ("patch", "/credentials/{credential_id}"): {
+        "x-turbovas-inherited-still-owns": "credential-secrets-writes-and-deletes",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "credential-metadata-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scan-configs"): {
         "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
@@ -6745,6 +6756,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA Credential detail redacted metadata (migrated through gsad same-origin proxy)", "read-only credential metadata automation", "native-api-request helper"],
             },
             {
+                "method": "patch",
+                "endpoint": "/api/v1/credentials/{credential_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native credential name/comment metadata modification"],
+            },
+            {
                 "endpoint": "/api/v1/scan-configs",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Scan Configs list (migrated through gsad same-origin proxy)", "read-only scan-config metadata automation", "native-api-request helper"],
@@ -7582,6 +7600,24 @@ def native_tooling_status_only_findings(findings: list[dict[str, Any]]) -> list[
 
 
 NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
+    {
+        "owner": "services/turbovas-api/src/credential_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/credential_writes.rs",),
+        "symbols": (
+            "pub(crate) struct CredentialPatchRequest",
+            "pub(crate) fn validate_credential_patch_request",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/credential_write_sql.rs",
+        "forbidden": ("services/turbovas-api/src/credential_writes.rs",),
+        "symbols": (
+            "pub(crate) fn credential_write_operator_owner_sql",
+            "pub(crate) fn credential_write_state_sql",
+            "pub(crate) fn credential_unique_name_sql",
+            "pub(crate) fn credential_update_metadata_sql",
+        ),
+    },
     {
         "owner": "services/turbovas-api/src/report_config_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/report_config_writes.rs",),
@@ -12316,6 +12352,9 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.tag-resource-in-use-after-remove",
             "native-api-direct.alert-fixture",
             "native-api-direct.alert-write-update",
+            "native-api-direct.credential-fixture",
+            "native-api-direct.credential-write-update",
+            "native-api-direct.credential-fixture-cleanup",
             "native-api-direct.alert-tag-write-create",
             "native-api-direct.alert-tag-resource-add",
             "native-api-direct.alert-tag-resource-in-use-after-add",
@@ -12449,6 +12488,9 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     tag_clone_name = f"{tag_name}-clone"
     alert_name = f"turbovas-direct-write-smoke-alert-{int(time.time())}-{os.getpid()}"
     alert_tag_name = f"turbovas-direct-write-smoke-alert-tag-{int(time.time())}-{os.getpid()}"
+    credential_id: str | None = None
+    credential_name = f"turbovas-direct-write-smoke-credential-{int(time.time())}-{os.getpid()}"
+    credential_updated_comment = "TurboVAS direct write smoke updated credential metadata"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
         findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.direct-write.config", f"Compose direct write-control config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
@@ -13402,6 +13444,55 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 if isinstance(alert_cleanup_details, dict):
                     alert_cleanup_details.update({"alert_id": alert_resource_id, "alert_name": alert_name, "alert_tag_id": alert_tag_id, "alert_tag_name": alert_tag_name, "deleted_counts": alert_cleanup_deleted})
                 findings.append(alert_cleanup_finding)
+
+            credential_fixture_sql = (
+                "WITH inserted AS (INSERT INTO credentials "
+                "(uuid, owner, name, comment, creation_time, modification_time, type, allow_insecure) "
+                f"SELECT make_uuid(), id, {sql_literal(credential_name)}, 'TurboVAS direct write smoke temporary credential', m_now(), m_now(), 'up', 0 "
+                f"FROM users WHERE uuid = {sql_literal(admin_uuid or '')} RETURNING id, uuid), "
+                "inserted_data AS (INSERT INTO credentials_data (credential, type, value) "
+                "SELECT id, 'username', 'turbovas-direct-write-smoke-user' FROM inserted "
+                "UNION ALL SELECT id, 'password', 'turbovas-direct-write-smoke-secret' FROM inserted RETURNING credential) "
+                "SELECT uuid FROM inserted;"
+            )
+            credential_fixture = psql(repo_root, credential_fixture_sql)
+            credential_id = psql_value(credential_fixture)
+            credential_fixture_ok = credential_fixture.returncode == 0 and bool(credential_id)
+            credential_fixture_finding = process_step_finding("pass" if credential_fixture_ok else "fail", "native-api-direct.credential-fixture", "Direct write-control smoke created a temporary credential fixture with sentinel secret rows." if credential_fixture_ok else "Direct write-control smoke failed to create a temporary credential fixture.", credential_fixture, ["psql", "fixed-credential-smoke-fixture"])
+            credential_fixture_details = credential_fixture_finding.setdefault("details", {})
+            if isinstance(credential_fixture_details, dict):
+                credential_fixture_details.update({"credential_id": credential_id, "credential_name": credential_name})
+            findings.append(credential_fixture_finding)
+
+            if credential_id:
+                credential_secret_sql = (
+                    "SELECT md5(string_agg(type || '=' || value, ',' ORDER BY type, value)) "
+                    "FROM credentials_data "
+                    f"WHERE credential = (SELECT id FROM credentials WHERE uuid = {sql_literal(credential_id)});"
+                )
+                credential_secret_before = psql_value(psql(repo_root, credential_secret_sql))
+                credential_patch_body = json.dumps({"comment": credential_updated_comment}, separators=(",", ":"))
+                credential_patch = direct_native_api_curl(repo_root, f"/api/v1/credentials/{urllib.parse.quote(credential_id)}", token=token, env=env, method="PATCH", body=credential_patch_body, extra_headers=content_type)
+                credential_patch_json, credential_patch_status = parse_json_output_with_http_status(credential_patch)
+                credential_secret_after = psql_value(psql(repo_root, credential_secret_sql))
+                credential_patch_ok = credential_patch.returncode == 0 and credential_patch_status == 200 and isinstance(credential_patch_json, dict) and credential_patch_json.get("id") == credential_id and credential_patch_json.get("comment") == credential_updated_comment and credential_secret_before and credential_secret_before == credential_secret_after
+                findings.append(native_api_probe_finding("pass" if credential_patch_ok else "fail", "native-api-direct.credential-write-update", "Direct write-control patched credential metadata without changing sentinel secret rows." if credential_patch_ok else "Direct write-control failed to patch credential metadata or changed sentinel secret rows.", credential_patch, direct_native_api_display_command(f"/api/v1/credentials/{urllib.parse.quote(credential_id)}", token=token, env=env, method="PATCH", body=credential_patch_body, extra_headers=content_type), credential_patch_json, {"http_status": credential_patch_status, "credential_id": credential_id, "secret_checksum_before": credential_secret_before, "secret_checksum_after": credential_secret_after, **summarize_native_api_response(credential_patch_json)}))
+
+                credential_cleanup_sql = (
+                    "WITH live_credential AS (SELECT id FROM credentials "
+                    f"WHERE uuid = {sql_literal(credential_id)} AND name = {sql_literal(credential_name)}), "
+                    "deleted_data AS (DELETE FROM credentials_data WHERE credential IN (SELECT id FROM live_credential)), "
+                    "deleted_credential AS (DELETE FROM credentials WHERE id IN (SELECT id FROM live_credential) RETURNING id) "
+                    "SELECT count(*) FROM deleted_credential;"
+                )
+                credential_cleanup = psql(repo_root, credential_cleanup_sql)
+                credential_cleanup_deleted = psql_value(credential_cleanup)
+                credential_cleanup_ok = credential_cleanup.returncode == 0 and credential_cleanup_deleted == "1"
+                credential_cleanup_finding = process_step_finding("pass" if credential_cleanup_ok else "fail", "native-api-direct.credential-fixture-cleanup", "Direct write-control smoke removed the temporary credential fixture and sentinel secret rows." if credential_cleanup_ok else "Direct write-control smoke failed to clean up the temporary credential fixture.", credential_cleanup, ["psql", "fixed-credential-smoke-cleanup"])
+                credential_cleanup_details = credential_cleanup_finding.setdefault("details", {})
+                if isinstance(credential_cleanup_details, dict):
+                    credential_cleanup_details.update({"credential_id": credential_id, "credential_name": credential_name, "deleted_count": credential_cleanup_deleted})
+                findings.append(credential_cleanup_finding)
 
             patch_body = json.dumps(
                 {"comment": "TurboVAS direct write smoke updated temporary tag", "value": "updated", "active": False},

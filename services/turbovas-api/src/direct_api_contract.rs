@@ -169,6 +169,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::PATCH, ["", "api", "v1", "alerts", alert_id]) => {
             direct_api_write_id_segment_is_allowed(alert_id)
         }
+        (&Method::PATCH, ["", "api", "v1", "credentials", credential_id]) => {
+            direct_api_write_id_segment_is_allowed(credential_id)
+        }
         (&Method::POST, ["", "api", "v1", "filters"]) => true,
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "filters", filter_id]) => {
             direct_api_write_id_segment_is_allowed(filter_id)

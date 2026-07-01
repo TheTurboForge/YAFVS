@@ -8164,12 +8164,57 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "owner": "services/turbovas-api/src/schedule_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
+        "symbols": (
+            "pub(crate) struct SchedulePatchRequest",
+            "pub(crate) struct ScheduleCloneRequest",
+            "pub(crate) fn validate_schedule_patch_request",
+            "pub(crate) fn validate_schedule_clone_request",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/filter_write_sql.rs",
         "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
         "symbols": (
             "pub(crate) fn filter_write_state_sql",
             "pub(crate) fn filter_unique_name_sql",
             "pub(crate) fn filter_update_metadata_sql",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/filter_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
+        "symbols": (
+            "pub(crate) struct FilterCreateRequest",
+            "pub(crate) struct FilterPatchRequest",
+            "pub(crate) struct FilterCloneRequest",
+            "pub(crate) fn validate_filter_create_request",
+            "pub(crate) fn validate_filter_patch_request",
+            "pub(crate) fn validate_filter_clone_request",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/scan_config_write_validation.rs",
+        "forbidden": ("services/turbovas-api/src/scan_config_writes.rs",),
+        "symbols": (
+            "pub(crate) struct ScanConfigPatchRequest",
+            "pub(crate) struct ScanConfigCloneRequest",
+            "pub(crate) fn validate_scan_config_patch_request",
+            "pub(crate) fn validate_scan_config_clone_request",
+        ),
+    },
+    {
+        "owner": "services/turbovas-api/src/scan_config_write_sql.rs",
+        "forbidden": ("services/turbovas-api/src/scan_config_writes.rs",),
+        "symbols": (
+            "pub(crate) fn scan_config_write_state_sql",
+            "pub(crate) fn scan_config_trash_state_sql",
+            "pub(crate) fn scan_config_clone_metadata_sql",
+            "pub(crate) fn scan_config_update_metadata_sql",
+            "pub(crate) fn scan_config_trash_insert_sql",
+            "pub(crate) fn scan_config_delete_metadata_sql",
+            "pub(crate) fn scan_config_restore_metadata_sql",
         ),
     },
     {

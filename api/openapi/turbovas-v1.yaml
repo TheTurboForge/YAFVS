@@ -1541,6 +1541,39 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /tags/{tag_id}/export:
+    get:
+      operationId: getTagsByTagIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: tag-metadata-export-read
+      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-export
+      summary: Export tag metadata
+      description: Scriptable JSON metadata export for one tag. Security-information tag assignment, filter-based resource actions, assigned-resource delete, and inherited file export remain compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/TagId'
+      responses:
+        '200':
+          description: Tag metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tags/{tag_id}/clone:
     post:
       operationId: postTagsByTagIdClone

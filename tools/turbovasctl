@@ -588,6 +588,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tag-active-resource-assignment-write",
         "tag-clone",
         "tag-hard-delete",
+        "tag-metadata-export-read",
         "tag-metadata-read",
         "tag-restore",
         "tag-trash-move",
@@ -701,6 +702,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/tags"): "direct-read",
     ("get", "/tags/{tag_id}"): "direct-read",
     ("get", "/tags/{tag_id}/resources"): "direct-read",
+    ("get", "/tags/{tag_id}/export"): "direct-read",
     ("get", "/trashcan/summary"): "direct-read",
     ("get", "/reports"): "direct-read",
     ("get", "/reports/{report_id}"): "direct-read",
@@ -1093,6 +1095,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-metadata-read",
+    },
+    ("get", "/tags/{tag_id}/export"): {
+        "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "tag-metadata-export-read",
     },
     ("post", "/tags"): {
         "x-turbovas-inherited-still-owns": "tag-security-info-filter-actions-export",
@@ -1548,6 +1555,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/tags/resource-names/{}",
         "/api/v1/tags/{}",
         "/api/v1/tags/{}/resources",
+        "/api/v1/tags/{}/export",
         "/api/v1/overrides",
         "/api/v1/overrides/{}",
         "/api/v1/port-lists",
@@ -7135,6 +7143,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/tags/{tag_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Tag detail metadata (migrated through gsad same-origin proxy)", "read-only tag metadata automation"],
+            },
+            {
+                "endpoint": "/api/v1/tags/{tag_id}/export",
+                "status": "implemented_internal_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["direct native JSON tag metadata export", "read-only tag metadata automation"],
             },
             {
                 "endpoint": "/api/v1/tags/{tag_id}/resources",

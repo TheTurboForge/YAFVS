@@ -101,8 +101,23 @@ pub(crate) async fn tag_asset_detail(
     State(state): State<AppState>,
     Path(tag_id): Path<String>,
 ) -> Result<Json<TagAssetItem>, ApiError> {
-    parse_uuid(&tag_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_tag_asset_detail(&client, &tag_id).await?))
+}
+
+pub(crate) async fn export_tag_metadata(
+    State(state): State<AppState>,
+    Path(tag_id): Path<String>,
+) -> Result<Json<TagAssetItem>, ApiError> {
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(load_tag_asset_detail(&client, &tag_id).await?))
+}
+
+pub(crate) async fn load_tag_asset_detail(
+    client: &tokio_postgres::Client,
+    tag_id: &str,
+) -> Result<TagAssetItem, ApiError> {
+    parse_uuid(&tag_id)?;
     let row = client
         .query_opt(
             r#"SELECT t.uuid AS id,
@@ -127,7 +142,7 @@ pub(crate) async fn tag_asset_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(tag_asset_from_row(&row)))
+    Ok(tag_asset_from_row(&row))
 }
 
 pub(crate) async fn tag_asset_resources(

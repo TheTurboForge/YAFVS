@@ -7172,8 +7172,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/results/{result_id}/export",
-                "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["direct native result metadata export", "native-api-request helper"],
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA result metadata export (migrated through gsad same-origin proxy)", "direct native result metadata export", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/vulnerabilities",

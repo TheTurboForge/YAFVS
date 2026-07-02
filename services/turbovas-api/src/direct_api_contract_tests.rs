@@ -407,8 +407,9 @@ fn runtime_accepts_distinct_internal_and_direct_routers() {
     assert!(startup_source.contains("let base_router = native_api_router();"));
     assert!(
         startup_source
-            .contains("let internal_app = base_router.clone().with_state(state.clone());")
+            .contains("browser_proxy_native_api_router(base_router.clone(), browser_proxy_auth)")
     );
+    assert!(startup_source.contains(".with_state(state.clone())"));
     assert!(startup_source.contains(
         "direct_native_api_router(base_router, auth.write_control_enabled()).with_state(state)"
     ));
@@ -442,6 +443,37 @@ fn direct_api_router_applies_body_limit_to_extractors() {
     let direct_routes = direct_api_route_registration_block(source);
     assert!(direct_routes.contains("DefaultBodyLimit::max("));
     assert!(direct_routes.contains("MAX_DIRECT_API_WRITE_BODY_BYTES as usize"));
+}
+
+#[test]
+fn browser_proxy_write_router_is_secret_gated_and_narrow() {
+    let source = include_str!("routes.rs");
+    let startup_source = include_str!("startup.rs");
+    let browser_routes = browser_proxy_route_registration_block(source);
+
+    assert!(startup_source.contains("let browser_proxy_auth = browser_proxy_api_config()?;"));
+    assert!(browser_routes.contains("let Some(auth) = auth else"));
+    assert!(browser_routes.contains("/api/v1/filters"));
+    assert!(browser_routes.contains("/api/v1/filters/:filter_id/clone"));
+    assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
+    assert!(browser_routes.contains("post(browser_proxy_clone_filter)"));
+    assert!(browser_routes.contains("DefaultBodyLimit::max("));
+    assert!(browser_routes.contains("Extension(auth)"));
+    assert!(!browser_routes.contains("patch("));
+    assert!(!browser_routes.contains("delete("));
+    assert!(!browser_routes.contains("targets"));
+    assert!(!browser_routes.contains("credentials"));
+    assert!(!browser_routes.contains("scanner"));
+}
+
+fn browser_proxy_route_registration_block(source: &str) -> &str {
+    source
+        .split_once("pub(crate) fn browser_proxy_native_api_router(")
+        .expect("browser proxy router must be registered")
+        .1
+        .split_once("\n}\n\n#[cfg(test)]")
+        .expect("browser proxy router must end before tests")
+        .0
 }
 
 fn registered_routes(routes: &str) -> Vec<RegisteredRoute<'_>> {

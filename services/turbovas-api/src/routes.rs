@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use axum::{
-    Router,
+    Extension, Router,
     extract::DefaultBodyLimit,
     routing::{delete, get, patch, post},
 };
@@ -12,6 +12,9 @@ use crate::{
     alert_writes::patch_alert,
     alerts::*,
     app_state::{AppState, healthz},
+    browser_proxy_api::{
+        BrowserProxyAuth, browser_proxy_clone_filter, browser_proxy_create_filter,
+    },
     cert_advisories::*,
     cpe_catalog::*,
     credential_writes::patch_credential,
@@ -426,6 +429,27 @@ pub(crate) fn direct_native_api_router(
     ))
 }
 
+pub(crate) fn browser_proxy_native_api_router(
+    router: Router<AppState>,
+    auth: Option<BrowserProxyAuth>,
+) -> Router<AppState> {
+    let Some(auth) = auth else {
+        return router;
+    };
+    let write_router = Router::new()
+        .route("/api/v1/filters", post(browser_proxy_create_filter))
+        .route(
+            "/api/v1/filters/:filter_id/clone",
+            post(browser_proxy_clone_filter),
+        )
+        .layer(DefaultBodyLimit::max(
+            MAX_DIRECT_API_WRITE_BODY_BYTES as usize,
+        ))
+        .layer(Extension(auth));
+
+    router.merge(write_router)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,5 +459,12 @@ mod tests {
         let base_router = native_api_router();
         let _direct_read_router = direct_native_api_router(base_router, false);
         let _direct_write_router = direct_native_api_router(native_api_router(), true);
+        let _browser_proxy_router = browser_proxy_native_api_router(native_api_router(), None);
+        let _browser_write_router = browser_proxy_native_api_router(
+            native_api_router(),
+            Some(BrowserProxyAuth::new(
+                "0123456789abcdef0123456789abcdef".to_string(),
+            )),
+        );
     }
 }

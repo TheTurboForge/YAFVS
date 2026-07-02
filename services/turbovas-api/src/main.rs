@@ -12,6 +12,7 @@ mod alerts;
 mod app_state;
 mod asset_user_tag_query_sql;
 mod auth;
+mod browser_proxy_api;
 mod cert_advisories;
 mod cert_advisory_payloads;
 mod collections;

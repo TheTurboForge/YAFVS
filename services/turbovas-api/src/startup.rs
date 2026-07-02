@@ -6,10 +6,11 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 use crate::{
     app_state::{AppState, create_pool},
+    browser_proxy_api::browser_proxy_api_config,
     direct_api::direct_api_config,
     errors::ApiError,
     operator_identity::resolve_configured_direct_api_operator,
-    routes::{direct_native_api_router, native_api_router},
+    routes::{browser_proxy_native_api_router, direct_native_api_router, native_api_router},
     runtime::{DirectApiListener, serve_api},
 };
 
@@ -22,6 +23,7 @@ pub(crate) async fn run() -> Result<(), ApiError> {
     let state = AppState {
         pool: create_pool()?,
     };
+    let browser_proxy_auth = browser_proxy_api_config()?;
     let direct_api = direct_api_config()?;
     if let Some((_, auth)) = direct_api.as_ref() {
         let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
@@ -30,7 +32,8 @@ pub(crate) async fn run() -> Result<(), ApiError> {
         }
     }
     let base_router = native_api_router();
-    let internal_app = base_router.clone().with_state(state.clone());
+    let internal_app = browser_proxy_native_api_router(base_router.clone(), browser_proxy_auth)
+        .with_state(state.clone());
     let direct_api = direct_api.map(|(bind, auth)| {
         let direct_app =
             direct_native_api_router(base_router, auth.write_control_enabled()).with_state(state);

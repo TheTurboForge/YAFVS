@@ -33,6 +33,8 @@ pub(crate) struct TargetCreateRequest {
     pub(crate) hosts: Vec<String>,
     #[serde(default)]
     pub(crate) exclude_hosts: Option<Vec<String>>,
+    #[serde(default)]
+    pub(crate) credentials: Option<TargetCredentialsCreateRequest>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,6 +93,23 @@ pub(crate) struct TargetCredentialsPatchRequest {
     pub(crate) krb5: Option<TargetCredentialPatchFieldRequest>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TargetCredentialsCreateRequest {
+    #[serde(default)]
+    pub(crate) ssh: Option<TargetCredentialLinkPatchRequest>,
+    #[serde(default)]
+    pub(crate) ssh_elevate: Option<TargetCredentialLinkPatchRequest>,
+    #[serde(default)]
+    pub(crate) smb: Option<TargetCredentialLinkPatchRequest>,
+    #[serde(default)]
+    pub(crate) esxi: Option<TargetCredentialLinkPatchRequest>,
+    #[serde(default)]
+    pub(crate) snmp: Option<TargetCredentialLinkPatchRequest>,
+    #[serde(default)]
+    pub(crate) krb5: Option<TargetCredentialLinkPatchRequest>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedTargetCreate {
     pub(crate) name: String,
@@ -102,6 +121,7 @@ pub(crate) struct ValidatedTargetCreate {
     pub(crate) port_list_id: String,
     pub(crate) hosts: String,
     pub(crate) exclude_hosts: String,
+    pub(crate) credentials: ValidatedTargetCredentialsPatch,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -172,6 +192,7 @@ pub(crate) fn validate_target_create_request(
         port_list_id: validate_uuid(request.port_list_id, "port_list_id")?,
         hosts: hosts.ok_or_else(|| ApiError::BadRequest("hosts is required".to_string()))?,
         exclude_hosts: exclude_hosts.unwrap_or_default(),
+        credentials: validate_credentials_create(request.credentials)?,
     })
 }
 
@@ -283,6 +304,45 @@ fn validate_credentials_patch(
     Ok(patch)
 }
 
+fn validate_credentials_create(
+    request: Option<TargetCredentialsCreateRequest>,
+) -> Result<ValidatedTargetCredentialsPatch, ApiError> {
+    let Some(request) = request else {
+        return Ok(ValidatedTargetCredentialsPatch::default());
+    };
+    let credentials = ValidatedTargetCredentialsPatch {
+        ssh: validate_credential_create_action(request.ssh, "credentials.ssh", true)?,
+        ssh_elevate: validate_credential_create_action(
+            request.ssh_elevate,
+            "credentials.ssh_elevate",
+            false,
+        )?,
+        smb: validate_credential_create_action(request.smb, "credentials.smb", false)?,
+        esxi: validate_credential_create_action(request.esxi, "credentials.esxi", false)?,
+        snmp: validate_credential_create_action(request.snmp, "credentials.snmp", false)?,
+        krb5: validate_credential_create_action(request.krb5, "credentials.krb5", false)?,
+    };
+    if !credentials.has_changes() {
+        return Err(ApiError::BadRequest(
+            "credentials create request must include at least one credential field".to_string(),
+        ));
+    }
+    Ok(credentials)
+}
+
+fn validate_credential_create_action(
+    request: Option<TargetCredentialLinkPatchRequest>,
+    field_name: &str,
+    allow_port: bool,
+) -> Result<Option<ValidatedCredentialPatchAction>, ApiError> {
+    let Some(request) = request else {
+        return Ok(None);
+    };
+    Ok(Some(ValidatedCredentialPatchAction::Set(
+        validate_credential_link_request(request, field_name, allow_port)?,
+    )))
+}
+
 fn validate_credential_patch_action(
     action: Option<TargetCredentialPatchFieldRequest>,
     field_name: &str,
@@ -297,6 +357,16 @@ fn validate_credential_patch_action(
         }
         TargetCredentialPatchFieldRequest::Set(request) => request,
     };
+    Ok(Some(ValidatedCredentialPatchAction::Set(
+        validate_credential_link_request(request, field_name, allow_port)?,
+    )))
+}
+
+fn validate_credential_link_request(
+    request: TargetCredentialLinkPatchRequest,
+    field_name: &str,
+    allow_port: bool,
+) -> Result<ValidatedCredentialLinkPatch, ApiError> {
     let port = match (allow_port, request.port) {
         (true, None) => Some(22),
         (true, Some(port)) if (1..=65535).contains(&port) => Some(port),
@@ -312,12 +382,10 @@ fn validate_credential_patch_action(
             )));
         }
     };
-    Ok(Some(ValidatedCredentialPatchAction::Set(
-        ValidatedCredentialLinkPatch {
-            id: validate_uuid(request.id, &format!("{field_name}.id"))?,
-            port,
-        },
-    )))
+    Ok(ValidatedCredentialLinkPatch {
+        id: validate_uuid(request.id, &format!("{field_name}.id"))?,
+        port,
+    })
 }
 
 fn deserialize_credential_patch_field<'de, D>(

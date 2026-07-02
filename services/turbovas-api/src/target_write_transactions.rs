@@ -46,6 +46,7 @@ pub(crate) async fn execute_target_create_transaction(
     owner_id: i32,
     port_list_internal_id: i32,
     request: &ValidatedTargetCreate,
+    credential_links: &ResolvedTargetCredentialsPatch,
 ) -> Result<TargetWriteRecord, ApiError> {
     let record = query_target_write_record_with_internal_id(
         tx,
@@ -65,7 +66,85 @@ pub(crate) async fn execute_target_create_transaction(
         "create target metadata",
     )
     .await?;
+    apply_target_credential_link_changes(tx, record.internal_id, credential_links).await?;
     Ok(TargetWriteRecord { uuid: record.uuid })
+}
+
+pub(crate) async fn resolve_target_create_credential_links(
+    tx: &Transaction<'_>,
+    operator_owner_id: i32,
+    credentials: &ValidatedTargetCredentialsPatch,
+) -> Result<ResolvedTargetCredentialsPatch, ApiError> {
+    let resolved = ResolvedTargetCredentialsPatch {
+        ssh: resolve_credential_patch_action(
+            tx,
+            credentials.ssh.as_ref(),
+            operator_owner_id,
+            SSH_CREDENTIAL_TYPES,
+            "credentials.ssh",
+        )
+        .await?,
+        ssh_elevate: resolve_credential_patch_action(
+            tx,
+            credentials.ssh_elevate.as_ref(),
+            operator_owner_id,
+            ELEVATE_CREDENTIAL_TYPES,
+            "credentials.ssh_elevate",
+        )
+        .await?,
+        smb: resolve_credential_patch_action(
+            tx,
+            credentials.smb.as_ref(),
+            operator_owner_id,
+            SMB_CREDENTIAL_TYPES,
+            "credentials.smb",
+        )
+        .await?,
+        esxi: resolve_credential_patch_action(
+            tx,
+            credentials.esxi.as_ref(),
+            operator_owner_id,
+            ESXI_CREDENTIAL_TYPES,
+            "credentials.esxi",
+        )
+        .await?,
+        snmp: resolve_credential_patch_action(
+            tx,
+            credentials.snmp.as_ref(),
+            operator_owner_id,
+            SNMP_CREDENTIAL_TYPES,
+            "credentials.snmp",
+        )
+        .await?,
+        krb5: resolve_credential_patch_action(
+            tx,
+            credentials.krb5.as_ref(),
+            operator_owner_id,
+            KRB5_CREDENTIAL_TYPES,
+            "credentials.krb5",
+        )
+        .await?,
+    };
+    let final_ssh = resolved_credential_internal_id(resolved.ssh.as_ref());
+    let final_elevate = resolved_credential_internal_id(resolved.ssh_elevate.as_ref());
+    let final_smb = resolved_credential_internal_id(resolved.smb.as_ref());
+    let final_krb5 = resolved_credential_internal_id(resolved.krb5.as_ref());
+    if final_elevate.is_some() && final_ssh.is_none() {
+        return Err(ApiError::BadRequest(
+            "credentials.ssh_elevate requires an ssh credential".to_string(),
+        ));
+    }
+    if final_ssh.is_some() && final_ssh == final_elevate {
+        return Err(ApiError::BadRequest(
+            "credentials.ssh and credentials.ssh_elevate must be different credentials".to_string(),
+        ));
+    }
+    if final_smb.is_some() && final_krb5.is_some() {
+        return Err(ApiError::BadRequest(
+            "credentials.smb and credentials.krb5 cannot both be assigned".to_string(),
+        ));
+    }
+    Ok(resolved)
 }
 
 pub(crate) async fn execute_target_clone_transaction(
@@ -420,6 +499,13 @@ async fn final_target_credential_internal_id(
         None => {
             load_current_target_credential_internal_id(tx, target_internal_id, credential_use).await
         }
+    }
+}
+
+fn resolved_credential_internal_id(action: Option<&ResolvedCredentialPatchAction>) -> Option<i32> {
+    match action {
+        Some(ResolvedCredentialPatchAction::Set { internal_id, .. }) => Some(*internal_id),
+        Some(ResolvedCredentialPatchAction::Clear) | None => None,
     }
 }
 

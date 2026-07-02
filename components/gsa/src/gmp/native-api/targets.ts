@@ -104,6 +104,7 @@ export interface NativeTargetCreateArgs {
   aliveTests: AliveTest[];
   allowSimultaneousIPs: boolean;
   comment?: string;
+  credentials?: NativeTargetCredentialsPatchArgs;
   excludeHosts?: string[];
   hosts: string[];
   name: string;
@@ -383,6 +384,14 @@ export const createNativeTarget = async (
   gmp: NativeApiGmp,
   args: NativeTargetCreateArgs,
 ): Promise<Response<ActionResult>> => {
+  const credentialEntries = Object.entries({
+    ssh: args.credentials?.ssh,
+    ssh_elevate: args.credentials?.sshElevate,
+    smb: args.credentials?.smb,
+    esxi: args.credentials?.esxi,
+    snmp: args.credentials?.snmp,
+    krb5: args.credentials?.krb5,
+  }).filter(([, value]) => value !== undefined);
   const payload = await writeNativeJson<NativeTargetItem>(
     gmp,
     'api/v1/targets',
@@ -398,6 +407,9 @@ export const createNativeTarget = async (
       allow_simultaneous_ips: args.allowSimultaneousIPs,
       reverse_lookup_only: args.reverseLookupOnly,
       reverse_lookup_unify: args.reverseLookupUnify,
+      ...(credentialEntries.length > 0
+        ? {credentials: Object.fromEntries(credentialEntries)}
+        : {}),
     },
   );
   return new Response(

@@ -35,13 +35,26 @@ pub(crate) async fn create_target(
         .await
         .map_err(|error| map_target_write_db_error(error, "begin create target transaction"))?;
     let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
-    tx.batch_execute("LOCK TABLE targets, port_lists IN SHARE ROW EXCLUSIVE MODE;")
+    tx.batch_execute(
+        "LOCK TABLE targets, targets_login_data, port_lists, credentials IN SHARE ROW EXCLUSIVE MODE;",
+    )
         .await
         .map_err(|error| map_target_write_db_error(error, "lock targets for create"))?;
     ensure_unique_target_name(&tx, &request.name, -1, owner_id).await?;
     let port_list = load_assignable_target_port_list(&tx, &request.port_list_id, owner_id).await?;
-    let record =
-        execute_target_create_transaction(&tx, owner_id, port_list.internal_id, &request).await?;
+    let credential_links = if request.credentials.has_changes() {
+        resolve_target_create_credential_links(&tx, owner_id, &request.credentials).await?
+    } else {
+        ResolvedTargetCredentialsPatch::default()
+    };
+    let record = execute_target_create_transaction(
+        &tx,
+        owner_id,
+        port_list.internal_id,
+        &request,
+        &credential_links,
+    )
+    .await?;
     tx.commit()
         .await
         .map_err(|error| map_target_write_db_error(error, "commit create target transaction"))?;

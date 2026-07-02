@@ -177,19 +177,27 @@ const nativeTargetCreateArgsFromParams = ({
   ) {
     return undefined;
   }
-  if (port !== undefined && port !== 22) {
+  const hasCredentialInput = [
+    esxiCredentialId,
+    krb5CredentialId,
+    smbCredentialId,
+    snmpCredentialId,
+    sshCredentialId,
+    sshElevateCredentialId,
+  ].some(id => !isUnsetCredential(id));
+  if (port !== undefined && port !== 22 && !hasCredentialInput) {
     return undefined;
   }
-  if (
-    ![
-      esxiCredentialId,
-      krb5CredentialId,
-      smbCredentialId,
-      snmpCredentialId,
-      sshCredentialId,
-      sshElevateCredentialId,
-    ].every(isUnsetCredential)
-  ) {
+  const credentials = nativeTargetCredentialsCreateFromParams({
+    esxiCredentialId,
+    krb5CredentialId,
+    port,
+    smbCredentialId,
+    snmpCredentialId,
+    sshCredentialId,
+    sshElevateCredentialId,
+  });
+  if (credentials === undefined && hasCredentialInput) {
     return undefined;
   }
   if (
@@ -228,6 +236,63 @@ const nativeTargetCreateArgsFromParams = ({
     allowSimultaneousIPs,
     reverseLookupOnly,
     reverseLookupUnify,
+    ...(credentials !== undefined ? {credentials} : {}),
+  };
+};
+
+const nativeTargetCredentialsCreateFromParams = ({
+  esxiCredentialId,
+  krb5CredentialId,
+  port,
+  smbCredentialId,
+  snmpCredentialId,
+  sshCredentialId,
+  sshElevateCredentialId,
+}: Pick<
+  TargetCommandCreateParams,
+  | 'esxiCredentialId'
+  | 'krb5CredentialId'
+  | 'port'
+  | 'smbCredentialId'
+  | 'snmpCredentialId'
+  | 'sshCredentialId'
+  | 'sshElevateCredentialId'
+>): NativeTargetCredentialsPatchArgs | undefined => {
+  if (!isValidSshPort(port)) {
+    return undefined;
+  }
+  if (port !== undefined && port !== 22 && isUnsetCredential(sshCredentialId)) {
+    return undefined;
+  }
+  if (isUnsetCredential(sshCredentialId) && !isUnsetCredential(sshElevateCredentialId)) {
+    return undefined;
+  }
+  const credentials: NativeTargetCredentialsPatchArgs = {
+    ssh: nativeCredentialCreateFromId(sshCredentialId, port),
+    sshElevate: nativeCredentialCreateFromId(sshElevateCredentialId),
+    smb: nativeCredentialCreateFromId(smbCredentialId),
+    esxi: nativeCredentialCreateFromId(esxiCredentialId),
+    snmp: nativeCredentialCreateFromId(snmpCredentialId),
+    krb5: nativeCredentialCreateFromId(krb5CredentialId),
+  };
+  return Object.values(credentials).some(value => value !== undefined)
+    ? credentials
+    : undefined;
+};
+
+const nativeCredentialCreateFromId = (
+  id?: string,
+  port?: number,
+): NativeTargetCredentialPatchArgs | undefined => {
+  if (isUnsetCredential(id)) {
+    return undefined;
+  }
+  if (id.trim().length === 0) {
+    return undefined;
+  }
+  return {
+    id,
+    ...(port !== undefined ? {port} : {}),
   };
 };
 

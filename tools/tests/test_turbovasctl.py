@@ -3057,7 +3057,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'tag-restore',
          'tag-trash-move',
          'target-clone',
-         'target-create',
+         'target-create-with-optional-credential-references',
          'target-detail-summary-read',
          'target-hard-delete',
          'target-list-read',
@@ -7034,6 +7034,7 @@ db2:keys=5,expires=0,avg_ttl=0
             credential_uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
             target_uuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
             target_clone_uuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbc"
+            target_create_with_credential_uuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbd"
             target_live = {"value": True}
             target_clone_live = {"value": True}
             target_updated_comment = "TurboVAS direct write smoke updated target metadata"
@@ -7086,6 +7087,8 @@ db2:keys=5,expires=0,avg_ttl=0
                     if "md5" in command_text and "targets_login_data" in command_text and "FROM targets" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "target-adjacent-state-checksum\n", "")
                     if "SELECT count(*)::text || '|' || coalesce(max(port)::text" in command_text:
+                        if target_create_with_credential_uuid in command_text:
+                            return turbovasctl.subprocess.CompletedProcess(command, 0, "1|2222\n", "")
                         value = "1|22" if target_credential_link_count["value"] else "0|"
                         return turbovasctl.subprocess.CompletedProcess(command, 0, value + "\n", "")
                     if "SELECT count(*)::text FROM targets_login_data" in command_text:
@@ -7156,6 +7159,11 @@ db2:keys=5,expires=0,avg_ttl=0
                 if method == "POST" and path == "/api/v1/targets":
                     payload = json.loads(body)
                     self.assertEqual(payload["port_list_id"], port_list_uuid)
+                    if payload["hosts"] == ["192.0.2.44"]:
+                        self.assertEqual(payload["exclude_hosts"], [])
+                        self.assertEqual(payload["alive_tests"], ["TCP-ACK Service Ping"])
+                        self.assertEqual(payload["credentials"], {"ssh": {"id": credential_uuid, "port": 2222}})
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_create_with_credential_uuid, "name": payload["name"], "comment": payload["comment"], "credentials": {"ssh": {"id": credential_uuid, "port": 2222}}}) + "\n201", "")
                     self.assertEqual(payload["hosts"], ["192.0.2.42"])
                     self.assertEqual(payload["exclude_hosts"], [])
                     self.assertEqual(payload["alive_tests"], ["TCP-ACK Service Ping"])
@@ -7528,6 +7536,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.credential-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.credential-fixture-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.target-write-create"], "pass")
+        self.assertEqual(checks["native-api-direct.target-create-with-credential-link"], "pass")
         self.assertEqual(checks["native-api-direct.target-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.target-alive-test-update"], "pass")
         self.assertEqual(checks["native-api-direct.target-port-list-update"], "pass")

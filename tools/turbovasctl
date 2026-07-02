@@ -616,7 +616,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tag-metadata-write",
         "tag-resource-name-read",
         "tag-resource-reference-read",
-        "target-create",
+        "target-create-with-optional-credential-references",
         "target-detail-summary-read",
         "target-clone",
         "target-hard-delete",
@@ -1475,7 +1475,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
-        "x-turbovas-replaces": "target-create",
+        "x-turbovas-replaces": "target-create-with-optional-credential-references",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
     },
@@ -7909,7 +7909,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/targets",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["same-origin browser target create for simple manual targets", "direct native target create with bounded metadata and explicit scan inputs"],
+                "replacement_candidates": ["same-origin browser target create for simple manual targets with optional existing credential references", "direct native target create with bounded metadata, explicit scan inputs, and secret-free credential references"],
             },
             {
                 "endpoint": "/api/v1/targets/{target_id}",
@@ -13604,6 +13604,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.credential-write-update",
             "native-api-direct.credential-fixture-cleanup",
             "native-api-direct.target-write-create",
+            "native-api-direct.target-create-with-credential-link",
             "native-api-direct.target-write-update",
             "native-api-direct.target-write-clone",
             "native-api-direct.target-write-delete-clone",
@@ -13766,9 +13767,11 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     credential_updated_comment = "TurboVAS direct write smoke updated credential metadata"
     target_id: str | None = None
     target_clone_id: str | None = None
+    target_create_with_credential_id: str | None = None
     target_credential_id: str | None = None
     target_name = f"turbovas-direct-write-smoke-target-{int(time.time())}-{os.getpid()}"
     target_clone_name = f"{target_name}-clone"
+    target_create_with_credential_name = f"{target_name}-with-credential"
     target_credential_name = f"{target_name}-credential"
     target_updated_comment = "TurboVAS direct write smoke updated target metadata"
     task_id: str | None = None
@@ -14896,6 +14899,30 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         f"WHERE credential = (SELECT id FROM credentials WHERE uuid = {sql_literal(target_credential_id)});"
                     )
                     target_credential_secret_before = psql_value(psql(repo_root, target_credential_secret_sql))
+                    target_create_with_credential_body = json.dumps(
+                        {
+                            "name": target_create_with_credential_name,
+                            "comment": "TurboVAS direct write smoke target created with credential reference",
+                            "port_list_id": predefined_port_list_id,
+                            "hosts": ["192.0.2.44"],
+                            "exclude_hosts": [],
+                            "alive_tests": ["TCP-ACK Service Ping"],
+                            "allow_simultaneous_ips": True,
+                            "reverse_lookup_only": False,
+                            "reverse_lookup_unify": False,
+                            "credentials": {"ssh": {"id": target_credential_id, "port": 2222}},
+                        },
+                        separators=(",", ":"),
+                    )
+                    target_create_with_credential = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=target_create_with_credential_body, extra_headers=content_type)
+                    target_create_with_credential_json, target_create_with_credential_status = parse_json_output_with_http_status(target_create_with_credential)
+                    target_create_with_credential_id = target_create_with_credential_json.get("id") if isinstance(target_create_with_credential_json, dict) and isinstance(target_create_with_credential_json.get("id"), str) else None
+                    target_create_with_credential_link_state = psql_value(psql(repo_root, "SELECT count(*)::text || '|' || coalesce(max(port)::text, '') FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_create_with_credential_id or '')}) AND credential = (SELECT id FROM credentials WHERE uuid = {sql_literal(target_credential_id)}) AND type = 'ssh';")) if target_create_with_credential_id else None
+                    target_credential_secret_after_create = psql_value(psql(repo_root, target_credential_secret_sql))
+                    target_create_with_credential_response_credentials = target_create_with_credential_json.get("credentials") if isinstance(target_create_with_credential_json, dict) else None
+                    target_create_with_credential_response_ssh = target_create_with_credential_response_credentials.get("ssh") if isinstance(target_create_with_credential_response_credentials, dict) else None
+                    target_create_with_credential_ok = target_create_with_credential.returncode == 0 and target_create_with_credential_status == 201 and bool(target_create_with_credential_id) and isinstance(target_create_with_credential_response_ssh, dict) and target_create_with_credential_response_ssh.get("id") == target_credential_id and target_create_with_credential_response_ssh.get("port") == 2222 and target_create_with_credential_link_state == "1|2222" and target_credential_secret_before and target_credential_secret_before == target_credential_secret_after_create
+                    findings.append(native_api_probe_finding("pass" if target_create_with_credential_ok else "fail", "native-api-direct.target-create-with-credential-link", "Direct write-control created a temporary target with an existing SSH credential reference without touching credential secret rows." if target_create_with_credential_ok else "Direct write-control failed to create a target with an existing SSH credential reference safely.", target_create_with_credential, direct_native_api_display_command("/api/v1/targets", token=token, env=env, method="POST", body=target_create_with_credential_body, extra_headers=content_type), target_create_with_credential_json, {"http_status": target_create_with_credential_status, "target_id": target_create_with_credential_id, "credential_id": target_credential_id, "link_state": target_create_with_credential_link_state, "secret_checksum_before": target_credential_secret_before, "secret_checksum_after": target_credential_secret_after_create, **summarize_native_api_response(target_create_with_credential_json)}))
                     target_credential_patch_body = json.dumps({"credentials": {"ssh": {"id": target_credential_id}}}, separators=(",", ":"))
                     target_credential_patch = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_patch_body, extra_headers=content_type)
                     target_credential_patch_json, target_credential_patch_status = parse_json_output_with_http_status(target_credential_patch)
@@ -15139,10 +15166,12 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 target_cleanup_sql = (
                     "WITH live_target AS (SELECT id FROM targets "
                     f"WHERE (uuid = {sql_literal(target_id)} AND name = {sql_literal(target_name)}) "
-                    f"OR (uuid = {sql_literal(target_clone_id or '')} AND name = {sql_literal(target_clone_name)})), "
+                    f"OR (uuid = {sql_literal(target_clone_id or '')} AND name = {sql_literal(target_clone_name)}) "
+                    f"OR (uuid = {sql_literal(target_create_with_credential_id or '')} AND name = {sql_literal(target_create_with_credential_name)})), "
                     "trash_target AS (SELECT id FROM targets_trash "
                     f"WHERE (uuid = {sql_literal(target_id)} AND name = {sql_literal(target_name)}) "
-                    f"OR (uuid = {sql_literal(target_clone_id or '')} AND name = {sql_literal(target_clone_name)})), "
+                    f"OR (uuid = {sql_literal(target_clone_id or '')} AND name = {sql_literal(target_clone_name)}) "
+                    f"OR (uuid = {sql_literal(target_create_with_credential_id or '')} AND name = {sql_literal(target_create_with_credential_name)})), "
                     "deleted_scope_targets AS (DELETE FROM scope_targets WHERE target IN (SELECT id FROM live_target)), "
                     "deleted_live_login_data AS (DELETE FROM targets_login_data WHERE target IN (SELECT id FROM live_target)), "
                     "deleted_trash_login_data AS (DELETE FROM targets_trash_login_data WHERE target IN (SELECT id FROM trash_target)), "
@@ -15160,7 +15189,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 target_cleanup_finding = process_step_finding("pass" if target_cleanup_ok else "fail", "native-api-direct.target-fixture-cleanup", "Direct write-control smoke verified or removed any temporary target live/trash residue." if target_cleanup_ok else "Direct write-control smoke failed to clean up temporary target live/trash residue.", target_cleanup, ["psql", "fixed-target-smoke-cleanup"])
                 target_cleanup_details = target_cleanup_finding.setdefault("details", {})
                 if isinstance(target_cleanup_details, dict):
-                    target_cleanup_details.update({"target_id": target_id, "target_clone_id": target_clone_id, "target_name": target_name, "deleted_counts": target_cleanup_deleted})
+                    target_cleanup_details.update({"target_id": target_id, "target_clone_id": target_clone_id, "target_create_with_credential_id": target_create_with_credential_id, "target_name": target_name, "deleted_counts": target_cleanup_deleted})
                 findings.append(target_cleanup_finding)
 
                 if target_credential_id:

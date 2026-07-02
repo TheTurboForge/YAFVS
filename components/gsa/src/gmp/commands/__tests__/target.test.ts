@@ -284,7 +284,146 @@ describe('TargetCommand tests', () => {
     expect(result.data.id).toEqual('native-target-id');
   });
 
-  test('should keep credential target creates on GMP when native API is available', async () => {
+  test('should create target with credential references through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-target-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    const result = await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'name',
+      comment: 'comment',
+      targetSource: 'manual',
+      targetExcludeSource: 'manual',
+      hosts: '192.0.2.10',
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: true,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 2222,
+      sshCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: UNSET_VALUE,
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/targets',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'name',
+          comment: 'comment',
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: ['192.0.2.10'],
+          exclude_hosts: [],
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: true,
+          credentials: {
+            ssh: {
+              id: '54b05b45-02be-4123-9b05-b4502be11234',
+              port: 2222,
+            },
+          },
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-target-id');
+  });
+
+  test('should create target with non-ssh credential references through native API when default ssh port is present', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-target-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'name',
+      comment: 'comment',
+      targetSource: 'manual',
+      targetExcludeSource: 'manual',
+      hosts: '192.0.2.10',
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: true,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+      sshCredentialId: UNSET_VALUE,
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: '54b05b45-02be-4123-9b05-b4502be11235',
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/targets',
+      expect.objectContaining({
+        body: JSON.stringify({
+          name: 'name',
+          comment: 'comment',
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: ['192.0.2.10'],
+          exclude_hosts: [],
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: true,
+          credentials: {
+            smb: {
+              id: '54b05b45-02be-4123-9b05-b4502be11235',
+            },
+          },
+        }),
+      }),
+    );
+  });
+
+  test('should keep invalid credential target creates on GMP when native API is available', async () => {
     const response = createActionResultResponse();
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -311,9 +450,8 @@ describe('TargetCommand tests', () => {
       reverseLookupUnify: true,
       portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
       aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-      sshCredentialId: 'ssh_id',
-      sshElevateCredentialId: UNSET_VALUE,
+      sshCredentialId: UNSET_VALUE,
+      sshElevateCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
       smbCredentialId: UNSET_VALUE,
       esxiCredentialId: UNSET_VALUE,
       snmpCredentialId: UNSET_VALUE,
@@ -325,7 +463,7 @@ describe('TargetCommand tests', () => {
       data: expect.objectContaining({
         cmd: 'create_target',
         hosts: '192.0.2.10',
-        ssh_credential_id: 'ssh_id',
+        ssh_elevate_credential_id: UNSET_VALUE,
       }),
     });
   });

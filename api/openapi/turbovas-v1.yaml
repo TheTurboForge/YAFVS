@@ -4379,14 +4379,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: target-create
+      x-turbovas-replaces: target-create-with-optional-credential-references
       x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
-      summary: Create target metadata and bounded scan inputs
-      description: Direct write-control endpoint for creating an operator-owned target with name, comment, existing port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, and simultaneous-IP behavior only. CIDR/range host grammar, inline port-list creation, create-time credential links, task/control semantics, file export, and credential secret material remain inherited; credential links may be changed later through target PATCH.
+      summary: Create target metadata, bounded scan inputs, and optional credential references
+      description: Direct write-control endpoint for creating an operator-owned target with name, comment, existing port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, simultaneous-IP behavior, and optional existing credential references only. CIDR/range host grammar, inline port-list creation, task/control semantics, file export, and credential secret material remain inherited.
       requestBody:
         required: true
         content:
@@ -5741,6 +5741,8 @@ components:
           items:
             type: string
             maxLength: 4096
+        credentials:
+          $ref: '#/components/schemas/TargetCredentialsCreateRequest'
     TargetPatchRequest:
       type: object
       additionalProperties: false
@@ -5808,6 +5810,24 @@ components:
           minimum: 1
           maximum: 65535
           description: SSH authentication port. Only supported for credentials.ssh; omitted SSH ports default to 22.
+    TargetCredentialsCreateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Target credential references to assign during target creation. Each present field sets that credential use to an existing credential reference. Null clear actions and secret material are never accepted.
+      properties:
+        ssh:
+          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        ssh_elevate:
+          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        smb:
+          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        esxi:
+          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        snmp:
+          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+        krb5:
+          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
     TargetCredentialsPatchRequest:
       type: object
       additionalProperties: false

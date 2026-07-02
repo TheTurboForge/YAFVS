@@ -8,9 +8,10 @@ use crate::{
     target_write_sql::*,
     target_write_validation::{
         MAX_TARGET_HOSTS, MAX_TARGET_TEXT_BYTES, TargetCloneRequest, TargetCreateRequest,
-        TargetCredentialLinkPatchRequest, TargetCredentialsPatchRequest, TargetPatchRequest,
-        ValidatedCredentialPatchAction, validate_alive_tests, validate_target_clone_request,
-        validate_target_create_request, validate_target_patch_request,
+        TargetCredentialLinkPatchRequest, TargetCredentialsCreateRequest,
+        TargetCredentialsPatchRequest, TargetPatchRequest, ValidatedCredentialPatchAction,
+        validate_alive_tests, validate_target_clone_request, validate_target_create_request,
+        validate_target_patch_request,
     },
 };
 
@@ -25,6 +26,7 @@ fn create_request() -> TargetCreateRequest {
         port_list_id: "12345678-1234-1234-1234-123456789abc".to_string(),
         hosts: vec!["192.0.2.42".to_string(), "host-one".to_string()],
         exclude_hosts: Some(vec!["192.0.2.43".to_string()]),
+        credentials: None,
     }
 }
 
@@ -181,6 +183,34 @@ fn target_create_request_requires_explicit_safe_scan_inputs() {
     );
     assert_eq!(validated.hosts, "192.0.2.42, host-one");
     assert_eq!(validated.exclude_hosts, "192.0.2.43");
+    assert!(!validated.credentials.has_changes());
+}
+
+#[test]
+fn target_create_request_accepts_secret_free_credential_references() {
+    let ssh_id = "12345678-1234-1234-1234-123456789abc";
+    let snmp_id = "12345678-1234-1234-1234-123456789abd";
+    let mut request = create_request();
+    request.credentials = Some(TargetCredentialsCreateRequest {
+        ssh: Some(credential_link(ssh_id, Some(2222))),
+        snmp: Some(credential_link(snmp_id, None)),
+        ..Default::default()
+    });
+    let validated = validate_target_create_request(request).expect("valid create target");
+    match validated.credentials.ssh {
+        Some(ValidatedCredentialPatchAction::Set(link)) => {
+            assert_eq!(link.id, ssh_id);
+            assert_eq!(link.port, Some(2222));
+        }
+        _ => panic!("ssh credential should be set"),
+    }
+    match validated.credentials.snmp {
+        Some(ValidatedCredentialPatchAction::Set(link)) => {
+            assert_eq!(link.id, snmp_id);
+            assert_eq!(link.port, None);
+        }
+        _ => panic!("snmp credential should be set"),
+    }
 }
 
 #[test]
@@ -206,6 +236,13 @@ fn target_create_request_rejects_unsafe_or_missing_inputs() {
         "credential_id": "12345678-1234-1234-1234-123456789abc"
     });
     assert!(serde_json::from_value::<TargetCreateRequest>(request).is_err());
+
+    let mut request = create_request();
+    request.credentials = Some(TargetCredentialsCreateRequest::default());
+    assert!(matches!(
+        validate_target_create_request(request),
+        Err(ApiError::BadRequest(_))
+    ));
 }
 
 fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
@@ -224,7 +261,7 @@ fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
 }
 
 #[test]
-fn target_create_sql_is_metadata_only_and_credential_free() {
+fn target_create_metadata_sql_is_metadata_only_and_credential_free() {
     let sql = target_create_metadata_sql();
     assert!(sql.contains("INSERT INTO targets"));
     assert!(sql.contains("make_uuid()"));

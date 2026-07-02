@@ -71,6 +71,10 @@ export interface NativeFilterCreateArgs {
   term: string;
 }
 
+export interface NativeFilterPatchArgs extends NativeFilterCreateArgs {
+  id: string;
+}
+
 const FILTER_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   term: 'term',
@@ -154,9 +158,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
@@ -261,6 +266,24 @@ export const createNativeFilter = async (
       filter_type: filterType,
       term,
     },
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeFilter = async (
+  gmp: NativeApiGmp,
+  {id, name, comment = '', filterType, term}: NativeFilterPatchArgs,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeFilterPayload>(
+    gmp,
+    `api/v1/filters/${encodeURIComponent(id)}`,
+    {
+      name,
+      comment,
+      filter_type: filterType,
+      term,
+    },
+    'PATCH',
   );
   return new Response({id: stringValue(payload.id)});
 };

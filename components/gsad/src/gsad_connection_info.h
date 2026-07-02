@@ -25,9 +25,10 @@
 typedef enum gsad_method_type
 {
   METHOD_TYPE_UNKNOWN =
-    0, ///< Other/Unknown method types. Currently only GET and POST are used.
+    0, ///< Other/Unknown method types.
   METHOD_TYPE_POST = 1, ///< POST method.
-  METHOD_TYPE_GET = 2   ///< GET method.
+  METHOD_TYPE_GET = 2,  ///< GET method.
+  METHOD_TYPE_PATCH = 3 ///< PATCH method.
 } gsad_method_type_t;
 
 /**

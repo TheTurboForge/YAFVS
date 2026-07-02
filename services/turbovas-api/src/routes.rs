@@ -17,10 +17,10 @@ use crate::{
         browser_proxy_clone_report_config, browser_proxy_clone_scan_config,
         browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_clone_target,
         browser_proxy_create_filter, browser_proxy_create_port_list,
-        browser_proxy_create_report_config, browser_proxy_create_tag, browser_proxy_restore_filter,
-        browser_proxy_restore_port_list, browser_proxy_restore_report_config,
-        browser_proxy_restore_scan_config, browser_proxy_restore_schedule,
-        browser_proxy_restore_tag, browser_proxy_restore_target,
+        browser_proxy_create_report_config, browser_proxy_create_tag, browser_proxy_patch_filter,
+        browser_proxy_restore_filter, browser_proxy_restore_port_list,
+        browser_proxy_restore_report_config, browser_proxy_restore_scan_config,
+        browser_proxy_restore_schedule, browser_proxy_restore_tag, browser_proxy_restore_target,
         browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
@@ -446,6 +446,10 @@ pub(crate) fn browser_proxy_native_api_router(
     };
     let write_router = Router::new()
         .route("/api/v1/filters", post(browser_proxy_create_filter))
+        .route(
+            "/api/v1/filters/:filter_id",
+            patch(browser_proxy_patch_filter),
+        )
         .route("/api/v1/port-lists", post(browser_proxy_create_port_list))
         .route("/api/v1/tags", post(browser_proxy_create_tag))
         .route(

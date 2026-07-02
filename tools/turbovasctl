@@ -6934,6 +6934,14 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ):
             templates.add(f"{tag_prefix.rstrip('/')}/{{}}{resources_suffix}")
 
+    patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
+    if patch_function_body:
+        patch_constants = c_string_constants(patch_function_body)
+        for prefix_variable in ("filter_prefix",):
+            prefix = patch_constants.get(prefix_variable)
+            if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}")
+
     return sorted(templates), errors
 
 
@@ -6950,10 +6958,16 @@ def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], li
         return [], ["missing_native_api_url_handler"]
 
     methods: set[str] = set()
-    if "gsad_http_method_handler_new_get (native_api_get_handler)" in source or "gsad_http_method_handler_new_with_handlers (native_api_get_handler" in source:
+    if (
+        "gsad_http_method_handler_new_get (native_api_get_handler)" in source
+        or "gsad_http_method_handler_new_with_handlers (native_api_get_handler" in source
+        or "gsad_http_method_handler_new_with_patch_handler (native_api_get_handler" in source
+    ):
         methods.add("GET")
     if "gsad_http_method_handler_new_post (native_api_post_handler)" in source or "native_api_post_handler" in source:
         methods.add("POST")
+    if "native_api_patch_handler" in source:
+        methods.add("PATCH")
     return sorted(methods), [] if methods else ["missing_native_api_method_handler"]
 
 
@@ -7380,7 +7394,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "patch",
                 "endpoint": "/api/v1/filters/{filter_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native saved-filter name/comment/type/term metadata modification"],
             },

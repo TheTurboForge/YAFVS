@@ -15,8 +15,8 @@ use crate::{
     auth::{DirectApiOperator, constant_time_str_eq, direct_api_bearer_token_is_acceptable},
     errors::ApiError,
     filter_payloads::FilterAssetItem,
-    filter_write_validation::{FilterCloneRequest, FilterCreateRequest},
-    filter_writes::{clone_filter, create_filter, restore_filter},
+    filter_write_validation::{FilterCloneRequest, FilterCreateRequest, FilterPatchRequest},
+    filter_writes::{clone_filter, create_filter, patch_filter, restore_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
     port_list_payloads::PortListAssetDetail,
     port_list_write_validation::{PortListCloneRequest, PortListCreateRequest},
@@ -144,6 +144,23 @@ pub(crate) async fn browser_proxy_create_filter(
 ) -> Result<(StatusCode, Json<FilterAssetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_filter(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_filter(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(filter_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<FilterPatchRequest>,
+) -> Result<Json<FilterAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_filter(
+        State(state),
+        Path(filter_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_create_port_list(

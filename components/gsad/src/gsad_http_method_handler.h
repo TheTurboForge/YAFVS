@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -11,6 +12,11 @@
 gsad_http_handler_t *
 gsad_http_method_handler_new_with_handlers (gsad_http_handler_t *,
                                             gsad_http_handler_t *);
+
+gsad_http_handler_t *
+gsad_http_method_handler_new_with_patch_handler (gsad_http_handler_t *,
+                                                 gsad_http_handler_t *,
+                                                 gsad_http_handler_t *);
 
 gsad_http_handler_t *
   gsad_http_method_handler_new_get_from_func (gsad_http_handler_func_t);

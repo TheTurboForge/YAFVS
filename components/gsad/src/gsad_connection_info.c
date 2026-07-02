@@ -8,7 +8,7 @@
 
 struct gsad_connection_info
 {
-  gsad_method_type_t method_type;          ///< 1=POST, 2=GET.
+  gsad_method_type_t method_type;          ///< HTTP method type.
   gchar *url;                              ///< Request URL.
   params_t *params;                        ///< Request parameters.
   struct MHD_PostProcessor *postprocessor; ///< POST processor.

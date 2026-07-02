@@ -243,6 +243,88 @@ describe('FilterCommand tests', () => {
     expect(result.data.id).toEqual('123');
   });
 
+  test('should save an existing filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-filter-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'filter-id',
+      name: 'Test Filter 1',
+      type: 'host',
+      term: 'name=Test',
+      comment: 'comment',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/filters/filter-id');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/filters/filter-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'Test Filter 1',
+          comment: 'comment',
+          filter_type: 'host',
+          term: 'name=Test',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-filter-id');
+  });
+
+  test('should not fall back to GMP when native filter save fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'alert in use'}}),
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'filter-id',
+        name: 'Test Filter 1',
+        type: 'host',
+        term: 'name=Test',
+      }),
+    ).rejects.toThrow('Native API request failed with status 409');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test.each<FilterResourceMapping>([
     {entityType: 'host', resourceType: 'host'},
     {entityType: 'operatingsystem', resourceType: 'os'},

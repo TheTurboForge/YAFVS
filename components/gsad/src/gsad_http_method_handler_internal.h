@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -15,6 +16,7 @@ typedef struct gsad_http_method_handler
 {
   gsad_http_handler_t *get;  ///< Handler for GET requests.
   gsad_http_handler_t *post; ///< Handler for POST requests.
+  gsad_http_handler_t *patch; ///< Handler for PATCH requests.
 } gsad_http_method_handler_t;
 
 void

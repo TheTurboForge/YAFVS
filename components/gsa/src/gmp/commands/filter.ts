@@ -11,7 +11,11 @@ import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
-import {cloneNativeFilter, createNativeFilter} from 'gmp/native-api/filters';
+import {
+  cloneNativeFilter,
+  createNativeFilter,
+  patchNativeFilter,
+} from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
 interface GetFilterResponseData extends XmlResponseData {
@@ -72,7 +76,7 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     return super.clone({id});
   }
 
-  save(args: {
+  async save(args: {
     id: string;
     term: string;
     name: string;
@@ -80,12 +84,23 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     comment?: string;
   }) {
     const {id, term, name, type, comment = ''} = args;
+    const filterType = resourceType(type);
+    if (filterType !== undefined && canUseNativeApi(this.http)) {
+      return patchNativeFilter(this.http, {
+        id,
+        term,
+        name,
+        filterType,
+        comment,
+      });
+    }
+
     const data = {
       cmd: 'save_filter',
       comment,
       id,
       name,
-      resource_type: resourceType(type),
+      resource_type: filterType,
       term,
     };
     log.debug('Saving filter', args, data);

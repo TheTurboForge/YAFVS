@@ -403,6 +403,23 @@ browser_proxy_operator_name (gsad_credentials_t *credentials)
 }
 
 static gboolean
+native_api_patch_path_is_allowed (const gchar *path)
+{
+  const gchar *filter_prefix = "/api/v1/filters/";
+
+  if (path == NULL || strchr (path, '?') != NULL)
+    return FALSE;
+
+  if (g_str_has_prefix (path, filter_prefix))
+    {
+      const gchar *id = path + strlen (filter_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  return FALSE;
+}
+
+static gboolean
 native_api_path_is_allowed (const gchar *path)
 {
   const gchar *raw_reports_path = "/api/v1/reports";
@@ -1117,7 +1134,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                    "Connection: close\r\n"
                    "User-Agent: gsad-native-api-proxy\r\n",
                    method, path, host, port);
-  if (g_strcmp0 (method, "POST") == 0)
+  if (g_strcmp0 (method, "POST") == 0 || g_strcmp0 (method, "PATCH") == 0)
     {
       g_string_append_printf (request,
                               "Content-Type: application/json\r\n"
@@ -1217,12 +1234,14 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
   return ret;
 }
 
-gsad_http_result_t
-gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
-                                  void *handler_data,
-                                  gsad_http_connection_t *connection,
-                                  gsad_connection_info_t *con_info,
-                                  void *data)
+typedef gboolean (*native_api_write_path_check_t) (const gchar *path);
+
+static gsad_http_result_t
+handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
+                         gsad_http_connection_t *connection,
+                         gsad_connection_info_t *con_info, void *data,
+                         const gchar *method,
+                         native_api_write_path_check_t path_is_allowed)
 {
   gsad_credentials_t *credentials = (gsad_credentials_t *) data;
   const gchar *path = gsad_connection_info_get_url (con_info);
@@ -1238,7 +1257,7 @@ gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
   (void) handler_next;
   (void) handler_data;
 
-  if (!native_api_post_path_is_allowed (path))
+  if (!path_is_allowed (path))
     {
       gsad_credentials_free (credentials);
       return send_json_error (connection, MHD_HTTP_NOT_FOUND,
@@ -1263,7 +1282,7 @@ gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
 
   request_body = gsad_connection_info_get_raw_body (con_info,
                                                     &request_body_length);
-  body = fetch_native_api_json ("POST", path, request_body, request_body_length,
+  body = fetch_native_api_json (method, path, request_body, request_body_length,
                                 secret, operator_name, &status_code,
                                 &error_message);
   gsad_credentials_free (credentials);
@@ -1281,4 +1300,28 @@ gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
                                              NULL, 0);
   g_free (body);
   return ret;
+}
+
+gsad_http_result_t
+gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
+                                  void *handler_data,
+                                  gsad_http_connection_t *connection,
+                                  gsad_connection_info_t *con_info,
+                                  void *data)
+{
+  return handle_native_api_write (handler_next, handler_data, connection,
+                                  con_info, data, "POST",
+                                  native_api_post_path_is_allowed);
+}
+
+gsad_http_result_t
+gsad_http_handle_native_api_patch (gsad_http_handler_t *handler_next,
+                                   void *handler_data,
+                                   gsad_http_connection_t *connection,
+                                   gsad_connection_info_t *con_info,
+                                   void *data)
+{
+  return handle_native_api_write (handler_next, handler_data, connection,
+                                  con_info, data, "PATCH",
+                                  native_api_patch_path_is_allowed);
 }

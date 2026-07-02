@@ -24,4 +24,9 @@ gsad_http_handle_native_api_post (gsad_http_handler_t *, void *,
                                   gsad_http_connection_t *,
                                   gsad_connection_info_t *, void *);
 
+gsad_http_result_t
+gsad_http_handle_native_api_patch (gsad_http_handler_t *, void *,
+                                   gsad_http_connection_t *,
+                                   gsad_connection_info_t *, void *);
+
 #endif /* _GSAD_NATIVE_API_H */

@@ -654,6 +654,34 @@ fn tls_certificate_detail_contract_excludes_certificate_bytes() {
 }
 
 #[test]
+fn tls_certificate_direct_routes_remain_get_only_until_export_or_delete_contracts_exist() {
+    for path in [
+        "/api/v1/tls-certificates",
+        "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc/export",
+    ] {
+        assert!(
+            direct_api_v1_path_is_allowed(path),
+            "GET {path} must be direct-read allowlisted"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, false),
+            "GET {path} must be allowed without write-control"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, true),
+            "GET {path} must remain allowed when write-control is enabled"
+        );
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, path, true),
+                "{method} {path} must stay closed until TLS certificate byte-export, delete, or rich-history contracts exist"
+            );
+        }
+    }
+}
+
+#[test]
 fn scanner_user_tags_are_detail_only_active_scanner_tags() {
     let source = include_str!("scanner_asset_payloads.rs");
     let scanner_list_payload = source

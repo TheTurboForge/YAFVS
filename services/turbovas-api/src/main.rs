@@ -125,6 +125,7 @@ mod scanner_asset_query_sql;
 mod scanner_assets;
 mod scanner_write_db;
 mod scanner_write_sql;
+mod scanner_write_transactions;
 mod scanner_write_validation;
 mod scanner_writes;
 mod schedule_payloads;

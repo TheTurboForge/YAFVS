@@ -8326,6 +8326,11 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "owner": "services/turbovas-api/src/scanner_write_transactions.rs",
+        "forbidden": ("services/turbovas-api/src/scanner_writes.rs",),
+        "symbols": ("pub(crate) async fn execute_scanner_patch_transaction",),
+    },
+    {
         "owner": "services/turbovas-api/src/report_config_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/report_config_writes.rs",),
         "symbols": (

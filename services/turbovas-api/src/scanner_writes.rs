@@ -6,7 +6,6 @@ use axum::{
     Json,
     extract::{Extension, Path, State},
 };
-use tokio_postgres::Transaction;
 
 use crate::{
     app_state::AppState,
@@ -15,10 +14,8 @@ use crate::{
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_assets::scanner_asset_detail,
     scanner_write_db::*,
-    scanner_write_sql::scanner_update_metadata_sql,
-    scanner_write_validation::{
-        ScannerPatchRequest, ValidatedScannerPatch, validate_scanner_patch_request,
-    },
+    scanner_write_transactions::execute_scanner_patch_transaction,
+    scanner_write_validation::{ScannerPatchRequest, validate_scanner_patch_request},
 };
 
 pub(crate) async fn patch_scanner(
@@ -50,18 +47,4 @@ pub(crate) async fn patch_scanner(
         .map_err(|error| map_scanner_write_db_error(error, "commit patch scanner transaction"))?;
 
     scanner_asset_detail(State(state), Path(record.uuid)).await
-}
-
-pub(crate) async fn execute_scanner_patch_transaction(
-    tx: &Transaction<'_>,
-    scanner_internal_id: i32,
-    request: &ValidatedScannerPatch,
-) -> Result<ScannerWriteRecord, ApiError> {
-    query_scanner_write_record(
-        tx,
-        scanner_update_metadata_sql(),
-        &[&scanner_internal_id, &request.name, &request.comment],
-        "update scanner metadata",
-    )
-    .await
 }

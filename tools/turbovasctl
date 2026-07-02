@@ -18378,7 +18378,34 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
     return result
 
 
-def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
+def runtime_webui_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    non_pass = [compact_browser_smoke_finding(item) for item in findings if isinstance(item, dict) and item.get("status") != "pass"]
+    checks = {
+        item.get("check"): item.get("status")
+        for item in findings
+        if isinstance(item, dict) and item.get("check")
+    }
+    urls = [
+        item.get("details", {}).get("url")
+        for item in findings
+        if isinstance(item, dict) and item.get("check", "").startswith("webui.http-") and isinstance(item.get("details"), dict)
+    ]
+    compact["details"] = {
+        "finding_count": len(findings),
+        "non_pass_count": len(non_pass),
+        "artifact_count": len(result.get("artifacts", [])) if isinstance(result.get("artifacts"), list) else 0,
+        "base_url_count": len({url.split('/', 3)[2] for url in urls if isinstance(url, str) and url.startswith("http")}),
+        "checks": checks,
+    }
+    compact["findings"] = non_pass or [
+        finding("pass", "runtime-webui-smoke.status-only", "Runtime web UI smoke passed with compact status-only output.")
+    ]
+    return compact
+
+
+def command_runtime_webui_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     static_dir = gsad_static_dir(repo_root)
     index_path = static_dir / "index.html"
@@ -18403,7 +18430,8 @@ def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
             asset_http = run_command(["curl", "-kfsS", "--max-time", "10", "-o", "/dev/null", f"{base_url}/{asset_rel}"], repo_root, env=runtime_env(repo_root))
             findings.append(finding("pass" if asset_http.returncode == 0 else "fail", "webui.http-asset", f"GSA asset HTTP probe exit code {asset_http.returncode}.", details={"url": f"{base_url}/{asset_rel}", "output_tail": output_tail(asset_http.stdout, 40)}))
 
-    return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
+    result = make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
+    return runtime_webui_smoke_status_only_result(result) if status_only else result
 
 
 def compact_browser_smoke_finding(item: dict[str, Any]) -> dict[str, Any]:
@@ -19512,7 +19540,8 @@ def build_parser() -> argparse.ArgumentParser:
     direct_token = subparsers.add_parser("runtime-native-api-direct-token", parents=[common], help="inspect or rotate the opt-in direct native API runtime bearer token")
     direct_token.add_argument("--rotate", action="store_true", help="rotate the ignored runtime bearer token without printing it")
     subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal TurboVAS native API sidecar")
-    subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
+    webui_smoke = subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
+    webui_smoke.add_argument("--status-only", action="store_true", help="emit compact web UI smoke status and only non-pass findings for chat-safe validation")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
     browser_smoke.add_argument("--status-only", action="store_true", help="emit compact browser-smoke status and only non-pass findings for chat-safe validation")
@@ -19687,7 +19716,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "runtime-native-api-rebuild":
         result = command_runtime_native_api_rebuild(repo_root)
     elif args.command == "runtime-webui-smoke":
-        result = command_runtime_webui_smoke(repo_root)
+        result = command_runtime_webui_smoke(repo_root, status_only=args.status_only)
     elif args.command == "runtime-browser-smoke":
         result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke, status_only=args.status_only)
     elif args.command == "runtime-browser-regression":

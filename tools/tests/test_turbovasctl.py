@@ -926,6 +926,34 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn('append_query_param (target, params, "token")', native_api)
         self.assertNotIn("MHD_POSTDATA_KIND", native_api)
 
+    def test_runtime_webui_smoke_status_only_is_registered_and_compacts_output(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        self.assertIn("def command_runtime_webui_smoke", source)
+        self.assertIn("webui_smoke.add_argument(\"--status-only\"", source)
+        self.assertIn("command_runtime_webui_smoke(repo_root, status_only=args.status_only)", source)
+
+        result = turbovasctl.make_result(
+            "runtime-webui-smoke",
+            Path("/tmp/TurboVAS"),
+            "Runtime web UI smoke checks completed.",
+            [
+                turbovasctl.finding("pass", "webui.static-index", "index", "/tmp/index.html"),
+                turbovasctl.finding("pass", "webui.http-index", "index http", details={"url": "https://one/", "output_tail": ["large"]}),
+                turbovasctl.finding("warn", "webui.http-config", "config warning", details={"url": "https://two/config.js", "output_tail": ["large"]}),
+            ],
+            ["/tmp/static", "https://one", "https://two"],
+        )
+
+        compact = turbovasctl.runtime_webui_smoke_status_only_result(result)
+
+        self.assertEqual(compact["status"], "warn")
+        self.assertEqual(compact["details"]["finding_count"], 3)
+        self.assertEqual(compact["details"]["non_pass_count"], 1)
+        self.assertEqual(compact["details"]["artifact_count"], 3)
+        self.assertEqual(compact["details"]["base_url_count"], 2)
+        self.assertEqual(compact["findings"][0]["check"], "webui.http-config")
+        self.assertNotIn("output_tail", json.dumps(compact["findings"]))
+
     def test_runtime_browser_smoke_is_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         browser_smoke = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")

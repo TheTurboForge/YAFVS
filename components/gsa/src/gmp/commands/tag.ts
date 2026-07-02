@@ -12,7 +12,7 @@ import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import Tag, {type TagElement} from 'gmp/models/tag';
-import {cloneNativeTag} from 'gmp/native-api/tags';
+import {cloneNativeTag, createNativeTag} from 'gmp/native-api/tags';
 import {NO_VALUE, parseYesNo, YES_VALUE} from 'gmp/parser';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
@@ -43,7 +43,7 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     return root.get_tag.get_tags_response.tag;
   }
 
-  create({
+  async create({
     active,
     comment = '',
     filter,
@@ -52,9 +52,24 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     resourceType: resourceTypeValue,
     value = '',
   }: TagCommandCreateParams) {
+    const rawFilter = filterString(filter);
+    const nativeFilter = rawFilter ?? '';
+    if (canUseNativeApi(this.http) && resourceIds.length === 0 && nativeFilter === '') {
+      try {
+        return await createNativeTag(this.http, {
+          active,
+          comment,
+          name,
+          resourceType: resourceTypeValue,
+          value,
+        });
+      } catch (err) {
+        log.error('Native tag create failed, falling back to GMP', name, err);
+      }
+    }
     const data = {
       cmd: 'create_tag',
-      filter: filterString(filter),
+      filter: rawFilter,
       tag_name: name,
       tag_value: value,
       active: parseYesNo(active),

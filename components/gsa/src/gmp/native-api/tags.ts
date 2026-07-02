@@ -357,6 +357,32 @@ export const cloneNativeTag = async (
   return new Response({id: stringValue(payload.id)});
 };
 
+export const createNativeTag = async (
+  gmp: NativeApiGmp,
+  {
+    active,
+    comment,
+    name,
+    resourceType,
+    value,
+  }: {
+    active: boolean;
+    comment: string;
+    name: string;
+    resourceType: EntityType;
+    value: string;
+  },
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeTagPayload>(gmp, 'api/v1/tags', {
+    active,
+    comment,
+    name,
+    resource_type: nativeResourceType(resourceType),
+    value,
+  });
+  return new Response({id: stringValue(payload.id)});
+};
+
 export const fetchNativeTagResources = async (
   gmp: NativeApiGmp,
   id: string,

@@ -109,6 +109,98 @@ describe('TagCommand tests', () => {
     expect(data.id).toEqual('foo');
   });
 
+  test('should create a metadata-only tag through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.create({
+      active: false,
+      comment: 'comment',
+      name: 'name',
+      resourceType: 'task',
+      value: 'value',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          active: false,
+          comment: 'comment',
+          name: 'name',
+          resource_type: 'task',
+          value: 'value',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-tag-id');
+  });
+
+  test('should fall back to GMP when native metadata-only tag create fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.create({
+      active: true,
+      comment: 'comment',
+      name: 'name',
+      resourceType: 'task',
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        active: YES_VALUE,
+        cmd: 'create_tag',
+        comment: 'comment',
+        resource_type: 'task',
+        tag_name: 'name',
+        tag_value: '',
+      },
+    });
+    expect(result.data.id).toEqual('fallback-tag-id');
+  });
+
   test('should return single tag', async () => {
     const response = createEntityResponse('tag', {_id: 'foo'});
     const fakeHttp = createHttp(response);

@@ -371,6 +371,7 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "export-csv-report.gmp.py",
         "export-pdf-report.gmp.py",
         "export-xml-report.gmp.py",
+        "generate-scope-report.gmp.py",
     },
     "monthly_report_semantics": {
         "monthly-report-gos24.10.gmp.py",
@@ -426,6 +427,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-targets-from-csv.gmp.py": "Native tooling still lacks a CSV bulk-target import contract that maps hosts, credentials, alive-test selection, and port-list choice in one path.",
     "create-tasks-from-csv.gmp.py": "Native tooling still lacks a CSV bulk-task import contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "export-xml-report.gmp.py": "Native tooling still lacks a direct report-export contract that fetches a report by id, serializes XML, and writes the chosen file name locally.",
+    "generate-scope-report.gmp.py": "Native tooling still lacks a direct scope-report generation contract with explicit authorization, provenance, snapshot, and metric rebuild semantics.",
     "update-task-target.gmp.py": "Native tooling still lacks a task-target swap contract that clones the current target, preserves target settings, rebinds the task, and deletes the old target when unused.",
     "verify-scanners.gmp.py": "Native tooling still lacks a scanner verification readout that batches verify responses into an operator-facing table with host/version fallback handling.",
 }

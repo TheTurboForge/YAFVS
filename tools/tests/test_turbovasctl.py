@@ -5527,20 +5527,20 @@ class TurboVASCtlTests(unittest.TestCase):
 
         focused = turbovasctl.command_native_tooling_removal_review(
             root,
-            paths=["components/gvm-tools/scripts/export-xml-report.gmp.py"],
+            paths=["components/gvm-tools/scripts/generate-scope-report.gmp.py"],
         )
         focused_details = focused["details"]
         self.assertEqual(focused_details["total"], 1)
         self.assertEqual(focused_details["blocked_or_review_count"], 1)
         self.assertEqual(
             focused_details["path_filter"],
-            ["components/gvm-tools/scripts/export-xml-report.gmp.py"],
+            ["components/gvm-tools/scripts/generate-scope-report.gmp.py"],
         )
         self.assertEqual(focused_details["bucket_counts"], {"export_or_report_generation": 1})
         self.assertIn(
-            "serializes XML",
+            "scope-report generation contract",
             focused_details["buckets"][0]["path_blockers"][
-                "components/gvm-tools/scripts/export-xml-report.gmp.py"
+                "components/gvm-tools/scripts/generate-scope-report.gmp.py"
             ],
         )
 
@@ -5694,6 +5694,7 @@ class TurboVASCtlTests(unittest.TestCase):
         review = turbovasctl.native_tooling_removal_review(
             [
                 "components/gvm-tools/scripts/export-xml-report.gmp.py",
+                "components/gvm-tools/scripts/generate-scope-report.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-targets-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
@@ -5706,6 +5707,7 @@ class TurboVASCtlTests(unittest.TestCase):
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
         self.assertIn("serializes XML", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
+        self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
         self.assertIn("scanner verification readout", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])
         self.assertIn("CSV bulk-alert import contract", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
         self.assertIn("CSV bulk-target import contract", write_blockers["components/gvm-tools/scripts/create-targets-from-csv.gmp.py"])

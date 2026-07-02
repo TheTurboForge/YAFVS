@@ -49,6 +49,8 @@ mod host_asset_query_sql;
 mod host_assets;
 mod metrics;
 mod metrics_payloads;
+#[cfg(test)]
+mod monthly_report_characterization_tests;
 mod nvt_catalog;
 mod nvt_catalog_payloads;
 mod nvt_payloads;

@@ -1996,6 +1996,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "gsad_proxy_methods",
                 "write_proxy_boundary_status",
                 "write_proxy_requires_design",
+                "browser_delete_proxy_requires_design",
+                "browser_delete_proxy_design_count",
                 "missing_gsad_proxy_allowlist_count",
                 "unexpected_gsad_proxy_allowlist_count",
                 "internal_only_gsad_proxy_allowlist_count",
@@ -2008,6 +2010,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
+        self.assertTrue(status_only["details"]["browser_proxy_contract"]["browser_delete_proxy_requires_design"])
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_delete_proxy_design_count"], 15)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["missing_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["unexpected_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["internal_only_gsad_proxy_allowlist_count"], 0)
@@ -2383,6 +2387,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
         self.assertFalse(contract["write_proxy_requires_design"])
+        self.assertTrue(contract["browser_delete_proxy_requires_design"])
+        self.assertEqual(len(contract["browser_delete_proxy_design_operations"]), 15)
+        self.assertIn("DELETE /api/v1/targets/{target_id}", contract["browser_delete_proxy_design_operations"])
+        self.assertIn("DELETE /api/v1/filters/{filter_id}/trash", contract["browser_delete_proxy_design_operations"])
         self.assertIn("PATCH /api/v1/alerts/{alert_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/filters/{filter_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/credentials/{credential_id}", contract["browser_write_proxy_operations"])
@@ -2531,8 +2539,61 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(summary["alignment_status"], "warn")
         self.assertEqual(summary["write_proxy_boundary_status"], "warn")
         self.assertEqual(summary["gsad_proxy_methods"], ["GET"])
+        self.assertFalse(summary["browser_delete_proxy_requires_design"])
+        self.assertEqual(summary["browser_delete_proxy_design_operations"], [])
         self.assertEqual(summary["browser_write_proxy_operations"], ["POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/resources"])
         self.assertEqual(summary["direct_write_control_operations"], ["POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/resources"])
+
+    def test_native_tooling_state_reports_browser_delete_proxy_design_gap(self):
+        endpoints = [
+            {
+                "endpoint": "/api/v1/tags",
+                "method": "post",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+            },
+            {
+                "endpoint": "/api/v1/tags/{tag_id}",
+                "method": "delete",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            proxy_source = root / "components" / "gsad" / "src" / "gsad_native_api.c"
+            proxy_source.parent.mkdir(parents=True)
+            proxy_source.write_text(
+                "static gboolean\n"
+                "native_api_path_is_allowed (const gchar *path)\n"
+                "{\n"
+                "  return FALSE;\n"
+                "}\n"
+                "static gboolean\n"
+                "native_api_post_path_is_allowed (const gchar *path)\n"
+                "{\n"
+                "  const gchar *tags_path = \"/api/v1/tags\";\n"
+                "  if (g_strcmp0 (path, tags_path) == 0)\n"
+                "    return TRUE;\n"
+                "  return FALSE;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            request_source = root / "components" / "gsad" / "src" / "gsad_http_handle_request.c"
+            request_source.write_text(
+                'gsad_http_url_handler_new ("^/api/v1/.+$",\n'
+                "  gsad_http_method_handler_new_with_post_handler (native_api_get_handler, native_api_post_handler));\n",
+                encoding="utf-8",
+            )
+
+            summary = turbovasctl.native_api_browser_proxy_contract_summary(root, endpoints)
+
+        self.assertEqual(summary["alignment_status"], "pass")
+        self.assertEqual(summary["write_proxy_boundary_status"], "pass")
+        self.assertTrue(summary["browser_delete_proxy_requires_design"])
+        self.assertEqual(summary["browser_delete_proxy_design_operations"], ["DELETE /api/v1/tags/{tag_id}"])
+        self.assertEqual(summary["browser_write_proxy_operations"], ["POST /api/v1/tags"])
+        self.assertEqual(summary["missing_gsad_proxy_allowlist"], [])
 
     def test_native_tooling_state_parses_browser_post_proxy_boundary(self):
         endpoints = [

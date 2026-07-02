@@ -253,6 +253,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *filters_path = "/api/v1/filters";
   const gchar *tags_path = "/api/v1/tags";
   const gchar *filter_prefix = "/api/v1/filters/";
+  const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *clone_suffix = "/clone";
@@ -270,6 +271,18 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, filter_prefix))
     {
       const gchar *id = path + strlen (filter_prefix);
+      gsize id_length;
+
+      if (!g_str_has_suffix (id, clone_suffix))
+        return FALSE;
+
+      id_length = strlen (id) - strlen (clone_suffix);
+      return is_uuid_segment (id, id_length);
+    }
+
+  if (g_str_has_prefix (path, report_config_prefix))
+    {
+      const gchar *id = path + strlen (report_config_prefix);
       gsize id_length;
 
       if (!g_str_has_suffix (id, clone_suffix))

@@ -1,14 +1,18 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import type {EntityCommandParams} from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import type {Element} from 'gmp/models/model';
 import ReportConfig from 'gmp/models/report-config';
+import {cloneNativeReportConfig} from 'gmp/native-api/report-configs';
 import {parseYesNo} from 'gmp/parser';
 import {isArray} from 'gmp/utils/identity';
 
@@ -138,6 +142,17 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
       (root as ReportConfigResponseData).get_report_config
         ?.get_report_configs_response?.report_config ?? {}
     );
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativeReportConfig(this.http, id);
+      } catch (error) {
+        log.debug('Native report config clone failed, falling back to GMP', error);
+      }
+    }
+    return super.clone({id});
   }
 }
 

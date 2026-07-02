@@ -18,6 +18,9 @@ use crate::{
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest},
     filter_writes::{clone_filter, create_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
+    report_config_payloads::ReportConfigAssetItem,
+    report_config_write_validation::ReportConfigCloneRequest,
+    report_config_writes::clone_report_config,
     schedule_payloads::ScheduleAssetDetail,
     schedule_write_validation::ScheduleCloneRequest,
     schedule_writes::clone_schedule,
@@ -85,6 +88,23 @@ pub(crate) async fn browser_proxy_clone_filter(
     clone_filter(
         State(state),
         Path(filter_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_clone_report_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(report_config_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ReportConfigCloneRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ReportConfigAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_report_config(
+        State(state),
+        Path(report_config_id),
         Some(Extension(operator)),
         Json(request),
     )

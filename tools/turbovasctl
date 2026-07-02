@@ -6898,6 +6898,26 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             if suffix.startswith("/"):
                 templates.add(f"{scope_prefix.rstrip('/')}/{{}}/reports/{{}}{suffix}")
 
+    post_function_body = c_source_function_body(source, "native_api_post_path_is_allowed")
+    if post_function_body:
+        post_constants = c_string_constants(post_function_body)
+        for match in re.finditer(
+            r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
+            post_function_body,
+            re.DOTALL,
+        ):
+            variable = match.group(1)
+            value = post_constants.get(variable)
+            if value and value.startswith("/api/v1"):
+                templates.add(value)
+            else:
+                errors.append(f"unresolved_post_exact_path:{variable}")
+
+        filter_prefix = post_constants.get("filter_prefix")
+        clone_suffix = post_constants.get("clone_suffix")
+        if filter_prefix and clone_suffix and "g_str_has_prefix (path, filter_prefix)" in post_function_body:
+            templates.add(f"{filter_prefix.rstrip('/')}/{{}}{clone_suffix}")
+
     return sorted(templates), errors
 
 
@@ -6914,8 +6934,10 @@ def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], li
         return [], ["missing_native_api_url_handler"]
 
     methods: set[str] = set()
-    if "gsad_http_method_handler_new_get (native_api_get_handler)" in source:
+    if "gsad_http_method_handler_new_get (native_api_get_handler)" in source or "gsad_http_method_handler_new_with_handlers (native_api_get_handler" in source:
         methods.add("GET")
+    if "gsad_http_method_handler_new_post (native_api_post_handler)" in source or "native_api_post_handler" in source:
+        methods.add("POST")
     return sorted(methods), [] if methods else ["missing_native_api_method_handler"]
 
 
@@ -7335,7 +7357,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/filters",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native saved-filter create"],
             },
@@ -7356,7 +7378,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/filters/{filter_id}/clone",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native saved-filter clone"],
             },

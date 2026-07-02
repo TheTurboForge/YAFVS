@@ -53,6 +53,7 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
   gsad_http_handler_t *gmp_get_handler = NULL;
   gsad_http_handler_t *gmp_post_handler = NULL;
   gsad_http_handler_t *native_api_get_handler = NULL;
+  gsad_http_handler_t *native_api_post_handler = NULL;
   gsad_http_handler_t *system_report_handler = NULL;
 
   gboolean is_jwt_requested = gsad_settings_is_jwt_requested (gsad_settings);
@@ -65,6 +66,8 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
       gmp_post_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       native_api_get_handler =
+        gsad_http_handler_new (gsad_http_handle_setup_credentials);
+      native_api_post_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
@@ -82,6 +85,10 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
         gsad_http_handler_new (gsad_http_handle_setup_user);
       gsad_http_handler_add_from_func (native_api_get_handler,
                                        gsad_http_handle_setup_credentials);
+      native_api_post_handler =
+        gsad_http_handler_new (gsad_http_handle_setup_user);
+      gsad_http_handler_add_from_func (native_api_post_handler,
+                                       gsad_http_handle_setup_credentials);
       system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_user);
       gsad_http_handler_add_from_func (system_report_handler,
@@ -97,11 +104,15 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
   url_handlers = gsad_http_handler_add (url_handlers, gmp_url_handler);
   next = url_handlers;
 
-  // Create authenticated same-origin handler for allowlisted native API reads.
+  // Create authenticated same-origin handlers for allowlisted native API paths.
   gsad_http_handler_add_from_func (native_api_get_handler,
                                    gsad_http_handle_native_api_get);
+  gsad_http_handler_add_from_func (native_api_post_handler,
+                                   gsad_http_handle_native_api_post);
   gsad_http_handler_t *native_api_url_handler = gsad_http_url_handler_new (
-    "^/api/v1/.+$", gsad_http_method_handler_new_get (native_api_get_handler));
+    "^/api/v1/.+$",
+    gsad_http_method_handler_new_with_handlers (native_api_get_handler,
+                                                native_api_post_handler));
   next = gsad_http_handler_add (next, native_api_url_handler);
 
   gboolean is_api_only = gsad_settings_is_api_only_enabled (gsad_settings);

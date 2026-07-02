@@ -15,6 +15,7 @@
 #include "gsad_credentials.h"
 #include "gsad_http.h"
 #include "gsad_params.h"
+#include "gsad_user.h"
 
 #include <errno.h>
 #include <netdb.h>
@@ -30,6 +31,12 @@
 #define DEFAULT_NATIVE_API_HOST "turbovas-api"
 #define DEFAULT_NATIVE_API_PORT "9080"
 #define NATIVE_API_MAX_RESPONSE_BYTES (10 * 1024 * 1024)
+#define BROWSER_PROXY_SECRET_ENV "TURBOVAS_API_BROWSER_PROXY_SECRET"
+#define BROWSER_PROXY_SECRET_HEADER "x-turbovas-browser-proxy-secret"
+#define BROWSER_PROXY_OPERATOR_HEADER "x-turbovas-operator-name"
+#define BROWSER_PROXY_SECRET_MIN_LENGTH 32
+#define BROWSER_PROXY_SECRET_MAX_LENGTH 4096
+#define BROWSER_PROXY_OPERATOR_MAX_LENGTH 256
 
 static gboolean
 is_uuid_segment (const gchar *value, gsize length)
@@ -238,6 +245,87 @@ is_tag_resource_type_segment (const gchar *value, gsize length)
       return TRUE;
 
   return FALSE;
+}
+
+static gboolean
+native_api_post_path_is_allowed (const gchar *path)
+{
+  const gchar *filters_path = "/api/v1/filters";
+  const gchar *filter_prefix = "/api/v1/filters/";
+  const gchar *clone_suffix = "/clone";
+
+  if (path == NULL || strchr (path, '?') != NULL)
+    return FALSE;
+
+  if (g_strcmp0 (path, filters_path) == 0)
+    return TRUE;
+
+  if (g_str_has_prefix (path, filter_prefix))
+    {
+      const gchar *id = path + strlen (filter_prefix);
+      gsize id_length;
+
+      if (!g_str_has_suffix (id, clone_suffix))
+        return FALSE;
+
+      id_length = strlen (id) - strlen (clone_suffix);
+      return is_uuid_segment (id, id_length);
+    }
+
+  return FALSE;
+}
+
+static gboolean
+native_api_header_value_is_safe (const gchar *value, gsize min_length,
+                                 gsize max_length)
+{
+  gsize length;
+
+  if (value == NULL)
+    return FALSE;
+
+  length = strlen (value);
+  if (length < min_length || length > max_length)
+    return FALSE;
+
+  for (const gchar *cursor = value; *cursor != '\0'; cursor++)
+    if (!g_ascii_isprint (*cursor))
+      return FALSE;
+
+  return TRUE;
+}
+
+static const gchar *
+browser_proxy_secret (void)
+{
+  const gchar *secret = g_getenv (BROWSER_PROXY_SECRET_ENV);
+
+  if (!native_api_header_value_is_safe (secret, BROWSER_PROXY_SECRET_MIN_LENGTH,
+                                        BROWSER_PROXY_SECRET_MAX_LENGTH))
+    return NULL;
+
+  return secret;
+}
+
+static const gchar *
+browser_proxy_operator_name (gsad_credentials_t *credentials)
+{
+  gsad_user_t *user;
+  const gchar *username;
+
+  if (credentials == NULL)
+    return NULL;
+
+  user = gsad_credentials_get_user (credentials);
+  if (user == NULL)
+    return NULL;
+
+  username = gsad_user_get_username (user);
+  if (!native_api_header_value_is_safe (username, 1,
+                                        BROWSER_PROXY_OPERATOR_MAX_LENGTH))
+    return NULL;
+
+  return username;
 }
 
 static gboolean
@@ -906,7 +994,10 @@ extract_response_body (GString *raw_response, guint *status_code,
 }
 
 static gchar *
-fetch_native_api_json (const gchar *path, guint *status_code,
+fetch_native_api_json (const gchar *method, const gchar *path,
+                       const gchar *request_body, gsize request_body_length,
+                       const gchar *browser_proxy_secret,
+                       const gchar *operator_name, guint *status_code,
                        gchar **error_message)
 {
   const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
@@ -931,12 +1022,25 @@ fetch_native_api_json (const gchar *path, guint *status_code,
 
   request = g_string_new (NULL);
   g_string_printf (request,
-                   "GET %s HTTP/1.1\r\n"
+                   "%s %s HTTP/1.1\r\n"
                    "Host: %s:%s\r\n"
                    "Accept: application/json\r\n"
                    "Connection: close\r\n"
-                   "User-Agent: gsad-native-api-proxy\r\n\r\n",
-                   path, host, port);
+                   "User-Agent: gsad-native-api-proxy\r\n",
+                   method, path, host, port);
+  if (g_strcmp0 (method, "POST") == 0)
+    {
+      g_string_append_printf (request,
+                              "Content-Type: application/json\r\n"
+                              "Content-Length: %" G_GSIZE_FORMAT "\r\n"
+                              BROWSER_PROXY_SECRET_HEADER ": %s\r\n"
+                              BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n",
+                              request_body_length, browser_proxy_secret,
+                              operator_name);
+    }
+  g_string_append (request, "\r\n");
+  if (request_body != NULL && request_body_length > 0)
+    g_string_append_len (request, request_body, request_body_length);
 
   if (!send_all (fd, request->str, request->len))
     {
@@ -1004,8 +1108,75 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
     }
 
   request_target = native_api_request_target (path, params);
-  body = fetch_native_api_json (request_target, &status_code, &error_message);
+  body = fetch_native_api_json ("GET", request_target, NULL, 0, NULL, NULL,
+                                &status_code, &error_message);
   g_free (request_target);
+  gsad_credentials_free (credentials);
+
+  if (body == NULL)
+    {
+      g_warning ("%s: %s", __func__, error_message);
+      g_free (error_message);
+      return send_json_error (connection, MHD_HTTP_BAD_GATEWAY,
+                              "Native API service is unavailable.");
+    }
+
+  ret = gsad_http_send_response_for_content (connection, body, (int) status_code,
+                                             NULL, GSAD_CONTENT_TYPE_APP_JSON,
+                                             NULL, 0);
+  g_free (body);
+  return ret;
+}
+
+gsad_http_result_t
+gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
+                                  void *handler_data,
+                                  gsad_http_connection_t *connection,
+                                  gsad_connection_info_t *con_info,
+                                  void *data)
+{
+  gsad_credentials_t *credentials = (gsad_credentials_t *) data;
+  const gchar *path = gsad_connection_info_get_url (con_info);
+  const gchar *secret = NULL;
+  const gchar *operator_name = NULL;
+  const gchar *request_body = NULL;
+  gsize request_body_length = 0;
+  gchar *body = NULL;
+  gchar *error_message = NULL;
+  guint status_code = MHD_HTTP_BAD_GATEWAY;
+  gsad_http_result_t ret;
+
+  (void) handler_next;
+  (void) handler_data;
+
+  if (!native_api_post_path_is_allowed (path))
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_NOT_FOUND,
+                              "Native API path is not available.");
+    }
+
+  secret = browser_proxy_secret ();
+  if (secret == NULL)
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_SERVICE_UNAVAILABLE,
+                              "Native API browser write proxy is not configured.");
+    }
+
+  operator_name = browser_proxy_operator_name (credentials);
+  if (operator_name == NULL)
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_UNAUTHORIZED,
+                              "Native API browser write proxy requires a session user.");
+    }
+
+  request_body = gsad_connection_info_get_raw_body (con_info,
+                                                    &request_body_length);
+  body = fetch_native_api_json ("POST", path, request_body, request_body_length,
+                                secret, operator_name, &status_code,
+                                &error_message);
   gsad_credentials_free (credentials);
 
   if (body == NULL)

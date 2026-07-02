@@ -301,6 +301,7 @@ services:
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       TURBOVAS_RUNTIME_DIR: /runtime
+      TURBOVAS_API_BROWSER_PROXY_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}
     ports:
       - "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392"
     volumes:

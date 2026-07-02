@@ -16,6 +16,7 @@ import {
   cloneNativeTag,
   createNativeTag,
   deleteNativeTag,
+  exportNativeTagMetadata,
   patchNativeTag,
 } from 'gmp/native-api/tags';
 import {NO_VALUE, parseYesNo, YES_VALUE} from 'gmp/parser';
@@ -130,6 +131,21 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     };
     log.debug('Saving tag', data);
     return this.action(data);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeTagMetadata(this.http, id);
+      } catch (err) {
+        log.debug(
+          'Native tag metadata export failed, falling back to GMP',
+          id,
+          err,
+        );
+      }
+    }
+    return super.export({id});
   }
 
   async enable({id}: EntityCommandParams) {

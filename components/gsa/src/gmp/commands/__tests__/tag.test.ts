@@ -10,6 +10,7 @@ import {
   createActionResultResponse,
   createEntityResponse,
   createHttp,
+  createPlainResponse,
 } from 'gmp/commands/testing';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
@@ -20,6 +21,87 @@ afterEach(() => {
 });
 
 describe('TagCommand tests', () => {
+  test('should export tag metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'tag-id',
+        name: 'Critical assets',
+        value: 'critical',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.export({id: 'tag-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/tag-id/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'tag-id',
+      name: 'Critical assets',
+      value: 'critical',
+    });
+  });
+
+  test('should fall back to GMP when native tag metadata export fails', async () => {
+    const content = '<some><xml>exported-data</xml></some>';
+    const response = createPlainResponse(content);
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.export({id: 'tag-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'tag',
+        bulk_select: 1,
+        'bulk_selected:tag-id': 1,
+      },
+    });
+    expect(result.data).toEqual(content);
+  });
+
   test('should create new tag with resources', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

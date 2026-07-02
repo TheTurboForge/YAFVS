@@ -97,9 +97,11 @@ fn create_range(protocol: &str, start: i32, end: i32) -> PortListCreateRangeRequ
 fn port_list_clone_sql_copies_metadata_ranges_and_tags_without_range_mutation() {
     let metadata = port_list_clone_metadata_sql();
     assert!(metadata.contains("INSERT INTO port_lists"));
+    assert!(metadata.contains("predefined, creation_time, modification_time"));
     assert!(metadata.contains("coalesce($3, uniquify('port_list', name, $2, ' Clone'))"));
     assert!(metadata.contains("coalesce($4, comment)"));
-    assert!(metadata.contains("0,"));
+    assert!(metadata.contains("            0,\n            m_now(),"));
+    assert!(!metadata.contains("SELECT uuid, owner, name, comment, predefined"));
     assert!(metadata.contains("FROM port_lists"));
     assert!(metadata.contains("WHERE id = $1"));
 

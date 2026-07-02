@@ -17,6 +17,7 @@ import {
 import Response from 'gmp/http/response';
 import OperatingSystem from 'gmp/models/os';
 import {
+  exportNativeOperatingSystemMetadata,
   fetchNativeOperatingSystems,
   nativeOperatingSystemsQueryFromFilter,
 } from 'gmp/native-api/operating-systems';
@@ -29,6 +30,17 @@ class OperatingSystemCommand extends EntityCommand {
 
   getElementFromRoot(root) {
     return root.get_asset.get_assets_response.asset;
+  }
+
+  async export({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeOperatingSystemMetadata(this.http, id);
+      } catch {
+        // Keep inherited bulk export responsible for legacy OS export behavior.
+      }
+    }
+    return super.export({id});
   }
 }
 

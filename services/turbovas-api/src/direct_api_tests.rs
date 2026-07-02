@@ -344,6 +344,28 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
     ));
     assert!(!direct_api_v1_path_is_allowed("/api/v1/internal-preview"));
     assert!(!direct_api_v1_path_is_allowed("/api/v1/reports/id/raw-xml"));
+
+    for path in [
+        "/api/v1/filters/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/tags/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/schedules/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/filters/../export",
+        "/api/v1/tags/./export",
+        "/api/v1/port-lists//export",
+        "/api/v1/schedules/12345678-1234-1234-1234-123456789abc/../export",
+        "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/./export",
+        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc//export",
+        "/api/v1/report-formats/../export",
+    ] {
+        assert!(
+            !direct_api_v1_path_is_allowed(path),
+            "metadata export path classifier must reject malformed path: {path}"
+        );
+    }
 }
 #[test]
 fn direct_api_method_classifier_gates_scope_writes_on_write_control_flag() {

@@ -236,4 +236,33 @@ fn native_report_format_import_is_not_directly_exposed_until_contract_exists() {
             );
         }
     }
+
+    let export_block = openapi_path_block("/report-formats/{report_format_id}/export");
+    for required in [
+        "get:",
+        "operationId: getReportFormatsByReportFormatIdExport",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-read",
+        "x-turbovas-maturity: live-read",
+        "x-turbovas-replaces: report-format-metadata-export-read",
+        "x-turbovas-inherited-still-owns: report-format-import-export-verify-writes-and-deletes",
+        "$ref: '#/components/schemas/ReportFormatAsset'",
+    ] {
+        assert!(
+            export_block.contains(required),
+            "OpenAPI report-format export block missing {required}"
+        );
+    }
+    for forbidden in [
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-safety-contract: write-control-v1",
+        "\n    post:",
+        "\n    patch:",
+        "\n    delete:",
+    ] {
+        assert!(
+            !export_block.contains(forbidden),
+            "OpenAPI report-format export block must not expose write/file semantics: {forbidden}"
+        );
+    }
 }

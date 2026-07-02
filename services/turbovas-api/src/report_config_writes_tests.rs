@@ -47,6 +47,51 @@ fn report_config_clone_handler_enforces_source_owner_check() {
 }
 
 #[test]
+fn report_config_destructive_handlers_enforce_owner_before_mutation() {
+    let source = include_str!("report_config_writes.rs");
+    for (label, start, end, owner_check, side_effect) in [
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_report_config",
+            "pub(crate) async fn clone_report_config",
+            "ensure_report_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "execute_report_config_hard_delete_transaction",
+        ),
+        (
+            "delete",
+            "pub(crate) async fn delete_report_config",
+            "pub(crate) async fn restore_report_config",
+            "ensure_report_config_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_report_config_not_in_use_by_alerts",
+        ),
+        (
+            "restore",
+            "pub(crate) async fn restore_report_config",
+            "pub(crate) async fn patch_report_config",
+            "ensure_report_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_report_config_uuid_not_live",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} owner check must happen before destructive side effects"
+        );
+    }
+}
+
+#[test]
 fn report_config_create_request_normalizes_metadata_and_params() {
     let request: ReportConfigCreateRequest = serde_json::from_str(
         r#"{

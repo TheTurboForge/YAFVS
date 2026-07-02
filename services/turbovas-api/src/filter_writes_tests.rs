@@ -78,6 +78,51 @@ fn filter_clone_handler_enforces_source_owner_check() {
 }
 
 #[test]
+fn filter_destructive_handlers_enforce_owner_before_mutation() {
+    let source = include_str!("filter_writes.rs");
+    for (label, start, end, owner_check, side_effect) in [
+        (
+            "delete",
+            "pub(crate) async fn delete_filter",
+            "pub(crate) async fn clone_filter",
+            "ensure_filter_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_filter_not_in_use_by_alerts",
+        ),
+        (
+            "restore",
+            "pub(crate) async fn restore_filter",
+            "pub(crate) async fn hard_delete_filter",
+            "ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "execute_filter_restore_transaction",
+        ),
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_filter",
+            "pub(crate) async fn execute_filter_trash_transaction",
+            "ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_filter_not_in_use_by_trash_alerts",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} owner check must happen before destructive side effects"
+        );
+    }
+}
+
+#[test]
 fn filter_clone_request_accepts_default_or_metadata_override() {
     let default =
         validate_filter_clone_request(clone_request(None, None)).expect("default clone metadata");

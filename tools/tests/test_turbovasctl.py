@@ -2003,7 +2003,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 28)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 29)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2364,7 +2364,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 28)
+        self.assertEqual(contract["browser_write_proxy_count"], 29)
         self.assertEqual(contract["direct_write_control_count"], 48)
         self.assertEqual(contract["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
@@ -2377,6 +2377,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("PATCH /api/v1/scan-configs/{scan_config_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/scanners/{scanner_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/tags/{tag_id}", contract["browser_write_proxy_operations"])
+        self.assertIn("PATCH /api/v1/targets/{target_id}", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/filters", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/filters/{filter_id}/clone", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/port-lists", contract["browser_write_proxy_operations"])
@@ -2629,6 +2630,12 @@ class TurboVASCtlTests(unittest.TestCase):
                 "direct_access": "direct_write_control",
             },
             {
+                "endpoint": "/api/v1/targets/{target_id}",
+                "method": "patch",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+            },
+            {
                 "endpoint": "/api/v1/targets/{target_id}/clone",
                 "method": "post",
                 "status": "implemented_internal_and_browser_proxied",
@@ -2704,6 +2711,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  const gchar *scanner_prefix = \"/api/v1/scanners/\";\n"
                 "  const gchar *schedule_prefix = \"/api/v1/schedules/\";\n"
                 "  const gchar *tag_prefix = \"/api/v1/tags/\";\n"
+                "  const gchar *target_prefix = \"/api/v1/targets/\";\n"
                 "  if (g_str_has_prefix (path, filter_prefix))\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, port_list_prefix))\n"
@@ -2717,6 +2725,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  if (g_str_has_prefix (path, schedule_prefix))\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, tag_prefix))\n"
+                "    return TRUE;\n"
+                "  if (g_str_has_prefix (path, target_prefix))\n"
                 "    return TRUE;\n"
                 "  return FALSE;\n"
                 "}\n",
@@ -2733,7 +2743,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(summary["alignment_status"], "pass")
         self.assertEqual(summary["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
-        self.assertEqual(summary["browser_write_proxy_operations"], ["PATCH /api/v1/filters/{filter_id}", "PATCH /api/v1/port-lists/{port_list_id}", "PATCH /api/v1/report-configs/{report_config_id}", "PATCH /api/v1/scan-configs/{scan_config_id}", "PATCH /api/v1/scanners/{scanner_id}", "PATCH /api/v1/schedules/{schedule_id}", "PATCH /api/v1/tags/{tag_id}", "POST /api/v1/filters", "POST /api/v1/filters/{filter_id}/clone", "POST /api/v1/port-lists", "POST /api/v1/port-lists/{port_list_id}/clone", "POST /api/v1/report-configs", "POST /api/v1/report-configs/{report_config_id}/clone", "POST /api/v1/scan-configs/{scan_config_id}/clone", "POST /api/v1/schedules/{schedule_id}/clone", "POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/clone", "POST /api/v1/tags/{tag_id}/resources", "POST /api/v1/targets/{target_id}/clone"])
+        self.assertEqual(summary["browser_write_proxy_operations"], ["PATCH /api/v1/filters/{filter_id}", "PATCH /api/v1/port-lists/{port_list_id}", "PATCH /api/v1/report-configs/{report_config_id}", "PATCH /api/v1/scan-configs/{scan_config_id}", "PATCH /api/v1/scanners/{scanner_id}", "PATCH /api/v1/schedules/{schedule_id}", "PATCH /api/v1/tags/{tag_id}", "PATCH /api/v1/targets/{target_id}", "POST /api/v1/filters", "POST /api/v1/filters/{filter_id}/clone", "POST /api/v1/port-lists", "POST /api/v1/port-lists/{port_list_id}/clone", "POST /api/v1/report-configs", "POST /api/v1/report-configs/{report_config_id}/clone", "POST /api/v1/scan-configs/{scan_config_id}/clone", "POST /api/v1/schedules/{schedule_id}/clone", "POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/clone", "POST /api/v1/tags/{tag_id}/resources", "POST /api/v1/targets/{target_id}/clone"])
         self.assertEqual(summary["missing_gsad_proxy_allowlist"], [])
 
     def test_native_tooling_state_reports_direct_api_contract_drift(self):

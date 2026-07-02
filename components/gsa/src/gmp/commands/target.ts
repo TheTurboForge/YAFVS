@@ -12,7 +12,7 @@ import type Http from 'gmp/http/http';
 import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import Target, {type AliveTest} from 'gmp/models/target';
-import {cloneNativeTarget} from 'gmp/native-api/targets';
+import {cloneNativeTarget, patchNativeTarget} from 'gmp/native-api/targets';
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 import {UNSET_VALUE} from 'web/utils/Render';
@@ -47,6 +47,20 @@ interface TargetCommandCreateParams {
 export interface TargetCommandSaveParams extends TargetCommandCreateParams {
   id: string;
 }
+
+type TargetCommandSaveArgs = TargetCommandSaveParams;
+
+const TARGET_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+
+const isTargetMetadataOnlySave = (args: TargetCommandSaveArgs) => {
+  const keys = Object.keys(args);
+  return (
+    keys.every(key => TARGET_METADATA_SAVE_KEYS.has(key)) &&
+    typeof args.id === 'string' &&
+    typeof args.name === 'string' &&
+    (args.comment === undefined || typeof args.comment === 'string')
+  );
+};
 
 class TargetCommand extends EntityCommand<Target> {
   constructor(http: Http) {
@@ -128,29 +142,38 @@ class TargetCommand extends EntityCommand<Target> {
     }
   }
 
-  async save({
-    id,
-    name,
-    comment,
-    targetSource,
-    targetExcludeSource,
-    hosts,
-    excludeHosts,
-    reverseLookupOnly,
-    reverseLookupUnify,
-    portListId,
-    aliveTests,
-    allowSimultaneousIPs,
-    sshCredentialId,
-    sshElevateCredentialId,
-    port,
-    smbCredentialId,
-    esxiCredentialId,
-    snmpCredentialId,
-    krb5CredentialId,
-    file,
-    excludeFile,
-  }: TargetCommandSaveParams) {
+  async save(args: TargetCommandSaveArgs) {
+    if (canUseNativeApi(this.http) && isTargetMetadataOnlySave(args)) {
+      return patchNativeTarget(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
+
+    const {
+      id,
+      name,
+      comment,
+      targetSource,
+      targetExcludeSource,
+      hosts,
+      excludeHosts,
+      reverseLookupOnly,
+      reverseLookupUnify,
+      portListId,
+      aliveTests,
+      allowSimultaneousIPs,
+      sshCredentialId,
+      sshElevateCredentialId,
+      port,
+      smbCredentialId,
+      esxiCredentialId,
+      snmpCredentialId,
+      krb5CredentialId,
+      file,
+      excludeFile,
+    } = args;
     try {
       return await this.action({
         cmd: 'save_target',

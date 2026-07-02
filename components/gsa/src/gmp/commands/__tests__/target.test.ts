@@ -349,6 +349,102 @@ describe('TargetCommand tests', () => {
     expect(data.id).toEqual('foo');
   });
 
+  test('should save target metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'target_id1', name: 'updated'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    const result = await cmd.save({
+      id: 'target_id1',
+      name: 'updated',
+      comment: 'metadata only',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target_id1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/targets/target_id1',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'updated',
+          comment: 'metadata only',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('target_id1');
+  });
+
+  test('should keep scan-input target saves on GMP when native API is available', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'target_id1',
+      allowSimultaneousIPs: true,
+      name: 'name',
+      comment: 'comment',
+      targetSource: 'manual',
+      targetExcludeSource: 'manual',
+      hosts: '123.456, 678.9',
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: true,
+      portListId: 'pl_id1',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+      sshCredentialId: 'ssh_id',
+      sshElevateCredentialId: '0',
+      smbCredentialId: '0',
+      esxiCredentialId: '0',
+      snmpCredentialId: '0',
+      krb5CredentialId: '0',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'save_target',
+        target_id: 'target_id1',
+        hosts: '123.456, 678.9',
+        port_list_id: 'pl_id1',
+        ssh_credential_id: 'ssh_id',
+      }),
+    });
+  });
+
   test.each([
     {
       name: 'resource restricted',

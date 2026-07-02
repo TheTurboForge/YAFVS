@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import type Filter from 'gmp/models/filter';
 import Target from 'gmp/models/target';
 
@@ -69,6 +70,12 @@ interface NativeTargetPage {
 interface NativeTargetCollectionPayload {
   page?: Partial<NativeTargetPage>;
   items?: NativeTargetItem[];
+}
+
+interface NativeTargetPatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
 }
 
 export interface NativeTargetQuery {
@@ -249,9 +256,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: nativeWriteHeaders(gmp),
     body: JSON.stringify(body),
@@ -314,6 +322,31 @@ export const cloneNativeTarget = async (
     {},
   );
   return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeTarget = async (
+  gmp: NativeApiGmp,
+  {id, name, comment}: NativeTargetPatchArgs,
+): Promise<Response<ActionResult>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+  };
+  const payload = await writeNativeJson<NativeTargetItem>(
+    gmp,
+    `api/v1/targets/${encodeURIComponent(id)}`,
+    body,
+    'PATCH',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_target',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };
 
 export const exportNativeTargetMetadata = async (

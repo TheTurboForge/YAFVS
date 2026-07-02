@@ -2003,7 +2003,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 10)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 17)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2364,7 +2364,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 10)
+        self.assertEqual(contract["browser_write_proxy_count"], 17)
         self.assertEqual(contract["direct_write_control_count"], 48)
         self.assertEqual(contract["gsad_proxy_methods"], ["GET", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
@@ -3353,7 +3353,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(clone_report_config["x_turbovas_replaces"], "report-config-clone")
 
         restore_report_config = rows[("post", "/api/v1/report-configs/{report_config_id}/restore")]
-        self.assertEqual(restore_report_config["status"], "implemented_direct_write_control")
+        self.assertEqual(restore_report_config["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(restore_report_config["direct_access"], "direct_write_control")
         self.assertEqual(restore_report_config["x_turbovas_maturity"], "live-write")
         self.assertEqual(restore_report_config["x_turbovas_exposure"], "direct-write")
@@ -3516,7 +3516,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-file-export")
 
         tag_restore = rows[("post", "/api/v1/tags/{tag_id}/restore")]
-        self.assertEqual(tag_restore["status"], "implemented_direct_write_control")
+        self.assertEqual(tag_restore["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_restore["direct_access"], "direct_write_control")
         self.assertEqual(tag_restore["x_turbovas_replaces"], "tag-restore")
 

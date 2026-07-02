@@ -462,6 +462,13 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/clone"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/clone"));
     assert!(browser_routes.contains("/api/v1/targets/:target_id/clone"));
+    assert!(browser_routes.contains("/api/v1/filters/:filter_id/restore"));
+    assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/restore"));
+    assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id/restore"));
+    assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/restore"));
+    assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/restore"));
+    assert!(browser_routes.contains("/api/v1/tags/:tag_id/restore"));
+    assert!(browser_routes.contains("/api/v1/targets/:target_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/resources"));
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
     assert!(browser_routes.contains("post(browser_proxy_create_tag)"));
@@ -472,6 +479,13 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_clone_schedule)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_target)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_filter)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_port_list)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_report_config)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_scan_config)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_schedule)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_tag)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_target)"));
     assert!(browser_routes.contains("post(browser_proxy_update_tag_resources)"));
     assert!(browser_routes.contains("DefaultBodyLimit::max("));
     assert!(browser_routes.contains("Extension(auth)"));

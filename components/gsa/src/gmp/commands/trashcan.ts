@@ -5,6 +5,7 @@
  */
 
 import HttpCommand from 'gmp/commands/http';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Alert from 'gmp/models/alert';
@@ -21,6 +22,10 @@ import Schedule from 'gmp/models/schedule';
 import Tag from 'gmp/models/tag';
 import Target from 'gmp/models/target';
 import Task from 'gmp/models/task';
+import {
+  restoreNativeTrashcanEntity,
+  supportsNativeTrashcanRestore,
+} from 'gmp/native-api/trashcan';
 import {map} from 'gmp/utils/array';
 import {apiType, type EntityType} from 'gmp/utils/entity-type';
 
@@ -109,7 +114,11 @@ type TrashCanGetResponse<TData> = Response<
 type TrashCanGetPromise<TData> = Promise<TrashCanGetResponse<TData>>;
 
 class TrashCanCommand extends HttpCommand {
-  async restore({id}: {id: string}) {
+  async restore({id, entityType}: {id: string; entityType?: EntityType}) {
+    if (supportsNativeTrashcanRestore(entityType) && canUseNativeApi(this.http)) {
+      await restoreNativeTrashcanEntity(this.http, {id, entityType});
+      return;
+    }
     const data = {cmd: 'restore', target_id: id};
     await this.httpPostWithTransform(data);
   }

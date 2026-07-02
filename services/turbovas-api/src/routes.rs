@@ -16,7 +16,11 @@ use crate::{
         BrowserProxyAuth, browser_proxy_clone_filter, browser_proxy_clone_port_list,
         browser_proxy_clone_report_config, browser_proxy_clone_scan_config,
         browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_clone_target,
-        browser_proxy_create_filter, browser_proxy_create_tag, browser_proxy_update_tag_resources,
+        browser_proxy_create_filter, browser_proxy_create_tag, browser_proxy_restore_filter,
+        browser_proxy_restore_port_list, browser_proxy_restore_report_config,
+        browser_proxy_restore_scan_config, browser_proxy_restore_schedule,
+        browser_proxy_restore_tag, browser_proxy_restore_target,
+        browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
     cpe_catalog::*,
@@ -451,25 +455,53 @@ pub(crate) fn browser_proxy_native_api_router(
             post(browser_proxy_clone_filter),
         )
         .route(
+            "/api/v1/filters/:filter_id/restore",
+            post(browser_proxy_restore_filter),
+        )
+        .route(
             "/api/v1/port-lists/:port_list_id/clone",
             post(browser_proxy_clone_port_list),
+        )
+        .route(
+            "/api/v1/port-lists/:port_list_id/restore",
+            post(browser_proxy_restore_port_list),
         )
         .route(
             "/api/v1/report-configs/:report_config_id/clone",
             post(browser_proxy_clone_report_config),
         )
         .route(
+            "/api/v1/report-configs/:report_config_id/restore",
+            post(browser_proxy_restore_report_config),
+        )
+        .route(
             "/api/v1/scan-configs/:scan_config_id/clone",
             post(browser_proxy_clone_scan_config),
+        )
+        .route(
+            "/api/v1/scan-configs/:scan_config_id/restore",
+            post(browser_proxy_restore_scan_config),
         )
         .route(
             "/api/v1/schedules/:schedule_id/clone",
             post(browser_proxy_clone_schedule),
         )
+        .route(
+            "/api/v1/schedules/:schedule_id/restore",
+            post(browser_proxy_restore_schedule),
+        )
         .route("/api/v1/tags/:tag_id/clone", post(browser_proxy_clone_tag))
+        .route(
+            "/api/v1/tags/:tag_id/restore",
+            post(browser_proxy_restore_tag),
+        )
         .route(
             "/api/v1/targets/:target_id/clone",
             post(browser_proxy_clone_target),
+        )
+        .route(
+            "/api/v1/targets/:target_id/restore",
+            post(browser_proxy_restore_target),
         )
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,

@@ -16,25 +16,25 @@ use crate::{
     errors::ApiError,
     filter_payloads::FilterAssetItem,
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest},
-    filter_writes::{clone_filter, create_filter},
+    filter_writes::{clone_filter, create_filter, restore_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
     port_list_payloads::PortListAssetDetail,
     port_list_write_validation::PortListCloneRequest,
-    port_list_writes::clone_port_list,
+    port_list_writes::{clone_port_list, restore_port_list},
     report_config_payloads::ReportConfigAssetItem,
     report_config_write_validation::ReportConfigCloneRequest,
-    report_config_writes::clone_report_config,
+    report_config_writes::{clone_report_config, restore_report_config},
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_validation::ScanConfigCloneRequest,
-    scan_config_writes::clone_scan_config,
+    scan_config_writes::{clone_scan_config, restore_scan_config},
     schedule_payloads::ScheduleAssetDetail,
     schedule_write_validation::ScheduleCloneRequest,
-    schedule_writes::clone_schedule,
+    schedule_writes::{clone_schedule, restore_schedule},
     tag_payloads::TagAssetItem,
     tag_write_validation::{TagCloneRequest, TagCreateRequest, TagResourceUpdateRequest},
-    tag_writes::{clone_tag, create_tag, update_tag_resources},
+    tag_writes::{clone_tag, create_tag, restore_tag, update_tag_resources},
     target_write_validation::TargetCloneRequest,
-    target_writes::clone_target,
+    target_writes::{clone_target, restore_target},
     task_target_payloads::TargetItem,
 };
 
@@ -47,10 +47,35 @@ pub(crate) struct BrowserProxyAuth {
     secret: String,
 }
 
+pub(crate) async fn browser_proxy_restore_port_list(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(port_list_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<PortListAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
+}
+
 impl BrowserProxyAuth {
     pub(crate) fn new(secret: String) -> Self {
         Self { secret }
     }
+}
+
+pub(crate) async fn browser_proxy_restore_report_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(report_config_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ReportConfigAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_report_config(
+        State(state),
+        Path(report_config_id),
+        Some(Extension(operator)),
+    )
+    .await
 }
 
 fn env_string(name: &str) -> Option<String> {
@@ -60,8 +85,33 @@ fn env_string(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+pub(crate) async fn browser_proxy_restore_scan_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scan_config_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ScanConfigAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_scan_config(
+        State(state),
+        Path(scan_config_id),
+        Some(Extension(operator)),
+    )
+    .await
+}
+
 pub(crate) fn browser_proxy_api_config() -> Result<Option<BrowserProxyAuth>, ApiError> {
     browser_proxy_api_config_from_source(env_string(BROWSER_PROXY_SECRET_ENV))
+}
+
+pub(crate) async fn browser_proxy_restore_tag(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(tag_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<TagAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_tag(State(state), Path(tag_id), Some(Extension(operator))).await
 }
 
 fn browser_proxy_api_config_from_source(
@@ -76,6 +126,16 @@ fn browser_proxy_api_config_from_source(
     Ok(Some(BrowserProxyAuth::new(secret)))
 }
 
+pub(crate) async fn browser_proxy_restore_target(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(target_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<TargetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_target(State(state), Path(target_id), Some(Extension(operator))).await
+}
+
 pub(crate) async fn browser_proxy_create_filter(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -84,6 +144,26 @@ pub(crate) async fn browser_proxy_create_filter(
 ) -> Result<(StatusCode, Json<FilterAssetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_filter(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_restore_filter(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(filter_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<FilterAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_filter(State(state), Path(filter_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_restore_schedule(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(schedule_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ScheduleAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_schedule(State(state), Path(schedule_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_clone_filter(

@@ -6915,11 +6915,14 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 errors.append(f"unresolved_post_exact_path:{variable}")
 
         clone_suffix = post_constants.get("clone_suffix")
+        restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
         for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
+            if prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
         if (
             tag_prefix
@@ -7332,7 +7335,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native scan-config restore from trash"],
             },
@@ -7396,7 +7399,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/filters/{filter_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native saved-filter restore from trash"],
             },
@@ -7547,7 +7550,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/port-lists/{port_list_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native port-list restore from trash"],
             },
@@ -7604,7 +7607,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/schedules/{schedule_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native schedule restore from trash"],
             },
@@ -7663,7 +7666,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/report-configs/{report_config_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native report-config restore from trash"],
             },
@@ -7822,7 +7825,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/tags/{tag_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native tag restore from trash"],
             },
@@ -7880,7 +7883,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/targets/{target_id}/restore",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native target restore from trash"],
             },

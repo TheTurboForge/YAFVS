@@ -248,6 +248,18 @@ is_tag_resource_type_segment (const gchar *value, gsize length)
 }
 
 static gboolean
+is_uuid_segment_with_suffix (const gchar *value, const gchar *suffix)
+{
+  gsize id_length;
+
+  if (!g_str_has_suffix (value, suffix))
+    return FALSE;
+
+  id_length = strlen (value) - strlen (suffix);
+  return is_uuid_segment (value, id_length);
+}
+
+static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *filters_path = "/api/v1/filters";
@@ -260,6 +272,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *target_prefix = "/api/v1/targets/";
   const gchar *clone_suffix = "/clone";
+  const gchar *restore_suffix = "/restore";
   const gchar *resources_suffix = "/resources";
 
   if (path == NULL || strchr (path, '?') != NULL)
@@ -274,61 +287,36 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, filter_prefix))
     {
       const gchar *id = path + strlen (filter_prefix);
-      gsize id_length;
-
-      if (!g_str_has_suffix (id, clone_suffix))
-        return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
-      return is_uuid_segment (id, id_length);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, port_list_prefix))
     {
       const gchar *id = path + strlen (port_list_prefix);
-      gsize id_length;
-
-      if (!g_str_has_suffix (id, clone_suffix))
-        return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
-      return is_uuid_segment (id, id_length);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, report_config_prefix))
     {
       const gchar *id = path + strlen (report_config_prefix);
-      gsize id_length;
-
-      if (!g_str_has_suffix (id, clone_suffix))
-        return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
-      return is_uuid_segment (id, id_length);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, scan_config_prefix))
     {
       const gchar *id = path + strlen (scan_config_prefix);
-      gsize id_length;
-
-      if (!g_str_has_suffix (id, clone_suffix))
-        return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
-      return is_uuid_segment (id, id_length);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, schedule_prefix))
     {
       const gchar *id = path + strlen (schedule_prefix);
-      gsize id_length;
-
-      if (!g_str_has_suffix (id, clone_suffix))
-        return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
-      return is_uuid_segment (id, id_length);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, tag_prefix))
@@ -338,6 +326,8 @@ native_api_post_path_is_allowed (const gchar *path)
 
       if (g_str_has_suffix (id, clone_suffix))
         id_length = strlen (id) - strlen (clone_suffix);
+      else if (g_str_has_suffix (id, restore_suffix))
+        id_length = strlen (id) - strlen (restore_suffix);
       else if (g_str_has_suffix (id, resources_suffix))
         id_length = strlen (id) - strlen (resources_suffix);
       else
@@ -348,13 +338,8 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, target_prefix))
     {
       const gchar *id = path + strlen (target_prefix);
-      gsize id_length;
-
-      if (!g_str_has_suffix (id, clone_suffix))
-        return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
-      return is_uuid_segment (id, id_length);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   return FALSE;

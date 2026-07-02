@@ -134,7 +134,10 @@ const TrashCan = () => {
 
   const handleRestore = async (entity: Model) => {
     try {
-      await gmp.trashcan.restore({id: entity.id as string});
+      await gmp.trashcan.restore({
+        id: entity.id as string,
+        entityType: entity.entityType,
+      });
       loadTrash();
       showSuccessNotification(
         _('{{- name}} restored successfully.', {name: entity.name as string}),

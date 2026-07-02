@@ -506,6 +506,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("patch(browser_proxy_patch_schedule)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scope)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_tag)"));
+    assert!(browser_routes.contains("patch(browser_proxy_patch_target)"));
     assert!(browser_routes.contains("post(browser_proxy_create_scope)"));
     assert!(browser_routes.contains("post(browser_proxy_create_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_create_report_config)"));

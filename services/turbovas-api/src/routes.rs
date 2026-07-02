@@ -29,7 +29,7 @@ use crate::{
         browser_proxy_patch_filter, browser_proxy_patch_port_list,
         browser_proxy_patch_report_config, browser_proxy_patch_scan_config,
         browser_proxy_patch_schedule, browser_proxy_patch_scope, browser_proxy_patch_tag,
-        browser_proxy_restore_filter, browser_proxy_restore_port_list,
+        browser_proxy_patch_target, browser_proxy_restore_filter, browser_proxy_restore_port_list,
         browser_proxy_restore_report_config, browser_proxy_restore_scan_config,
         browser_proxy_restore_schedule, browser_proxy_restore_tag, browser_proxy_restore_target,
         browser_proxy_update_tag_resources,
@@ -602,6 +602,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/targets/:target_id/restore",
             post(browser_proxy_restore_target),
+        )
+        .route(
+            "/api/v1/targets/:target_id",
+            patch(browser_proxy_patch_target),
         )
         .route(
             "/api/v1/targets/:target_id",

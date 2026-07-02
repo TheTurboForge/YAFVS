@@ -64,9 +64,10 @@ use crate::{
         clone_tag, create_tag, delete_tag, hard_delete_tag, patch_tag, restore_tag,
         update_tag_resources,
     },
-    target_write_validation::{TargetCloneRequest, TargetCreateRequest},
+    target_write_validation::{TargetCloneRequest, TargetCreateRequest, TargetPatchRequest},
     target_writes::{
-        clone_target, create_target, delete_target, hard_delete_target, restore_target,
+        clone_target, create_target, delete_target, hard_delete_target, patch_target,
+        restore_target,
     },
     task_target_payloads::TargetItem,
 };
@@ -254,6 +255,23 @@ pub(crate) async fn browser_proxy_create_target(
 ) -> Result<(StatusCode, HeaderMap, Json<TargetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_target(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_target(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(target_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<TargetPatchRequest>,
+) -> Result<Json<TargetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_target(
+        State(state),
+        Path(target_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_patch_alert(

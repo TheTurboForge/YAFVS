@@ -319,13 +319,29 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
             direct_api_v1_method_is_allowed(&Method::GET, path, true),
             "GET {path} must remain allowlisted under write control"
         );
-        for method in [Method::POST, Method::DELETE, Method::PUT] {
+        for method in [Method::DELETE, Method::PUT] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, path, true),
                 "{method} {path} must remain closed"
             );
         }
     }
+
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scan-configs",
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scan-configs",
+        false
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families",
+        true
+    ));
 
     assert!(direct_api_v1_method_is_allowed(
         &Method::PATCH,
@@ -385,7 +401,9 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
 
     let list = openapi_path_block("/scan-configs");
     assert!(list.contains("get:"));
-    assert!(!list.contains("\n  post:"));
+    assert!(list.contains("post:"));
+    assert!(list.contains("x-turbovas-replaces: scan-config-create-from-base"));
+    assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(!list.contains("\n  patch:"));
     assert!(!list.contains("\n  delete:"));
 
@@ -399,7 +417,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(detail.contains("x-turbovas-replaces: scan-config-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create"
+        "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
     ));
 
     let clone = openapi_path_block("/scan-configs/{scan_config_id}/clone");
@@ -407,7 +425,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(clone.contains("x-turbovas-replaces: scan-config-clone"));
     assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(clone.contains(
-        "x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create"
+        "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
     ));
 
     let restore = openapi_path_block("/scan-configs/{scan_config_id}/restore");

@@ -10,6 +10,15 @@ pub(crate) const MAX_SCAN_CONFIG_TEXT_BYTES: usize = 4096;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigCreateRequest {
+    pub(crate) name: String,
+    pub(crate) base_scan_config_id: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ScanConfigPatchRequest {
     #[serde(default)]
     pub(crate) name: Option<String>,
@@ -22,6 +31,8 @@ pub(crate) struct ScanConfigPatchRequest {
 pub(crate) struct ScanConfigCloneRequest {
     #[serde(default)]
     pub(crate) name: Option<String>,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -31,8 +42,28 @@ pub(crate) struct ValidatedScanConfigPatch {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScanConfigCreate {
+    pub(crate) name: String,
+    pub(crate) base_scan_config_id: String,
+    pub(crate) comment: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedScanConfigClone {
     pub(crate) name: Option<String>,
+    pub(crate) comment: Option<String>,
+}
+
+pub(crate) fn validate_scan_config_create_request(
+    request: ScanConfigCreateRequest,
+) -> Result<ValidatedScanConfigCreate, ApiError> {
+    Ok(ValidatedScanConfigCreate {
+        name: normalize_required_scan_config_text(request.name, "name")?,
+        base_scan_config_id: crate::path_ids::parse_uuid(request.base_scan_config_id.trim())?
+            .to_string(),
+        comment: normalize_optional_scan_config_text(request.comment, "comment")?
+            .unwrap_or_default(),
+    })
 }
 
 pub(crate) fn validate_scan_config_clone_request(
@@ -40,6 +71,7 @@ pub(crate) fn validate_scan_config_clone_request(
 ) -> Result<ValidatedScanConfigClone, ApiError> {
     Ok(ValidatedScanConfigClone {
         name: normalize_optional_required_scan_config_text(request.name, "name")?,
+        comment: normalize_optional_scan_config_text(request.comment, "comment")?,
     })
 }
 

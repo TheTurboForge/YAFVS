@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import type QueryFilter from 'gmp/models/filter';
 import ScanConfig from 'gmp/models/scan-config';
 import {NO_VALUE, YES_VALUE, type YesNo} from 'gmp/parser';
@@ -114,6 +115,17 @@ export interface NativeScanConfigFamiliesResponse {
 
 export interface NativeScanConfigPatchRequest {
   name?: string;
+  comment?: string;
+}
+
+export interface NativeScanConfigCloneRequest {
+  name?: string;
+  comment?: string;
+}
+
+export interface NativeScanConfigCreateRequest {
+  base_scan_config_id: string;
+  name: string;
   comment?: string;
 }
 
@@ -421,13 +433,34 @@ export const exportNativeScanConfigMetadata = async (
 export const cloneNativeScanConfig = async (
   gmp: NativeApiGmp,
   id: string,
+  request: NativeScanConfigCloneRequest = {},
 ): Promise<Response<{id: string}>> => {
   const payload = await writeNativeJson<NativeScanConfigPayload>(
     gmp,
     `api/v1/scan-configs/${encodeURIComponent(id)}/clone`,
-    {},
+    request,
   );
   return new Response({id: stringValue(payload.id)});
+};
+
+export const createNativeScanConfig = async (
+  gmp: NativeApiGmp,
+  request: NativeScanConfigCreateRequest,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeScanConfigPayload>(
+    gmp,
+    'api/v1/scan-configs',
+    request,
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'create_config',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };
 
 export const deleteNativeScanConfig = async (

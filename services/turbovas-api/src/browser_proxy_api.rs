@@ -41,9 +41,10 @@ use crate::{
         patch_report_config, restore_report_config,
     },
     scan_config_payloads::ScanConfigAssetDetail,
-    scan_config_write_validation::ScanConfigCloneRequest,
+    scan_config_write_validation::{ScanConfigCloneRequest, ScanConfigCreateRequest},
     scan_config_writes::{
-        clone_scan_config, delete_scan_config, hard_delete_scan_config, restore_scan_config,
+        clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
+        restore_scan_config,
     },
     schedule_payloads::ScheduleAssetDetail,
     schedule_write_validation::ScheduleCloneRequest,
@@ -334,6 +335,16 @@ pub(crate) async fn browser_proxy_create_report_config(
 ) -> Result<(StatusCode, HeaderMap, Json<ReportConfigAssetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_report_config(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_create_scan_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<ScanConfigCreateRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ScanConfigAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_scan_config(State(state), Some(Extension(operator)), Json(request)).await
 }
 
 pub(crate) async fn browser_proxy_patch_report_config(

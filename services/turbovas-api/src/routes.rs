@@ -17,19 +17,19 @@ use crate::{
         browser_proxy_clone_report_config, browser_proxy_clone_scan_config,
         browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_clone_target,
         browser_proxy_create_filter, browser_proxy_create_port_list,
-        browser_proxy_create_report_config, browser_proxy_create_tag, browser_proxy_create_target,
-        browser_proxy_delete_filter, browser_proxy_delete_port_list,
-        browser_proxy_delete_report_config, browser_proxy_delete_scan_config,
-        browser_proxy_delete_schedule, browser_proxy_delete_scope, browser_proxy_delete_tag,
-        browser_proxy_delete_target, browser_proxy_hard_delete_filter,
-        browser_proxy_hard_delete_port_list, browser_proxy_hard_delete_report_config,
-        browser_proxy_hard_delete_scan_config, browser_proxy_hard_delete_schedule,
-        browser_proxy_hard_delete_tag, browser_proxy_hard_delete_target, browser_proxy_patch_alert,
-        browser_proxy_patch_filter, browser_proxy_patch_port_list,
-        browser_proxy_patch_report_config, browser_proxy_patch_tag, browser_proxy_restore_filter,
-        browser_proxy_restore_port_list, browser_proxy_restore_report_config,
-        browser_proxy_restore_scan_config, browser_proxy_restore_schedule,
-        browser_proxy_restore_tag, browser_proxy_restore_target,
+        browser_proxy_create_report_config, browser_proxy_create_scan_config,
+        browser_proxy_create_tag, browser_proxy_create_target, browser_proxy_delete_filter,
+        browser_proxy_delete_port_list, browser_proxy_delete_report_config,
+        browser_proxy_delete_scan_config, browser_proxy_delete_schedule,
+        browser_proxy_delete_scope, browser_proxy_delete_tag, browser_proxy_delete_target,
+        browser_proxy_hard_delete_filter, browser_proxy_hard_delete_port_list,
+        browser_proxy_hard_delete_report_config, browser_proxy_hard_delete_scan_config,
+        browser_proxy_hard_delete_schedule, browser_proxy_hard_delete_tag,
+        browser_proxy_hard_delete_target, browser_proxy_patch_alert, browser_proxy_patch_filter,
+        browser_proxy_patch_port_list, browser_proxy_patch_report_config, browser_proxy_patch_tag,
+        browser_proxy_restore_filter, browser_proxy_restore_port_list,
+        browser_proxy_restore_report_config, browser_proxy_restore_scan_config,
+        browser_proxy_restore_schedule, browser_proxy_restore_tag, browser_proxy_restore_target,
         browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
@@ -71,8 +71,8 @@ use crate::{
     result_payloads::*,
     scan_config_families::scan_config_asset_families,
     scan_config_writes::{
-        clone_scan_config, delete_scan_config, hard_delete_scan_config, patch_scan_config,
-        restore_scan_config,
+        clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
+        patch_scan_config, restore_scan_config,
     },
     scan_configs::*,
     scanner_assets::*,
@@ -359,6 +359,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/report-configs/:report_config_id/trash",
                 delete(hard_delete_report_config),
             )
+            .route("/api/v1/scan-configs", post(create_scan_config))
             .route(
                 "/api/v1/scan-configs/:scan_config_id",
                 patch(patch_scan_config),
@@ -531,6 +532,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/report-configs/:report_config_id/restore",
             post(browser_proxy_restore_report_config),
+        )
+        .route(
+            "/api/v1/scan-configs",
+            post(browser_proxy_create_scan_config),
         )
         .route(
             "/api/v1/scan-configs/:scan_config_id/clone",

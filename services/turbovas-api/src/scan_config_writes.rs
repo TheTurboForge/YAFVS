@@ -16,11 +16,50 @@ use crate::{
     scan_config_write_db::*,
     scan_config_write_transactions::*,
     scan_config_write_validation::{
-        ScanConfigCloneRequest, ScanConfigPatchRequest, validate_scan_config_clone_request,
+        ScanConfigCloneRequest, ScanConfigCreateRequest, ScanConfigPatchRequest,
+        validate_scan_config_clone_request, validate_scan_config_create_request,
         validate_scan_config_patch_request,
     },
     scan_configs::load_scan_config_asset_detail,
 };
+
+pub(crate) async fn create_scan_config(
+    State(state): State<AppState>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<ScanConfigCreateRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ScanConfigAssetDetail>), ApiError> {
+    let operator = require_scan_config_write_operator(operator)?;
+    let request = validate_scan_config_create_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_scan_config_write_db_error(error, "begin create scan-config transaction")
+    })?;
+    let operator_owner_id = resolve_scan_config_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE configs, config_preferences, nvt_selectors, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_scan_config_write_db_error(error, "lock scan-config tables for create"))?;
+    let config_state = load_scan_config_write_state(&tx, &request.base_scan_config_id).await?;
+    ensure_scan_config_clone_source_allowed(&config_state, operator_owner_id)?;
+    ensure_unique_scan_config_name(&tx, &request.name, 0).await?;
+    let record = execute_scan_config_create_from_base_transaction(
+        &tx,
+        config_state.internal_id,
+        operator_owner_id,
+        &request,
+    )
+    .await?;
+    tx.commit().await.map_err(|error| {
+        map_scan_config_write_db_error(error, "commit create scan-config transaction")
+    })?;
+
+    Ok((
+        StatusCode::CREATED,
+        scan_config_write_location_headers(&record.uuid)?,
+        Json(load_scan_config_asset_detail(&client, &record.uuid).await?),
+    ))
+}
 
 pub(crate) async fn clone_scan_config(
     State(state): State<AppState>,

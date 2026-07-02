@@ -111,6 +111,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/scan-configs",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/scan-configs/:scan_config_id",
         safety_contract: "write-control-v1",
@@ -478,6 +483,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/clone"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/clone"));
     assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id/clone"));
+    assert!(browser_routes.contains("/api/v1/scan-configs"));
     assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/clone"));
     assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/clone"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/clone"));

@@ -10,6 +10,18 @@ use crate::scan_config_write_db::{
 use crate::scan_config_write_sql::*;
 use crate::scan_config_write_validation::*;
 
+fn create_request(
+    name: &str,
+    base_scan_config_id: &str,
+    comment: Option<&str>,
+) -> ScanConfigCreateRequest {
+    ScanConfigCreateRequest {
+        name: name.to_string(),
+        base_scan_config_id: base_scan_config_id.to_string(),
+        comment: comment.map(str::to_string),
+    }
+}
+
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> ScanConfigPatchRequest {
     ScanConfigPatchRequest {
         name: name.map(str::to_string),
@@ -17,10 +29,78 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> ScanConfigPatchRe
     }
 }
 
-fn clone_request(name: Option<&str>) -> ScanConfigCloneRequest {
+#[test]
+fn scan_config_create_request_requires_name_and_base_uuid() {
+    let validated = validate_scan_config_create_request(create_request(
+        "  copied scan  ",
+        "12345678-1234-1234-1234-123456789abc",
+        Some("  copied comment  "),
+    ))
+    .expect("valid scan-config create-from-base");
+    assert_eq!(validated.name, "copied scan");
+    assert_eq!(
+        validated.base_scan_config_id,
+        "12345678-1234-1234-1234-123456789abc"
+    );
+    assert_eq!(validated.comment, "copied comment");
+    assert_eq!(
+        validate_scan_config_create_request(create_request(
+            "copied scan",
+            "12345678-1234-1234-1234-123456789abc",
+            None,
+        ))
+        .expect("default scan-config create comment")
+        .comment,
+        ""
+    );
+    assert!(matches!(
+        validate_scan_config_create_request(create_request(
+            "   ",
+            "12345678-1234-1234-1234-123456789abc",
+            None,
+        )),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_scan_config_create_request(create_request("copied scan", "not-a-uuid", None)),
+        Err(ApiError::BadRequest(_))
+    ));
+    let request = serde_json::json!({
+        "name": "copy",
+        "base_scan_config_id": "12345678-1234-1234-1234-123456789abc",
+        "preference": "not yet",
+    });
+    assert!(serde_json::from_value::<ScanConfigCreateRequest>(request).is_err());
+}
+
+fn clone_request(name: Option<&str>, comment: Option<&str>) -> ScanConfigCloneRequest {
     ScanConfigCloneRequest {
         name: name.map(str::to_string),
+        comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn scan_config_create_from_base_sql_copies_source_without_import_or_preference_mutation_payloads() {
+    let metadata = scan_config_create_from_base_metadata_sql();
+    assert!(metadata.contains("INSERT INTO configs"));
+    assert!(metadata.contains("make_uuid()"));
+    assert!(metadata.contains("$3,"));
+    assert!(metadata.contains("$4,"));
+    assert!(metadata.contains("families_growing, nvts_growing, predefined, creation_time"));
+    assert!(metadata.contains("            0,\n            m_now(),"));
+    assert!(metadata.contains("'scan'"));
+    assert!(metadata.contains("FROM configs"));
+    assert!(metadata.contains("WHERE id = $1"));
+    assert!(!metadata.contains("uniquify"));
+    assert!(!metadata.contains("coalesce($3"));
+
+    let prefs = scan_config_clone_preferences_sql();
+    assert!(prefs.contains("INSERT INTO config_preferences"));
+    let selectors = scan_config_clone_selectors_sql();
+    assert!(selectors.contains("INSERT INTO nvt_selectors"));
+    let tags = scan_config_clone_tags_sql();
+    assert!(tags.contains("INSERT INTO tag_resources"));
 }
 
 #[test]
@@ -54,20 +134,24 @@ fn scan_config_clone_source_allows_predefined_or_operator_owned_sources() {
 
 #[test]
 fn scan_config_clone_request_trims_optional_name_and_rejects_unknown_fields() {
-    let validated = validate_scan_config_clone_request(clone_request(Some("  copied scan  ")))
-        .expect("valid scan-config clone");
+    let validated = validate_scan_config_clone_request(clone_request(
+        Some("  copied scan  "),
+        Some("  copied comment  "),
+    ))
+    .expect("valid scan-config clone");
     assert_eq!(validated.name.as_deref(), Some("copied scan"));
+    assert_eq!(validated.comment.as_deref(), Some("copied comment"));
     assert_eq!(
-        validate_scan_config_clone_request(clone_request(None))
+        validate_scan_config_clone_request(clone_request(None, None))
             .expect("default scan-config clone name")
             .name,
         None
     );
     assert!(matches!(
-        validate_scan_config_clone_request(clone_request(Some("   "))),
+        validate_scan_config_clone_request(clone_request(Some("   "), None)),
         Err(ApiError::BadRequest(_))
     ));
-    let request = serde_json::json!({"name": "copy", "comment": "not yet"});
+    let request = serde_json::json!({"name": "copy", "selector": "not yet"});
     assert!(serde_json::from_value::<ScanConfigCloneRequest>(request).is_err());
 }
 
@@ -96,6 +180,7 @@ fn scan_config_clone_sql_copies_preferences_selectors_tags_and_makes_user_owned_
     assert!(metadata.contains("INSERT INTO configs"));
     assert!(metadata.contains("make_uuid()"));
     assert!(metadata.contains("coalesce($3, uniquify('config', name, $2, ' Clone'))"));
+    assert!(metadata.contains("coalesce($4, comment)"));
     assert!(metadata.contains("families_growing, nvts_growing, predefined, creation_time"));
     assert!(metadata.contains("            0,\n            m_now(),"));
     assert!(!metadata.contains("nvts_growing,\n            predefined"));

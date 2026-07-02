@@ -76,7 +76,30 @@ pub(crate) fn scan_config_clone_metadata_sql() -> &'static str {
             $2,
             coalesce($3, uniquify('config', name, $2, ' Clone')),
             make_uuid(),
-            comment,
+            coalesce($4, comment),
+            family_count,
+            nvt_count,
+            families_growing,
+            nvts_growing,
+            0,
+            m_now(),
+            m_now(),
+            'scan'
+       FROM configs
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn scan_config_create_from_base_metadata_sql() -> &'static str {
+    "INSERT INTO configs
+        (uuid, owner, name, nvt_selector, comment, family_count, nvt_count,
+         families_growing, nvts_growing, predefined, creation_time,
+         modification_time, usage_type)
+     SELECT make_uuid(),
+            $2,
+            $3,
+            make_uuid(),
+            $4,
             family_count,
             nvt_count,
             families_growing,

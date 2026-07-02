@@ -570,8 +570,9 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "saved-filter-metadata-modify",
         "saved-filter-restore",
         "saved-filter-trash-move",
-        "scan-config-family-summary-read",
         "scan-config-clone",
+        "scan-config-create-from-base",
+        "scan-config-family-summary-read",
         "scan-config-hard-delete",
         "scan-config-metadata-detail-info-tags-and-task-backlink-read",
         "scan-config-metadata-export-read",
@@ -657,7 +658,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "saved-filter-export-and-alert-linkage",
         "scanner-control-credentials-writes-and-deletes",
         "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
-        "scan-config-preferences-selector-import-export-create",
+        "scan-config-preference-selector-mutation-import-export-blank-create",
         "scap-rich-context",
         "schedule-create-calendar-export",
         "scope-report-generation",
@@ -724,6 +725,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/tasks/{task_id}"): "direct-write",
     ("get", "/tasks/{task_id}/export"): "direct-read",
     ("get", "/scan-configs"): "direct-read",
+    ("post", "/scan-configs"): "direct-write",
     ("get", "/scan-configs/{scan_config_id}"): "direct-read",
     ("get", "/scan-configs/{scan_config_id}/export"): "direct-read",
     ("patch", "/scan-configs/{scan_config_id}"): "direct-write",
@@ -1142,47 +1144,52 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scan-configs"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-metadata-list-read",
     },
+    ("post", "/scan-configs"): {
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "scan-config-create-from-base",
+    },
     ("get", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-metadata-detail-info-tags-and-task-backlink-read",
     },
     ("get", "/scan-configs/{scan_config_id}/export"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-metadata-export-read",
     },
     ("patch", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scan-config-metadata-modify",
     },
     ("delete", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scan-config-trash-move",
     },
     ("post", "/scan-configs/{scan_config_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scan-config-clone",
     },
     ("post", "/scan-configs/{scan_config_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scan-config-restore",
     },
     ("delete", "/scan-configs/{scan_config_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preferences-selector-import-export-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
@@ -7360,6 +7367,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA top-level Scan Configs list (migrated through gsad same-origin proxy)", "read-only scan-config metadata automation", "native-api-request helper"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/scan-configs",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA Scan Config create-from-base dialog flow", "direct native scan-config create-from-base"],
+                "residual_inherited": [
+                    "Scan-config import/XML create, blank scanner-id create, preference edits, NVT selector/family mutations, scanner control, and inherited file export remain inherited until separately migrated."
+                ],
+            },
+            {
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Scan Config detail Information fields (migrated through gsad same-origin proxy)", "read-only scan-config metadata automation", "native-api-request helper"],
@@ -7377,7 +7394,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["GSA Scan Config metadata save (migrated through gsad same-origin proxy)", "direct native scan-config name/comment metadata modification"],
                 "residual_inherited": [
-                    "Scan-config create/import, export XML, preference edits, NVT selector/family mutations, scanner control, deletes, restores, and trash handling remain inherited or direct-only until separately migrated."
+                    "Scan-config import/XML create, blank scanner-id create, export XML, preference edits, NVT selector/family mutations, and scanner control remain inherited until separately migrated."
                 ],
             },
             {
@@ -13497,6 +13514,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.schedule-restore-disabled",
             "native-api-direct.schedule-hard-delete-disabled",
             "native-api-direct.scan-config-patch-disabled",
+            "native-api-direct.scan-config-create-disabled",
             "native-api-direct.scan-config-clone-disabled",
             "native-api-direct.scan-config-hard-delete-disabled",
             "native-api-direct.target-create-disabled",
@@ -13563,7 +13581,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.schedule-write-post-cleanup",
             "native-api-direct.scan-config-predefined-patch-denied",
             "native-api-direct.scan-config-predefined-delete-denied",
-            "native-api-direct.scan-config-fixture",
+            "native-api-direct.scan-config-write-create",
             "native-api-direct.scan-config-write-update",
             "native-api-direct.scan-config-write-clone",
             "native-api-direct.scan-config-write-delete-clone",
@@ -14071,28 +14089,23 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         predefined_scan_config_delete_ok = predefined_scan_config_delete.returncode == 0 and predefined_scan_config_delete_status == 409 and isinstance(predefined_scan_config_delete_json, dict) and predefined_scan_config_delete_json.get("error", {}).get("code") == "conflict"
         findings.append(native_api_probe_finding("pass" if predefined_scan_config_delete_ok else "fail", "native-api-direct.scan-config-predefined-delete-denied", "Direct write-control rejects predefined scan-config delete." if predefined_scan_config_delete_ok else "Direct write-control did not reject a predefined scan-config delete.", predefined_scan_config_delete, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(FULL_AND_FAST_SCAN_CONFIG_ID)}", token=token, env=env, method="DELETE"), predefined_scan_config_delete_json, {"http_status": predefined_scan_config_delete_status, "scan_config_id": FULL_AND_FAST_SCAN_CONFIG_ID, **summarize_native_api_response(predefined_scan_config_delete_json)}))
 
-        scan_config_fixture_sql = (
-            "WITH inserted_config AS (INSERT INTO configs "
-            "(uuid, name, owner, nvt_selector, comment, creation_time, modification_time, usage_type, predefined) "
-            "VALUES (make_uuid(), "
-            f"{sql_literal(scan_config_name)}, "
-            f"(SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid or '')}), "
-            "'54b45713-d4f4-4435-b20d-304c175ed8c5', "
-            "'TurboVAS direct write smoke temporary scan config', "
-            "m_now(), m_now(), 'scan', 0) "
-            "RETURNING uuid::text) SELECT uuid FROM inserted_config;"
+        scan_config_create_body = json.dumps(
+            {
+                "base_scan_config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
+                "comment": "TurboVAS direct write smoke temporary scan config",
+                "name": scan_config_name,
+            },
+            separators=(",", ":"),
         )
-        scan_config_fixture = psql(repo_root, scan_config_fixture_sql)
-        scan_config_id = psql_value(scan_config_fixture) or None
-        scan_config_fixture_ok = scan_config_fixture.returncode == 0 and bool(scan_config_id)
-        scan_config_fixture_finding = process_step_finding("pass" if scan_config_fixture_ok else "fail", "native-api-direct.scan-config-fixture", "Direct write-control smoke created a temporary scan-config fixture for metadata patching." if scan_config_fixture_ok else "Direct write-control smoke failed to create a temporary scan-config fixture for metadata patching.", scan_config_fixture, ["psql", "fixed-scan-config-smoke-fixture"])
-        scan_config_fixture_details = scan_config_fixture_finding.setdefault("details", {})
-        if isinstance(scan_config_fixture_details, dict):
-            scan_config_fixture_details.update({"scan_config_id": scan_config_id, "scan_config_name": scan_config_name})
-        findings.append(scan_config_fixture_finding)
+        scan_config_create = direct_native_api_curl(repo_root, "/api/v1/scan-configs", token=token, env=env, method="POST", body=scan_config_create_body, extra_headers=content_type)
+        scan_config_create_json, scan_config_create_status = parse_json_output_with_http_status(scan_config_create)
+        scan_config_id = scan_config_create_json.get("id") if isinstance(scan_config_create_json, dict) and isinstance(scan_config_create_json.get("id"), str) else None
+        scan_config_create_ok = scan_config_create.returncode == 0 and scan_config_create_status == 201 and bool(scan_config_id) and scan_config_create_json.get("name") == scan_config_name and scan_config_create_json.get("predefined") is False
+        findings.append(native_api_probe_finding("pass" if scan_config_create_ok else "fail", "native-api-direct.scan-config-write-create", "Direct write-control created a temporary scan-config from a base config." if scan_config_create_ok else "Direct write-control failed to create a temporary scan-config from a base config.", scan_config_create, direct_native_api_display_command("/api/v1/scan-configs", token=token, env=env, method="POST", body=scan_config_create_body, extra_headers=content_type), scan_config_create_json, {"http_status": scan_config_create_status, "scan_config_id": scan_config_id, "scan_config_name": scan_config_name, **summarize_native_api_response(scan_config_create_json)}))
 
         if scan_config_id:
             scan_config_patch_comment = "TurboVAS direct write smoke updated scan-config comment"
+            scan_config_clone_comment = "TurboVAS direct write smoke cloned scan-config comment"
             scan_config_patch_body = json.dumps(
                 {"comment": scan_config_patch_comment},
                 separators=(",", ":"),
@@ -14103,13 +14116,13 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             findings.append(native_api_probe_finding("pass" if scan_config_patch_ok else "fail", "native-api-direct.scan-config-write-update", "Direct write-control patched temporary scan-config comment metadata." if scan_config_patch_ok else "Direct write-control failed to patch temporary scan-config comment metadata.", scan_config_patch, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_patch_body, extra_headers=content_type), scan_config_patch_json, {"http_status": scan_config_patch_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_patch_json)}))
 
             scan_config_clone_body = json.dumps(
-                {"name": scan_config_clone_name},
+                {"comment": scan_config_clone_comment, "name": scan_config_clone_name},
                 separators=(",", ":"),
             )
             scan_config_clone = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/clone", token=token, env=env, method="POST", body=scan_config_clone_body, extra_headers=content_type)
             scan_config_clone_json, scan_config_clone_status = parse_json_output_with_http_status(scan_config_clone)
             scan_config_clone_id = scan_config_clone_json.get("id") if isinstance(scan_config_clone_json, dict) and isinstance(scan_config_clone_json.get("id"), str) else None
-            scan_config_clone_ok = scan_config_clone.returncode == 0 and scan_config_clone_status == 201 and bool(scan_config_clone_id) and scan_config_clone_id != scan_config_id and scan_config_clone_json.get("name") == scan_config_clone_name and scan_config_clone_json.get("predefined") is False
+            scan_config_clone_ok = scan_config_clone.returncode == 0 and scan_config_clone_status == 201 and bool(scan_config_clone_id) and scan_config_clone_id != scan_config_id and scan_config_clone_json.get("name") == scan_config_clone_name and scan_config_clone_json.get("comment") == scan_config_clone_comment and scan_config_clone_json.get("predefined") is False
             findings.append(native_api_probe_finding("pass" if scan_config_clone_ok else "fail", "native-api-direct.scan-config-write-clone", "Direct write-control cloned the temporary scan config fixture." if scan_config_clone_ok else "Direct write-control failed to clone the temporary scan config fixture.", scan_config_clone, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/clone", token=token, env=env, method="POST", body=scan_config_clone_body, extra_headers=content_type), scan_config_clone_json, {"http_status": scan_config_clone_status, "scan_config_id": scan_config_id, "scan_config_clone_id": scan_config_clone_id, **summarize_native_api_response(scan_config_clone_json)}))
 
             if scan_config_clone_id:
@@ -15756,6 +15769,27 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_scan_config_patch_json, disabled_scan_config_patch_status = parse_json_output_with_http_status(disabled_scan_config_patch)
     disabled_scan_config_patch_ok = disabled_scan_config_patch.returncode == 0 and disabled_scan_config_patch_status == 405 and isinstance(disabled_scan_config_patch_json, dict) and disabled_scan_config_patch_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_scan_config_patch_ok else "fail", "native-api-direct.scan-config-patch-disabled", "Direct native API rejects scan-config patches while direct write-control is disabled." if disabled_scan_config_patch_ok else "Direct native API did not reject a scan-config patch while direct write-control is disabled.", disabled_scan_config_patch, direct_native_api_display_command("/api/v1/scan-configs/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_scan_config_patch_json, {"http_status": disabled_scan_config_patch_status, **summarize_native_api_response(disabled_scan_config_patch_json)}))
+
+    disabled_scan_config_create_body = json.dumps(
+        {
+            "base_scan_config_id": "00000000-0000-0000-0000-000000000000",
+            "comment": "disabled scan-config create",
+            "name": "disabled scan-config create",
+        },
+        separators=(",", ":"),
+    )
+    disabled_scan_config_create = direct_native_api_curl(
+        repo_root,
+        "/api/v1/scan-configs",
+        token=token,
+        env=env,
+        method="POST",
+        body=disabled_scan_config_create_body,
+        extra_headers=content_type,
+    )
+    disabled_scan_config_create_json, disabled_scan_config_create_status = parse_json_output_with_http_status(disabled_scan_config_create)
+    disabled_scan_config_create_ok = disabled_scan_config_create.returncode == 0 and disabled_scan_config_create_status == 405 and isinstance(disabled_scan_config_create_json, dict) and disabled_scan_config_create_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_scan_config_create_ok else "fail", "native-api-direct.scan-config-create-disabled", "Direct native API rejects scan-config creates while direct write-control is disabled." if disabled_scan_config_create_ok else "Direct native API did not reject a scan-config create while direct write-control is disabled.", disabled_scan_config_create, direct_native_api_display_command("/api/v1/scan-configs", token=token, env=env, method="POST", body=disabled_scan_config_create_body, extra_headers=content_type), disabled_scan_config_create_json, {"http_status": disabled_scan_config_create_status, **summarize_native_api_response(disabled_scan_config_create_json)}))
 
     disabled_scan_config_clone = direct_native_api_curl(
         repo_root,

@@ -19,6 +19,7 @@ import Nvt from 'gmp/models/nvt';
 import ScanConfig from 'gmp/models/scan-config';
 import {
   cloneNativeScanConfig,
+  createNativeScanConfig,
   deleteNativeScanConfig,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
@@ -93,7 +94,22 @@ export class ScanConfigCommand extends EntityCommand {
     return this.httpPostWithTransform(data);
   }
 
-  create({baseScanConfig, name, comment}) {
+  async create({baseScanConfig, name, comment}) {
+    if (canUseNativeApi(this.http) && isDefined(baseScanConfig)) {
+      try {
+        return await createNativeScanConfig(this.http, {
+          base_scan_config_id: baseScanConfig,
+          comment: comment ?? '',
+          name,
+        });
+      } catch (error) {
+        log.debug(
+          'Native scan config create-from-base failed, falling back to GMP',
+          error,
+        );
+      }
+    }
+
     const data = {
       cmd: 'create_config',
       base: baseScanConfig,

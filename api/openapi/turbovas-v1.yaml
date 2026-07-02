@@ -2928,9 +2928,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-list-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: List scan configs
-      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs; preference edit payloads, NVT selector expansion/family mutation, import/export, scanner control, create/import, and selector/preference mutations remain inherited while native contracts are designed.
+      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create a scan config from an existing base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs; preference edit payloads, NVT selector expansion/family mutation, import/export, scanner control, blank create, and selector/preference mutations remain inherited while native contracts are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2962,6 +2962,53 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postScanConfigs
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scan-config-create-from-base
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Create a scan config from a base config
+      description: Direct write-control endpoint for creating an operator-owned non-predefined scan config from an operator-visible or predefined base scan config. The create-from-base path copies metadata counters, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id while applying request-owned name/comment metadata. Import/XML create, blank scanner-id create, preference edits, selector/family mutation, and scanner control remain inherited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanConfigCreateRequest'
+      responses:
+        '201':
+          description: Scan config created from base
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Relative URL for the created scan config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanConfigAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs/{scan_config_id}:
     get:
       operationId: getScanConfigsByScanConfigId
@@ -2969,9 +3016,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-detail-info-tags-and-task-backlink-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: Read one scan config metadata record
-      description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Native direct write-control can patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference edit payloads, import/export, scanner control, create/import, and selector/preference mutations remain inherited while native contracts are designed.
+      description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Native direct write-control can create from base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference edit payloads, import/export, scanner control, blank create, and selector/preference mutations remain inherited while native contracts are designed.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -3001,13 +3048,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-metadata-modify
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Patch scan-config metadata
-      description: Direct write-control endpoint for changing a non-predefined scan config name or comment. Preference values, NVT selector/family selection, import/export, create, scanner control, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for changing a non-predefined scan config name or comment. Preference values, NVT selector/family selection, import/export, blank create, scanner control, and cache recalculation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -3045,13 +3092,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-trash-move
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Move scan config to trash
-      description: Direct write-control endpoint for moving a live scan config to trash. Scan configs referenced by non-hidden live tasks are rejected; hidden/trash task links, preferences, and tag links are relinked to the trash row. Create, import/export, selector/preference mutation, scanner control, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for moving a live scan config to trash. Scan configs referenced by non-hidden live tasks are rejected; hidden/trash task links, preferences, and tag links are relinked to the trash row. Import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -3080,13 +3127,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-clone
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Clone a scan config
-      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Preference edit payloads, import/export, scanner control, create/import, and selector/family mutations remain inherited.
+      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Preference edit payloads, import/export, scanner control, blank create, and selector/family mutations remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -3130,13 +3177,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-restore
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Restore a scan config from trash
-      description: Direct write-control endpoint for restoring a trashed scan config when no live config with the same id or name exists and the associated scanner is not in the trash. Preferences, task links, and tag links are relinked to the restored live row. Create, import/export, selector/preference mutation, scanner control, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for restoring a trashed scan config when no live config with the same id or name exists and the associated scanner is not in the trash. Preferences, task links, and tag links are relinked to the restored live row. Import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -3169,13 +3216,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-hard-delete
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Permanently delete a trashed scan config
-      description: Direct write-control endpoint for permanently deleting an unreferenced trashed scan config. The endpoint rejects scan configs referenced by trash tasks, then deletes active/trash tag links pointing at the trashed config id, the non-universal NVT selector, trash preferences, and trash metadata only. Live scan configs are never deleted through this route. Create, import/export, selector/preference mutation, scanner control, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for permanently deleting an unreferenced trashed scan config. The endpoint rejects scan configs referenced by trash tasks, then deletes active/trash tag links pointing at the trashed config id, the non-universal NVT selector, trash preferences, and trash metadata only. Live scan configs are never deleted through this route. Import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -3204,7 +3251,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: Read scan config NVT family selection summary
       description: Read-only expansion of the NVT Families detail tab. Scanner preferences, NVT preferences, selector edit payloads, import/export, and writes remain on inherited compatibility paths.
       parameters:
@@ -3237,9 +3284,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-export-read
-      x-turbovas-inherited-still-owns: scan-config-preferences-selector-import-export-create
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: Export scan-config metadata
-      description: Scriptable JSON metadata export for one scan config, including active User Tags and shallow task backlinks. Preference edit payloads, NVT selector/family mutation, import/export, scanner control, and create/import remain compatibility paths.
+      description: Scriptable JSON metadata export for one scan config, including active User Tags and shallow task backlinks. Preference edit payloads, NVT selector/family mutation, import/export, scanner control, and blank create remain compatibility paths.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -6544,14 +6591,35 @@ components:
         comment:
           type: string
           maxLength: 4096
-    ScanConfigCloneRequest:
+    ScanConfigCreateRequest:
       type: object
       additionalProperties: false
-      description: Optional explicit name for a cloned scan config. Empty object uses the inherited-style unique Clone name.
+      required:
+        - name
+        - base_scan_config_id
+      description: Create a new operator-owned non-predefined scan config by copying an existing base config. This intentionally excludes import/XML create, blank scanner-id create, and preference or selector mutation payloads.
       properties:
         name:
           type: string
           minLength: 1
+          maxLength: 4096
+        base_scan_config_id:
+          type: string
+          format: uuid
+        comment:
+          type: string
+          maxLength: 4096
+    ScanConfigCloneRequest:
+      type: object
+      additionalProperties: false
+      description: Optional explicit name and comment for a cloned scan config. Empty object uses the inherited-style unique Clone name and copies the source comment.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
           maxLength: 4096
     ScheduleCloneRequest:
       type: object

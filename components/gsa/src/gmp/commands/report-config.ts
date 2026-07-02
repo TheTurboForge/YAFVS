@@ -88,24 +88,58 @@ const nativeReportConfigCreateRequestFromCommand = ({
     })),
 });
 
-const hasNativeUnsupportedDefaultParam = (
+const hasNativeDefaultParam = (
   paramsUsingDefault: Record<string, string | number | boolean | undefined>,
 ): boolean => Object.values(paramsUsingDefault).some(value => parseYesNo(value));
 
-const nativeReportConfigPatchRequestFromCommand = ({
-  comment,
-  name,
-  params = {},
-  paramsUsingDefault = {},
-  paramTypes = {},
-}: ReportConfigSaveArgs): NativeReportConfigPatchRequest => {
-  const paramEntries = Object.entries(params).filter(
+const haveSameKeys = (
+  left?: Record<string, unknown>,
+  right?: Record<string, unknown>,
+): boolean => {
+  const leftKeys = Object.keys(left ?? {}).sort();
+  const rightKeys = Object.keys(right ?? {}).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key, index) => key === rightKeys[index])
+  );
+};
+
+const hasCompleteNativeParamState = ({
+  params,
+  paramsUsingDefault,
+  paramTypes,
+}: ReportConfigSaveArgs): boolean =>
+  params !== undefined &&
+  paramsUsingDefault !== undefined &&
+  paramTypes !== undefined &&
+  haveSameKeys(params, paramsUsingDefault) &&
+  haveSameKeys(params, paramTypes);
+
+const canUseNativeReportConfigPatch = (args: ReportConfigSaveArgs): boolean => {
+  const paramsUsingDefault = args.paramsUsingDefault ?? {};
+  return (
+    !hasNativeDefaultParam(paramsUsingDefault) ||
+    hasCompleteNativeParamState(args)
+  );
+};
+
+const nativeReportConfigPatchRequestFromCommand = (
+  args: ReportConfigSaveArgs,
+): NativeReportConfigPatchRequest => {
+  const {
+    comment,
+    name,
+    params,
+    paramsUsingDefault = {},
+    paramTypes = {},
+  } = args;
+  const paramEntries = Object.entries(params ?? {}).filter(
     ([paramName]) => !parseYesNo(paramsUsingDefault[paramName]),
   );
   return {
     name,
     ...(comment !== undefined ? {comment} : {}),
-    ...(paramEntries.length > 0
+    ...(params !== undefined
       ? {
           params: paramEntries.map(([paramName, value]) => ({
             name: paramName,
@@ -181,7 +215,7 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
 
     if (
       canUseNativeApi(this.http) &&
-      !hasNativeUnsupportedDefaultParam(paramsUsingDefault)
+      canUseNativeReportConfigPatch(args)
     ) {
       return patchNativeReportConfig(
         this.http,

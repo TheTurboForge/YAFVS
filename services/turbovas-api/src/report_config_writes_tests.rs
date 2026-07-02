@@ -166,6 +166,18 @@ fn report_config_patch_request_requires_explicit_field_and_preserves_param_value
         .is_err(),
         "patch deliberately does not change the report format"
     );
+
+    let all_defaults_patch: ReportConfigPatchRequest =
+        serde_json::from_str(r#"{"params":[]}"#).expect("valid all-defaults patch DTO");
+    let validated =
+        validate_report_config_patch_request(all_defaults_patch).expect("valid all-defaults patch");
+    assert!(
+        validated
+            .params
+            .expect("explicit empty params replacement")
+            .is_empty(),
+        "empty params must remain an explicit replacement, not become metadata-only"
+    );
 }
 
 #[test]

@@ -33,6 +33,7 @@ import {
   HOSTS_ORDERING_RANDOM,
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
 } from 'gmp/models/task';
+import {createSession} from 'gmp/testing';
 
 let logLevel: LogLevel;
 
@@ -279,6 +280,90 @@ describe('TaskCommand tests', () => {
         usage_type: 'scan',
         cs_allow_failed_retrieval: 1,
       },
+    });
+    expect(response).toBeUndefined();
+  });
+
+  test('should save task metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'task1', name: 'updated-task'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TaskCommand(fakeHttp);
+    const response = await cmd.save({
+      id: 'task1',
+      name: 'updated-task',
+      comment: 'metadata only',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tasks/task1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks/task1',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'updated-task',
+          comment: 'metadata only',
+        }),
+      },
+    );
+    expect(response?.data.id).toEqual('task1');
+  });
+
+  test('should keep operational task save on GMP when native API is available', async () => {
+    const mockResponse = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(mockResponse) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TaskCommand(fakeHttp);
+    const response = await cmd.save({
+      apply_overrides: 0,
+      comment: 'comment',
+      id: 'task1',
+      max_checks: 10,
+      max_hosts: 10,
+      min_qod: 70,
+      name: 'foo',
+      csAllowFailedRetrieval: true,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'save_task',
+        task_id: 'task1',
+        max_checks: 10,
+      }),
     });
     expect(response).toBeUndefined();
   });

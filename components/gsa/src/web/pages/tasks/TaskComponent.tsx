@@ -94,6 +94,80 @@ const TAGS_FILTER = ALL_FILTER.copy().set('resource_type', 'task');
 const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
   typeof gmp?.buildUrl === 'function';
 
+const valueToString = (value: unknown): string | undefined =>
+  isDefined(value) ? String(value) : undefined;
+
+const scalarEquals = (left: unknown, right: unknown): boolean =>
+  valueToString(left) === valueToString(right);
+
+const idEquals = (left: unknown, right: unknown): boolean =>
+  scalarEquals(left, right);
+
+const scheduleIdEquals = (left: unknown, right: unknown): boolean =>
+  scalarEquals(left ?? UNSET_VALUE, right ?? UNSET_VALUE);
+
+const numericEquals = (left: unknown, right: unknown): boolean => {
+  if (!isDefined(left) && !isDefined(right)) {
+    return true;
+  }
+  if (!isDefined(left) || !isDefined(right)) {
+    return false;
+  }
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  return (
+    Number.isFinite(leftNumber) &&
+    Number.isFinite(rightNumber) &&
+    leftNumber === rightNumber
+  );
+};
+
+const alertIdsFromTask = (task: Task): string[] =>
+  map(task.alerts, alert => alert.id as string);
+
+const alertIdsEqual = (left: string[] = [], right: string[] = []): boolean =>
+  left.length === right.length && left.every((id, index) => id === right[index]);
+
+export const isTaskMetadataOnlyDialogSave = ({
+  alert_ids: alertIds = [],
+  auto_delete_data: autoDeleteData,
+  apply_overrides: applyOverrides,
+  config_id: configId,
+  csAllowFailedRetrieval,
+  max_checks: maxChecks,
+  max_hosts: maxHosts,
+  min_qod: minQod,
+  scanner_id: scannerId,
+  scanner_type: scannerType,
+  schedule_id: scheduleId,
+  schedule_periods: schedulePeriods,
+  target_id: targetId,
+  task,
+}: TaskDialogData): boolean => {
+  if (!isDefined(task?.id)) {
+    return false;
+  }
+
+  return (
+    alertIdsEqual(alertIds, alertIdsFromTask(task)) &&
+    idEquals(configId, task.config?.id) &&
+    idEquals(scannerId, task.scanner?.id) &&
+    scalarEquals(scannerType, task.scanner?.scannerType) &&
+    scheduleIdEquals(scheduleId, task.schedule?.id) &&
+    scalarEquals(
+      schedulePeriods ?? NO_VALUE,
+      task.schedule_periods === YES_VALUE ? YES_VALUE : NO_VALUE,
+    ) &&
+    idEquals(targetId, task.target?.id) &&
+    scalarEquals(applyOverrides, task.apply_overrides) &&
+    numericEquals(autoDeleteData, task.auto_delete_data) &&
+    numericEquals(maxChecks, task.max_checks) &&
+    numericEquals(maxHosts, task.max_hosts) &&
+    numericEquals(minQod, task.min_qod) &&
+    scalarEquals(csAllowFailedRetrieval, task.csAllowFailedRetrieval)
+  );
+};
+
 const exportTask = (gmp: any, task: EntityCommandParams) => {
   if (canUseNativeApi(gmp)) {
     return exportNativeTaskMetadata(gmp, task.id as string);
@@ -319,7 +393,8 @@ const TaskComponent = ({
     setTargetId(data.id);
   };
 
-  const handleSaveTask = ({
+  const handleSaveTask = (data: TaskDialogData) => {
+    const {
     add_tag: addTag,
     alert_ids: alertIds,
     auto_delete_data: autoDeleteData,
@@ -338,8 +413,18 @@ const TaskComponent = ({
     tag_id: tagId,
     target_id: targetId,
     task,
-  }: TaskDialogData) => {
+    } = data;
     if (isDefined(task)) {
+      if (canUseNativeApi(gmp) && isTaskMetadataOnlyDialogSave(data)) {
+        return gmp.task
+          .save({
+            comment,
+            id: task.id as string,
+            name,
+          })
+          .then(onSaved, onSaveError)
+          .then(() => closeTaskDialog());
+      }
       return gmp.task
         .save({
           alert_ids: alertIds,

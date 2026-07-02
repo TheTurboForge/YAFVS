@@ -8,6 +8,7 @@
 
 import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
 import FeedStatusCommand, {feedStatusRejection} from 'gmp/commands/feed-status';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type ResponseRejection} from 'gmp/http/rejection';
 import _ from 'gmp/locale';
@@ -19,6 +20,7 @@ import Task, {
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
   type TaskElement,
 } from 'gmp/models/task';
+import {patchNativeTask} from 'gmp/native-api/tasks';
 import {NO_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
@@ -69,6 +71,17 @@ const MANAGER_DAEMON_RESPONSE_FAILURE =
 const TASK_START_RESPONSE_FOLLOWUP = _(
   'The task start request may have changed scan state before the manager response failed. Refresh the task status and check the latest report before retrying.',
 );
+const TASK_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+
+const isTaskMetadataOnlySave = (args: TaskCommandSaveParams) => {
+  const keys = Object.keys(args);
+  return (
+    keys.every(key => TASK_METADATA_SAVE_KEYS.has(key)) &&
+    typeof args.id === 'string' &&
+    typeof args.name === 'string' &&
+    (args.comment === undefined || typeof args.comment === 'string')
+  );
+};
 
 export const isTaskStartManagerResponseFailure = (error: unknown) =>
   error instanceof Error &&
@@ -191,25 +204,33 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     }
   }
 
+  async save(args: TaskCommandSaveParams) {
+    if (canUseNativeApi(this.http) && isTaskMetadataOnlySave(args)) {
+      return patchNativeTask(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
 
-  async save({
-    alert_ids = [],
-    auto_delete_data,
-    apply_overrides,
-    comment = '',
-    config_id = NO_VALUE_ID,
-    csAllowFailedRetrieval,
-    id,
-    max_checks,
-    max_hosts,
-    min_qod,
-    name,
-    scanner_id = NO_VALUE_ID,
-    scanner_type,
-    schedule_id = NO_VALUE_ID,
-    schedule_periods,
-    target_id = NO_VALUE_ID,
-  }: TaskCommandSaveParams) {
+    const {
+      alert_ids = [],
+      auto_delete_data,
+      apply_overrides,
+      comment = '',
+      config_id = NO_VALUE_ID,
+      csAllowFailedRetrieval,
+      id,
+      max_checks,
+      max_hosts,
+      min_qod,
+      name,
+      scanner_id = NO_VALUE_ID,
+      scanner_type,
+      schedule_id = NO_VALUE_ID,
+      schedule_periods,
+      target_id = NO_VALUE_ID,
+    } = args;
     const data = {
       'alert_ids:': alert_ids,
       apply_overrides,

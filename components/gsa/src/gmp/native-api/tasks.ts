@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import type Filter from 'gmp/models/filter';
 import Task from 'gmp/models/task';
 
@@ -92,6 +93,12 @@ export interface NativeTasksResponse {
 
 export interface NativeTaskResponse {
   task: Task;
+}
+
+interface NativeTaskPatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
 }
 
 const TASK_SORT_FIELDS: Record<string, string> = {
@@ -267,6 +274,31 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
 export const fetchNativeTasks = async (
   gmp: NativeApiGmp,
   query: NativeTaskQuery,
@@ -319,4 +351,29 @@ export const exportNativeTaskMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const patchNativeTask = async (
+  gmp: NativeApiGmp,
+  {id, name, comment}: NativeTaskPatchArgs,
+): Promise<Response<ActionResult>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+  };
+  const payload = await writeNativeJson<NativeTaskItem>(
+    gmp,
+    `api/v1/tasks/${encodeURIComponent(id)}`,
+    body,
+    'PATCH',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_task',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };

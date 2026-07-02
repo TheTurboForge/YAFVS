@@ -411,6 +411,7 @@ native_api_patch_path_is_allowed (const gchar *path)
   const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *tag_prefix = "/api/v1/tags/";
+  const gchar *task_prefix = "/api/v1/tasks/";
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
@@ -448,6 +449,12 @@ native_api_patch_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, tag_prefix))
     {
       const gchar *id = path + strlen (tag_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, task_prefix))
+    {
+      const gchar *id = path + strlen (task_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

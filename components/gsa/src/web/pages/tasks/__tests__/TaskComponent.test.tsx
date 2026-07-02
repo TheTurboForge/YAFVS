@@ -13,7 +13,9 @@ import Setting from 'gmp/models/setting';
 import Task from 'gmp/models/task';
 import {createSession} from 'gmp/testing';
 import Button from 'web/components/form/Button';
-import TaskComponent from 'web/pages/tasks/TaskComponent';
+import TaskComponent, {
+  isTaskMetadataOnlyDialogSave,
+} from 'web/pages/tasks/TaskComponent';
 
 const createGmp = ({
   alerts = [],
@@ -161,6 +163,92 @@ describe('TaskComponent tests', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByTestId('dialog-test-id')).toBeInTheDocument();
     expect(screen.getByText(/New Task/i)).toBeInTheDocument();
+  });
+
+  test('should detect metadata-only standard task edits', () => {
+    const standardTask = Task.fromElement({
+      _id: 'standard-task-id',
+      name: 'Standard Task',
+      comment: 'Old comment',
+      target: {_id: 'target-id', name: 'Standard Target'},
+      config: {_id: 'config-id', name: 'Full and fast'},
+      scanner: {_id: 'scanner-id', name: 'OpenVAS', type: '2'},
+      schedule: {_id: 'schedule-id', name: 'Daily'},
+      schedule_periods: 1,
+      alert: [{_id: 'alert-id', name: 'Alert'}],
+      preferences: {
+        preference: [
+          {scanner_name: 'assets_apply_overrides', value: '1'},
+          {scanner_name: 'assets_min_qod', value: '70'},
+          {scanner_name: 'auto_delete_data', value: '5'},
+          {scanner_name: 'max_checks', value: '4'},
+          {scanner_name: 'max_hosts', value: '2'},
+          {scanner_name: 'cs_allow_failed_retrieval', value: '0'},
+        ],
+      },
+    });
+
+    expect(
+      isTaskMetadataOnlyDialogSave({
+        alert_ids: ['alert-id'],
+        apply_overrides: 0,
+        auto_delete_data: 5,
+        comment: 'New comment',
+        config_id: 'config-id',
+        csAllowFailedRetrieval: false,
+        max_checks: 4,
+        max_hosts: 2,
+        min_qod: 70,
+        name: 'Renamed Task',
+        scanner_id: 'scanner-id',
+        scanner_type: '2',
+        schedule_id: 'schedule-id',
+        schedule_periods: 1,
+        target_id: 'target-id',
+        task: standardTask,
+      }),
+    ).toEqual(true);
+  });
+
+  test('should reject operational standard task edits as metadata-only', () => {
+    const standardTask = Task.fromElement({
+      _id: 'standard-task-id',
+      name: 'Standard Task',
+      target: {_id: 'target-id', name: 'Standard Target'},
+      config: {_id: 'config-id', name: 'Full and fast'},
+      scanner: {_id: 'scanner-id', name: 'OpenVAS', type: '2'},
+      schedule_periods: 0,
+      preferences: {
+        preference: [
+          {scanner_name: 'assets_apply_overrides', value: '1'},
+          {scanner_name: 'assets_min_qod', value: '70'},
+          {scanner_name: 'auto_delete_data', value: '5'},
+          {scanner_name: 'max_checks', value: '4'},
+          {scanner_name: 'max_hosts', value: '2'},
+          {scanner_name: 'cs_allow_failed_retrieval', value: '0'},
+        ],
+      },
+    });
+
+    expect(
+      isTaskMetadataOnlyDialogSave({
+        alert_ids: [],
+        apply_overrides: 0,
+        auto_delete_data: 5,
+        comment: 'New comment',
+        config_id: 'different-config-id',
+        csAllowFailedRetrieval: false,
+        max_checks: 4,
+        max_hosts: 2,
+        min_qod: 70,
+        name: 'Renamed Task',
+        scanner_id: 'scanner-id',
+        scanner_type: '2',
+        schedule_periods: 0,
+        target_id: 'target-id',
+        task: standardTask,
+      }),
+    ).toEqual(false);
   });
 
 });

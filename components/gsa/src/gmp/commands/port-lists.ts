@@ -5,6 +5,7 @@
  */
 
 import EntitiesCommand from 'gmp/commands/entities';
+import type {EntityCommandParams} from 'gmp/commands/entity';
 import type {
   HttpCommandInputParams,
   HttpCommandOptions,
@@ -22,6 +23,7 @@ import logger from 'gmp/log';
 import {type Element} from 'gmp/models/model';
 import PortList, {type PortListElement} from 'gmp/models/port-list';
 import {
+  cloneNativePortList,
   fetchNativePortLists,
   nativePortListsQueryFromFilter,
 } from 'gmp/native-api/port-lists';
@@ -101,6 +103,17 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
       id,
       name,
     });
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativePortList(this.http, id);
+      } catch (error) {
+        log.debug('Native port list clone failed, falling back to GMP', error);
+      }
+    }
+    return super.clone({id});
   }
 
   createPortRange({

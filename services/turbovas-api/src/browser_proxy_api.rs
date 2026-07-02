@@ -18,6 +18,9 @@ use crate::{
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest},
     filter_writes::{clone_filter, create_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
+    port_list_payloads::PortListAssetDetail,
+    port_list_write_validation::PortListCloneRequest,
+    port_list_writes::clone_port_list,
     report_config_payloads::ReportConfigAssetItem,
     report_config_write_validation::ReportConfigCloneRequest,
     report_config_writes::clone_report_config,
@@ -88,6 +91,23 @@ pub(crate) async fn browser_proxy_clone_filter(
     clone_filter(
         State(state),
         Path(filter_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_clone_port_list(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(port_list_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<PortListCloneRequest>,
+) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_port_list(
+        State(state),
+        Path(port_list_id),
         Some(Extension(operator)),
         Json(request),
     )

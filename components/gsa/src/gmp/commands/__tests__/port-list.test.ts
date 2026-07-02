@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {FROM_FILE, PortListCommand} from 'gmp/commands/port-lists';
 import {
   createHttp,
@@ -11,6 +12,11 @@ import {
   createHttpMany,
   createEntityResponse,
 } from 'gmp/commands/testing';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('PortListCommand', () => {
   test('should allow to create a port list', async () => {
@@ -68,6 +74,84 @@ describe('PortListCommand', () => {
       message: 'OK',
       action: 'save_port_list',
     });
+  });
+
+  test('should clone a port list through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-port-list-clone-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.clone({id: 'port-list-id'});
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith(
+      'api/v1/port-lists/port-list-id/clone',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/port-lists/port-list-id/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(result.data.id).toEqual('native-port-list-clone-id');
+  });
+
+  test('should fall back to GMP when native port list clone fails', async () => {
+    const response = createActionResultResponse({
+      action: 'Clone Port List',
+      id: 'fallback-port-list-clone-id',
+      message: 'Cloned Port List',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.clone({id: 'port-list-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(http.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'clone',
+        id: 'port-list-id',
+        resource_type: 'port_list',
+      },
+    });
+    expect(result.data.id).toEqual('fallback-port-list-clone-id');
   });
 
   test('should allow to create a port range', async () => {

@@ -13253,7 +13253,52 @@ def command_feed_copy_to_runtime(repo_root: Path) -> dict[str, Any]:
     return make_result("feed-copy-to-runtime", repo_root, "Feed cache copy to runtime attempted.", findings, [str(feed_cache_var_lib(repo_root)), str(feed_runtime_root(repo_root))])
 
 
-def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
+def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
+    checks = {
+        item.get("check"): item.get("status")
+        for item in findings
+        if isinstance(item, dict) and item.get("check")
+    }
+    service_status = {
+        item.get("details", {}).get("service"): item.get("status")
+        for item in findings
+        if isinstance(item, dict)
+        and item.get("check") == "runtime.app.running"
+        and isinstance(item.get("details"), dict)
+        and item.get("details", {}).get("service")
+    }
+    important_checks = {
+        check: checks[check]
+        for check in (
+            "compose.config",
+            "runtime.infrastructure",
+            "runtime.database-init",
+            "runtime.scanner-redis",
+            "runtime.feed-keyring",
+            "gsa.build.index",
+            "gsa.static-stage",
+            "gsa.config-js",
+            "compose.app-up",
+        )
+        if check in checks
+    }
+    compact["details"] = {
+        "finding_count": len(findings),
+        "non_pass_count": len(non_pass),
+        "artifact_count": len(result.get("artifacts", [])) if isinstance(result.get("artifacts"), list) else 0,
+        "important_checks": important_checks,
+        "service_status": service_status,
+    }
+    compact["findings"] = non_pass or [
+        finding("pass", "runtime-app-up.status-only", "Application runtime startup passed; no non-pass findings.")
+    ]
+    return compact
+
+
+def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_app_env(repo_root))
@@ -13273,13 +13318,15 @@ def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
     findings.extend(stage_gsa_static(repo_root))
     findings.extend(gsad_binding_transition_findings(repo_root))
     if aggregate_status(findings) == "fail":
-        return make_result("runtime-app-up", repo_root, "Application runtime startup stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
+        result = make_result("runtime-app-up", repo_root, "Application runtime startup stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
+        return runtime_app_up_status_only_result(result) if status_only else result
 
     findings.extend(compose_app_services_up_with_retry(repo_root, "compose.app-up", "docker compose app up"))
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-    return make_result("runtime-app-up", repo_root, "Application runtime startup attempted.", findings, [str(runtime_dir(repo_root))])
+    result = make_result("runtime-app-up", repo_root, "Application runtime startup attempted.", findings, [str(runtime_dir(repo_root))])
+    return runtime_app_up_status_only_result(result) if status_only else result
 
 
 def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
@@ -19335,7 +19382,8 @@ def build_parser() -> argparse.ArgumentParser:
     osv_lockfile_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe OSV checks")
     path_coupling = subparsers.add_parser("path-coupling-state", parents=[common], help="inspect absolute checkout/runtime path coupling")
     path_coupling.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe path-coupling checks")
-    subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
+    runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
+    runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
@@ -19505,7 +19553,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "path-coupling-state":
         result = command_path_coupling_state(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-up":
-        result = command_runtime_app_up(repo_root)
+        result = command_runtime_app_up(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-down":
         result = command_runtime_app_down(repo_root)
     elif args.command == "runtime-app-smoke":

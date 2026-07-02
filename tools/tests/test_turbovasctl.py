@@ -425,6 +425,37 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertTrue(turbovasctl.compose_app_up_transient_error("removal of container abc123 is already in progress"))
         self.assertFalse(turbovasctl.compose_app_up_transient_error("database migration failed"))
 
+    def test_runtime_app_up_status_only_omits_pass_output_tails(self):
+        result = {
+            "status": "pass",
+            "summary": "Application runtime startup attempted.",
+            "artifacts": ["/runtime"],
+            "findings": [
+                turbovasctl.finding("pass", "compose.config", "Compose config validation exit code 0."),
+                turbovasctl.finding("pass", "runtime.infrastructure", "Runtime infrastructure startup attempted.", details={"status": "pass"}),
+                turbovasctl.finding("pass", "runtime.database-init", "Runtime database initialization completed.", details={"status": "pass"}),
+                turbovasctl.finding("pass", "runtime.scanner-redis", "Scanner Redis initialization completed.", details={"status": "pass"}),
+                turbovasctl.finding("pass", "runtime.feed-keyring", "Shared feed signature keyring initialization completed.", details={"status": "pass"}),
+                turbovasctl.finding("pass", "gsa.build.index", "GSA production build index.html exists."),
+                turbovasctl.finding("pass", "gsa.static-stage", "GSA production build is staged for gsad."),
+                turbovasctl.finding("pass", "gsa.config-js", "GSA config.js uses browser host fallback."),
+                turbovasctl.finding("pass", "compose.app-up", "docker compose app up exit code 0.", details={"output_tail": ["large build output"]}),
+                turbovasctl.finding("pass", "runtime.app.running", "gsad container is running.", details={"service": "gsad", "logs_tail": ["large log tail"]}),
+            ],
+        }
+
+        compact = turbovasctl.runtime_app_up_status_only_result(result)
+
+        self.assertEqual(compact["status"], "pass")
+        self.assertEqual(compact["details"]["finding_count"], 10)
+        self.assertEqual(compact["details"]["non_pass_count"], 0)
+        self.assertEqual(compact["details"]["artifact_count"], 1)
+        self.assertEqual(compact["details"]["important_checks"]["compose.app-up"], "pass")
+        self.assertEqual(compact["details"]["service_status"], {"gsad": "pass"})
+        self.assertEqual(compact["findings"][0]["check"], "runtime-app-up.status-only")
+        self.assertNotIn("output_tail", json.dumps(compact))
+        self.assertNotIn("logs_tail", json.dumps(compact))
+
     def test_inventory_reports_missing_components(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1074,6 +1105,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
         self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
+        self.assertIn('runtime_app_up.add_argument("--status-only"', source)
+        self.assertIn("command_runtime_app_up(repo_root, status_only=args.status_only)", source)
         self.assertIn("def command_runtime_native_api_direct_smoke", source)
         self.assertIn("def command_runtime_native_api_direct_write_smoke", source)
         self.assertIn("def command_runtime_native_api_rebuild", source)

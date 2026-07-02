@@ -271,6 +271,8 @@ mod tooling_alert_write_characterization_tests;
 #[cfg(test)]
 mod tooling_bulk_write_characterization_tests;
 #[cfg(test)]
+mod tooling_credential_write_characterization_tests;
+#[cfg(test)]
 mod tooling_schedule_write_characterization_tests;
 #[cfg(test)]
 mod tooling_tag_write_characterization_tests;

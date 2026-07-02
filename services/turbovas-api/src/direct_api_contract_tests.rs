@@ -498,6 +498,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/targets/:target_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/resources"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_alert)"));
+    assert!(browser_routes.contains("patch(browser_proxy_patch_credential)"));
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_port_list)"));
@@ -549,7 +550,6 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(!browser_routes.contains("delete(delete_"));
     assert!(!browser_routes.contains("delete(hard_delete_"));
     assert!(!browser_routes.contains("/api/v1/targets/:target_id\", post("));
-    assert!(!browser_routes.contains("credentials"));
     assert!(!browser_routes.contains("scanner"));
 }
 

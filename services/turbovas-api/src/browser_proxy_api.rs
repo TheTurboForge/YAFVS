@@ -16,6 +16,9 @@ use crate::{
     alert_writes::patch_alert,
     app_state::AppState,
     auth::{DirectApiOperator, constant_time_str_eq, direct_api_bearer_token_is_acceptable},
+    credential_payloads::CredentialAssetItem,
+    credential_write_validation::CredentialPatchRequest,
+    credential_writes::patch_credential,
     errors::ApiError,
     filter_payloads::FilterAssetItem,
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest, FilterPatchRequest},
@@ -81,6 +84,23 @@ const BROWSER_PROXY_OPERATOR_NAME_HEADER: &str = "x-turbovas-operator-name";
 #[derive(Clone)]
 pub(crate) struct BrowserProxyAuth {
     secret: String,
+}
+
+pub(crate) async fn browser_proxy_patch_credential(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(credential_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CredentialPatchRequest>,
+) -> Result<Json<CredentialAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_credential(
+        State(state),
+        Path(credential_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_restore_port_list(

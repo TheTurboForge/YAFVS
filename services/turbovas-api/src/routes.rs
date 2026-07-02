@@ -26,7 +26,7 @@ use crate::{
         browser_proxy_hard_delete_port_list, browser_proxy_hard_delete_report_config,
         browser_proxy_hard_delete_scan_config, browser_proxy_hard_delete_schedule,
         browser_proxy_hard_delete_tag, browser_proxy_hard_delete_target, browser_proxy_patch_alert,
-        browser_proxy_patch_filter, browser_proxy_patch_port_list,
+        browser_proxy_patch_credential, browser_proxy_patch_filter, browser_proxy_patch_port_list,
         browser_proxy_patch_report_config, browser_proxy_patch_scan_config,
         browser_proxy_patch_schedule, browser_proxy_patch_scope, browser_proxy_patch_tag,
         browser_proxy_patch_target, browser_proxy_patch_task, browser_proxy_restore_filter,
@@ -463,6 +463,10 @@ pub(crate) fn browser_proxy_native_api_router(
     };
     let write_router = Router::new()
         .route("/api/v1/alerts/:alert_id", patch(browser_proxy_patch_alert))
+        .route(
+            "/api/v1/credentials/:credential_id",
+            patch(browser_proxy_patch_credential),
+        )
         .route("/api/v1/filters", post(browser_proxy_create_filter))
         .route(
             "/api/v1/filters/:filter_id",

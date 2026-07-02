@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {ScopesCommand} from 'gmp/commands/scopes';
+import {ScopeReportsCommand, ScopesCommand} from 'gmp/commands/scopes';
 import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
@@ -245,5 +245,65 @@ describe('ScopesCommand tests', () => {
       'Native API request failed with status 409',
     );
     expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should keep scope report generation on GMP when native API is available', async () => {
+    const response = createActionResultResponse({
+      action: 'generate_scope_report',
+      id: 'scope-report-id',
+    });
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScopesCommand(fakeHttp);
+    await cmd.generateReport({id: 'scope-id'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'generate_scope_report',
+        scope_id: 'scope-id',
+      },
+    });
+  });
+
+  test('should keep scope report deletion on GMP when native API is available', async () => {
+    const response = createActionResultResponse({
+      action: 'delete_scope_report',
+      id: 'scope-report-id',
+    });
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScopeReportsCommand(fakeHttp);
+    await cmd.delete({id: 'scope-report-id'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'delete_scope_report',
+        scope_report_id: 'scope-report-id',
+      },
+    });
   });
 });

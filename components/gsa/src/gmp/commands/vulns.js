@@ -16,6 +16,7 @@ import {
 import Response from 'gmp/http/response';
 import Vulnerability from 'gmp/models/vulnerability';
 import {
+  exportNativeVulnerabilityMetadata,
   fetchNativeVulnerabilities,
   nativeVulnerabilitiesQueryFromFilter,
 } from 'gmp/native-api/vulnerabilities';
@@ -23,6 +24,17 @@ import {
 class VulnerabilityCommand extends EntityCommand {
   constructor(http) {
     super(http, 'vuln', Vulnerability);
+  }
+
+  async export({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeVulnerabilityMetadata(this.http, id);
+      } catch {
+        // Keep inherited bulk export responsible for legacy vulnerability export behavior.
+      }
+    }
+    return super.export({id});
   }
 }
 

@@ -147,6 +147,44 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /vulnerabilities/{vulnerability_id}/export:
+    get:
+      operationId: getVulnerabilitiesByVulnerabilityIdExport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: vulnerability-metadata-export-read
+      x-turbovas-inherited-still-owns: vulnerability-exports-and-actions
+      summary: Export vulnerability metadata
+      description: Direct native JSON metadata export for one observed top-level vulnerability aggregated from positive-severity raw scan results. This does not replace inherited bulk XML/table export or future vulnerability actions.
+      parameters:
+        - name: vulnerability_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: NVT OID for the vulnerability row.
+      responses:
+        '200':
+          description: Vulnerability metadata export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vulnerability'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /cves:
     get:
       operationId: getCves

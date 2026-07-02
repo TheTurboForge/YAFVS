@@ -1980,8 +1980,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 146)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 97)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 147)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 98)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 49)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 49)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2129,7 +2129,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 97)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 98)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 49)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -2918,7 +2918,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 146)
+        self.assertEqual(contract["operation_count"], 147)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
@@ -3094,7 +3094,8 @@ class TurboVASCtlTests(unittest.TestCase):
          'tls-certificate-asset-list-read',
          'tls-certificate-asset-metadata-export-read',
          'trashcan-count-summary-read',
-         'vulnerability-list-read']
+         'vulnerability-list-read',
+         'vulnerability-metadata-export-read']
         expected_inherited_still_owns_values = ['alert-detail-delivery-control',
          'cert-advisory-rich-detail-export',
          'credential-secrets-writes-and-deletes',
@@ -3197,9 +3198,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 146)
-        self.assertEqual(details["direct_operation_count"], 146)
-        self.assertEqual(details["direct_read_operation_count"], 97)
+        self.assertEqual(details["operation_count"], 147)
+        self.assertEqual(details["direct_operation_count"], 147)
+        self.assertEqual(details["direct_read_operation_count"], 98)
         self.assertEqual(
             details["non_get_direct_operations"],
             ["PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}"],
@@ -3412,11 +3413,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 146)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 146)
-        self.assertEqual(details["summary"]["inventory_rows"], 146)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 146)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 146)
+        self.assertEqual(details["summary"]["total_rows"], 147)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 147)
+        self.assertEqual(details["summary"]["inventory_rows"], 147)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 147)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 147)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -3619,6 +3620,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/cves": ("getCves", "cve-catalog-list-read", "scap-rich-context"),
             "/api/v1/cves/{cve_id}": ("getCvesByCveId", "cve-catalog-detail-epss-reference-configuration-read", "scap-rich-context"),
             "/api/v1/cves/{cve_id}/export": ("getCvesByCveIdExport", "cve-catalog-metadata-export-read", "scap-rich-context"),
+            "/api/v1/vulnerabilities/{vulnerability_id}/export": ("getVulnerabilitiesByVulnerabilityIdExport", "vulnerability-metadata-export-read", "vulnerability-exports-and-actions"),
             "/api/v1/cpes": ("getCpes", "cpe-catalog-list-read", "scap-rich-context"),
             "/api/v1/cpes/{cpe_id}": ("getCpesByCpeId", "cpe-catalog-detail-read", "scap-rich-context"),
             "/api/v1/cert-bund-advisories": ("getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
@@ -4114,7 +4116,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 146)
+        self.assertEqual(len(operation_ids), 147)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -4219,6 +4221,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /dfn-cert-advisories/{dfn_cert_advisory_id}",
                 "GET /dfn-cert-advisories/{dfn_cert_advisory_id}/export",
                 "GET /feeds",
+                "GET /vulnerabilities/{vulnerability_id}/export",
                 "GET /nvts",
                 "GET /nvts/{nvt_id}",
                 "GET /nvts/{nvt_id}/export",

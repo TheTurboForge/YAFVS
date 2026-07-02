@@ -5,6 +5,7 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import type Filter from 'gmp/models/filter';
 import Vulnerability from 'gmp/models/vulnerability';
@@ -260,4 +261,16 @@ export const fetchNativeVulnerabilities = async (
     counts: nativeCounts(page, vulnerabilities.length),
     page,
   };
+};
+
+export const exportNativeVulnerabilityMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeVulnerabilityPayload>(
+    gmp,
+    `api/v1/vulnerabilities/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };

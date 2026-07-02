@@ -634,6 +634,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tls-certificate-asset-metadata-export-read",
         "trashcan-count-summary-read",
         "vulnerability-list-read",
+        "vulnerability-metadata-export-read",
     }
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
@@ -694,6 +695,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/cves"): "direct-read",
     ("get", "/cves/{cve_id}"): "direct-read",
     ("get", "/cves/{cve_id}/export"): "direct-read",
+    ("get", "/vulnerabilities/{vulnerability_id}/export"): "direct-read",
     ("get", "/dfn-cert-advisories"): "direct-read",
     ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}"): "direct-read",
     ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}/export"): "direct-read",
@@ -1386,6 +1388,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "vulnerability-list-read",
     },
+    ("get", "/vulnerabilities/{vulnerability_id}/export"): {
+        "x-turbovas-inherited-still-owns": "vulnerability-exports-and-actions",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "vulnerability-metadata-export-read",
+    },
     ("get", "/reports/{report_id}"): {
         "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
@@ -1657,6 +1664,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/results/{}",
         "/api/v1/results/{}/export",
         "/api/v1/vulnerabilities",
+        "/api/v1/vulnerabilities/{}/export",
         "/api/v1/cves",
         "/api/v1/cves/{}",
         "/api/v1/cves/{}/export",
@@ -6834,6 +6842,16 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         if "result_export_suffix" in constants and "g_str_has_suffix (id, result_export_suffix)" in function_body:
             templates.add(f"{constants['results_path']}/{{}}{constants['result_export_suffix']}")
 
+    vulnerability_prefix = constants.get("vulnerability_prefix")
+    vulnerability_export_suffix = constants.get("vulnerability_export_suffix")
+    if (
+        vulnerability_prefix
+        and vulnerability_export_suffix
+        and "g_str_has_prefix (path, vulnerability_prefix)" in function_body
+        and "g_str_has_suffix (id, vulnerability_export_suffix)" in function_body
+    ):
+        templates.add(f"{vulnerability_prefix.rstrip('/')}/{{}}{vulnerability_export_suffix}")
+
     single_segment_prefixes = (
         "cpe_prefix",
         "cve_prefix",
@@ -7180,6 +7198,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/vulnerabilities",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Vulnerabilities list (migrated through gsad same-origin proxy)", "read-only vulnerability automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/vulnerabilities/{vulnerability_id}/export",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA vulnerability metadata export (migrated through gsad same-origin proxy)", "direct native JSON vulnerability metadata export", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/cves",

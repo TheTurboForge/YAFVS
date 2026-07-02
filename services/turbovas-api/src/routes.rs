@@ -117,6 +117,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route("/api/v1/results/:result_id", get(result_detail))
         .route("/api/v1/results/:result_id/export", get(result_export))
         .route("/api/v1/vulnerabilities", get(vulnerabilities))
+        .route(
+            "/api/v1/vulnerabilities/:vulnerability_id/export",
+            get(vulnerability_export),
+        )
         .route("/api/v1/cpes", get(cpe_catalog))
         .route("/api/v1/cpes/*cpe_id", get(cpe_catalog_detail))
         .route("/api/v1/cves", get(cve_catalog))

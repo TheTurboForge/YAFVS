@@ -590,6 +590,8 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *results_path = "/api/v1/results";
   const gchar *result_export_suffix = "/export";
   const gchar *vulnerabilities_path = "/api/v1/vulnerabilities";
+  const gchar *vulnerability_prefix = "/api/v1/vulnerabilities/";
+  const gchar *vulnerability_export_suffix = "/export";
   const gchar *cpes_path = "/api/v1/cpes";
   const gchar *cpe_prefix = "/api/v1/cpes/";
   const gchar *cves_path = "/api/v1/cves";
@@ -705,6 +707,16 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, vulnerabilities_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, vulnerability_prefix))
+    {
+      const gchar *id = path + strlen (vulnerability_prefix);
+      if (g_str_has_suffix (id, vulnerability_export_suffix))
+        return is_nvt_oid_segment (id,
+                                   strlen (id)
+                                   - strlen (vulnerability_export_suffix));
+      return FALSE;
+    }
 
   if (g_strcmp0 (path, cpes_path) == 0)
     return TRUE;

@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {rendererWith, screen, within} from 'web/testing';
+import {rendererWith, screen, waitFor, within} from 'web/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 import CvesTab from 'web/pages/reports/details/CvesTab';
@@ -86,6 +86,86 @@ describe('Report CVEs Tab tests', () => {
       expect.stringContaining('/api/v1/reports/report-123/cves'),
       expect.objectContaining({credentials: 'include'}),
     );
+  });
+
+  test('should keep native CVE query pagination and sort in sync', async () => {
+    const interactiveFilter = Filter.fromString(
+      'search=postgres rows=2 first=3 sort-reverse=severity',
+    );
+    const fetchMock = testing.fn((url: string) => {
+      const params = new URL(url).searchParams;
+      const page = Number(params.get('page') ?? '1');
+      const sort = params.get('sort') ?? '';
+      const filterText = params.get('filter') ?? '';
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page,
+            page_size: Number(params.get('page_size') ?? '2'),
+            total: 5,
+            sort,
+            filter: filterText,
+          },
+          items: [
+            {
+              id: `CVE-2019-${page}${sort === 'id' ? '999' : '123'}`,
+              affected_system_count: 2,
+              result_count: 3,
+              max_severity: 7.5,
+              source_report_ids: [reportId],
+            },
+          ],
+        }),
+        ok: true,
+        status: 200,
+      });
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+    const {render} = rendererWith({gmp, router: true, capabilities: true});
+    const {userEvent} = render(
+      <CvesTab filter={interactiveFilter} reportId={reportId} status="Done" />,
+    );
+
+    await screen.findByText('CVE-2019-2123');
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/reports/report-123/cves',
+      expect.objectContaining({
+        page: 2,
+        page_size: 2,
+        sort: '-max_severity',
+        filter: 'postgres',
+      }),
+    );
+    expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', {name: 'Next'}));
+    await waitFor(() => {
+      expect(gmp.buildUrl).toHaveBeenCalledWith(
+        'api/v1/reports/report-123/cves',
+        expect.objectContaining({
+          page: 3,
+          page_size: 2,
+          sort: '-max_severity',
+          filter: 'postgres',
+        }),
+      );
+    });
+    expect(await screen.findByText('CVE-2019-3123')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('CVE'));
+    await waitFor(() => {
+      expect(gmp.buildUrl).toHaveBeenCalledWith(
+        'api/v1/reports/report-123/cves',
+        expect.objectContaining({
+          page: 1,
+          page_size: 2,
+          sort: 'id',
+          filter: 'postgres',
+        }),
+      );
+    });
+    expect(await screen.findByText('CVE-2019-1999')).toBeInTheDocument();
   });
 
   test('should render empty native CVE table', async () => {

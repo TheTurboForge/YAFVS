@@ -1968,27 +1968,27 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("implemented_native_endpoint_count", details)
         self.assertIn("direct_api_contract", details)
         self.assertIn("browser_proxy_contract", details)
-        self.assertIn("product_workflow_residue", details)
+        self.assertNotIn("product_workflow_residue", details)
+        self.assertNotIn("by_category", details)
         self.assertNotIn("candidate_for_removal_paths", details)
-        self.assertEqual(details["candidate_for_removal_path_count"], details["by_category"]["candidate_for_removal"]["count"])
         self.assertIn("candidate_for_removal_review", details)
         review = details["candidate_for_removal_review"]
-        self.assertEqual(review["total"], details["by_category"]["candidate_for_removal"]["count"])
         self.assertEqual(review["safe_removal_count"], 0)
         self.assertEqual(review["blocked_or_review_count"], review["total"])
-        self.assertGreater(review["buckets"]["write_or_mutation"]["count"], 0)
-        self.assertGreater(review["buckets"]["scanner_or_task_control"]["count"], 0)
-        self.assertGreater(review["buckets"]["export_or_report_generation"]["count"], 0)
-        self.assertGreater(review["buckets"]["credential_or_account"]["count"], 0)
-        for bucket in review["buckets"].values():
-            self.assertNotIn("paths", bucket)
-            self.assertEqual(bucket["path_count"], bucket["count"])
-        inventory_details = compact["findings"][0]["details"]
-        self.assertNotIn("candidate_for_removal_paths", inventory_details)
-        self.assertIn("candidate_for_removal_review", inventory_details)
-        self.assertIn("bucket_counts", inventory_details["candidate_for_removal_review"])
-        self.assertNotIn("next_replacement_candidates", inventory_details)
-        self.assertIn("product_workflow_residue", inventory_details)
+        self.assertGreater(review["bucket_counts"]["write_or_mutation"], 0)
+        self.assertGreater(review["bucket_counts"]["scanner_or_task_control"], 0)
+        self.assertGreater(review["bucket_counts"]["export_or_report_generation"], 0)
+        self.assertGreater(review["bucket_counts"]["credential_or_account"], 0)
+        self.assertEqual(
+            compact["findings"],
+            [
+                {
+                    "status": "pass",
+                    "check": "native-tooling.status-only",
+                    "message": "Native tooling state passed; no non-pass findings.",
+                }
+            ],
+        )
         for item in compact["findings"]:
             finding_details = item.get("details", {})
             self.assertNotIn("inventory_endpoints", finding_details)
@@ -2137,7 +2137,7 @@ class TurboVASCtlTests(unittest.TestCase):
         findings = {item["check"]: item for item in summary["findings"]}
         self.assertNotIn("paths", findings["native-tooling.unknown"]["details"])
         self.assertEqual(findings["native-tooling.unknown"]["details"], {"count": 0})
-        self.assertLess(len(json.dumps(summary)), len(json.dumps(compact)))
+        self.assertLess(len(json.dumps(compact)), len(json.dumps(summary)))
 
     def test_native_tooling_state_status_only_is_chat_safe(self):
         root = Path(__file__).resolve().parents[2]
@@ -2223,7 +2223,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 41)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 49)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 49)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2601,7 +2601,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 41)
+        self.assertEqual(contract["browser_write_proxy_count"], 49)
         self.assertEqual(contract["direct_write_control_count"], 49)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
@@ -2630,7 +2630,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("POST /api/v1/tags/{tag_id}/resources", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/targets", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/targets/{target_id}/clone", contract["browser_write_proxy_operations"])
-        for direct_only in [
+        for proxied_write in [
             "PATCH /api/v1/credentials/{credential_id}",
             "PATCH /api/v1/scan-configs/{scan_config_id}",
             "PATCH /api/v1/scanners/{scanner_id}",
@@ -2640,8 +2640,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "PATCH /api/v1/tasks/{task_id}",
             "POST /api/v1/scopes",
         ]:
-            self.assertIn(direct_only, contract["direct_write_control_operations"])
-            self.assertNotIn(direct_only, contract["browser_write_proxy_operations"])
+            self.assertIn(proxied_write, contract["direct_write_control_operations"])
+            self.assertIn(proxied_write, contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/tags", contract["direct_write_control_operations"])
         self.assertEqual(contract["missing_gsad_proxy_allowlist"], [])
         self.assertEqual(contract["unexpected_gsad_proxy_allowlist"], [])
@@ -3657,8 +3657,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("GSA raw report list (migrated through gsad same-origin proxy)", reports["replacement_candidates"])
 
         create_scope = rows[("post", "/api/v1/scopes")]
-        self.assertEqual(create_scope["status"], "implemented_direct_write_control")
-        self.assertEqual(create_scope["browser_access"], "not_browser_proxied")
+        self.assertEqual(create_scope["status"], "implemented_internal_and_browser_proxied")
+        self.assertEqual(create_scope["browser_access"], "browser_proxied")
         self.assertEqual(create_scope["method"], "post")
         self.assertEqual(create_scope["inventory_endpoint"], "/api/v1/scopes")
         self.assertEqual(create_scope["direct_access"], "direct_write_control")
@@ -3668,8 +3668,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(create_scope["x_turbovas_replaces"], "scope-metadata-membership-write")
 
         update_scope = rows[("patch", "/api/v1/scopes/{scope_id}")]
-        self.assertEqual(update_scope["status"], "implemented_direct_write_control")
-        self.assertEqual(update_scope["browser_access"], "not_browser_proxied")
+        self.assertEqual(update_scope["status"], "implemented_internal_and_browser_proxied")
+        self.assertEqual(update_scope["browser_access"], "browser_proxied")
         self.assertEqual(update_scope["direct_access"], "direct_write_control")
         self.assertEqual(update_scope["x_turbovas_maturity"], "live-write")
         self.assertEqual(update_scope["x_turbovas_exposure"], "direct-write")
@@ -3723,8 +3723,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(clone_schedule["x_turbovas_replaces"], "schedule-clone")
 
         patch_schedule = rows[("patch", "/api/v1/schedules/{schedule_id}")]
-        self.assertEqual(patch_schedule["status"], "implemented_direct_write_control")
-        self.assertEqual(patch_schedule["browser_access"], "not_browser_proxied")
+        self.assertEqual(patch_schedule["status"], "implemented_internal_and_browser_proxied")
+        self.assertEqual(patch_schedule["browser_access"], "browser_proxied")
         self.assertEqual(patch_schedule["direct_access"], "direct_write_control")
         self.assertEqual(patch_schedule["x_turbovas_maturity"], "live-write")
         self.assertEqual(patch_schedule["x_turbovas_exposure"], "direct-write")

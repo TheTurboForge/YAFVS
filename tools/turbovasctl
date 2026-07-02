@@ -10136,13 +10136,11 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
         finding("pass", "native-tooling.end-state", "End-state remains full removal of required python-gvm and gvm-tools dependence after native API replacements land."),
     ]
     result = make_result("native-tooling-state", repo_root, "Inherited GMP/python-gvm/gvm-tools dependency state collected.", findings)
-    if status_only:
+    if status_only or compact:
         result["details"] = native_tooling_status_only_details(summary)
         result["findings"] = native_tooling_status_only_findings(findings)
     elif summary_only:
         result["details"] = summary_details
-    elif compact:
-        result["details"] = compact_native_tooling_summary(summary)
     else:
         result["details"] = {"items": items, **summary}
     return result
@@ -19595,7 +19593,7 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_request.add_argument("--allow-write-control", action="store_true", help="allow intentional non-GET/write-control-shaped request probes")
     native_api_request.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
-    native_tooling_state.add_argument("--compact", action="store_true", help="omit full item and endpoint inventories, but keep review detail such as removal candidates")
+    native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
     native_tooling_state.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
     native_tooling_removal_review = subparsers.add_parser("native-tooling-removal-review", parents=[common], help="summarize blocked inherited tooling removal candidates without full inventory output")

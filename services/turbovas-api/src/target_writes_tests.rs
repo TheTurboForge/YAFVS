@@ -552,8 +552,11 @@ fn target_patch_sql_is_metadata_only() {
 fn target_clone_sql_copies_metadata_credential_references_and_active_tags_only() {
     let clone = target_clone_metadata_sql();
     assert!(clone.contains("INSERT INTO targets"));
+    assert!(clone.contains("(uuid, owner, name, hosts"));
     assert!(clone.contains("make_uuid()"));
+    assert!(clone.contains("SELECT make_uuid(),\n            $2,"));
     assert!(clone.contains("coalesce($3, uniquify('target', name, $2, ' Clone'))"));
+    assert!(!clone.contains("SELECT uuid, owner, name"));
     for required in [
         "hosts",
         "exclude_hosts",

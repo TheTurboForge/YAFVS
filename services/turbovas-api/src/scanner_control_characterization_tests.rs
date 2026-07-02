@@ -232,6 +232,14 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
             ),
             "{method} /api/v1/scanners/{{id}} must remain closed"
         );
+        assert!(
+            !direct_api_v1_method_is_allowed(
+                &method,
+                "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/export",
+                true,
+            ),
+            "{method} /api/v1/scanners/{{id}}/export must remain closed"
+        );
     }
     assert!(direct_api_v1_method_is_allowed(
         &Method::PATCH,
@@ -282,5 +290,36 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
         "export/download behavior, create, clone, restore, and delete remain inherited",
     ] {
         assert!(detail.contains(residual), "detail docs missing {residual}");
+    }
+
+    let export = openapi_path_block("/scanners/{scanner_id}/export");
+    for required in [
+        "get:",
+        "operationId: getScannersByScannerIdExport",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-read",
+        "x-turbovas-maturity: live-read",
+        "x-turbovas-replaces: scanner-metadata-export-read",
+        "x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
+        "$ref: '#/components/schemas/ScannerAssetDetail'",
+        "Credential secrets, scanner CA material",
+        "verify/control operations",
+    ] {
+        assert!(
+            export.contains(required),
+            "scanner metadata export OpenAPI block missing {required}"
+        );
+    }
+    for forbidden in [
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-safety-contract: write-control-v1",
+        "\n    post:",
+        "\n    patch:",
+        "\n    delete:",
+    ] {
+        assert!(
+            !export.contains(forbidden),
+            "scanner metadata export must not expose inherited control/download/write behavior: {forbidden}"
+        );
     }
 }

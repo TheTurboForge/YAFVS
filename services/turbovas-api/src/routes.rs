@@ -27,10 +27,10 @@ use crate::{
         browser_proxy_hard_delete_schedule, browser_proxy_hard_delete_tag,
         browser_proxy_hard_delete_target, browser_proxy_patch_alert, browser_proxy_patch_filter,
         browser_proxy_patch_port_list, browser_proxy_patch_report_config,
-        browser_proxy_patch_schedule, browser_proxy_patch_tag, browser_proxy_restore_filter,
-        browser_proxy_restore_port_list, browser_proxy_restore_report_config,
-        browser_proxy_restore_scan_config, browser_proxy_restore_schedule,
-        browser_proxy_restore_tag, browser_proxy_restore_target,
+        browser_proxy_patch_scan_config, browser_proxy_patch_schedule, browser_proxy_patch_tag,
+        browser_proxy_restore_filter, browser_proxy_restore_port_list,
+        browser_proxy_restore_report_config, browser_proxy_restore_scan_config,
+        browser_proxy_restore_schedule, browser_proxy_restore_tag, browser_proxy_restore_target,
         browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
@@ -545,6 +545,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/scan-configs/:scan_config_id/clone",
             post(browser_proxy_clone_scan_config),
+        )
+        .route(
+            "/api/v1/scan-configs/:scan_config_id",
+            patch(browser_proxy_patch_scan_config),
         )
         .route(
             "/api/v1/scan-configs/:scan_config_id/restore",

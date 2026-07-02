@@ -13,6 +13,7 @@ import Schedule from 'gmp/models/schedule';
 import {
   cloneNativeSchedule,
   deleteNativeSchedule,
+  exportNativeScheduleMetadata,
   patchNativeSchedule,
 } from 'gmp/native-api/schedules';
 
@@ -72,6 +73,20 @@ export class ScheduleCommand extends EntityCommand {
 
   getElementFromRoot(root) {
     return root.get_schedule.get_schedules_response.schedule;
+  }
+
+  async export({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeScheduleMetadata(this.http, id);
+      } catch (error) {
+        log.debug(
+          'Native schedule metadata export failed, falling back to GMP',
+          error,
+        );
+      }
+    }
+    return super.export({id});
   }
 
   async clone({id}) {

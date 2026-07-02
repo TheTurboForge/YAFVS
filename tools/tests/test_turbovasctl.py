@@ -5672,18 +5672,19 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/verify-scanners.gmp.py",
                 "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
+                "components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/unclassified.gmp.py",
             ]
         )
 
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], 6)
+        self.assertEqual(review["blocked_or_review_count"], 7)
         buckets = review["buckets"]
         self.assertEqual(buckets["credential_or_account"]["count"], 1)
         self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
         self.assertEqual(buckets["scanner_or_task_control"]["count"], 1)
-        self.assertEqual(buckets["write_or_mutation"]["count"], 2)
+        self.assertEqual(buckets["write_or_mutation"]["count"], 3)
         self.assertIn(
             "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
             buckets["write_or_mutation"]["path_blockers"],
@@ -5706,6 +5707,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/create-targets-from-host-list.gmp.py",
                 "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
+                "components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
                 "components/gvm-tools/scripts/send-schedules.gmp.py",
@@ -5734,6 +5736,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("one target per host", write_blockers["components/gvm-tools/scripts/create-targets-from-host-list.gmp.py"])
         self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
         self.assertIn("CSV tag behavior", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
+        self.assertIn("filter-based override deletion", write_blockers["components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py"])
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
         self.assertIn("XML schedule send", write_blockers["components/gvm-tools/scripts/send-schedules.gmp.py"])

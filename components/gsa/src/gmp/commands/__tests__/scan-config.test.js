@@ -15,6 +15,7 @@ import {
   createHttp,
   createHttpMany,
   createActionResultResponse,
+  createPlainResponse,
   createResponse,
 } from 'gmp/commands/testing';
 import {
@@ -232,6 +233,81 @@ describe('ScanConfigCommand tests', () => {
         xml_file: 'content',
       },
     });
+  });
+
+  test('should export scan config metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'scan-config-id',
+        name: 'Full and fast',
+        usage_type: 'scan',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const result = await cmd.export({id: 'scan-config-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/scan-config-id/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'scan-config-id',
+      name: 'Full and fast',
+      usage_type: 'scan',
+    });
+  });
+
+  test('should fall back to GMP when native scan config metadata export fails', async () => {
+    const content = '<some><xml>exported-data</xml></some>';
+    const response = createPlainResponse(content);
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const result = await cmd.export({id: 'scan-config-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'config',
+        bulk_select: 1,
+        'bulk_selected:scan-config-id': 1,
+      },
+    });
+    expect(result.data).toEqual(content);
   });
 
   test('should create a config', async () => {

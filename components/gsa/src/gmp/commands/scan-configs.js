@@ -21,6 +21,7 @@ import {
   cloneNativeScanConfig,
   createNativeScanConfig,
   deleteNativeScanConfig,
+  exportNativeScanConfigMetadata,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
   patchNativeScanConfig,
@@ -92,6 +93,20 @@ export class ScanConfigCommand extends EntityCommand {
     };
     log.debug('Importing scan config', data);
     return this.httpPostWithTransform(data);
+  }
+
+  async export({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeScanConfigMetadata(this.http, id);
+      } catch (error) {
+        log.debug(
+          'Native scan config metadata export failed, falling back to GMP',
+          error,
+        );
+      }
+    }
+    return super.export({id});
   }
 
   async create({baseScanConfig, name, comment}) {

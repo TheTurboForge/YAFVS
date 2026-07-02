@@ -41,8 +41,8 @@ use crate::{
         TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
     },
     tag_writes::{clone_tag, create_tag, patch_tag, restore_tag, update_tag_resources},
-    target_write_validation::TargetCloneRequest,
-    target_writes::{clone_target, restore_target},
+    target_write_validation::{TargetCloneRequest, TargetCreateRequest},
+    target_writes::{clone_target, create_target, restore_target},
     task_target_payloads::TargetItem,
 };
 
@@ -142,6 +142,16 @@ pub(crate) async fn browser_proxy_restore_target(
 ) -> Result<Json<TargetItem>, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     restore_target(State(state), Path(target_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_create_target(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<TargetCreateRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<TargetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_target(State(state), Some(Extension(operator)), Json(request)).await
 }
 
 pub(crate) async fn browser_proxy_create_filter(

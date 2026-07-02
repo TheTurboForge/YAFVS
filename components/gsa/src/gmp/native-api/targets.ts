@@ -9,7 +9,7 @@ import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import ActionResult from 'gmp/models/action-result';
 import type Filter from 'gmp/models/filter';
-import Target from 'gmp/models/target';
+import Target, {type AliveTest} from 'gmp/models/target';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -76,6 +76,18 @@ interface NativeTargetPatchArgs {
   id: string;
   name?: string;
   comment?: string;
+}
+
+export interface NativeTargetCreateArgs {
+  aliveTests: AliveTest[];
+  allowSimultaneousIPs: boolean;
+  comment?: string;
+  excludeHosts?: string[];
+  hosts: string[];
+  name: string;
+  portListId: string;
+  reverseLookupOnly: boolean;
+  reverseLookupUnify: boolean;
 }
 
 export interface NativeTargetQuery {
@@ -322,6 +334,32 @@ export const cloneNativeTarget = async (
     {},
   );
   return new Response({id: stringValue(payload.id)});
+};
+
+export const createNativeTarget = async (
+  gmp: NativeApiGmp,
+  args: NativeTargetCreateArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeTargetItem>(gmp, 'api/v1/targets', {
+    name: args.name,
+    ...(args.comment !== undefined ? {comment: args.comment} : {}),
+    port_list_id: args.portListId,
+    hosts: args.hosts,
+    ...(args.excludeHosts !== undefined ? {exclude_hosts: args.excludeHosts} : {}),
+    alive_tests: args.aliveTests,
+    allow_simultaneous_ips: args.allowSimultaneousIPs,
+    reverse_lookup_only: args.reverseLookupOnly,
+    reverse_lookup_unify: args.reverseLookupUnify,
+  });
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'create_target',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };
 
 export const patchNativeTarget = async (

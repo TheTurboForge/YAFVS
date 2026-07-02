@@ -17,11 +17,12 @@ use crate::{
         browser_proxy_clone_report_config, browser_proxy_clone_scan_config,
         browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_clone_target,
         browser_proxy_create_filter, browser_proxy_create_port_list,
-        browser_proxy_create_report_config, browser_proxy_create_tag, browser_proxy_patch_filter,
-        browser_proxy_patch_port_list, browser_proxy_patch_report_config, browser_proxy_patch_tag,
-        browser_proxy_restore_filter, browser_proxy_restore_port_list,
-        browser_proxy_restore_report_config, browser_proxy_restore_scan_config,
-        browser_proxy_restore_schedule, browser_proxy_restore_tag, browser_proxy_restore_target,
+        browser_proxy_create_report_config, browser_proxy_create_tag, browser_proxy_create_target,
+        browser_proxy_patch_filter, browser_proxy_patch_port_list,
+        browser_proxy_patch_report_config, browser_proxy_patch_tag, browser_proxy_restore_filter,
+        browser_proxy_restore_port_list, browser_proxy_restore_report_config,
+        browser_proxy_restore_scan_config, browser_proxy_restore_schedule,
+        browser_proxy_restore_tag, browser_proxy_restore_target,
         browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
@@ -515,6 +516,7 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/tags/:tag_id/restore",
             post(browser_proxy_restore_tag),
         )
+        .route("/api/v1/targets", post(browser_proxy_create_target))
         .route(
             "/api/v1/targets/:target_id/clone",
             post(browser_proxy_clone_target),

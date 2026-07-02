@@ -266,6 +266,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *port_lists_path = "/api/v1/port-lists";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *tags_path = "/api/v1/tags";
+  const gchar *targets_path = "/api/v1/targets";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *report_config_prefix = "/api/v1/report-configs/";
@@ -290,6 +291,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, tags_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, targets_path) == 0)
     return TRUE;
 
   if (g_str_has_prefix (path, filter_prefix))

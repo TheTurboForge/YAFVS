@@ -11,8 +11,21 @@ import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
-import Target, {type AliveTest} from 'gmp/models/target';
-import {cloneNativeTarget, patchNativeTarget} from 'gmp/native-api/targets';
+import Target, {
+  ARP_PING,
+  CONSIDER_ALIVE,
+  ICMP_PING,
+  SCAN_CONFIG_DEFAULT,
+  TCP_ACK,
+  TCP_SYN,
+  type AliveTest,
+} from 'gmp/models/target';
+import {
+  cloneNativeTarget,
+  createNativeTarget,
+  patchNativeTarget,
+  type NativeTargetCreateArgs,
+} from 'gmp/native-api/targets';
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 import {UNSET_VALUE} from 'web/utils/Render';
@@ -51,6 +64,14 @@ export interface TargetCommandSaveParams extends TargetCommandCreateParams {
 type TargetCommandSaveArgs = TargetCommandSaveParams;
 
 const TARGET_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+const NATIVE_TARGET_ALIVE_TESTS = new Set<AliveTest>([
+  ARP_PING,
+  CONSIDER_ALIVE,
+  ICMP_PING,
+  SCAN_CONFIG_DEFAULT,
+  TCP_ACK,
+  TCP_SYN,
+]);
 
 const isTargetMetadataOnlySave = (args: TargetCommandSaveArgs) => {
   const keys = Object.keys(args);
@@ -60,6 +81,145 @@ const isTargetMetadataOnlySave = (args: TargetCommandSaveArgs) => {
     typeof args.name === 'string' &&
     (args.comment === undefined || typeof args.comment === 'string')
   );
+};
+
+const isUnsetCredential = (id?: string) =>
+  id === undefined || id === UNSET_VALUE;
+
+const looksLikeIpv4Range = (value: string) => {
+  const [left, right] = value.split('-', 2);
+  if (right === undefined) {
+    return false;
+  }
+  return /^\d+\.\d+\.\d+\.\d+$/.test(left) && /^[\d.]+$/.test(right);
+};
+
+const looksLikeIpv4WithLeadingZero = (value: string) =>
+  /^\d+\.\d+\.\d+\.\d+$/.test(value) &&
+  value.split('.').some(part => part.length > 1 && part.startsWith('0'));
+
+const isNativeTargetHostEntry = (value: string) =>
+  value.length <= 4096 &&
+  !/[\u0000-\u001F\u007F]/.test(value) &&
+  !value.includes('/') &&
+  !looksLikeIpv4Range(value) &&
+  !looksLikeIpv4WithLeadingZero(value) &&
+  /^[A-Za-z0-9._:-]+$/.test(value);
+
+const parseNativeTargetHostList = (
+  value: string | undefined,
+  {allowEmpty = false}: {allowEmpty?: boolean} = {},
+) => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const entries = value
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0);
+  if (entries.length === 0) {
+    return allowEmpty ? [] : undefined;
+  }
+  return entries.every(isNativeTargetHostEntry) ? [...new Set(entries)] : undefined;
+};
+
+const canUseNativeTargetAliveTests = (
+  aliveTests?: AliveTest[],
+): aliveTests is AliveTest[] => {
+  if (!Array.isArray(aliveTests) || aliveTests.length === 0) {
+    return false;
+  }
+  if (!aliveTests.every(aliveTest => NATIVE_TARGET_ALIVE_TESTS.has(aliveTest))) {
+    return false;
+  }
+  if (aliveTests.includes(SCAN_CONFIG_DEFAULT) || aliveTests.includes(CONSIDER_ALIVE)) {
+    return aliveTests.length === 1;
+  }
+  return true;
+};
+
+const nativeTargetCreateArgsFromParams = ({
+  aliveTests,
+  allowSimultaneousIPs,
+  comment,
+  esxiCredentialId,
+  excludeFile,
+  excludeHosts,
+  file,
+  hosts,
+  hostsFilter,
+  krb5CredentialId,
+  name,
+  port,
+  portListId,
+  reverseLookupOnly,
+  reverseLookupUnify,
+  smbCredentialId,
+  snmpCredentialId,
+  sshCredentialId,
+  sshElevateCredentialId,
+  targetExcludeSource,
+  targetSource,
+}: TargetCommandCreateParams): NativeTargetCreateArgs | undefined => {
+  if (targetSource !== undefined && targetSource !== 'manual') {
+    return undefined;
+  }
+  if (targetExcludeSource !== undefined && targetExcludeSource !== 'manual') {
+    return undefined;
+  }
+  if (file !== undefined || excludeFile !== undefined || hostsFilter !== undefined) {
+    return undefined;
+  }
+  if (port !== undefined && port !== 22) {
+    return undefined;
+  }
+  if (
+    ![
+      esxiCredentialId,
+      krb5CredentialId,
+      smbCredentialId,
+      snmpCredentialId,
+      sshCredentialId,
+      sshElevateCredentialId,
+    ].every(isUnsetCredential)
+  ) {
+    return undefined;
+  }
+  if (
+    !canUseNativeTargetAliveTests(aliveTests) ||
+    typeof allowSimultaneousIPs !== 'boolean' ||
+    typeof reverseLookupOnly !== 'boolean' ||
+    typeof reverseLookupUnify !== 'boolean' ||
+    typeof portListId !== 'string' ||
+    portListId.length === 0
+  ) {
+    return undefined;
+  }
+  const nativeHosts = parseNativeTargetHostList(hosts);
+  if (nativeHosts === undefined) {
+    return undefined;
+  }
+  const nativeExcludeHosts = parseNativeTargetHostList(excludeHosts, {
+    allowEmpty: true,
+  });
+  if (excludeHosts !== undefined && nativeExcludeHosts === undefined) {
+    return undefined;
+  }
+  const excludedHosts = new Set(nativeExcludeHosts ?? []);
+  if (nativeHosts.every(host => excludedHosts.has(host))) {
+    return undefined;
+  }
+  return {
+    name,
+    comment,
+    portListId,
+    hosts: nativeHosts,
+    ...(nativeExcludeHosts !== undefined ? {excludeHosts: nativeExcludeHosts} : {}),
+    aliveTests,
+    allowSimultaneousIPs,
+    reverseLookupOnly,
+    reverseLookupUnify,
+  };
 };
 
 class TargetCommand extends EntityCommand<Target> {
@@ -101,6 +261,33 @@ class TargetCommand extends EntityCommand<Target> {
     excludeFile,
     hostsFilter,
   }: TargetCommandCreateParams) {
+    const nativeCreateArgs = nativeTargetCreateArgsFromParams({
+      aliveTests,
+      allowSimultaneousIPs,
+      comment,
+      esxiCredentialId,
+      excludeFile,
+      excludeHosts,
+      file,
+      hosts,
+      hostsFilter,
+      krb5CredentialId,
+      name,
+      port,
+      portListId,
+      reverseLookupOnly,
+      reverseLookupUnify,
+      smbCredentialId,
+      snmpCredentialId,
+      sshCredentialId,
+      sshElevateCredentialId,
+      targetExcludeSource,
+      targetSource,
+    });
+    if (canUseNativeApi(this.http) && nativeCreateArgs !== undefined) {
+      return createNativeTarget(this.http, nativeCreateArgs);
+    }
+
     try {
       return await this.entityAction({
         cmd: 'create_target',

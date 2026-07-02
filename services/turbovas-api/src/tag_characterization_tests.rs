@@ -172,6 +172,28 @@ fn inherited_delete_tag_has_live_trash_already_trash_and_hard_delete_paths() {
 }
 
 #[test]
+fn inherited_modify_tag_owns_set_add_remove_and_filter_resource_semantics() {
+    let modify_tag = inherited_function(MANAGE_SQL_TAGS, "modify_tag");
+    for required in [
+        "resources_action == NULL",
+        "strcmp (resources_action, \"set\") == 0",
+        "DELETE FROM tag_resources WHERE tag = %llu",
+        "strcmp (resources_action, \"add\")",
+        "strcmp (resources_action, \"remove\")",
+        "tag_remove_resources_list",
+        "tag_add_resources_list",
+        "resources_filter && strcmp (resources_filter, \"\")",
+        "tag_remove_resources_filter",
+        "tag_add_resources_filter",
+    ] {
+        assert!(
+            modify_tag.contains(required),
+            "modify_tag missing inherited resource mutation branch {required}"
+        );
+    }
+}
+
+#[test]
 fn inherited_tag_writability_helpers_are_currently_permissive_live_closed_trash() {
     let tag_writable = inherited_function(MANAGE_TAGS, "tag_writable");
     let trash_tag_writable = inherited_function(MANAGE_TAGS, "trash_tag_writable");

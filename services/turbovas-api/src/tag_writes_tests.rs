@@ -207,6 +207,12 @@ fn tag_resource_update_request_is_explicit_ids_only() {
     );
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
+            r#"{"action":"replace","resource_ids":["12345678-1234-1234-1234-123456789abc"]}"#,
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"add","resource_ids":[],"resource_filter":"name~x"}"#,
         )
         .is_err()
@@ -249,6 +255,18 @@ fn tag_resource_update_request_rejects_implicit_selection_and_bad_ids() {
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resource_filter":"name~prod"}"#,
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_str::<TagResourceUpdateRequest>(
+            r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resources_filter":"name~prod"}"#,
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_str::<TagResourceUpdateRequest>(
+            r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resources_action":"set"}"#,
         )
         .is_err()
     );

@@ -1,14 +1,17 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import type {Element} from 'gmp/models/model';
 import ReportFormat from 'gmp/models/report-format';
+import {exportNativeReportFormatMetadata} from 'gmp/native-api/report-formats';
 
 interface ReportFormatResponseData extends XmlResponseData {
   get_report_format?: {
@@ -32,6 +35,17 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
     };
     log.debug('Importing report format', data);
     return this.action(data);
+  }
+
+  async export({id}: {id: string}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeReportFormatMetadata(this.http, id);
+      } catch {
+        // Keep inherited GMP bulk export responsible for legacy export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   save(args: {active: boolean; id: string; name: string; summary: string}) {

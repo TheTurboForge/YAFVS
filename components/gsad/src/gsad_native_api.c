@@ -466,6 +466,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *report_config_export_suffix = "/export";
   const gchar *report_formats_path = "/api/v1/report-formats";
   const gchar *report_format_prefix = "/api/v1/report-formats/";
+  const gchar *report_format_export_suffix = "/export";
   const gchar *trashcan_summary_path = "/api/v1/trashcan/summary";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *targets_path = "/api/v1/targets";
@@ -782,6 +783,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, report_format_prefix))
     {
       const gchar *id = path + strlen (report_format_prefix);
+      if (g_str_has_suffix (id, report_format_export_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (report_format_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

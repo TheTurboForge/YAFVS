@@ -1,11 +1,17 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
+import ReportFormatCommand from 'gmp/commands/report-format';
 import {ReportFormatsCommand} from 'gmp/commands/report-formats';
-import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
+import {
+  createActionResultResponse,
+  createEntitiesResponse,
+  createHttp,
+} from 'gmp/commands/testing';
 import {ALL_FILTER} from 'gmp/models/filter';
 import ReportFormat from 'gmp/models/report-format';
 import {createSession} from 'gmp/testing';
@@ -15,6 +21,91 @@ afterEach(() => {
 });
 
 describe('ReportFormatsCommand tests', () => {
+  test('should export report format metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'report-format-id',
+        name: 'XML',
+        extension: 'xml',
+        content_type: 'text/xml',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    const result = await cmd.export({id: 'report-format-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-formats/report-format-id/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/report-format-id/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'report-format-id',
+      name: 'XML',
+      extension: 'xml',
+      content_type: 'text/xml',
+    });
+  });
+
+  test('should fall back to GMP when native report format metadata export fails', async () => {
+    const response = createActionResultResponse({
+      action: 'bulk_export',
+      id: 'fallback-export-id',
+      message: 'Exported Report Format',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    await cmd.export({id: 'report-format-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'report_format',
+        bulk_select: 1,
+        'bulk_selected:report-format-id': 1,
+      },
+    });
+  });
+
   test('should return report formats through inherited GMP fallback', async () => {
     const response = createEntitiesResponse('report_format', [
       {_id: '1', name: 'XML'},

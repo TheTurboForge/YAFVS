@@ -6868,6 +6868,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("task_prefix", "task_export_suffix"),
         ("tls_certificate_prefix", "tls_certificate_export_suffix"),
         ("report_config_prefix", "report_config_export_suffix"),
+        ("report_format_prefix", "report_format_export_suffix"),
     ):
         prefix = constants.get(prefix_variable)
         suffix = constants.get(suffix_variable)
@@ -7691,7 +7692,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/report-formats/{report_format_id}/export",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["direct native JSON report-format metadata export", "read-only report-format automation"],
             },

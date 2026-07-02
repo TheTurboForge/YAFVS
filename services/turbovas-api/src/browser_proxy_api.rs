@@ -22,8 +22,12 @@ use crate::{
     port_list_write_validation::{PortListCloneRequest, PortListCreateRequest},
     port_list_writes::{clone_port_list, create_port_list, restore_port_list},
     report_config_payloads::ReportConfigAssetItem,
-    report_config_write_validation::{ReportConfigCloneRequest, ReportConfigCreateRequest},
-    report_config_writes::{clone_report_config, create_report_config, restore_report_config},
+    report_config_write_validation::{
+        ReportConfigCloneRequest, ReportConfigCreateRequest, ReportConfigPatchRequest,
+    },
+    report_config_writes::{
+        clone_report_config, create_report_config, patch_report_config, restore_report_config,
+    },
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_validation::ScanConfigCloneRequest,
     scan_config_writes::{clone_scan_config, restore_scan_config},
@@ -181,6 +185,23 @@ pub(crate) async fn browser_proxy_create_report_config(
 ) -> Result<(StatusCode, HeaderMap, Json<ReportConfigAssetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_report_config(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_report_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(report_config_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ReportConfigPatchRequest>,
+) -> Result<Json<ReportConfigAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_report_config(
+        State(state),
+        Path(report_config_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_restore_filter(

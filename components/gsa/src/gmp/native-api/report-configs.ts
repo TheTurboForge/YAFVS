@@ -78,6 +78,12 @@ export interface NativeReportConfigCreateRequest {
   params?: NativeReportConfigWriteParamPayload[];
 }
 
+export interface NativeReportConfigPatchRequest {
+  name?: string;
+  comment?: string;
+  params?: NativeReportConfigWriteParamPayload[];
+}
+
 export interface NativeReportConfigsQuery {
   page: number;
   pageSize: number;
@@ -171,9 +177,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
@@ -321,6 +328,20 @@ export const createNativeReportConfig = async (
     gmp,
     'api/v1/report-configs',
     request,
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeReportConfig = async (
+  gmp: NativeApiGmp,
+  id: string,
+  request: NativeReportConfigPatchRequest,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeReportConfigPayload>(
+    gmp,
+    `api/v1/report-configs/${encodeURIComponent(id)}`,
+    request,
+    'PATCH',
   );
   return new Response({id: stringValue(payload.id)});
 };

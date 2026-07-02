@@ -15,7 +15,9 @@ import ReportConfig from 'gmp/models/report-config';
 import {
   cloneNativeReportConfig,
   createNativeReportConfig,
+  patchNativeReportConfig,
   type NativeReportConfigCreateRequest,
+  type NativeReportConfigPatchRequest,
 } from 'gmp/native-api/report-configs';
 import {parseYesNo} from 'gmp/parser';
 import {isArray} from 'gmp/utils/identity';
@@ -86,6 +88,34 @@ const nativeReportConfigCreateRequestFromCommand = ({
     })),
 });
 
+const hasNativeUnsupportedDefaultParam = (
+  paramsUsingDefault: Record<string, string | number | boolean | undefined>,
+): boolean => Object.values(paramsUsingDefault).some(value => parseYesNo(value));
+
+const nativeReportConfigPatchRequestFromCommand = ({
+  comment,
+  name,
+  params = {},
+  paramsUsingDefault = {},
+  paramTypes = {},
+}: ReportConfigSaveArgs): NativeReportConfigPatchRequest => {
+  const paramEntries = Object.entries(params).filter(
+    ([paramName]) => !parseYesNo(paramsUsingDefault[paramName]),
+  );
+  return {
+    name,
+    ...(comment !== undefined ? {comment} : {}),
+    ...(paramEntries.length > 0
+      ? {
+          params: paramEntries.map(([paramName, value]) => ({
+            name: paramName,
+            value: reportConfigParamValueToString(value, paramTypes[paramName]),
+          })),
+        }
+      : {}),
+  };
+};
+
 export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   constructor(http: Http) {
     super(http, 'report_config', ReportConfig);
@@ -139,7 +169,7 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
     return this.action(data);
   }
 
-  save(args: ReportConfigSaveArgs) {
+  async save(args: ReportConfigSaveArgs) {
     const {
       id,
       comment,
@@ -148,6 +178,17 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
       paramsUsingDefault = {},
       paramTypes = {},
     } = args;
+
+    if (
+      canUseNativeApi(this.http) &&
+      !hasNativeUnsupportedDefaultParam(paramsUsingDefault)
+    ) {
+      return patchNativeReportConfig(
+        this.http,
+        id,
+        nativeReportConfigPatchRequestFromCommand(args),
+      );
+    }
 
     const data = {
       cmd: 'save_report_config',

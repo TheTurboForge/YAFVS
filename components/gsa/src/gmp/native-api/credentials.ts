@@ -5,6 +5,7 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import Credential, {type CredentialType} from 'gmp/models/credential';
 import type QueryFilter from 'gmp/models/filter';
@@ -233,4 +234,16 @@ export const fetchNativeCredential = async (
     {token: gmp.session.token},
   );
   return nativeCredentialToModel(payload);
+};
+
+export const exportNativeCredentialMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeCredentialPayload>(
+    gmp,
+    `api/v1/credentials/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };

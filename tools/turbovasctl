@@ -6849,6 +6849,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     for prefix_variable, suffix_variable in (
         ("alert_prefix", "alert_export_suffix"),
         ("cert_bund_advisory_prefix", "cert_bund_advisory_export_suffix"),
+        ("credential_prefix", "credential_export_suffix"),
         ("cve_prefix", "cve_export_suffix"),
         ("dfn_cert_advisory_prefix", "dfn_cert_advisory_export_suffix"),
         ("filter_prefix", "filter_export_suffix"),
@@ -7280,7 +7281,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/credentials/{credential_id}/export",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["direct native JSON credential redacted metadata export", "read-only credential metadata automation"],
             },

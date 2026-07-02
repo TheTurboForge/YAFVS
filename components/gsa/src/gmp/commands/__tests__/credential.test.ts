@@ -1,11 +1,13 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CredentialCommand from 'gmp/commands/credential';
 import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
+import {createSession} from 'gmp/testing';
 import {
   CERTIFICATE_CREDENTIAL_TYPE,
   CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE,
@@ -17,7 +19,96 @@ const certificate = new File(['cert'], 'cert.pem');
 const privateKey = new File(['private_key'], 'key.pem');
 const publicKey = new File(['public_key'], 'key.pub');
 
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
+
 describe('CredentialCommand tests', () => {
+  test('should export redacted credential metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'credential-id',
+        name: 'SSH credential',
+        credential_type: 'usk',
+        targets: [{id: 'target-id', name: 'Target', use_type: 'scan'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new CredentialCommand(fakeHttp);
+
+    const result = await cmd.export({id: 'credential-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/credentials/credential-id/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/credentials/credential-id/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'credential-id',
+      name: 'SSH credential',
+      credential_type: 'usk',
+      targets: [{id: 'target-id', name: 'Target', use_type: 'scan'}],
+    });
+  });
+
+  test('should fall back to GMP when native credential metadata export fails', async () => {
+    const response = createActionResultResponse({
+      action: 'bulk_export',
+      id: 'fallback-export-id',
+      message: 'Exported Credential',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new CredentialCommand(fakeHttp);
+
+    await cmd.export({id: 'credential-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'credential',
+        bulk_select: 1,
+        'bulk_selected:credential-id': 1,
+      },
+    });
+  });
+
   test('should create KRB5 credential with empty kdcs', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

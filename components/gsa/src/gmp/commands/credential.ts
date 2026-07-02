@@ -1,9 +1,12 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import type {EntityCommandParams} from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Credential, {
   type CredentialType,
@@ -12,6 +15,7 @@ import Credential, {
   type SNMPPrivacyAlgorithmType,
 } from 'gmp/models/credential';
 import {type Element} from 'gmp/models/model';
+import {exportNativeCredentialMetadata} from 'gmp/native-api/credentials';
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
@@ -108,6 +112,17 @@ class CredentialCommand extends EntityCommand<
 > {
   constructor(http: Http) {
     super(http, 'credential', Credential);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeCredentialMetadata(this.http, id);
+      } catch {
+        // Keep inherited GMP bulk export responsible for legacy export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   private createBase({

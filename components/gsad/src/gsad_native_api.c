@@ -449,6 +449,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *scanner_export_suffix = "/export";
   const gchar *credentials_path = "/api/v1/credentials";
   const gchar *credential_prefix = "/api/v1/credentials/";
+  const gchar *credential_export_suffix = "/export";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *scan_config_export_suffix = "/export";
@@ -652,6 +653,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, credential_prefix))
     {
       const gchar *id = path + strlen (credential_prefix);
+      if (g_str_has_suffix (id, credential_export_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (credential_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

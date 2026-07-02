@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,9 +7,20 @@
 import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
+import {
+  canUseNativeApi,
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
+import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import Nvt from 'gmp/models/nvt';
 import ScanConfig from 'gmp/models/scan-config';
+import {
+  fetchNativeScanConfigs,
+  nativeScanConfigsQueryFromFilter,
+} from 'gmp/native-api/scan-configs';
 import {YES_VALUE, NO_VALUE} from 'gmp/parser';
 import {forEach, map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
@@ -205,6 +217,20 @@ class ScanConfigsCommand extends EntitiesCommand {
   }
 
   get(params, options) {
+    if (canUseNativeApi(this.http)) {
+      const filter = filterFromCommandParams(params);
+      return fetchNativeScanConfigs(
+        this.http,
+        nativeScanConfigsQueryFromFilter(filter),
+      ).then(
+        nativeResponse =>
+          new Response(nativeResponse.scanConfigs, {
+            filter,
+            counts: nativeResponse.counts,
+          }),
+      );
+    }
+
     params = {...params, usage_type: 'scan'};
     return this.httpGetWithTransform(params, options).then(response => {
       const {entities, filter, counts} = this.getCollectionListFromRoot(
@@ -213,7 +239,41 @@ class ScanConfigsCommand extends EntitiesCommand {
       return response.set(entities, {filter, counts});
     });
   }
+
+  async getAll(params = {}, options) {
+    if (!canUseNativeApi(this.http)) {
+      return super.getAll(params, options);
+    }
+
+    const filter = filterFromCommandParams(params).all();
+    const scanConfigs = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; scanConfigs.length < total; page += 1) {
+      const nativeResponse = await fetchNativeScanConfigs(this.http, {
+        ...nativeScanConfigsQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      scanConfigs.push(...nativeResponse.scanConfigs);
+      total = nativeResponse.page.total;
+      if (nativeResponse.scanConfigs.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      scanConfigs,
+      nativeCollectionMeta(
+        filter,
+        scanConfigs,
+        Number.isFinite(total) ? total : 0,
+      ),
+    );
+  }
 }
 
 registerCommand('scanconfig', ScanConfigCommand);
 registerCommand('scanconfigs', ScanConfigsCommand);
+
+export {ScanConfigsCommand};

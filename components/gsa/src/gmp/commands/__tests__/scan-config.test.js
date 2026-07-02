@@ -1,10 +1,15 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
-import {convertPreferences, ScanConfigCommand} from 'gmp/commands/scan-configs';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
+import {
+  convertPreferences,
+  ScanConfigCommand,
+  ScanConfigsCommand,
+} from 'gmp/commands/scan-configs';
 import {
   createEntityResponse,
   createHttp,
@@ -17,6 +22,11 @@ import {
   SCANCONFIG_TREND_DYNAMIC,
 } from 'gmp/models/scan-config';
 import {YES_VALUE, NO_VALUE} from 'gmp/parser';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('convertPreferences tests', () => {
   test('should convert preferences', () => {
@@ -55,6 +65,135 @@ describe('convertPreferences tests', () => {
   test('should return empty object if preferences are empty', () => {
     expect(convertPreferences(undefined, '1.2.3')).toEqual({});
     expect(convertPreferences({}, '1.2.3')).toEqual({});
+  });
+});
+
+describe('ScanConfigsCommand tests', () => {
+  test('should fetch scan configs with inherited GMP fallback', async () => {
+    const response = createResponse({
+      get_configs: {
+        get_configs_response: {
+          config: [{_id: 'config-1', name: 'Inherited config'}],
+        },
+      },
+    });
+    const fakeHttp = createHttp(response);
+
+    const cmd = new ScanConfigsCommand(fakeHttp);
+    const result = await cmd.get({filter: 'first=1 rows=25'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_configs',
+        filter: 'first=1 rows=25',
+        usage_type: 'scan',
+      },
+    });
+    expect(result.data[0].id).toEqual('config-1');
+  });
+
+  test('should fetch scan configs through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'base'},
+        items: [
+          {
+            id: 'd21f6c81-2b88-4ac1-b7b4-a2a9f2ad4663',
+            name: 'Base',
+            comment: 'Basic configuration template',
+            family_count: 2,
+            nvt_count: 3,
+            predefined: true,
+            writable: false,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScanConfigsCommand(fakeHttp);
+    const result = await cmd.get({filter: 'first=1 rows=25 search=base'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data[0].id).toEqual('d21f6c81-2b88-4ac1-b7b4-a2a9f2ad4663');
+    expect(result.data[0].name).toEqual('Base');
+    expect(result.data[0].predefined).toEqual(true);
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scan-configs', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'name',
+      filter: 'base',
+      predefined: '',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 2, total: 3, sort: 'name', filter: ''},
+        items: [
+          {id: 'config-1', name: 'One'},
+          {id: 'config-2', name: 'Two'},
+        ],
+      },
+      {
+        page: {page: 2, page_size: 2, total: 3, sort: 'name', filter: ''},
+        items: [{id: 'config-3', name: 'Three'}],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScanConfigsCommand(fakeHttp);
+    const result = await cmd.getAll();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data).toHaveLength(3);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/scan-configs', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      predefined: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/scan-configs', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      predefined: '',
+    });
   });
 });
 

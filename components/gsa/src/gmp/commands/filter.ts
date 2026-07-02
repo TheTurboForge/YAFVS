@@ -15,6 +15,7 @@ import {
   cloneNativeFilter,
   createNativeFilter,
   deleteNativeFilter,
+  exportNativeFilterMetadata,
   patchNativeFilter,
 } from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
@@ -32,6 +33,20 @@ const log = logger.getLogger('gmp.commands.filters');
 export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   constructor(http: Http) {
     super(http, 'filter', Filter);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeFilterMetadata(this.http, id);
+      } catch (error) {
+        log.debug(
+          'Native filter metadata export failed, falling back to GMP',
+          error,
+        );
+      }
+    }
+    return super.export({id});
   }
 
   async create(args: {

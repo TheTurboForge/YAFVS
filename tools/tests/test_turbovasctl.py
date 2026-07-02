@@ -2003,7 +2003,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 29)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 30)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2364,7 +2364,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 29)
+        self.assertEqual(contract["browser_write_proxy_count"], 30)
         self.assertEqual(contract["direct_write_control_count"], 48)
         self.assertEqual(contract["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
@@ -3352,7 +3352,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(create_scope["x_turbovas_replaces"], "scope-metadata-membership-write")
 
         update_scope = rows[("patch", "/api/v1/scopes/{scope_id}")]
-        self.assertEqual(update_scope["status"], "implemented_direct_write_control")
+        self.assertEqual(update_scope["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(update_scope["direct_access"], "direct_write_control")
         self.assertEqual(update_scope["x_turbovas_maturity"], "live-write")
         self.assertEqual(update_scope["x_turbovas_exposure"], "direct-write")

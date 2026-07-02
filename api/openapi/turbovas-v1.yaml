@@ -5653,14 +5653,6 @@ components:
         comment:
           type: string
           maxLength: 4096
-        filter_type:
-          type: string
-          maxLength: 4096
-          description: Optional saved-filter resource type such as task, result, info, report, or target. Pretty names are normalized to database type names. Rejected for filters referenced by live alerts.
-        term:
-          type: string
-          maxLength: 4096
-          description: Optional saved-filter term stored as operator configuration data. Rejected for filters referenced by live alerts.
         protection_requirement:
           enum: [normal, high, very_high]
         target_ids:

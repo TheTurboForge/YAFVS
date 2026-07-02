@@ -7796,9 +7796,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "patch",
                 "endpoint": "/api/v1/scopes/{scope_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native scope metadata and membership updates"],
+                "replacement_candidates": ["GSA scope metadata and membership updates", "direct native scope metadata and membership updates"],
             },
             {
                 "method": "delete",

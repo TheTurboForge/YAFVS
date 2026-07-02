@@ -412,6 +412,7 @@ native_api_patch_path_is_allowed (const gchar *path)
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
+  const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *target_prefix = "/api/v1/targets/";
   const gchar *task_prefix = "/api/v1/tasks/";
@@ -458,6 +459,12 @@ native_api_patch_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, schedule_prefix))
     {
       const gchar *id = path + strlen (schedule_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, scope_prefix))
+    {
+      const gchar *id = path + strlen (scope_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import HttpCommand from 'gmp/commands/http';
 import type {EntitiesMeta} from 'gmp/commands/entities';
+import {canUseNativeApi} from 'gmp/commands/native';
 import {
   getMetricsNode,
   parseReportMetrics,
@@ -15,6 +16,7 @@ import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
 import type {XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Filter from 'gmp/models/filter';
+import {patchNativeScope} from 'gmp/native-api/scopes';
 import {isDefined} from 'gmp/utils/identity';
 
 export type ProtectionRequirement = 'normal' | 'high' | 'very_high';
@@ -132,6 +134,38 @@ interface ScopeWriteParams {
   targetIds?: string[];
   hostIds?: string[];
 }
+
+interface ScopeModifyNativeParams extends ScopeWriteParams {
+  id: string;
+}
+
+const SCOPE_MODIFY_KEYS = new Set([
+  'id',
+  'name',
+  'comment',
+  'protectionRequirement',
+  'targetIds',
+  'hostIds',
+]);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every(item => typeof item === 'string');
+
+const isNativeScopeModify = (
+  params: ScopeWriteParams,
+): params is ScopeModifyNativeParams => {
+  const keys = Object.keys(params);
+  return (
+    keys.every(key => SCOPE_MODIFY_KEYS.has(key)) &&
+    typeof params.id === 'string' &&
+    (params.name === undefined || typeof params.name === 'string') &&
+    (params.comment === undefined || typeof params.comment === 'string') &&
+    (params.protectionRequirement === undefined ||
+      typeof params.protectionRequirement === 'string') &&
+    (params.targetIds === undefined || isStringArray(params.targetIds)) &&
+    (params.hostIds === undefined || isStringArray(params.hostIds))
+  );
+};
 
 const asArray = <T,>(value: T | T[] | undefined): T[] => {
   if (!isDefined(value)) {
@@ -391,6 +425,10 @@ export class ScopesCommand extends HttpCommand {
   }
 
   modify(params: ScopeWriteParams) {
+    if (canUseNativeApi(this.http) && isNativeScopeModify(params)) {
+      return patchNativeScope(this.http, params);
+    }
+
     return this.httpPostWithTransform({
       cmd: 'modify_scope',
       scope_id: params.id,

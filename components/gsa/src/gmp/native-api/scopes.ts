@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -11,6 +12,7 @@ import type {
   ScopeReportSummary,
   ScopeTarget,
 } from 'gmp/commands/scopes';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 
 interface NativeApiSession {
@@ -69,6 +71,15 @@ interface NativeScopeItem {
 
 interface NativeScopeCollectionPayload {
   items?: NativeScopeItem[];
+}
+
+interface NativeScopePatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
+  protectionRequirement?: ProtectionRequirement | string;
+  targetIds?: string[];
+  hostIds?: string[];
 }
 
 const stringValue = (value: unknown, fallback = ''): string =>
@@ -177,6 +188,31 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
 export const fetchNativeScopes = async (gmp: NativeApiGmp): Promise<Scope[]> => {
   const payload = await fetchNativeJson<NativeScopeCollectionPayload>(
     gmp,
@@ -200,4 +236,33 @@ export const fetchNativeScope = async (
     `api/v1/scopes/${encodeURIComponent(id)}`,
   );
   return nativeScopeToModel(payload);
+};
+
+export const patchNativeScope = async (
+  gmp: NativeApiGmp,
+  {
+    id,
+    name,
+    comment,
+    protectionRequirement,
+    targetIds,
+    hostIds,
+  }: NativeScopePatchArgs,
+): Promise<Response<{id: string}>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+    ...(protectionRequirement !== undefined
+      ? {protection_requirement: protectionRequirement}
+      : {}),
+    ...(targetIds !== undefined ? {target_ids: targetIds} : {}),
+    ...(hostIds !== undefined ? {host_ids: hostIds} : {}),
+  };
+  const payload = await writeNativeJson<NativeScopeItem>(
+    gmp,
+    `api/v1/scopes/${encodeURIComponent(id)}`,
+    body,
+    'PATCH',
+  );
+  return new Response({id: stringValue(payload.id)});
 };

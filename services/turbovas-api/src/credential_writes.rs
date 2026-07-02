@@ -6,17 +6,14 @@ use axum::{
     Json,
     extract::{Extension, Path, State},
 };
-use tokio_postgres::Transaction;
 
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     credential_payloads::CredentialAssetItem,
     credential_write_db::*,
-    credential_write_sql::credential_update_metadata_sql,
-    credential_write_validation::{
-        CredentialPatchRequest, ValidatedCredentialPatch, validate_credential_patch_request,
-    },
+    credential_write_transactions::execute_credential_patch_transaction,
+    credential_write_validation::{CredentialPatchRequest, validate_credential_patch_request},
     credentials::load_credential_asset_detail,
     errors::ApiError,
 };
@@ -57,18 +54,4 @@ pub(crate) async fn patch_credential(
     Ok(Json(
         load_credential_asset_detail(&client, &record.uuid).await?,
     ))
-}
-
-pub(crate) async fn execute_credential_patch_transaction(
-    tx: &Transaction<'_>,
-    credential_internal_id: i32,
-    request: &ValidatedCredentialPatch,
-) -> Result<CredentialWriteRecord, ApiError> {
-    query_credential_write_record(
-        tx,
-        credential_update_metadata_sql(),
-        &[&credential_internal_id, &request.name, &request.comment],
-        "update credential metadata",
-    )
-    .await
 }

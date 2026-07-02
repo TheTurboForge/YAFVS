@@ -23,6 +23,7 @@ mod credential_payloads;
 mod credential_query_sql;
 mod credential_write_db;
 mod credential_write_sql;
+mod credential_write_transactions;
 mod credential_write_validation;
 mod credential_writes;
 mod credentials;

@@ -359,6 +359,11 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
         "/api/v1/tasks/12345678-1234-1234-1234-123456789abc",
         false,
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/export",
+        false,
+    ));
     assert!(!direct_api_v1_method_is_allowed(
         &Method::PATCH,
         "/api/v1/tasks/12345678-1234-1234-1234-123456789abc",
@@ -383,6 +388,16 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
             "{method} /api/v1/tasks/{{id}} must remain closed"
         );
     }
+    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+        assert!(
+            !direct_api_v1_method_is_allowed(
+                &method,
+                "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/export",
+                true,
+            ),
+            "{method} /api/v1/tasks/{{id}}/export must remain closed"
+        );
+    }
     assert!(
         !direct_api_v1_method_is_allowed(&Method::PATCH, "/api/v1/tasks", true),
         "PATCH /api/v1/tasks collection must remain closed"
@@ -396,6 +411,18 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
         assert!(
             !direct_api_v1_method_is_allowed(&Method::POST, &path, true),
             "POST {path} must remain closed until a scanner-control contract lands"
+        );
+    }
+    for path in [
+        "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/export/extra",
+        "/api/v1/tasks/../export",
+        "/api/v1/tasks/./export",
+        "/api/v1/tasks//export",
+        "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/../export",
+    ] {
+        assert!(
+            !direct_api_v1_path_is_allowed(path),
+            "task metadata export classifier must reject malformed path: {path}"
         );
     }
 }
@@ -429,4 +456,36 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     assert!(
         detail.contains("task/report status transitions remain on inherited compatibility paths")
     );
+
+    let export = openapi_path_block("/tasks/{task_id}/export");
+    for required in [
+        "get:",
+        "operationId: getTasksByTaskIdExport",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-read",
+        "x-turbovas-maturity: live-read",
+        "x-turbovas-replaces: task-metadata-export-read",
+        "x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes",
+        "$ref: '#/components/schemas/Task'",
+        "Scanner lifecycle control, report creation",
+        "inherited file-export formats remain outside this endpoint",
+    ] {
+        assert!(
+            export.contains(required),
+            "task metadata export OpenAPI block missing {required}"
+        );
+    }
+    for forbidden in [
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-safety-contract: write-control-v1",
+        "\n    post:",
+        "\n    patch:",
+        "\n    put:",
+        "\n    delete:",
+    ] {
+        assert!(
+            !export.contains(forbidden),
+            "task metadata export must not expose scanner-control/write/file-export behavior: {forbidden}"
+        );
+    }
 }

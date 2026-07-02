@@ -51,6 +51,9 @@ use crate::{
         clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
         patch_scan_config, restore_scan_config,
     },
+    scanner_asset_payloads::ScannerAssetDetail,
+    scanner_write_validation::ScannerPatchRequest,
+    scanner_writes::patch_scanner,
     schedule_payloads::ScheduleAssetDetail,
     schedule_write_validation::{ScheduleCloneRequest, SchedulePatchRequest},
     schedule_writes::{
@@ -84,6 +87,23 @@ const BROWSER_PROXY_OPERATOR_NAME_HEADER: &str = "x-turbovas-operator-name";
 #[derive(Clone)]
 pub(crate) struct BrowserProxyAuth {
     secret: String,
+}
+
+pub(crate) async fn browser_proxy_patch_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ScannerPatchRequest>,
+) -> Result<Json<ScannerAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_scanner(
+        State(state),
+        Path(scanner_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_patch_credential(

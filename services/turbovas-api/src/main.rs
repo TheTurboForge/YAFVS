@@ -257,4 +257,6 @@ mod scope_contract_tests;
 #[cfg(test)]
 mod scope_report_contract_tests;
 #[cfg(test)]
+mod scope_report_mutation_characterization_tests;
+#[cfg(test)]
 mod task_control_characterization_tests;

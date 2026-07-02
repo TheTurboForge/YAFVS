@@ -307,6 +307,26 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
         );
     }
 
+    let export_path = "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/export";
+    assert!(
+        direct_api_v1_path_is_allowed(export_path),
+        "redacted credential metadata export is scriptable native JSON"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::GET, export_path, false),
+        "credential metadata export must allow GET without write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::GET, export_path, true),
+        "credential metadata export must remain GET-able with write-control enabled"
+    );
+    for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, export_path, true),
+            "{method} credential metadata export must stay closed; secret export/download semantics remain inherited"
+        );
+    }
+
     for (path, replaces) in [
         ("/credentials", "credential-redacted-metadata-list-read"),
         (

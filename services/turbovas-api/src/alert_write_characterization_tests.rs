@@ -368,6 +368,21 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         direct_api_v1_path_is_allowed("/api/v1/alerts/12345678-1234-1234-1234-123456789abc/export"),
         "redacted alert metadata export is scriptable native JSON"
     );
+    let export_path = "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/export";
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::GET, export_path, false),
+        "alert metadata export must allow GET without write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::GET, export_path, true),
+        "alert metadata export must remain GET-able with write-control enabled"
+    );
+    for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, export_path, true),
+            "{method} alert metadata export must stay closed; inherited XML/export/test/control semantics remain inherited"
+        );
+    }
 
     for (path, replaces, forbidden_methods) in [
         (

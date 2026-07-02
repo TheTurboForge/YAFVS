@@ -5494,13 +5494,19 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("write_or_mutation", details["bucket_counts"])
         write_bucket = next(bucket for bucket in details["buckets"] if bucket["name"] == "write_or_mutation")
         self.assertGreater(write_bucket["count"], 0)
+        self.assertIn("reason", write_bucket)
         self.assertIn("components/gvm-tools/scripts/create-tags-from-csv.gmp.py", write_bucket["paths"])
+        self.assertIn(
+            "credential tags are intentionally unsupported",
+            write_bucket["path_blockers"]["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"],
+        )
         self.assertNotIn("items", details)
         self.assertNotIn("implemented_native_endpoints", details)
 
         status_details = status_only["details"]
         self.assertIn("bucket_counts", status_details)
         self.assertNotIn("buckets", status_details)
+        self.assertNotIn("path_blockers", status_details)
 
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
@@ -5629,18 +5635,23 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/list-users.gmp.py",
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/verify-scanners.gmp.py",
+                "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/unclassified.gmp.py",
             ]
         )
 
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], 5)
+        self.assertEqual(review["blocked_or_review_count"], 6)
         buckets = review["buckets"]
         self.assertEqual(buckets["credential_or_account"]["count"], 1)
         self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
         self.assertEqual(buckets["scanner_or_task_control"]["count"], 1)
-        self.assertEqual(buckets["write_or_mutation"]["count"], 1)
+        self.assertEqual(buckets["write_or_mutation"]["count"], 2)
+        self.assertIn(
+            "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
+            buckets["write_or_mutation"]["path_blockers"],
+        )
         self.assertEqual(buckets["needs_review"]["count"], 1)
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):

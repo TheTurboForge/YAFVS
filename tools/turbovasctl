@@ -420,6 +420,9 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
     "write_or_mutation": "Write, mutation, destructive, or side-effecting script; not safe for read-only native API retirement.",
     "needs_review": "Script is still marked as a removal candidate but lacks a specific retirement-safety bucket.",
 }
+NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
+    "create-tags-from-csv.gmp.py": "Native tag writes do not yet replace this script's full contract: credential tags are intentionally unsupported, report tags use inherited filter-based assignment, and broad resource-name lookups need explicit native contracts.",
+}
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OPENAPI_WRITE_CONTROL_METHODS = frozenset({"post", "put", "patch", "delete"})
@@ -3186,6 +3189,9 @@ def native_tooling_removal_review(paths: list[str]) -> dict[str, Any]:
         bucket = native_tooling_gvm_tools_removal_bucket(path)
         buckets[bucket]["count"] += 1
         buckets[bucket]["paths"].append(path)
+        path_blocker = NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS.get(Path(path).name)
+        if path_blocker:
+            buckets[bucket].setdefault("path_blockers", {})[path] = path_blocker
     return {
         "total": len(paths),
         "safe_removal_count": buckets["native_read_replaced"]["count"],
@@ -10074,7 +10080,9 @@ def command_native_tooling_removal_review(repo_root: Path, status_only: bool = F
             {
                 "name": name,
                 "count": bucket.get("count", 0),
+                "reason": bucket.get("reason"),
                 "paths": list(bucket.get("paths", [])),
+                "path_blockers": dict(bucket.get("path_blockers", {})),
             }
             for name, bucket in sorted(buckets.items())
             if isinstance(bucket, dict)

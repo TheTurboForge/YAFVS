@@ -19,6 +19,7 @@ import Nvt from 'gmp/models/nvt';
 import ScanConfig from 'gmp/models/scan-config';
 import {
   cloneNativeScanConfig,
+  deleteNativeScanConfig,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
   patchNativeScanConfig,
@@ -109,10 +110,21 @@ export class ScanConfigCommand extends EntityCommand {
       try {
         return await cloneNativeScanConfig(this.http, id);
       } catch (error) {
-        log.debug('Native scan config clone failed, falling back to GMP', error);
+        log.debug(
+          'Native scan config clone failed, falling back to GMP',
+          error,
+        );
       }
     }
     return super.clone({id});
+  }
+
+  async delete({id}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeScanConfig(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   save({

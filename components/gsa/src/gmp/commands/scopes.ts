@@ -8,15 +8,16 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import HttpCommand from 'gmp/commands/http';
 import type {EntitiesMeta} from 'gmp/commands/entities';
 import {canUseNativeApi} from 'gmp/commands/native';
-import {
-  getMetricsNode,
-  parseReportMetrics,
-} from 'gmp/commands/report-metrics';
+import {getMetricsNode, parseReportMetrics} from 'gmp/commands/report-metrics';
 import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
 import type {XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Filter from 'gmp/models/filter';
-import {createNativeScope, patchNativeScope} from 'gmp/native-api/scopes';
+import {
+  createNativeScope,
+  deleteNativeScope,
+  patchNativeScope,
+} from 'gmp/native-api/scopes';
 import {isDefined} from 'gmp/utils/identity';
 
 export type ProtectionRequirement = 'normal' | 'high' | 'very_high';
@@ -190,7 +191,7 @@ const isNativeScopeCreate = (
   );
 };
 
-const asArray = <T,>(value: T | T[] | undefined): T[] => {
+const asArray = <T>(value: T | T[] | undefined): T[] => {
   if (!isDefined(value)) {
     return [];
   }
@@ -245,16 +246,26 @@ const idOf = (node: unknown): string => {
 
 const protectionValue = (data: XmlNode): ProtectionRequirement => {
   const protection = getNode(data.protection_requirement);
-  return text(protection.value, text(data.protection_requirement, 'normal')) as ProtectionRequirement;
+  return text(
+    protection.value,
+    text(data.protection_requirement, 'normal'),
+  ) as ProtectionRequirement;
 };
 
 const protectionLabel = (data: XmlNode): string => {
   const protection = getNode(data.protection_requirement);
-  return text(protection.label, text(data.protection_requirement_label, 'Normal'));
+  return text(
+    protection.label,
+    text(data.protection_requirement_label, 'Normal'),
+  );
 };
 
-const countValue = (counts: XmlNode, data: XmlNode, nested: string, flat: string) =>
-  integer(counts[nested] ?? data[flat]);
+const countValue = (
+  counts: XmlNode,
+  data: XmlNode,
+  nested: string,
+  flat: string,
+) => integer(counts[nested] ?? data[flat]);
 
 const parseEntityRef = (node: unknown): ScopeTarget | ScopeHost => {
   const data = getNode(node);
@@ -273,19 +284,44 @@ const parseScopeReportSummary = (node: unknown): ScopeReportSummary => {
     name: text(data.name),
     created: optionalText(data.created ?? data.creation_time),
     latestEvidenceTime: optionalText(data.latest_evidence_time),
-    sourceReportCount: countValue(counts, data, 'source_reports', 'source_report_count'),
+    sourceReportCount: countValue(
+      counts,
+      data,
+      'source_reports',
+      'source_report_count',
+    ),
     hostsTotal: countValue(counts, data, 'hosts_total', 'member_host_count'),
-    hostsWithEvidence: countValue(counts, data, 'hosts_with_evidence', 'evidence_host_count'),
-    hostsMissingEvidence: countValue(counts, data, 'hosts_missing_evidence', 'missing_host_count'),
+    hostsWithEvidence: countValue(
+      counts,
+      data,
+      'hosts_with_evidence',
+      'evidence_host_count',
+    ),
+    hostsMissingEvidence: countValue(
+      counts,
+      data,
+      'hosts_missing_evidence',
+      'missing_host_count',
+    ),
     resultsTotal: countValue(counts, data, 'results_total', 'result_count'),
-    vulnerabilitiesTotal: countValue(counts, data, 'vulnerabilities_total', 'vulnerability_count'),
+    vulnerabilitiesTotal: countValue(
+      counts,
+      data,
+      'vulnerabilities_total',
+      'vulnerability_count',
+    ),
     severityHigh: integer(severity.high),
     severityMedium: integer(severity.medium),
     severityLow: integer(severity.low),
     severityLog: integer(severity.log),
     severityFalsePositive: integer(severity.false_positive),
     maxSeverity: decimal(data.max_severity),
-    excludedCandidateHosts: countValue(counts, data, 'excluded_candidate_hosts', 'excluded_candidate_host_count'),
+    excludedCandidateHosts: countValue(
+      counts,
+      data,
+      'excluded_candidate_hosts',
+      'excluded_candidate_host_count',
+    ),
   };
 };
 
@@ -326,14 +362,21 @@ const parseScope = (node: unknown): Scope => {
     modificationTime: optionalText(data.modification_time),
     targetCount: countValue(counts, data, 'targets', 'target_count'),
     hostCount: countValue(counts, data, 'hosts', 'host_count'),
-    scopeReportCount: countValue(counts, data, 'scope_reports', 'scope_report_count'),
+    scopeReportCount: countValue(
+      counts,
+      data,
+      'scope_reports',
+      'scope_report_count',
+    ),
     targets: asArray(targets.target).map(parseEntityRef),
     hosts: asArray(hosts.host).map(parseEntityRef),
     candidateHosts: [
       ...asArray(candidateHosts.host).map(parseCandidateHost),
       ...asArray(candidateHosts.candidate_host).map(parseCandidateHost),
     ],
-    scopeReports: asArray(scopeReports.scope_report).map(parseScopeReportSummary),
+    scopeReports: asArray(scopeReports.scope_report).map(
+      parseScopeReportSummary,
+    ),
   };
 };
 
@@ -467,7 +510,12 @@ export class ScopesCommand extends HttpCommand {
     });
   }
 
-  delete({id}: {id: string}) {
+  async delete({id}: {id: string}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeScope(this.http, id);
+      return;
+    }
+
     return this.httpPostWithTransform({cmd: 'delete_scope', scope_id: id});
   }
 

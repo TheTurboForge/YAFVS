@@ -92,9 +92,74 @@ describe('ScheduleCommand tests', () => {
     expect(result.data.id).toEqual('fallback-schedule-clone-id');
   });
 
+  test('should delete a schedule through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    await cmd.delete({id: 'schedule-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/schedules/schedule-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/schedules/schedule-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should not fall back to GMP when native schedule delete fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-schedule-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScheduleCommand(fakeHttp);
+
+    await expect(cmd.delete({id: 'schedule-id'})).rejects.toThrow(
+      'Native API request failed with status 409',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should save schedule metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({id: 'schedule-id', name: 'updated-schedule'}),
+      json: testing
+        .fn()
+        .mockResolvedValue({id: 'schedule-id', name: 'updated-schedule'}),
       ok: true,
       status: 200,
     });
@@ -118,7 +183,9 @@ describe('ScheduleCommand tests', () => {
     });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/schedules/schedule-id');
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/schedules/schedule-id',
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/schedules/schedule-id',
       {

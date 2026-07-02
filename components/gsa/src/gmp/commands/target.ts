@@ -23,6 +23,7 @@ import Target, {
 import {
   cloneNativeTarget,
   createNativeTarget,
+  deleteNativeTarget,
   patchNativeTarget,
   type NativeTargetCredentialPatchArgs,
   type NativeTargetCredentialsPatchArgs,
@@ -115,7 +116,9 @@ const parseNativeTargetHostList = (
   if (entries.length === 0) {
     return allowEmpty ? [] : undefined;
   }
-  return entries.every(isNativeTargetHostEntry) ? [...new Set(entries)] : undefined;
+  return entries.every(isNativeTargetHostEntry)
+    ? [...new Set(entries)]
+    : undefined;
 };
 
 const canUseNativeTargetAliveTests = (
@@ -124,10 +127,15 @@ const canUseNativeTargetAliveTests = (
   if (!Array.isArray(aliveTests) || aliveTests.length === 0) {
     return false;
   }
-  if (!aliveTests.every(aliveTest => NATIVE_TARGET_ALIVE_TESTS.has(aliveTest))) {
+  if (
+    !aliveTests.every(aliveTest => NATIVE_TARGET_ALIVE_TESTS.has(aliveTest))
+  ) {
     return false;
   }
-  if (aliveTests.includes(SCAN_CONFIG_DEFAULT) || aliveTests.includes(CONSIDER_ALIVE)) {
+  if (
+    aliveTests.includes(SCAN_CONFIG_DEFAULT) ||
+    aliveTests.includes(CONSIDER_ALIVE)
+  ) {
     return aliveTests.length === 1;
   }
   return true;
@@ -162,7 +170,11 @@ const nativeTargetCreateArgsFromParams = ({
   if (targetExcludeSource !== undefined && targetExcludeSource !== 'manual') {
     return undefined;
   }
-  if (file !== undefined || excludeFile !== undefined || hostsFilter !== undefined) {
+  if (
+    file !== undefined ||
+    excludeFile !== undefined ||
+    hostsFilter !== undefined
+  ) {
     return undefined;
   }
   if (port !== undefined && port !== 22) {
@@ -209,7 +221,9 @@ const nativeTargetCreateArgsFromParams = ({
     comment,
     portListId,
     hosts: nativeHosts,
-    ...(nativeExcludeHosts !== undefined ? {excludeHosts: nativeExcludeHosts} : {}),
+    ...(nativeExcludeHosts !== undefined
+      ? {excludeHosts: nativeExcludeHosts}
+      : {}),
     aliveTests,
     allowSimultaneousIPs,
     reverseLookupOnly,
@@ -251,10 +265,7 @@ const nativeTargetCredentialsPatchFromParams = ({
   if (port !== undefined && sshCredentialId === undefined) {
     return undefined;
   }
-  if (
-    sshCredentialId === undefined &&
-    sshElevateCredentialId !== undefined
-  ) {
+  if (sshCredentialId === undefined && sshElevateCredentialId !== undefined) {
     return undefined;
   }
   if (
@@ -307,7 +318,11 @@ const nativeTargetPatchArgsFromParams = ({
   if (targetExcludeSource !== undefined && targetExcludeSource !== 'manual') {
     return undefined;
   }
-  if (file !== undefined || excludeFile !== undefined || hostsFilter !== undefined) {
+  if (
+    file !== undefined ||
+    excludeFile !== undefined ||
+    hostsFilter !== undefined
+  ) {
     return undefined;
   }
   if (aliveTests !== undefined && !canUseNativeTargetAliveTests(aliveTests)) {
@@ -371,7 +386,9 @@ const nativeTargetPatchArgsFromParams = ({
     ...(reverseLookupUnify !== undefined ? {reverseLookupUnify} : {}),
     ...(portListId !== undefined ? {portListId} : {}),
     ...(nativeHosts !== undefined ? {hosts: nativeHosts} : {}),
-    ...(nativeExcludeHosts !== undefined ? {excludeHosts: nativeExcludeHosts} : {}),
+    ...(nativeExcludeHosts !== undefined
+      ? {excludeHosts: nativeExcludeHosts}
+      : {}),
     ...(credentials !== undefined ? {credentials} : {}),
   };
 };
@@ -390,6 +407,14 @@ class TargetCommand extends EntityCommand<Target> {
       }
     }
     return super.clone({id});
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeTarget(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   async create({

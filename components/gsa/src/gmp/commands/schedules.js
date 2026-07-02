@@ -10,7 +10,11 @@ import EntityCommand from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import logger from 'gmp/log';
 import Schedule from 'gmp/models/schedule';
-import {cloneNativeSchedule, patchNativeSchedule} from 'gmp/native-api/schedules';
+import {
+  cloneNativeSchedule,
+  deleteNativeSchedule,
+  patchNativeSchedule,
+} from 'gmp/native-api/schedules';
 
 const log = logger.getLogger('gmp.commands.schedules');
 
@@ -79,6 +83,14 @@ export class ScheduleCommand extends EntityCommand {
       }
     }
     return super.clone({id});
+  }
+
+  async delete({id}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeSchedule(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 }
 

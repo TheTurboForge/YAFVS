@@ -86,12 +86,10 @@ export interface NativeTargetPatchArgs {
   reverseLookupUnify?: boolean;
 }
 
-export type NativeTargetCredentialPatchArgs =
-  | {
-      id: string;
-      port?: number;
-    }
-  | null;
+export type NativeTargetCredentialPatchArgs = {
+  id: string;
+  port?: number;
+} | null;
 
 export interface NativeTargetCredentialsPatchArgs {
   esxi?: NativeTargetCredentialPatchArgs;
@@ -175,7 +173,9 @@ const nativeSearchFromFilter = (filter?: Filter): string => {
   return /[=<>:~]/.test(criteria) ? '' : criteria;
 };
 
-export const nativeTargetQueryFromFilter = (filter?: Filter): NativeTargetQuery => {
+export const nativeTargetQueryFromFilter = (
+  filter?: Filter,
+): NativeTargetQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
   return {
@@ -226,7 +226,10 @@ export const nativeTargetToModel = (item: NativeTargetItem): Target => {
     port_list: item.port_list
       ? {
           _id: stringValue(item.port_list.id),
-          name: stringValue(item.port_list.name, stringValue(item.port_list.id)),
+          name: stringValue(
+            item.port_list.name,
+            stringValue(item.port_list.id),
+          ),
         }
       : undefined,
     ssh_credential: credentialElement(credentials.ssh),
@@ -273,6 +276,11 @@ const nativeWriteHeaders = (gmp: NativeApiGmp): HeadersInit => ({
   ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
 });
 
+const nativeDeleteHeaders = (gmp: NativeApiGmp): HeadersInit => ({
+  ...nativeHeaders(gmp),
+  ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -286,6 +294,17 @@ const fetchNativeJson = async <T>(
     throw new Error(`Native API request failed with status ${response.status}`);
   }
   return (await response.json()) as T;
+};
+
+const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: nativeDeleteHeaders(gmp),
+  });
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
 };
 
 const writeNativeJson = async <T>(
@@ -364,17 +383,23 @@ export const createNativeTarget = async (
   gmp: NativeApiGmp,
   args: NativeTargetCreateArgs,
 ): Promise<Response<ActionResult>> => {
-  const payload = await writeNativeJson<NativeTargetItem>(gmp, 'api/v1/targets', {
-    name: args.name,
-    ...(args.comment !== undefined ? {comment: args.comment} : {}),
-    port_list_id: args.portListId,
-    hosts: args.hosts,
-    ...(args.excludeHosts !== undefined ? {exclude_hosts: args.excludeHosts} : {}),
-    alive_tests: args.aliveTests,
-    allow_simultaneous_ips: args.allowSimultaneousIPs,
-    reverse_lookup_only: args.reverseLookupOnly,
-    reverse_lookup_unify: args.reverseLookupUnify,
-  });
+  const payload = await writeNativeJson<NativeTargetItem>(
+    gmp,
+    'api/v1/targets',
+    {
+      name: args.name,
+      ...(args.comment !== undefined ? {comment: args.comment} : {}),
+      port_list_id: args.portListId,
+      hosts: args.hosts,
+      ...(args.excludeHosts !== undefined
+        ? {exclude_hosts: args.excludeHosts}
+        : {}),
+      alive_tests: args.aliveTests,
+      allow_simultaneous_ips: args.allowSimultaneousIPs,
+      reverse_lookup_only: args.reverseLookupOnly,
+      reverse_lookup_unify: args.reverseLookupUnify,
+    },
+  );
   return new Response(
     new ActionResult({
       action_result: {
@@ -446,6 +471,12 @@ export const patchNativeTarget = async (
     }),
   );
 };
+
+export const deleteNativeTarget = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> =>
+  deleteNative(gmp, `api/v1/targets/${encodeURIComponent(id)}`);
 
 export const exportNativeTargetMetadata = async (
   gmp: NativeApiGmp,

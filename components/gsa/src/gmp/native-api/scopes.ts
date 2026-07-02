@@ -108,7 +108,7 @@ const numberValue = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const asArray = <T,>(value: T[] | undefined): T[] =>
+const asArray = <T>(value: T[] | undefined): T[] =>
   Array.isArray(value) ? value : [];
 
 const entity = (item: NativeScopeEntity): ScopeTarget | ScopeHost => ({
@@ -221,7 +221,25 @@ const writeNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-export const fetchNativeScopes = async (gmp: NativeApiGmp): Promise<Scope[]> => {
+const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+};
+
+export const fetchNativeScopes = async (
+  gmp: NativeApiGmp,
+): Promise<Scope[]> => {
   const payload = await fetchNativeJson<NativeScopeCollectionPayload>(
     gmp,
     'api/v1/scopes',
@@ -272,6 +290,12 @@ export const createNativeScope = async (
   );
   return new Response({id: stringValue(payload.id)});
 };
+
+export const deleteNativeScope = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> =>
+  deleteNative(gmp, `api/v1/scopes/${encodeURIComponent(id)}`);
 
 export const patchNativeScope = async (
   gmp: NativeApiGmp,

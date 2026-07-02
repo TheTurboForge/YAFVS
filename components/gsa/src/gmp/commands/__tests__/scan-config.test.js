@@ -178,22 +178,30 @@ describe('ScanConfigsCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(result.data).toHaveLength(3);
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/scan-configs', {
-      token: 'test-token',
-      page: 1,
-      page_size: 500,
-      sort: 'name',
-      filter: '',
-      predefined: '',
-    });
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/scan-configs', {
-      token: 'test-token',
-      page: 2,
-      page_size: 500,
-      sort: 'name',
-      filter: '',
-      predefined: '',
-    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/scan-configs',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: 500,
+        sort: 'name',
+        filter: '',
+        predefined: '',
+      },
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/scan-configs',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 500,
+        sort: 'name',
+        filter: '',
+        predefined: '',
+      },
+    );
   });
 });
 
@@ -254,9 +262,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -298,9 +304,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
 
@@ -316,6 +320,61 @@ describe('ScanConfigCommand tests', () => {
       },
     });
     expect(result.data.id).toEqual('fallback-scan-config-clone-id');
+  });
+
+  test('should delete a scan config through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+    await cmd.delete({id: 'scan-config-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/scan-config-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should not fall back to GMP when native scan config delete fails', async () => {
+    const response = createActionResultResponse({
+      id: 'fallback-scan-config-id',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await expect(cmd.delete({id: 'scan-config-id'})).rejects.toThrow(
+      'Native API request failed with status 409',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should save a config', async () => {
@@ -387,9 +446,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';

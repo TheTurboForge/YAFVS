@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import AlertCommand from 'gmp/commands/alert';
 import {
   createActionResultResponse,
@@ -17,6 +18,11 @@ import {
   METHOD_TYPE_EMAIL,
 } from 'gmp/models/alert';
 import {YES_VALUE} from 'gmp/parser';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('AlertCommand tests', () => {
   test('should get an alert', async () => {
@@ -119,6 +125,90 @@ describe('AlertCommand tests', () => {
     });
     const {data} = resp;
     expect(data.id).toEqual('foo');
+  });
+
+  test('should save alert metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'alert_id1', name: 'updated'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    const result = await cmd.save({
+      id: 'alert_id1',
+      name: 'updated',
+      comment: 'metadata only',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/alerts/alert_id1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts/alert_id1',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'updated',
+          comment: 'metadata only',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('alert_id1');
+  });
+
+  test('should keep delivery alert saves on GMP when native API is available', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'alert_id1',
+      name: 'Test Alert',
+      comment: 'This is a test alert',
+      event: EVENT_TYPE_NEW_SECINFO,
+      condition: CONDITION_TYPE_ALWAYS,
+      filter_id: 'filter_id1',
+      method: METHOD_TYPE_EMAIL,
+      active: true,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'save_alert',
+        alert_id: 'alert_id1',
+        event: EVENT_TYPE_NEW_SECINFO,
+        method: METHOD_TYPE_EMAIL,
+      }),
+    });
   });
 
   test('should allow to get new alert settings', async () => {

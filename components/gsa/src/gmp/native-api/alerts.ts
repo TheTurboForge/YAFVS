@@ -1,10 +1,13 @@
-/* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+/* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import Alert from 'gmp/models/alert';
 import type QueryFilter from 'gmp/models/filter';
 
@@ -69,6 +72,12 @@ export interface NativeAlertsResponse {
   alerts: Alert[];
   counts: CollectionCounts;
   page: NativePage;
+}
+
+export interface NativeAlertPatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
 }
 
 const ALERT_SORT_FIELDS: Record<string, string> = {
@@ -145,6 +154,31 @@ const fetchNativeJson = async <T>(
       Accept: 'application/json',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'PATCH',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -248,4 +282,28 @@ export const fetchNativeAlert = async (
     {token: gmp.session.token},
   );
   return nativeAlertToModel(payload);
+};
+
+export const patchNativeAlert = async (
+  gmp: NativeApiGmp,
+  {id, name, comment}: NativeAlertPatchArgs,
+): Promise<Response<ActionResult>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+  };
+  const payload = await writeNativeJson<NativeAlertPayload>(
+    gmp,
+    `api/v1/alerts/${encodeURIComponent(id)}`,
+    body,
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_alert',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };

@@ -11,6 +11,9 @@ use axum::{
 };
 
 use crate::{
+    alert_payloads::AlertAssetItem,
+    alert_write_validation::AlertPatchRequest,
+    alert_writes::patch_alert,
     app_state::AppState,
     auth::{DirectApiOperator, constant_time_str_eq, direct_api_bearer_token_is_acceptable},
     errors::ApiError,
@@ -152,6 +155,23 @@ pub(crate) async fn browser_proxy_create_target(
 ) -> Result<(StatusCode, HeaderMap, Json<TargetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_target(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_alert(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(alert_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<AlertPatchRequest>,
+) -> Result<Json<AlertAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_alert(
+        State(state),
+        Path(alert_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_create_filter(

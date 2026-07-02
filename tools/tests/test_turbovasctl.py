@@ -2003,7 +2003,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 32)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 33)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2377,12 +2377,13 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 32)
+        self.assertEqual(contract["browser_write_proxy_count"], 33)
         self.assertEqual(contract["direct_write_control_count"], 48)
         self.assertEqual(contract["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
         self.assertFalse(contract["write_proxy_requires_design"])
+        self.assertIn("PATCH /api/v1/alerts/{alert_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/filters/{filter_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/credentials/{credential_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/port-lists/{port_list_id}", contract["browser_write_proxy_operations"])

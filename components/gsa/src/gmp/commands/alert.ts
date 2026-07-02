@@ -5,6 +5,7 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import type Response from 'gmp/http/response';
 import logger from 'gmp/log';
@@ -21,6 +22,7 @@ import {
   parseModelFromElement,
 } from 'gmp/models/model';
 import {parseYesNo} from 'gmp/parser';
+import {patchNativeAlert} from 'gmp/native-api/alerts';
 import {map} from 'gmp/utils/array';
 
 interface AlertCreateParams {
@@ -39,6 +41,14 @@ interface AlertCreateParams {
 interface AlertSaveParams extends AlertCreateParams {
   id: string;
 }
+
+interface AlertMetadataSaveParams {
+  id: string;
+  name: string;
+  comment?: string;
+}
+
+type AlertSaveArgs = AlertSaveParams | AlertMetadataSaveParams;
 
 interface NewAlertElement {
   new_alert?: {
@@ -96,6 +106,20 @@ interface EditAlertSettings extends NewAlertSettings {
 }
 
 const log = logger.getLogger('gmp.commands.alert');
+
+const ALERT_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+
+const isAlertMetadataOnlySave = (
+  args: AlertSaveArgs,
+): args is AlertMetadataSaveParams => {
+  const keys = Object.keys(args);
+  return (
+    keys.every(key => ALERT_METADATA_SAVE_KEYS.has(key)) &&
+    typeof args.id === 'string' &&
+    typeof args.name === 'string' &&
+    (args.comment === undefined || typeof args.comment === 'string')
+  );
+};
 
 const event_data_fields = ['status', 'feed_event', 'secinfo_type'];
 const method_data_fields = [
@@ -226,22 +250,31 @@ class AlertCommand extends EntityCommand<Alert> {
     return this.action(data);
   }
 
-  save({
-    active,
-    id,
-    name,
-    comment = '',
-    event,
-    condition,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    filter_id,
-    method,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    report_format_ids = [],
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    report_config_ids = [],
-    ...other
-  }: AlertSaveParams) {
+  save(args: AlertSaveArgs) {
+    if (canUseNativeApi(this.http) && isAlertMetadataOnlySave(args)) {
+      return patchNativeAlert(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
+
+    const {
+      active,
+      id,
+      name,
+      comment = '',
+      event,
+      condition,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      filter_id,
+      method,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      report_format_ids = [],
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      report_config_ids = [],
+      ...other
+    } = args as AlertSaveParams;
     const data = {
       ...convertData('method_data', other, method_data_fields),
       ...convertData('condition_data', other, condition_data_fields),

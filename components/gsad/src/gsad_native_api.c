@@ -413,6 +413,7 @@ browser_proxy_operator_name (gsad_credentials_t *credentials)
 static gboolean
 native_api_patch_path_is_allowed (const gchar *path)
 {
+  const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *credential_prefix = "/api/v1/credentials/";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
@@ -427,6 +428,12 @@ native_api_patch_path_is_allowed (const gchar *path)
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
+
+  if (g_str_has_prefix (path, alert_prefix))
+    {
+      const gchar *id = path + strlen (alert_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
 
   if (g_str_has_prefix (path, credential_prefix))
     {

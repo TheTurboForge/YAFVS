@@ -10,14 +10,15 @@ pub(crate) enum ScopeReportMutationOperation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScopeReportMutationStep {
-    ResolveOperatorOwner,
+    RequireOperatorIdentity,
     BeginTransaction,
     ResolveScope,
     ResolveScopeReport,
-    DecideAuthorizationAndProvenancePolicy,
+    VerifyScopeOwnerMatch,
+    VerifyScopeReportOwnerMatch,
     SelectScopeTargets,
     SelectLatestCompletedSourceReports,
-    InsertScopeReportHeader,
+    InsertScopeReportHeaderWithGeneratedByOperator,
     InsertScopeReportSources,
     RebuildScopeReportCounts,
     RebuildScopeReportMetrics,
@@ -38,13 +39,13 @@ pub(crate) fn scope_report_generation_plan() -> ScopeReportMutationPlan {
     ScopeReportMutationPlan {
         operation: ScopeReportMutationOperation::Generate,
         steps: vec![
-            ScopeReportMutationStep::ResolveOperatorOwner,
+            ScopeReportMutationStep::RequireOperatorIdentity,
             ScopeReportMutationStep::BeginTransaction,
             ScopeReportMutationStep::ResolveScope,
-            ScopeReportMutationStep::DecideAuthorizationAndProvenancePolicy,
+            ScopeReportMutationStep::VerifyScopeOwnerMatch,
             ScopeReportMutationStep::SelectScopeTargets,
             ScopeReportMutationStep::SelectLatestCompletedSourceReports,
-            ScopeReportMutationStep::InsertScopeReportHeader,
+            ScopeReportMutationStep::InsertScopeReportHeaderWithGeneratedByOperator,
             ScopeReportMutationStep::InsertScopeReportSources,
             ScopeReportMutationStep::RebuildScopeReportCounts,
             ScopeReportMutationStep::RebuildScopeReportMetrics,
@@ -57,10 +58,10 @@ pub(crate) fn scope_report_delete_plan() -> ScopeReportMutationPlan {
     ScopeReportMutationPlan {
         operation: ScopeReportMutationOperation::Delete,
         steps: vec![
-            ScopeReportMutationStep::ResolveOperatorOwner,
+            ScopeReportMutationStep::RequireOperatorIdentity,
             ScopeReportMutationStep::BeginTransaction,
             ScopeReportMutationStep::ResolveScopeReport,
-            ScopeReportMutationStep::DecideAuthorizationAndProvenancePolicy,
+            ScopeReportMutationStep::VerifyScopeReportOwnerMatch,
             ScopeReportMutationStep::DeleteScopeReportSourceLinks,
             ScopeReportMutationStep::DeleteScopeReportSnapshot,
             ScopeReportMutationStep::RelyOnCascadeMetricCleanup,
@@ -82,19 +83,19 @@ mod tests {
     }
 
     #[test]
-    fn generation_plan_keeps_policy_decision_before_snapshot_mutation() {
+    fn generation_plan_requires_scope_owner_before_snapshot_mutation() {
         assert_eq!(
             scope_report_generation_plan(),
             ScopeReportMutationPlan {
                 operation: ScopeReportMutationOperation::Generate,
                 steps: vec![
-                    ScopeReportMutationStep::ResolveOperatorOwner,
+                    ScopeReportMutationStep::RequireOperatorIdentity,
                     ScopeReportMutationStep::BeginTransaction,
                     ScopeReportMutationStep::ResolveScope,
-                    ScopeReportMutationStep::DecideAuthorizationAndProvenancePolicy,
+                    ScopeReportMutationStep::VerifyScopeOwnerMatch,
                     ScopeReportMutationStep::SelectScopeTargets,
                     ScopeReportMutationStep::SelectLatestCompletedSourceReports,
-                    ScopeReportMutationStep::InsertScopeReportHeader,
+                    ScopeReportMutationStep::InsertScopeReportHeaderWithGeneratedByOperator,
                     ScopeReportMutationStep::InsertScopeReportSources,
                     ScopeReportMutationStep::RebuildScopeReportCounts,
                     ScopeReportMutationStep::RebuildScopeReportMetrics,
@@ -103,12 +104,16 @@ mod tests {
             }
         );
         let plan = scope_report_generation_plan();
-        let policy = index_of(
-            &plan,
-            ScopeReportMutationStep::DecideAuthorizationAndProvenancePolicy,
+        let owner = index_of(&plan, ScopeReportMutationStep::VerifyScopeOwnerMatch);
+        assert!(owner < index_of(&plan, ScopeReportMutationStep::SelectScopeTargets));
+        assert!(
+            owner
+                < index_of(
+                    &plan,
+                    ScopeReportMutationStep::InsertScopeReportHeaderWithGeneratedByOperator,
+                )
         );
-        assert!(policy < index_of(&plan, ScopeReportMutationStep::InsertScopeReportHeader));
-        assert!(policy < index_of(&plan, ScopeReportMutationStep::InsertScopeReportSources));
+        assert!(owner < index_of(&plan, ScopeReportMutationStep::InsertScopeReportSources));
         assert!(
             index_of(&plan, ScopeReportMutationStep::InsertScopeReportSources)
                 < index_of(&plan, ScopeReportMutationStep::RebuildScopeReportCounts)
@@ -120,16 +125,16 @@ mod tests {
     }
 
     #[test]
-    fn delete_plan_keeps_policy_decision_and_raw_evidence_preservation_explicit() {
+    fn delete_plan_requires_report_owner_before_snapshot_mutation() {
         assert_eq!(
             scope_report_delete_plan(),
             ScopeReportMutationPlan {
                 operation: ScopeReportMutationOperation::Delete,
                 steps: vec![
-                    ScopeReportMutationStep::ResolveOperatorOwner,
+                    ScopeReportMutationStep::RequireOperatorIdentity,
                     ScopeReportMutationStep::BeginTransaction,
                     ScopeReportMutationStep::ResolveScopeReport,
-                    ScopeReportMutationStep::DecideAuthorizationAndProvenancePolicy,
+                    ScopeReportMutationStep::VerifyScopeReportOwnerMatch,
                     ScopeReportMutationStep::DeleteScopeReportSourceLinks,
                     ScopeReportMutationStep::DeleteScopeReportSnapshot,
                     ScopeReportMutationStep::RelyOnCascadeMetricCleanup,
@@ -139,15 +144,38 @@ mod tests {
             }
         );
         let plan = scope_report_delete_plan();
-        let policy = index_of(
-            &plan,
-            ScopeReportMutationStep::DecideAuthorizationAndProvenancePolicy,
-        );
-        assert!(policy < index_of(&plan, ScopeReportMutationStep::DeleteScopeReportSourceLinks));
-        assert!(policy < index_of(&plan, ScopeReportMutationStep::DeleteScopeReportSnapshot));
+        let owner = index_of(&plan, ScopeReportMutationStep::VerifyScopeReportOwnerMatch);
+        assert!(owner < index_of(&plan, ScopeReportMutationStep::DeleteScopeReportSourceLinks));
+        assert!(owner < index_of(&plan, ScopeReportMutationStep::DeleteScopeReportSnapshot));
         assert!(
             index_of(&plan, ScopeReportMutationStep::DeleteScopeReportSnapshot)
                 < index_of(&plan, ScopeReportMutationStep::PreserveRawReportEvidence)
+        );
+    }
+
+    #[test]
+    fn scope_report_mutations_require_operator_identity_before_transaction_work() {
+        for plan in [scope_report_generation_plan(), scope_report_delete_plan()] {
+            assert_eq!(
+                plan.steps.first(),
+                Some(&ScopeReportMutationStep::RequireOperatorIdentity),
+                "{plan:?} must reject anonymous or unbound mutation attempts before DB work"
+            );
+            assert!(
+                index_of(&plan, ScopeReportMutationStep::RequireOperatorIdentity)
+                    < index_of(&plan, ScopeReportMutationStep::BeginTransaction)
+            );
+        }
+    }
+
+    #[test]
+    fn scope_report_generation_records_provenance_before_source_rows() {
+        let plan = scope_report_generation_plan();
+        assert!(
+            index_of(
+                &plan,
+                ScopeReportMutationStep::InsertScopeReportHeaderWithGeneratedByOperator,
+            ) < index_of(&plan, ScopeReportMutationStep::InsertScopeReportSources)
         );
     }
 }

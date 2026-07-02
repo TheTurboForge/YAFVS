@@ -185,6 +185,85 @@ describe('PortListCommand', () => {
     });
   });
 
+  test('should save port list metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-port-list-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.save({
+      id: 'port-list-id',
+      name: 'Native Port List',
+      comment: 'Updated by native API',
+    });
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith(
+      'api/v1/port-lists/port-list-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          comment: 'Updated by native API',
+          name: 'Native Port List',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-port-list-id');
+    expect(result.data.action).toEqual('save_port_list');
+    expect(result.data.message).toEqual('OK');
+  });
+
+  test('should not fall back to GMP when native port list save fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'duplicate'}}),
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(createActionResultResponse()) as ReturnType<
+      typeof createHttp
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    await expect(
+      command.save({id: 'port-list-id', name: 'Duplicate'}),
+    ).rejects.toThrow('Native API request failed with status 409');
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(http.request).not.toHaveBeenCalled();
+  });
+
   test('should clone a port list through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'native-port-list-clone-id'}),

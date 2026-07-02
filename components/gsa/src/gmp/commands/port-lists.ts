@@ -26,6 +26,7 @@ import {
   cloneNativePortList,
   createNativePortList,
   fetchNativePortLists,
+  patchNativePortList,
   type NativePortListCreateRequest,
   nativePortListsQueryFromFilter,
 } from 'gmp/native-api/port-lists';
@@ -136,7 +137,11 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
     });
   }
 
-  save({id, name, comment = ''}: PortListCommandSaveParams) {
+  async save({id, name, comment = ''}: PortListCommandSaveParams) {
+    if (canUseNativeApi(this.http)) {
+      return patchNativePortList(this.http, id, {comment, name});
+    }
+
     log.debug('Saving port list', {id, name, comment});
     return this.action({
       cmd: 'save_port_list',

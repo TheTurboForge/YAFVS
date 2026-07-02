@@ -19,8 +19,10 @@ use crate::{
     filter_writes::{clone_filter, create_filter, patch_filter, restore_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
     port_list_payloads::PortListAssetDetail,
-    port_list_write_validation::{PortListCloneRequest, PortListCreateRequest},
-    port_list_writes::{clone_port_list, create_port_list, restore_port_list},
+    port_list_write_validation::{
+        PortListCloneRequest, PortListCreateRequest, PortListPatchRequest,
+    },
+    port_list_writes::{clone_port_list, create_port_list, patch_port_list, restore_port_list},
     report_config_payloads::ReportConfigAssetItem,
     report_config_write_validation::{
         ReportConfigCloneRequest, ReportConfigCreateRequest, ReportConfigPatchRequest,
@@ -252,6 +254,23 @@ pub(crate) async fn browser_proxy_clone_port_list(
 ) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     clone_port_list(
+        State(state),
+        Path(port_list_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_patch_port_list(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(port_list_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<PortListPatchRequest>,
+) -> Result<Json<PortListAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_port_list(
         State(state),
         Path(port_list_id),
         Some(Extension(operator)),

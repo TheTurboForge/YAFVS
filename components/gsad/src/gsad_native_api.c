@@ -406,6 +406,7 @@ static gboolean
 native_api_patch_path_is_allowed (const gchar *path)
 {
   const gchar *filter_prefix = "/api/v1/filters/";
+  const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *tag_prefix = "/api/v1/tags/";
 
@@ -415,6 +416,12 @@ native_api_patch_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, filter_prefix))
     {
       const gchar *id = path + strlen (filter_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, port_list_prefix))
+    {
+      const gchar *id = path + strlen (port_list_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

@@ -8,6 +8,7 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
+import ActionResult from 'gmp/models/action-result';
 import PortList from 'gmp/models/port-list';
 import type QueryFilter from 'gmp/models/filter';
 
@@ -188,9 +189,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
@@ -308,6 +310,28 @@ export const createNativePortList = async (
     request,
   );
   return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativePortList = async (
+  gmp: NativeApiGmp,
+  id: string,
+  request: {comment: string; name: string},
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativePortListPayload>(
+    gmp,
+    `api/v1/port-lists/${encodeURIComponent(id)}`,
+    request,
+    'PATCH',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_port_list',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };
 
 export const cloneNativePortList = async (

@@ -17915,7 +17915,7 @@ def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
 
 
-def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = None) -> dict[str, Any]:
+def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = None, *, write_filter_smoke: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     probe = runtime_browser_smoke_probe_path(repo_root)
@@ -17937,6 +17937,8 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     findings.append(finding("pass" if base_urls else "fail", "gsad.urls", "Configured gsad base URLs are available." if base_urls else "No gsad base URLs are configured.", details={"base_urls": list(base_urls)}))
     findings.extend(runtime_gsa_freshness_findings(repo_root))
     findings.append(browser_gmp_readiness_finding(repo_root, check="browser-smoke.gmp-ready"))
+    if write_filter_smoke:
+        findings.append(socket_readiness_finding("browser-smoke.cleanup-gvmd-socket", "gvmd", gvmd_socket_path(repo_root), missing_status="fail"))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-browser-smoke", repo_root, "Runtime browser smoke stopped at prerequisites.", findings, [str(artifact_dir)])
 
@@ -17962,6 +17964,8 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
         args.extend(["--scope-report-path", scope_report_path])
     if expect_result_row:
         args.append("--expect-result-row")
+    if write_filter_smoke:
+        args.extend(["--write-filter-smoke", "--cleanup-gmp-socket", str(gvmd_socket_path(repo_root))])
     for route in routes or []:
         args.extend(["--route", route])
     for base_url in base_urls:
@@ -18927,6 +18931,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
+    browser_smoke.add_argument("--write-filter-smoke", action="store_true", help="create/clone/delete a disposable saved filter through browser native POST proxy validation")
     subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
     subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
     subparsers.add_parser("runtime-rbac-smoke", parents=[common], help="verify all authenticated users share operator privileges")
@@ -19099,7 +19104,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "runtime-webui-smoke":
         result = command_runtime_webui_smoke(repo_root)
     elif args.command == "runtime-browser-smoke":
-        result = command_runtime_browser_smoke(repo_root, args.route)
+        result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke)
     elif args.command == "runtime-browser-regression":
         result = command_runtime_browser_regression(repo_root)
     elif args.command == "runtime-credential-smoke":

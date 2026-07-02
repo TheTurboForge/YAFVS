@@ -24,6 +24,21 @@ PLAYWRIGHT_NODE_PATHS = (
 )
 
 
+def add_greenbone_python_paths(repo_root: Path) -> None:
+    for source_path in (repo_root / "components" / "python-gvm", repo_root / "components" / "gvm-tools"):
+        if source_path.is_dir():
+            path = str(source_path)
+            if path not in sys.path:
+                sys.path.insert(0, path)
+    for venv_name in ("python-gvm", "gvm-tools"):
+        site_root = repo_root / "build" / "venvs" / venv_name / "lib"
+        for site_packages in sorted(site_root.glob("python*/site-packages")):
+            if site_packages.is_dir():
+                path = str(site_packages)
+                if path not in sys.path:
+                    sys.path.insert(0, path)
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -302,12 +317,20 @@ async function assertNoPerSourceEvidenceSections(page, check) {
   add(found ? 'fail' : 'pass', check, found ? 'Tab still renders per-source raw-report evidence sections.' : 'Tab renders as one aggregated scope-report collection.', { url: page.url() });
 }
 
-async function fetchNativeJsonWithBrowserToken(page, path) {
-  return await page.evaluate(async requestPath => {
+async function fetchNativeJsonWithBrowserToken(page, path, options = {}) {
+  return await page.evaluate(async ({requestPath, requestOptions}) => {
+    const requestBody = requestOptions.body === undefined ? undefined : JSON.stringify(requestOptions.body);
+    const method = requestOptions.method || 'GET';
     const token = window.localStorage.getItem('token') || '';
     const separator = requestPath.includes('?') ? '&' : '?';
-    const response = await fetch(`${requestPath}${separator}token=${encodeURIComponent(token)}`, {
-      headers: { Accept: 'application/json' },
+    const url = method === 'GET' ? `${requestPath}${separator}token=${encodeURIComponent(token)}` : requestPath;
+    const headers = { Accept: 'application/json' };
+    if (requestBody !== undefined) headers['Content-Type'] = 'application/json';
+    if (method !== 'GET' && token) headers['X-TurboVAS-Token'] = token;
+    const response = await fetch(url, {
+      method,
+      headers,
+      ...(requestBody !== undefined ? { body: requestBody } : {}),
     });
     const text = await response.text();
     let body = null;
@@ -317,7 +340,40 @@ async function fetchNativeJsonWithBrowserToken(page, path) {
       // Preserve a short sample for diagnostics when a response is not JSON.
     }
     return { status: response.status, body, textSample: text.slice(0, 120) };
-  }, path);
+  }, {requestPath: path, requestOptions: options});
+}
+
+async function assertSavedFilterWriteProxy(page) {
+  const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const create = await fetchNativeJsonWithBrowserToken(page, '/api/v1/filters', {
+    method: 'POST',
+    body: {
+      name: `TurboVAS browser write smoke ${suffix}`,
+      comment: 'Temporary filter created by runtime-browser-smoke.',
+      filter_type: 'task',
+      term: 'rows=1',
+    },
+  });
+  const createdId = typeof create.body?.id === 'string' ? create.body.id : null;
+  add(
+    create.status === 201 && createdId ? 'pass' : 'fail',
+    'filter.write-create-native-api',
+    create.status === 201 && createdId ? 'Saved-filter create worked through the same-origin native POST proxy.' : 'Saved-filter create through the same-origin native POST proxy failed.',
+    { status: create.status, created_id: createdId, cleanup_required: Boolean(createdId), message: create.body?.error?.message || create.textSample },
+  );
+  if (!createdId) return;
+
+  const clone = await fetchNativeJsonWithBrowserToken(page, `/api/v1/filters/${encodeURIComponent(createdId)}/clone`, {
+    method: 'POST',
+    body: {},
+  });
+  const cloneId = typeof clone.body?.id === 'string' ? clone.body.id : null;
+  add(
+    clone.status === 201 && cloneId ? 'pass' : 'fail',
+    'filter.write-clone-native-api',
+    clone.status === 201 && cloneId ? 'Saved-filter clone worked through the same-origin native POST proxy.' : 'Saved-filter clone through the same-origin native POST proxy failed.',
+    { status: clone.status, source_id: createdId, clone_id: cloneId, cleanup_required: Boolean(cloneId), message: clone.body?.error?.message || clone.textSample },
+  );
 }
 
 async function assertNativeApiInvalidSortProxy(page, spec) {
@@ -523,6 +579,9 @@ async function validateFocusedRoute(page, nativeApiResponses, spec) {
   if (spec.label === 'tags') {
     await assertTagResourceNameProxy(page);
   }
+  if (spec.label === 'filters' && config.writeFilterSmoke) {
+    await assertSavedFilterWriteProxy(page);
+  }
   await assertNativeApiInvalidSortProxy(page, spec);
   await assertNativeApiInvalidPageProxy(page, spec);
   await assertNativeApiMalformedPageProxy(page, spec);
@@ -633,6 +692,9 @@ async function runForBaseUrl(baseUrl) {
       await assertNoAppError(page, 'filter-detail.app-error');
       const nativeFilterDetail = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/filters\/[^/]+$/);
       add(nativeFilterDetail ? 'pass' : 'fail', 'filter.detail-native-api', nativeFilterDetail ? 'Filter detail loaded through same-origin native API.' : 'Filter detail did not produce a successful same-origin native API response.', { responses: nativeApiResponses.filter(item => /\/api\/v1\/filters\/[^/]+$/.test(item.path)) });
+    }
+    if (config.writeFilterSmoke) {
+      await assertSavedFilterWriteProxy(page);
     }
 
     await gotoRoute(page, '/port-lists', 'port-lists');
@@ -961,6 +1023,68 @@ def split_route_values(values: list[str]) -> list[str]:
     return routes
 
 
+def filter_write_smoke_ids(payload: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for item in payload.get("findings", []):
+        if not isinstance(item, dict):
+            continue
+        details = item.get("details", {})
+        if not isinstance(details, dict):
+            continue
+        for key in ("clone_id", "created_id"):
+            value = details.get(key)
+            if isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", value) and value not in ids:
+                ids.append(value)
+    ids.reverse()
+    return ids
+
+
+def append_finding(payload: dict[str, Any], status: str, check: str, message: str, details: dict[str, Any] | None = None) -> None:
+    payload.setdefault("findings", []).append({
+        "status": status,
+        "check": check,
+        "message": message,
+        "details": details or {},
+    })
+    payload["status"] = aggregate(payload["findings"])
+    payload["summary"] = "Browser runtime smoke passed." if payload["status"] == "pass" else "Browser runtime smoke found issues."
+
+
+def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]) -> None:
+    if not args.write_filter_smoke:
+        return
+    ids = filter_write_smoke_ids(payload)
+    if not ids:
+        saw_write_check = any(
+            isinstance(item, dict) and str(item.get("check", "")).startswith("filter.write-")
+            for item in payload.get("findings", [])
+        )
+        if not saw_write_check:
+            return
+        append_finding(payload, "warn", "filter.write-cleanup", "No saved-filter write-smoke IDs were available for cleanup.")
+        return
+    if not args.cleanup_gmp_socket:
+        append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write smoke created filters but no cleanup GMP socket was provided.", {"filter_ids": ids})
+        return
+    try:
+        add_greenbone_python_paths(Path(__file__).resolve().parents[1])
+        import runtime_full_test_scan
+
+        gmp, _password = runtime_full_test_scan.connect_gmp(
+            Path(args.cleanup_gmp_socket),
+            args.username,
+            Path(args.password_file),
+            max(10, args.timeout_ms // 1000),
+        )
+        deleted: list[str] = []
+        for filter_id in ids:
+            gmp.delete_filter(filter_id, ultimate=True)
+            deleted.append(filter_id)
+        append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through GMP cleanup.", {"deleted_ids": deleted})
+    except Exception as error:  # pylint: disable=broad-except
+        append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write-smoke cleanup failed.", {"filter_ids": ids, "error_type": type(error).__name__, "error": str(error)})
+
+
 def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
     artifact_dir = Path(args.artifact_dir).expanduser().resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -987,6 +1111,7 @@ def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
                 "scopeReportPath": args.scope_report_path,
                 "expectResultRow": args.expect_result_row,
                 "focusRoutes": focus_routes,
+                "writeFilterSmoke": args.write_filter_smoke,
             },
             indent=2,
             sort_keys=True,
@@ -1022,6 +1147,7 @@ def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
     payload["artifacts"].extend([str(script_path), str(config_path)])
     payload.setdefault("findings", findings)
     payload["status"] = payload.get("status") if completed.returncode == 0 else "fail"
+    cleanup_filter_write_smoke(args, payload)
     write_artifact(artifact_dir, "browser-smoke-wrapper.json", payload)
     if str(artifact_dir / "browser-smoke-wrapper.json") not in payload["artifacts"]:
         payload["artifacts"].append(str(artifact_dir / "browser-smoke-wrapper.json"))
@@ -1038,6 +1164,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--route", action="append", help=f"focus the browser smoke on one route label or path; may be repeated, or set {ROUTES_ENV}=route1,route2")
     parser.add_argument("--scope-report-path", help="preferred canonical scope-report detail path to exercise")
     parser.add_argument("--expect-result-row", action="store_true", help="fail if the selected scope report has no visible Results row")
+    parser.add_argument("--write-filter-smoke", action="store_true", help="create and clone a disposable saved filter through the browser native POST proxy")
+    parser.add_argument("--cleanup-gmp-socket", help="gvmd socket used to delete temporary saved-filter write-smoke rows")
     return parser
 
 

@@ -12,6 +12,7 @@
 #include "gsad_http_method_handler.h"
 #include "gsad_http_url_handler.h"
 #include "gsad_native_api.h"
+#include "gsad_params.h"
 #include "gsad_params_mhd.h" /* for params_mhd_add */
 #include "gsad_utils.h"      /* for str_equal */
 #include "validator.h"       /* for gvm_validator_t */
@@ -29,6 +30,24 @@
  * gsad_http_request_cleanup_handlers in the atexit function.
  */
 gsad_http_handler_t *global_handlers;
+
+#define NATIVE_API_TOKEN_HEADER "X-TurboVAS-Token"
+
+static void
+add_native_api_header_token (gsad_http_connection_t *connection,
+                             const char *url, params_t *params)
+{
+  const gchar *token;
+
+  if (url == NULL || !g_str_has_prefix (url, "/api/v1/")
+      || params_given (params, "token"))
+    return;
+
+  token = MHD_lookup_connection_value (connection, MHD_HEADER_KIND,
+                                       NATIVE_API_TOKEN_HEADER);
+  if (token && token[0] != '\0')
+    params_add (params, "token", token);
+}
 
 /**
  * @brief Setup the HTTP handlers for gsad.
@@ -282,6 +301,12 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
 
           con_info = gsad_connection_info_new (METHOD_TYPE_POST, url);
 
+          if (g_str_has_prefix (url, "/api/v1/"))
+            {
+              *con_cls = (void *) con_info;
+              return MHD_YES;
+            }
+
           /* Freed by MHD_OPTION_NOTIFY_COMPLETED callback, free_resources. */
           struct MHD_PostProcessor *postprocessor = MHD_create_post_processor (
             connection, POST_BUFFER_SIZE, serve_post, (void *) con_info);
@@ -322,8 +347,9 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
                 connection, BAD_REQUEST_PAGE, MHD_HTTP_NOT_ACCEPTABLE, NULL,
                 GSAD_CONTENT_TYPE_TEXT_HTML, NULL, 0);
             }
-          MHD_post_process (gsad_connection_info_get_postprocessor (con_info),
-                            upload_data, *upload_data_size);
+          if (gsad_connection_info_get_postprocessor (con_info) != NULL)
+            MHD_post_process (gsad_connection_info_get_postprocessor (con_info),
+                              upload_data, *upload_data_size);
           *upload_data_size = 0;
           return MHD_YES;
         }
@@ -331,6 +357,8 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
 
   /* validate parameters */
   params = gsad_connection_info_get_params (con_info);
+  if (gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_POST)
+    add_native_api_header_token (connection, url, params);
   params_mhd_validate (params);
 
   g_debug ("Handling %s request for %s", method, url);

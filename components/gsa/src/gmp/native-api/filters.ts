@@ -155,12 +155,13 @@ const writeNativeJson = async <T>(
   path: string,
   body: unknown,
 ): Promise<T> => {
-  const response = await fetch(gmp.buildUrl(path, {token: gmp.session.token}), {
+  const response = await fetch(gmp.buildUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
     body: JSON.stringify(body),

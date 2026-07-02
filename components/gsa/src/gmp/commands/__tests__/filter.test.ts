@@ -72,9 +72,7 @@ describe('FilterCommand tests', () => {
     });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/filters', {
-      token: 'test-token',
-    });
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/filters');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/filters',
       {
@@ -83,6 +81,7 @@ describe('FilterCommand tests', () => {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -162,7 +161,6 @@ describe('FilterCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
       'api/v1/filters/filter-id/clone',
-      {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/filters/filter-id/clone',
@@ -172,6 +170,7 @@ describe('FilterCommand tests', () => {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({}),

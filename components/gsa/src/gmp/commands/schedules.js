@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,12 +7,14 @@
 import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import logger from 'gmp/log';
 import Schedule from 'gmp/models/schedule';
+import {cloneNativeSchedule} from 'gmp/native-api/schedules';
 
 const log = logger.getLogger('gmp.commands.schedules');
 
-class ScheduleCommand extends EntityCommand {
+export class ScheduleCommand extends EntityCommand {
   constructor(http) {
     super(http, 'schedule', Schedule);
   }
@@ -46,9 +49,20 @@ class ScheduleCommand extends EntityCommand {
   getElementFromRoot(root) {
     return root.get_schedule.get_schedules_response.schedule;
   }
+
+  async clone({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativeSchedule(this.http, id);
+      } catch (error) {
+        log.debug('Native schedule clone failed, falling back to GMP', error);
+      }
+    }
+    return super.clone({id});
+  }
 }
 
-class SchedulesCommand extends EntitiesCommand {
+export class SchedulesCommand extends EntitiesCommand {
   constructor(http) {
     super(http, 'schedule', Schedule);
   }

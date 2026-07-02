@@ -456,11 +456,13 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/filters"));
     assert!(browser_routes.contains("/api/v1/tags"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/clone"));
+    assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/clone"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/clone"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/resources"));
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
     assert!(browser_routes.contains("post(browser_proxy_create_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_filter)"));
+    assert!(browser_routes.contains("post(browser_proxy_clone_schedule)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_update_tag_resources)"));
     assert!(browser_routes.contains("DefaultBodyLimit::max("));

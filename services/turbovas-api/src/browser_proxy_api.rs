@@ -18,6 +18,9 @@ use crate::{
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest},
     filter_writes::{clone_filter, create_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
+    schedule_payloads::ScheduleAssetDetail,
+    schedule_write_validation::ScheduleCloneRequest,
+    schedule_writes::clone_schedule,
     tag_payloads::TagAssetItem,
     tag_write_validation::{TagCloneRequest, TagCreateRequest, TagResourceUpdateRequest},
     tag_writes::{clone_tag, create_tag, update_tag_resources},
@@ -126,6 +129,23 @@ pub(crate) async fn browser_proxy_update_tag_resources(
     update_tag_resources(
         State(state),
         Path(tag_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_clone_schedule(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(schedule_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ScheduleCloneRequest>,
+) -> Result<(StatusCode, Json<ScheduleAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_schedule(
+        State(state),
+        Path(schedule_id),
         Some(Extension(operator)),
         Json(request),
     )

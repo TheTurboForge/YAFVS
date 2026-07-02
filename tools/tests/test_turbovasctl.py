@@ -2003,7 +2003,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 5)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 6)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2364,7 +2364,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 5)
+        self.assertEqual(contract["browser_write_proxy_count"], 6)
         self.assertEqual(contract["direct_write_control_count"], 48)
         self.assertEqual(contract["gsad_proxy_methods"], ["GET", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
@@ -2372,6 +2372,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertFalse(contract["write_proxy_requires_design"])
         self.assertIn("POST /api/v1/filters", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/filters/{filter_id}/clone", contract["browser_write_proxy_operations"])
+        self.assertIn("POST /api/v1/schedules/{schedule_id}/clone", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/tags", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/tags/{tag_id}/clone", contract["browser_write_proxy_operations"])
         self.assertIn("POST /api/v1/tags/{tag_id}/resources", contract["browser_write_proxy_operations"])
@@ -2524,6 +2525,12 @@ class TurboVASCtlTests(unittest.TestCase):
                 "direct_access": "direct_write_control",
             },
             {
+                "endpoint": "/api/v1/schedules/{schedule_id}/clone",
+                "method": "post",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+            },
+            {
                 "endpoint": "/api/v1/tags",
                 "method": "post",
                 "status": "implemented_internal_and_browser_proxied",
@@ -2552,6 +2559,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  const gchar *filters_path = \"/api/v1/filters\";\n"
                 "  const gchar *tags_path = \"/api/v1/tags\";\n"
                 "  const gchar *filter_prefix = \"/api/v1/filters/\";\n"
+                "  const gchar *schedule_prefix = \"/api/v1/schedules/\";\n"
                 "  const gchar *tag_prefix = \"/api/v1/tags/\";\n"
                 "  const gchar *clone_suffix = \"/clone\";\n"
                 "  const gchar *resources_suffix = \"/resources\";\n"
@@ -2560,6 +2568,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  if (g_strcmp0 (path, tags_path) == 0)\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, filter_prefix))\n"
+                "    return TRUE;\n"
+                "  if (g_str_has_prefix (path, schedule_prefix))\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, tag_prefix))\n"
                 "    {\n"
@@ -2584,7 +2594,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(summary["alignment_status"], "pass")
         self.assertEqual(summary["gsad_proxy_methods"], ["GET", "POST"])
-        self.assertEqual(summary["browser_write_proxy_operations"], ["POST /api/v1/filters", "POST /api/v1/filters/{filter_id}/clone", "POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/clone", "POST /api/v1/tags/{tag_id}/resources"])
+        self.assertEqual(summary["browser_write_proxy_operations"], ["POST /api/v1/filters", "POST /api/v1/filters/{filter_id}/clone", "POST /api/v1/schedules/{schedule_id}/clone", "POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/clone", "POST /api/v1/tags/{tag_id}/resources"])
         self.assertEqual(summary["missing_gsad_proxy_allowlist"], [])
 
     def test_native_tooling_state_reports_direct_api_contract_drift(self):
@@ -3239,6 +3249,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(delete_schedule["x_turbovas_exposure"], "direct-write")
         self.assertEqual(delete_schedule["x_turbovas_replaces"], "schedule-trash-move")
 
+        clone_schedule = rows[("post", "/api/v1/schedules/{schedule_id}/clone")]
+        self.assertEqual(clone_schedule["status"], "implemented_internal_and_browser_proxied")
+        self.assertEqual(clone_schedule["direct_access"], "direct_write_control")
+        self.assertEqual(clone_schedule["x_turbovas_maturity"], "live-write")
+        self.assertEqual(clone_schedule["x_turbovas_exposure"], "direct-write")
+        self.assertEqual(clone_schedule["x_turbovas_replaces"], "schedule-clone")
+
         delete_filter = rows[("delete", "/api/v1/filters/{filter_id}")]
         self.assertEqual(delete_filter["status"], "implemented_direct_write_control")
         self.assertEqual(delete_filter["direct_access"], "direct_write_control")
@@ -3247,7 +3264,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(delete_filter["x_turbovas_replaces"], "saved-filter-trash-move")
 
         create_tag = rows[("post", "/api/v1/tags")]
-        self.assertEqual(create_tag["status"], "implemented_direct_write_control")
+        self.assertEqual(create_tag["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(create_tag["direct_access"], "direct_write_control")
         self.assertEqual(create_tag["x_turbovas_maturity"], "live-write")
         self.assertEqual(create_tag["x_turbovas_exposure"], "direct-write")
@@ -3268,7 +3285,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(delete_tag["x_turbovas_replaces"], "tag-trash-move")
 
         update_tag_resources = rows[("post", "/api/v1/tags/{tag_id}/resources")]
-        self.assertEqual(update_tag_resources["status"], "implemented_direct_write_control")
+        self.assertEqual(update_tag_resources["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(update_tag_resources["direct_access"], "direct_write_control")
         self.assertEqual(update_tag_resources["x_turbovas_maturity"], "live-write")
         self.assertEqual(update_tag_resources["x_turbovas_exposure"], "direct-write")
@@ -3451,7 +3468,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-file-export")
 
         tag_clone = rows[("post", "/api/v1/tags/{tag_id}/clone")]
-        self.assertEqual(tag_clone["status"], "implemented_direct_write_control")
+        self.assertEqual(tag_clone["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_clone["direct_access"], "direct_write_control")
         self.assertEqual(tag_clone["x_turbovas_maturity"], "live-write")
         self.assertEqual(tag_clone["x_turbovas_exposure"], "direct-write")

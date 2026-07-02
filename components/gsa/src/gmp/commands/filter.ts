@@ -5,12 +5,13 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import type {EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
-import {createNativeFilter} from 'gmp/native-api/filters';
+import {cloneNativeFilter, createNativeFilter} from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
 interface GetFilterResponseData extends XmlResponseData {
@@ -58,6 +59,17 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     };
     log.debug('Creating new filter', args, data);
     return this.action(data);
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativeFilter(this.http, id);
+      } catch (error) {
+        log.debug('Native filter clone failed, falling back to GMP', error);
+      }
+    }
+    return super.clone({id});
   }
 
   save(args: {

@@ -263,3 +263,15 @@ export const createNativeFilter = async (
   );
   return new Response({id: stringValue(payload.id)});
 };
+
+export const cloneNativeFilter = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeFilterPayload>(
+    gmp,
+    `api/v1/filters/${encodeURIComponent(id)}/clone`,
+    {},
+  );
+  return new Response({id: stringValue(payload.id)});
+};

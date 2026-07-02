@@ -10,9 +10,21 @@ import EntityCommand from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import logger from 'gmp/log';
 import Schedule from 'gmp/models/schedule';
-import {cloneNativeSchedule} from 'gmp/native-api/schedules';
+import {cloneNativeSchedule, patchNativeSchedule} from 'gmp/native-api/schedules';
 
 const log = logger.getLogger('gmp.commands.schedules');
+
+const SCHEDULE_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+
+const isScheduleMetadataOnlySave = args => {
+  const keys = Object.keys(args);
+  return (
+    keys.every(key => SCHEDULE_METADATA_SAVE_KEYS.has(key)) &&
+    typeof args.id === 'string' &&
+    typeof args.name === 'string' &&
+    (args.comment === undefined || typeof args.comment === 'string')
+  );
+};
 
 export class ScheduleCommand extends EntityCommand {
   constructor(http) {
@@ -32,6 +44,14 @@ export class ScheduleCommand extends EntityCommand {
   }
 
   save(args) {
+    if (canUseNativeApi(this.http) && isScheduleMetadataOnlySave(args)) {
+      return patchNativeSchedule(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
+
     const {comment = '', icalendar, id, name, timezone} = args;
 
     const data = {

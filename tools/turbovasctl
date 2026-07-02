@@ -6937,7 +6937,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
         patch_constants = c_string_constants(patch_function_body)
-        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "tag_prefix"):
+        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix"):
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
@@ -7606,9 +7606,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "patch",
                 "endpoint": "/api/v1/schedules/{schedule_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native schedule name/comment metadata modification"],
+                "replacement_candidates": ["same-origin browser schedule metadata PATCH for command-level metadata-only saves", "direct native schedule name/comment metadata modification"],
             },
             {
                 "method": "delete",

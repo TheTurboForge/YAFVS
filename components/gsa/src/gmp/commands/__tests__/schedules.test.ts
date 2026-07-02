@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -89,5 +90,89 @@ describe('ScheduleCommand tests', () => {
       },
     });
     expect(result.data.id).toEqual('fallback-schedule-clone-id');
+  });
+
+  test('should save schedule metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'schedule-id', name: 'updated-schedule'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'schedule-id',
+      name: 'updated-schedule',
+      comment: 'metadata only',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/schedules/schedule-id');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/schedules/schedule-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'updated-schedule',
+          comment: 'metadata only',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('schedule-id');
+  });
+
+  test('should keep calendar-bearing schedule save on GMP', async () => {
+    const response = createActionResultResponse({id: 'saved-schedule-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'schedule-id',
+      name: 'updated-schedule',
+      comment: 'calendar-bearing',
+      icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+      timezone: 'UTC',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'save_schedule',
+        schedule_id: 'schedule-id',
+        name: 'updated-schedule',
+        comment: 'calendar-bearing',
+        icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+        timezone: 'UTC',
+      },
+    });
+    expect(result.data.id).toEqual('saved-schedule-id');
   });
 });

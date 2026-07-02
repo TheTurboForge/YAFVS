@@ -59,6 +59,12 @@ interface NativeSchedulesPayload {
   items?: NativeSchedulePayload[];
 }
 
+interface NativeSchedulePatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
+}
+
 export interface NativeSchedulesQuery {
   page: number;
   pageSize: number;
@@ -163,9 +169,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
@@ -268,6 +275,23 @@ export const cloneNativeSchedule = async (
     gmp,
     `api/v1/schedules/${encodeURIComponent(id)}/clone`,
     {},
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeSchedule = async (
+  gmp: NativeApiGmp,
+  {id, name, comment}: NativeSchedulePatchArgs,
+): Promise<Response<{id: string}>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+  };
+  const payload = await writeNativeJson<NativeSchedulePayload>(
+    gmp,
+    `api/v1/schedules/${encodeURIComponent(id)}`,
+    body,
+    'PATCH',
   );
   return new Response({id: stringValue(payload.id)});
 };

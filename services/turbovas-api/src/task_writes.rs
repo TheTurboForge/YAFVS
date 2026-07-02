@@ -6,7 +6,6 @@ use axum::{
     Json,
     extract::{Extension, Path, State},
 };
-use tokio_postgres::Transaction;
 
 use crate::{
     app_state::AppState,
@@ -15,8 +14,8 @@ use crate::{
     task_handlers::load_task_detail,
     task_target_payloads::TaskItem,
     task_write_db::*,
-    task_write_sql::task_update_metadata_sql,
-    task_write_validation::{TaskPatchRequest, ValidatedTaskPatch, validate_task_patch_request},
+    task_write_transactions::execute_task_patch_transaction,
+    task_write_validation::{TaskPatchRequest, validate_task_patch_request},
 };
 
 pub(crate) async fn patch_task(
@@ -47,18 +46,4 @@ pub(crate) async fn patch_task(
         .map_err(|error| map_task_write_db_error(error, "commit patch task transaction"))?;
 
     Ok(Json(load_task_detail(&client, &record.uuid).await?))
-}
-
-pub(crate) async fn execute_task_patch_transaction(
-    tx: &Transaction<'_>,
-    task_internal_id: i32,
-    request: &ValidatedTaskPatch,
-) -> Result<TaskWriteRecord, ApiError> {
-    query_task_write_record(
-        tx,
-        task_update_metadata_sql(),
-        &[&task_internal_id, &request.name, &request.comment],
-        "update task metadata",
-    )
-    .await
 }

@@ -184,6 +184,7 @@ mod task_target_payloads;
 mod task_targets;
 mod task_write_db;
 mod task_write_sql;
+mod task_write_transactions;
 mod task_write_validation;
 mod task_writes;
 #[cfg(test)]

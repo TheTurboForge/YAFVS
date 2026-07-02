@@ -430,6 +430,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-targets-from-csv.gmp.py": "Inherited CSV bulk-target behavior is characterized; native tooling still lacks a contract that maps hosts, credentials, alive-test selection, and port-list choice in one path.",
     "create-targets-from-host-list.gmp.py": "Inherited host-list target creation is characterized; native tooling still lacks a contract for optional port-list creation plus one target per host.",
     "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
+    "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-csv-report.gmp.py": "Inherited CSV report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "export-xml-report.gmp.py": "Inherited XML nested report serialization is characterized; native tooling still lacks a direct report-export contract that fetches a report by id and writes the chosen file name locally.",

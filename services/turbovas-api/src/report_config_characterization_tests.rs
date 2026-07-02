@@ -457,6 +457,23 @@ fn native_direct_api_exposes_only_report_config_create_write_control() {
         "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc",
         false
     ));
+    let export_path = "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/export";
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        true
+    ));
+    for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, export_path, true),
+            "{method} report-config metadata export must stay closed; XML/file export remains inherited"
+        );
+    }
     assert!(direct_api_v1_method_is_allowed(
         &Method::POST,
         "/api/v1/report-configs",
@@ -549,4 +566,10 @@ fn openapi_documents_report_config_create_and_patch_as_direct_write_control() {
     assert!(hard_delete.contains("x-turbovas-replaces: report-config-hard-delete"));
     assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(hard_delete.contains("x-turbovas-inherited-still-owns: report-config-file-export"));
+    let export = openapi_path_block("/report-configs/{report_config_id}/export");
+    assert!(export.contains("get:"));
+    assert!(export.contains("x-turbovas-exposure: direct-read"));
+    assert!(export.contains("x-turbovas-replaces: report-config-metadata-export-read"));
+    assert!(export.contains("x-turbovas-inherited-still-owns: report-config-file-export"));
+    assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));
 }

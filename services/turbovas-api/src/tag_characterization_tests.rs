@@ -195,6 +195,23 @@ fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_res
         "/api/v1/tags/12345678-1234-1234-1234-123456789abc",
         false
     ));
+    let export_path = "/api/v1/tags/12345678-1234-1234-1234-123456789abc/export";
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        true
+    ));
+    for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, export_path, true),
+            "{method} tag metadata export must stay closed; filter actions and file export remain inherited"
+        );
+    }
     assert!(direct_api_v1_method_is_allowed(
         &Method::POST,
         "/api/v1/tags",
@@ -248,6 +265,14 @@ fn openapi_tag_contract_records_remaining_inherited_tail() {
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-turbovas-replaces: tag-clone"));
     assert!(clone_block.contains("x-turbovas-safety-contract: write-control-v1"));
+    let export_block = openapi_path_block("/tags/{tag_id}/export");
+    assert!(export_block.contains("x-turbovas-replaces: tag-metadata-export-read"));
+    assert!(export_block.contains("x-turbovas-exposure: direct-read"));
+    assert!(
+        export_block
+            .contains("x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export")
+    );
+    assert!(!export_block.contains("x-turbovas-safety-contract: write-control-v1"));
     let delete_block = openapi_path_block("/tags/{tag_id}");
     assert!(delete_block.contains("Move tag to trash"));
     assert!(delete_block.contains("x-turbovas-replaces: tag-trash-move"));

@@ -184,6 +184,23 @@ fn native_direct_api_allows_only_schedule_metadata_patch_trash_move_and_restore_
         "/api/v1/schedules/12345678-1234-1234-1234-123456789abc",
         false
     ));
+    let export_path = "/api/v1/schedules/12345678-1234-1234-1234-123456789abc/export";
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        true
+    ));
+    for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, export_path, true),
+            "{method} schedule metadata export must stay closed; calendar create/export remains inherited"
+        );
+    }
     for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, "/api/v1/schedules", true),
@@ -275,4 +292,10 @@ fn openapi_documents_schedule_metadata_patch_and_trash_move_boundary() {
     assert!(
         hard_delete.contains("x-turbovas-inherited-still-owns: schedule-create-calendar-export")
     );
+    let export = openapi_path_block("/schedules/{schedule_id}/export");
+    assert!(export.contains("get:"));
+    assert!(export.contains("x-turbovas-exposure: direct-read"));
+    assert!(export.contains("x-turbovas-replaces: schedule-metadata-export-read"));
+    assert!(export.contains("x-turbovas-inherited-still-owns: schedule-create-calendar-export"));
+    assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));
 }

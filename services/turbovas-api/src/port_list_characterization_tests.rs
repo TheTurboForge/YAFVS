@@ -262,6 +262,23 @@ fn native_direct_api_allows_current_port_list_write_control_paths_only_when_enab
         "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc",
         false
     ));
+    let export_path = "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc/export";
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        export_path,
+        true
+    ));
+    for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, export_path, true),
+            "{method} port-list metadata export must stay closed; import/file export remains inherited"
+        );
+    }
     assert!(!direct_api_v1_method_is_allowed(
         &Method::POST,
         "/api/v1/port-lists",
@@ -369,4 +386,10 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
     assert!(hard_delete.contains("x-turbovas-replaces: port-list-hard-delete"));
     assert!(hard_delete.contains("x-turbovas-inherited-still-owns: port-list-import-export"));
+    let export = openapi_path_block("/port-lists/{port_list_id}/export");
+    assert!(export.contains("get:"));
+    assert!(export.contains("x-turbovas-exposure: direct-read"));
+    assert!(export.contains("x-turbovas-replaces: port-list-metadata-export-read"));
+    assert!(export.contains("x-turbovas-inherited-still-owns: port-list-import-export"));
+    assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));
 }

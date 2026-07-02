@@ -6,6 +6,7 @@ use super::*;
 use crate::{
     errors::ApiError,
     filter_write_plans::*,
+    filter_write_sql::*,
     filter_write_validation::{
         FilterCloneRequest, FilterPatchRequest, MAX_FILTER_TEXT_BYTES, ValidatedFilterPatch,
         validate_filter_clone_request, validate_filter_patch_request,
@@ -98,7 +99,7 @@ fn filter_destructive_handlers_enforce_owner_before_mutation() {
         (
             "hard delete",
             "pub(crate) async fn hard_delete_filter",
-            "pub(crate) async fn execute_filter_trash_transaction",
+            "pub(crate) async fn patch_filter",
             "ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
             "ensure_filter_not_in_use_by_trash_alerts",
         ),

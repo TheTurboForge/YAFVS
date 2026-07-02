@@ -37,6 +37,7 @@ mod filter_write_db;
 #[cfg(test)]
 mod filter_write_plans;
 mod filter_write_sql;
+mod filter_write_transactions;
 mod filter_write_validation;
 mod filter_writes;
 mod filters;

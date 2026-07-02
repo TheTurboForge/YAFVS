@@ -1,0 +1,239 @@
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use axum::http::Method;
+
+use crate::direct_api::direct_api_v1_method_is_allowed;
+
+const GSA_REPORT_FORMAT_COMMAND_TS: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/report-format.ts");
+const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GMP_REPORT_FORMATS_C: &str =
+    include_str!("../../../components/gvmd/src/gmp_report_formats.c");
+const MANAGE_PG_C: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
+const MANAGE_REPORT_FORMATS_C: &str =
+    include_str!("../../../components/gvmd/src/manage_report_formats.c");
+const MANAGE_SQL_REPORT_FORMATS_C: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
+const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
+
+fn inherited_function(source: &str, name: &str) -> String {
+    let marker = format!("\n{name} (");
+    let start = source
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{name} function marker must exist"));
+    let tail = &source[start..];
+    let end = tail.find("\n/**").unwrap_or(tail.len());
+    tail[..end].to_string()
+}
+
+fn openapi_path_block(path: &str) -> String {
+    let marker = format!("  {path}:");
+    let start = OPENAPI
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{path} path block must exist"));
+    let tail = &OPENAPI[start..];
+    tail.lines()
+        .enumerate()
+        .skip(1)
+        .find_map(|(index, line)| {
+            if line.starts_with("  /") && line.ends_with(':') {
+                Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn gsa_report_format_import_still_uses_inherited_gmp_action() {
+    for required in [
+        "import({xmlFile}: {xmlFile: string})",
+        "cmd: 'import_report_format'",
+        "xml_file: xmlFile",
+        "return this.action(data)",
+    ] {
+        assert!(
+            GSA_REPORT_FORMAT_COMMAND_TS.contains(required),
+            "GSA report-format import command missing inherited action fragment: {required}"
+        );
+    }
+    assert!(
+        !GSA_REPORT_FORMAT_COMMAND_TS.contains("importNativeReportFormat"),
+        "native report-format import must not appear before XML/file semantics are designed"
+    );
+}
+
+#[test]
+fn gsad_import_wraps_uploaded_xml_in_create_report_format() {
+    let import_gmp = inherited_function(GSAD_GMP_C, "import_report_format_gmp");
+    for required in [
+        "<create_report_format>",
+        "params_value (params, \"xml_file\")",
+        "gmp (connection, credentials, NULL, &entity",
+        "entity_attribute (entity, \"id\")",
+        "params_add (params, \"report_format_id\"",
+        "response_from_entity",
+        "MHD_HTTP_INTERNAL_SERVER_ERROR",
+    ] {
+        assert!(
+            import_gmp.contains(required),
+            "gsad report-format import path missing {required}"
+        );
+    }
+}
+
+#[test]
+fn inherited_gmp_report_format_create_parses_copy_or_import_payloads() {
+    let create_run = inherited_function(GMP_REPORT_FORMATS_C, "create_report_format_run");
+    for required in [
+        "entity_child (entity, \"copy\")",
+        "copy_report_format",
+        "entity_child (entity, \"get_report_formats_response\")",
+        "entity_child (get_report_formats_response, \"report_format\")",
+        "parse_report_format_entity",
+        "GET_REPORT_FORMATS_RESPONSE requires a",
+        "GET_REPORT_FORMATS_RESPONSE ID must be",
+        "!is_uuid (report_format_id)",
+        "create_report_format (report_format_id",
+        "XML_OK_CREATED_ID (\"create_report_format\")",
+        "Report format exists already",
+        "Every FILE must have a name",
+        "PARAM requires a DEFAULT element",
+        "Duplicate PARAM name",
+        "Bogus PARAM type",
+    ] {
+        assert!(
+            create_run.contains(required),
+            "GMP report-format create/import parser missing {required}"
+        );
+    }
+}
+
+#[test]
+fn inherited_report_format_import_mutates_db_files_signatures_and_events() {
+    let import_file = inherited_function(MANAGE_REPORT_FORMATS_C, "create_report_format_from_file");
+    for required in [
+        "parse_xml_file (path, &report_format)",
+        "parse_report_format_entity",
+        "set_resource_id_deprecated (\"report_format\"",
+        "create_report_format_no_acl",
+        "log_event (\"report_format\", \"Report format\"",
+        "log_event_fail (\"report_format\"",
+    ] {
+        assert!(
+            import_file.contains(required),
+            "inherited report-format file import missing {required}"
+        );
+    }
+
+    let save_files = inherited_function(MANAGE_SQL_REPORT_FORMATS_C, "save_report_format_files");
+    for required in [
+        "GVMD_STATE_DIR",
+        "\"report_formats\"",
+        "current_credentials.uuid",
+        "gvm_file_remove_recurse",
+        "g_mkdir_with_parents",
+        "path_is_in_directory",
+        "g_base64_decode",
+        "g_file_set_contents",
+        "chmod (full_file_name",
+    ] {
+        assert!(
+            save_files.contains(required),
+            "report-format import file persistence missing {required}"
+        );
+    }
+
+    let create_no_acl =
+        inherited_function(MANAGE_SQL_REPORT_FORMATS_C, "create_report_format_no_acl");
+    assert!(
+        create_no_acl.contains("create_report_format_internal (0, /* Check permission. */"),
+        "no-ACL report-format import wrapper must keep delegating to the shared create transaction"
+    );
+
+    let create_internal =
+        inherited_function(MANAGE_SQL_REPORT_FORMATS_C, "create_report_format_internal");
+    for required in [
+        "SELECT COUNT(*) FROM report_formats WHERE uuid = '%s';",
+        "SELECT COUNT(*) FROM report_formats_trash",
+        "WHERE original_uuid = '%s';",
+        "gvm_uuid_make",
+        "\"signatures\", \"report_formats\"",
+        "symlink (old, new)",
+        "save_report_format_files",
+        "INSERT INTO report_formats",
+        "add_report_format_params",
+        "current_credentials.uuid",
+        "sql_commit ();",
+    ] {
+        assert!(
+            create_internal.contains(required),
+            "report-format create/import transaction missing {required}"
+        );
+    }
+
+    let add_params = inherited_function(MANAGE_SQL_REPORT_FORMATS_C, "add_report_format_params");
+    for required in [
+        "report_format_param_type_from_name",
+        "SELECT count(*) FROM report_format_params",
+        "INSERT INTO report_format_params",
+        "INSERT INTO report_format_param_options",
+        "report_format_validate_param_value",
+        "return 8",
+        "return 9",
+    ] {
+        assert!(
+            add_params.contains(required),
+            "report-format param/options persistence missing {required}"
+        );
+    }
+
+    for required_table in [
+        "CREATE TABLE IF NOT EXISTS report_formats",
+        "CREATE TABLE IF NOT EXISTS report_formats_trash",
+        "CREATE TABLE IF NOT EXISTS report_format_params",
+        "CREATE TABLE IF NOT EXISTS report_format_param_options",
+    ] {
+        assert!(
+            MANAGE_PG_C.contains(required_table),
+            "report-format schema missing {required_table}"
+        );
+    }
+}
+
+#[test]
+fn native_report_format_import_is_not_directly_exposed_until_contract_exists() {
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        "/api/v1/report-formats",
+        false,
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc/export",
+        false,
+    ));
+    for path in [
+        "/api/v1/report-formats",
+        "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc/import",
+    ] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&Method::POST, path, true),
+            "native report-format import/write path must remain closed until its file/XML contract exists: {path}"
+        );
+    }
+
+    let list_block = openapi_path_block("/report-formats");
+    let detail_block = openapi_path_block("/report-formats/{report_format_id}");
+    for block in [list_block, detail_block] {
+        for forbidden in ["\n    post:", "\n    patch:", "\n    delete:"] {
+            assert!(
+                !block.contains(forbidden),
+                "OpenAPI report-format block unexpectedly exposes write/import operation {forbidden}"
+            );
+        }
+    }
+}

@@ -237,6 +237,8 @@ mod port_list_characterization_tests;
 #[cfg(test)]
 mod report_config_characterization_tests;
 #[cfg(test)]
+mod report_format_characterization_tests;
+#[cfg(test)]
 mod result_contract_tests;
 #[cfg(test)]
 mod scan_config_characterization_tests;

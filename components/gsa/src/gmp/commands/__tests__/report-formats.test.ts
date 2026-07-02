@@ -21,6 +21,25 @@ afterEach(() => {
 });
 
 describe('ReportFormatsCommand tests', () => {
+  test('should import report format through inherited GMP action', async () => {
+    const response = createActionResultResponse({
+      action: 'import_report_format',
+      id: 'report-format-id',
+      message: 'Imported Report Format',
+    });
+    const fakeHttp = createHttp(response);
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    await cmd.import({xmlFile: '<get_report_formats_response />'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'import_report_format',
+        xml_file: '<get_report_formats_response />',
+      },
+    });
+  });
+
   test('should export report format metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

@@ -593,7 +593,6 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *cves_suffix = "/cves";
   const gchar *tls_certificates_suffix = "/tls-certificates";
   const gchar *errors_suffix = "/errors";
-  const gchar *retention_plan_suffix = "/retention-plan";
   const gchar *scope_collection_suffixes[] = { "/metrics",
                                                "/results",
                                                "/hosts",
@@ -603,7 +602,7 @@ native_api_path_is_allowed (const gchar *path)
                                                "/cves",
                                                "/tls-certificates",
                                                "/errors",
-                                               retention_plan_suffix,
+                                               "/retention-plan",
                                                NULL };
 
   if (path == NULL || strchr (path, '?') != NULL)

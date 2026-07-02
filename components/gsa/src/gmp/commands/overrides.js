@@ -23,6 +23,7 @@ import Override, {
   SEVERITY_FALSE_POSITIVE,
 } from 'gmp/models/override';
 import {
+  exportNativeOverrideMetadata,
   fetchNativeOverrides,
   nativeOverridesQueryFromFilter,
 } from 'gmp/native-api/overrides';
@@ -45,6 +46,17 @@ class OverrideCommand extends EntityCommand {
 
   save(args) {
     return this._save({...args, cmd: 'save_override'});
+  }
+
+  async export({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeOverrideMetadata(this.http, id);
+      } catch {
+        // Keep inherited GMP bulk export responsible for legacy export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   _save(args) {

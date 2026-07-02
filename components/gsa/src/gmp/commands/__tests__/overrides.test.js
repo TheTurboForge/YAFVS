@@ -1,11 +1,16 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {OverridesCommand} from 'gmp/commands/overrides';
-import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
+import {OverrideCommand, OverridesCommand} from 'gmp/commands/overrides';
+import {
+  createActionResultResponse,
+  createEntitiesResponse,
+  createHttp,
+} from 'gmp/commands/testing';
 import Override from 'gmp/models/override';
 import {createSession} from 'gmp/testing';
 
@@ -14,6 +19,81 @@ afterEach(() => {
 });
 
 describe('OverridesCommand tests', () => {
+  test('should export override metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'override-id',
+        text: 'Accepted compensating control',
+        hosts: '192.0.2.10',
+        port: '443/tcp',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new OverrideCommand(fakeHttp);
+    const result = await cmd.export({id: 'override-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/overrides/override-id/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/overrides/override-id/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'override-id',
+      text: 'Accepted compensating control',
+      hosts: '192.0.2.10',
+      port: '443/tcp',
+    });
+  });
+
+  test('should fall back to GMP when native override metadata export fails', async () => {
+    const response = createActionResultResponse({
+      action: 'bulk_export',
+      id: 'fallback-export-id',
+      message: 'Exported Override',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new OverrideCommand(fakeHttp);
+    await cmd.export({id: 'override-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'override',
+        bulk_select: 1,
+        'bulk_selected:override-id': 1,
+      },
+    });
+  });
+
   test('should fetch overrides with inherited GMP fallback', async () => {
     const response = createEntitiesResponse('override', [
       {_id: 'override-1', text: 'Inherited override'},

@@ -453,6 +453,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *tag_export_suffix = "/export";
   const gchar *overrides_path = "/api/v1/overrides";
   const gchar *override_prefix = "/api/v1/overrides/";
+  const gchar *override_export_suffix = "/export";
   const gchar *port_lists_path = "/api/v1/port-lists";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *port_list_export_suffix = "/export";
@@ -726,6 +727,10 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, override_prefix))
     {
       const gchar *id = path + strlen (override_prefix);
+      if (g_str_has_suffix (id, override_export_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (override_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

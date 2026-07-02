@@ -6856,6 +6856,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("host_prefix", "host_export_suffix"),
         ("nvt_prefix", "nvt_export_suffix"),
         ("operating_system_prefix", "operating_system_export_suffix"),
+        ("override_prefix", "override_export_suffix"),
         ("port_list_prefix", "port_list_export_suffix"),
         ("scan_config_prefix", "scan_config_export_suffix"),
         ("scan_config_prefix", "scan_config_families_suffix"),
@@ -7500,7 +7501,8 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/overrides/{override_id}/export",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
                 "replacement_candidates": ["direct native JSON override metadata export", "read-only override metadata automation"],
             },
             {

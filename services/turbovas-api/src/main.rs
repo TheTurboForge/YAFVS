@@ -130,6 +130,7 @@ mod schedule_write_db;
 #[cfg(test)]
 mod schedule_write_plans;
 mod schedule_write_sql;
+mod schedule_write_transactions;
 mod schedule_write_validation;
 mod schedule_writes;
 mod schedules;

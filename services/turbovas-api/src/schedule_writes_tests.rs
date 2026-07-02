@@ -5,6 +5,7 @@
 use super::*;
 use crate::errors::ApiError;
 use crate::schedule_write_plans::*;
+use crate::schedule_write_sql::*;
 use crate::schedule_write_validation::*;
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> SchedulePatchRequest {

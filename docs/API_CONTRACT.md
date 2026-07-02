@@ -329,8 +329,11 @@ semantics are designed.
 Native port-list rows include port-list identity, comment, port counts, concrete
 port ranges, target backlink references, predefined/deprecated flags, and
 timestamps. Port lists are operator scanner configuration, so these endpoints
-stay inside the authenticated operator boundary. Create, modify, import, export,
-and delete actions remain inherited until native write semantics are designed.
+stay inside the authenticated operator boundary. Native write-control supports
+typed create, metadata patch, complete range-set replacement, clone, trash,
+restore, and trash-only hard delete; GSA range-add and non-empty range-delete
+actions use the native range-set replacement path. Port-list import, file
+export, and empty-range-delete semantics remain inherited.
 
 Native schedule rows include schedule identity, comments, iCalendar recurrence
 data, timezone, task backlink references, and timestamps. Schedules are operator

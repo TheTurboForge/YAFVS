@@ -25,7 +25,9 @@ import PortList, {type PortListElement} from 'gmp/models/port-list';
 import {
   cloneNativePortList,
   createNativePortList,
+  createNativePortRange,
   deleteNativePortList,
+  deleteNativePortRange,
   exportNativePortListMetadata,
   fetchNativePortLists,
   patchNativePortList,
@@ -186,12 +188,20 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
     return super.delete({id});
   }
 
-  createPortRange({
+  async createPortRange({
     portListId,
     portRangeStart,
     portRangeEnd,
     portType,
   }: PortListCommandCreatePortRangeParams) {
+    if (canUseNativeApi(this.http)) {
+      return createNativePortRange(this.http, {
+        portListId,
+        portRangeStart,
+        portRangeEnd,
+        portType,
+      });
+    }
     return this.action({
       cmd: 'create_port_range',
       id: portListId,
@@ -205,6 +215,16 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
     id,
     portListId,
   }: PortListCommandDeletePortRangeParams) {
+    if (canUseNativeApi(this.http)) {
+      const nativeResponse = await deleteNativePortRange(
+        this.http,
+        id,
+        portListId,
+      );
+      if (nativeResponse !== undefined) {
+        return nativeResponse;
+      }
+    }
     await this.httpPostWithTransform({
       cmd: 'delete_port_range',
       port_range_id: id,

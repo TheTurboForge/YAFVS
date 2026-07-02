@@ -505,6 +505,142 @@ describe('PortListCommand', () => {
     });
   });
 
+  test('should create a port range through native range-set patch when available', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [
+            {id: 'range-1', protocol: 'tcp', start: 80, end: 80},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [
+            {id: 'range-1', protocol: 'tcp', start: 80, end: 80},
+            {id: 'range-2', protocol: 'udp', start: 53, end: 53},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.createPortRange({
+      portListId: 'port-list-id',
+      portRangeStart: 53,
+      portRangeEnd: 53,
+      portType: 'udp',
+    });
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/port-lists/port-list-id',
+      {token: 'test-token'},
+    );
+    expect(http.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/port-lists/port-list-id',
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          port_ranges: [
+            {protocol: 'tcp', start: 80, end: 80},
+            {protocol: 'udp', start: 53, end: 53},
+          ],
+        }),
+      },
+    );
+    expect(result.data).toEqual({
+      id: 'range-2',
+      message: 'OK',
+      action: 'create_port_range',
+    });
+  });
+
+  test('should normalize reversed native port ranges like inherited create_port_range', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [
+            {id: 'range-1', protocol: 'tcp', start: 80, end: 443},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    await command.createPortRange({
+      portListId: 'port-list-id',
+      portRangeStart: 443,
+      portRangeEnd: 80,
+      portType: 'TCP',
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      expect.objectContaining({
+        body: JSON.stringify({
+          port_ranges: [{protocol: 'tcp', start: 80, end: 443}],
+        }),
+      }),
+    );
+  });
+
   test('should allow to delete a port range', async () => {
     const response = createActionResultResponse({
       action: 'delete_port_range',
@@ -518,6 +654,116 @@ describe('PortListCommand', () => {
       portListId: '67890',
     });
     expect(result.data.id).toEqual('324');
+  });
+
+  test('should delete a port range through native range-set patch when at least one range remains', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [
+            {id: 'range-1', protocol: 'tcp', start: 80, end: 80},
+            {id: 'range-2', protocol: 'udp', start: 53, end: 53},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [
+            {id: 'range-2', protocol: 'udp', start: 53, end: 53},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.deletePortRange({
+      id: 'range-1',
+      portListId: 'port-list-id',
+    });
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          port_ranges: [{protocol: 'udp', start: 53, end: 53}],
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('port-list-id');
+  });
+
+  test('should keep GMP delete for last port range until empty range-set semantics are native', async () => {
+    const fetchMock = testing.fn().mockResolvedValueOnce({
+      json: testing.fn().mockResolvedValue({
+        id: 'port-list-id',
+        name: 'Web ports',
+        port_ranges: [{id: 'range-1', protocol: 'tcp', start: 80, end: 80}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const response = createActionResultResponse({
+      action: 'delete_port_range',
+      id: 'range-1',
+    });
+    const entityResponse = createEntityResponse('port_list', {id: 'port-list-id'});
+    const http = createHttpMany([response, entityResponse]) as ReturnType<
+      typeof createHttpMany
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.deletePortRange({
+      id: 'range-1',
+      portListId: 'port-list-id',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(http.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'delete_port_range',
+        port_range_id: 'range-1',
+        no_redirect: 1,
+      },
+    });
+    expect(result.data.id).toEqual('port-list-id');
   });
 
   test('should allow to get a port list', async () => {

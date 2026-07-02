@@ -7610,7 +7610,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/port-lists/{port_list_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native port-list name/comment/range-set modification"],
+                "replacement_candidates": ["GSA Port List range add and non-empty range delete actions", "direct native port-list name/comment/range-set modification"],
             },
             {
                 "method": "delete",

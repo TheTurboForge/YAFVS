@@ -79,12 +79,20 @@ interface NativePortListCreateRangePayload {
   protocol: string;
   start: number;
   end: number;
+  comment?: string;
 }
 
 export interface NativePortListCreateRequest {
   name: string;
   comment?: string;
   port_ranges: NativePortListCreateRangePayload[];
+}
+
+export interface NativePortListRangeCommandRequest {
+  portListId: string;
+  portRangeStart: number;
+  portRangeEnd: number;
+  portType: string;
 }
 
 export interface NativePortListsQuery {
@@ -298,13 +306,46 @@ export const fetchNativePortList = async (
   gmp: NativeApiGmp,
   id: string,
 ): Promise<PortList> => {
-  const payload = await fetchNativeJson<NativePortListPayload>(
+  const payload = await fetchNativePortListPayload(gmp, id);
+  return nativePortListToModel(payload, {detail: true});
+};
+
+const fetchNativePortListPayload = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativePortListPayload> =>
+  fetchNativeJson<NativePortListPayload>(
     gmp,
     `api/v1/port-lists/${encodeURIComponent(id)}`,
     {token: gmp.session.token},
   );
-  return nativePortListToModel(payload, {detail: true});
-};
+
+const nativePortRangePatchRequest = (
+  range: NativePortRangePayload,
+): NativePortListCreateRangePayload => ({
+  protocol: range.protocol === 'udp' ? 'udp' : 'tcp',
+  start: integerValue(range.start),
+  end: integerValue(range.end),
+  ...(stringValue(range.comment).length > 0
+    ? {comment: stringValue(range.comment)}
+    : {}),
+});
+
+const patchNativePortListPayload = async (
+  gmp: NativeApiGmp,
+  id: string,
+  request: {
+    comment?: string;
+    name?: string;
+    port_ranges?: NativePortListCreateRangePayload[];
+  },
+): Promise<NativePortListPayload> =>
+  writeNativeJson<NativePortListPayload>(
+    gmp,
+    `api/v1/port-lists/${encodeURIComponent(id)}`,
+    request,
+    'PATCH',
+  );
 
 export const exportNativePortListMetadata = async (
   gmp: NativeApiGmp,
@@ -341,12 +382,7 @@ export const patchNativePortList = async (
   id: string,
   request: {comment: string; name: string},
 ): Promise<Response<ActionResult>> => {
-  const payload = await writeNativeJson<NativePortListPayload>(
-    gmp,
-    `api/v1/port-lists/${encodeURIComponent(id)}`,
-    request,
-    'PATCH',
-  );
+  const payload = await patchNativePortListPayload(gmp, id, request);
   return new Response(
     new ActionResult({
       action_result: {
@@ -356,6 +392,64 @@ export const patchNativePortList = async (
       },
     }),
   );
+};
+
+export const createNativePortRange = async (
+  gmp: NativeApiGmp,
+  {portListId, portRangeStart, portRangeEnd, portType}: NativePortListRangeCommandRequest,
+): Promise<Response<ActionResult>> => {
+  const current = await fetchNativePortListPayload(gmp, portListId);
+  const start = Math.min(portRangeStart, portRangeEnd);
+  const end = Math.max(portRangeStart, portRangeEnd);
+  const newRange = {
+    protocol: portType.toLowerCase(),
+    start,
+    end,
+  };
+  const payload = await patchNativePortListPayload(gmp, portListId, {
+    port_ranges: [
+      ...(current.port_ranges ?? []).map(nativePortRangePatchRequest),
+      newRange,
+    ],
+  });
+  const createdRange = (payload.port_ranges ?? []).find(
+    range =>
+      range.protocol === newRange.protocol &&
+      range.start === newRange.start &&
+      range.end === newRange.end,
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'create_port_range',
+        id:
+          createdRange?.id !== undefined
+            ? stringValue(createdRange.id)
+            : stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+};
+
+export const deleteNativePortRange = async (
+  gmp: NativeApiGmp,
+  id: string,
+  portListId: string,
+): Promise<Response<PortList> | undefined> => {
+  const current = await fetchNativePortListPayload(gmp, portListId);
+  const currentRanges = current.port_ranges ?? [];
+  const remainingRanges = currentRanges.filter(range => range.id !== id);
+  if (
+    remainingRanges.length === currentRanges.length ||
+    remainingRanges.length === 0
+  ) {
+    return undefined;
+  }
+  const payload = await patchNativePortListPayload(gmp, portListId, {
+    port_ranges: remainingRanges.map(nativePortRangePatchRequest),
+  });
+  return new Response(nativePortListToModel(payload, {detail: true}));
 };
 
 export const cloneNativePortList = async (

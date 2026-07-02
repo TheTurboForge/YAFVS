@@ -69,7 +69,9 @@ use crate::{
         clone_target, create_target, delete_target, hard_delete_target, patch_target,
         restore_target,
     },
-    task_target_payloads::TargetItem,
+    task_target_payloads::{TargetItem, TaskItem},
+    task_write_validation::TaskPatchRequest,
+    task_writes::patch_task,
 };
 
 const BROWSER_PROXY_SECRET_ENV: &str = "TURBOVAS_API_BROWSER_PROXY_SECRET";
@@ -629,6 +631,23 @@ pub(crate) async fn browser_proxy_patch_tag(
     patch_tag(
         State(state),
         Path(tag_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_patch_task(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<TaskPatchRequest>,
+) -> Result<Json<TaskItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_task(
+        State(state),
+        Path(task_id),
         Some(Extension(operator)),
         Json(request),
     )

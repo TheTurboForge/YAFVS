@@ -2,13 +2,39 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::http::Method;
+
 use crate::{
-    report_cve_query_sql::report_cves_sql, report_error_query_sql::report_errors_sql,
+    direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed},
+    report_cve_query_sql::report_cves_sql,
+    report_error_query_sql::report_errors_sql,
     report_host_query_sql::report_hosts_sql,
     report_operating_system_query_sql::report_operating_systems_sql,
-    report_payloads::raw_report_sql, report_port_query_sql::report_ports_sql,
+    report_payloads::raw_report_sql,
+    report_port_query_sql::report_ports_sql,
     report_tls_certificate_query_sql::report_tls_certificates_sql,
 };
+
+const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
+
+fn openapi_path_block(path: &str) -> String {
+    let marker = format!("  {path}:");
+    let start = OPENAPI
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{path} path block must exist"));
+    let tail = &OPENAPI[start..];
+    tail.lines()
+        .enumerate()
+        .skip(1)
+        .find_map(|(index, line)| {
+            if line.starts_with("  /") && line.ends_with(':') {
+                Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| tail.to_string())
+}
 
 #[test]
 fn raw_report_payload_exposes_report_progress_without_control_paths() {
@@ -25,6 +51,117 @@ fn raw_report_payload_exposes_report_progress_without_control_paths() {
             !upper_sql.contains(forbidden),
             "raw report read SQL must not include control/mutation path: {forbidden}"
         );
+    }
+}
+
+#[test]
+fn native_raw_report_routes_are_get_only_and_exclude_xml_export_generation() {
+    let raw_report_paths = [
+        "/api/v1/reports",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/results",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/hosts",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/ports",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/applications",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/operating-systems",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/cves",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/tls-certificates",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/errors",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/metrics",
+    ];
+    for path in raw_report_paths {
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, false),
+            "raw report read path must allow GET: {path}"
+        );
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, path, true),
+                "raw report read path must remain GET-only even with write-control enabled: {method} {path}"
+            );
+        }
+    }
+
+    for path in [
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/export",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/raw-xml",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/xml",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/results/extra",
+        "/api/v1/reports/../results",
+        "/api/v1/reports/./metrics",
+        "/api/v1/reports//hosts",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/../metrics",
+    ] {
+        assert!(
+            !direct_api_v1_path_is_allowed(path),
+            "raw report direct classifier must reject XML/export or malformed path: {path}"
+        );
+    }
+}
+
+#[test]
+fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
+    for (path, replacement) in [
+        ("/reports", "raw-report-list-read"),
+        ("/reports/{report_id}", "raw-report-detail-summary-read"),
+        (
+            "/reports/{report_id}/results",
+            "raw-report-result-evidence-read",
+        ),
+        (
+            "/reports/{report_id}/hosts",
+            "raw-report-host-evidence-read",
+        ),
+        (
+            "/reports/{report_id}/ports",
+            "raw-report-port-evidence-read",
+        ),
+        (
+            "/reports/{report_id}/applications",
+            "raw-report-application-evidence-read",
+        ),
+        (
+            "/reports/{report_id}/operating-systems",
+            "raw-report-operating-system-evidence-read",
+        ),
+        ("/reports/{report_id}/cves", "raw-report-cve-evidence-read"),
+        (
+            "/reports/{report_id}/tls-certificates",
+            "raw-report-tls-certificate-evidence-read",
+        ),
+        (
+            "/reports/{report_id}/errors",
+            "raw-report-error-message-evidence-read",
+        ),
+        ("/reports/{report_id}/metrics", "raw-report-metrics-read"),
+    ] {
+        let block = openapi_path_block(path);
+        for required in [
+            "get:",
+            "x-turbovas-direct: true",
+            "x-turbovas-exposure: direct-read",
+            "x-turbovas-maturity: live-read",
+            replacement,
+            "x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations",
+        ] {
+            assert!(
+                block.contains(required),
+                "{path} OpenAPI block missing {required}"
+            );
+        }
+        for forbidden in [
+            "x-turbovas-exposure: direct-write",
+            "x-turbovas-safety-contract: write-control-v1",
+            "\n    post:",
+            "\n    patch:",
+            "\n    put:",
+            "\n    delete:",
+        ] {
+            assert!(
+                !block.contains(forbidden),
+                "{path} must not expose raw-report generation/XML export/retention/mutation behavior: {forbidden}"
+            );
+        }
     }
 }
 

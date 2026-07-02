@@ -35,8 +35,10 @@ use crate::{
     schedule_write_validation::ScheduleCloneRequest,
     schedule_writes::{clone_schedule, restore_schedule},
     tag_payloads::TagAssetItem,
-    tag_write_validation::{TagCloneRequest, TagCreateRequest, TagResourceUpdateRequest},
-    tag_writes::{clone_tag, create_tag, restore_tag, update_tag_resources},
+    tag_write_validation::{
+        TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
+    },
+    tag_writes::{clone_tag, create_tag, patch_tag, restore_tag, update_tag_resources},
     target_write_validation::TargetCloneRequest,
     target_writes::{clone_target, restore_target},
     task_target_payloads::TargetItem,
@@ -334,6 +336,23 @@ pub(crate) async fn browser_proxy_create_tag(
 ) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_tag(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_tag(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(tag_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<TagPatchRequest>,
+) -> Result<Json<TagAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_tag(
+        State(state),
+        Path(tag_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_update_tag_resources(

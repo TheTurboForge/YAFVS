@@ -18,7 +18,7 @@ use crate::{
         browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_clone_target,
         browser_proxy_create_filter, browser_proxy_create_port_list,
         browser_proxy_create_report_config, browser_proxy_create_tag, browser_proxy_patch_filter,
-        browser_proxy_patch_report_config, browser_proxy_restore_filter,
+        browser_proxy_patch_report_config, browser_proxy_patch_tag, browser_proxy_restore_filter,
         browser_proxy_restore_port_list, browser_proxy_restore_report_config,
         browser_proxy_restore_scan_config, browser_proxy_restore_schedule,
         browser_proxy_restore_tag, browser_proxy_restore_target,
@@ -455,6 +455,7 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/report-configs/:report_config_id",
             patch(browser_proxy_patch_report_config),
         )
+        .route("/api/v1/tags/:tag_id", patch(browser_proxy_patch_tag))
         .route("/api/v1/port-lists", post(browser_proxy_create_port_list))
         .route("/api/v1/tags", post(browser_proxy_create_tag))
         .route(

@@ -239,9 +239,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
@@ -380,6 +381,35 @@ export const createNativeTag = async (
     resource_type: nativeResourceType(resourceType),
     value,
   });
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeTag = async (
+  gmp: NativeApiGmp,
+  id: string,
+  {
+    active,
+    comment,
+    name,
+    value,
+  }: {
+    active: boolean;
+    comment: string;
+    name: string;
+    value: string;
+  },
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeTagPayload>(
+    gmp,
+    `api/v1/tags/${encodeURIComponent(id)}`,
+    {
+      active,
+      comment,
+      name,
+      value,
+    },
+    'PATCH',
+  );
   return new Response({id: stringValue(payload.id)});
 };
 

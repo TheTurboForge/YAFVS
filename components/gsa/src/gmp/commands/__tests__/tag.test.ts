@@ -245,6 +245,125 @@ describe('TagCommand tests', () => {
     });
   });
 
+  test('should save tag metadata through native API when no resources or filter are supplied', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'tag-id',
+      name: 'bar',
+      comment: 'ipsum',
+      active: false,
+      resourceType: 'task',
+      value: 'lorem',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags/tag-id');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          active: false,
+          comment: 'ipsum',
+          name: 'bar',
+          value: 'lorem',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-tag-id');
+  });
+
+  test('should keep tag save on GMP when resources are supplied', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'foo',
+      name: 'bar',
+      active: true,
+      resourceIds: ['id1'],
+      resourceType: 'task',
+      resourcesAction: 'add',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'save_tag',
+        tag_id: 'foo',
+        'resource_ids:': ['id1'],
+        resources_action: 'add',
+      }),
+    });
+    expect(result.data.id).toEqual('fallback-tag-id');
+  });
+
+  test('should not fall back to GMP when native tag save fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'duplicate'}}),
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'tag-id',
+        name: 'bar',
+        active: true,
+        resourceType: 'task',
+      }),
+    ).rejects.toThrow('Native API request failed with status 409');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should save a tag with filter', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

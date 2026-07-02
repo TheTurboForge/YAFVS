@@ -12,7 +12,7 @@ import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import Tag, {type TagElement} from 'gmp/models/tag';
-import {cloneNativeTag, createNativeTag} from 'gmp/native-api/tags';
+import {cloneNativeTag, createNativeTag, patchNativeTag} from 'gmp/native-api/tags';
 import {NO_VALUE, parseYesNo, YES_VALUE} from 'gmp/parser';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
@@ -81,7 +81,7 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     return this.action(data);
   }
 
-  save({
+  async save({
     id,
     name,
     comment = '',
@@ -92,6 +92,21 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     resourcesAction,
     value = '',
   }: TagCommandSaveParams) {
+    const rawFilter = filterString(filter);
+    if (
+      canUseNativeApi(this.http) &&
+      resourceIds.length === 0 &&
+      rawFilter === undefined &&
+      resourcesAction === undefined
+    ) {
+      return patchNativeTag(this.http, id, {
+        active,
+        comment,
+        name,
+        value,
+      });
+    }
+
     const data = {
       cmd: 'save_tag',
       id,
@@ -99,7 +114,7 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
       tag_value: value,
       comment,
       active: parseYesNo(active),
-      filter: filterString(filter),
+      filter: rawFilter,
       'resource_ids:': resourceIds.length > 0 ? resourceIds : undefined,
       resource_type: resourceType(resourceTypeValue),
       resources_action: resourcesAction,

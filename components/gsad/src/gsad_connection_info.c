@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -11,6 +12,7 @@ struct gsad_connection_info
   gchar *url;                              ///< Request URL.
   params_t *params;                        ///< Request parameters.
   struct MHD_PostProcessor *postprocessor; ///< POST processor.
+  GString *raw_body;                       ///< Raw request body, if captured.
 };
 
 /**
@@ -23,6 +25,7 @@ gsad_connection_info_new (gsad_method_type_t method_type, const gchar *url)
 {
   gsad_connection_info_t *con_info = g_malloc (sizeof (gsad_connection_info_t));
   con_info->postprocessor = NULL;
+  con_info->raw_body = NULL;
   con_info->params = params_new ();
   con_info->method_type = method_type;
   con_info->url = g_strdup (url);
@@ -42,6 +45,9 @@ gsad_connection_info_free (gsad_connection_info_t *con_info)
 
   if (con_info->postprocessor != NULL)
     MHD_destroy_post_processor (con_info->postprocessor);
+
+  if (con_info->raw_body != NULL)
+    g_string_free (con_info->raw_body, TRUE);
 
   params_free (con_info->params);
   g_free (con_info->url);
@@ -109,6 +115,47 @@ gsad_connection_info_set_postprocessor (gsad_connection_info_t *con_info,
   if (con_info->postprocessor != NULL)
     MHD_destroy_post_processor (con_info->postprocessor);
   con_info->postprocessor = postprocessor;
+}
+
+gboolean
+gsad_connection_info_append_raw_body (gsad_connection_info_t *con_info,
+                                      const gchar *data, gsize length,
+                                      gsize max_length)
+{
+  if (con_info == NULL)
+    return FALSE;
+
+  if (length == 0)
+    return TRUE;
+
+  if (data == NULL)
+    return FALSE;
+
+  if (con_info->raw_body == NULL)
+    con_info->raw_body = g_string_new (NULL);
+
+  if (con_info->raw_body->len > max_length
+      || length > max_length - con_info->raw_body->len)
+    return FALSE;
+
+  g_string_append_len (con_info->raw_body, data, length);
+  return TRUE;
+}
+
+const gchar *
+gsad_connection_info_get_raw_body (const gsad_connection_info_t *con_info,
+                                   gsize *length)
+{
+  if (length != NULL)
+    *length = 0;
+
+  if (con_info == NULL || con_info->raw_body == NULL)
+    return NULL;
+
+  if (length != NULL)
+    *length = con_info->raw_body->len;
+
+  return con_info->raw_body->str;
 }
 
 /**

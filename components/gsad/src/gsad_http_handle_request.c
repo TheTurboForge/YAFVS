@@ -303,6 +303,14 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
       /* Second or later call for this request, a POST. */
       if (*upload_data_size != 0)
         {
+          if (!gsad_connection_info_append_raw_body (
+                con_info, upload_data, *upload_data_size, POST_BUFFER_SIZE))
+            {
+              *upload_data_size = 0;
+              return gsad_http_send_response_for_content (
+                connection, BAD_REQUEST_PAGE, MHD_HTTP_NOT_ACCEPTABLE, NULL,
+                GSAD_CONTENT_TYPE_TEXT_HTML, NULL, 0);
+            }
           MHD_post_process (gsad_connection_info_get_postprocessor (con_info),
                             upload_data, *upload_data_size);
           *upload_data_size = 0;

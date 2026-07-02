@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -58,6 +59,13 @@ gsad_connection_info_get_postprocessor (const gsad_connection_info_t *);
 void
 gsad_connection_info_set_postprocessor (gsad_connection_info_t *,
                                         struct MHD_PostProcessor *);
+
+gboolean
+gsad_connection_info_append_raw_body (gsad_connection_info_t *, const gchar *,
+                                      gsize, gsize);
+
+const gchar *
+gsad_connection_info_get_raw_body (const gsad_connection_info_t *, gsize *);
 
 const gchar *
 gsad_connection_info_get_url (const gsad_connection_info_t *);

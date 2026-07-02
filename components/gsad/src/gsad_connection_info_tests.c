@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -84,6 +85,42 @@ Ensure (gsad_connection_info, should_allow_to_get_params)
   assert_that (gsad_connection_info_get_params (con_info), is_null);
 }
 
+Ensure (gsad_connection_info, should_capture_raw_body_chunks)
+{
+  gsad_connection_info_t *con_info =
+    gsad_connection_info_new (METHOD_TYPE_POST, "/api/v1/filters");
+  gsize length = 0;
+
+  assert_that (gsad_connection_info_append_raw_body (con_info, "{\"", 2, 16),
+               is_true);
+  assert_that (gsad_connection_info_append_raw_body (con_info, "x\":1}", 5,
+                                                     16),
+               is_true);
+
+  assert_that (gsad_connection_info_get_raw_body (con_info, &length),
+               is_equal_to_string ("{\"x\":1}"));
+  assert_that (length, is_equal_to (7));
+
+  gsad_connection_info_free (con_info);
+}
+
+Ensure (gsad_connection_info, should_reject_raw_body_over_limit)
+{
+  gsad_connection_info_t *con_info =
+    gsad_connection_info_new (METHOD_TYPE_POST, "/api/v1/filters");
+  gsize length = 0;
+
+  assert_that (gsad_connection_info_append_raw_body (con_info, "abcd", 4, 5),
+               is_true);
+  assert_that (gsad_connection_info_append_raw_body (con_info, "ef", 2, 5),
+               is_false);
+  assert_that (gsad_connection_info_get_raw_body (con_info, &length),
+               is_equal_to_string ("abcd"));
+  assert_that (length, is_equal_to (4));
+
+  gsad_connection_info_free (con_info);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -99,6 +136,10 @@ main (int argc, char **argv)
                          should_allow_to_create_connection_info_unknown);
   add_test_with_context (suite, gsad_connection_info,
                          should_allow_to_get_params);
+  add_test_with_context (suite, gsad_connection_info,
+                         should_capture_raw_body_chunks);
+  add_test_with_context (suite, gsad_connection_info,
+                         should_reject_raw_body_over_limit);
   add_test_with_context (suite, gsad_connection_info,
                          should_allow_to_free_null_connection_info);
 

@@ -2,6 +2,104 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::http::Method;
+
+use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
+
+const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
+
+fn openapi_path_block(path: &str) -> String {
+    let marker = format!("  {path}:");
+    let start = OPENAPI
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{path} path block must exist"));
+    let tail = &OPENAPI[start..];
+    tail.lines()
+        .enumerate()
+        .skip(1)
+        .find_map(|(index, line)| {
+            if line.starts_with("  /") && line.ends_with(':') {
+                Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn result_routes_are_direct_get_only_until_action_contracts_exist() {
+    for path in [
+        "/api/v1/results",
+        "/api/v1/results/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/results/12345678-1234-1234-1234-123456789abc/export",
+    ] {
+        assert!(
+            direct_api_v1_path_is_allowed(path),
+            "GET {path} must be direct-read allowlisted"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, false),
+            "GET {path} must be allowed without direct write-control"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, true),
+            "GET {path} must remain allowed when write-control is enabled"
+        );
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, path, true),
+                "{method} {path} must stay closed until result actions/export/tag/override contracts exist"
+            );
+        }
+    }
+}
+
+#[test]
+fn result_openapi_documents_read_only_boundary() {
+    for (path, replaces, inherited) in [
+        (
+            "/results",
+            "result-list-and-effective-overrides-read",
+            "result-tags-exports-and-actions",
+        ),
+        (
+            "/results/{result_id}",
+            "result-detail-metadata-tags-and-overrides-read",
+            "result-exports-and-actions",
+        ),
+        (
+            "/results/{result_id}/export",
+            "result-metadata-export-read",
+            "result-actions-bulk-export-tag-and-override-workflows",
+        ),
+    ] {
+        let block = openapi_path_block(path);
+        for required in [
+            "get:",
+            "x-turbovas-direct: true",
+            "x-turbovas-exposure: direct-read",
+            "x-turbovas-maturity: live-read",
+            replaces,
+            inherited,
+        ] {
+            assert!(block.contains(required), "{path} block missing {required}");
+        }
+        for forbidden in [
+            "x-turbovas-exposure: direct-write",
+            "x-turbovas-safety-contract: write-control-v1",
+            "\n    post:",
+            "\n    patch:",
+            "\n    delete:",
+        ] {
+            assert!(
+                !block.contains(forbidden),
+                "{path} must not advertise result action/export/tag/override workflows: {forbidden}"
+            );
+        }
+    }
+}
+
 #[test]
 fn result_rows_expose_nvt_epss_context_without_mutation_workflows() {
     let source = include_str!("result_payloads.rs");

@@ -436,6 +436,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "export-xml-report.gmp.py": "Inherited XML nested report serialization is characterized; native tooling still lacks a direct report-export contract that fetches a report by id and writes the chosen file name locally.",
     "generate-scope-report.gmp.py": "Native tooling still lacks a direct scope-report generation contract with explicit authorization, provenance, snapshot, and metric rebuild semantics.",
+    "list-users.gmp.py": "Inherited user list behavior is characterized; native tooling still lacks an account-list contract and auth posture for exposing user identifiers.",
     "monthly-report-gos3.gmp.py": "Inherited GOS 3 monthly report-created summary behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",
     "monthly-report-gos4.gmp.py": "Inherited GOS 4 host-modified positive-result behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",
     "monthly-report-gos24.10.gmp.py": "Inherited GOS 24.10 result-window and unique-NVT behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",

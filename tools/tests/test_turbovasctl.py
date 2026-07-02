@@ -5699,6 +5699,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/export-xml-report.gmp.py",
                 "components/gvm-tools/scripts/generate-scope-report.gmp.py",
                 "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
+                "components/gvm-tools/scripts/list-users.gmp.py",
                 "components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
@@ -5727,6 +5728,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
         self.assertIn("CSV credential creation", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
         self.assertIn("secret-safe", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
+        self.assertIn("user list behavior", credential_blockers["components/gvm-tools/scripts/list-users.gmp.py"])
         self.assertIn("unique-NVT", monthly_blockers["components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py"])
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
         self.assertIn("scanner verification table", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])

@@ -5693,10 +5693,15 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_native_tooling_removal_review_documents_known_blocker_paths(self):
         review = turbovasctl.native_tooling_removal_review(
             [
+                "components/gvm-tools/scripts/export-csv-report.gmp.py",
+                "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/export-xml-report.gmp.py",
                 "components/gvm-tools/scripts/generate-scope-report.gmp.py",
+                "components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py",
+                "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-targets-from-csv.gmp.py",
+                "components/gvm-tools/scripts/create-targets-from-host-list.gmp.py",
                 "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
                 "components/gvm-tools/scripts/update-task-target.gmp.py",
                 "components/gvm-tools/scripts/verify-scanners.gmp.py",
@@ -5704,15 +5709,21 @@ class TurboVASCtlTests(unittest.TestCase):
         )
 
         export_blockers = review["buckets"]["export_or_report_generation"]["path_blockers"]
+        monthly_blockers = review["buckets"]["monthly_report_semantics"]["path_blockers"]
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
-        self.assertIn("serializes XML", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
+        self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-csv-report.gmp.py"])
+        self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
+        self.assertIn("nested report serialization", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
         self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
-        self.assertIn("scanner verification readout", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])
+        self.assertIn("unique-NVT", monthly_blockers["components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py"])
+        self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
+        self.assertIn("scanner verification table", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])
         self.assertIn("CSV bulk-alert import contract", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
-        self.assertIn("CSV bulk-target import contract", write_blockers["components/gvm-tools/scripts/create-targets-from-csv.gmp.py"])
-        self.assertIn("CSV bulk-task import contract", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
-        self.assertIn("task-target swap contract", write_blockers["components/gvm-tools/scripts/update-task-target.gmp.py"])
+        self.assertIn("CSV bulk-target behavior", write_blockers["components/gvm-tools/scripts/create-targets-from-csv.gmp.py"])
+        self.assertIn("one target per host", write_blockers["components/gvm-tools/scripts/create-targets-from-host-list.gmp.py"])
+        self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
+        self.assertIn("clone/rebind/delete behavior", write_blockers["components/gvm-tools/scripts/update-task-target.gmp.py"])
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")

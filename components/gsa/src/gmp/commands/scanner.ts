@@ -15,7 +15,10 @@ import Scanner, {
   type ScannerElement,
   type ScannerType,
 } from 'gmp/models/scanner';
-import {patchNativeScanner} from 'gmp/native-api/scanners';
+import {
+  exportNativeScannerMetadata,
+  patchNativeScanner,
+} from 'gmp/native-api/scanners';
 
 export interface ScannerCommandCreateParams {
   name: string;
@@ -80,6 +83,21 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
       options,
     );
     return this.transformResponseToModel(response);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeScannerMetadata(this.http, id);
+      } catch (err) {
+        log.debug(
+          'Native scanner metadata export failed, falling back to GMP',
+          id,
+          err,
+        );
+      }
+    }
+    return super.export({id});
   }
 
   create({

@@ -10,6 +10,7 @@ import {
   createHttp,
   createActionResultResponse,
   createEntityResponse,
+  createPlainResponse,
 } from 'gmp/commands/testing';
 import Scanner, {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
 import {createSession} from 'gmp/testing';
@@ -19,6 +20,89 @@ afterEach(() => {
 });
 
 describe('ScannerCommand tests', () => {
+  test('should export scanner metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '123',
+        name: 'OpenVAS Default',
+        host: 'localhost',
+        port: 9390,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScannerCommand(fakeHttp);
+    const result = await cmd.export({id: '123'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scanners/123/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners/123/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: '123',
+      name: 'OpenVAS Default',
+      host: 'localhost',
+      port: 9390,
+    });
+  });
+
+  test('should fall back to GMP when native scanner metadata export fails', async () => {
+    const content = '<some><xml>exported-data</xml></some>';
+    const response = createPlainResponse(content);
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScannerCommand(fakeHttp);
+    const result = await cmd.export({id: '123'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'scanner',
+        bulk_select: 1,
+        'bulk_selected:123': 1,
+      },
+    });
+    expect(result.data).toEqual(content);
+  });
+
   test('should send the correct data to create a scanner', async () => {
     const response = createActionResultResponse({
       action: 'create_scanner',

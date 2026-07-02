@@ -444,14 +444,6 @@ Requests the report specified and exports it as a pdf formatted report locally.
 
 **Note**: the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
 
-## `list-credentials.gmp.py`
-
-Lists all credentials configured with name and uuid.
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-credentials.gmp.py`
-
-Returns Credential uuid, Name, Type, & if insecure use is allowed
-
 ## `list-users.gmp.py`
 
 Lists all users

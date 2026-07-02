@@ -365,7 +365,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     "compatibility_probe": set(),
     "credential_or_account": {
         "create-credentials-from-csv.gmp.py",
-        "list-credentials.gmp.py",
         "list-users.gmp.py",
     },
     "export_or_report_generation": {

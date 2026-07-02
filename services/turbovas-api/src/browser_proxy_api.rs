@@ -47,8 +47,10 @@ use crate::{
         restore_scan_config,
     },
     schedule_payloads::ScheduleAssetDetail,
-    schedule_write_validation::ScheduleCloneRequest,
-    schedule_writes::{clone_schedule, delete_schedule, hard_delete_schedule, restore_schedule},
+    schedule_write_validation::{ScheduleCloneRequest, SchedulePatchRequest},
+    schedule_writes::{
+        clone_schedule, delete_schedule, hard_delete_schedule, patch_schedule, restore_schedule,
+    },
     scope_writes::delete_scope,
     tag_payloads::TagAssetItem,
     tag_write_validation::{
@@ -345,6 +347,23 @@ pub(crate) async fn browser_proxy_create_scan_config(
 ) -> Result<(StatusCode, HeaderMap, Json<ScanConfigAssetDetail>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_scan_config(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_schedule(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(schedule_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<SchedulePatchRequest>,
+) -> Result<Json<ScheduleAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_schedule(
+        State(state),
+        Path(schedule_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_patch_report_config(

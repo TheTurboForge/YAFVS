@@ -6576,6 +6576,42 @@ def rust_native_api_route_templates(repo_root: Path | None) -> list[str]:
     return sorted(routes)
 
 
+def rust_native_api_route_operations(
+    repo_root: Path | None,
+    function_name: str | None = None,
+) -> set[tuple[str, str]]:
+    if repo_root is None:
+        return set()
+    path = repo_root / "services" / "turbovas-api" / "src" / "routes.rs"
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    route_source = rust_source_function_body(source, function_name) if function_name else source
+    if function_name and not route_source:
+        return set()
+    return {
+        (match.group(2).lower(), rust_route_to_endpoint_template(match.group(1)))
+        for match in re.finditer(
+            r'\.route\(\s*"(/api/v1[^"]*)"\s*,\s*([a-z]+)\s*\(',
+            route_source,
+        )
+    }
+
+
+def rust_native_api_route_operation_declared(
+    repo_root: Path | None,
+    method: str,
+    endpoint: str,
+    function_name: str | None = None,
+) -> bool:
+    normalized = normalize_native_api_endpoint_template(endpoint)
+    return (method.lower(), normalized) in {
+        (route_method, normalize_native_api_endpoint_template(route_endpoint))
+        for route_method, route_endpoint in rust_native_api_route_operations(repo_root, function_name)
+    }
+
+
 def rust_match_pattern_to_endpoint(segment_source: str) -> str | None:
     tokens = [token.strip() for token in segment_source.split(",")]
     if len(tokens) < 4 or tokens[:3] != ['""', '"api"', '"v1"']:
@@ -7067,24 +7103,27 @@ def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], li
 
 
 def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints: list[dict[str, Any]]) -> dict[str, Any]:
+    def item_status(item: dict[str, Any]) -> str:
+        return native_api_effective_browser_proxy_status(repo_root, item)
+
     browser_proxied = sorted(
         item["endpoint"]
         for item in endpoints
         if isinstance(item.get("endpoint"), str)
-        and native_api_browser_access_from_status(str(item.get("status", "unknown"))) == "browser_proxied"
+        and native_api_browser_access_from_status(item_status(item)) == "browser_proxied"
     )
     internal_only = sorted(
         item["endpoint"]
         for item in endpoints
         if isinstance(item.get("endpoint"), str)
-        and native_api_browser_access_from_status(str(item.get("status", "unknown"))) == "internal_only"
+        and native_api_browser_access_from_status(item_status(item)) == "internal_only"
     )
     browser_write_proxied = sorted(
         f"{str(item.get('method', '')).upper()} {item['endpoint']}"
         for item in endpoints
         if isinstance(item.get("endpoint"), str)
         and str(item.get("method", "get")).lower() != "get"
-        and native_api_browser_access_from_status(str(item.get("status", "unknown"))) == "browser_proxied"
+        and native_api_browser_access_from_status(item_status(item)) == "browser_proxied"
     )
     direct_write_control = sorted(
         f"{str(item.get('method', '')).upper()} {item['endpoint']}"
@@ -7098,7 +7137,7 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         if isinstance(item.get("endpoint"), str)
         and str(item.get("method", "get")).lower() == "delete"
         and item.get("direct_access") == "direct_write_control"
-        and native_api_browser_access_from_status(str(item.get("status", "unknown"))) != "browser_proxied"
+        and native_api_browser_access_from_status(item_status(item)) != "browser_proxied"
     )
     openapi_internal_only = sorted(
         f"/api/v1{operation.get('path')}"
@@ -7156,6 +7195,9 @@ def annotate_native_tooling_direct_api(summary: dict[str, Any], repo_root: Path 
     for item in endpoints:
         if isinstance(item, dict) and isinstance(item.get("endpoint"), str):
             item.setdefault("direct_access", native_api_direct_access(item["endpoint"]))
+            effective_status = native_api_effective_browser_proxy_status(repo_root, item)
+            if effective_status != str(item.get("status", "unknown")):
+                item["status"] = effective_status
     summary["direct_api_contract"] = native_api_direct_contract_summary(repo_root, [item for item in endpoints if isinstance(item, dict)])
 
 
@@ -7179,6 +7221,42 @@ def native_browser_proxy_endpoint_status(repo_root: Path | None, endpoint: str) 
     if api_declared and proxy_declared:
         return "implemented_internal_and_browser_proxied"
     if api_declared or proxy_declared:
+        return "partial_internal_browser_proxy_mismatch"
+    return "planned_internal_and_browser_proxied"
+
+
+def native_api_effective_browser_proxy_status(repo_root: Path | None, item: dict[str, Any]) -> str:
+    status = str(item.get("status", "unknown"))
+    endpoint = item.get("endpoint")
+    method = str(item.get("method", "get")).lower()
+    if method == "get" or not isinstance(endpoint, str):
+        return status
+    operation_status = native_browser_proxy_operation_status(repo_root, method, endpoint)
+    return status if operation_status == "planned_internal_and_browser_proxied" else operation_status
+
+
+def native_browser_proxy_operation_status(repo_root: Path | None, method: str, endpoint: str) -> str:
+    if method.lower() == "get":
+        return native_browser_proxy_endpoint_status(repo_root, endpoint)
+    if repo_root is None:
+        return "planned_internal_and_browser_proxied"
+    api_declared = rust_native_api_route_operation_declared(
+        repo_root,
+        method,
+        endpoint,
+        "direct_native_api_router",
+    )
+    proxy_declared = rust_native_api_route_operation_declared(
+        repo_root,
+        method,
+        endpoint,
+        "browser_proxy_native_api_router",
+    )
+    if api_declared and proxy_declared:
+        return "implemented_internal_and_browser_proxied"
+    if api_declared:
+        return "implemented_direct_write_control"
+    if proxy_declared:
         return "partial_internal_browser_proxy_mismatch"
     return "planned_internal_and_browser_proxied"
 
@@ -9431,6 +9509,10 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
         status = inventory.get("status") if isinstance(inventory, dict) and isinstance(inventory.get("status"), str) else "unknown"
         if status == "unknown" and openapi_operation_is_pending_write_control(operation):
             status = "openapi_preview_write_control"
+        if method != "get" and status != "openapi_preview_write_control":
+            operation_status = native_browser_proxy_operation_status(repo_root, method, endpoint)
+            if operation_status != "planned_internal_and_browser_proxied":
+                status = operation_status
         if isinstance(inventory, dict) and isinstance(inventory.get("direct_access"), str):
             direct_access = inventory["direct_access"]
         elif status == "openapi_preview_write_control":

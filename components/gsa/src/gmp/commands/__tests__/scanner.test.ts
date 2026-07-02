@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ScannerCommand from 'gmp/commands/scanner';
 import {
   createHttp,
@@ -12,6 +12,11 @@ import {
   createEntityResponse,
 } from 'gmp/commands/testing';
 import Scanner, {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('ScannerCommand tests', () => {
   test('should send the correct data to create a scanner', async () => {
@@ -64,6 +69,99 @@ describe('ScannerCommand tests', () => {
       caCertificate: 'updated-ca-pub' as unknown as File,
       credentialId: 'updated-credential-id',
     });
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'save_scanner',
+        scanner_id: '123',
+        name: 'Updated Scanner',
+        comment: 'Updated comment',
+        credential_id: 'updated-credential-id',
+        scanner_host: '127.0.0.1',
+        scanner_type: OPENVASD_SCANNER_TYPE,
+        port: 9390,
+        ca_pub: 'updated-ca-pub',
+      },
+    });
+  });
+
+  test('should save scanner metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: '123', name: 'Updated Scanner'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScannerCommand(fakeHttp);
+    const result = await cmd.save({
+      id: '123',
+      name: 'Updated Scanner',
+      comment: 'metadata only',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scanners/123');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners/123',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'Updated Scanner',
+          comment: 'metadata only',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('123');
+  });
+
+  test('should keep scanner control saves on GMP when native API is available', async () => {
+    const response = createActionResultResponse({
+      action: 'save_scanner',
+      id: '123',
+      message: 'Scanner updated successfully',
+    });
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScannerCommand(fakeHttp);
+    await cmd.save({
+      id: '123',
+      name: 'Updated Scanner',
+      host: '127.0.0.1',
+      port: 9390,
+      type: OPENVASD_SCANNER_TYPE,
+      comment: 'Updated comment',
+      caCertificate: 'updated-ca-pub' as unknown as File,
+      credentialId: 'updated-credential-id',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         cmd: 'save_scanner',

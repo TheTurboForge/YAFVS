@@ -5,6 +5,7 @@
  */
 
 import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import type Response from 'gmp/http/response';
 import {type XmlMeta} from 'gmp/http/transform/fast-xml';
@@ -14,6 +15,7 @@ import Scanner, {
   type ScannerElement,
   type ScannerType,
 } from 'gmp/models/scanner';
+import {patchNativeScanner} from 'gmp/native-api/scanners';
 
 export interface ScannerCommandCreateParams {
   name: string;
@@ -29,11 +31,35 @@ export interface ScannerCommandSaveParams extends ScannerCommandCreateParams {
   id: string;
 }
 
+export interface ScannerCommandMetadataSaveParams {
+  id: string;
+  name: string;
+  comment?: string;
+}
+
+type ScannerCommandSaveArgs =
+  | ScannerCommandSaveParams
+  | ScannerCommandMetadataSaveParams;
+
 interface ScannerCommandVerifyParams {
   id: string;
 }
 
 const log = logger.getLogger('gmp.commands.scanner');
+
+const SCANNER_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+
+const isScannerMetadataOnlySave = (
+  args: ScannerCommandSaveArgs,
+): args is ScannerCommandMetadataSaveParams => {
+  const keys = Object.keys(args);
+  return (
+    keys.every(key => SCANNER_METADATA_SAVE_KEYS.has(key)) &&
+    typeof args.id === 'string' &&
+    typeof args.name === 'string' &&
+    (args.comment === undefined || typeof args.comment === 'string')
+  );
+};
 
 class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
   constructor(http: Http) {
@@ -79,16 +105,25 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     return this.entityAction(data);
   }
 
-  save({
-    id,
-    name,
-    caCertificate,
-    comment = '',
-    credentialId,
-    host,
-    port,
-    type,
-  }: ScannerCommandSaveParams) {
+  save(args: ScannerCommandSaveArgs) {
+    if (canUseNativeApi(this.http) && isScannerMetadataOnlySave(args)) {
+      return patchNativeScanner(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
+
+    const {
+      id,
+      name,
+      caCertificate,
+      comment = '',
+      credentialId,
+      host,
+      port,
+      type,
+    } = args as ScannerCommandSaveParams;
     const data = {
       cmd: 'save_scanner',
       // send empty string if caCertificate is undefined to remove existing CA cert

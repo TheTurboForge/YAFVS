@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import type Filter from 'gmp/models/filter';
 import Scanner from 'gmp/models/scanner';
 
@@ -65,6 +66,12 @@ interface NativeScannerPayload {
 interface NativeScannersPayload {
   page?: Partial<NativePage>;
   items?: NativeScannerPayload[];
+}
+
+interface NativeScannerPatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
 }
 
 export interface NativeScannersQuery {
@@ -151,6 +158,31 @@ const fetchNativeJson = async <T>(
       Accept: 'application/json',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-TurboVAS-Token': gmp.session.token ?? '',
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -256,4 +288,29 @@ export const exportNativeScannerMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const patchNativeScanner = async (
+  gmp: NativeApiGmp,
+  {id, name, comment}: NativeScannerPatchArgs,
+): Promise<Response<ActionResult>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+  };
+  const payload = await writeNativeJson<NativeScannerPayload>(
+    gmp,
+    `api/v1/scanners/${encodeURIComponent(id)}`,
+    body,
+    'PATCH',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_scanner',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };

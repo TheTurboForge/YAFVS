@@ -961,6 +961,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/alerts?page=abc&page_size=1", focused_route_catalog)
         self.assertIn("Raw-report list loaded through same-origin native API", browser_smoke)
         self.assertIn("browser_smoke.add_argument(\"--route\"", source)
+        self.assertIn("browser_smoke.add_argument(\"--status-only\"", source)
         self.assertIn("browser_smoke.add_argument(\"--write-filter-smoke\"", source)
         self.assertIn("filter.write-create-native-api", browser_smoke)
         self.assertIn("filter.write-clone-native-api", browser_smoke)
@@ -1025,6 +1026,78 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertTrue(artifact_arg.startswith(parent + os.sep), artifact_arg)
             self.assertTrue(artifact_arg.endswith("20260621T194501000000Z-pid4242-routes-reports"), artifact_arg)
             self.assertNotEqual(artifact_arg, parent)
+
+    def test_runtime_browser_smoke_status_only_compacts_helper_output(self):
+        helper_payload = {
+            "status": "warn",
+            "summary": "Browser smoke warning.",
+            "findings": [
+                {"status": "pass", "check": "browser.login", "message": "logged in", "details": {"url": "https://example/"}},
+                {"status": "warn", "check": "reports.empty", "message": "no rows", "details": {"samples": ["a", "b"]}},
+            ],
+            "artifacts": ["shot.png", "result.json"],
+        }
+        result = turbovasctl.make_result(
+            "runtime-browser-smoke",
+            Path("/tmp/TurboVAS"),
+            "Browser smoke warning.",
+            [
+                turbovasctl.finding("pass", "browser-smoke.artifact-dir", "ready", details={"routes": ["/reports"]}),
+                turbovasctl.finding("pass", "gsad.urls", "urls", details={"base_urls": ["https://one", "https://two"]}),
+                turbovasctl.finding(
+                    "warn",
+                    "browser-smoke.run",
+                    "Browser smoke warning.",
+                    details={"helper": helper_payload, "output_tail": "very noisy browser stdout"},
+                ),
+            ],
+            ["shot.png", "result.json"],
+        )
+
+        compact = turbovasctl.runtime_browser_smoke_status_only_result(result)
+
+        self.assertEqual(compact["status"], "warn")
+        self.assertEqual(compact["details"]["finding_count"], 3)
+        self.assertEqual(compact["details"]["non_pass_count"], 1)
+        self.assertEqual(compact["details"]["helper_status"], "warn")
+        self.assertEqual(compact["details"]["helper_finding_count"], 2)
+        self.assertEqual(compact["details"]["helper_non_pass_count"], 1)
+        self.assertEqual(compact["details"]["artifact_count"], 2)
+        self.assertEqual(compact["details"]["routes"], ["/reports"])
+        self.assertEqual(compact["details"]["base_url_count"], 2)
+        self.assertEqual(len(compact["findings"]), 2)
+        self.assertNotIn("output_tail", json.dumps(compact["findings"]))
+        self.assertNotIn("very noisy browser stdout", json.dumps(compact["findings"]))
+
+    def test_runtime_browser_smoke_status_only_flag_returns_compact_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            probe = root / "tools" / "runtime_browser_smoke.py"
+            secret = root.parent / "TurboVAS-runtime" / "secrets" / "admin-password"
+            probe.parent.mkdir(parents=True)
+            secret.parent.mkdir(parents=True)
+            probe.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            secret.write_text("admin\n", encoding="utf-8")
+
+            def fake_run_command(command, *_args, **_kwargs):
+                payload = {"status": "pass", "summary": "Browser smoke passed.", "findings": [], "artifacts": ["helper-artifact.json"]}
+                return subprocess.CompletedProcess(command, 0, json.dumps(payload) + "\n")
+
+            with unittest.mock.patch.object(turbovasctl, "runtime_secret_path", return_value=secret), \
+                unittest.mock.patch.object(turbovasctl, "runtime_browser_smoke_probe_path", return_value=probe), \
+                unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/node"), \
+                unittest.mock.patch.object(turbovasctl, "gsad_base_urls", return_value=("https://127.0.0.1:19392",)), \
+                unittest.mock.patch.object(turbovasctl, "runtime_gsa_freshness_findings", return_value=[]), \
+                unittest.mock.patch.object(turbovasctl, "browser_gmp_readiness_finding", return_value=turbovasctl.finding("pass", "browser-smoke.gmp-ready", "ready")), \
+                unittest.mock.patch.object(turbovasctl, "native_scope_report_browser_target", return_value=(None, False, turbovasctl.finding("pass", "browser-smoke.scope-report-target", "target"))), \
+                unittest.mock.patch.object(turbovasctl, "runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command):
+                result = turbovasctl.command_runtime_browser_smoke(root, ["reports"], status_only=True)
+
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(result["details"]["routes"], ["reports"])
+            self.assertEqual(result["details"]["helper_status"], "pass")
+            self.assertEqual(result["findings"][0]["check"], "runtime-browser-smoke.status-only")
 
     def test_runtime_browser_regression_is_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
@@ -6433,6 +6506,27 @@ db2:keys=5,expires=0,avg_ttl=0
         stale = [finding for finding in findings if finding["check"] == "gsa.static-freshness"]
         self.assertEqual(stale[0]["status"], "warn")
         self.assertEqual(stale[0]["details"]["latest_source_path"], "components/gsa/src")
+
+    def test_runtime_gsa_freshness_ignores_test_only_source_changes(self):
+        original_state = turbovasctl.docker_container_state
+        try:
+            turbovasctl.docker_container_state = lambda _root, _service: None
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "TurboVAS"
+                source = root / "components" / "gsa" / "src" / "web" / "pages" / "tasks" / "__tests__" / "Component.test.tsx"
+                staged = turbovasctl.gsad_static_dir(root) / "index.html"
+                source.parent.mkdir(parents=True)
+                staged.parent.mkdir(parents=True)
+                source.write_text("test('new');\n", encoding="utf-8")
+                staged.write_text("<div id='app'></div>", encoding="utf-8")
+                os.utime(staged, (1000, 1000))
+                os.utime(source, (2000, 2000))
+                findings = turbovasctl.runtime_gsa_freshness_findings(root)
+        finally:
+            turbovasctl.docker_container_state = original_state
+
+        stale = [finding for finding in findings if finding["check"] == "gsa.static-freshness"]
+        self.assertEqual(stale[0]["status"], "pass")
 
     def test_runtime_gsa_freshness_warns_for_stale_gsad_container(self):
         original_state = turbovasctl.docker_container_state

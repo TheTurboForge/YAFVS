@@ -2012,6 +2012,20 @@ GSA_FRESHNESS_SOURCE_PATHS = (
     "components/gsa/tsconfig.json",
 )
 GSA_FRESHNESS_SKIP_DIRS = frozenset({"node_modules", "build", "coverage", "dist", ".vite", ".turbo"})
+GSA_FRESHNESS_SKIP_FILE_SUFFIXES = (
+    ".test.js",
+    ".test.jsx",
+    ".test.ts",
+    ".test.tsx",
+    ".spec.js",
+    ".spec.jsx",
+    ".spec.ts",
+    ".spec.tsx",
+    ".stories.js",
+    ".stories.jsx",
+    ".stories.ts",
+    ".stories.tsx",
+)
 GSAD_FRESHNESS_SOURCE_PATHS = ("components/gsad/src/gsad_native_api.c",)
 GSAD_FRESHNESS_BUILD_PATHS = ("build/gsad/src/gsad", "build/prefix/sbin/gsad")
 
@@ -3542,9 +3556,18 @@ def first_gsa_asset_rel(index_html: str) -> str | None:
     return match.group(1) if match else None
 
 
-def path_latest_mtime(path: Path, *, skip_dirs: frozenset[str] = frozenset()) -> float | None:
+def gsa_freshness_should_skip_source_file(path: Path) -> bool:
+    parts = set(path.parts)
+    if "__tests__" in parts or "__mocks__" in parts:
+        return True
+    return path.name.endswith(GSA_FRESHNESS_SKIP_FILE_SUFFIXES)
+
+
+def path_latest_mtime(path: Path, *, skip_dirs: frozenset[str] = frozenset(), skip_file: Callable[[Path], bool] | None = None) -> float | None:
     try:
         if path.is_file():
+            if skip_file and skip_file(path):
+                return None
             return path.stat().st_mtime
         if not path.is_dir():
             return None
@@ -3555,19 +3578,22 @@ def path_latest_mtime(path: Path, *, skip_dirs: frozenset[str] = frozenset()) ->
         dirs[:] = [dirname for dirname in dirs if dirname not in skip_dirs]
         root_path = Path(root)
         for filename in files:
+            candidate = root_path / filename
+            if skip_file and skip_file(candidate):
+                continue
             try:
-                mtime = (root_path / filename).stat().st_mtime
+                mtime = candidate.stat().st_mtime
             except OSError:
                 continue
             latest = mtime if latest is None else max(latest, mtime)
     return latest
 
 
-def paths_latest_mtime(repo_root: Path, rel_paths: Iterable[str], *, skip_dirs: frozenset[str] = frozenset()) -> tuple[float | None, str | None]:
+def paths_latest_mtime(repo_root: Path, rel_paths: Iterable[str], *, skip_dirs: frozenset[str] = frozenset(), skip_file: Callable[[Path], bool] | None = None) -> tuple[float | None, str | None]:
     latest: float | None = None
     latest_path: str | None = None
     for rel_path in rel_paths:
-        mtime = path_latest_mtime(repo_root / rel_path, skip_dirs=skip_dirs)
+        mtime = path_latest_mtime(repo_root / rel_path, skip_dirs=skip_dirs, skip_file=skip_file)
         if mtime is None:
             continue
         if latest is None or mtime > latest:
@@ -3676,7 +3702,7 @@ def runtime_gsa_freshness_findings(repo_root: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     staged = gsad_static_dir(repo_root)
     staged_latest, staged_latest_path = paths_latest_mtime(repo_root, (str(staged.relative_to(repo_root)),)) if staged.exists() else (None, None)
-    source_latest, source_latest_path = paths_latest_mtime(repo_root, GSA_FRESHNESS_SOURCE_PATHS, skip_dirs=GSA_FRESHNESS_SKIP_DIRS)
+    source_latest, source_latest_path = paths_latest_mtime(repo_root, GSA_FRESHNESS_SOURCE_PATHS, skip_dirs=GSA_FRESHNESS_SKIP_DIRS, skip_file=gsa_freshness_should_skip_source_file)
     if staged_latest is not None and source_latest is not None and source_latest > staged_latest:
         findings.append(
             finding(
@@ -18380,7 +18406,94 @@ def command_runtime_webui_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
 
 
-def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = None, *, write_filter_smoke: bool = False) -> dict[str, Any]:
+def compact_browser_smoke_finding(item: dict[str, Any]) -> dict[str, Any]:
+    compact = {
+        key: item[key]
+        for key in ("status", "check", "message", "path")
+        if key in item and item[key] not in (None, "")
+    }
+    details = item.get("details")
+    if isinstance(details, dict):
+        compact_details: dict[str, Any] = {}
+        for key, value in details.items():
+            if key == "helper" and isinstance(value, dict):
+                compact_details["helper"] = {
+                    "status": value.get("status"),
+                    "summary": value.get("summary"),
+                    "finding_count": len(value.get("findings", [])) if isinstance(value.get("findings"), list) else 0,
+                    "artifact_count": len(value.get("artifacts", [])) if isinstance(value.get("artifacts"), list) else 0,
+                }
+            elif key == "output_tail":
+                continue
+            elif isinstance(value, (str, int, float, bool)) or value is None:
+                compact_details[key] = value
+            elif isinstance(value, list):
+                compact_details[key] = {"type": "list", "count": len(value)}
+            elif isinstance(value, dict):
+                compact_details[key] = {"type": "object", "key_count": len(value)}
+        if compact_details:
+            compact["details"] = compact_details
+    return compact
+
+
+def runtime_browser_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    top_non_pass = [
+        compact_browser_smoke_finding(item)
+        for item in findings
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ]
+    helper: dict[str, Any] | None = None
+    for item in findings:
+        if (
+            isinstance(item, dict)
+            and item.get("check") == "browser-smoke.run"
+            and isinstance(item.get("details"), dict)
+            and isinstance(item.get("details", {}).get("helper"), dict)
+        ):
+            helper = item["details"]["helper"]
+            break
+    helper_findings = helper.get("findings", []) if isinstance(helper, dict) else []
+    helper_non_pass = [
+        compact_doctor_finding(item)
+        for item in helper_findings
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ]
+    route_details = next(
+        (
+            item.get("details", {})
+            for item in findings
+            if isinstance(item, dict) and item.get("check") == "browser-smoke.artifact-dir" and isinstance(item.get("details"), dict)
+        ),
+        {},
+    )
+    gsad_details = next(
+        (
+            item.get("details", {})
+            for item in findings
+            if isinstance(item, dict) and item.get("check") == "gsad.urls" and isinstance(item.get("details"), dict)
+        ),
+        {},
+    )
+    compact["details"] = {
+        "finding_count": len(findings),
+        "non_pass_count": len(top_non_pass),
+        "helper_status": helper.get("status") if isinstance(helper, dict) else None,
+        "helper_summary": helper.get("summary") if isinstance(helper, dict) else None,
+        "helper_finding_count": len(helper_findings) if isinstance(helper_findings, list) else 0,
+        "helper_non_pass_count": len(helper_non_pass),
+        "artifact_count": len(result.get("artifacts", [])) if isinstance(result.get("artifacts"), list) else 0,
+        "routes": route_details.get("routes", []),
+        "base_url_count": len(gsad_details.get("base_urls", [])) if isinstance(gsad_details.get("base_urls"), list) else 0,
+    }
+    compact["findings"] = top_non_pass + helper_non_pass[:10] or [
+        finding("pass", "runtime-browser-smoke.status-only", "Runtime browser smoke passed with compact status-only output.")
+    ]
+    return compact
+
+
+def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = None, *, write_filter_smoke: bool = False, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     probe = runtime_browser_smoke_probe_path(repo_root)
@@ -18406,7 +18519,8 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     if write_filter_smoke:
         findings.append(socket_readiness_finding("browser-smoke.cleanup-gvmd-socket", "gvmd", cleanup_socket, missing_status="warn"))
     if aggregate_status(findings) == "fail":
-        return make_result("runtime-browser-smoke", repo_root, "Runtime browser smoke stopped at prerequisites.", findings, [str(artifact_dir)])
+        result = make_result("runtime-browser-smoke", repo_root, "Runtime browser smoke stopped at prerequisites.", findings, [str(artifact_dir)])
+        return runtime_browser_smoke_status_only_result(result) if status_only else result
 
     scope_report_path, expect_result_row, scope_target_finding = native_scope_report_browser_target(
         repo_root,
@@ -18456,7 +18570,8 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     )
     artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
     summary = parsed.get("summary") if parsed else f"Runtime browser smoke completed with exit code {result.returncode}."
-    return make_result("runtime-browser-smoke", repo_root, summary, findings, artifacts)
+    result_payload = make_result("runtime-browser-smoke", repo_root, summary, findings, artifacts)
+    return runtime_browser_smoke_status_only_result(result_payload) if status_only else result_payload
 
 
 def command_runtime_browser_regression(repo_root: Path) -> dict[str, Any]:
@@ -19400,6 +19515,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
+    browser_smoke.add_argument("--status-only", action="store_true", help="emit compact browser-smoke status and only non-pass findings for chat-safe validation")
     browser_smoke.add_argument("--write-filter-smoke", action="store_true", help="create/clone/delete a disposable saved filter through browser native POST proxy validation")
     subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
     subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
@@ -19573,7 +19689,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "runtime-webui-smoke":
         result = command_runtime_webui_smoke(repo_root)
     elif args.command == "runtime-browser-smoke":
-        result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke)
+        result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke, status_only=args.status_only)
     elif args.command == "runtime-browser-regression":
         result = command_runtime_browser_regression(repo_root)
     elif args.command == "runtime-credential-smoke":

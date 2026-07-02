@@ -331,6 +331,7 @@ fn native_target_broad_mutation_routes_remain_closed() {
     for path in [
         "/api/v1/targets",
         "/api/v1/targets/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/targets/12345678-1234-1234-1234-123456789abc/export",
     ] {
         assert!(
             direct_api_v1_path_is_allowed(path),
@@ -369,6 +370,17 @@ fn native_target_broad_mutation_routes_remain_closed() {
         assert!(
             !direct_api_v1_method_is_allowed(method, path, true),
             "target broad mutation path must not be reachable yet: {method} {path}"
+        );
+    }
+
+    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+        assert!(
+            !direct_api_v1_method_is_allowed(
+                &method,
+                "/api/v1/targets/12345678-1234-1234-1234-123456789abc/export",
+                true,
+            ),
+            "target metadata export must remain GET-only: {method}"
         );
     }
 
@@ -427,6 +439,38 @@ fn native_target_broad_mutation_routes_remain_closed() {
             "x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation"
         ));
     }
+    let export = openapi_path_block("/targets/{target_id}/export");
+    for required in [
+        "get:",
+        "operationId: getTargetsByTargetIdExport",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-read",
+        "x-turbovas-maturity: live-read",
+        "x-turbovas-replaces: target-metadata-export-read",
+        "x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation",
+        "$ref: '#/components/schemas/Target'",
+        "Credential references include id/name/type/port only",
+        "inherited file-export formats remain outside this read endpoint",
+    ] {
+        assert!(
+            export.contains(required),
+            "target metadata export OpenAPI block missing {required}"
+        );
+    }
+    for forbidden in [
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-safety-contract: write-control-v1",
+        "\n    post:",
+        "\n    patch:",
+        "\n    put:",
+        "\n    delete:",
+    ] {
+        assert!(
+            !export.contains(forbidden),
+            "target metadata export must not expose inherited write/file-export behavior: {forbidden}"
+        );
+    }
+
     let detail = openapi_path_block("/targets/{target_id}");
     assert!(detail.contains(
         "x-turbovas-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify"

@@ -5697,6 +5697,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/export-xml-report.gmp.py",
                 "components/gvm-tools/scripts/generate-scope-report.gmp.py",
+                "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
                 "components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
@@ -5713,6 +5714,7 @@ class TurboVASCtlTests(unittest.TestCase):
         )
 
         export_blockers = review["buckets"]["export_or_report_generation"]["path_blockers"]
+        credential_blockers = review["buckets"]["credential_or_account"]["path_blockers"]
         monthly_blockers = review["buckets"]["monthly_report_semantics"]["path_blockers"]
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
@@ -5720,6 +5722,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
         self.assertIn("nested report serialization", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
         self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
+        self.assertIn("CSV credential creation", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
+        self.assertIn("secret-safe", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
         self.assertIn("unique-NVT", monthly_blockers["components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py"])
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
         self.assertIn("scanner verification table", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])

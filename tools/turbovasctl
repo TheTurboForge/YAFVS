@@ -424,6 +424,7 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
 NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "bulk-modify-schedules.gmp.py": "Inherited bulk schedule timezone/iCalendar modification is characterized; native tooling still lacks a safe bulk schedule calendar-mutation contract.",
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
+    "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
     "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native tooling still lacks a contract for credential tags, report filter assignment, broad resource-name lookups, and explicit-ID resource assignment.",
     "create-targets-from-csv.gmp.py": "Inherited CSV bulk-target behavior is characterized; native tooling still lacks a contract that maps hosts, credentials, alive-test selection, and port-list choice in one path.",

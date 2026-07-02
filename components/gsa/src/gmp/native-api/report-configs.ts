@@ -66,6 +66,18 @@ interface NativeReportConfigsPayload {
   items?: NativeReportConfigPayload[];
 }
 
+interface NativeReportConfigWriteParamPayload {
+  name: string;
+  value: string;
+}
+
+export interface NativeReportConfigCreateRequest {
+  name: string;
+  report_format_id: string;
+  comment?: string;
+  params?: NativeReportConfigWriteParamPayload[];
+}
+
 export interface NativeReportConfigsQuery {
   page: number;
   pageSize: number;
@@ -299,6 +311,18 @@ export const exportNativeReportConfigMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const createNativeReportConfig = async (
+  gmp: NativeApiGmp,
+  request: NativeReportConfigCreateRequest,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeReportConfigPayload>(
+    gmp,
+    'api/v1/report-configs',
+    request,
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const cloneNativeReportConfig = async (

@@ -12,7 +12,11 @@ import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import type {Element} from 'gmp/models/model';
 import ReportConfig from 'gmp/models/report-config';
-import {cloneNativeReportConfig} from 'gmp/native-api/report-configs';
+import {
+  cloneNativeReportConfig,
+  createNativeReportConfig,
+  type NativeReportConfigCreateRequest,
+} from 'gmp/native-api/report-configs';
 import {parseYesNo} from 'gmp/parser';
 import {isArray} from 'gmp/utils/identity';
 
@@ -50,12 +54,44 @@ interface ReportConfigResponseData extends XmlResponseData {
 
 const log = logger.getLogger('gmp.commands.reportconfigs');
 
+const reportConfigParamValueToString = (
+  value: ReportConfigParamValue,
+  paramType: string | undefined,
+): string => {
+  if (isArray(value)) {
+    if (paramType === 'report_format_list') {
+      return value.map(String).join(',');
+    }
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
+const nativeReportConfigCreateRequestFromCommand = ({
+  comment,
+  name,
+  reportFormatId,
+  params = {},
+  paramsUsingDefault = {},
+  paramTypes = {},
+}: ReportConfigCreateArgs): NativeReportConfigCreateRequest => ({
+  name,
+  report_format_id: reportFormatId,
+  ...(comment !== undefined ? {comment} : {}),
+  params: Object.entries(params)
+    .filter(([paramName]) => !parseYesNo(paramsUsingDefault[paramName]))
+    .map(([paramName, value]) => ({
+      name: paramName,
+      value: reportConfigParamValueToString(value, paramTypes[paramName]),
+    })),
+});
+
 export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   constructor(http: Http) {
     super(http, 'report_config', ReportConfig);
   }
 
-  create(args: ReportConfigCreateArgs) {
+  async create(args: ReportConfigCreateArgs) {
     const {
       comment,
       name,
@@ -90,6 +126,13 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
           paramsUsingDefault[param_name],
         );
       }
+    }
+
+    if (canUseNativeApi(this.http)) {
+      return createNativeReportConfig(
+        this.http,
+        nativeReportConfigCreateRequestFromCommand(args),
+      );
     }
 
     log.debug('Creating new report config', args);

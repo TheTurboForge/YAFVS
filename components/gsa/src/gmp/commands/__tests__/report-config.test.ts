@@ -80,6 +80,100 @@ describe('ReportConfigCommand tests', () => {
     expect(data.id).toEqual('foo');
   });
 
+  test('should create report config through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-report-config-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ReportConfigCommand(fakeHttp);
+    const resp = await cmd.create({
+      name: 'native config',
+      comment: 'native comment',
+      reportFormatId: 'report-format-id',
+      params: {
+        body: ['a', 'b'],
+        formats: ['report-format-1', 'report-format-2'],
+        timezone: 'UTC',
+      },
+      paramsUsingDefault: {
+        timezone: true,
+      },
+      paramTypes: {
+        body: 'multi_selection',
+        formats: 'report_format_list',
+        timezone: 'string',
+      },
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/report-configs');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-configs',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'native config',
+          report_format_id: 'report-format-id',
+          comment: 'native comment',
+          params: [
+            {name: 'body', value: '["a","b"]'},
+            {name: 'formats', value: 'report-format-1,report-format-2'},
+          ],
+        }),
+      },
+    );
+    expect(resp.data.id).toEqual('native-report-config-id');
+  });
+
+  test('should not fall back to GMP when native report config create fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'duplicate'}}),
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ReportConfigCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        name: 'native config',
+        reportFormatId: 'report-format-id',
+      }),
+    ).rejects.toThrow('Native API request failed with status 409');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should save report config', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

@@ -18,6 +18,42 @@ afterEach(() => {
 });
 
 describe('ScheduleCommand tests', () => {
+  test('should keep schedule create on inherited GMP when native API is available', async () => {
+    const response = createActionResultResponse({id: 'created-schedule-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    const result = await cmd.create({
+      name: 'created-schedule',
+      comment: 'calendar-bearing create',
+      icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+      timezone: 'UTC',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'create_schedule',
+        name: 'created-schedule',
+        comment: 'calendar-bearing create',
+        icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+        timezone: 'UTC',
+      },
+    });
+    expect(result.data.id).toEqual('created-schedule-id');
+  });
+
   test('should export schedule metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

@@ -21,12 +21,27 @@ import {
   cloneNativeScanConfig,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
+  patchNativeScanConfig,
 } from 'gmp/native-api/scan-configs';
 import {YES_VALUE, NO_VALUE} from 'gmp/parser';
 import {forEach, map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
 
 const log = logger.getLogger('gmp.commands.scanconfigs');
+
+const isEmptyOptionalObject = value =>
+  !isDefined(value) || Object.keys(value).length === 0;
+
+const canPatchMetadataNatively = ({
+  familyTrend,
+  scannerPreferenceValues,
+  select,
+  trend,
+}) =>
+  !isDefined(familyTrend) &&
+  isEmptyOptionalObject(scannerPreferenceValues) &&
+  isEmptyOptionalObject(select) &&
+  isEmptyOptionalObject(trend);
 
 export const convert = (values, prefix) => {
   const ret = {};
@@ -109,6 +124,18 @@ export class ScanConfigCommand extends EntityCommand {
     select,
     scannerPreferenceValues,
   }) {
+    if (
+      canUseNativeApi(this.http) &&
+      canPatchMetadataNatively({
+        familyTrend,
+        scannerPreferenceValues,
+        select,
+        trend,
+      })
+    ) {
+      return patchNativeScanConfig(this.http, id, {comment, name});
+    }
+
     const trendData = isDefined(trend) ? convert(trend, 'trend:') : {};
     const scannerPreferenceData = isDefined(scannerPreferenceValues)
       ? convert(scannerPreferenceValues, 'preference:scanner:scanner:scanner:')

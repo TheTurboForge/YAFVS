@@ -379,6 +379,52 @@ describe('ScanConfigCommand tests', () => {
     });
   });
 
+  test('should save metadata through the native API when only name and comment are provided', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'scan-config-id',
+      name: 'Native name',
+      comment: 'Native comment',
+      trend: undefined,
+      select: undefined,
+      scannerPreferenceValues: undefined,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/scan-config-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({comment: 'Native comment', name: 'Native name'}),
+      },
+    );
+    expect(result.data.id).toEqual('scan-config-id');
+  });
+
   test('should save a config family', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

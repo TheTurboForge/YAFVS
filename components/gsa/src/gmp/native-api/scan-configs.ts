@@ -112,6 +112,11 @@ export interface NativeScanConfigFamiliesResponse {
   scanConfig: ScanConfig;
 }
 
+export interface NativeScanConfigPatchRequest {
+  name?: string;
+  comment?: string;
+}
+
 const SCAN_CONFIG_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   families_total: 'families_total',
@@ -235,9 +240,10 @@ const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
   body: unknown,
+  method = 'POST',
 ): Promise<T> => {
   const response = await fetch(gmp.buildUrl(path), {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
@@ -404,6 +410,20 @@ export const cloneNativeScanConfig = async (
     gmp,
     `api/v1/scan-configs/${encodeURIComponent(id)}/clone`,
     {},
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeScanConfig = async (
+  gmp: NativeApiGmp,
+  id: string,
+  request: NativeScanConfigPatchRequest,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeScanConfigPayload>(
+    gmp,
+    `api/v1/scan-configs/${encodeURIComponent(id)}`,
+    request,
+    'PATCH',
   );
   return new Response({id: stringValue(payload.id)});
 };

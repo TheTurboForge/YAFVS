@@ -6937,7 +6937,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
         patch_constants = c_string_constants(patch_function_body)
-        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "tag_prefix"):
+        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "tag_prefix"):
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
@@ -7330,9 +7330,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "patch",
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native scan-config name/comment metadata modification"],
+                "replacement_candidates": ["GSA Scan Config metadata save (migrated through gsad same-origin proxy)", "direct native scan-config name/comment metadata modification"],
+                "residual_inherited": [
+                    "Scan-config create/import, export XML, preference edits, NVT selector/family mutations, scanner control, deletes, restores, and trash handling remain inherited or direct-only until separately migrated."
+                ],
             },
             {
                 "method": "delete",

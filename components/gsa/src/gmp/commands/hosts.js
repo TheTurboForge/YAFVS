@@ -18,6 +18,7 @@ import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import Host from 'gmp/models/host';
 import {
+  exportNativeHostMetadata,
   fetchNativeHosts,
   nativeHostsQueryFromFilter,
 } from 'gmp/native-api/hosts';
@@ -56,6 +57,17 @@ class HostCommand extends EntityCommand {
       cmd: 'delete_asset',
       asset_id: id,
     });
+  }
+
+  async export({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeHostMetadata(this.http, id);
+      } catch {
+        // Keep inherited bulk export responsible for legacy host export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   getElementFromRoot(root) {

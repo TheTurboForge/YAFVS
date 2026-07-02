@@ -5525,6 +5525,25 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("buckets", status_details)
         self.assertNotIn("path_blockers", status_details)
 
+        focused = turbovasctl.command_native_tooling_removal_review(
+            root,
+            paths=["components/gvm-tools/scripts/export-xml-report.gmp.py"],
+        )
+        focused_details = focused["details"]
+        self.assertEqual(focused_details["total"], 1)
+        self.assertEqual(focused_details["blocked_or_review_count"], 1)
+        self.assertEqual(
+            focused_details["path_filter"],
+            ["components/gvm-tools/scripts/export-xml-report.gmp.py"],
+        )
+        self.assertEqual(focused_details["bucket_counts"], {"export_or_report_generation": 1})
+        self.assertIn(
+            "serializes XML",
+            focused_details["buckets"][0]["path_blockers"][
+                "components/gvm-tools/scripts/export-xml-report.gmp.py"
+            ],
+        )
+
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")

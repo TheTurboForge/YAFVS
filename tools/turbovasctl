@@ -10146,9 +10146,16 @@ def command_native_tooling_state(repo_root: Path, compact: bool = False, summary
     return result
 
 
-def command_native_tooling_removal_review(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+def command_native_tooling_removal_review(
+    repo_root: Path,
+    status_only: bool = False,
+    paths: list[str] | None = None,
+) -> dict[str, Any]:
     summary = summarize_native_tooling(native_tooling_inventory(repo_root), repo_root)
-    review = summary.get("candidate_for_removal_review", {})
+    if paths:
+        review = native_tooling_removal_review(paths)
+    else:
+        review = summary.get("candidate_for_removal_review", {})
     buckets = review.get("buckets", {}) if isinstance(review.get("buckets"), dict) else {}
     bucket_counts = {
         name: bucket.get("count", 0)
@@ -10161,6 +10168,8 @@ def command_native_tooling_removal_review(repo_root: Path, status_only: bool = F
         "blocked_or_review_count": review.get("blocked_or_review_count", 0),
         "bucket_counts": bucket_counts,
     }
+    if paths:
+        details["path_filter"] = list(paths)
     if not status_only:
         details["buckets"] = [
             {
@@ -19597,6 +19606,7 @@ def build_parser() -> argparse.ArgumentParser:
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
     native_tooling_state.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
     native_tooling_removal_review = subparsers.add_parser("native-tooling-removal-review", parents=[common], help="summarize blocked inherited tooling removal candidates without full inventory output")
+    native_tooling_removal_review.add_argument("--path", action="append", default=[], help="review a specific candidate path; may be repeated")
     native_tooling_removal_review.add_argument("--status-only", action="store_true", help="emit removal-review counts without path lists")
     migration_matrix = subparsers.add_parser("native-api-migration-matrix", parents=[common], help="show native API migration metadata by endpoint")
     migration_matrix.add_argument("--compact", action="store_true", help="alias for --status-only; emit compact planning details and only non-pass findings")
@@ -19755,7 +19765,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "native-tooling-state":
         result = command_native_tooling_state(repo_root, compact=args.compact, summary_only=args.summary, status_only=args.status_only)
     elif args.command == "native-tooling-removal-review":
-        result = command_native_tooling_removal_review(repo_root, status_only=args.status_only)
+        result = command_native_tooling_removal_review(repo_root, status_only=args.status_only, paths=args.path)
     elif args.command == "native-api-migration-matrix":
         result = command_native_api_migration_matrix(repo_root, status_only=args.status_only or args.compact, focus=args.focus)
     elif args.command == "native-api-client-contract":

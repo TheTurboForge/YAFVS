@@ -307,7 +307,7 @@ fn scope_write_execution_helpers_stay_private_transaction_scaffold() {
     let _patch = execute_scope_patch_transaction;
     let _delete = execute_scope_delete_transaction;
 
-    let source = include_str!("scope_write_db.rs");
+    let source = include_str!("scope_write_transactions.rs");
     let create_body = source
         .split_once("pub(crate) async fn execute_scope_create_transaction")
         .expect("create executor must exist")

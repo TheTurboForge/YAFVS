@@ -156,6 +156,7 @@ mod scope_write_db;
 #[cfg(test)]
 mod scope_write_plans;
 mod scope_write_sql;
+mod scope_write_transactions;
 mod scope_write_validation;
 mod scope_writes;
 mod startup;

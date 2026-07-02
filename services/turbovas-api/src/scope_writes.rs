@@ -15,6 +15,7 @@ use crate::{
     scope_payload_rows::ScopeItem,
     scope_payloads::load_scope_detail,
     scope_write_db::*,
+    scope_write_transactions::*,
     scope_write_validation::{
         ScopeCreateRequest, ScopePatchRequest, validate_scope_create_request,
         validate_scope_patch_request,

@@ -8722,6 +8722,15 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
             "pub(crate) fn scope_insert_host_sql",
         ),
     },
+    {
+        "owner": "services/turbovas-api/src/scope_write_transactions.rs",
+        "forbidden": ("services/turbovas-api/src/scope_write_db.rs",),
+        "symbols": (
+            "pub(crate) async fn execute_scope_create_transaction",
+            "pub(crate) async fn execute_scope_patch_transaction",
+            "pub(crate) async fn execute_scope_delete_transaction",
+        ),
+    },
 )
 
 

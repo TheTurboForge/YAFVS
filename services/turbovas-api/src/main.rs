@@ -91,6 +91,8 @@ mod report_cves;
 mod report_error_query_sql;
 mod report_errors;
 mod report_evidence_payloads;
+#[cfg(test)]
+mod report_export_characterization_tests;
 mod report_format_payloads;
 mod report_format_query_sql;
 mod report_formats;

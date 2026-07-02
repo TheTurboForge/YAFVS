@@ -18464,6 +18464,18 @@ def compact_browser_smoke_finding(item: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def compact_status_artifacts(artifacts: Any, *, max_items: int = 5) -> list[str]:
+    if not isinstance(artifacts, list):
+        return []
+    artifact_paths = [str(item) for item in artifacts if isinstance(item, str) and item]
+    preferred = [
+        item
+        for item in artifact_paths
+        if item.endswith((".json", ".log", ".txt"))
+    ]
+    return (preferred or artifact_paths)[:max_items]
+
+
 def runtime_browser_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     compact = dict(result)
     findings = result.get("findings", [])
@@ -18515,8 +18527,58 @@ def runtime_browser_smoke_status_only_result(result: dict[str, Any]) -> dict[str
         "routes": route_details.get("routes", []),
         "base_url_count": len(gsad_details.get("base_urls", [])) if isinstance(gsad_details.get("base_urls"), list) else 0,
     }
+    compact["artifacts"] = compact_status_artifacts(result.get("artifacts"))
     compact["findings"] = top_non_pass + helper_non_pass[:10] or [
         finding("pass", "runtime-browser-smoke.status-only", "Runtime browser smoke passed with compact status-only output.")
+    ]
+    return compact
+
+
+def runtime_browser_regression_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    findings = result.get("findings", [])
+    top_non_pass = [
+        compact_browser_smoke_finding(item)
+        for item in findings
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ]
+    helper: dict[str, Any] | None = None
+    for item in findings:
+        if (
+            isinstance(item, dict)
+            and item.get("check") == "browser-regression.run"
+            and isinstance(item.get("details"), dict)
+            and isinstance(item.get("details", {}).get("helper"), dict)
+        ):
+            helper = item["details"]["helper"]
+            break
+    helper_findings = helper.get("findings", []) if isinstance(helper, dict) else []
+    helper_non_pass = [
+        compact_doctor_finding(item)
+        for item in helper_findings
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ]
+    gsad_details = next(
+        (
+            item.get("details", {})
+            for item in findings
+            if isinstance(item, dict) and item.get("check") == "gsad.urls" and isinstance(item.get("details"), dict)
+        ),
+        {},
+    )
+    compact["details"] = {
+        "finding_count": len(findings),
+        "non_pass_count": len(top_non_pass),
+        "helper_status": helper.get("status") if isinstance(helper, dict) else None,
+        "helper_summary": helper.get("summary") if isinstance(helper, dict) else None,
+        "helper_finding_count": len(helper_findings) if isinstance(helper_findings, list) else 0,
+        "helper_non_pass_count": len(helper_non_pass),
+        "artifact_count": len(result.get("artifacts", [])) if isinstance(result.get("artifacts"), list) else 0,
+        "base_url_count": len(gsad_details.get("base_urls", [])) if isinstance(gsad_details.get("base_urls"), list) else 0,
+    }
+    compact["artifacts"] = compact_status_artifacts(result.get("artifacts"))
+    compact["findings"] = top_non_pass + helper_non_pass[:10] or [
+        finding("pass", "runtime-browser-regression.status-only", "Runtime browser regression passed with compact status-only output.")
     ]
     return compact
 
@@ -18602,7 +18664,7 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     return runtime_browser_smoke_status_only_result(result_payload) if status_only else result_payload
 
 
-def command_runtime_browser_regression(repo_root: Path) -> dict[str, Any]:
+def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     probe = runtime_browser_regression_probe_path(repo_root)
@@ -18624,7 +18686,8 @@ def command_runtime_browser_regression(repo_root: Path) -> dict[str, Any]:
     findings.extend(runtime_gsa_freshness_findings(repo_root))
     findings.append(browser_gmp_readiness_finding(repo_root, check="browser-regression.gmp-ready"))
     if aggregate_status(findings) == "fail":
-        return make_result("runtime-browser-regression", repo_root, "Runtime browser regression stopped at prerequisites.", findings, [str(artifact_dir)])
+        result = make_result("runtime-browser-regression", repo_root, "Runtime browser regression stopped at prerequisites.", findings, [str(artifact_dir)])
+        return runtime_browser_regression_status_only_result(result) if status_only else result
 
     scope_report_path, expect_result_row, scope_target_finding = native_scope_report_browser_target(
         repo_root,
@@ -18668,7 +18731,8 @@ def command_runtime_browser_regression(repo_root: Path) -> dict[str, Any]:
     )
     artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
     summary = parsed.get("summary") if parsed else f"Runtime browser regression completed with exit code {result.returncode}."
-    return make_result("runtime-browser-regression", repo_root, summary, findings, artifacts)
+    result_payload = make_result("runtime-browser-regression", repo_root, summary, findings, artifacts)
+    return runtime_browser_regression_status_only_result(result_payload) if status_only else result_payload
 
 
 def command_runtime_credential_smoke(repo_root: Path) -> dict[str, Any]:
@@ -19546,7 +19610,8 @@ def build_parser() -> argparse.ArgumentParser:
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
     browser_smoke.add_argument("--status-only", action="store_true", help="emit compact browser-smoke status and only non-pass findings for chat-safe validation")
     browser_smoke.add_argument("--write-filter-smoke", action="store_true", help="create/clone/delete a disposable saved filter through browser native POST proxy validation")
-    subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
+    browser_regression = subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
+    browser_regression.add_argument("--status-only", action="store_true", help="emit compact browser-regression status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
     subparsers.add_parser("runtime-rbac-smoke", parents=[common], help="verify all authenticated users share operator privileges")
     quality_gate = subparsers.add_parser("quality-gate", parents=[common], help="run the local deterministic quality gate")
@@ -19720,7 +19785,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "runtime-browser-smoke":
         result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke, status_only=args.status_only)
     elif args.command == "runtime-browser-regression":
-        result = command_runtime_browser_regression(repo_root)
+        result = command_runtime_browser_regression(repo_root, status_only=args.status_only)
     elif args.command == "runtime-credential-smoke":
         result = command_runtime_credential_smoke(repo_root)
     elif args.command == "runtime-rbac-smoke":

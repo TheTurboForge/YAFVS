@@ -1093,6 +1093,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(compact["details"]["artifact_count"], 2)
         self.assertEqual(compact["details"]["routes"], ["/reports"])
         self.assertEqual(compact["details"]["base_url_count"], 2)
+        self.assertEqual(compact["artifacts"], ["result.json"])
         self.assertEqual(len(compact["findings"]), 2)
         self.assertNotIn("output_tail", json.dumps(compact["findings"]))
         self.assertNotIn("very noisy browser stdout", json.dumps(compact["findings"]))
@@ -1135,6 +1136,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("browser_gmp_readiness_finding(repo_root, check=\"browser-regression.gmp-ready\")", source)
         self.assertIn("runtime_browser_regression_probe_path", source)
         self.assertIn("runtime-browser-regression", source)
+        self.assertIn("browser_regression.add_argument(\"--status-only\"", source)
+        self.assertIn("command_runtime_browser_regression(repo_root, status_only=args.status_only)", source)
         self.assertIn("scope-report.result-evidence-route", browser_regression)
         self.assertIn("checkVulnerabilitiesRoute", browser_regression)
         self.assertIn("vulnerabilities.inline-details-route", browser_regression)
@@ -1152,6 +1155,78 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("network.native-api-failures", browser_regression)
         self.assertIn("runtime-browser-regression *args:", justfile)
         self.assertIn('tools/turbovasctl runtime-browser-regression "$@"', justfile)
+
+    def test_runtime_browser_regression_status_only_compacts_helper_output(self):
+        helper_payload = {
+            "status": "warn",
+            "summary": "Browser regression warning.",
+            "findings": [
+                {"status": "pass", "check": "browser.login", "message": "logged in", "details": {"url": "https://example/"}},
+                {"status": "warn", "check": "pagination-counts", "message": "count mismatch", "details": {"samples": ["a", "b"]}},
+            ],
+            "artifacts": ["regression.json", "screenshot.png"],
+        }
+        result = turbovasctl.make_result(
+            "runtime-browser-regression",
+            Path("/tmp/TurboVAS"),
+            "Browser regression warning.",
+            [
+                turbovasctl.finding("pass", "browser-regression.artifact-dir", "ready"),
+                turbovasctl.finding("pass", "gsad.urls", "urls", details={"base_urls": ["https://one", "https://two"]}),
+                turbovasctl.finding(
+                    "warn",
+                    "browser-regression.run",
+                    "Browser regression warning.",
+                    details={"helper": helper_payload, "output_tail": "very noisy browser stdout"},
+                ),
+            ],
+            ["regression.json", "screenshot.png"],
+        )
+
+        compact = turbovasctl.runtime_browser_regression_status_only_result(result)
+
+        self.assertEqual(compact["status"], "warn")
+        self.assertEqual(compact["details"]["finding_count"], 3)
+        self.assertEqual(compact["details"]["non_pass_count"], 1)
+        self.assertEqual(compact["details"]["helper_status"], "warn")
+        self.assertEqual(compact["details"]["helper_finding_count"], 2)
+        self.assertEqual(compact["details"]["helper_non_pass_count"], 1)
+        self.assertEqual(compact["details"]["artifact_count"], 2)
+        self.assertEqual(compact["details"]["base_url_count"], 2)
+        self.assertEqual(compact["artifacts"], ["regression.json"])
+        self.assertEqual(len(compact["findings"]), 2)
+        self.assertNotIn("output_tail", json.dumps(compact["findings"]))
+        self.assertNotIn("very noisy browser stdout", json.dumps(compact["findings"]))
+        self.assertNotIn("screenshot.png", json.dumps(compact["artifacts"]))
+
+    def test_runtime_browser_regression_status_only_flag_returns_compact_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            probe = root / "tools" / "runtime_browser_regression.py"
+            secret = root.parent / "TurboVAS-runtime" / "secrets" / "admin-password"
+            probe.parent.mkdir(parents=True)
+            secret.parent.mkdir(parents=True)
+            probe.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            secret.write_text("admin\n", encoding="utf-8")
+
+            def fake_run_command(command, *_args, **_kwargs):
+                payload = {"status": "pass", "summary": "Browser regression passed.", "findings": [], "artifacts": ["helper-artifact.json"]}
+                return subprocess.CompletedProcess(command, 0, json.dumps(payload) + "\n")
+
+            with unittest.mock.patch.object(turbovasctl, "runtime_secret_path", return_value=secret), \
+                unittest.mock.patch.object(turbovasctl, "runtime_browser_regression_probe_path", return_value=probe), \
+                unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/node"), \
+                unittest.mock.patch.object(turbovasctl, "gsad_base_urls", return_value=("https://127.0.0.1:19392",)), \
+                unittest.mock.patch.object(turbovasctl, "runtime_gsa_freshness_findings", return_value=[]), \
+                unittest.mock.patch.object(turbovasctl, "browser_gmp_readiness_finding", return_value=turbovasctl.finding("pass", "browser-regression.gmp-ready", "ready")), \
+                unittest.mock.patch.object(turbovasctl, "native_scope_report_browser_target", return_value=(None, False, turbovasctl.finding("pass", "browser-regression.scope-report-target", "target"))), \
+                unittest.mock.patch.object(turbovasctl, "runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command):
+                result = turbovasctl.command_runtime_browser_regression(root, status_only=True)
+
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(result["details"]["helper_status"], "pass")
+            self.assertEqual(result["findings"][0]["check"], "runtime-browser-regression.status-only")
 
     def test_browser_gmp_readiness_retries_until_authenticated(self):
         with unittest.mock.patch.object(

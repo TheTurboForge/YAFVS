@@ -24,6 +24,9 @@ use crate::{
     report_config_payloads::ReportConfigAssetItem,
     report_config_write_validation::ReportConfigCloneRequest,
     report_config_writes::clone_report_config,
+    scan_config_payloads::ScanConfigAssetDetail,
+    scan_config_write_validation::ScanConfigCloneRequest,
+    scan_config_writes::clone_scan_config,
     schedule_payloads::ScheduleAssetDetail,
     schedule_write_validation::ScheduleCloneRequest,
     schedule_writes::clone_schedule,
@@ -125,6 +128,23 @@ pub(crate) async fn browser_proxy_clone_report_config(
     clone_report_config(
         State(state),
         Path(report_config_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_clone_scan_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scan_config_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ScanConfigCloneRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ScanConfigAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_scan_config(
+        State(state),
+        Path(scan_config_id),
         Some(Extension(operator)),
         Json(request),
     )

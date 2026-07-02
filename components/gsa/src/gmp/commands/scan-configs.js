@@ -18,6 +18,7 @@ import logger from 'gmp/log';
 import Nvt from 'gmp/models/nvt';
 import ScanConfig from 'gmp/models/scan-config';
 import {
+  cloneNativeScanConfig,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
 } from 'gmp/native-api/scan-configs';
@@ -86,6 +87,17 @@ export class ScanConfigCommand extends EntityCommand {
     };
     log.debug('Creating scanconfig', data);
     return this.action(data);
+  }
+
+  async clone({id}) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativeScanConfig(this.http, id);
+      } catch (error) {
+        log.debug('Native scan config clone failed, falling back to GMP', error);
+      }
+    }
+    return super.clone({id});
   }
 
   save({

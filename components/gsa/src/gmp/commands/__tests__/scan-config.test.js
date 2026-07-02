@@ -246,6 +246,78 @@ describe('ScanConfigCommand tests', () => {
     });
   });
 
+  test('should clone a scan config through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-scan-config-clone-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const result = await cmd.clone({id: 'scan-config-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/scan-config-id/clone',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(result.data.id).toEqual('native-scan-config-clone-id');
+  });
+
+  test('should fall back to GMP when native scan config clone fails', async () => {
+    const response = createActionResultResponse({
+      action: 'Clone Scan Config',
+      id: 'fallback-scan-config-clone-id',
+      message: 'Cloned Scan Config',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const result = await cmd.clone({id: 'scan-config-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'clone',
+        id: 'scan-config-id',
+        resource_type: 'config',
+      },
+    });
+    expect(result.data.id).toEqual('fallback-scan-config-clone-id');
+  });
+
   test('should save a config', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

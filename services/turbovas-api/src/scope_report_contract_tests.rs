@@ -218,6 +218,48 @@ fn scope_report_native_routes_remain_get_only_read_paths() {
 }
 
 #[test]
+fn scope_report_direct_api_paths_remain_get_only() {
+    let scope_id = "12345678-1234-1234-1234-123456789abc";
+    let scope_report_id = "87654321-4321-4321-4321-cba987654321";
+    let scoped_prefix = format!("/api/v1/scopes/{scope_id}/reports/{scope_report_id}");
+    let paths = [
+        "/api/v1/scope-reports".to_string(),
+        format!("/api/v1/scope-reports/{scope_report_id}"),
+        format!("{scoped_prefix}/results"),
+        format!("{scoped_prefix}/hosts"),
+        format!("{scoped_prefix}/ports"),
+        format!("{scoped_prefix}/applications"),
+        format!("{scoped_prefix}/operating-systems"),
+        format!("{scoped_prefix}/cves"),
+        format!("{scoped_prefix}/tls-certificates"),
+        format!("{scoped_prefix}/errors"),
+        format!("{scoped_prefix}/metrics"),
+        format!("{scoped_prefix}/retention-plan"),
+    ];
+
+    for path in paths {
+        assert!(
+            direct_api_v1_path_is_allowed(&path),
+            "{path} must be direct-read allowlisted"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, &path, false),
+            "GET {path} must be allowed without write-control"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, &path, true),
+            "GET {path} must remain allowed with write-control enabled"
+        );
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, &path, true),
+                "{method} {path} must stay closed until scope-report generation, retention mutation, or destructive contracts exist"
+            );
+        }
+    }
+}
+
+#[test]
 fn scope_reports_do_not_trigger_scanner_or_task_control() {
     let source = [
         include_str!("scope_report_results.rs"),

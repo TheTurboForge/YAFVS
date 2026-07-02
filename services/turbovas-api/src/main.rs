@@ -169,6 +169,7 @@ mod tag_write_db;
 #[cfg(test)]
 mod tag_write_plans;
 mod tag_write_sql;
+mod tag_write_transactions;
 mod tag_write_validation;
 mod tag_writes;
 mod tags;

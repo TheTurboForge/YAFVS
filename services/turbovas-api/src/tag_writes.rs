@@ -14,6 +14,7 @@ use crate::{
     errors::ApiError,
     tag_payloads::TagAssetItem,
     tag_write_db::*,
+    tag_write_transactions::*,
     tag_write_validation::{
         TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
         validate_tag_clone_request, validate_tag_create_request, validate_tag_patch_request,

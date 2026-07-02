@@ -67,6 +67,7 @@ mod port_list_write_db;
 #[cfg(test)]
 mod port_list_write_plans;
 mod port_list_write_sql;
+mod port_list_write_transactions;
 mod port_list_write_validation;
 mod port_list_writes;
 mod port_lists;

@@ -8381,6 +8381,18 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "owner": "services/turbovas-api/src/port_list_write_transactions.rs",
+        "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
+        "symbols": (
+            "pub(crate) async fn execute_port_list_create_transaction",
+            "pub(crate) async fn execute_port_list_patch_transaction",
+            "pub(crate) async fn execute_port_list_trash_transaction",
+            "pub(crate) async fn execute_port_list_clone_transaction",
+            "pub(crate) async fn execute_port_list_restore_transaction",
+            "pub(crate) async fn execute_port_list_hard_delete_transaction",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/schedule_write_sql.rs",
         "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
         "symbols": (

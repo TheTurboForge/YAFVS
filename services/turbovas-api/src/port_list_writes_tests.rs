@@ -4,10 +4,12 @@
 
 use super::*;
 use crate::port_list_write_plans::*;
+use crate::port_list_write_sql::*;
 use crate::port_list_write_validation::{
     MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, PortListCloneRequest,
-    PortListCreateRangeRequest, PortListCreateRequest, validate_port_list_clone_request,
-    validate_port_list_create_request,
+    PortListCreateRangeRequest, PortListCreateRequest, PortListPatchRequest,
+    ValidatedPortListPatch, validate_port_list_clone_request, validate_port_list_create_request,
+    validate_port_list_patch_request,
 };
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequest {

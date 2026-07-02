@@ -96,8 +96,9 @@ fn scan_config_clone_sql_copies_preferences_selectors_tags_and_makes_user_owned_
     assert!(metadata.contains("INSERT INTO configs"));
     assert!(metadata.contains("make_uuid()"));
     assert!(metadata.contains("coalesce($3, uniquify('config', name, $2, ' Clone'))"));
-    assert!(metadata.contains("predefined"));
-    assert!(metadata.contains("0,"));
+    assert!(metadata.contains("families_growing, nvts_growing, predefined, creation_time"));
+    assert!(metadata.contains("            0,\n            m_now(),"));
+    assert!(!metadata.contains("nvts_growing,\n            predefined"));
     assert!(metadata.contains("'scan'"));
     assert!(metadata.contains("RETURNING id::integer, uuid::text"));
 

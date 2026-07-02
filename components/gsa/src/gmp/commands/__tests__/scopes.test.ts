@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -13,6 +14,86 @@ afterEach(() => {
 });
 
 describe('ScopesCommand tests', () => {
+  test('should create scope through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scope-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScopesCommand(fakeHttp);
+    const result = await cmd.create({
+      name: 'New Scope',
+      protectionRequirement: 'normal',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scopes');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scopes',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'New Scope',
+          protection_requirement: 'normal',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('scope-id');
+  });
+
+  test('should keep unexpected scope create payloads on GMP', async () => {
+    const response = createActionResultResponse({id: 'scope-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScopesCommand(fakeHttp);
+    await cmd.create({
+      id: 'unexpected-scope-id',
+      name: 'New Scope',
+      protectionRequirement: 'normal',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'create_scope',
+        name: 'New Scope',
+        comment: undefined,
+        protection_requirement: 'normal',
+        target_ids: undefined,
+        host_ids: undefined,
+      },
+    });
+  });
+
   test('should modify scope metadata and membership through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'scope-id'}),

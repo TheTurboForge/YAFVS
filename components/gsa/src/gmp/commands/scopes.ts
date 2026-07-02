@@ -16,7 +16,7 @@ import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
 import type {XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Filter from 'gmp/models/filter';
-import {patchNativeScope} from 'gmp/native-api/scopes';
+import {createNativeScope, patchNativeScope} from 'gmp/native-api/scopes';
 import {isDefined} from 'gmp/utils/identity';
 
 export type ProtectionRequirement = 'normal' | 'high' | 'very_high';
@@ -148,6 +148,14 @@ const SCOPE_MODIFY_KEYS = new Set([
   'hostIds',
 ]);
 
+const SCOPE_CREATE_KEYS = new Set([
+  'name',
+  'comment',
+  'protectionRequirement',
+  'targetIds',
+  'hostIds',
+]);
+
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(item => typeof item === 'string');
 
@@ -159,6 +167,21 @@ const isNativeScopeModify = (
     keys.every(key => SCOPE_MODIFY_KEYS.has(key)) &&
     typeof params.id === 'string' &&
     (params.name === undefined || typeof params.name === 'string') &&
+    (params.comment === undefined || typeof params.comment === 'string') &&
+    (params.protectionRequirement === undefined ||
+      typeof params.protectionRequirement === 'string') &&
+    (params.targetIds === undefined || isStringArray(params.targetIds)) &&
+    (params.hostIds === undefined || isStringArray(params.hostIds))
+  );
+};
+
+const isNativeScopeCreate = (
+  params: ScopeWriteParams,
+): params is ScopeWriteParams & {name: string} => {
+  const keys = Object.keys(params);
+  return (
+    keys.every(key => SCOPE_CREATE_KEYS.has(key)) &&
+    typeof params.name === 'string' &&
     (params.comment === undefined || typeof params.comment === 'string') &&
     (params.protectionRequirement === undefined ||
       typeof params.protectionRequirement === 'string') &&
@@ -414,6 +437,10 @@ export class ScopesCommand extends HttpCommand {
   }
 
   create(params: ScopeWriteParams) {
+    if (canUseNativeApi(this.http) && isNativeScopeCreate(params)) {
+      return createNativeScope(this.http, params);
+    }
+
     return this.httpPostWithTransform({
       cmd: 'create_scope',
       name: params.name,

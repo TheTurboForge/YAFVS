@@ -2003,7 +2003,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 30)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 31)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
@@ -2344,6 +2344,19 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(direct_read_endpoints, ["/api/v1/reports"])
 
+    def test_scope_create_openapi_schema_matches_native_write_dto(self):
+        root = Path(__file__).resolve().parents[2]
+        block = turbovasctl.openapi_component_schema_block(root, "ScopeCreateRequest")
+        fields = turbovasctl.openapi_indented_scalar_fields(block)
+
+        self.assertEqual(fields.get("type"), "object")
+        self.assertEqual(fields.get("additionalProperties"), "false")
+        self.assertEqual(fields.get("properties.name.type"), "string")
+        self.assertEqual(fields.get("properties.protection_requirement.enum"), "[normal, high, very_high]")
+        self.assertEqual(fields.get("properties.target_ids.type"), "array")
+        self.assertEqual(fields.get("properties.host_ids.type"), "array")
+        self.assertNotIn("properties.port_ranges.type", fields)
+
     def test_native_tooling_state_fails_on_direct_contract_drift(self):
         root = Path(__file__).resolve().parents[2]
         drift = {"alignment_status": "warn", "missing_rust_routes": ["/api/v1/example"]}
@@ -2364,7 +2377,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 30)
+        self.assertEqual(contract["browser_write_proxy_count"], 31)
         self.assertEqual(contract["direct_write_control_count"], 48)
         self.assertEqual(contract["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
@@ -3342,7 +3355,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("GSA raw report list (migrated through gsad same-origin proxy)", reports["replacement_candidates"])
 
         create_scope = rows[("post", "/api/v1/scopes")]
-        self.assertEqual(create_scope["status"], "implemented_direct_write_control")
+        self.assertEqual(create_scope["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(create_scope["method"], "post")
         self.assertEqual(create_scope["inventory_endpoint"], "/api/v1/scopes")
         self.assertEqual(create_scope["direct_access"], "direct_write_control")

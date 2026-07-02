@@ -82,6 +82,14 @@ interface NativeScopePatchArgs {
   hostIds?: string[];
 }
 
+interface NativeScopeCreateArgs {
+  name: string;
+  comment?: string;
+  protectionRequirement?: ProtectionRequirement | string;
+  targetIds?: string[];
+  hostIds?: string[];
+}
+
 const stringValue = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
 
@@ -236,6 +244,33 @@ export const fetchNativeScope = async (
     `api/v1/scopes/${encodeURIComponent(id)}`,
   );
   return nativeScopeToModel(payload);
+};
+
+export const createNativeScope = async (
+  gmp: NativeApiGmp,
+  {
+    name,
+    comment,
+    protectionRequirement,
+    targetIds,
+    hostIds,
+  }: NativeScopeCreateArgs,
+): Promise<Response<{id: string}>> => {
+  const body = {
+    name,
+    ...(comment !== undefined ? {comment} : {}),
+    ...(protectionRequirement !== undefined
+      ? {protection_requirement: protectionRequirement}
+      : {}),
+    ...(targetIds !== undefined ? {target_ids: targetIds} : {}),
+    ...(hostIds !== undefined ? {host_ids: hostIds} : {}),
+  };
+  const payload = await writeNativeJson<NativeScopeItem>(
+    gmp,
+    'api/v1/scopes',
+    body,
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const patchNativeScope = async (

@@ -5622,12 +5622,6 @@ components:
         comment:
           type: string
           maxLength: 4096
-        port_ranges:
-          type: array
-          minItems: 1
-          maxItems: 1024
-          items:
-            $ref: '#/components/schemas/PortListCreateRangeRequest'
         protection_requirement:
           enum: [normal, high, very_high]
         target_ids:

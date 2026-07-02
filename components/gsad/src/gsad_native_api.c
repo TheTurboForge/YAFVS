@@ -255,6 +255,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *clone_suffix = "/clone";
+  const gchar *resources_suffix = "/resources";
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
@@ -282,10 +283,12 @@ native_api_post_path_is_allowed (const gchar *path)
       const gchar *id = path + strlen (tag_prefix);
       gsize id_length;
 
-      if (!g_str_has_suffix (id, clone_suffix))
+      if (g_str_has_suffix (id, clone_suffix))
+        id_length = strlen (id) - strlen (clone_suffix);
+      else if (g_str_has_suffix (id, resources_suffix))
+        id_length = strlen (id) - strlen (resources_suffix);
+      else
         return FALSE;
-
-      id_length = strlen (id) - strlen (clone_suffix);
       return is_uuid_segment (id, id_length);
     }
 

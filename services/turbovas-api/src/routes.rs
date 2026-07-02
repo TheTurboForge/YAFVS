@@ -14,7 +14,7 @@ use crate::{
     app_state::{AppState, healthz},
     browser_proxy_api::{
         BrowserProxyAuth, browser_proxy_clone_filter, browser_proxy_clone_tag,
-        browser_proxy_create_filter, browser_proxy_create_tag,
+        browser_proxy_create_filter, browser_proxy_create_tag, browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
     cpe_catalog::*,
@@ -440,6 +440,10 @@ pub(crate) fn browser_proxy_native_api_router(
     let write_router = Router::new()
         .route("/api/v1/filters", post(browser_proxy_create_filter))
         .route("/api/v1/tags", post(browser_proxy_create_tag))
+        .route(
+            "/api/v1/tags/:tag_id/resources",
+            post(browser_proxy_update_tag_resources),
+        )
         .route(
             "/api/v1/filters/:filter_id/clone",
             post(browser_proxy_clone_filter),

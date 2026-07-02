@@ -104,6 +104,13 @@ export interface NativeTagsResponse {
   page: NativePage;
 }
 
+interface NativeTagPatchInput {
+  active?: boolean;
+  comment?: string;
+  name?: string;
+  value?: string;
+}
+
 const TAG_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   value: 'value',
@@ -387,17 +394,7 @@ export const createNativeTag = async (
 export const patchNativeTag = async (
   gmp: NativeApiGmp,
   id: string,
-  {
-    active,
-    comment,
-    name,
-    value,
-  }: {
-    active: boolean;
-    comment: string;
-    name: string;
-    value: string;
-  },
+  {active, comment, name, value}: NativeTagPatchInput,
 ): Promise<Response<{id: string}>> => {
   const payload = await writeNativeJson<NativeTagPayload>(
     gmp,

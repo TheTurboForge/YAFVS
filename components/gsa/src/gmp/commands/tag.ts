@@ -123,7 +123,10 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     return this.action(data);
   }
 
-  enable({id}: EntityCommandParams) {
+  async enable({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return patchNativeTag(this.http, id, {active: true});
+    }
     const data = {
       cmd: 'toggle_tag',
       enable: YES_VALUE,
@@ -133,7 +136,10 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     return this.httpPostWithTransform(data);
   }
 
-  disable({id}: EntityCommandParams) {
+  async disable({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return patchNativeTag(this.http, id, {active: false});
+    }
     const data = {
       cmd: 'toggle_tag',
       enable: NO_VALUE,

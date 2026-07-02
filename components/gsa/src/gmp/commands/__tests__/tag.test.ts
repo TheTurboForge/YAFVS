@@ -445,6 +445,48 @@ describe('TagCommand tests', () => {
     });
   });
 
+  test('should enable a tag through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.enable({id: 'tag-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags/tag-id');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          active: true,
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-tag-id');
+  });
+
   test('should disable a tag', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
@@ -459,6 +501,48 @@ describe('TagCommand tests', () => {
         enable: NO_VALUE,
       },
     });
+  });
+
+  test('should disable a tag through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.disable({id: 'tag-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags/tag-id');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          active: false,
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-tag-id');
   });
 
   test('should clone a tag through native API when available', async () => {

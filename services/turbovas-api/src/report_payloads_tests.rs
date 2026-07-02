@@ -4,8 +4,9 @@
 
 use crate::{
     report_cve_query_sql::report_cves_sql, report_error_query_sql::report_errors_sql,
-    report_host_query_sql::report_hosts_sql, report_payloads::raw_report_sql,
-    report_port_query_sql::report_ports_sql,
+    report_host_query_sql::report_hosts_sql,
+    report_operating_system_query_sql::report_operating_systems_sql,
+    report_payloads::raw_report_sql, report_port_query_sql::report_ports_sql,
     report_tls_certificate_query_sql::report_tls_certificates_sql,
 };
 
@@ -23,6 +24,35 @@ fn raw_report_payload_exposes_report_progress_without_control_paths() {
         assert!(
             !upper_sql.contains(forbidden),
             "raw report read SQL must not include control/mutation path: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn raw_report_operating_system_sql_is_report_scoped_read_only() {
+    let sql = report_operating_systems_sql("max_severity DESC");
+    let upper_sql = sql.to_ascii_uppercase();
+
+    for required in [
+        "SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)",
+        "JOIN report_hosts rh ON rh.report = sr.id",
+        "os_cpe.name = 'best_os_cpe'",
+        "os_txt.name = 'best_os_txt'",
+        "LEFT JOIN results r",
+        "AND lower(coalesce(nullif(r.host, ''), r.hostname, '')) = oi.host_key",
+        "FILTER (WHERE coalesce(r.severity, 0) > 0)::bigint AS vulnerability_count",
+        "count(*) OVER()::bigint AS total",
+        "ORDER BY max_severity DESC, name ASC LIMIT $3 OFFSET $4",
+    ] {
+        assert!(
+            sql.contains(required),
+            "raw report operating-system SQL missing {required}"
+        );
+    }
+    for forbidden in ["INSERT ", "UPDATE ", "DELETE ", "START_TASK", "STOP_TASK"] {
+        assert!(
+            !upper_sql.contains(forbidden),
+            "raw report operating-system SQL must not include control/mutation path: {forbidden}"
         );
     }
 }

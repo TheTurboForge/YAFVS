@@ -91,6 +91,7 @@ mod report_formats;
 mod report_helpers;
 mod report_host_query_sql;
 mod report_hosts;
+mod report_operating_system_query_sql;
 mod report_operating_systems;
 mod report_payloads;
 #[cfg(test)]

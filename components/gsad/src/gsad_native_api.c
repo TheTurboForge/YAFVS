@@ -258,6 +258,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *tag_prefix = "/api/v1/tags/";
+  const gchar *target_prefix = "/api/v1/targets/";
   const gchar *clone_suffix = "/clone";
   const gchar *resources_suffix = "/resources";
 
@@ -341,6 +342,18 @@ native_api_post_path_is_allowed (const gchar *path)
         id_length = strlen (id) - strlen (resources_suffix);
       else
         return FALSE;
+      return is_uuid_segment (id, id_length);
+    }
+
+  if (g_str_has_prefix (path, target_prefix))
+    {
+      const gchar *id = path + strlen (target_prefix);
+      gsize id_length;
+
+      if (!g_str_has_suffix (id, clone_suffix))
+        return FALSE;
+
+      id_length = strlen (id) - strlen (clone_suffix);
       return is_uuid_segment (id, id_length);
     }
 

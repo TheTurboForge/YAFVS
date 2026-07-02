@@ -224,6 +224,12 @@ const nativeHeaders = (gmp: NativeApiGmp): HeadersInit => {
   return headers;
 };
 
+const nativeWriteHeaders = (gmp: NativeApiGmp): HeadersInit => ({
+  ...nativeHeaders(gmp),
+  'Content-Type': 'application/json',
+  ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -232,6 +238,23 @@ const fetchNativeJson = async <T>(
   const response = await fetch(gmp.buildUrl(path, params), {
     credentials: 'include',
     headers: nativeHeaders(gmp),
+  });
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: nativeWriteHeaders(gmp),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`Native API request failed with status ${response.status}`);
@@ -279,6 +302,18 @@ export const fetchNativeTarget = async (
     {token: gmp.session.token},
   );
   return {target: nativeTargetToModel(payload)};
+};
+
+export const cloneNativeTarget = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeTargetItem>(
+    gmp,
+    `api/v1/targets/${encodeURIComponent(id)}/clone`,
+    {},
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const exportNativeTargetMetadata = async (

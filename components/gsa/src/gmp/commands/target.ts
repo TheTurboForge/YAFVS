@@ -1,14 +1,18 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import type {EntityCommandParams} from 'gmp/commands/entity';
 import {feedStatusRejection} from 'gmp/commands/feed-status';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import Target, {type AliveTest} from 'gmp/models/target';
+import {cloneNativeTarget} from 'gmp/native-api/targets';
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 import {UNSET_VALUE} from 'web/utils/Render';
@@ -47,6 +51,17 @@ export interface TargetCommandSaveParams extends TargetCommandCreateParams {
 class TargetCommand extends EntityCommand<Target> {
   constructor(http: Http) {
     super(http, 'target', Target);
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativeTarget(this.http, id);
+      } catch {
+        // Keep inherited GMP clone responsible for legacy rejection handling.
+      }
+    }
+    return super.clone({id});
   }
 
   async create({

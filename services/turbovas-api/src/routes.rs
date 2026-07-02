@@ -15,8 +15,8 @@ use crate::{
     browser_proxy_api::{
         BrowserProxyAuth, browser_proxy_clone_filter, browser_proxy_clone_port_list,
         browser_proxy_clone_report_config, browser_proxy_clone_scan_config,
-        browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_create_filter,
-        browser_proxy_create_tag, browser_proxy_update_tag_resources,
+        browser_proxy_clone_schedule, browser_proxy_clone_tag, browser_proxy_clone_target,
+        browser_proxy_create_filter, browser_proxy_create_tag, browser_proxy_update_tag_resources,
     },
     cert_advisories::*,
     cpe_catalog::*,
@@ -467,6 +467,10 @@ pub(crate) fn browser_proxy_native_api_router(
             post(browser_proxy_clone_schedule),
         )
         .route("/api/v1/tags/:tag_id/clone", post(browser_proxy_clone_tag))
+        .route(
+            "/api/v1/targets/:target_id/clone",
+            post(browser_proxy_clone_target),
+        )
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,
         ))

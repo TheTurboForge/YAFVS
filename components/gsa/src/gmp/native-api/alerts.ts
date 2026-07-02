@@ -284,6 +284,18 @@ export const fetchNativeAlert = async (
   return nativeAlertToModel(payload);
 };
 
+export const exportNativeAlertMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeAlertPayload>(
+    gmp,
+    `api/v1/alerts/${encodeURIComponent(id)}/export`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
 export const patchNativeAlert = async (
   gmp: NativeApiGmp,
   {id, name, comment}: NativeAlertPatchArgs,

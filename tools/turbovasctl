@@ -7531,9 +7531,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/alerts/{alert_id}/export",
-                "status": alert_detail_endpoint_status(repo_root),
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
-                "replacement_candidates": ["direct native redacted alert metadata export", "native-api-request helper"],
+                "replacement_candidates": ["GSA alert metadata export (migrated through gsad same-origin proxy)", "direct native redacted alert metadata export", "native-api-request helper"],
                 "notes": [
                     "Native JSON metadata export only; inherited XML export, alert delivery, and payload detail remain inherited.",
                     "Task references are id/name metadata only.",

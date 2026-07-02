@@ -481,6 +481,34 @@ fn operating_system_read_sql_is_os_metadata_and_host_counts_only() {
 }
 
 #[test]
+fn operating_system_direct_routes_remain_get_only_until_write_contracts_exist() {
+    for path in [
+        "/api/v1/operating-systems",
+        "/api/v1/operating-systems/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/operating-systems/12345678-1234-1234-1234-123456789abc/export",
+    ] {
+        assert!(
+            direct_api_v1_path_is_allowed(path),
+            "GET {path} must be direct-read allowlisted"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, false),
+            "GET {path} must be allowed without write-control"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, true),
+            "GET {path} must remain allowed when write-control is enabled"
+        );
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, path, true),
+                "{method} {path} must stay closed until operating-system write/delete/rich-history contracts exist"
+            );
+        }
+    }
+}
+
+#[test]
 fn host_user_tags_are_detail_only_active_host_tags() {
     let payload_source = include_str!("host_asset_payloads.rs");
     let host_list_payload = payload_source

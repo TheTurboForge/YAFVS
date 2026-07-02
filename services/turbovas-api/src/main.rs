@@ -6,6 +6,7 @@ mod alert_payloads;
 mod alert_query_sql;
 mod alert_write_db;
 mod alert_write_sql;
+mod alert_write_transactions;
 mod alert_write_validation;
 mod alert_writes;
 mod alerts;

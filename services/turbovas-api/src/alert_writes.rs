@@ -6,15 +6,12 @@ use axum::{
     Json,
     extract::{Extension, Path, State},
 };
-use tokio_postgres::Transaction;
 
 use crate::{
     alert_payloads::AlertAssetItem,
     alert_write_db::*,
-    alert_write_sql::alert_update_metadata_sql,
-    alert_write_validation::{
-        AlertPatchRequest, ValidatedAlertPatch, validate_alert_patch_request,
-    },
+    alert_write_transactions::execute_alert_patch_transaction,
+    alert_write_validation::{AlertPatchRequest, validate_alert_patch_request},
     alerts::load_alert_asset_detail,
     app_state::AppState,
     auth::DirectApiOperator,
@@ -49,18 +46,4 @@ pub(crate) async fn patch_alert(
         .map_err(|error| map_alert_write_db_error(error, "commit patch alert transaction"))?;
 
     Ok(Json(load_alert_asset_detail(&client, &record.uuid).await?))
-}
-
-pub(crate) async fn execute_alert_patch_transaction(
-    tx: &Transaction<'_>,
-    alert_internal_id: i32,
-    request: &ValidatedAlertPatch,
-) -> Result<AlertWriteRecord, ApiError> {
-    query_alert_write_record(
-        tx,
-        alert_update_metadata_sql(),
-        &[&alert_internal_id, &request.name, &request.comment],
-        "update alert metadata",
-    )
-    .await
 }

@@ -24,7 +24,10 @@ import {
   cloneNativeTarget,
   createNativeTarget,
   patchNativeTarget,
+  type NativeTargetCredentialPatchArgs,
+  type NativeTargetCredentialsPatchArgs,
   type NativeTargetCreateArgs,
+  type NativeTargetPatchArgs,
 } from 'gmp/native-api/targets';
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
@@ -63,7 +66,6 @@ export interface TargetCommandSaveParams extends TargetCommandCreateParams {
 
 type TargetCommandSaveArgs = TargetCommandSaveParams;
 
-const TARGET_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
 const NATIVE_TARGET_ALIVE_TESTS = new Set<AliveTest>([
   ARP_PING,
   CONSIDER_ALIVE,
@@ -73,18 +75,11 @@ const NATIVE_TARGET_ALIVE_TESTS = new Set<AliveTest>([
   TCP_SYN,
 ]);
 
-const isTargetMetadataOnlySave = (args: TargetCommandSaveArgs) => {
-  const keys = Object.keys(args);
-  return (
-    keys.every(key => TARGET_METADATA_SAVE_KEYS.has(key)) &&
-    typeof args.id === 'string' &&
-    typeof args.name === 'string' &&
-    (args.comment === undefined || typeof args.comment === 'string')
-  );
-};
-
 const isUnsetCredential = (id?: string) =>
   id === undefined || id === UNSET_VALUE;
+
+const isValidSshPort = (port?: number): boolean =>
+  port === undefined || (Number.isInteger(port) && port >= 1 && port <= 65535);
 
 const looksLikeIpv4Range = (value: string) => {
   const [left, right] = value.split('-', 2);
@@ -222,6 +217,165 @@ const nativeTargetCreateArgsFromParams = ({
   };
 };
 
+const nativeCredentialPatchFromId = (
+  id?: string,
+  port?: number,
+): NativeTargetCredentialPatchArgs | undefined => {
+  if (id === undefined) {
+    return undefined;
+  }
+  if (id === UNSET_VALUE) {
+    return null;
+  }
+  if (id.trim().length === 0) {
+    return undefined;
+  }
+  return {
+    id,
+    ...(port !== undefined ? {port} : {}),
+  };
+};
+
+const nativeTargetCredentialsPatchFromParams = ({
+  esxiCredentialId,
+  krb5CredentialId,
+  port,
+  smbCredentialId,
+  snmpCredentialId,
+  sshCredentialId,
+  sshElevateCredentialId,
+}: TargetCommandSaveArgs): NativeTargetCredentialsPatchArgs | undefined => {
+  if (!isValidSshPort(port)) {
+    return undefined;
+  }
+  if (port !== undefined && sshCredentialId === undefined) {
+    return undefined;
+  }
+  if (
+    sshCredentialId === undefined &&
+    sshElevateCredentialId !== undefined
+  ) {
+    return undefined;
+  }
+  if (
+    sshCredentialId === UNSET_VALUE &&
+    sshElevateCredentialId !== undefined &&
+    sshElevateCredentialId !== UNSET_VALUE
+  ) {
+    return undefined;
+  }
+  const credentials: NativeTargetCredentialsPatchArgs = {
+    ssh: nativeCredentialPatchFromId(sshCredentialId, port),
+    sshElevate: nativeCredentialPatchFromId(sshElevateCredentialId),
+    smb: nativeCredentialPatchFromId(smbCredentialId),
+    esxi: nativeCredentialPatchFromId(esxiCredentialId),
+    snmp: nativeCredentialPatchFromId(snmpCredentialId),
+    krb5: nativeCredentialPatchFromId(krb5CredentialId),
+  };
+  return Object.values(credentials).some(value => value !== undefined)
+    ? credentials
+    : undefined;
+};
+
+const nativeTargetPatchArgsFromParams = ({
+  aliveTests,
+  allowSimultaneousIPs,
+  comment,
+  esxiCredentialId,
+  excludeFile,
+  excludeHosts,
+  file,
+  hosts,
+  hostsFilter,
+  id,
+  krb5CredentialId,
+  name,
+  port,
+  portListId,
+  reverseLookupOnly,
+  reverseLookupUnify,
+  smbCredentialId,
+  snmpCredentialId,
+  sshCredentialId,
+  sshElevateCredentialId,
+  targetExcludeSource,
+  targetSource,
+}: TargetCommandSaveArgs): NativeTargetPatchArgs | undefined => {
+  if (targetSource !== undefined && targetSource !== 'manual') {
+    return undefined;
+  }
+  if (targetExcludeSource !== undefined && targetExcludeSource !== 'manual') {
+    return undefined;
+  }
+  if (file !== undefined || excludeFile !== undefined || hostsFilter !== undefined) {
+    return undefined;
+  }
+  if (aliveTests !== undefined && !canUseNativeTargetAliveTests(aliveTests)) {
+    return undefined;
+  }
+  if (portListId !== undefined && portListId.length === 0) {
+    return undefined;
+  }
+  const nativeHosts = parseNativeTargetHostList(hosts);
+  if (hosts !== undefined && nativeHosts === undefined) {
+    return undefined;
+  }
+  const nativeExcludeHosts = parseNativeTargetHostList(excludeHosts, {
+    allowEmpty: true,
+  });
+  if (excludeHosts !== undefined && nativeExcludeHosts === undefined) {
+    return undefined;
+  }
+  if (excludeHosts !== undefined && nativeHosts === undefined) {
+    return undefined;
+  }
+  const excludedHosts = new Set(nativeExcludeHosts ?? []);
+  if (
+    nativeHosts !== undefined &&
+    nativeHosts.every(host => excludedHosts.has(host))
+  ) {
+    return undefined;
+  }
+  const credentials = nativeTargetCredentialsPatchFromParams({
+    id,
+    name,
+    esxiCredentialId,
+    krb5CredentialId,
+    port,
+    smbCredentialId,
+    snmpCredentialId,
+    sshCredentialId,
+    sshElevateCredentialId,
+  });
+  if (
+    credentials === undefined &&
+    [
+      esxiCredentialId,
+      krb5CredentialId,
+      smbCredentialId,
+      snmpCredentialId,
+      sshCredentialId,
+      sshElevateCredentialId,
+      port,
+    ].some(value => value !== undefined)
+  ) {
+    return undefined;
+  }
+  return {
+    id,
+    name,
+    comment,
+    ...(aliveTests !== undefined ? {aliveTests} : {}),
+    ...(allowSimultaneousIPs !== undefined ? {allowSimultaneousIPs} : {}),
+    ...(reverseLookupOnly !== undefined ? {reverseLookupOnly} : {}),
+    ...(reverseLookupUnify !== undefined ? {reverseLookupUnify} : {}),
+    ...(portListId !== undefined ? {portListId} : {}),
+    ...(nativeHosts !== undefined ? {hosts: nativeHosts} : {}),
+    ...(nativeExcludeHosts !== undefined ? {excludeHosts: nativeExcludeHosts} : {}),
+    ...(credentials !== undefined ? {credentials} : {}),
+  };
+};
+
 class TargetCommand extends EntityCommand<Target> {
   constructor(http: Http) {
     super(http, 'target', Target);
@@ -330,12 +484,9 @@ class TargetCommand extends EntityCommand<Target> {
   }
 
   async save(args: TargetCommandSaveArgs) {
-    if (canUseNativeApi(this.http) && isTargetMetadataOnlySave(args)) {
-      return patchNativeTarget(this.http, {
-        id: args.id,
-        name: args.name,
-        comment: args.comment,
-      });
+    const nativePatchArgs = nativeTargetPatchArgsFromParams(args);
+    if (canUseNativeApi(this.http) && nativePatchArgs !== undefined) {
+      return patchNativeTarget(this.http, nativePatchArgs);
     }
 
     const {

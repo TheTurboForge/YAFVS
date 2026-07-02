@@ -556,7 +556,88 @@ describe('TargetCommand tests', () => {
     expect(result.data.id).toEqual('target_id1');
   });
 
-  test('should keep scan-input target saves on GMP when native API is available', async () => {
+  test('should save scan-input target changes through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'target_id1', name: 'updated'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    const result = await cmd.save({
+      id: 'target_id1',
+      allowSimultaneousIPs: true,
+      name: 'updated',
+      comment: 'comment',
+      targetSource: 'manual',
+      targetExcludeSource: 'manual',
+      hosts: '192.0.2.10, example.test',
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: true,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+      sshCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: UNSET_VALUE,
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target_id1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/targets/target_id1',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'updated',
+          comment: 'comment',
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: true,
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: ['192.0.2.10', 'example.test'],
+          exclude_hosts: [],
+          credentials: {
+            ssh: {
+              id: '54b05b45-02be-4123-9b05-b4502be11234',
+              port: 22,
+            },
+            ssh_elevate: null,
+            smb: null,
+            esxi: null,
+            snmp: null,
+            krb5: null,
+          },
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('target_id1');
+  });
+
+  test('should keep unsupported host target saves on GMP when native API is available', async () => {
     const response = createActionResultResponse();
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -578,19 +659,19 @@ describe('TargetCommand tests', () => {
       comment: 'comment',
       targetSource: 'manual',
       targetExcludeSource: 'manual',
-      hosts: '123.456, 678.9',
+      hosts: '192.0.2.0/24',
       excludeHosts: '',
       reverseLookupOnly: false,
       reverseLookupUnify: true,
-      portListId: 'pl_id1',
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
       aliveTests: [SCAN_CONFIG_DEFAULT],
       port: 22,
-      sshCredentialId: 'ssh_id',
-      sshElevateCredentialId: '0',
-      smbCredentialId: '0',
-      esxiCredentialId: '0',
-      snmpCredentialId: '0',
-      krb5CredentialId: '0',
+      sshCredentialId: UNSET_VALUE,
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: UNSET_VALUE,
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -598,9 +679,8 @@ describe('TargetCommand tests', () => {
       data: expect.objectContaining({
         cmd: 'save_target',
         target_id: 'target_id1',
-        hosts: '123.456, 678.9',
-        port_list_id: 'pl_id1',
-        ssh_credential_id: 'ssh_id',
+        hosts: '192.0.2.0/24',
+        ssh_credential_id: UNSET_VALUE,
       }),
     });
   });

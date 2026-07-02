@@ -72,10 +72,34 @@ interface NativeTargetCollectionPayload {
   items?: NativeTargetItem[];
 }
 
-interface NativeTargetPatchArgs {
+export interface NativeTargetPatchArgs {
   id: string;
   name?: string;
   comment?: string;
+  aliveTests?: AliveTest[];
+  allowSimultaneousIPs?: boolean;
+  credentials?: NativeTargetCredentialsPatchArgs;
+  excludeHosts?: string[];
+  hosts?: string[];
+  portListId?: string;
+  reverseLookupOnly?: boolean;
+  reverseLookupUnify?: boolean;
+}
+
+export type NativeTargetCredentialPatchArgs =
+  | {
+      id: string;
+      port?: number;
+    }
+  | null;
+
+export interface NativeTargetCredentialsPatchArgs {
+  esxi?: NativeTargetCredentialPatchArgs;
+  krb5?: NativeTargetCredentialPatchArgs;
+  smb?: NativeTargetCredentialPatchArgs;
+  snmp?: NativeTargetCredentialPatchArgs;
+  ssh?: NativeTargetCredentialPatchArgs;
+  sshElevate?: NativeTargetCredentialPatchArgs;
 }
 
 export interface NativeTargetCreateArgs {
@@ -364,11 +388,47 @@ export const createNativeTarget = async (
 
 export const patchNativeTarget = async (
   gmp: NativeApiGmp,
-  {id, name, comment}: NativeTargetPatchArgs,
+  {
+    id,
+    aliveTests,
+    allowSimultaneousIPs,
+    comment,
+    credentials,
+    excludeHosts,
+    hosts,
+    name,
+    portListId,
+    reverseLookupOnly,
+    reverseLookupUnify,
+  }: NativeTargetPatchArgs,
 ): Promise<Response<ActionResult>> => {
+  const credentialEntries = Object.entries({
+    ssh: credentials?.ssh,
+    ssh_elevate: credentials?.sshElevate,
+    smb: credentials?.smb,
+    esxi: credentials?.esxi,
+    snmp: credentials?.snmp,
+    krb5: credentials?.krb5,
+  }).filter(([, value]) => value !== undefined);
   const body = {
     ...(name !== undefined ? {name} : {}),
     ...(comment !== undefined ? {comment} : {}),
+    ...(aliveTests !== undefined ? {alive_tests: aliveTests} : {}),
+    ...(allowSimultaneousIPs !== undefined
+      ? {allow_simultaneous_ips: allowSimultaneousIPs}
+      : {}),
+    ...(reverseLookupOnly !== undefined
+      ? {reverse_lookup_only: reverseLookupOnly}
+      : {}),
+    ...(reverseLookupUnify !== undefined
+      ? {reverse_lookup_unify: reverseLookupUnify}
+      : {}),
+    ...(portListId !== undefined ? {port_list_id: portListId} : {}),
+    ...(hosts !== undefined ? {hosts} : {}),
+    ...(excludeHosts !== undefined ? {exclude_hosts: excludeHosts} : {}),
+    ...(credentialEntries.length > 0
+      ? {credentials: Object.fromEntries(credentialEntries)}
+      : {}),
   };
   const payload = await writeNativeJson<NativeTargetItem>(
     gmp,

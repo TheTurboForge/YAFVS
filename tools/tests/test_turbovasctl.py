@@ -2414,7 +2414,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertGreaterEqual(contract["browser_proxied_count"], contract["gsad_proxy_allowlist_count"])
         self.assertIn("/api/v1/reports/{}", contract["gsad_proxy_allowlist_endpoints"])
         self.assertIn("/api/v1/scopes/{}/reports/{}/metrics", contract["gsad_proxy_allowlist_endpoints"])
-        self.assertNotIn("/api/v1/scopes/{}/reports/{}/retention-plan", contract["gsad_proxy_allowlist_endpoints"])
+        self.assertIn("/api/v1/scopes/{}/reports/{}/retention-plan", contract["gsad_proxy_allowlist_endpoints"])
         self.assertNotIn(
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
             contract["internal_only_endpoints"],
@@ -3657,8 +3657,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_hard_delete["x_turbovas_replaces"], "tag-hard-delete")
 
         retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
-        self.assertEqual(retention["status"], "implemented_internal_and_scriptable_read")
-        self.assertEqual(retention["browser_access"], "not_browser_proxied")
+        self.assertEqual(retention["status"], "implemented_internal_browser_proxied_and_scriptable_read")
+        self.assertEqual(retention["browser_access"], "browser_proxied")
         self.assertEqual(retention["direct_access"], "scriptable_read")
         self.assertTrue(retention["openapi_direct_marker"])
         self.assertEqual(retention["x_turbovas_exposure"], "direct-read")

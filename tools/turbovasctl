@@ -7994,8 +7994,8 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
-                "status": "implemented_internal_and_scriptable_read",
-                "replacement_candidates": ["B-143 non-destructive retention preview scaffold", "runtime-native-api-smoke validation", "direct native retention-plan preview automation"],
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "replacement_candidates": ["B-143 non-destructive retention preview scaffold", "GSA/browser retention preview reads through gsad same-origin proxy", "runtime-native-api-smoke validation", "direct native retention-plan preview automation"],
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}/metrics",

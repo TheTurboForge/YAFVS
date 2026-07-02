@@ -134,11 +134,11 @@ address; `TURBOVAS_API_DIRECT_PORT` accepts one TCP port; and
 rejects URLs, host lists, whitespace, and invalid ports before executing direct
 requests.
 Direct scriptable access is narrower than the internal listener: endpoints must
-be explicitly classified for direct use. Internal-only scaffolds such as the
-scope-report retention preview stay available to internal validation but return
-JSON `404 not_found` on the direct bearer listener. Direct write-control is
-limited to explicitly registered scope metadata/membership routes behind
-verified operator identity and `TURBOVAS_API_DIRECT_WRITE_CONTROL`.
+be explicitly classified for direct use. Non-destructive preview reads such as
+the scope-report retention plan are scriptable and browser-proxied when marked
+direct, but retention mutations remain closed. Direct write-control is limited
+to explicitly registered routes behind verified operator identity and
+`TURBOVAS_API_DIRECT_WRITE_CONTROL`.
 The OpenAPI contract marks direct scriptable reads with the
 `x-turbovas-direct: true` operation extension, and `native-tooling-state`
 reports whether those markers align with the implementation inventory.

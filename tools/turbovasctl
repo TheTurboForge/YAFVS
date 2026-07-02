@@ -7204,7 +7204,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "endpoint": "/api/v1/cpes/{cpe_id}",
                 "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["GSA Security Information CPE detail (migrated through gsad same-origin proxy)", "read-only CPE catalog automation"],
+                "replacement_candidates": ["GSA Security Information CPE detail (migrated through gsad same-origin proxy)", "GSA CPE detail metadata export (migrated through gsad same-origin proxy)", "read-only CPE catalog automation"],
             },
             {
                 "endpoint": "/api/v1/nvts",

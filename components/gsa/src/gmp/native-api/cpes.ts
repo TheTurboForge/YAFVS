@@ -5,6 +5,7 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import Cpe from 'gmp/models/cpe';
 import type Filter from 'gmp/models/filter';
@@ -253,4 +254,16 @@ export const fetchNativeCpe = async (
     {token: gmp.session.token},
   );
   return nativeCpeToModel(payload, {detail: true});
+};
+
+export const exportNativeCpeMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeCatalogCpePayload>(
+    gmp,
+    `api/v1/cpes/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };

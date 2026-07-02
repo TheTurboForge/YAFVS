@@ -384,7 +384,8 @@ deprecation status, severity, CVE reference count, and reported CVE references
 where available from SCAP-owned PostgreSQL state. This catalog is intentionally
 distinct from observed host, application, operating-system, and report evidence:
 `/cpes` is reference intelligence, while report paths are observed evidence from
-completed scans.
+completed scans. GSA CPE metadata export reuses the same browser-proxied native
+detail JSON; raw/rich SCAP feed export remains inherited.
 
 Native Security Information NVT catalog rows use `nvts.oid` as the identifier
 and include the NVT name, family, severity, QoD, solution metadata, tags, CVE,

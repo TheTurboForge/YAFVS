@@ -5654,6 +5654,28 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(buckets["needs_review"]["count"], 1)
 
+    def test_native_tooling_removal_review_documents_known_blocker_paths(self):
+        review = turbovasctl.native_tooling_removal_review(
+            [
+                "components/gvm-tools/scripts/export-xml-report.gmp.py",
+                "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
+                "components/gvm-tools/scripts/create-targets-from-csv.gmp.py",
+                "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
+                "components/gvm-tools/scripts/update-task-target.gmp.py",
+                "components/gvm-tools/scripts/verify-scanners.gmp.py",
+            ]
+        )
+
+        export_blockers = review["buckets"]["export_or_report_generation"]["path_blockers"]
+        control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
+        write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
+        self.assertIn("serializes XML", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
+        self.assertIn("scanner verification readout", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])
+        self.assertIn("CSV bulk-alert import contract", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
+        self.assertIn("CSV bulk-target import contract", write_blockers["components/gvm-tools/scripts/create-targets-from-csv.gmp.py"])
+        self.assertIn("CSV bulk-task import contract", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
+        self.assertIn("task-target swap contract", write_blockers["components/gvm-tools/scripts/update-task-target.gmp.py"])
+
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/task.ts", "product_workflow")[0], "task-target-scan-control-or-credential")

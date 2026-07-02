@@ -421,7 +421,13 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
     "needs_review": "Script is still marked as a removal candidate but lacks a specific retirement-safety bucket.",
 }
 NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
+    "create-alerts-from-csv.gmp.py": "Native tooling still lacks a CSV bulk-alert import contract that resolves alert methods, credentials, report formats, and per-row event payloads for EMAIL and SMB variants.",
     "create-tags-from-csv.gmp.py": "Native tag writes do not yet replace this script's full contract: credential tags are intentionally unsupported, report tags use inherited filter-based assignment, and broad resource-name lookups need explicit native contracts.",
+    "create-targets-from-csv.gmp.py": "Native tooling still lacks a CSV bulk-target import contract that maps hosts, credentials, alive-test selection, and port-list choice in one path.",
+    "create-tasks-from-csv.gmp.py": "Native tooling still lacks a CSV bulk-task import contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
+    "export-xml-report.gmp.py": "Native tooling still lacks a direct report-export contract that fetches a report by id, serializes XML, and writes the chosen file name locally.",
+    "update-task-target.gmp.py": "Native tooling still lacks a task-target swap contract that clones the current target, preserves target settings, rebinds the task, and deletes the old target when unused.",
+    "verify-scanners.gmp.py": "Native tooling still lacks a scanner verification readout that batches verify responses into an operator-facing table with host/version fallback handling.",
 }
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})

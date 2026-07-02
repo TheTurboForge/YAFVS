@@ -15,7 +15,10 @@ import Credential, {
   type SNMPPrivacyAlgorithmType,
 } from 'gmp/models/credential';
 import {type Element} from 'gmp/models/model';
-import {exportNativeCredentialMetadata} from 'gmp/native-api/credentials';
+import {
+  exportNativeCredentialMetadata,
+  patchNativeCredential,
+} from 'gmp/native-api/credentials';
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
@@ -104,6 +107,16 @@ const saveFile = (file: File | undefined | null): File | undefined | string => {
   }
   return file;
 };
+
+const CREDENTIAL_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
+
+const isCredentialMetadataOnlySave = (
+  args: CredentialCommandSaveArgs,
+): boolean =>
+  Object.keys(args).every(key => CREDENTIAL_METADATA_SAVE_KEYS.has(key)) &&
+  typeof args.id === 'string' &&
+  typeof args.name === 'string' &&
+  (args.comment === undefined || typeof args.comment === 'string');
 
 class CredentialCommand extends EntityCommand<
   Credential,
@@ -246,7 +259,15 @@ class CredentialCommand extends EntityCommand<
     };
   }
 
-  save(args: CredentialCommandSaveArgs) {
+  async save(args: CredentialCommandSaveArgs) {
+    if (canUseNativeApi(this.http) && isCredentialMetadataOnlySave(args)) {
+      return patchNativeCredential(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
+
     const baseData = this.saveBase(args);
     return this.action(baseData);
   }

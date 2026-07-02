@@ -7307,9 +7307,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "patch",
                 "endpoint": "/api/v1/credentials/{credential_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native credential name/comment metadata modification"],
+                "replacement_candidates": ["same-origin browser credential metadata PATCH for command-level metadata-only saves", "direct native credential name/comment metadata modification"],
             },
             {
                 "endpoint": "/api/v1/scan-configs",

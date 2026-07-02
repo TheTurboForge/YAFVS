@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import Credential, {type CredentialType} from 'gmp/models/credential';
 import type QueryFilter from 'gmp/models/filter';
 
@@ -53,6 +54,12 @@ interface NativeCredentialPayload {
 interface NativeCredentialsPayload {
   page?: Partial<NativePage>;
   items?: NativeCredentialPayload[];
+}
+
+interface NativeCredentialPatchArgs {
+  id: string;
+  name?: string;
+  comment?: string;
 }
 
 export interface NativeCredentialsQuery {
@@ -163,6 +170,31 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
 const referenceElement = (reference: NativeCredentialUsageReference) => ({
   _id: stringValue(reference.id),
   name: stringValue(reference.name),
@@ -246,4 +278,29 @@ export const exportNativeCredentialMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const patchNativeCredential = async (
+  gmp: NativeApiGmp,
+  {id, name, comment}: NativeCredentialPatchArgs,
+): Promise<Response<ActionResult>> => {
+  const body = {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+  };
+  const payload = await writeNativeJson<NativeCredentialPayload>(
+    gmp,
+    `api/v1/credentials/${encodeURIComponent(id)}`,
+    body,
+    'PATCH',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_credential',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
 };

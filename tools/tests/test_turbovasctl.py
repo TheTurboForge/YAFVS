@@ -5514,7 +5514,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("reason", write_bucket)
         self.assertIn("components/gvm-tools/scripts/create-tags-from-csv.gmp.py", write_bucket["paths"])
         self.assertIn(
-            "credential tags are intentionally unsupported",
+            "CSV tag behavior is characterized",
             write_bucket["path_blockers"]["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"],
         )
         self.assertNotIn("items", details)
@@ -5700,9 +5700,13 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
+                "components/gvm-tools/scripts/create-schedules-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-targets-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-targets-from-host-list.gmp.py",
                 "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
+                "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
+                "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
+                "components/gvm-tools/scripts/send-schedules.gmp.py",
                 "components/gvm-tools/scripts/update-task-target.gmp.py",
                 "components/gvm-tools/scripts/verify-scanners.gmp.py",
             ]
@@ -5719,10 +5723,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("unique-NVT", monthly_blockers["components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py"])
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
         self.assertIn("scanner verification table", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])
-        self.assertIn("CSV bulk-alert import contract", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
+        self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
+        self.assertIn("CSV schedule creation", write_blockers["components/gvm-tools/scripts/create-schedules-from-csv.gmp.py"])
         self.assertIn("CSV bulk-target behavior", write_blockers["components/gvm-tools/scripts/create-targets-from-csv.gmp.py"])
         self.assertIn("one target per host", write_blockers["components/gvm-tools/scripts/create-targets-from-host-list.gmp.py"])
         self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
+        self.assertIn("CSV tag behavior", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
+        self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
+        self.assertIn("XML schedule send", write_blockers["components/gvm-tools/scripts/send-schedules.gmp.py"])
         self.assertIn("clone/rebind/delete behavior", write_blockers["components/gvm-tools/scripts/update-task-target.gmp.py"])
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):

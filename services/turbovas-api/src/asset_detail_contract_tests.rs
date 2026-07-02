@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::http::Method;
+
 use crate::{
     alert_query_sql::{alert_asset_detail_sql, alert_asset_tasks_sql, alert_assets_sql},
     asset_user_tag_query_sql::{
@@ -10,6 +12,7 @@ use crate::{
         tls_certificate_user_tags_sql,
     },
     collections::{ALERT_DEFAULT_SORT, ALERT_SORT_FIELDS},
+    direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed},
     host_asset_query_sql::{
         host_asset_identifiers_sql, host_asset_operating_systems_sql, host_asset_safe_details_sql,
     },
@@ -544,6 +547,34 @@ fn host_asset_detail_side_queries_are_bounded_safe_metadata() {
             !combined.contains(forbidden),
             "host detail SQL must not contain {forbidden}"
         );
+    }
+}
+
+#[test]
+fn host_asset_direct_routes_remain_get_only_until_target_or_tag_contracts_exist() {
+    for path in [
+        "/api/v1/hosts",
+        "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        "/api/v1/hosts/12345678-1234-1234-1234-123456789abc/export",
+    ] {
+        assert!(
+            direct_api_v1_path_is_allowed(path),
+            "GET {path} must be direct-read allowlisted"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, false),
+            "GET {path} must be allowed without write-control"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&Method::GET, path, true),
+            "GET {path} must remain allowed when write-control is enabled"
+        );
+        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            assert!(
+                !direct_api_v1_method_is_allowed(&method, path, true),
+                "{method} {path} must stay closed until host target-creation, tag-write, or rich-history contracts exist"
+            );
+        }
     }
 }
 

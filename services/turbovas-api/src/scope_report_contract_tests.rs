@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::http::Method;
+
 use crate::{
     collections::{REPORT_RESULT_DEFAULT_SORT, REPORT_RESULT_SORT_FIELDS},
-    direct_api::direct_api_v1_path_is_allowed,
+    direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed},
     query::sort_clause,
     scope_report_results::scope_report_results_sql,
     scope_report_retention::scope_report_retention_sources_sql,
@@ -59,9 +61,24 @@ fn scope_report_retention_preview_marks_only_non_latest_sources() {
     assert!(!upper_sql.contains("INSERT"));
     assert!(!upper_sql.contains("UPDATE"));
     assert!(!upper_sql.contains("DELETE"));
-    assert!(direct_api_v1_path_is_allowed(
-        "/api/v1/scopes/scope-id/reports/report-id/retention-plan"
+    let retention_path = "/api/v1/scopes/12345678-1234-1234-1234-123456789abc/reports/87654321-4321-4321-4321-cba987654321/retention-plan";
+    assert!(direct_api_v1_path_is_allowed(retention_path));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        retention_path,
+        false
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        retention_path,
+        true
+    ));
+    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, retention_path, true),
+            "{method} retention preview must remain closed even when write-control mode is enabled"
+        );
+    }
 }
 
 #[test]

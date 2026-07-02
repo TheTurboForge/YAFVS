@@ -267,4 +267,6 @@ mod scope_report_mutation_characterization_tests;
 #[cfg(test)]
 mod task_control_characterization_tests;
 #[cfg(test)]
+mod tooling_bulk_write_characterization_tests;
+#[cfg(test)]
 mod tooling_task_control_characterization_tests;

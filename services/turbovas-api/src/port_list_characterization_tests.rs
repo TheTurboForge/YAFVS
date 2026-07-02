@@ -9,6 +9,8 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_PORT_LISTS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
+const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GMP_PORT_LISTS: &str = include_str!("../../../components/gvmd/src/gmp_port_lists.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -173,6 +175,67 @@ fn inherited_create_port_list_validates_ranges_owner_acl_name_and_feed_predefine
     let create_no_acl = inherited_function(MANAGE_SQL_PORT_LISTS, "create_port_list_no_acl");
     assert!(create_no_acl.contains("create_port_list_internal (0"));
     assert!(create_no_acl.contains("1, /* Predefined. */"));
+}
+
+#[test]
+fn inherited_port_list_import_wraps_uploaded_xml_and_parser_keeps_three_create_branches() {
+    let import = inherited_function(GSAD_GMP_C, "import_port_list_gmp");
+    for required in [
+        "<create_port_list>",
+        "params_value (params, \"xml_file\")",
+        "gmp (connection, credentials, NULL, &entity, response_data, command)",
+        "response_from_entity (connection, credentials, params, entity",
+    ] {
+        assert!(
+            import.contains(required),
+            "import_port_list_gmp missing {required}"
+        );
+    }
+
+    let create_run = inherited_function(GMP_PORT_LISTS, "create_port_list_run");
+    for required in [
+        "get_port_lists_response = entity_child (entity, \"get_port_lists_response\")",
+        "parse_port_list_entity (port_list, &port_list_id, &import_name",
+        "GET_PORT_LISTS_RESPONSE requires a",
+        "GET_PORT_LISTS_RESPONSE ID must be",
+        "!is_uuid (port_list_id)",
+        "create_port_list (port_list_id",
+        "copy = entity_child (entity, \"copy\")",
+        "copy_port_list (name ? entity_text (name) : NULL",
+        "entity_child (entity, \"port_range\")",
+        "create_port_list (NULL",
+    ] {
+        assert!(
+            create_run.contains(required),
+            "create_port_list_run missing {required}"
+        );
+    }
+}
+
+#[test]
+fn inherited_port_list_export_is_generic_xml_resource_export() {
+    let single_export = inherited_function(GSAD_GMP_C, "export_port_list_gmp");
+    assert!(single_export.contains("export_resource (connection, \"port_list\""));
+
+    let many_export = inherited_function(GSAD_GMP_C, "export_port_lists_gmp");
+    assert!(many_export.contains("export_many (connection, \"port_list\""));
+
+    for forbidden in [
+        "create_port_list",
+        "modify_port_list",
+        "delete_port_list",
+        "create_port_range",
+        "import_port_list",
+    ] {
+        assert!(
+            !single_export.contains(forbidden),
+            "single port-list export must not include mutation boundary {forbidden}"
+        );
+        assert!(
+            !many_export.contains(forbidden),
+            "multi port-list export must not include mutation boundary {forbidden}"
+        );
+    }
 }
 
 #[test]

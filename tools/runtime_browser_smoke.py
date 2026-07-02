@@ -374,6 +374,33 @@ async function assertSavedFilterWriteProxy(page) {
     clone.status === 201 && cloneId ? 'Saved-filter clone worked through the same-origin native POST proxy.' : 'Saved-filter clone through the same-origin native POST proxy failed.',
     { status: clone.status, source_id: createdId, clone_id: cloneId, cleanup_required: Boolean(cloneId), message: clone.body?.error?.message || clone.textSample },
   );
+  if (cloneId) {
+    await deleteSavedFilterThroughNativeProxy(page, cloneId, 'clone');
+  }
+  await deleteSavedFilterThroughNativeProxy(page, createdId, 'created');
+}
+
+async function deleteSavedFilterThroughNativeProxy(page, filterId, label) {
+  const trash = await fetchNativeJsonWithBrowserToken(page, `/api/v1/filters/${encodeURIComponent(filterId)}`, {
+    method: 'DELETE',
+  });
+  add(
+    trash.status === 204 ? 'pass' : 'fail',
+    `filter.write-delete-${label}-native-api`,
+    trash.status === 204 ? 'Saved-filter delete worked through the same-origin native DELETE proxy.' : 'Saved-filter delete through the same-origin native DELETE proxy failed.',
+    { status: trash.status, filter_id: filterId, cleanup_required: trash.status !== 204, message: trash.body?.error?.message || trash.textSample },
+  );
+  if (trash.status !== 204) return;
+
+  const hardDelete = await fetchNativeJsonWithBrowserToken(page, `/api/v1/filters/${encodeURIComponent(filterId)}/trash`, {
+    method: 'DELETE',
+  });
+  add(
+    hardDelete.status === 204 ? 'pass' : 'fail',
+    `filter.write-hard-delete-${label}-native-api`,
+    hardDelete.status === 204 ? 'Saved-filter hard-delete worked through the same-origin native DELETE proxy.' : 'Saved-filter hard-delete through the same-origin native DELETE proxy failed.',
+    { status: hardDelete.status, filter_id: filterId, native_deleted_id: hardDelete.status === 204 ? filterId : null, cleanup_required: hardDelete.status !== 204, message: hardDelete.body?.error?.message || hardDelete.textSample },
+  );
 }
 
 async function assertNativeApiInvalidSortProxy(page, spec) {
@@ -1025,6 +1052,16 @@ def split_route_values(values: list[str]) -> list[str]:
 
 def filter_write_smoke_ids(payload: dict[str, Any]) -> list[str]:
     ids: list[str] = []
+    native_deleted_ids: set[str] = set()
+    for item in payload.get("findings", []):
+        if not isinstance(item, dict):
+            continue
+        details = item.get("details", {})
+        if not isinstance(details, dict):
+            continue
+        value = details.get("native_deleted_id")
+        if isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", value):
+            native_deleted_ids.add(value)
     for item in payload.get("findings", []):
         if not isinstance(item, dict):
             continue
@@ -1033,7 +1070,12 @@ def filter_write_smoke_ids(payload: dict[str, Any]) -> list[str]:
             continue
         for key in ("clone_id", "created_id"):
             value = details.get(key)
-            if isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", value) and value not in ids:
+            if (
+                isinstance(value, str)
+                and re.fullmatch(r"[0-9a-fA-F-]{36}", value)
+                and value not in native_deleted_ids
+                and value not in ids
+            ):
                 ids.append(value)
     ids.reverse()
     return ids
@@ -1060,6 +1102,16 @@ def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]
             for item in payload.get("findings", [])
         )
         if not saw_write_check:
+            return
+        native_deleted_ids = [
+            details.get("native_deleted_id")
+            for item in payload.get("findings", [])
+            if isinstance(item, dict)
+            for details in [item.get("details", {})]
+            if isinstance(details, dict) and isinstance(details.get("native_deleted_id"), str)
+        ]
+        if native_deleted_ids:
+            append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through native DELETE cleanup.", {"native_deleted_ids": native_deleted_ids})
             return
         append_finding(payload, "warn", "filter.write-cleanup", "No saved-filter write-smoke IDs were available for cleanup.")
         return

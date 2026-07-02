@@ -19,33 +19,48 @@ use crate::{
     errors::ApiError,
     filter_payloads::FilterAssetItem,
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest, FilterPatchRequest},
-    filter_writes::{clone_filter, create_filter, patch_filter, restore_filter},
+    filter_writes::{
+        clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
+        restore_filter,
+    },
     operator_identity::resolve_browser_proxy_operator_by_name,
     port_list_payloads::PortListAssetDetail,
     port_list_write_validation::{
         PortListCloneRequest, PortListCreateRequest, PortListPatchRequest,
     },
-    port_list_writes::{clone_port_list, create_port_list, patch_port_list, restore_port_list},
+    port_list_writes::{
+        clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
+        patch_port_list, restore_port_list,
+    },
     report_config_payloads::ReportConfigAssetItem,
     report_config_write_validation::{
         ReportConfigCloneRequest, ReportConfigCreateRequest, ReportConfigPatchRequest,
     },
     report_config_writes::{
-        clone_report_config, create_report_config, patch_report_config, restore_report_config,
+        clone_report_config, create_report_config, delete_report_config, hard_delete_report_config,
+        patch_report_config, restore_report_config,
     },
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_validation::ScanConfigCloneRequest,
-    scan_config_writes::{clone_scan_config, restore_scan_config},
+    scan_config_writes::{
+        clone_scan_config, delete_scan_config, hard_delete_scan_config, restore_scan_config,
+    },
     schedule_payloads::ScheduleAssetDetail,
     schedule_write_validation::ScheduleCloneRequest,
-    schedule_writes::{clone_schedule, restore_schedule},
+    schedule_writes::{clone_schedule, delete_schedule, hard_delete_schedule, restore_schedule},
+    scope_writes::delete_scope,
     tag_payloads::TagAssetItem,
     tag_write_validation::{
         TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
     },
-    tag_writes::{clone_tag, create_tag, patch_tag, restore_tag, update_tag_resources},
+    tag_writes::{
+        clone_tag, create_tag, delete_tag, hard_delete_tag, patch_tag, restore_tag,
+        update_tag_resources,
+    },
     target_write_validation::{TargetCloneRequest, TargetCreateRequest},
-    target_writes::{clone_target, create_target, restore_target},
+    target_writes::{
+        clone_target, create_target, delete_target, hard_delete_target, restore_target,
+    },
     task_target_payloads::TargetItem,
 };
 
@@ -89,6 +104,26 @@ pub(crate) async fn browser_proxy_restore_report_config(
     .await
 }
 
+pub(crate) async fn browser_proxy_delete_filter(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(filter_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_filter(State(state), Path(filter_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_filter(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(filter_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_filter(State(state), Path(filter_id), Some(Extension(operator))).await
+}
+
 fn env_string(name: &str) -> Option<String> {
     env::var(name)
         .ok()
@@ -106,6 +141,36 @@ pub(crate) async fn browser_proxy_restore_scan_config(
     restore_scan_config(
         State(state),
         Path(scan_config_id),
+        Some(Extension(operator)),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_delete_report_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(report_config_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_report_config(
+        State(state),
+        Path(report_config_id),
+        Some(Extension(operator)),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_report_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(report_config_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_report_config(
+        State(state),
+        Path(report_config_id),
         Some(Extension(operator)),
     )
     .await
@@ -174,6 +239,26 @@ pub(crate) async fn browser_proxy_patch_alert(
     .await
 }
 
+pub(crate) async fn browser_proxy_delete_port_list(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(port_list_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_port_list(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(port_list_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
+}
+
 pub(crate) async fn browser_proxy_create_filter(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -197,6 +282,36 @@ pub(crate) async fn browser_proxy_patch_filter(
         Path(filter_id),
         Some(Extension(operator)),
         Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_delete_scan_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scan_config_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_scan_config(
+        State(state),
+        Path(scan_config_id),
+        Some(Extension(operator)),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_scan_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scan_config_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_scan_config(
+        State(state),
+        Path(scan_config_id),
+        Some(Extension(operator)),
     )
     .await
 }
@@ -236,6 +351,26 @@ pub(crate) async fn browser_proxy_patch_report_config(
         Json(request),
     )
     .await
+}
+
+pub(crate) async fn browser_proxy_delete_tag(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(tag_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_tag(State(state), Path(tag_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_tag(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(tag_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_tag(State(state), Path(tag_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_restore_filter(
@@ -436,6 +571,56 @@ pub(crate) async fn browser_proxy_clone_schedule(
         Json(request),
     )
     .await
+}
+
+pub(crate) async fn browser_proxy_delete_schedule(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(schedule_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_schedule(State(state), Path(schedule_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_schedule(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(schedule_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_schedule(State(state), Path(schedule_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_delete_scope(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scope_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_scope(State(state), Path(scope_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_delete_target(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(target_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_target(State(state), Path(target_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_target(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(target_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_target(State(state), Path(target_id), Some(Extension(operator))).await
 }
 
 async fn browser_proxy_operator_from_headers(

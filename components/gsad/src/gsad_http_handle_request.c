@@ -74,6 +74,7 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
   gsad_http_handler_t *native_api_get_handler = NULL;
   gsad_http_handler_t *native_api_post_handler = NULL;
   gsad_http_handler_t *native_api_patch_handler = NULL;
+  gsad_http_handler_t *native_api_delete_handler = NULL;
   gsad_http_handler_t *system_report_handler = NULL;
 
   gboolean is_jwt_requested = gsad_settings_is_jwt_requested (gsad_settings);
@@ -90,6 +91,8 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
       native_api_post_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       native_api_patch_handler =
+        gsad_http_handler_new (gsad_http_handle_setup_credentials);
+      native_api_delete_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
@@ -115,6 +118,10 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
         gsad_http_handler_new (gsad_http_handle_setup_user);
       gsad_http_handler_add_from_func (native_api_patch_handler,
                                        gsad_http_handle_setup_credentials);
+      native_api_delete_handler =
+        gsad_http_handler_new (gsad_http_handle_setup_user);
+      gsad_http_handler_add_from_func (native_api_delete_handler,
+                                       gsad_http_handle_setup_credentials);
       system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_user);
       gsad_http_handler_add_from_func (system_report_handler,
@@ -137,11 +144,14 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
                                    gsad_http_handle_native_api_post);
   gsad_http_handler_add_from_func (native_api_patch_handler,
                                    gsad_http_handle_native_api_patch);
+  gsad_http_handler_add_from_func (native_api_delete_handler,
+                                   gsad_http_handle_native_api_delete);
   gsad_http_handler_t *native_api_url_handler = gsad_http_url_handler_new (
     "^/api/v1/.+$",
-    gsad_http_method_handler_new_with_patch_handler (native_api_get_handler,
-                                                     native_api_post_handler,
-                                                     native_api_patch_handler));
+    gsad_http_method_handler_new_with_delete_handler (native_api_get_handler,
+                                                      native_api_post_handler,
+                                                      native_api_patch_handler,
+                                                      native_api_delete_handler));
   next = gsad_http_handler_add (next, native_api_url_handler);
 
   gboolean is_api_only = gsad_settings_is_api_only_enabled (gsad_settings);
@@ -221,7 +231,8 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
       next = gsad_http_handler_add (next, index_url_handler);
     }
 
-  // don't support other methods than GET, POST and PATCH, return 405 for other methods
+  // don't support other methods than GET, POST, PATCH and DELETE, return 405
+  // for other methods
   next =
     gsad_http_handler_add_from_func (next, gsad_http_handle_invalid_method);
   // return 404 for URLs that don't match any of the above handlers
@@ -262,7 +273,7 @@ gsad_http_request_cleanup_handlers ()
  * @param[in]  cls              A pointer to http_handler_t
  * @param[in]  connection       Connection handle, e.g. used to send response.
  * @param[in]  url              The URL requested.
- * @param[in]  method           "GET", "POST" or "PATCH", others are disregarded.
+ * @param[in]  method           "GET", "POST", "PATCH" or "DELETE", others are disregarded.
  * @param[in]  version          Not used for this callback.
  * @param[in]  upload_data      Data used for write requests.
  * @param[in]  upload_data_size Size of upload_data.
@@ -311,6 +322,12 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
           *con_cls = (void *) con_info;
           return MHD_YES;
         }
+      if (str_equal (method, "DELETE") && g_str_has_prefix (url, "/api/v1/"))
+        {
+          con_info = gsad_connection_info_new (METHOD_TYPE_DELETE, url);
+          *con_cls = (void *) con_info;
+          return MHD_YES;
+        }
       if (str_equal (method, "POST"))
         {
           /* First call for this request, a POST. */
@@ -350,6 +367,15 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
       return MHD_YES;
     }
 
+  if (gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_DELETE
+      && *upload_data_size != 0)
+    {
+      *upload_data_size = 0;
+      return gsad_http_send_response_for_content (
+        connection, BAD_REQUEST_PAGE, MHD_HTTP_NOT_ACCEPTABLE, NULL,
+        GSAD_CONTENT_TYPE_TEXT_HTML, NULL, 0);
+    }
+
   if (gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_POST
       || gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_PATCH)
     {
@@ -375,7 +401,8 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
   /* validate parameters */
   params = gsad_connection_info_get_params (con_info);
   if (gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_POST
-      || gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_PATCH)
+      || gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_PATCH
+      || gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_DELETE)
     add_native_api_header_token (connection, url, params);
   params_mhd_validate (params);
 

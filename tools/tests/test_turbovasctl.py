@@ -933,6 +933,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("browser_smoke.add_argument(\"--write-filter-smoke\"", source)
         self.assertIn("filter.write-create-native-api", browser_smoke)
         self.assertIn("filter.write-clone-native-api", browser_smoke)
+        self.assertIn("filter.write-delete-${label}-native-api", browser_smoke)
+        self.assertIn("filter.write-hard-delete-${label}-native-api", browser_smoke)
         self.assertIn("filter.write-cleanup", browser_smoke)
         self.assertIn('args.extend(["--route", route])', source)
         self.assertIn("runtime-browser-smoke *args:", justfile)
@@ -2005,13 +2007,13 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 33)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 48)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 48)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
-        self.assertTrue(status_only["details"]["browser_proxy_contract"]["browser_delete_proxy_requires_design"])
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_delete_proxy_design_count"], 15)
+        self.assertFalse(status_only["details"]["browser_proxy_contract"]["browser_delete_proxy_requires_design"])
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_delete_proxy_design_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["missing_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["unexpected_gsad_proxy_allowlist_count"], 0)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["internal_only_gsad_proxy_allowlist_count"], 0)
@@ -2381,16 +2383,16 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 33)
+        self.assertEqual(contract["browser_write_proxy_count"], 48)
         self.assertEqual(contract["direct_write_control_count"], 48)
-        self.assertEqual(contract["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
+        self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
         self.assertFalse(contract["write_proxy_requires_design"])
-        self.assertTrue(contract["browser_delete_proxy_requires_design"])
-        self.assertEqual(len(contract["browser_delete_proxy_design_operations"]), 15)
-        self.assertIn("DELETE /api/v1/targets/{target_id}", contract["browser_delete_proxy_design_operations"])
-        self.assertIn("DELETE /api/v1/filters/{filter_id}/trash", contract["browser_delete_proxy_design_operations"])
+        self.assertFalse(contract["browser_delete_proxy_requires_design"])
+        self.assertEqual(contract["browser_delete_proxy_design_operations"], [])
+        self.assertIn("DELETE /api/v1/targets/{target_id}", contract["browser_write_proxy_operations"])
+        self.assertIn("DELETE /api/v1/filters/{filter_id}/trash", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/alerts/{alert_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/filters/{filter_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/credentials/{credential_id}", contract["browser_write_proxy_operations"])
@@ -3434,13 +3436,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(update_scope["x_turbovas_exposure"], "direct-write")
 
         delete_scope = rows[("delete", "/api/v1/scopes/{scope_id}")]
-        self.assertEqual(delete_scope["status"], "implemented_direct_write_control")
+        self.assertEqual(delete_scope["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_scope["direct_access"], "direct_write_control")
         self.assertEqual(delete_scope["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_scope["x_turbovas_exposure"], "direct-write")
 
         delete_port_list = rows[("delete", "/api/v1/port-lists/{port_list_id}")]
-        self.assertEqual(delete_port_list["status"], "implemented_direct_write_control")
+        self.assertEqual(delete_port_list["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_port_list["direct_access"], "direct_write_control")
         self.assertEqual(delete_port_list["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_port_list["x_turbovas_exposure"], "direct-write")
@@ -3454,7 +3456,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(clone_port_list["x_turbovas_replaces"], "port-list-clone")
 
         hard_delete_port_list = rows[("delete", "/api/v1/port-lists/{port_list_id}/trash")]
-        self.assertEqual(hard_delete_port_list["status"], "implemented_direct_write_control")
+        self.assertEqual(hard_delete_port_list["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(hard_delete_port_list["direct_access"], "direct_write_control")
         self.assertEqual(hard_delete_port_list["x_turbovas_maturity"], "live-write")
         self.assertEqual(hard_delete_port_list["x_turbovas_exposure"], "direct-write")
@@ -3468,7 +3470,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(export_port_list["x_turbovas_replaces"], "port-list-metadata-export-read")
 
         delete_schedule = rows[("delete", "/api/v1/schedules/{schedule_id}")]
-        self.assertEqual(delete_schedule["status"], "implemented_direct_write_control")
+        self.assertEqual(delete_schedule["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_schedule["direct_access"], "direct_write_control")
         self.assertEqual(delete_schedule["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_schedule["x_turbovas_exposure"], "direct-write")
@@ -3489,7 +3491,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(patch_filter["x_turbovas_replaces"], "saved-filter-metadata-modify")
 
         delete_filter = rows[("delete", "/api/v1/filters/{filter_id}")]
-        self.assertEqual(delete_filter["status"], "implemented_direct_write_control")
+        self.assertEqual(delete_filter["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_filter["direct_access"], "direct_write_control")
         self.assertEqual(delete_filter["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_filter["x_turbovas_exposure"], "direct-write")
@@ -3510,7 +3512,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(update_tag["x_turbovas_replaces"], "tag-metadata-write")
 
         delete_tag = rows[("delete", "/api/v1/tags/{tag_id}")]
-        self.assertEqual(delete_tag["status"], "implemented_direct_write_control")
+        self.assertEqual(delete_tag["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_tag["direct_access"], "direct_write_control")
         self.assertEqual(delete_tag["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_tag["x_turbovas_exposure"], "direct-write")
@@ -3552,7 +3554,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(restore_report_config["x_turbovas_replaces"], "report-config-restore")
 
         hard_delete_report_config = rows[("delete", "/api/v1/report-configs/{report_config_id}/trash")]
-        self.assertEqual(hard_delete_report_config["status"], "implemented_direct_write_control")
+        self.assertEqual(hard_delete_report_config["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(hard_delete_report_config["direct_access"], "direct_write_control")
         self.assertEqual(hard_delete_report_config["x_turbovas_maturity"], "live-write")
         self.assertEqual(hard_delete_report_config["x_turbovas_exposure"], "direct-write")
@@ -3713,7 +3715,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_restore["x_turbovas_replaces"], "tag-restore")
 
         tag_hard_delete = rows[("delete", "/api/v1/tags/{tag_id}/trash")]
-        self.assertEqual(tag_hard_delete["status"], "implemented_direct_write_control")
+        self.assertEqual(tag_hard_delete["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_hard_delete["direct_access"], "direct_write_control")
         self.assertEqual(tag_hard_delete["x_turbovas_replaces"], "tag-hard-delete")
 

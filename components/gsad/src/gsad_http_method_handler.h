@@ -19,6 +19,12 @@ gsad_http_method_handler_new_with_patch_handler (gsad_http_handler_t *,
                                                  gsad_http_handler_t *);
 
 gsad_http_handler_t *
+gsad_http_method_handler_new_with_delete_handler (gsad_http_handler_t *,
+                                                  gsad_http_handler_t *,
+                                                  gsad_http_handler_t *,
+                                                  gsad_http_handler_t *);
+
+gsad_http_handler_t *
   gsad_http_method_handler_new_get_from_func (gsad_http_handler_func_t);
 
 gsad_http_handler_t *

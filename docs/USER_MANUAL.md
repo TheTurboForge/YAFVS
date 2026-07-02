@@ -111,14 +111,14 @@ readability, `TURBOVAS_API_OPERATOR_NAME`. When an operator UUID is set,
 `turbovas-api` verifies that it exists in `users` before binding the direct
 listener. The direct write-control flag is
 `TURBOVAS_API_DIRECT_WRITE_CONTROL=1`; it is strict-boolean, requires
-`TURBOVAS_API_OPERATOR_UUID`, and currently enables only approved scope
-metadata/membership writes, tag metadata create/update, unassigned-tag delete,
-selected alert metadata patches, credential name/comment metadata patches, and
-target name/comment metadata patches, and explicit add/remove of resource
-assignments for selected native-safe active resource types. UUID-backed
+`TURBOVAS_API_OPERATOR_UUID`, and currently enables only explicit contract-listed
+native write/control routes for scopes, tags, filters, port lists, report
+configs, scan configs, schedules, targets, selected alert metadata, credential
+name/comment metadata, scanner metadata, task metadata, and reviewed clone/
+restore/trash operations. UUID-backed
 resources use UUIDs; catalog-backed security information resources use exact
 public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. Alert
-delivery/control, filter/bulk actions, trash, clone/copy, export, target
+delivery/control, filter/bulk actions, file import/export, target
 host/exclude/port-list/alive-test/reverse-DNS/credential-link writes,
 credential secrets/control paths, users, reports, and results remain on
 inherited compatibility paths. Direct mode otherwise accepts

@@ -450,6 +450,19 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     let source = include_str!("routes.rs");
     let startup_source = include_str!("startup.rs");
     let browser_routes = browser_proxy_route_registration_block(source);
+    let registered = registered_routes(browser_routes);
+    let mut browser_delete_routes = registered
+        .iter()
+        .filter(|route| route.method == "delete")
+        .map(|route| route.path)
+        .collect::<Vec<_>>();
+    browser_delete_routes.sort_unstable();
+    let mut expected_delete_routes = APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS
+        .iter()
+        .filter(|contract| contract.method == "delete")
+        .map(|contract| contract.path)
+        .collect::<Vec<_>>();
+    expected_delete_routes.sort_unstable();
 
     assert!(startup_source.contains("let browser_proxy_auth = browser_proxy_api_config()?;"));
     assert!(browser_routes.contains("let Some(auth) = auth else"));
@@ -502,10 +515,27 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_restore_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_target)"));
     assert!(browser_routes.contains("post(browser_proxy_update_tag_resources)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_scope)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_tag)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_tag)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_filter)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_filter)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_port_list)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_port_list)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_report_config)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_report_config)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_scan_config)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_scan_config)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_schedule)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_schedule)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_target)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_target)"));
+    assert_eq!(browser_delete_routes, expected_delete_routes);
     assert!(browser_routes.contains("DefaultBodyLimit::max("));
     assert!(browser_routes.contains("Extension(auth)"));
     assert!(!browser_routes.contains("patch(patch_"));
-    assert!(!browser_routes.contains("delete("));
+    assert!(!browser_routes.contains("delete(delete_"));
+    assert!(!browser_routes.contains("delete(hard_delete_"));
     assert!(!browser_routes.contains("/api/v1/targets/:target_id\", post("));
     assert!(!browser_routes.contains("credentials"));
     assert!(!browser_routes.contains("scanner"));

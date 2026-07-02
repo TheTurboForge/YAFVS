@@ -38,10 +38,11 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - `TURBOVAS_API_DIRECT_WRITE_CONTROL` is the direct write-control enablement
   flag. It accepts only strict boolean values, requires
   `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
-  approved direct scope metadata/membership write routes, tag metadata
-  create/update and unassigned-tag delete routes, selected alert metadata
-  patches, credential name/comment metadata patches, and target name/comment
-  metadata patches.
+  approved direct write-control route contracts for scopes, tags, filters, port
+  lists, report configs, scan configs, schedules, targets, selected alert
+  metadata, credential name/comment metadata, scanner metadata, task metadata,
+  and related clone/restore/trash operations where the native contract has been
+  explicitly reviewed.
 - `/healthz` is unauthenticated for readiness. `/api/v1/...` on the direct
   listener requires `Authorization: Bearer <token>` and returns JSON `401`
   errors for missing or wrong tokens.
@@ -49,15 +50,15 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   `405 method_not_allowed` unless the method/path pair is deliberately
   registered as direct write-control and `TURBOVAS_API_DIRECT_WRITE_CONTROL` is
   enabled with a verified operator identity. The current direct write surface is
-  limited to explicitly approved metadata/control routes. Scope
-  create/update/delete metadata and membership routes, tag metadata
-  create/update and unassigned-tag delete, selected alert metadata patches,
-  credential name/comment metadata patches, and target name/comment metadata
-  patches are currently native; tag
-  resource-assignment filter actions, set/replace semantics, tag trash behavior,
-  clone/copy, export, target host/exclude/port-list/alive-test/reverse-DNS/
-  credential-link writes, credential secrets, and credential create/clone/delete
-  semantics remain inherited.
+  limited to explicitly approved metadata/control routes and is checked by
+  OpenAPI metadata plus Rust route-contract tests. The authenticated same-origin
+  `gsad` browser proxy exposes the browser-relevant subset of those routes,
+  including no-body DELETE for current trash/delete operations, through exact C
+  path allowlists and the internal browser-proxy secret/operator headers.
+  Credential, scanner, and task control writes are not browser-proxied by this
+  boundary; credential secrets, alert delivery, feed/scanner control,
+  account/auth control, file import/export, and unreviewed destructive behavior
+  remain inherited until separately designed.
 - The direct listener applies a fixed in-flight cap to authenticated direct
   `GET` requests and returns JSON `429 too_many_requests` with `X-Request-Id`
   when the cap is reached. This is a coarse development pressure guard, not a
@@ -99,15 +100,15 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   direct API container for the opt-in helper. Do not pass generated runtime
   tokens through container environment variables.
 - Keep direct v1 write-control limited to explicitly reviewed routes. Scanner
-  control, credential secret/control paths, feed sync,
-  feed import/update/download/mirroring, account management, task writes,
+  runtime control, credential secrets, feed sync,
+  feed import/update/download/mirroring, account management, broad task control,
   target host/exclude/port-list/alive-test/reverse-DNS/credential-link writes,
-  alert delivery, security-information
-  tag assignment, filter/bulk tag actions, trash, clone/copy, export, and
-  destructive mutations stay inherited until native write/control designs are
-  separately reviewed. Explicit tag add/remove for UUID resources on the tag's
-  existing native-safe active-table resource type is allowed only through the
-  direct write-control route. Read-only feed inventory metadata at
+  alert delivery, security-information tag assignment, filter/bulk tag actions,
+  file import/export, and unreviewed destructive mutations stay inherited until
+  native write/control designs are separately reviewed. Explicit tag add/remove
+  for UUID resources on the tag's existing native-safe active-table resource
+  type is allowed only through the direct write-control route. Read-only feed
+  inventory metadata at
   `/api/v1/feeds` is allowed only as a classified scriptable read endpoint.
 - Read-only tag-dialog resource-name lookups, including alert, are also
   allowlisted scriptable reads. They expose only id/type/name lookup data;

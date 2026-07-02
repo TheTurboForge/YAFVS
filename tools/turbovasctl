@@ -241,6 +241,8 @@ TURBOVAS_API_OPERATOR_NAME_ENV = "TURBOVAS_API_OPERATOR_NAME"
 TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV = "TURBOVAS_API_DIRECT_WRITE_CONTROL"
 TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE = "/runtime/secrets/native-api-bearer-token"
 TURBOVAS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
+TURBOVAS_API_BROWSER_PROXY_SECRET_ENV = "TURBOVAS_API_BROWSER_PROXY_SECRET"
+TURBOVAS_API_BROWSER_PROXY_SECRET = "native-api-browser-proxy-secret"
 TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH = 32
 TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH = 1024
 UUID_VALUE_RE = re.compile(
@@ -4249,6 +4251,14 @@ def runtime_env(repo_root: Path) -> dict[str, str]:
     return env
 
 
+def runtime_app_env(repo_root: Path) -> dict[str, str]:
+    env = runtime_env(repo_root)
+    if not env.get(TURBOVAS_API_BROWSER_PROXY_SECRET_ENV):
+        secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_API_BROWSER_PROXY_SECRET)
+        env[TURBOVAS_API_BROWSER_PROXY_SECRET_ENV] = secret
+    return env
+
+
 def systemd_user_env() -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
@@ -4843,7 +4853,7 @@ def app_services_running(repo_root: Path) -> bool:
 
 def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str, timeout: int = 900) -> list[dict[str, Any]]:
     command = compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--build", *APP_SERVICES)
-    result = run_command(command, repo_root, env=runtime_env(repo_root), timeout=timeout)
+    result = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=timeout)
     if result.returncode == 0:
         return [process_step_finding("pass", check, f"{message} exit code 0.", result, command)]
 
@@ -4862,7 +4872,7 @@ def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str
     retry_command = compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", *APP_SERVICES)
     for attempt in range(1, 3):
         time.sleep(8 * attempt)
-        retry = run_command(retry_command, repo_root, env=runtime_env(repo_root), timeout=300)
+        retry = run_command(retry_command, repo_root, env=runtime_app_env(repo_root), timeout=300)
         if retry.returncode == 0:
             findings.append(process_step_finding("pass", f"{check}.retry", f"{message} retry {attempt} exit code 0.", retry, retry_command))
             return findings
@@ -6942,6 +6952,26 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
 
+    delete_function_body = c_source_function_body(source, "native_api_delete_path_is_allowed")
+    if delete_function_body:
+        delete_constants = c_string_constants(delete_function_body)
+        trash_suffix = delete_constants.get("trash_suffix")
+        for prefix_variable in (
+            "filter_prefix",
+            "port_list_prefix",
+            "report_config_prefix",
+            "scan_config_prefix",
+            "schedule_prefix",
+            "scope_prefix",
+            "tag_prefix",
+            "target_prefix",
+        ):
+            prefix = delete_constants.get(prefix_variable)
+            if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}")
+                if prefix_variable != "scope_prefix" and trash_suffix and "trash_suffix" in delete_function_body:
+                    templates.add(f"{prefix.rstrip('/')}/{{}}{trash_suffix}")
+
     return sorted(templates), errors
 
 
@@ -6962,12 +6992,15 @@ def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], li
         "gsad_http_method_handler_new_get (native_api_get_handler)" in source
         or "gsad_http_method_handler_new_with_handlers (native_api_get_handler" in source
         or "gsad_http_method_handler_new_with_patch_handler (native_api_get_handler" in source
+        or "gsad_http_method_handler_new_with_delete_handler (native_api_get_handler" in source
     ):
         methods.add("GET")
     if "gsad_http_method_handler_new_post (native_api_post_handler)" in source or "native_api_post_handler" in source:
         methods.add("POST")
     if "native_api_patch_handler" in source:
         methods.add("PATCH")
+    if "native_api_delete_handler" in source or "gsad_http_method_handler_new_with_delete_handler" in source:
+        methods.add("DELETE")
     return sorted(methods), [] if methods else ["missing_native_api_method_handler"]
 
 
@@ -7350,7 +7383,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native scan-config live-to-trash move"],
             },
@@ -7371,7 +7404,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native scan-config trash hard-delete"],
             },
@@ -7414,7 +7447,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/filters/{filter_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native saved-filter live-to-trash move"],
             },
@@ -7435,7 +7468,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/filters/{filter_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native saved-filter hard delete from trash"],
             },
@@ -7566,7 +7599,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/port-lists/{port_list_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native port-list live-to-trash move"],
             },
@@ -7587,7 +7620,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/port-lists/{port_list_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native port-list hard delete from trash"],
             },
@@ -7623,7 +7656,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/schedules/{schedule_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native schedule live-to-trash move"],
             },
@@ -7644,7 +7677,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/schedules/{schedule_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native schedule hard delete from trash"],
             },
@@ -7682,7 +7715,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/report-configs/{report_config_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native report-config trash move"],
             },
@@ -7703,7 +7736,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/report-configs/{report_config_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native report-config hard delete from trash"],
             },
@@ -7813,7 +7846,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/scopes/{scope_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native mutable scope delete automation"],
             },
@@ -7834,7 +7867,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/tags/{tag_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native tag live-to-trash move"],
             },
@@ -7862,7 +7895,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/tags/{tag_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native tag hard delete from trash"],
             },
@@ -7906,7 +7939,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/targets/{target_id}",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native target live-to-trash move"],
             },
@@ -7920,7 +7953,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "delete",
                 "endpoint": "/api/v1/targets/{target_id}/trash",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native target hard delete from trash"],
             },
@@ -13013,7 +13046,7 @@ def command_feed_copy_to_runtime(repo_root: Path) -> dict[str, Any]:
 def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_app_env(repo_root))
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
     infra = command_up(repo_root)
     findings.append(finding(infra["status"], "runtime.infrastructure", infra["summary"], details={"status": infra["status"]}))
@@ -13042,17 +13075,18 @@ def command_runtime_app_up(repo_root: Path) -> dict[str, Any]:
 def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
+    app_env = runtime_app_env(repo_root)
+    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=app_env)
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
 
-    build = run_command(compose_command(repo_root, "build", "turbovas-api"), repo_root, env=runtime_env(repo_root), timeout=1200)
+    build = run_command(compose_command(repo_root, "build", "turbovas-api"), repo_root, env=app_env, timeout=1200)
     findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "turbovas-api")))
     if build.returncode != 0:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because image build failed.", findings, [str(runtime_dir(repo_root))])
 
-    up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api"), repo_root, env=runtime_env(repo_root), timeout=300)
+    up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api"), repo_root, env=app_env, timeout=300)
     findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-up", f"docker compose up --no-deps turbovas-api exit code {up.returncode}.", up, compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api")))
     if up.returncode != 0:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because turbovas-api restart failed.", findings, [str(runtime_dir(repo_root))])
@@ -18065,8 +18099,9 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     findings.append(finding("pass" if base_urls else "fail", "gsad.urls", "Configured gsad base URLs are available." if base_urls else "No gsad base URLs are configured.", details={"base_urls": list(base_urls)}))
     findings.extend(runtime_gsa_freshness_findings(repo_root))
     findings.append(browser_gmp_readiness_finding(repo_root, check="browser-smoke.gmp-ready"))
+    cleanup_socket = gvmd_socket_path(repo_root)
     if write_filter_smoke:
-        findings.append(socket_readiness_finding("browser-smoke.cleanup-gvmd-socket", "gvmd", gvmd_socket_path(repo_root), missing_status="fail"))
+        findings.append(socket_readiness_finding("browser-smoke.cleanup-gvmd-socket", "gvmd", cleanup_socket, missing_status="warn"))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-browser-smoke", repo_root, "Runtime browser smoke stopped at prerequisites.", findings, [str(artifact_dir)])
 
@@ -18093,7 +18128,9 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     if expect_result_row:
         args.append("--expect-result-row")
     if write_filter_smoke:
-        args.extend(["--write-filter-smoke", "--cleanup-gmp-socket", str(gvmd_socket_path(repo_root))])
+        args.append("--write-filter-smoke")
+        if cleanup_socket.exists():
+            args.extend(["--cleanup-gmp-socket", str(cleanup_socket)])
     for route in routes or []:
         args.extend(["--route", route])
     for base_url in base_urls:

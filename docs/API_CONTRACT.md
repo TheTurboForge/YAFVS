@@ -90,22 +90,25 @@ host-binding posture tracked outside this development API.
   write-control routes.
 - Direct v1 method boundary: the opt-in direct listener accepts classified
   `GET` requests under `/api/v1` by default. With direct write-control enabled
-  and operator identity verified, it additionally accepts only
-  `POST /scopes`, `PATCH /scopes/{scope_id}`, and
-  `DELETE /scopes/{scope_id}` for scope metadata/membership writes;
-  `POST /tags`, `PATCH /tags/{tag_id}`, and `DELETE /tags/{tag_id}` for tag
-  metadata writes; `POST /tags/{tag_id}/resources` for explicit add/remove of
-  UUID resource assignments for the tag's existing native-safe active-table
-  resource type; and `PATCH /targets/{target_id}` for target name/comment
-  metadata only. Tag delete is limited to unassigned tags;
-  security-information tag assignment, filter/bulk actions, target host/exclude,
-  port-list, alive-test, reverse-DNS, credential-link, trash behavior,
-  clone/copy, and export remain inherited. Other valid-token non-GET requests
-  return JSON
-  `405 method_not_allowed`.
+  and operator identity verified, it additionally accepts only explicit
+  contract-listed `POST`, `PATCH`, and `DELETE` write/control routes. Current
+  families cover scope metadata/membership, tag metadata/resources/clone/
+  restore/trash, filter metadata/clone/restore/trash, port-list metadata/clone/
+  restore/trash, report-config metadata/clone/restore/trash, scan-config
+  metadata/clone/restore/trash, schedule metadata/clone/restore/trash, target
+  metadata/create/clone/restore/trash, selected alert metadata, credential
+  name/comment metadata, scanner metadata, and task metadata. Other valid-token
+  non-GET requests return JSON `405 method_not_allowed`. The enforced route set
+  is the `APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS` list in
+  `services/turbovas-api/src/direct_api_contract_tests.rs` plus OpenAPI
+  `x-turbovas-exposure: direct-write` metadata.
 - Direct v1 browser boundary: direct responses do not emit browser CORS access
-  headers. Browser product reads continue through the same-origin `gsad` path
-  while direct access remains script/operator oriented.
+  headers. Browser product reads and browser-relevant write routes continue
+  through the authenticated same-origin `gsad` proxy. That proxy uses exact
+  allowlists and now includes the existing browser-safe `POST`, `PATCH`, and
+  no-body `DELETE` write routes for scopes, tags, filters, port lists, report
+  configs, scan configs, schedules, and targets; credential, scanner, and task
+  control writes remain direct-only or inherited until separately designed.
 - Direct v1 request-shape boundary: bearer-authenticated direct `GET` and
   `DELETE` requests reject request bodies, direct write-control `POST`/`PATCH`
   bodies are size-bounded, direct non-GET requests reject query strings, and
@@ -214,7 +217,9 @@ Operating Systems, raw report CVEs, raw report TLS Certificates, raw report Erro
 report Metrics, and all current
 scope-report evidence tabs:
 GSA calls same-origin `/api/v1/...` paths, and `gsad` authenticates and
-allowlists those reads before proxying to the internal sidecar.
+allowlists those reads and selected write routes before proxying to the internal
+sidecar. Browser-proxied DELETE routes are no-body only and share the same
+operator-session-to-internal-proxy-secret boundary as POST/PATCH browser writes.
 `runtime-report-summary --json` now also uses the native raw report
 detail/result-row endpoints instead of `python-gvm`.
 `runtime-native-api-smoke --json` and browser smoke cover the live runtime

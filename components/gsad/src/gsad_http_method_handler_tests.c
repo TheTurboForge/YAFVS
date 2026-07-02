@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -109,6 +110,30 @@ Ensure (gsad_http_method_handler, should_create_new_get_handler)
   gsad_http_handler_free (method_handler);
 }
 
+Ensure (gsad_http_method_handler, should_create_new_handler_with_delete_handler)
+{
+  gsad_http_handler_t *get_handler = gsad_http_handler_new (dummy_handle);
+  gsad_http_handler_t *post_handler = gsad_http_handler_new (dummy_handle);
+  gsad_http_handler_t *patch_handler = gsad_http_handler_new (dummy_handle);
+  gsad_http_handler_t *delete_handler = gsad_http_handler_new (dummy_handle);
+  gsad_http_handler_t *method_handler =
+    gsad_http_method_handler_new_with_delete_handler (
+      get_handler, post_handler, patch_handler, delete_handler);
+  gsad_http_method_handler_t *handler_data =
+    (gsad_http_method_handler_t *) method_handler->data;
+
+  assert_that (handler_data, is_not_null);
+  assert_that (method_handler, is_not_null);
+  assert_that (method_handler->handle, is_not_null);
+  assert_that (method_handler->next, is_null);
+  assert_that (handler_data->get, is_equal_to (get_handler));
+  assert_that (handler_data->post, is_equal_to (post_handler));
+  assert_that (handler_data->patch, is_equal_to (patch_handler));
+  assert_that (handler_data->delete, is_equal_to (delete_handler));
+
+  gsad_http_handler_free (method_handler);
+}
+
 Ensure (gsad_http_method_handler, should_create_new_post_handler)
 {
   gsad_http_handler_t *post_handler = gsad_http_handler_new (dummy_handle);
@@ -125,6 +150,33 @@ Ensure (gsad_http_method_handler, should_create_new_post_handler)
   assert_that (handler_data->post, is_equal_to (post_handler));
   assert_that (handler_data->post->handle, is_equal_to (dummy_handle));
 
+  gsad_http_handler_free (method_handler);
+}
+
+Ensure (gsad_http_method_handler, should_call_delete_handler_for_delete_method)
+{
+  gsad_http_handler_t *delete_handler = gsad_http_handler_new (dummy_handle);
+  gsad_http_handler_t *method_handler =
+    gsad_http_method_handler_new_with_delete_handler (NULL, NULL, NULL,
+                                                      delete_handler);
+  gsad_connection_info_t *con_info =
+    gsad_connection_info_new (METHOD_TYPE_DELETE, "/api/v1/tags/abc");
+
+  expect (dummy_handle, will_return (MHD_YES));
+  gsad_http_result_t result =
+    gsad_http_handler_call (method_handler, NULL, con_info, NULL);
+  assert_that (result, is_equal_to (MHD_YES));
+  assert_that (get_call_count (), is_equal_to (1));
+
+  call_t *call = get_last_call ();
+  assert_that (call, is_not_null);
+  assert_that (call->handler_next, is_null);
+  assert_that (call->handler_data, is_null);
+  assert_that (call->connection, is_null);
+  assert_that (call->con_info, is_equal_to (con_info));
+  assert_that (call->data, is_null);
+
+  gsad_connection_info_free (con_info);
   gsad_http_handler_free (method_handler);
 }
 
@@ -341,9 +393,13 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_http_method_handler,
                          should_create_new_handler_with_handlers);
   add_test_with_context (suite, gsad_http_method_handler,
+                         should_create_new_handler_with_delete_handler);
+  add_test_with_context (suite, gsad_http_method_handler,
                          should_call_get_handler_for_get_method);
   add_test_with_context (suite, gsad_http_method_handler,
                          should_call_post_handler_for_post_method);
+  add_test_with_context (suite, gsad_http_method_handler,
+                         should_call_delete_handler_for_delete_method);
   add_test_with_context (suite, gsad_http_method_handler,
                          should_not_call_handlers_for_other_methods);
   add_test_with_context (suite, gsad_http_method_handler,

@@ -260,6 +260,80 @@ is_uuid_segment_with_suffix (const gchar *value, const gchar *suffix)
 }
 
 static gboolean
+native_api_delete_path_is_allowed (const gchar *path)
+{
+  const gchar *filter_prefix = "/api/v1/filters/";
+  const gchar *port_list_prefix = "/api/v1/port-lists/";
+  const gchar *report_config_prefix = "/api/v1/report-configs/";
+  const gchar *scan_config_prefix = "/api/v1/scan-configs/";
+  const gchar *schedule_prefix = "/api/v1/schedules/";
+  const gchar *scope_prefix = "/api/v1/scopes/";
+  const gchar *tag_prefix = "/api/v1/tags/";
+  const gchar *target_prefix = "/api/v1/targets/";
+  const gchar *trash_suffix = "/trash";
+
+  if (path == NULL || strchr (path, '?') != NULL)
+    return FALSE;
+
+  if (g_str_has_prefix (path, filter_prefix))
+    {
+      const gchar *id = path + strlen (filter_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, port_list_prefix))
+    {
+      const gchar *id = path + strlen (port_list_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, report_config_prefix))
+    {
+      const gchar *id = path + strlen (report_config_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, scan_config_prefix))
+    {
+      const gchar *id = path + strlen (scan_config_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, schedule_prefix))
+    {
+      const gchar *id = path + strlen (schedule_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, scope_prefix))
+    {
+      const gchar *id = path + strlen (scope_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, tag_prefix))
+    {
+      const gchar *id = path + strlen (tag_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, target_prefix))
+    {
+      const gchar *id = path + strlen (target_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  return FALSE;
+}
+
+static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *filters_path = "/api/v1/filters";
@@ -1220,7 +1294,8 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                    "Connection: close\r\n"
                    "User-Agent: gsad-native-api-proxy\r\n",
                    method, path, host, port);
-  if (g_strcmp0 (method, "POST") == 0 || g_strcmp0 (method, "PATCH") == 0)
+  if (g_strcmp0 (method, "POST") == 0 || g_strcmp0 (method, "PATCH") == 0
+      || g_strcmp0 (method, "DELETE") == 0)
     {
       g_string_append_printf (request,
                               "Content-Type: application/json\r\n"
@@ -1368,6 +1443,12 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
 
   request_body = gsad_connection_info_get_raw_body (con_info,
                                                     &request_body_length);
+  if (g_strcmp0 (method, "DELETE") == 0 && request_body_length != 0)
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_NOT_ACCEPTABLE,
+                              "Native API DELETE requests must not include a request body.");
+    }
   body = fetch_native_api_json (method, path, request_body, request_body_length,
                                 secret, operator_name, &status_code,
                                 &error_message);
@@ -1410,4 +1491,16 @@ gsad_http_handle_native_api_patch (gsad_http_handler_t *handler_next,
   return handle_native_api_write (handler_next, handler_data, connection,
                                   con_info, data, "PATCH",
                                   native_api_patch_path_is_allowed);
+}
+
+gsad_http_result_t
+gsad_http_handle_native_api_delete (gsad_http_handler_t *handler_next,
+                                    void *handler_data,
+                                    gsad_http_connection_t *connection,
+                                    gsad_connection_info_t *con_info,
+                                    void *data)
+{
+  return handle_native_api_write (handler_next, handler_data, connection,
+                                  con_info, data, "DELETE",
+                                  native_api_delete_path_is_allowed);
 }

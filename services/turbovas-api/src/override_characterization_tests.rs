@@ -199,6 +199,11 @@ fn native_direct_api_keeps_override_writes_closed_until_result_effects_are_desig
         "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
         false
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/export",
+        false
+    ));
     for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, "/api/v1/overrides", true),
@@ -213,6 +218,14 @@ fn native_direct_api_keeps_override_writes_closed_until_result_effects_are_desig
                 true,
             ),
             "{method} /api/v1/overrides/{{id}} must remain closed"
+        );
+        assert!(
+            !direct_api_v1_method_is_allowed(
+                &method,
+                "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/export",
+                true,
+            ),
+            "{method} /api/v1/overrides/{{id}}/export must remain closed"
         );
     }
 }
@@ -235,4 +248,33 @@ fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
     assert!(detail.contains(
         "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
     ));
+
+    let export = openapi_path_block("/overrides/{override_id}/export");
+    for required in [
+        "get:",
+        "operationId: getOverridesByOverrideIdExport",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-read",
+        "x-turbovas-maturity: live-read",
+        "x-turbovas-replaces: override-metadata-export-read",
+        "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion",
+        "$ref: '#/components/schemas/OverrideAsset'",
+    ] {
+        assert!(
+            export.contains(required),
+            "override metadata export OpenAPI block missing {required}"
+        );
+    }
+    for forbidden in [
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-safety-contract: write-control-v1",
+        "\n    post:",
+        "\n    patch:",
+        "\n    delete:",
+    ] {
+        assert!(
+            !export.contains(forbidden),
+            "override metadata export must not expose inherited write/export/trash/result effects: {forbidden}"
+        );
+    }
 }

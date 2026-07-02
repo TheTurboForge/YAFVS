@@ -16,6 +16,7 @@ import {
   cloneNativeReportConfig,
   createNativeReportConfig,
   deleteNativeReportConfig,
+  exportNativeReportConfigMetadata,
   patchNativeReportConfig,
   type NativeReportConfigCreateRequest,
   type NativeReportConfigPatchRequest,
@@ -155,6 +156,17 @@ const nativeReportConfigPatchRequestFromCommand = (
 export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   constructor(http: Http) {
     super(http, 'report_config', ReportConfig);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeReportConfigMetadata(this.http, id);
+      } catch {
+        // Keep inherited bulk export responsible for legacy report-config export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   async create(args: ReportConfigCreateArgs) {

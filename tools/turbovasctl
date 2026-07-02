@@ -6913,10 +6913,11 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             else:
                 errors.append(f"unresolved_post_exact_path:{variable}")
 
-        filter_prefix = post_constants.get("filter_prefix")
         clone_suffix = post_constants.get("clone_suffix")
-        if filter_prefix and clone_suffix and "g_str_has_prefix (path, filter_prefix)" in post_function_body:
-            templates.add(f"{filter_prefix.rstrip('/')}/{{}}{clone_suffix}")
+        for prefix_variable in ("filter_prefix", "tag_prefix"):
+            prefix = post_constants.get(prefix_variable)
+            if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
 
     return sorted(templates), errors
 
@@ -7804,7 +7805,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             {
                 "method": "post",
                 "endpoint": "/api/v1/tags/{tag_id}/clone",
-                "status": "implemented_direct_write_control",
+                "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native tag clone with copied resource assignments"],
             },

@@ -235,6 +235,30 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
 const nativeTagToModel = (item: NativeTagPayload): Tag => {
   const resourceType =
     stringValue(item.resource_type) || stringValue(item.resources?.type);
@@ -319,6 +343,18 @@ export const exportNativeTagMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const cloneNativeTag = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeTagPayload>(
+    gmp,
+    `api/v1/tags/${encodeURIComponent(id)}/clone`,
+    {},
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const fetchNativeTagResources = async (

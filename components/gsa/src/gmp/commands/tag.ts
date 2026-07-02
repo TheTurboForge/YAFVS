@@ -1,8 +1,10 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import {canUseNativeApi} from 'gmp/commands/native';
 import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
 import type Http from 'gmp/http/http';
 import logger from 'gmp/log';
@@ -10,6 +12,7 @@ import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import Tag, {type TagElement} from 'gmp/models/tag';
+import {cloneNativeTag} from 'gmp/native-api/tags';
 import {NO_VALUE, parseYesNo, YES_VALUE} from 'gmp/parser';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
@@ -108,6 +111,17 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     };
     log.debug('Disabling tag', data);
     return this.httpPostWithTransform(data);
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await cloneNativeTag(this.http, id);
+      } catch (err) {
+        log.error('Native tag clone failed, falling back to GMP', id, err);
+      }
+    }
+    return super.clone({id});
   }
 }
 

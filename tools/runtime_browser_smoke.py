@@ -1145,7 +1145,8 @@ def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
         payload["artifacts"] = []
     payload.setdefault("artifacts", [])
     payload["artifacts"].extend([str(script_path), str(config_path)])
-    payload.setdefault("findings", findings)
+    payload.setdefault("findings", [])
+    payload["findings"].extend(findings)
     payload["status"] = payload.get("status") if completed.returncode == 0 else "fail"
     cleanup_filter_write_smoke(args, payload)
     write_artifact(artifact_dir, "browser-smoke-wrapper.json", payload)

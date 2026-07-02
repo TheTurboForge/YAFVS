@@ -13,7 +13,8 @@ use crate::{
     alerts::*,
     app_state::{AppState, healthz},
     browser_proxy_api::{
-        BrowserProxyAuth, browser_proxy_clone_filter, browser_proxy_create_filter,
+        BrowserProxyAuth, browser_proxy_clone_filter, browser_proxy_clone_tag,
+        browser_proxy_create_filter,
     },
     cert_advisories::*,
     cpe_catalog::*,
@@ -442,6 +443,7 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/filters/:filter_id/clone",
             post(browser_proxy_clone_filter),
         )
+        .route("/api/v1/tags/:tag_id/clone", post(browser_proxy_clone_tag))
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,
         ))

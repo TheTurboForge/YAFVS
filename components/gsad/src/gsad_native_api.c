@@ -6,7 +6,7 @@
 
 /**
  * @file gsad_native_api.c
- * @brief Authenticated same-origin proxy for TurboVAS native API reads.
+ * @brief Authenticated same-origin proxy for bounded TurboVAS native API paths.
  */
 
 #include "gsad_native_api.h"
@@ -252,6 +252,7 @@ native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *filters_path = "/api/v1/filters";
   const gchar *filter_prefix = "/api/v1/filters/";
+  const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *clone_suffix = "/clone";
 
   if (path == NULL || strchr (path, '?') != NULL)
@@ -263,6 +264,18 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, filter_prefix))
     {
       const gchar *id = path + strlen (filter_prefix);
+      gsize id_length;
+
+      if (!g_str_has_suffix (id, clone_suffix))
+        return FALSE;
+
+      id_length = strlen (id) - strlen (clone_suffix);
+      return is_uuid_segment (id, id_length);
+    }
+
+  if (g_str_has_prefix (path, tag_prefix))
+    {
+      const gchar *id = path + strlen (tag_prefix);
       gsize id_length;
 
       if (!g_str_has_suffix (id, clone_suffix))

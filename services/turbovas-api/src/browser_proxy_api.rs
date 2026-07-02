@@ -18,6 +18,9 @@ use crate::{
     filter_write_validation::{FilterCloneRequest, FilterCreateRequest},
     filter_writes::{clone_filter, create_filter},
     operator_identity::resolve_browser_proxy_operator_by_name,
+    tag_payloads::TagAssetItem,
+    tag_write_validation::TagCloneRequest,
+    tag_writes::clone_tag,
 };
 
 const BROWSER_PROXY_SECRET_ENV: &str = "TURBOVAS_API_BROWSER_PROXY_SECRET";
@@ -79,6 +82,23 @@ pub(crate) async fn browser_proxy_clone_filter(
     clone_filter(
         State(state),
         Path(filter_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_clone_tag(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(tag_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<TagCloneRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_tag(
+        State(state),
+        Path(tag_id),
         Some(Extension(operator)),
         Json(request),
     )

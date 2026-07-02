@@ -47,6 +47,91 @@ afterAll(() => {
 });
 
 describe('TaskCommand tests', () => {
+  test('should export task metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'task-id',
+        name: 'Native task',
+        status: 'Done',
+        target: {id: 'target-id', name: 'Target'},
+        current_report: {id: 'report-id', timestamp: '2026-07-02T17:00:00Z'},
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TaskCommand(fakeHttp);
+
+    const result = await cmd.export({id: 'task-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tasks/task-id/export',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks/task-id/export',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'task-id',
+      name: 'Native task',
+      status: 'Done',
+      target: {id: 'target-id', name: 'Target'},
+      current_report: {id: 'report-id', timestamp: '2026-07-02T17:00:00Z'},
+    });
+  });
+
+  test('should fall back to GMP when native task metadata export fails', async () => {
+    const content = '<some><xml>exported-task</xml></some>';
+    const response = createPlainResponse(content);
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TaskCommand(fakeHttp);
+
+    const result = await cmd.export({id: 'task-id'});
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'task',
+        bulk_select: 1,
+        'bulk_selected:task-id': 1,
+      },
+    });
+    expect(result.data).toEqual(content);
+  });
+
   test('should enrich manager response failures while starting a task', async () => {
     const xhr = {
       status: 500,

@@ -20,7 +20,7 @@ import Task, {
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
   type TaskElement,
 } from 'gmp/models/task';
-import {patchNativeTask} from 'gmp/native-api/tasks';
+import {exportNativeTaskMetadata, patchNativeTask} from 'gmp/native-api/tasks';
 import {NO_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
@@ -108,6 +108,17 @@ const enrichTaskStartManagerResponseFailure = (error: unknown) => {
 class TaskCommand extends EntityCommand<Task, TaskElement> {
   constructor(http: Http) {
     super(http, 'task', Task);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeTaskMetadata(this.http, id);
+      } catch {
+        // Keep inherited bulk export responsible for legacy task export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   async start({id}: EntityCommandParams) {

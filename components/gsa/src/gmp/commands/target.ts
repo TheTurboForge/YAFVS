@@ -24,6 +24,7 @@ import {
   cloneNativeTarget,
   createNativeTarget,
   deleteNativeTarget,
+  exportNativeTargetMetadata,
   patchNativeTarget,
   type NativeTargetCredentialPatchArgs,
   type NativeTargetCredentialsPatchArgs,
@@ -461,6 +462,17 @@ const nativeTargetPatchArgsFromParams = ({
 class TargetCommand extends EntityCommand<Target> {
   constructor(http: Http) {
     super(http, 'target', Target);
+  }
+
+  async export({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      try {
+        return await exportNativeTargetMetadata(this.http, id);
+      } catch {
+        // Keep inherited bulk export responsible for legacy target export behavior.
+      }
+    }
+    return super.export({id});
   }
 
   async clone({id}: EntityCommandParams) {

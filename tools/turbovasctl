@@ -8503,6 +8503,17 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "symbols": ("pub(crate) fn target_sql",),
     },
     {
+        "owner": "services/turbovas-api/src/target_write_transactions.rs",
+        "forbidden": ("services/turbovas-api/src/target_writes.rs",),
+        "symbols": (
+            "pub(crate) async fn execute_target_create_transaction",
+            "pub(crate) async fn execute_target_clone_transaction",
+            "pub(crate) async fn execute_target_trash_transaction",
+            "pub(crate) async fn execute_target_restore_transaction",
+            "pub(crate) async fn execute_target_hard_delete_transaction",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/task_query_sql.rs",
         "forbidden": ("services/turbovas-api/src/task_handlers.rs",),
         "symbols": ("pub(crate) fn task_sql",),

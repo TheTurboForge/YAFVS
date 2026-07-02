@@ -177,6 +177,7 @@ mod target_query_sql;
 mod target_write_characterization_tests;
 mod target_write_db;
 mod target_write_sql;
+mod target_write_transactions;
 mod target_write_validation;
 mod target_writes;
 #[cfg(test)]

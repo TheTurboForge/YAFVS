@@ -12,7 +12,12 @@ import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import Tag, {type TagElement} from 'gmp/models/tag';
-import {cloneNativeTag, createNativeTag, patchNativeTag} from 'gmp/native-api/tags';
+import {
+  cloneNativeTag,
+  createNativeTag,
+  deleteNativeTag,
+  patchNativeTag,
+} from 'gmp/native-api/tags';
 import {NO_VALUE, parseYesNo, YES_VALUE} from 'gmp/parser';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
@@ -54,7 +59,11 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
   }: TagCommandCreateParams) {
     const rawFilter = filterString(filter);
     const nativeFilter = rawFilter ?? '';
-    if (canUseNativeApi(this.http) && resourceIds.length === 0 && nativeFilter === '') {
+    if (
+      canUseNativeApi(this.http) &&
+      resourceIds.length === 0 &&
+      nativeFilter === ''
+    ) {
       try {
         return await createNativeTag(this.http, {
           active,
@@ -158,6 +167,14 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
       }
     }
     return super.clone({id});
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeTag(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 }
 

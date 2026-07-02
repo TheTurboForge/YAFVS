@@ -53,6 +53,25 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const deleteNative = async (
+  gmp: NativeTrashcanApiGmp,
+  path: string,
+): Promise<void> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+};
+
 const writeNativeJson = async <T>(
   gmp: NativeTrashcanApiGmp,
   path: string,
@@ -92,6 +111,8 @@ export const supportsNativeTrashcanRestore = (
 ): entityType is keyof typeof RESTORE_PATHS =>
   entityType !== undefined && RESTORE_PATHS[entityType] !== undefined;
 
+export const supportsNativeTrashcanDelete = supportsNativeTrashcanRestore;
+
 export const fetchNativeTrashcanSummary = async (
   gmp: NativeTrashcanApiGmp,
 ): Promise<NativeTrashcanSummary> =>
@@ -107,5 +128,19 @@ export const restoreNativeTrashcanEntity = async (
   if (path === undefined) {
     throw new Error(`Native restore is not available for ${entityType}`);
   }
-  await writeNativeJson(gmp, `api/v1/${path}/${encodeURIComponent(id)}/restore`);
+  await writeNativeJson(
+    gmp,
+    `api/v1/${path}/${encodeURIComponent(id)}/restore`,
+  );
+};
+
+export const deleteNativeTrashcanEntity = async (
+  gmp: NativeTrashcanApiGmp,
+  {id, entityType}: NativeTrashcanRestoreArgs,
+): Promise<void> => {
+  const path = RESTORE_PATHS[entityType];
+  if (path === undefined) {
+    throw new Error(`Native trash delete is not available for ${entityType}`);
+  }
+  await deleteNative(gmp, `api/v1/${path}/${encodeURIComponent(id)}/trash`);
 };

@@ -185,6 +185,22 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+};
+
 const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -268,7 +284,9 @@ export const fetchNativePortLists = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const portLists = (payload.items ?? []).map(item => nativePortListToModel(item));
+  const portLists = (payload.items ?? []).map(item =>
+    nativePortListToModel(item),
+  );
   return {
     portLists,
     counts: nativeCounts(page, portLists.length),
@@ -311,6 +329,12 @@ export const createNativePortList = async (
   );
   return new Response({id: stringValue(payload.id)});
 };
+
+export const deleteNativePortList = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> =>
+  deleteNative(gmp, `api/v1/port-lists/${encodeURIComponent(id)}`);
 
 export const patchNativePortList = async (
   gmp: NativeApiGmp,

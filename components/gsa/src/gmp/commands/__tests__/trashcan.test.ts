@@ -113,9 +113,9 @@ describe('TrashCanCommand tests', () => {
     fakeHttp.session.token = 'test-token';
     const cmd = new TrashCanCommand(fakeHttp);
 
-    await expect(cmd.restore({id: '1234', entityType: 'filter'})).rejects.toThrow(
-      'Native API request failed with status 409',
-    );
+    await expect(
+      cmd.restore({id: '1234', entityType: 'filter'}),
+    ).rejects.toThrow('Native API request failed with status 409');
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
@@ -143,6 +143,93 @@ describe('TrashCanCommand tests', () => {
     });
   });
 
+  test('should delete supported trash entities through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await cmd.delete({id: '1234', entityType: 'filter'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/filters/1234/trash');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/filters/1234/trash',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should fall back to GMP delete for unsupported native trash entities', async () => {
+    const response = createResponse({});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await cmd.delete({id: '1234', entityType: 'task'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'delete_from_trash',
+        task_id: '1234',
+        resource_type: 'task',
+      },
+    });
+  });
+
+  test('should not fall back to GMP when supported native trash delete fails', async () => {
+    const response = createResponse({});
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(
+      cmd.delete({id: '1234', entityType: 'filter'}),
+    ).rejects.toThrow('Native API request failed with status 409');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should allow to delete an host from the trashcan', async () => {
     const response = createResponse({});
     const fakeHttp = createHttp(response);
@@ -156,8 +243,6 @@ describe('TrashCanCommand tests', () => {
       },
     });
   });
-
-
 
   test('should handle failed requests gracefully', async () => {
     const response = createResponse({

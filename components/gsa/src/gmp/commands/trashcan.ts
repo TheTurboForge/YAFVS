@@ -23,6 +23,8 @@ import Tag from 'gmp/models/tag';
 import Target from 'gmp/models/target';
 import Task from 'gmp/models/task';
 import {
+  deleteNativeTrashcanEntity,
+  supportsNativeTrashcanDelete,
   restoreNativeTrashcanEntity,
   supportsNativeTrashcanRestore,
 } from 'gmp/native-api/trashcan';
@@ -115,7 +117,10 @@ type TrashCanGetPromise<TData> = Promise<TrashCanGetResponse<TData>>;
 
 class TrashCanCommand extends HttpCommand {
   async restore({id, entityType}: {id: string; entityType?: EntityType}) {
-    if (supportsNativeTrashcanRestore(entityType) && canUseNativeApi(this.http)) {
+    if (
+      supportsNativeTrashcanRestore(entityType) &&
+      canUseNativeApi(this.http)
+    ) {
       await restoreNativeTrashcanEntity(this.http, {id, entityType});
       return;
     }
@@ -124,6 +129,13 @@ class TrashCanCommand extends HttpCommand {
   }
 
   async delete({id, entityType}: {id: string; entityType: EntityType}) {
+    if (
+      supportsNativeTrashcanDelete(entityType) &&
+      canUseNativeApi(this.http)
+    ) {
+      await deleteNativeTrashcanEntity(this.http, {id, entityType});
+      return;
+    }
     const cmdApiType = apiType(entityType);
     const cmd = 'delete_from_trash';
     const typeId = cmdApiType + '_id';
@@ -140,19 +152,45 @@ class TrashCanCommand extends HttpCommand {
 
   async get(): Promise<Response<TrashCanGetData, XmlMeta>> {
     const requests = [
-      this.httpGetWithTransform({cmd: 'get_trash_alerts'}) as TrashCanGetPromise<AlertResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_configs'}) as TrashCanGetPromise<ConfigsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_credentials'}) as TrashCanGetPromise<CredentialsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_filters'}) as TrashCanGetPromise<FiltersResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_overrides'}) as TrashCanGetPromise<OverridesResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_port_lists'}) as TrashCanGetPromise<PortListsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_report_configs'}) as TrashCanGetPromise<ReportConfigsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_report_formats'}) as TrashCanGetPromise<ReportFormatsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_scanners'}) as TrashCanGetPromise<ScannersResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_schedules'}) as TrashCanGetPromise<SchedulesResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_tags'}) as TrashCanGetPromise<TagsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_targets'}) as TrashCanGetPromise<TargetsResponseData>,
-      this.httpGetWithTransform({cmd: 'get_trash_tasks'}) as TrashCanGetPromise<TasksResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_alerts',
+      }) as TrashCanGetPromise<AlertResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_configs',
+      }) as TrashCanGetPromise<ConfigsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_credentials',
+      }) as TrashCanGetPromise<CredentialsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_filters',
+      }) as TrashCanGetPromise<FiltersResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_overrides',
+      }) as TrashCanGetPromise<OverridesResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_port_lists',
+      }) as TrashCanGetPromise<PortListsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_report_configs',
+      }) as TrashCanGetPromise<ReportConfigsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_report_formats',
+      }) as TrashCanGetPromise<ReportFormatsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_scanners',
+      }) as TrashCanGetPromise<ScannersResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_schedules',
+      }) as TrashCanGetPromise<SchedulesResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_tags',
+      }) as TrashCanGetPromise<TagsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_targets',
+      }) as TrashCanGetPromise<TargetsResponseData>,
+      this.httpGetWithTransform({
+        cmd: 'get_trash_tasks',
+      }) as TrashCanGetPromise<TasksResponseData>,
     ];
 
     const requestNames = [
@@ -183,19 +221,31 @@ class TrashCanCommand extends HttpCommand {
         ? (results[index].value as T)
         : null;
 
-    const alertsResponse = getResponse<TrashCanGetResponse<AlertResponseData>>(0);
-    const configsResponse = getResponse<TrashCanGetResponse<ConfigsResponseData>>(1);
-    const credentialsResponse = getResponse<TrashCanGetResponse<CredentialsResponseData>>(2);
-    const filtersResponse = getResponse<TrashCanGetResponse<FiltersResponseData>>(3);
-    const overridesResponse = getResponse<TrashCanGetResponse<OverridesResponseData>>(4);
-    const portListsResponse = getResponse<TrashCanGetResponse<PortListsResponseData>>(5);
-    const reportConfigsResponse = getResponse<TrashCanGetResponse<ReportConfigsResponseData>>(6);
-    const reportFormatsResponse = getResponse<TrashCanGetResponse<ReportFormatsResponseData>>(7);
-    const scannersResponse = getResponse<TrashCanGetResponse<ScannersResponseData>>(8);
-    const schedulesResponse = getResponse<TrashCanGetResponse<SchedulesResponseData>>(9);
+    const alertsResponse =
+      getResponse<TrashCanGetResponse<AlertResponseData>>(0);
+    const configsResponse =
+      getResponse<TrashCanGetResponse<ConfigsResponseData>>(1);
+    const credentialsResponse =
+      getResponse<TrashCanGetResponse<CredentialsResponseData>>(2);
+    const filtersResponse =
+      getResponse<TrashCanGetResponse<FiltersResponseData>>(3);
+    const overridesResponse =
+      getResponse<TrashCanGetResponse<OverridesResponseData>>(4);
+    const portListsResponse =
+      getResponse<TrashCanGetResponse<PortListsResponseData>>(5);
+    const reportConfigsResponse =
+      getResponse<TrashCanGetResponse<ReportConfigsResponseData>>(6);
+    const reportFormatsResponse =
+      getResponse<TrashCanGetResponse<ReportFormatsResponseData>>(7);
+    const scannersResponse =
+      getResponse<TrashCanGetResponse<ScannersResponseData>>(8);
+    const schedulesResponse =
+      getResponse<TrashCanGetResponse<SchedulesResponseData>>(9);
     const tagsResponse = getResponse<TrashCanGetResponse<TagsResponseData>>(10);
-    const targetsResponse = getResponse<TrashCanGetResponse<TargetsResponseData>>(11);
-    const tasksResponse = getResponse<TrashCanGetResponse<TasksResponseData>>(12);
+    const targetsResponse =
+      getResponse<TrashCanGetResponse<TargetsResponseData>>(11);
+    const tasksResponse =
+      getResponse<TrashCanGetResponse<TasksResponseData>>(12);
 
     const alertsData = alertsResponse?.data.get_trash;
     const configsData = configsResponse?.data.get_trash;
@@ -231,19 +281,49 @@ class TrashCanCommand extends HttpCommand {
     }
 
     return baseResponse.setData({
-      alerts: map(alertsData?.get_alerts_response?.alert, element => Alert.fromElement(element)),
-      scanConfigs: map(configsData?.get_configs_response?.config, element => ScanConfig.fromElement(element)),
-      credentials: map(credentialsData?.get_credentials_response?.credential, element => Credential.fromElement(element)),
-      filters: map(filtersData?.get_filters_response?.filter, element => Filter.fromElement(element)),
-      overrides: map(overridesData?.get_overrides_response?.override, element => Override.fromElement(element)),
-      portLists: map(portListsData?.get_port_lists_response?.port_list, element => PortList.fromElement(element)),
-      reportConfigs: map(reportConfigsData?.get_report_configs_response?.report_config, element => ReportConfig.fromElement(element)),
-      reportFormats: map(reportFormatsData?.get_report_formats_response?.report_format, element => ReportFormat.fromElement(element)),
-      scanners: map(scannersData?.get_scanners_response?.scanner, element => Scanner.fromElement(element)),
-      schedules: map(schedulesData?.get_schedules_response?.schedule, element => Schedule.fromElement(element)),
-      tags: map(tagsData?.get_tags_response?.tag, element => Tag.fromElement(element)),
-      targets: map(targetsData?.get_targets_response?.target, element => Target.fromElement(element)),
-      tasks: map(tasksData?.get_tasks_response?.task, element => Task.fromElement(element)),
+      alerts: map(alertsData?.get_alerts_response?.alert, element =>
+        Alert.fromElement(element),
+      ),
+      scanConfigs: map(configsData?.get_configs_response?.config, element =>
+        ScanConfig.fromElement(element),
+      ),
+      credentials: map(
+        credentialsData?.get_credentials_response?.credential,
+        element => Credential.fromElement(element),
+      ),
+      filters: map(filtersData?.get_filters_response?.filter, element =>
+        Filter.fromElement(element),
+      ),
+      overrides: map(overridesData?.get_overrides_response?.override, element =>
+        Override.fromElement(element),
+      ),
+      portLists: map(
+        portListsData?.get_port_lists_response?.port_list,
+        element => PortList.fromElement(element),
+      ),
+      reportConfigs: map(
+        reportConfigsData?.get_report_configs_response?.report_config,
+        element => ReportConfig.fromElement(element),
+      ),
+      reportFormats: map(
+        reportFormatsData?.get_report_formats_response?.report_format,
+        element => ReportFormat.fromElement(element),
+      ),
+      scanners: map(scannersData?.get_scanners_response?.scanner, element =>
+        Scanner.fromElement(element),
+      ),
+      schedules: map(schedulesData?.get_schedules_response?.schedule, element =>
+        Schedule.fromElement(element),
+      ),
+      tags: map(tagsData?.get_tags_response?.tag, element =>
+        Tag.fromElement(element),
+      ),
+      targets: map(targetsData?.get_targets_response?.target, element =>
+        Target.fromElement(element),
+      ),
+      tasks: map(tasksData?.get_tasks_response?.task, element =>
+        Task.fromElement(element),
+      ),
       failedRequests: failedRequests.length > 0 ? failedRequests : undefined,
     });
   }

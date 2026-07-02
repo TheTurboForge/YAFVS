@@ -342,6 +342,71 @@ describe('PortListCommand', () => {
     expect(result.data.id).toEqual('fallback-port-list-clone-id');
   });
 
+  test('should delete a port list through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    await command.delete({id: 'port-list-id'});
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith(
+      'api/v1/port-lists/port-list-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should not fall back to GMP when native port list delete fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(createActionResultResponse()) as ReturnType<
+      typeof createHttp
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    await expect(command.delete({id: 'port-list-id'})).rejects.toThrow(
+      'Native API request failed with status 409',
+    );
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(http.request).not.toHaveBeenCalled();
+  });
+
   test('should allow to create a port range', async () => {
     const response = createActionResultResponse({
       action: 'create_port_range',

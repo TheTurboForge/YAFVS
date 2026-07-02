@@ -14,6 +14,7 @@ import Filter, {type FilterModelElement} from 'gmp/models/filter';
 import {
   cloneNativeFilter,
   createNativeFilter,
+  deleteNativeFilter,
   patchNativeFilter,
 } from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
@@ -74,6 +75,14 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
       }
     }
     return super.clone({id});
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeFilter(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   async save(args: {

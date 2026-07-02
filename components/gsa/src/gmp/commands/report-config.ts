@@ -15,6 +15,7 @@ import ReportConfig from 'gmp/models/report-config';
 import {
   cloneNativeReportConfig,
   createNativeReportConfig,
+  deleteNativeReportConfig,
   patchNativeReportConfig,
   type NativeReportConfigCreateRequest,
   type NativeReportConfigPatchRequest,
@@ -90,7 +91,8 @@ const nativeReportConfigCreateRequestFromCommand = ({
 
 const hasNativeDefaultParam = (
   paramsUsingDefault: Record<string, string | number | boolean | undefined>,
-): boolean => Object.values(paramsUsingDefault).some(value => parseYesNo(value));
+): boolean =>
+  Object.values(paramsUsingDefault).some(value => parseYesNo(value));
 
 const haveSameKeys = (
   left?: Record<string, unknown>,
@@ -213,10 +215,7 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
       paramTypes = {},
     } = args;
 
-    if (
-      canUseNativeApi(this.http) &&
-      canUseNativeReportConfigPatch(args)
-    ) {
+    if (canUseNativeApi(this.http) && canUseNativeReportConfigPatch(args)) {
       return patchNativeReportConfig(
         this.http,
         id,
@@ -267,10 +266,21 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
       try {
         return await cloneNativeReportConfig(this.http, id);
       } catch (error) {
-        log.debug('Native report config clone failed, falling back to GMP', error);
+        log.debug(
+          'Native report config clone failed, falling back to GMP',
+          error,
+        );
       }
     }
     return super.clone({id});
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeReportConfig(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 }
 

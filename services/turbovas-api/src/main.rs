@@ -273,4 +273,6 @@ mod tooling_bulk_write_characterization_tests;
 #[cfg(test)]
 mod tooling_schedule_write_characterization_tests;
 #[cfg(test)]
+mod tooling_tag_write_characterization_tests;
+#[cfg(test)]
 mod tooling_task_control_characterization_tests;

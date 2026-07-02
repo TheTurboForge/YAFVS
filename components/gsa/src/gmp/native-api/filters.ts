@@ -64,6 +64,13 @@ export interface NativeFiltersResponse {
   page: NativePage;
 }
 
+export interface NativeFilterCreateArgs {
+  name: string;
+  comment?: string;
+  filterType: string;
+  term: string;
+}
+
 const FILTER_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   term: 'term',
@@ -134,6 +141,29 @@ const fetchNativeJson = async <T>(
       Accept: 'application/json',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path, {token: gmp.session.token}), {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -215,4 +245,21 @@ export const exportNativeFilterMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const createNativeFilter = async (
+  gmp: NativeApiGmp,
+  {name, comment = '', filterType, term}: NativeFilterCreateArgs,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeFilterPayload>(
+    gmp,
+    'api/v1/filters',
+    {
+      name,
+      comment,
+      filter_type: filterType,
+      term,
+    },
+  );
+  return new Response({id: stringValue(payload.id)});
 };

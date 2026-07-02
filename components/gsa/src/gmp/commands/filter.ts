@@ -1,13 +1,16 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
+import {createNativeFilter} from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
 interface GetFilterResponseData extends XmlResponseData {
@@ -25,18 +28,32 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     super(http, 'filter', Filter);
   }
 
-  create(args: {
+  async create(args: {
     term: string;
     name: string;
     type: EntityType;
     comment?: string;
   }) {
     const {term, name, type, comment = ''} = args;
+    const filterType = resourceType(type);
+    if (filterType !== undefined && canUseNativeApi(this.http)) {
+      try {
+        return await createNativeFilter(this.http, {
+          term,
+          name,
+          filterType,
+          comment,
+        });
+      } catch (error) {
+        log.debug('Native filter create failed, falling back to GMP', error);
+      }
+    }
+
     const data = {
       cmd: 'create_filter',
       term,
       name,
-      resource_type: resourceType(type),
+      resource_type: filterType,
       comment,
     };
     log.debug('Creating new filter', args, data);

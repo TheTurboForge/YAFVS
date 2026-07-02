@@ -1,12 +1,18 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {FilterCommand} from 'gmp/commands/filter';
 import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
+import {createSession} from 'gmp/testing';
 import type {EntityType} from 'gmp/utils/entity-type';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 interface FilterResourceMapping {
   entityType: EntityType;
@@ -28,6 +34,98 @@ describe('FilterCommand tests', () => {
       type: 'host',
       term: 'name=Test',
     });
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'create_filter',
+        name: 'Test Filter 1',
+        comment: '',
+        resource_type: 'host',
+        term: 'name=Test',
+      },
+    });
+    expect(result.data.id).toEqual('123');
+  });
+
+  test('should create a new filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-filter-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+    const result = await cmd.create({
+      name: 'Test Filter 1',
+      type: 'host',
+      term: 'name=Test',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/filters', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/filters',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'Test Filter 1',
+          comment: '',
+          filter_type: 'host',
+          term: 'name=Test',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-filter-id');
+  });
+
+  test('should fall back to GMP when native filter create fails', async () => {
+    const response = createActionResultResponse({
+      action: 'create_filter',
+      id: '123',
+      message: 'Filter created successfully',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+    const result = await cmd.create({
+      name: 'Test Filter 1',
+      type: 'host',
+      term: 'name=Test',
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         cmd: 'create_filter',

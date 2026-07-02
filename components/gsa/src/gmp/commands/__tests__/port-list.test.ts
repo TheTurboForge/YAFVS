@@ -57,6 +57,115 @@ describe('PortListCommand', () => {
     });
   });
 
+  test('should create a typed port list through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-port-list-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.create({
+      name: 'Native Port List',
+      comment: 'Created by native API',
+      portRange: 'tcp:1-1000, udp:53',
+    });
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith('api/v1/port-lists');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/port-lists',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'Native Port List',
+          comment: 'Created by native API',
+          port_ranges: [
+            {protocol: 'tcp', start: 1, end: 1000},
+            {protocol: 'udp', start: 53, end: 53},
+          ],
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-port-list-id');
+  });
+
+  test('should not fall back to GMP when native typed port list create fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'invalid range'}}),
+      ok: false,
+      status: 400,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    await expect(
+      command.create({name: 'Native Port List', portRange: 'tcp:1-1000'}),
+    ).rejects.toThrow('Native API request failed with status 400');
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(http.request).not.toHaveBeenCalled();
+  });
+
+  test('should fall back to GMP for file or unsupported port list create shapes', async () => {
+    const response = createActionResultResponse({id: 'fallback-port-list-id'});
+    const http = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.create({
+      name: 'Legacy Port List',
+      portRange: 'icmp:8',
+    });
+
+    expect(http.buildUrl).not.toHaveBeenCalled();
+    expect(http.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'create_port_list',
+        name: 'Legacy Port List',
+        comment: '',
+        from_file: undefined,
+        port_range: 'icmp:8',
+        file: undefined,
+      },
+    });
+    expect(result.data.id).toEqual('fallback-port-list-id');
+  });
+
   test('should allow to save a port list', async () => {
     const response = createActionResultResponse({
       action: 'save_port_list',

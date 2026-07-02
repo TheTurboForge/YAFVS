@@ -263,6 +263,7 @@ static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *filters_path = "/api/v1/filters";
+  const gchar *port_lists_path = "/api/v1/port-lists";
   const gchar *tags_path = "/api/v1/tags";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
@@ -279,6 +280,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return FALSE;
 
   if (g_strcmp0 (path, filters_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, port_lists_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, tags_path) == 0)

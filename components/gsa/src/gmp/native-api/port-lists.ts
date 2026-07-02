@@ -74,6 +74,18 @@ interface NativePortListsPayload {
   items?: NativePortListPayload[];
 }
 
+interface NativePortListCreateRangePayload {
+  protocol: string;
+  start: number;
+  end: number;
+}
+
+export interface NativePortListCreateRequest {
+  name: string;
+  comment?: string;
+  port_ranges: NativePortListCreateRangePayload[];
+}
+
 export interface NativePortListsQuery {
   page: number;
   pageSize: number;
@@ -284,6 +296,18 @@ export const exportNativePortListMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const createNativePortList = async (
+  gmp: NativeApiGmp,
+  request: NativePortListCreateRequest,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativePortListPayload>(
+    gmp,
+    'api/v1/port-lists',
+    request,
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const cloneNativePortList = async (

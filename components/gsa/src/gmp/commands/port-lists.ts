@@ -24,7 +24,9 @@ import {type Element} from 'gmp/models/model';
 import PortList, {type PortListElement} from 'gmp/models/port-list';
 import {
   cloneNativePortList,
+  createNativePortList,
   fetchNativePortLists,
+  type NativePortListCreateRequest,
   nativePortListsQueryFromFilter,
 } from 'gmp/native-api/port-lists';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
@@ -66,18 +68,57 @@ const log = logger.getLogger('gmp.commands.portlists');
 export const FROM_FILE = YES_VALUE;
 export const NOT_FROM_FILE = NO_VALUE;
 
+const nativePortListCreateRequestFromCommand = ({
+  name,
+  comment = '',
+  fromFile,
+  portRange,
+}: PortListCommandCreateParams): NativePortListCreateRequest | undefined => {
+  if (fromFile === FROM_FILE || portRange === undefined) {
+    return undefined;
+  }
+  const port_ranges = portRange
+    .split(/[\n,]+/)
+    .map(range => range.trim())
+    .filter(range => range.length > 0)
+    .map(range => {
+      const match = /^(tcp|udp):(\d+)(?:-(\d+))?$/i.exec(range);
+      if (match === null) {
+        return undefined;
+      }
+      const start = Number.parseInt(match[2], 10);
+      const end = Number.parseInt(match[3] ?? match[2], 10);
+      if (!Number.isInteger(start) || !Number.isInteger(end)) {
+        return undefined;
+      }
+      return {protocol: match[1].toLowerCase(), start, end};
+    });
+
+  if (port_ranges.some(range => range === undefined)) {
+    return undefined;
+  }
+
+  return {
+    name,
+    comment,
+    port_ranges: port_ranges.filter(range => range !== undefined),
+  };
+};
+
 export class PortListCommand extends EntityCommand<PortList, PortListElement> {
   constructor(http: Http) {
     super(http, 'port_list', PortList);
   }
 
-  create({
-    name,
-    comment = '',
-    fromFile,
-    portRange,
-    file,
-  }: PortListCommandCreateParams) {
+  async create(args: PortListCommandCreateParams) {
+    const {name, comment = '', fromFile, portRange, file} = args;
+    if (canUseNativeApi(this.http)) {
+      const nativeRequest = nativePortListCreateRequestFromCommand(args);
+      if (nativeRequest !== undefined) {
+        return await createNativePortList(this.http, nativeRequest);
+      }
+    }
+
     log.debug('Creating new port list', {
       name,
       comment,

@@ -454,6 +454,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(startup_source.contains("let browser_proxy_auth = browser_proxy_api_config()?;"));
     assert!(browser_routes.contains("let Some(auth) = auth else"));
     assert!(browser_routes.contains("/api/v1/filters"));
+    assert!(browser_routes.contains("/api/v1/port-lists"));
     assert!(browser_routes.contains("/api/v1/tags"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/clone"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/clone"));

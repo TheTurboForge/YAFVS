@@ -4126,6 +4126,28 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertFalse(compact["details"]["focus_rows_truncated"])
         self.assertNotIn("items", compact["details"])
 
+    def test_native_api_migration_matrix_compact_focus_rows_include_write_auth_metadata(self):
+        row = {
+            "method": "patch",
+            "endpoint": "/api/v1/tasks/{task_id}",
+            "status": "implemented_internal_and_browser_proxied",
+            "direct_access": "direct_write_control",
+            "browser_access": "browser_proxied",
+            "x_turbovas_replaces": "task-metadata-modify",
+            "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes",
+            "x_turbovas_operator_identity": "direct-token-operator",
+            "x_turbovas_owner_semantics": "preserve-existing-owner",
+            "x_turbovas_side_effect": "metadata-write",
+            "x_turbovas_safety_contract": "write-control-v1",
+        }
+
+        compact = turbovasctl.native_api_migration_matrix_compact_focus_row(row)
+
+        self.assertEqual(compact["x_turbovas_operator_identity"], "direct-token-operator")
+        self.assertEqual(compact["x_turbovas_owner_semantics"], "preserve-existing-owner")
+        self.assertEqual(compact["x_turbovas_side_effect"], "metadata-write")
+        self.assertEqual(compact["x_turbovas_safety_contract"], "write-control-v1")
+
     def test_native_api_migration_matrix_focus_accepts_repeated_terms(self):
         root = Path(__file__).resolve().parents[2]
         rows = [

@@ -9441,8 +9441,12 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
                 "openapi_direct_marker": "x-turbovas-direct" in fields if isinstance(operation, dict) else None,
                 "x_turbovas_exposure": values.get("x-turbovas-exposure"),
                 "x_turbovas_maturity": values.get("x-turbovas-maturity"),
+                "x_turbovas_operator_identity": values.get("x-turbovas-operator-identity"),
+                "x_turbovas_owner_semantics": values.get("x-turbovas-owner-semantics"),
                 "x_turbovas_replaces": values.get("x-turbovas-replaces"),
                 "x_turbovas_inherited_still_owns": values.get("x-turbovas-inherited-still-owns"),
+                "x_turbovas_safety_contract": values.get("x-turbovas-safety-contract"),
+                "x_turbovas_side_effect": values.get("x-turbovas-side-effect"),
                 "replacement_candidates": replacement_candidates,
             }
         )
@@ -9621,8 +9625,12 @@ def native_api_migration_matrix_filter_rows(rows: list[dict[str, Any]], focus: s
             "openapi_path",
             "x_turbovas_exposure",
             "x_turbovas_maturity",
+            "x_turbovas_operator_identity",
+            "x_turbovas_owner_semantics",
             "x_turbovas_replaces",
             "x_turbovas_inherited_still_owns",
+            "x_turbovas_safety_contract",
+            "x_turbovas_side_effect",
         ):
             value = row.get(key)
             if value is not None:
@@ -9686,6 +9694,10 @@ def native_api_migration_matrix_compact_focus_row(row: dict[str, Any]) -> dict[s
         "browser_access",
         "x_turbovas_replaces",
         "x_turbovas_inherited_still_owns",
+        "x_turbovas_operator_identity",
+        "x_turbovas_owner_semantics",
+        "x_turbovas_side_effect",
+        "x_turbovas_safety_contract",
     )
     return {key: row[key] for key in keys if row.get(key) is not None}
 

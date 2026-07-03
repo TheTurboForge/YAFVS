@@ -20,6 +20,7 @@ mod browser_proxy_report_config;
 mod browser_proxy_scan_config;
 mod browser_proxy_schedule;
 mod browser_proxy_scope;
+mod browser_proxy_target;
 mod cert_advisories;
 mod cert_advisory_payloads;
 mod collections;

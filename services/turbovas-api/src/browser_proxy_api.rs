@@ -32,12 +32,7 @@ use crate::{
         clone_tag, create_tag, delete_tag, hard_delete_tag, patch_tag, restore_tag,
         update_tag_resources,
     },
-    target_write_validation::{TargetCloneRequest, TargetCreateRequest, TargetPatchRequest},
-    target_writes::{
-        clone_target, create_target, delete_target, hard_delete_target, patch_target,
-        restore_target,
-    },
-    task_target_payloads::{TargetItem, TaskItem},
+    task_target_payloads::TaskItem,
     task_write_validation::TaskPatchRequest,
     task_writes::patch_task,
 };
@@ -124,43 +119,6 @@ fn browser_proxy_api_config_from_source(
     Ok(Some(BrowserProxyAuth::new(secret)))
 }
 
-pub(crate) async fn browser_proxy_restore_target(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(target_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Json<TargetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    restore_target(State(state), Path(target_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_create_target(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    headers: HeaderMap,
-    Json(request): Json<TargetCreateRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<TargetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    create_target(State(state), Some(Extension(operator)), Json(request)).await
-}
-
-pub(crate) async fn browser_proxy_patch_target(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(target_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<TargetPatchRequest>,
-) -> Result<Json<TargetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_target(
-        State(state),
-        Path(target_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
 pub(crate) async fn browser_proxy_patch_alert(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -209,23 +167,6 @@ pub(crate) async fn browser_proxy_clone_tag(
     clone_tag(
         State(state),
         Path(tag_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_clone_target(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(target_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<TargetCloneRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<TargetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    clone_target(
-        State(state),
-        Path(target_id),
         Some(Extension(operator)),
         Json(request),
     )
@@ -291,26 +232,6 @@ pub(crate) async fn browser_proxy_update_tag_resources(
         Json(request),
     )
     .await
-}
-
-pub(crate) async fn browser_proxy_delete_target(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(target_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    delete_target(State(state), Path(target_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_hard_delete_target(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(target_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    hard_delete_target(State(state), Path(target_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_operator_from_headers(

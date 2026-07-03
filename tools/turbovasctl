@@ -437,6 +437,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "monthly-report-gos24.10.gmp.py": "Inherited GOS 24.10 result-window and unique-NVT behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
     "scan-new-system.gmp.py": "Inherited ad-hoc scan-new-system target/task creation is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
+    "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
     "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
     "send-targets.gmp.py": "Inherited XML target import is characterized; native tooling still lacks a safe target import contract for credential references, alive-test/reverse-lookup fields, port ranges, and port-list references.",
     "send-tasks.gmp.py": "Inherited XML task import is characterized; native tooling still lacks a safe task import contract for config/scanner/target resolution, schedule fields, and preferences.",

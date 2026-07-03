@@ -16,6 +16,7 @@ mod auth;
 mod browser_proxy_api;
 mod browser_proxy_port_list;
 mod browser_proxy_report_config;
+mod browser_proxy_scan_config;
 mod browser_proxy_schedule;
 mod cert_advisories;
 mod cert_advisory_payloads;

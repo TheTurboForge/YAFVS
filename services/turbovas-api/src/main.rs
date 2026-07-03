@@ -194,6 +194,7 @@ mod tags;
 mod target_alive_tests;
 mod target_handlers;
 mod target_host_validation;
+mod target_id_validation;
 mod target_query_sql;
 mod target_text_validation;
 #[cfg(test)]

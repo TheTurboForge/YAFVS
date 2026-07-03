@@ -423,7 +423,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
-    "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native tooling still lacks a contract for credential tags, report filter assignment, broad resource-name lookups, and explicit-ID resource assignment.",
+    "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native-tags-from-csv covers the native-safe Alert/Config/Scanner/Schedule/Target/Task exact resource-name subset, but credential tags and report filter assignment still lack an explicit native contract.",
     "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "delete-overrides-by-filter.gmp.py": "Inherited filter-based override deletion is characterized; native tooling still lacks an explicit destructive override-delete contract, authorization rule, and pacing/error semantics.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
@@ -16891,6 +16891,295 @@ def native_target_csv_fetch_exact_items(
             return matches, {"reason": "lookup pagination exceeded safety limit", "page": page, "total": total}
 
 
+NATIVE_TAG_CSV_RESOURCE_TYPES: dict[str, str] = {
+    "ALERT": "alert",
+    "CONFIG": "config",
+    "SCANNER": "scanner",
+    "SCHEDULE": "schedule",
+    "TARGET": "target",
+    "TASK": "task",
+}
+NATIVE_TAG_CSV_UNSUPPORTED_INHERITED_TYPES = frozenset({"CREDENTIAL", "REPORT"})
+
+
+@dataclass(frozen=True)
+class NativeTagCsvRow:
+    row_number: int
+    inherited_type: str
+    resource_type: str
+    tag_value: str
+    description: str
+    tag_name: str
+    resource_names: tuple[str, ...]
+
+
+def load_native_tag_csv_rows(csv_file: Path) -> list[NativeTagCsvRow]:
+    rows: list[NativeTagCsvRow] = []
+    try:
+        with csv_file.open(encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle, delimiter=",")
+            for row_number, row in enumerate(reader, start=1):
+                if not row:
+                    continue
+                if len(row) < 3:
+                    raise ValueError(f"row {row_number} must include tag type, tag value, and description")
+                inherited_type = row[0].strip().upper()
+                tag_value = row[1].strip()
+                description = row[2].strip()
+                if not inherited_type or not tag_value:
+                    raise ValueError(f"row {row_number} must include tag type and tag value")
+                if inherited_type in NATIVE_TAG_CSV_UNSUPPORTED_INHERITED_TYPES:
+                    raise ValueError(
+                        f"row {row_number} uses inherited {inherited_type} tag semantics that are not native-safe yet"
+                    )
+                resource_type = NATIVE_TAG_CSV_RESOURCE_TYPES.get(inherited_type)
+                if resource_type is None:
+                    supported = ", ".join(sorted(NATIVE_TAG_CSV_RESOURCE_TYPES))
+                    raise ValueError(f"row {row_number} has unsupported tag type {inherited_type}; supported native-safe types: {supported}")
+                resource_names = tuple(cell.strip() for cell in row[3:13] if cell.strip())
+                tag_name = f"{tag_value}:{description}:{inherited_type}"
+                rows.append(
+                    NativeTagCsvRow(
+                        row_number=row_number,
+                        inherited_type=inherited_type,
+                        resource_type=resource_type,
+                        tag_value=tag_value,
+                        description=description,
+                        tag_name=tag_name,
+                        resource_names=resource_names,
+                    )
+                )
+    except OSError as exc:
+        raise ValueError(f"failed to read tag CSV file: {exc}") from exc
+    if not rows:
+        raise ValueError("tag CSV file is empty")
+    return rows
+
+
+def native_tag_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        "csv_file": details.get("csv_file"),
+        "row_count": details.get("row_count", 0),
+        "dry_run": details.get("dry_run", False),
+        "skipped_existing_tag_count": details.get("skipped_existing_tag_count", 0),
+        "created_tag_count": details.get("created_tag_count", 0),
+        "assigned_resource_count": details.get("assigned_resource_count", 0),
+    }
+    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding("pass", "native-tags-from-csv.status-only", "Native CSV tag creation passed; details summarized.")
+    ]
+    return compact
+
+
+def native_tag_csv_tag_body(row: NativeTagCsvRow, *, timestamp: str) -> dict[str, Any]:
+    return {
+        "name": row.tag_name,
+        "comment": f"Created: {timestamp}",
+        "value": row.tag_value,
+        "resource_type": row.resource_type,
+        "active": True,
+    }
+
+
+def native_tag_csv_exact_items(parsed: dict[str, Any] | None, value: str) -> list[dict[str, Any]]:
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        return []
+    matches: list[dict[str, Any]] = []
+    for item in parsed["items"]:
+        if not isinstance(item, dict):
+            continue
+        if item.get("name") == value or item.get("id") == value:
+            matches.append(item)
+    return matches
+
+
+def native_tag_csv_fetch_exact_items(
+    repo_root: Path,
+    base_path: str,
+    value: str,
+    *,
+    token: str,
+    env: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    matches: list[dict[str, Any]] = []
+    page = 1
+    page_size = 100
+    encoded_value = urllib.parse.quote(value)
+    while True:
+        separator = "&" if "?" in base_path else "?"
+        path = f"{base_path}{separator}filter={encoded_value}&page={page}&page_size={page_size}"
+        response = direct_native_api_curl(repo_root, path, token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+            return matches, {"reason": "lookup failed", "http_status": http_status, "page": page, **summarize_native_api_response(parsed)}
+        matches.extend(native_tag_csv_exact_items(parsed, value))
+        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
+        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(parsed["items"])
+        actual_page_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else page_size
+        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) and page_info.get("page") else page
+        if actual_page * actual_page_size >= total or not parsed["items"]:
+            return matches, None
+        page += 1
+        if page > 1000:
+            return matches, {"reason": "lookup pagination exceeded safety limit", "page": page, "total": total}
+
+
+def command_native_tags_from_csv(
+    repo_root: Path,
+    csv_file: Path,
+    *,
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "csv_file": str(csv_file),
+        "dry_run": dry_run,
+        "skipped_existing_tag_count": 0,
+        "created_tag_count": 0,
+        "created_tag_ids": [],
+        "assigned_resource_count": 0,
+    }
+    try:
+        rows = load_native_tag_csv_rows(csv_file)
+        details["row_count"] = len(rows)
+        findings.append(finding("pass", "native-tags-from-csv.rows", f"Loaded {len(rows)} non-empty CSV row(s)."))
+    except ValueError as exc:
+        findings.append(finding("fail", "native-tags-from-csv.rows", str(exc), details={"csv_file": str(csv_file)}))
+        result = make_result("native-tags-from-csv", repo_root, "Native CSV tag creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_tag_csv_status_only_result(result) if status_only else result
+
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    if dry_run:
+        details["planned_tags"] = [
+            {
+                "tag": native_tag_csv_tag_body(row, timestamp=timestamp),
+                "resource_names": list(row.resource_names),
+            }
+            for row in rows
+        ]
+        findings.append(finding("pass", "native-tags-from-csv.dry-run", "Dry run planned native tag writes without runtime access or resource-name resolution."))
+        result = make_result("native-tags-from-csv", repo_root, "Native CSV tag creation dry run completed.", findings)
+        result["details"] = details
+        return native_tag_csv_status_only_result(result) if status_only else result
+
+    if not allow_write_control:
+        findings.append(finding("fail", "native-tags-from-csv.write-control-intent", "Creating tags requires --allow-write-control."))
+        result = make_result("native-tags-from-csv", repo_root, "Native CSV tag creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_tag_csv_status_only_result(result) if status_only else result
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-tags-from-csv.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        result = make_result("native-tags-from-csv", repo_root, "Direct native API CSV tag creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_tag_csv_status_only_result(result) if status_only else result
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-tags-from-csv.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        result = make_result("native-tags-from-csv", repo_root, "Direct native API CSV tag creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_tag_csv_status_only_result(result) if status_only else result
+
+    rows_to_create: list[tuple[NativeTagCsvRow, list[str]]] = []
+    preflight_failures: list[dict[str, Any]] = []
+    skipped_existing_tags: list[str] = []
+    planned_tag_names: set[str] = set()
+    for row in rows:
+        if row.tag_name in planned_tag_names:
+            skipped_existing_tags.append(row.tag_name)
+            continue
+        tag_matches, tag_failure = native_tag_csv_fetch_exact_items(repo_root, "/api/v1/tags", row.tag_name, token=token, env=env)
+        if tag_failure:
+            preflight_failures.append({"row": row.row_number, "tag": row.tag_name, **tag_failure})
+            continue
+        if tag_matches:
+            skipped_existing_tags.append(row.tag_name)
+            continue
+
+        resource_ids: list[str] = []
+        for resource_name in row.resource_names:
+            lookup_path = f"/api/v1/tags/resource-names/{urllib.parse.quote(row.resource_type, safe='')}"
+            resource_matches, resource_failure = native_tag_csv_fetch_exact_items(repo_root, lookup_path, resource_name, token=token, env=env)
+            if resource_failure:
+                preflight_failures.append({"row": row.row_number, "tag": row.tag_name, "resource": resource_name, **resource_failure})
+                continue
+            if len(resource_matches) != 1:
+                preflight_failures.append({"row": row.row_number, "tag": row.tag_name, "resource": resource_name, "reason": "resource lookup was missing or ambiguous", "match_count": len(resource_matches)})
+                continue
+            resource_id = resource_matches[0].get("id")
+            if not isinstance(resource_id, str) or not resource_id:
+                preflight_failures.append({"row": row.row_number, "tag": row.tag_name, "resource": resource_name, "reason": "resource response did not include an id"})
+                continue
+            resource_ids.append(resource_id)
+        rows_to_create.append((row, resource_ids))
+        planned_tag_names.add(row.tag_name)
+
+    details["skipped_existing_tags"] = skipped_existing_tags
+    details["skipped_existing_tag_count"] = len(skipped_existing_tags)
+    if preflight_failures:
+        details["preflight_failures"] = preflight_failures
+        findings.append(finding("fail", "native-tags-from-csv.preflight", "Native CSV tag creation preflight failed before creating tags.", details={"failure_count": len(preflight_failures), "failures": preflight_failures[:10]}))
+        result = make_result("native-tags-from-csv", repo_root, "Native CSV tag creation rejected before tag writes.", findings)
+        result["details"] = details
+        return native_tag_csv_status_only_result(result) if status_only else result
+
+    findings.append(finding("pass", "native-tags-from-csv.preflight", f"Preflight resolved {len(rows_to_create)} tag create row(s) and skipped {len(skipped_existing_tags)} existing tag(s)."))
+
+    content_type = (("Content-Type", "application/json"),)
+    created_tag_ids: list[str] = []
+    assigned_resource_count = 0
+    create_failures: list[dict[str, Any]] = []
+    for row, resource_ids in rows_to_create:
+        tag_body = json.dumps(native_tag_csv_tag_body(row, timestamp=timestamp), separators=(",", ":"))
+        tag_create = direct_native_api_curl(repo_root, "/api/v1/tags", token=token, env=env, method="POST", body=tag_body, extra_headers=content_type)
+        tag_create_json, tag_create_status = parse_json_output_with_http_status(tag_create)
+        tag_id = tag_create_json.get("id") if isinstance(tag_create_json, dict) and isinstance(tag_create_json.get("id"), str) else None
+        if tag_create.returncode != 0 or tag_create_status != 201 or not tag_id:
+            create_failures.append({"row": row.row_number, "tag": row.tag_name, "stage": "create", "http_status": tag_create_status, **summarize_native_api_response(tag_create_json)})
+            break
+        created_tag_ids.append(tag_id)
+        if resource_ids:
+            resource_body = json.dumps({"action": "add", "resource_ids": resource_ids}, separators=(",", ":"))
+            resource_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=resource_body, extra_headers=content_type)
+            resource_add_json, resource_add_status = parse_json_output_with_http_status(resource_add)
+            if resource_add.returncode != 0 or resource_add_status != 200:
+                create_failures.append({"row": row.row_number, "tag": row.tag_name, "tag_id": tag_id, "stage": "resource-add", "http_status": resource_add_status, **summarize_native_api_response(resource_add_json)})
+                break
+            assigned_resource_count += len(resource_ids)
+    details["created_tag_ids"] = created_tag_ids
+    details["created_tag_count"] = len(created_tag_ids)
+    details["assigned_resource_count"] = assigned_resource_count
+    if create_failures:
+        details["create_failures"] = create_failures
+        findings.append(finding("fail", "native-tags-from-csv.tag-create", "One or more native tag create/resource requests failed.", details={"failure_count": len(create_failures), "failures": create_failures[:10]}))
+    else:
+        findings.append(finding("pass", "native-tags-from-csv.tag-create", f"Created {len(created_tag_ids)} tag(s) and assigned {assigned_resource_count} resource(s) through the native API."))
+
+    result_status = aggregate_status(findings)
+    result = make_result(
+        "native-tags-from-csv",
+        repo_root,
+        "Native CSV tag creation completed." if result_status != "fail" else "Native CSV tag creation failed.",
+        findings,
+    )
+    result["details"] = details
+    return native_tag_csv_status_only_result(result) if status_only else result
+
+
 def native_targets_from_host_list_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     compact = dict(result)
@@ -20164,6 +20453,11 @@ def build_parser() -> argparse.ArgumentParser:
     native_targets_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional target creation")
     native_targets_csv.add_argument("--dry-run", action="store_true", help="plan target request bodies without contacting the runtime")
     native_targets_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_tags_csv = subparsers.add_parser("native-tags-from-csv", parents=[common], help="create native tags from the native-safe subset of the inherited tag CSV shape through the direct native API")
+    native_tags_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with tag type, value, description, and up to ten resource-name columns")
+    native_tags_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional tag creation")
+    native_tags_csv.add_argument("--dry-run", action="store_true", help="plan tag request bodies without contacting the runtime")
+    native_tags_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -20342,6 +20636,14 @@ def main(argv: list[str] | None = None) -> int:
             repo_root,
             args.csv_file,
             port_list_id=args.port_list_id,
+            allow_write_control=args.allow_write_control,
+            dry_run=args.dry_run,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-tags-from-csv":
+        result = command_native_tags_from_csv(
+            repo_root,
+            args.csv_file,
             allow_write_control=args.allow_write_control,
             dry_run=args.dry_run,
             status_only=args.status_only,

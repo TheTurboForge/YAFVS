@@ -285,6 +285,11 @@ The sample files should serve as an example.
 
 Creates tags as specified in a csv-file. See tags.csv for file format/contents.
 
+TurboVAS provides `tools/turbovasctl native-tags-from-csv` for the native-safe
+subset: Alert, Config, Scanner, Schedule, Target, and Task tags resolved by
+exact resource name. Credential tags and Report filter tags remain inherited
+until their native safety contract is explicit.
+
 ### Example
 
 `$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket create-tags-from-csv.gmp.py ./tags.csv`

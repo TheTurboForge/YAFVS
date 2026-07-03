@@ -140,7 +140,14 @@ tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt 
 tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
 tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --dry-run
 tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
+tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
+tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 ```
+
+`native-tags-from-csv` supports the native-safe subset of the inherited tag CSV
+shape: Alert, Config, Scanner, Schedule, Target, and Task tags with exact
+resource-name lookup. Inherited Credential tags and Report filter tags remain
+outside this helper until their native safety contract is explicit.
 
 For raw `curl` probes, keep the bearer token in shell memory and read it from
 the ignored runtime secret written by the direct smoke. Do not echo the token,

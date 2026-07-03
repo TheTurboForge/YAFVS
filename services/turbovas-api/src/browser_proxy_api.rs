@@ -27,14 +27,6 @@ use crate::{
         restore_filter,
     },
     operator_identity::resolve_browser_proxy_operator_by_name,
-    port_list_payloads::PortListAssetDetail,
-    port_list_write_validation::{
-        PortListCloneRequest, PortListCreateRequest, PortListPatchRequest,
-    },
-    port_list_writes::{
-        clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
-        patch_port_list, restore_port_list,
-    },
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_validation::{
         ScanConfigCloneRequest, ScanConfigCreateRequest, ScanConfigPatchRequest,
@@ -108,16 +100,6 @@ pub(crate) async fn browser_proxy_patch_credential(
         Json(request),
     )
     .await
-}
-
-pub(crate) async fn browser_proxy_restore_port_list(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(port_list_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Json<PortListAssetDetail>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    restore_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
 }
 
 impl BrowserProxyAuth {
@@ -275,26 +257,6 @@ pub(crate) async fn browser_proxy_patch_alert(
     .await
 }
 
-pub(crate) async fn browser_proxy_delete_port_list(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(port_list_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    delete_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_hard_delete_port_list(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(port_list_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    hard_delete_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
-}
-
 pub(crate) async fn browser_proxy_create_filter(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -350,16 +312,6 @@ pub(crate) async fn browser_proxy_hard_delete_scan_config(
         Some(Extension(operator)),
     )
     .await
-}
-
-pub(crate) async fn browser_proxy_create_port_list(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    headers: HeaderMap,
-    Json(request): Json<PortListCreateRequest>,
-) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    create_port_list(State(state), Some(Extension(operator)), Json(request)).await
 }
 
 pub(crate) async fn browser_proxy_create_scan_config(
@@ -430,40 +382,6 @@ pub(crate) async fn browser_proxy_clone_filter(
     clone_filter(
         State(state),
         Path(filter_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_clone_port_list(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(port_list_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<PortListCloneRequest>,
-) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    clone_port_list(
-        State(state),
-        Path(port_list_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_patch_port_list(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(port_list_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<PortListPatchRequest>,
-) -> Result<Json<PortListAssetDetail>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_port_list(
-        State(state),
-        Path(port_list_id),
         Some(Extension(operator)),
         Json(request),
     )

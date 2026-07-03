@@ -8806,6 +8806,19 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "symbols": ("pub(crate) fn validate_alive_tests",),
     },
     {
+        "owner": "services/turbovas-api/src/target_text_validation.rs",
+        "forbidden": (
+            "services/turbovas-api/src/target_host_validation.rs",
+            "services/turbovas-api/src/target_write_validation.rs",
+        ),
+        "symbols": (
+            "pub(crate) const MAX_TARGET_TEXT_BYTES",
+            "pub(crate) fn normalize_optional_required_target_text",
+            "pub(crate) fn normalize_required_target_text",
+            "pub(crate) fn normalize_optional_target_text",
+        ),
+    },
+    {
         "owner": "services/turbovas-api/src/target_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/target_writes.rs",),
         "symbols": (

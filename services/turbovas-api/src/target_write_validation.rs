@@ -5,11 +5,15 @@
 use serde::Deserialize;
 
 use crate::{
-    errors::ApiError, path_ids::parse_uuid, target_alive_tests::validate_alive_tests,
+    errors::ApiError,
+    path_ids::parse_uuid,
+    target_alive_tests::validate_alive_tests,
     target_host_validation::validate_target_host_lists,
+    target_text_validation::{
+        normalize_optional_required_target_text, normalize_optional_target_text,
+        normalize_required_target_text,
+    },
 };
-
-pub(crate) const MAX_TARGET_TEXT_BYTES: usize = 4096;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -419,41 +423,4 @@ fn validate_optional_uuid(
             Ok(parse_uuid(value)?.to_string())
         })
         .transpose()
-}
-
-fn normalize_optional_required_target_text(
-    value: Option<String>,
-    field_name: &str,
-) -> Result<Option<String>, ApiError> {
-    value
-        .map(|value| normalize_required_target_text(value, field_name))
-        .transpose()
-}
-
-fn normalize_required_target_text(value: String, field_name: &str) -> Result<String, ApiError> {
-    let value = normalize_target_text_value(value, field_name)?;
-    if value.is_empty() {
-        Err(ApiError::BadRequest(format!("{field_name} is required")))
-    } else {
-        Ok(value)
-    }
-}
-
-fn normalize_optional_target_text(
-    value: Option<String>,
-    field_name: &str,
-) -> Result<Option<String>, ApiError> {
-    value
-        .map(|value| normalize_target_text_value(value, field_name))
-        .transpose()
-}
-
-fn normalize_target_text_value(value: String, field_name: &str) -> Result<String, ApiError> {
-    let value = value.trim().to_string();
-    if value.len() > MAX_TARGET_TEXT_BYTES || value.chars().any(char::is_control) {
-        return Err(ApiError::BadRequest(format!(
-            "{field_name} must be printable text up to {MAX_TARGET_TEXT_BYTES} bytes"
-        )));
-    }
-    Ok(value)
 }

@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use crate::{errors::ApiError, target_write_validation::MAX_TARGET_TEXT_BYTES};
+use crate::{errors::ApiError, target_text_validation::MAX_TARGET_TEXT_BYTES};
 
 pub(crate) const MAX_TARGET_HOSTS: usize = 4095;
 

@@ -191,6 +191,7 @@ mod tag_write_transactions;
 mod tag_write_validation;
 mod tag_writes;
 mod tags;
+mod target_alive_tests;
 mod target_handlers;
 mod target_host_validation;
 mod target_query_sql;

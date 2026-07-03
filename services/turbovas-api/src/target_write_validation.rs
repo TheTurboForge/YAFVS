@@ -5,7 +5,8 @@
 use serde::Deserialize;
 
 use crate::{
-    errors::ApiError, path_ids::parse_uuid, target_host_validation::validate_target_host_lists,
+    errors::ApiError, path_ids::parse_uuid, target_alive_tests::validate_alive_tests,
+    target_host_validation::validate_target_host_lists,
 };
 
 pub(crate) const MAX_TARGET_TEXT_BYTES: usize = 4096;
@@ -455,48 +456,4 @@ fn normalize_target_text_value(value: String, field_name: &str) -> Result<String
         )));
     }
     Ok(value)
-}
-
-pub(crate) fn validate_alive_tests(value: Option<Vec<String>>) -> Result<Option<i32>, ApiError> {
-    let Some(values) = value else {
-        return Ok(None);
-    };
-    if values.is_empty() {
-        return Ok(Some(0));
-    }
-    let mut bitfield = 0;
-    let mut saw_default = false;
-    let mut saw_consider_alive = false;
-    for value in values {
-        match value.as_str() {
-            "Scan Config Default" => saw_default = true,
-            "Consider Alive" => saw_consider_alive = true,
-            "TCP-ACK Service Ping" => bitfield |= 1,
-            "ICMP Ping" => bitfield |= 2,
-            "ARP Ping" => bitfield |= 4,
-            "TCP-SYN Service Ping" => bitfield |= 16,
-            _ => {
-                return Err(ApiError::BadRequest(format!(
-                    "unsupported alive_tests value: {value}"
-                )));
-            }
-        }
-    }
-    if saw_default && (saw_consider_alive || bitfield != 0) {
-        return Err(ApiError::BadRequest(
-            "Scan Config Default cannot be combined with other alive_tests values".to_string(),
-        ));
-    }
-    if saw_consider_alive && bitfield != 0 {
-        return Err(ApiError::BadRequest(
-            "Consider Alive cannot be combined with probe alive_tests values".to_string(),
-        ));
-    }
-    if saw_default {
-        Ok(Some(0))
-    } else if saw_consider_alive {
-        Ok(Some(8))
-    } else {
-        Ok(Some(bitfield))
-    }
 }

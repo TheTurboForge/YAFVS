@@ -285,4 +285,6 @@ mod tooling_target_import_characterization_tests;
 #[cfg(test)]
 mod tooling_task_control_characterization_tests;
 #[cfg(test)]
+mod tooling_task_import_characterization_tests;
+#[cfg(test)]
 mod tooling_trash_write_characterization_tests;

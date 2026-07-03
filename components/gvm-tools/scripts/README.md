@@ -18,16 +18,6 @@ This script creates a new scan config with nvts from a given CERT-Bund!
 
 ---
 
-## `clean-sensor.gmp.py`
-
-This script removes all resources from a sensor, except active tasks.
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/clean-sensor.gmp.py`
-
----
-
 ## `combine-reports.gmp.py`
 
 This script will combine desired reports into a single report. The combined report will then be sent to a desired container task. This script will create a container task for the combined report to be sent to, however, if you would like the report to be sent to an existing task, place the report of the desired task first and add the argument 'first_task'.

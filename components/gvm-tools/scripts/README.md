@@ -32,21 +32,6 @@ This script will combine desired reports into a single report. The combined repo
 
 ---
 
-## `create-targets-from-host-list.gmp.py`
-
-This script pulls hostnames from a text file and creates a target for each.
-
-### Arguments
-
-* `<hostname>`: IP of the GVM host
-* `<hosts_textfile>`: text file containing hostnames
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/create_targets_from_host_list.gmp.py <hostname> <hosts_textfile>`
-
----
-
 ## `delete-overrides-by-filter.gmp.py`
 
 This script deletes overrides with a specific filter value.

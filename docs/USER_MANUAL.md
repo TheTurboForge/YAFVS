@@ -119,7 +119,7 @@ restore/trash operations. UUID-backed
 resources use UUIDs; catalog-backed security information resources use exact
 public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. Alert
 delivery/control, filter/bulk actions, file import/export, target
-host/exclude/port-list/alive-test/reverse-DNS/credential-link writes,
+bulk CSV import, target credential-secret import,
 credential secrets/control paths, users, reports, and results remain on
 inherited compatibility paths. Direct mode otherwise accepts
 only classified read-only `GET` requests.
@@ -128,6 +128,16 @@ responses/logs:
 
 ```sh
 tools/turbovasctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
+```
+
+Host-list target creation is available without GMP/XML or `gvm-tools` through
+the guarded direct native API helper. Dry-run first to inspect the generated
+request shape, then rerun with explicit write-control intent after direct
+write-control is enabled:
+
+```sh
+tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --dry-run
+tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
 ```
 
 For raw `curl` probes, keep the bearer token in shell memory and read it from

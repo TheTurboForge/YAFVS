@@ -300,6 +300,7 @@ ENTERPRISE_FEED_KEY_SUPPORT_SCAN_PATHS = (
 NOTUS_SIGNATURE_SUBTREES = ("advisories", "products")
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
 IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
+NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST = "Scan Config Default"
 GVMD_IMPORT_TIMEOUT_SECONDS = 7200
 OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
 OSPD_STABLE_HOSTNAME = "turbovas-ospd-openvas"
@@ -395,7 +396,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "create-schedules-from-csv.gmp.py",
         "create-tags-from-csv.gmp.py",
         "create-targets-from-csv.gmp.py",
-        "create-targets-from-host-list.gmp.py",
         "create-tasks-from-csv.gmp.py",
         "delete-overrides-by-filter.gmp.py",
         "empty-trash.gmp.py",
@@ -423,7 +423,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
     "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native tooling still lacks a contract for credential tags, report filter assignment, broad resource-name lookups, and explicit-ID resource assignment.",
     "create-targets-from-csv.gmp.py": "Inherited CSV bulk-target behavior is characterized; native tooling still lacks a contract that maps hosts, credentials, alive-test selection, and port-list choice in one path.",
-    "create-targets-from-host-list.gmp.py": "Inherited host-list target creation is characterized; native tooling still lacks a contract for optional port-list creation plus one target per host.",
     "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "delete-overrides-by-filter.gmp.py": "Inherited filter-based override deletion is characterized; native tooling still lacks an explicit destructive override-delete contract, authorization rule, and pacing/error semantics.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
@@ -16708,6 +16707,240 @@ def command_native_api_request(
     return result
 
 
+def load_native_target_host_list(hosts_file: Path) -> list[str]:
+    try:
+        content = hosts_file.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"failed to read host file: {exc}") from exc
+    hosts = [line.strip() for line in content.splitlines() if line.strip()]
+    if not hosts:
+        raise ValueError("host file is empty")
+    return hosts
+
+
+def parse_native_target_host_list_port_ranges(port_range: str) -> list[dict[str, Any]]:
+    ranges: list[dict[str, Any]] = []
+    for raw_token in port_range.split(","):
+        token = raw_token.strip()
+        if not token:
+            continue
+        match = re.fullmatch(r"(?i)(T|TCP|U|UDP):(\d+)(?:-(\d+))?", token)
+        if not match:
+            raise ValueError("port ranges must use comma-separated T:start-end or U:start-end tokens")
+        protocol_token, start_text, end_text = match.groups()
+        start = int(start_text)
+        end = int(end_text or start_text)
+        if not (1 <= start <= 65535 and 1 <= end <= 65535 and start <= end):
+            raise ValueError("port range start/end must be within 1..65535 and start must not exceed end")
+        ranges.append(
+            {
+                "protocol": "tcp" if protocol_token.lower().startswith("t") else "udp",
+                "start": start,
+                "end": end,
+                "comment": "TurboVAS native host-list target import",
+            }
+        )
+    if not ranges:
+        raise ValueError("port range must include at least one T:/U: range")
+    return ranges
+
+
+def native_target_host_list_target_body(host: str, port_list_id: str, timestamp: str) -> dict[str, Any]:
+    return {
+        "name": f"Target for {host}",
+        "comment": f"Created: {timestamp}",
+        "port_list_id": port_list_id,
+        "hosts": [host],
+        "exclude_hosts": [],
+        "alive_tests": [NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST],
+        "allow_simultaneous_ips": False,
+        "reverse_lookup_only": False,
+        "reverse_lookup_unify": False,
+    }
+
+
+def native_targets_from_host_list_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        "hosts_file": details.get("hosts_file"),
+        "host_count": details.get("host_count", 0),
+        "dry_run": details.get("dry_run", False),
+        "port_list_id": details.get("port_list_id"),
+        "port_list_created": details.get("port_list_created", False),
+        "created_target_count": details.get("created_target_count", 0),
+    }
+    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding("pass", "native-targets-from-host-list.status-only", "Native host-list target creation passed; details summarized.")
+    ]
+    return compact
+
+
+def command_native_targets_from_host_list(
+    repo_root: Path,
+    hosts_file: Path,
+    *,
+    port_list_id: str | None = None,
+    port_range: str | None = None,
+    port_list_name: str | None = None,
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "hosts_file": str(hosts_file),
+        "dry_run": dry_run,
+        "port_list_created": False,
+        "created_target_count": 0,
+        "created_target_ids": [],
+    }
+    try:
+        hosts = load_native_target_host_list(hosts_file)
+        details["host_count"] = len(hosts)
+        findings.append(finding("pass", "native-targets-from-host-list.hosts", f"Loaded {len(hosts)} non-empty host(s) from the host file."))
+    except ValueError as exc:
+        findings.append(finding("fail", "native-targets-from-host-list.hosts", str(exc), details={"hosts_file": str(hosts_file)}))
+        result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+    if port_list_id and port_range:
+        findings.append(finding("fail", "native-targets-from-host-list.port-selection", "Use either --port-list-id or --port-range, not both."))
+        result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+    port_ranges: list[dict[str, Any]] | None = None
+    if port_range:
+        try:
+            port_ranges = parse_native_target_host_list_port_ranges(port_range)
+            details["port_range_count"] = len(port_ranges)
+        except ValueError as exc:
+            findings.append(finding("fail", "native-targets-from-host-list.port-range", str(exc), details={"port_range": port_range}))
+            result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation rejected before runtime access.", findings)
+            result["details"] = details
+            return native_targets_from_host_list_status_only_result(result) if status_only else result
+    else:
+        port_list_id = port_list_id or IANA_TCP_UDP_PORT_LIST_ID
+        if not UUID_VALUE_RE.fullmatch(port_list_id):
+            findings.append(finding("fail", "native-targets-from-host-list.port-list-id", "--port-list-id must be a UUID.", details={"port_list_id": port_list_id}))
+            result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation rejected before runtime access.", findings)
+            result["details"] = details
+            return native_targets_from_host_list_status_only_result(result) if status_only else result
+        details["port_list_id"] = port_list_id
+
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    planned_targets = [native_target_host_list_target_body(host, port_list_id or "<created-port-list-id>", timestamp) for host in hosts]
+    if dry_run:
+        details["planned_targets"] = planned_targets
+        if port_ranges is not None:
+            details["planned_port_list"] = {
+                "name": port_list_name or f"Port list for target {hosts_file.stem}",
+                "comment": "Created by TurboVAS native-targets-from-host-list",
+                "port_ranges": port_ranges,
+            }
+        findings.append(finding("pass", "native-targets-from-host-list.dry-run", "Dry run planned native port-list/target writes without runtime access."))
+        result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation dry run completed.", findings)
+        result["details"] = details
+        return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+    if not allow_write_control:
+        findings.append(finding("fail", "native-targets-from-host-list.write-control-intent", "Creating targets requires --allow-write-control."))
+        result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-targets-from-host-list.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        result = make_result("native-targets-from-host-list", repo_root, "Direct native API target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_targets_from_host_list_status_only_result(result) if status_only else result
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-targets-from-host-list.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        result = make_result("native-targets-from-host-list", repo_root, "Direct native API target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+    content_type = (("Content-Type", "application/json"),)
+    if port_ranges is not None:
+        port_list_body = json.dumps(
+            {
+                "name": port_list_name or f"Port list for target {hosts_file.stem}",
+                "comment": "Created by TurboVAS native-targets-from-host-list",
+                "port_ranges": port_ranges,
+            },
+            separators=(",", ":"),
+        )
+        created_port_list = direct_native_api_curl(repo_root, "/api/v1/port-lists", token=token, env=env, method="POST", body=port_list_body, extra_headers=content_type)
+        created_port_list_json, created_port_list_status = parse_json_output_with_http_status(created_port_list)
+        created_port_list_id = created_port_list_json.get("id") if isinstance(created_port_list_json, dict) and isinstance(created_port_list_json.get("id"), str) else None
+        created_port_list_ok = created_port_list.returncode == 0 and created_port_list_status == 201 and bool(created_port_list_id)
+        findings.append(
+            native_api_probe_finding(
+                "pass" if created_port_list_ok else "fail",
+                "native-targets-from-host-list.port-list-create",
+                "Created a native port list for host-list target creation." if created_port_list_ok else "Failed to create the native port list for host-list target creation.",
+                created_port_list,
+                direct_native_api_display_command("/api/v1/port-lists", token=token, env=env, method="POST", body=port_list_body, extra_headers=content_type),
+                created_port_list_json,
+                {"http_status": created_port_list_status, "port_list_id": created_port_list_id, **summarize_native_api_response(created_port_list_json)},
+            )
+        )
+        if not created_port_list_ok:
+            result = make_result("native-targets-from-host-list", repo_root, "Native host-list target creation failed before target creation.", findings)
+            result["details"] = details
+            return native_targets_from_host_list_status_only_result(result) if status_only else result
+        port_list_id = created_port_list_id
+        details["port_list_id"] = created_port_list_id
+        details["port_list_created"] = True
+
+    created_target_ids: list[str] = []
+    for index, host in enumerate(hosts, start=1):
+        target_body = json.dumps(native_target_host_list_target_body(host, str(port_list_id), timestamp), separators=(",", ":"))
+        target_create = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=target_body, extra_headers=content_type)
+        target_create_json, target_create_status = parse_json_output_with_http_status(target_create)
+        target_id = target_create_json.get("id") if isinstance(target_create_json, dict) and isinstance(target_create_json.get("id"), str) else None
+        target_create_ok = target_create.returncode == 0 and target_create_status == 201 and bool(target_id)
+        if target_id:
+            created_target_ids.append(target_id)
+        details["created_target_count"] = len(created_target_ids)
+        details["created_target_ids"] = created_target_ids
+        findings.append(
+            native_api_probe_finding(
+                "pass" if target_create_ok else "fail",
+                "native-targets-from-host-list.target-create",
+                f"Created target {index} of {len(hosts)} through the native API." if target_create_ok else f"Failed to create target {index} of {len(hosts)} through the native API.",
+                target_create,
+                direct_native_api_display_command("/api/v1/targets", token=token, env=env, method="POST", body=target_body, extra_headers=content_type),
+                target_create_json,
+                {"http_status": target_create_status, "target_id": target_id, "target_index": index, **summarize_native_api_response(target_create_json)},
+            )
+        )
+        if not target_create_ok:
+            break
+
+    result_status = aggregate_status(findings)
+    result = make_result(
+        "native-targets-from-host-list",
+        repo_root,
+        "Native host-list target creation completed." if result_status != "fail" else "Native host-list target creation failed.",
+        findings,
+    )
+    result["details"] = details
+    return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+
 def compact_native_api_request_finding(item: dict[str, Any]) -> dict[str, Any]:
     compact = compact_doctor_finding(item)
     details = item.get("details")
@@ -19620,6 +19853,14 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_request.add_argument("--body-json", help="validated JSON request body; redacted in rendered commands")
     native_api_request.add_argument("--allow-write-control", action="store_true", help="allow intentional non-GET/write-control-shaped request probes")
     native_api_request.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_targets_host_list = subparsers.add_parser("native-targets-from-host-list", parents=[common], help="create one native target per host from a host-list file through the direct native API")
+    native_targets_host_list.add_argument("--hosts-file", required=True, type=Path, help="text file containing one host/IP per non-empty line")
+    native_targets_host_list.add_argument("--port-list-id", help="existing port-list UUID; defaults to All IANA assigned TCP and UDP")
+    native_targets_host_list.add_argument("--port-range", help="create a native port list from comma-separated T:start-end or U:start-end ranges")
+    native_targets_host_list.add_argument("--port-list-name", help="name for the generated port list when --port-range is used")
+    native_targets_host_list.add_argument("--allow-write-control", action="store_true", help="confirm intentional target/port-list creation")
+    native_targets_host_list.add_argument("--dry-run", action="store_true", help="plan request bodies without contacting the runtime")
+    native_targets_host_list.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -19780,6 +20021,17 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-targets-from-host-list":
+        result = command_native_targets_from_host_list(
+            repo_root,
+            args.hosts_file,
+            port_list_id=args.port_list_id,
+            port_range=args.port_range,
+            port_list_name=args.port_list_name,
+            allow_write_control=args.allow_write_control,
+            dry_run=args.dry_run,
             status_only=args.status_only,
         )
     elif args.command == "native-tooling-state":

@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: 2024 Martin Boller
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Loosely based on the create-targets-from-host-list.gmp.py
+# Loosely based on older gvm-tools bulk target examples.
 # As provided by Greenbone in the gvm-tools repo
 #
 # Run with gvm-script --gmp-username admin-user --gmp-password password socket create-credentials-from-csv.gmp.py credentials.csv

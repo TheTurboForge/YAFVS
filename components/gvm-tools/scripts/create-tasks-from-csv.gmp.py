@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Loosely based on the create-targets-from-host-list
+# Loosely based on older gvm-tools bulk target examples.
 #
 # Run with gvm-script --gmp-username admin-user --gmp-password password socket create-tasks-from-csv.gmp.py hostname-server tasks.csv
 

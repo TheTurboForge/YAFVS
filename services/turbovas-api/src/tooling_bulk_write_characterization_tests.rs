@@ -6,8 +6,6 @@ const CREATE_TARGETS_CSV: &str =
     include_str!("../../../components/gvm-tools/scripts/create-targets-from-csv.gmp.py");
 const CREATE_TASKS_CSV: &str =
     include_str!("../../../components/gvm-tools/scripts/create-tasks-from-csv.gmp.py");
-const CREATE_TARGETS_HOST_LIST: &str =
-    include_str!("../../../components/gvm-tools/scripts/create-targets-from-host-list.gmp.py");
 const UPDATE_TASK_TARGET: &str =
     include_str!("../../../components/gvm-tools/scripts/update-task-target.gmp.py");
 
@@ -73,31 +71,6 @@ fn inherited_create_tasks_from_csv_resolves_references_ordering_alerts_and_dupli
         assert!(
             CREATE_TASKS_CSV.contains(required),
             "create-tasks-from-csv missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_create_targets_from_host_list_can_create_port_list_then_one_target_per_host() {
-    for required in [
-        "ports.set_defaults(\n        port_list_id=\"4a4717fe-57d2-11e1-9a26-406186ea4fc5\"",
-        "host_list = [x.strip() for x in content]",
-        "host_list = list(filter(None, host_list))",
-        "error_and_exit(\"Host file is empty (exit)\")",
-        "for host in host_list:",
-        "name = f\"Target for {host}\"",
-        "hosts = [host]",
-        "gmp.create_target(",
-        "name=name, comment=comment, hosts=hosts, port_list_id=port_list_id",
-        "if parsed_args.port_range:",
-        "gmp.create_port_list(",
-        "name=f\"Port list for target {parsed_args.hostname}\"",
-        "port_range=parsed_args.port_range",
-        "comment=\"Port List created by gvm-script\"",
-    ] {
-        assert!(
-            CREATE_TARGETS_HOST_LIST.contains(required),
-            "create-targets-from-host-list missing {required}"
         );
     }
 }

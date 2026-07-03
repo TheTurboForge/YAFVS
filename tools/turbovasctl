@@ -19628,6 +19628,7 @@ def build_parser() -> argparse.ArgumentParser:
     native_tooling_removal_review.add_argument("--status-only", action="store_true", help="emit removal-review counts without path lists")
     migration_matrix = subparsers.add_parser("native-api-migration-matrix", parents=[common], help="show native API migration metadata by endpoint")
     migration_matrix.add_argument("--compact", action="store_true", help="alias for --status-only; emit compact planning details and only non-pass findings")
+    migration_matrix.add_argument("--summary", action="store_true", help="alias for --status-only; emit compact planning details and only non-pass findings")
     migration_matrix.add_argument("--status-only", action="store_true", help="emit summary/contract details and only non-pass findings for chat-safe API planning")
     migration_matrix.add_argument("--focus", action="append", help="comma-separated terms used to keep only matching migration rows; may be repeated")
     native_api_client_contract = subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
@@ -19785,7 +19786,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "native-tooling-removal-review":
         result = command_native_tooling_removal_review(repo_root, status_only=args.status_only, paths=args.path)
     elif args.command == "native-api-migration-matrix":
-        result = command_native_api_migration_matrix(repo_root, status_only=args.status_only or args.compact, focus=args.focus)
+        result = command_native_api_migration_matrix(repo_root, status_only=args.status_only or args.compact or args.summary, focus=args.focus)
     elif args.command == "native-api-client-contract":
         result = command_native_api_client_contract(repo_root, status_only=args.status_only)
     elif args.command == "rust-migration-state":

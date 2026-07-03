@@ -1265,6 +1265,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_native_tooling_state", source)
         self.assertIn("def command_native_api_request", source)
         self.assertIn('native_api_request.add_argument("--status-only"', source)
+        self.assertIn('migration_matrix.add_argument("--summary"', source)
+        self.assertIn("args.status_only or args.compact or args.summary", source)
         self.assertIn("status_only=args.status_only", source)
         self.assertIn("def command_native_api_client_contract", source)
         self.assertIn("def command_native_api_cargo_audit", source)

@@ -35,14 +35,6 @@ use crate::{
         clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
         patch_port_list, restore_port_list,
     },
-    report_config_payloads::ReportConfigAssetItem,
-    report_config_write_validation::{
-        ReportConfigCloneRequest, ReportConfigCreateRequest, ReportConfigPatchRequest,
-    },
-    report_config_writes::{
-        clone_report_config, create_report_config, delete_report_config, hard_delete_report_config,
-        patch_report_config, restore_report_config,
-    },
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_validation::{
         ScanConfigCloneRequest, ScanConfigCreateRequest, ScanConfigPatchRequest,
@@ -134,21 +126,6 @@ impl BrowserProxyAuth {
     }
 }
 
-pub(crate) async fn browser_proxy_restore_report_config(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(report_config_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Json<ReportConfigAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    restore_report_config(
-        State(state),
-        Path(report_config_id),
-        Some(Extension(operator)),
-    )
-    .await
-}
-
 pub(crate) async fn browser_proxy_create_scope(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -213,36 +190,6 @@ pub(crate) async fn browser_proxy_restore_scan_config(
     restore_scan_config(
         State(state),
         Path(scan_config_id),
-        Some(Extension(operator)),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_delete_report_config(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(report_config_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    delete_report_config(
-        State(state),
-        Path(report_config_id),
-        Some(Extension(operator)),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_hard_delete_report_config(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(report_config_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    hard_delete_report_config(
-        State(state),
-        Path(report_config_id),
         Some(Extension(operator)),
     )
     .await
@@ -415,16 +362,6 @@ pub(crate) async fn browser_proxy_create_port_list(
     create_port_list(State(state), Some(Extension(operator)), Json(request)).await
 }
 
-pub(crate) async fn browser_proxy_create_report_config(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    headers: HeaderMap,
-    Json(request): Json<ReportConfigCreateRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<ReportConfigAssetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    create_report_config(State(state), Some(Extension(operator)), Json(request)).await
-}
-
 pub(crate) async fn browser_proxy_create_scan_config(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -446,23 +383,6 @@ pub(crate) async fn browser_proxy_patch_scan_config(
     patch_scan_config(
         State(state),
         Path(scan_config_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_patch_report_config(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(report_config_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<ReportConfigPatchRequest>,
-) -> Result<Json<ReportConfigAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_report_config(
-        State(state),
-        Path(report_config_id),
         Some(Extension(operator)),
         Json(request),
     )
@@ -544,23 +464,6 @@ pub(crate) async fn browser_proxy_patch_port_list(
     patch_port_list(
         State(state),
         Path(port_list_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_clone_report_config(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(report_config_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<ReportConfigCloneRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<ReportConfigAssetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    clone_report_config(
-        State(state),
-        Path(report_config_id),
         Some(Extension(operator)),
         Json(request),
     )

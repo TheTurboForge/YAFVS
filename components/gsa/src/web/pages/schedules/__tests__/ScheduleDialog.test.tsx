@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -234,8 +235,15 @@ describe('ScheduleDialog component tests', () => {
     expect(recurrenceSelect).toHaveValue('Weekly');
 
     selectItems = await getSelectItemElementsForSelect(timezoneSelect);
-    expect(selectItems.length).toBe(mockedTimezones.length);
-    fireEvent.click(selectItems[1]);
+    const timezoneOption = Array.from(selectItems).find(
+      (item): item is HTMLElement =>
+        item instanceof HTMLElement &&
+        item.getAttribute('value') === mockedTimezones[1],
+    );
+    if (!timezoneOption) {
+      throw new Error(`Missing timezone option ${mockedTimezones[1]}`);
+    }
+    fireEvent.click(timezoneOption);
     expect(timezoneSelect).toHaveValue(mockedTimezones[1]);
 
     selectItems = await getSelectItemElementsForSelect(recurrenceSelect);

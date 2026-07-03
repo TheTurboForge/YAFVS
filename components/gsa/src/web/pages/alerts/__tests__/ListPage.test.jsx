@@ -300,6 +300,10 @@ describe('Alert ListPage tests', () => {
         page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
         items: [{id: 'task-1', name: 'Scheduled Task', status: 'Done'}],
       },
+      'api/v1/credentials': {
+        page: {page: 1, page_size: 500, total: 0, sort: 'name', filter: ''},
+        items: [],
+      },
     };
     const fetchMock = testing.fn(url => {
       const path = Object.keys(payloads).find(candidate =>

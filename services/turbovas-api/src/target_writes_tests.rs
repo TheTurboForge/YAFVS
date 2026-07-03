@@ -4,10 +4,11 @@
 
 use crate::{
     errors::ApiError,
+    target_host_validation::MAX_TARGET_HOSTS,
     target_write_db::ensure_target_owner_matches_operator,
     target_write_sql::*,
     target_write_validation::{
-        MAX_TARGET_HOSTS, MAX_TARGET_TEXT_BYTES, TargetCloneRequest, TargetCreateRequest,
+        MAX_TARGET_TEXT_BYTES, TargetCloneRequest, TargetCreateRequest,
         TargetCredentialLinkPatchRequest, TargetCredentialsCreateRequest,
         TargetCredentialsPatchRequest, TargetPatchRequest, ValidatedCredentialPatchAction,
         validate_alive_tests, validate_target_clone_request, validate_target_create_request,

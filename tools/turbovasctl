@@ -301,6 +301,9 @@ NOTUS_SIGNATURE_SUBTREES = ("advisories", "products")
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
 IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
 NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST = "Scan Config Default"
+NATIVE_TARGET_CSV_DEFAULT_PORT_LIST_ID = "730ef368-57e2-11e1-a90f-406186ea4fc5"
+NATIVE_TARGET_CSV_SSH_CREDENTIAL_TYPES = frozenset({"up", "usk", "cs_up", "cs_usk"})
+NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES = frozenset({"up", "cs_up"})
 GVMD_IMPORT_TIMEOUT_SECONDS = 7200
 OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
 OSPD_STABLE_HOSTNAME = "turbovas-ospd-openvas"
@@ -395,7 +398,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "create-alerts-from-csv.gmp.py",
         "create-schedules-from-csv.gmp.py",
         "create-tags-from-csv.gmp.py",
-        "create-targets-from-csv.gmp.py",
         "create-tasks-from-csv.gmp.py",
         "delete-overrides-by-filter.gmp.py",
         "empty-trash.gmp.py",
@@ -422,7 +424,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
     "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native tooling still lacks a contract for credential tags, report filter assignment, broad resource-name lookups, and explicit-ID resource assignment.",
-    "create-targets-from-csv.gmp.py": "Inherited CSV bulk-target behavior is characterized; native tooling still lacks a contract that maps hosts, credentials, alive-test selection, and port-list choice in one path.",
     "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "delete-overrides-by-filter.gmp.py": "Inherited filter-based override deletion is characterized; native tooling still lacks an explicit destructive override-delete contract, authorization rule, and pacing/error semantics.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
@@ -16759,6 +16760,137 @@ def native_target_host_list_target_body(host: str, port_list_id: str, timestamp:
     }
 
 
+@dataclass(frozen=True)
+class NativeTargetCsvRow:
+    row_number: int
+    name: str
+    host: str
+    smb_credential_name: str
+    ssh_credential_name: str
+    alive_test: str
+
+
+def load_native_target_csv_rows(csv_file: Path) -> list[NativeTargetCsvRow]:
+    rows: list[NativeTargetCsvRow] = []
+    try:
+        with csv_file.open(encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle, delimiter=",")
+            for row_number, row in enumerate(reader, start=1):
+                if not row:
+                    continue
+                if len(row) < 7:
+                    raise ValueError(f"row {row_number} must have at least 7 columns")
+                name = row[0].strip()
+                host = row[1].strip()
+                if not name or not host:
+                    raise ValueError(f"row {row_number} must include target name and host")
+                rows.append(
+                    NativeTargetCsvRow(
+                        row_number=row_number,
+                        name=name,
+                        host=host,
+                        smb_credential_name=row[2].strip(),
+                        ssh_credential_name=row[3].strip(),
+                        alive_test=(row[6].strip() or NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST),
+                    )
+                )
+    except OSError as exc:
+        raise ValueError(f"failed to read target CSV file: {exc}") from exc
+    if not rows:
+        raise ValueError("target CSV file is empty")
+    return rows
+
+
+def native_target_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        "csv_file": details.get("csv_file"),
+        "row_count": details.get("row_count", 0),
+        "dry_run": details.get("dry_run", False),
+        "port_list_id": details.get("port_list_id"),
+        "skipped_existing_target_count": details.get("skipped_existing_target_count", 0),
+        "created_target_count": details.get("created_target_count", 0),
+    }
+    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding("pass", "native-targets-from-csv.status-only", "Native CSV target creation passed; details summarized.")
+    ]
+    return compact
+
+
+def native_target_csv_target_body(
+    row: NativeTargetCsvRow,
+    *,
+    port_list_id: str,
+    timestamp: str,
+    credentials: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    body = native_target_host_list_target_body(row.host, port_list_id, timestamp)
+    body["name"] = row.name
+    body["alive_tests"] = [row.alive_test]
+    if credentials:
+        body["credentials"] = credentials
+    return body
+
+
+def native_target_csv_exact_item(parsed: dict[str, Any] | None, name: str, *, allowed_types: frozenset[str] | None = None) -> list[dict[str, Any]]:
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        return []
+    matches: list[dict[str, Any]] = []
+    for item in parsed["items"]:
+        if not isinstance(item, dict) or item.get("name") != name:
+            continue
+        credential_type = item.get("credential_type")
+        if allowed_types is not None and credential_type not in allowed_types:
+            continue
+        matches.append(item)
+    return matches
+
+
+def native_target_csv_direct_get(
+    repo_root: Path,
+    path: str,
+    *,
+    token: str,
+    env: dict[str, str],
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None, int | None]:
+    response = direct_native_api_curl(repo_root, path, token=token, env=env)
+    parsed, http_status = parse_json_output_with_http_status(response)
+    return response, parsed, http_status
+
+
+def native_target_csv_fetch_exact_items(
+    repo_root: Path,
+    base_path: str,
+    name: str,
+    *,
+    token: str,
+    env: dict[str, str],
+    allowed_types: frozenset[str] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    matches: list[dict[str, Any]] = []
+    page = 1
+    page_size = 100
+    encoded_name = urllib.parse.quote(name)
+    while True:
+        separator = "&" if "?" in base_path else "?"
+        path = f"{base_path}{separator}filter={encoded_name}&page={page}&page_size={page_size}"
+        response, parsed, http_status = native_target_csv_direct_get(repo_root, path, token=token, env=env)
+        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+            return matches, {"reason": "lookup failed", "http_status": http_status, "page": page, **summarize_native_api_response(parsed)}
+        matches.extend(native_target_csv_exact_item(parsed, name, allowed_types=allowed_types))
+        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
+        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(parsed["items"])
+        actual_page_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else page_size
+        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) and page_info.get("page") else page
+        if actual_page * actual_page_size >= total or not parsed["items"]:
+            return matches, None
+        page += 1
+        if page > 1000:
+            return matches, {"reason": "lookup pagination exceeded safety limit", "page": page, "total": total}
+
+
 def native_targets_from_host_list_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     compact = dict(result)
@@ -16939,6 +17071,171 @@ def command_native_targets_from_host_list(
     )
     result["details"] = details
     return native_targets_from_host_list_status_only_result(result) if status_only else result
+
+
+def command_native_targets_from_csv(
+    repo_root: Path,
+    csv_file: Path,
+    *,
+    port_list_id: str | None = None,
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "csv_file": str(csv_file),
+        "dry_run": dry_run,
+        "port_list_id": port_list_id or NATIVE_TARGET_CSV_DEFAULT_PORT_LIST_ID,
+        "skipped_existing_target_count": 0,
+        "created_target_count": 0,
+        "created_target_ids": [],
+        "skipped_existing_targets": [],
+    }
+    try:
+        rows = load_native_target_csv_rows(csv_file)
+        details["row_count"] = len(rows)
+        findings.append(finding("pass", "native-targets-from-csv.rows", f"Loaded {len(rows)} non-empty CSV row(s)."))
+    except ValueError as exc:
+        findings.append(finding("fail", "native-targets-from-csv.rows", str(exc), details={"csv_file": str(csv_file)}))
+        result = make_result("native-targets-from-csv", repo_root, "Native CSV target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+
+    port_list_id = port_list_id or NATIVE_TARGET_CSV_DEFAULT_PORT_LIST_ID
+    if not UUID_VALUE_RE.fullmatch(port_list_id):
+        findings.append(finding("fail", "native-targets-from-csv.port-list-id", "--port-list-id must be a UUID.", details={"port_list_id": port_list_id}))
+        result = make_result("native-targets-from-csv", repo_root, "Native CSV target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+    details["port_list_id"] = port_list_id
+
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    if dry_run:
+        details["planned_targets"] = [
+            native_target_csv_target_body(row, port_list_id=port_list_id, timestamp=timestamp, credentials={})
+            for row in rows
+        ]
+        findings.append(finding("pass", "native-targets-from-csv.dry-run", "Dry run planned native target writes without runtime access or credential resolution."))
+        result = make_result("native-targets-from-csv", repo_root, "Native CSV target creation dry run completed.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+
+    if not allow_write_control:
+        findings.append(finding("fail", "native-targets-from-csv.write-control-intent", "Creating targets requires --allow-write-control."))
+        result = make_result("native-targets-from-csv", repo_root, "Native CSV target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-targets-from-csv.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        result = make_result("native-targets-from-csv", repo_root, "Direct native API CSV target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-targets-from-csv.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        result = make_result("native-targets-from-csv", repo_root, "Direct native API CSV target creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+
+    rows_to_create: list[tuple[NativeTargetCsvRow, dict[str, dict[str, Any]]]] = []
+    preflight_failures: list[dict[str, Any]] = []
+    skipped_existing_targets: list[str] = []
+    planned_target_names: set[str] = set()
+    for row in rows:
+        if row.name in planned_target_names:
+            skipped_existing_targets.append(row.name)
+            continue
+        target_matches, target_failure = native_target_csv_fetch_exact_items(repo_root, "/api/v1/targets", row.name, token=token, env=env)
+        if target_failure:
+            preflight_failures.append({"row": row.row_number, "name": row.name, **target_failure})
+            continue
+        if target_matches:
+            skipped_existing_targets.append(row.name)
+            continue
+
+        credentials: dict[str, dict[str, Any]] = {}
+        for field_name, credential_name, allowed_types in (
+            ("smb", row.smb_credential_name, NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES),
+            ("ssh", row.ssh_credential_name, NATIVE_TARGET_CSV_SSH_CREDENTIAL_TYPES),
+        ):
+            if not credential_name:
+                continue
+            matches, credential_failure = native_target_csv_fetch_exact_items(
+                repo_root,
+                "/api/v1/credentials",
+                credential_name,
+                token=token,
+                env=env,
+                allowed_types=allowed_types,
+            )
+            if credential_failure:
+                preflight_failures.append({"row": row.row_number, "name": row.name, "credential": credential_name, "field": field_name, **credential_failure})
+                continue
+            if len(matches) != 1:
+                preflight_failures.append({"row": row.row_number, "name": row.name, "credential": credential_name, "field": field_name, "reason": "credential lookup was missing or ambiguous", "match_count": len(matches)})
+                continue
+            credential_id = matches[0].get("id")
+            if not isinstance(credential_id, str):
+                preflight_failures.append({"row": row.row_number, "name": row.name, "credential": credential_name, "field": field_name, "reason": "credential response did not include an id"})
+                continue
+            credentials[field_name] = {"id": credential_id}
+        rows_to_create.append((row, credentials))
+        planned_target_names.add(row.name)
+
+    details["skipped_existing_targets"] = skipped_existing_targets
+    details["skipped_existing_target_count"] = len(skipped_existing_targets)
+    if preflight_failures:
+        details["preflight_failures"] = preflight_failures
+        findings.append(finding("fail", "native-targets-from-csv.preflight", "Native CSV target creation preflight failed before creating targets.", details={"failure_count": len(preflight_failures), "failures": preflight_failures[:10]}))
+        result = make_result("native-targets-from-csv", repo_root, "Native CSV target creation rejected before target writes.", findings)
+        result["details"] = details
+        return native_target_csv_status_only_result(result) if status_only else result
+
+    findings.append(finding("pass", "native-targets-from-csv.preflight", f"Preflight resolved {len(rows_to_create)} target create row(s) and skipped {len(skipped_existing_targets)} existing target(s)."))
+
+    content_type = (("Content-Type", "application/json"),)
+    created_target_ids: list[str] = []
+    create_failures: list[dict[str, Any]] = []
+    for row, credentials in rows_to_create:
+        target_body = json.dumps(
+            native_target_csv_target_body(row, port_list_id=port_list_id, timestamp=timestamp, credentials=credentials),
+            separators=(",", ":"),
+        )
+        target_create = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=target_body, extra_headers=content_type)
+        target_create_json, target_create_status = parse_json_output_with_http_status(target_create)
+        target_id = target_create_json.get("id") if isinstance(target_create_json, dict) and isinstance(target_create_json.get("id"), str) else None
+        if target_create.returncode == 0 and target_create_status == 201 and target_id:
+            created_target_ids.append(target_id)
+        else:
+            create_failures.append({"row": row.row_number, "name": row.name, "http_status": target_create_status, **summarize_native_api_response(target_create_json)})
+            break
+    details["created_target_ids"] = created_target_ids
+    details["created_target_count"] = len(created_target_ids)
+    if create_failures:
+        details["create_failures"] = create_failures
+        findings.append(finding("fail", "native-targets-from-csv.target-create", "One or more native target create requests failed.", details={"failure_count": len(create_failures), "failures": create_failures[:10]}))
+    else:
+        findings.append(finding("pass", "native-targets-from-csv.target-create", f"Created {len(created_target_ids)} target(s) through the native API."))
+
+    result_status = aggregate_status(findings)
+    result = make_result(
+        "native-targets-from-csv",
+        repo_root,
+        "Native CSV target creation completed." if result_status != "fail" else "Native CSV target creation failed.",
+        findings,
+    )
+    result["details"] = details
+    return native_target_csv_status_only_result(result) if status_only else result
 
 
 def compact_native_api_request_finding(item: dict[str, Any]) -> dict[str, Any]:
@@ -19861,6 +20158,12 @@ def build_parser() -> argparse.ArgumentParser:
     native_targets_host_list.add_argument("--allow-write-control", action="store_true", help="confirm intentional target/port-list creation")
     native_targets_host_list.add_argument("--dry-run", action="store_true", help="plan request bodies without contacting the runtime")
     native_targets_host_list.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_targets_csv = subparsers.add_parser("native-targets-from-csv", parents=[common], help="create native targets from the inherited target CSV shape through the direct native API")
+    native_targets_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with target name, host, SMB credential name, SSH credential name, and alive-test columns")
+    native_targets_csv.add_argument("--port-list-id", help="existing port-list UUID; defaults to All TCP and Nmap top 100 UDP")
+    native_targets_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional target creation")
+    native_targets_csv.add_argument("--dry-run", action="store_true", help="plan target request bodies without contacting the runtime")
+    native_targets_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -20030,6 +20333,15 @@ def main(argv: list[str] | None = None) -> int:
             port_list_id=args.port_list_id,
             port_range=args.port_range,
             port_list_name=args.port_list_name,
+            allow_write_control=args.allow_write_control,
+            dry_run=args.dry_run,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-targets-from-csv":
+        result = command_native_targets_from_csv(
+            repo_root,
+            args.csv_file,
+            port_list_id=args.port_list_id,
             allow_write_control=args.allow_write_control,
             dry_run=args.dry_run,
             status_only=args.status_only,

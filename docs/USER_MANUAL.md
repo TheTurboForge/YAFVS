@@ -138,6 +138,8 @@ write-control is enabled:
 ```sh
 tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --dry-run
 tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
+tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --dry-run
+tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
 ```
 
 For raw `curl` probes, keep the bearer token in shell memory and read it from

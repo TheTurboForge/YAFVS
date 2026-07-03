@@ -2,43 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-const CREATE_TARGETS_CSV: &str =
-    include_str!("../../../components/gvm-tools/scripts/create-targets-from-csv.gmp.py");
 const CREATE_TASKS_CSV: &str =
     include_str!("../../../components/gvm-tools/scripts/create-tasks-from-csv.gmp.py");
 const UPDATE_TASK_TARGET: &str =
     include_str!("../../../components/gvm-tools/scripts/update-task-target.gmp.py");
-
-#[test]
-fn inherited_create_targets_from_csv_maps_rows_to_target_credentials_and_alive_test() {
-    for required in [
-        "ports.set_defaults(\n        port_list_id=\"730ef368-57e2-11e1-a90f-406186ea4fc5\"",
-        "gmp.get_credentials(filter_string=\"rows=-1, name=\" + credName)",
-        "gmp.get_targets(filter_string=\"rows=-1, name=\" + targetName)",
-        "content = csv.reader(csvFile, delimiter=\",\")",
-        "name = row[0]",
-        "hosts = [row[1]]",
-        "smbCred = credential_id(gmp, row[2])",
-        "sshCred = credential_id(gmp, row[3])",
-        "aliveTest = row[6]",
-        "aliveTest = \"Scan Config Default\"",
-        "alive_test = gmp.types.AliveTest((aliveTest))",
-        "if target_id(gmp, name):",
-        "gmp.create_target(",
-        "port_list_id=port_list_id",
-        "smb_credential_id=smbCred",
-        "ssh_credential_id=sshCred",
-        "alive_test=alive_test",
-        "except GvmResponseError as gvmerr:",
-        "error_and_exit(f\"Failed to read target_csv_file: {str(e)} (exit)\")",
-        "error_and_exit(\"Host file is empty (exit)\")",
-    ] {
-        assert!(
-            CREATE_TARGETS_CSV.contains(required),
-            "create-targets-from-csv missing {required}"
-        );
-    }
-}
 
 #[test]
 fn inherited_create_tasks_from_csv_resolves_references_ordering_alerts_and_duplicate_names() {

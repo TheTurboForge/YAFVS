@@ -20,12 +20,6 @@ use crate::{
     credential_write_validation::CredentialPatchRequest,
     credential_writes::patch_credential,
     errors::ApiError,
-    filter_payloads::FilterAssetItem,
-    filter_write_validation::{FilterCloneRequest, FilterCreateRequest, FilterPatchRequest},
-    filter_writes::{
-        clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
-        restore_filter,
-    },
     operator_identity::resolve_browser_proxy_operator_by_name,
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_write_validation::ScannerPatchRequest,
@@ -127,26 +121,6 @@ pub(crate) async fn browser_proxy_patch_scope(
     .await
 }
 
-pub(crate) async fn browser_proxy_delete_filter(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(filter_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    delete_filter(State(state), Path(filter_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_hard_delete_filter(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(filter_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    hard_delete_filter(State(state), Path(filter_id), Some(Extension(operator))).await
-}
-
 fn env_string(name: &str) -> Option<String> {
     env::var(name)
         .ok()
@@ -234,33 +208,6 @@ pub(crate) async fn browser_proxy_patch_alert(
     .await
 }
 
-pub(crate) async fn browser_proxy_create_filter(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    headers: HeaderMap,
-    Json(request): Json<FilterCreateRequest>,
-) -> Result<(StatusCode, Json<FilterAssetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    create_filter(State(state), Some(Extension(operator)), Json(request)).await
-}
-
-pub(crate) async fn browser_proxy_patch_filter(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(filter_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<FilterPatchRequest>,
-) -> Result<Json<FilterAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_filter(
-        State(state),
-        Path(filter_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
 pub(crate) async fn browser_proxy_delete_tag(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -279,33 +226,6 @@ pub(crate) async fn browser_proxy_hard_delete_tag(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     hard_delete_tag(State(state), Path(tag_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_restore_filter(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(filter_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Json<FilterAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    restore_filter(State(state), Path(filter_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_clone_filter(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(filter_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<FilterCloneRequest>,
-) -> Result<(StatusCode, Json<FilterAssetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    clone_filter(
-        State(state),
-        Path(filter_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
 }
 
 pub(crate) async fn browser_proxy_clone_tag(

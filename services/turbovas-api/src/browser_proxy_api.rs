@@ -24,9 +24,6 @@ use crate::{
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_write_validation::ScannerPatchRequest,
     scanner_writes::patch_scanner,
-    scope_payload_rows::ScopeItem,
-    scope_write_validation::{ScopeCreateRequest, ScopePatchRequest},
-    scope_writes::{create_scope, delete_scope, patch_scope},
     tag_payloads::TagAssetItem,
     tag_write_validation::{
         TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
@@ -92,33 +89,6 @@ impl BrowserProxyAuth {
     pub(crate) fn new(secret: String) -> Self {
         Self { secret }
     }
-}
-
-pub(crate) async fn browser_proxy_create_scope(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    headers: HeaderMap,
-    Json(request): Json<ScopeCreateRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<ScopeItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    create_scope(State(state), Some(Extension(operator)), Json(request)).await
-}
-
-pub(crate) async fn browser_proxy_patch_scope(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(scope_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<ScopePatchRequest>,
-) -> Result<Json<ScopeItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_scope(
-        State(state),
-        Path(scope_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
 }
 
 fn env_string(name: &str) -> Option<String> {
@@ -321,16 +291,6 @@ pub(crate) async fn browser_proxy_update_tag_resources(
         Json(request),
     )
     .await
-}
-
-pub(crate) async fn browser_proxy_delete_scope(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(scope_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    delete_scope(State(state), Path(scope_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_delete_target(

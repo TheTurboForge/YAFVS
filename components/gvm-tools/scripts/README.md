@@ -42,20 +42,6 @@ This script will combine desired reports into a single report. The combined repo
 
 ---
 
-## `create-dummy-data.gmp.py`
-
-This script will create random data in the given GVM database.
-
-### Arguments
-
-* `<count>`: Number of datasets to create
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/create-dummy-data.gmp.py <count>`
-
----
-
 ## `create-targets-from-host-list.gmp.py`
 
 This script pulls hostnames from a text file and creates a target for each.
@@ -101,23 +87,6 @@ This script generates randomized report data.
 ### Example
 
 `$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/gen-random-reports.gmp.py -T 5 -r 4 -R 3 --hosts 10 --with-gauss`
-
----
-
-## `gen-random-targets.gmp.py`
-
-This script generates random task data and feeds it to a desired GSM database.
-
-### Arguments
-
-* `<host_number>`: number of dummy hosts to select from
-* `<number>`: number of targets to be generated
-* `'with-gauss'`: (optional), if you would like for the number of targets generated
-    to be randomized on a Gaussian distribution
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/gen-random-targets.gmp.py 3 40 with-gauss`
 
 ---
 

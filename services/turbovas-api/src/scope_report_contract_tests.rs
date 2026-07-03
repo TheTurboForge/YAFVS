@@ -166,7 +166,7 @@ fn scope_report_list_and_detail_expose_persisted_metrics_summary() {
 fn scope_report_native_routes_remain_get_only_read_paths() {
     let source = include_str!("routes.rs");
     let start = ".route(\"/api/v1/scope-reports\", get(scope_reports))";
-    let end = "\n}\n\npub(crate) fn direct_native_api_router";
+    let end = "\n}\n\n#[cfg(test)]";
     let routes = source
         .split_once(start)
         .expect("scope report routes must be registered")

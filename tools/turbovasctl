@@ -6578,14 +6578,48 @@ def rust_route_to_endpoint_template(route: str) -> str:
     return "/".join(parts)
 
 
-def rust_native_api_route_templates(repo_root: Path | None) -> list[str]:
+RUST_NATIVE_API_ROUTE_SOURCE_PATHS = (
+    "services/turbovas-api/src/routes.rs",
+    "services/turbovas-api/src/direct_api_routes.rs",
+    "services/turbovas-api/src/browser_proxy_routes.rs",
+)
+RUST_NATIVE_API_ROUTE_FUNCTION_SOURCES = {
+    "native_api_router": "services/turbovas-api/src/routes.rs",
+    "direct_native_api_router": "services/turbovas-api/src/direct_api_routes.rs",
+    "browser_proxy_native_api_router": "services/turbovas-api/src/browser_proxy_routes.rs",
+}
+
+
+def rust_native_api_route_sources(repo_root: Path | None) -> list[str]:
     if repo_root is None:
         return []
-    path = repo_root / "services" / "turbovas-api" / "src" / "routes.rs"
-    try:
-        source = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
+    sources: list[str] = []
+    for relative_path in RUST_NATIVE_API_ROUTE_SOURCE_PATHS:
+        try:
+            sources.append((repo_root / relative_path).read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    return sources
+
+
+def rust_native_api_route_source(repo_root: Path | None, function_name: str | None = None) -> str:
+    if repo_root is None:
+        return ""
+    if function_name:
+        preferred_path = RUST_NATIVE_API_ROUTE_FUNCTION_SOURCES.get(function_name)
+        if preferred_path:
+            source = rust_repo_file_source(repo_root, preferred_path)
+            if rust_source_function_body(source, function_name):
+                return source
+        for source in rust_native_api_route_sources(repo_root):
+            if rust_source_function_body(source, function_name):
+                return source
+        return ""
+    return "\n".join(rust_native_api_route_sources(repo_root))
+
+
+def rust_native_api_route_templates(repo_root: Path | None) -> list[str]:
+    source = rust_native_api_route_source(repo_root)
     routes = {
         rust_route_to_endpoint_template(match.group(1))
         for match in re.finditer(r'\.route\(\s*"(/api/v1[^"]*)"', source)
@@ -6597,13 +6631,7 @@ def rust_native_api_route_operations(
     repo_root: Path | None,
     function_name: str | None = None,
 ) -> set[tuple[str, str]]:
-    if repo_root is None:
-        return set()
-    path = repo_root / "services" / "turbovas-api" / "src" / "routes.rs"
-    try:
-        source = path.read_text(encoding="utf-8")
-    except OSError:
-        return set()
+    source = rust_native_api_route_source(repo_root, function_name)
     route_source = rust_source_function_body(source, function_name) if function_name else source
     if function_name and not route_source:
         return set()
@@ -6719,7 +6747,7 @@ def rust_repo_file_source(repo_root: Path | None, relative_path: str) -> str:
 
 
 def rust_direct_api_body_limit_summary(repo_root: Path | None) -> dict[str, Any]:
-    route_source = rust_repo_file_source(repo_root, "services/turbovas-api/src/routes.rs")
+    route_source = rust_native_api_route_source(repo_root, "direct_native_api_router")
     request_shape_source = rust_repo_file_source(repo_root, "services/turbovas-api/src/request_shapes.rs")
     direct_router_body = rust_source_function_body(route_source, "direct_native_api_router")
     properties = {

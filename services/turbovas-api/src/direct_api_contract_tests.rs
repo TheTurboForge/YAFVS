@@ -338,9 +338,11 @@ fn direct_api_allowlist_tracks_registered_get_routes_and_write_contracts() {
 
 #[test]
 fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
-    let source = include_str!("routes.rs");
-    let internal_routes = registered_routes(app_route_registration_block(source));
-    let direct_routes = registered_routes(direct_api_route_registration_block(source));
+    let routes_source = include_str!("routes.rs");
+    let direct_routes_source = include_str!("direct_api_routes.rs");
+    let internal_routes = registered_routes(app_route_registration_block(routes_source));
+    let direct_routes =
+        registered_routes(direct_api_route_registration_block(direct_routes_source));
     let direct_writes = direct_routes
         .iter()
         .filter(|route| route.method != "get")
@@ -388,7 +390,10 @@ fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
             contract.path
         );
     }
-    assert!(direct_api_route_registration_block(source).contains("if write_control_enabled"));
+    assert!(
+        direct_api_route_registration_block(direct_routes_source)
+            .contains("if write_control_enabled")
+    );
 }
 
 #[test]
@@ -427,8 +432,8 @@ fn app_route_registration_block(source: &str) -> &str {
         .split_once("pub(crate) fn native_api_router() -> Router<AppState> {\n    Router::new()")
         .expect("native API router must be registered")
         .1
-        .split_once("\n}\n\npub(crate) fn direct_native_api_router")
-        .expect("native API router must end before direct router")
+        .split_once("\n}\n\n#[cfg(test)]")
+        .expect("native API router must end before route tests")
         .0
 }
 
@@ -444,7 +449,7 @@ fn direct_api_route_registration_block(source: &str) -> &str {
 
 #[test]
 fn direct_api_router_applies_body_limit_to_extractors() {
-    let source = include_str!("routes.rs");
+    let source = include_str!("direct_api_routes.rs");
     let direct_routes = direct_api_route_registration_block(source);
     assert!(direct_routes.contains("DefaultBodyLimit::max("));
     assert!(direct_routes.contains("MAX_DIRECT_API_WRITE_BODY_BYTES as usize"));
@@ -452,7 +457,7 @@ fn direct_api_router_applies_body_limit_to_extractors() {
 
 #[test]
 fn browser_proxy_write_router_is_secret_gated_and_narrow() {
-    let source = include_str!("routes.rs");
+    let source = include_str!("browser_proxy_routes.rs");
     let startup_source = include_str!("startup.rs");
     let browser_routes = browser_proxy_route_registration_block(source);
     let registered = registered_routes(browser_routes);
@@ -558,8 +563,8 @@ fn browser_proxy_route_registration_block(source: &str) -> &str {
         .split_once("pub(crate) fn browser_proxy_native_api_router(")
         .expect("browser proxy router must be registered")
         .1
-        .split_once("\n}\n\n#[cfg(test)]")
-        .expect("browser proxy router must end before tests")
+        .split_once("\n}\n")
+        .expect("browser proxy router must end")
         .0
 }
 

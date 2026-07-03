@@ -9,7 +9,7 @@ use axum::{
     extract::{Path, State},
 };
 use quick_xml::{
-    Reader,
+    Reader, XmlVersion,
     events::{BytesStart, Event},
 };
 use tokio_postgres::Client;
@@ -231,7 +231,9 @@ fn push_cpe_reference_href(
         if xml_local_name(attribute.key.as_ref()) != b"href" {
             continue;
         }
-        let Ok(value) = attribute.decode_and_unescape_value(reader.decoder()) else {
+        let Ok(value) =
+            attribute.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
+        else {
             continue;
         };
         let url = value.trim().to_string();

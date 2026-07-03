@@ -273,6 +273,8 @@ mod tooling_alert_write_characterization_tests;
 #[cfg(test)]
 mod tooling_bulk_write_characterization_tests;
 #[cfg(test)]
+mod tooling_cert_config_characterization_tests;
+#[cfg(test)]
 mod tooling_credential_write_characterization_tests;
 #[cfg(test)]
 mod tooling_override_write_characterization_tests;

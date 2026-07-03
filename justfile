@@ -24,6 +24,9 @@ native-targets-from-host-list *args:
 native-targets-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-targets-from-csv "$@"
 
+native-targets-from-xml *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-targets-from-xml "$@"
+
 native-tags-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tags-from-csv "$@"
 

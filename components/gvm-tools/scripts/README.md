@@ -153,20 +153,6 @@ This script pulls schedule data from an xml document and feeds it to a desired G
 
 ---
 
-## `send-targets.gmp.py`
-
-This script pulls target data from an xml document and feeds it to a desired GSM.
-
-### Arguments
-
-* `<xml_doc>`:   .xml file containing schedules
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/send-targets.gmp.py example_file.xml`
-
----
-
 ## `send-tasks.gmp.py`
 
 This script pulls tasks data from an xml document and feeds it to a desired GSM.

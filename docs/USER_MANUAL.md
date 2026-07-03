@@ -140,6 +140,8 @@ tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt 
 tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
 tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --dry-run
 tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
+tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --dry-run
+tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --allow-write-control --status-only
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 ```
@@ -148,6 +150,10 @@ tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-writ
 shape: Alert, Config, Credential, Scanner, Schedule, Target, and Task tags with
 exact resource-name lookup. Inherited Report filter tags remain outside this
 helper until their native safety contract is explicit.
+
+`native-targets-from-xml` supports the retained secret-free target XML subset
+with explicit `port_list` IDs. It rejects legacy `port_range` rows and non-SSH
+credential ports instead of silently changing import semantics.
 
 For raw `curl` probes, keep the bearer token in shell memory and read it from
 the ignored runtime secret written by the direct smoke. Do not echo the token,

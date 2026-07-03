@@ -1257,7 +1257,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -5549,6 +5549,160 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIsNone(failure)
         self.assertEqual(matches, [{"id": "22222222-2222-4222-8222-222222222222", "name": "needle", "credential_type": "up"}])
 
+    def test_native_targets_from_xml_parses_and_dry_runs_secret_free_payloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "targets.xml"
+            xml_file.write_text(
+                """
+<targets>
+  <target>
+    <name>XML target</name>
+    <hosts>192.0.2.10, 192.0.2.11</hosts>
+    <exclude_hosts>192.0.2.99</exclude_hosts>
+    <comment>Imported from XML</comment>
+    <alive_tests>ICMP Ping</alive_tests>
+    <reverse_lookup_only>1</reverse_lookup_only>
+    <reverse_lookup_unify>0</reverse_lookup_unify>
+    <ssh_credential id="55555555-5555-4555-8555-555555555555"><port>2222</port></ssh_credential>
+    <smb_credential id="44444444-4444-4444-8444-444444444444" />
+    <port_list id="11111111-1111-4111-8111-111111111111" />
+  </target>
+</targets>
+""",
+                encoding="utf-8",
+            )
+            rows = turbovasctl.load_native_target_xml_rows(xml_file)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].hosts, ("192.0.2.10", "192.0.2.11"))
+
+            result = turbovasctl.command_native_targets_from_xml(root, xml_file, dry_run=True)
+
+        self.assertEqual(result["status"], "pass")
+        planned = result["details"]["planned_targets"][0]
+        self.assertEqual(planned["name"], "XML target")
+        self.assertEqual(planned["hosts"], ["192.0.2.10", "192.0.2.11"])
+        self.assertEqual(planned["exclude_hosts"], ["192.0.2.99"])
+        self.assertEqual(planned["alive_tests"], ["ICMP Ping"])
+        self.assertTrue(planned["reverse_lookup_only"])
+        self.assertEqual(planned["credentials"]["ssh"]["port"], 2222)
+        self.assertNotIn("password", json.dumps(planned))
+
+    def test_native_targets_from_xml_rejects_unsupported_non_ssh_credential_port(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "targets.xml"
+            xml_file.write_text(
+                """
+<targets>
+  <target>
+    <name>XML target</name>
+    <hosts>192.0.2.10</hosts>
+    <alive_tests>Scan Config Default</alive_tests>
+    <smb_credential id="44444444-4444-4444-8444-444444444444"><port>445</port></smb_credential>
+    <port_list id="11111111-1111-4111-8111-111111111111" />
+  </target>
+</targets>
+""",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_targets_from_xml(root, xml_file)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertIn("ports are not native-safe", checks["native-targets-from-xml.rows"]["message"])
+
+    def test_native_targets_from_xml_rejects_legacy_port_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "targets.xml"
+            xml_file.write_text(
+                """
+<targets>
+  <target>
+    <name>XML target</name>
+    <hosts>192.0.2.10</hosts>
+    <alive_tests>Scan Config Default</alive_tests>
+    <port_range>T:1-443</port_range>
+    <port_list id="11111111-1111-4111-8111-111111111111" />
+  </target>
+</targets>
+""",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_targets_from_xml(root, xml_file)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertIn("port_range is not native-safe", checks["native-targets-from-xml.rows"]["message"])
+
+    def test_native_targets_from_xml_requires_write_control_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "targets.xml"
+            xml_file.write_text(
+                """
+<targets>
+  <target>
+    <name>XML target</name>
+    <hosts>192.0.2.10</hosts>
+    <alive_tests>Scan Config Default</alive_tests>
+    <port_list id="11111111-1111-4111-8111-111111111111" />
+  </target>
+</targets>
+""",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_targets_from_xml(root, xml_file)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["native-targets-from-xml.write-control-intent"]["status"], "fail")
+
+    def test_native_targets_from_xml_uses_direct_api_for_targets(self):
+        created_bodies: list[dict[str, object]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            self.assertEqual(path, "/api/v1/targets")
+            body = json.loads(kwargs["body"])
+            created_bodies.append(body)
+            return subprocess.CompletedProcess(["curl"], 0, '{"id":"66666666-6666-4666-8666-666666666666"}\n201', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "targets.xml"
+            xml_file.write_text(
+                """
+<targets>
+  <target>
+    <name>XML target</name>
+    <hosts>192.0.2.10</hosts>
+    <alive_tests>Consider Alive</alive_tests>
+    <reverse_lookup_unify>1</reverse_lookup_unify>
+    <ssh_credential id="55555555-5555-4555-8555-555555555555" />
+    <port_list id="11111111-1111-4111-8111-111111111111" />
+  </target>
+</targets>
+""",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_targets_from_xml(root, xml_file, allow_write_control=True, status_only=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["created_target_count"], 1)
+        self.assertEqual(created_bodies[0]["alive_tests"], ["Consider Alive"])
+        self.assertEqual(created_bodies[0]["credentials"], {"ssh": {"id": "55555555-5555-4555-8555-555555555555"}})
+
     def test_native_tags_from_csv_parses_supported_subset_and_dry_runs_payloads(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -6043,7 +6197,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
                 "components/gvm-tools/scripts/send-schedules.gmp.py",
-                "components/gvm-tools/scripts/send-targets.gmp.py",
                 "components/gvm-tools/scripts/send-tasks.gmp.py",
                 "components/gvm-tools/scripts/update-task-target.gmp.py",
                 "components/gvm-tools/scripts/verify-scanners.gmp.py",
@@ -6078,7 +6231,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
         self.assertIn("XML schedule send", write_blockers["components/gvm-tools/scripts/send-schedules.gmp.py"])
-        self.assertIn("XML target import", write_blockers["components/gvm-tools/scripts/send-targets.gmp.py"])
         self.assertIn("XML task import", write_blockers["components/gvm-tools/scripts/send-tasks.gmp.py"])
         self.assertIn("clone/rebind/delete behavior", write_blockers["components/gvm-tools/scripts/update-task-target.gmp.py"])
 

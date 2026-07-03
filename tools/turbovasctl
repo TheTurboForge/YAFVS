@@ -382,7 +382,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "nvt-scan.gmp.py",
         "scan-new-system.gmp.py",
         "start-alert-scan.gmp.py",
-        "start-multiple-alerts-scan.gmp.py",
         "start-nvt-scan.gmp.py",
         "start-scans-from-csv.py",
         "stop-all-scans.gmp.py",

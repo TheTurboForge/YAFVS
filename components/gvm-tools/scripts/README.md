@@ -211,21 +211,6 @@ This script makes an alert scan and sends the report via email.
 
 ---
 
-## `start-multiple-alerts-scan.gmp.py`
-
-This script makes an alert scan and sends the report via email.
-
-### Arguments
-
-* `<sender_email>`:      E-Mail of the sender
-* `<receiver_email>`:    E-Mail of the receiver
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/start-multiple-alerts-scan.gmp.py <sender_email> <receiver_email>`
-
----
-
 ## `start-nvt-scan.gmp.py`
 
 This script creates a new task (if the target is not existing) with specific host and nvt!

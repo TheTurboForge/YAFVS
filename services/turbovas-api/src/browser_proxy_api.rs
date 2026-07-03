@@ -7,7 +7,7 @@ use std::env;
 use axum::{
     Extension, Json,
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
 };
 
 use crate::{
@@ -24,14 +24,6 @@ use crate::{
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_write_validation::ScannerPatchRequest,
     scanner_writes::patch_scanner,
-    tag_payloads::TagAssetItem,
-    tag_write_validation::{
-        TagCloneRequest, TagCreateRequest, TagPatchRequest, TagResourceUpdateRequest,
-    },
-    tag_writes::{
-        clone_tag, create_tag, delete_tag, hard_delete_tag, patch_tag, restore_tag,
-        update_tag_resources,
-    },
     task_target_payloads::TaskItem,
     task_write_validation::TaskPatchRequest,
     task_writes::patch_task,
@@ -97,16 +89,6 @@ pub(crate) fn browser_proxy_api_config() -> Result<Option<BrowserProxyAuth>, Api
     browser_proxy_api_config_from_source(env_string(BROWSER_PROXY_SECRET_ENV))
 }
 
-pub(crate) async fn browser_proxy_restore_tag(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(tag_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Json<TagAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    restore_tag(State(state), Path(tag_id), Some(Extension(operator))).await
-}
-
 fn browser_proxy_api_config_from_source(
     secret: Option<String>,
 ) -> Result<Option<BrowserProxyAuth>, ApiError> {
@@ -136,70 +118,6 @@ pub(crate) async fn browser_proxy_patch_alert(
     .await
 }
 
-pub(crate) async fn browser_proxy_delete_tag(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(tag_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    delete_tag(State(state), Path(tag_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_hard_delete_tag(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(tag_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<StatusCode, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    hard_delete_tag(State(state), Path(tag_id), Some(Extension(operator))).await
-}
-
-pub(crate) async fn browser_proxy_clone_tag(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(tag_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<TagCloneRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    clone_tag(
-        State(state),
-        Path(tag_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_create_tag(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    headers: HeaderMap,
-    Json(request): Json<TagCreateRequest>,
-) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    create_tag(State(state), Some(Extension(operator)), Json(request)).await
-}
-
-pub(crate) async fn browser_proxy_patch_tag(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(tag_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<TagPatchRequest>,
-) -> Result<Json<TagAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_tag(
-        State(state),
-        Path(tag_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
 pub(crate) async fn browser_proxy_patch_task(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
@@ -211,23 +129,6 @@ pub(crate) async fn browser_proxy_patch_task(
     patch_task(
         State(state),
         Path(task_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_update_tag_resources(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(tag_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<TagResourceUpdateRequest>,
-) -> Result<Json<TagAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    update_tag_resources(
-        State(state),
-        Path(tag_id),
         Some(Extension(operator)),
         Json(request),
     )

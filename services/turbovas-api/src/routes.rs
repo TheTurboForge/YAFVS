@@ -13,10 +13,8 @@ use crate::{
     alerts::*,
     app_state::{AppState, healthz},
     browser_proxy_api::{
-        BrowserProxyAuth, browser_proxy_clone_tag, browser_proxy_create_tag,
-        browser_proxy_delete_tag, browser_proxy_hard_delete_tag, browser_proxy_patch_alert,
-        browser_proxy_patch_credential, browser_proxy_patch_scanner, browser_proxy_patch_tag,
-        browser_proxy_patch_task, browser_proxy_restore_tag, browser_proxy_update_tag_resources,
+        BrowserProxyAuth, browser_proxy_patch_alert, browser_proxy_patch_credential,
+        browser_proxy_patch_scanner, browser_proxy_patch_task,
     },
     browser_proxy_filter::{
         browser_proxy_clone_filter, browser_proxy_create_filter, browser_proxy_delete_filter,
@@ -44,6 +42,11 @@ use crate::{
     },
     browser_proxy_scope::{
         browser_proxy_create_scope, browser_proxy_delete_scope, browser_proxy_patch_scope,
+    },
+    browser_proxy_tag::{
+        browser_proxy_clone_tag, browser_proxy_create_tag, browser_proxy_delete_tag,
+        browser_proxy_hard_delete_tag, browser_proxy_patch_tag, browser_proxy_restore_tag,
+        browser_proxy_update_tag_resources,
     },
     browser_proxy_target::{
         browser_proxy_clone_target, browser_proxy_create_target, browser_proxy_delete_target,

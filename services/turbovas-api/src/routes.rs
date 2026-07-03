@@ -12,13 +12,14 @@ use crate::{
     alert_writes::patch_alert,
     alerts::*,
     app_state::{AppState, healthz},
-    browser_proxy_api::{
-        BrowserProxyAuth, browser_proxy_patch_alert, browser_proxy_patch_credential,
-        browser_proxy_patch_scanner, browser_proxy_patch_task,
-    },
+    browser_proxy_api::BrowserProxyAuth,
     browser_proxy_filter::{
         browser_proxy_clone_filter, browser_proxy_create_filter, browser_proxy_delete_filter,
         browser_proxy_hard_delete_filter, browser_proxy_patch_filter, browser_proxy_restore_filter,
+    },
+    browser_proxy_metadata_patch::{
+        browser_proxy_patch_alert, browser_proxy_patch_credential, browser_proxy_patch_scanner,
+        browser_proxy_patch_task,
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,

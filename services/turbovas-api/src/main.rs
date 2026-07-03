@@ -15,6 +15,7 @@ mod asset_user_tag_query_sql;
 mod auth;
 mod browser_proxy_api;
 mod browser_proxy_filter;
+mod browser_proxy_metadata_patch;
 mod browser_proxy_port_list;
 mod browser_proxy_report_config;
 mod browser_proxy_scan_config;

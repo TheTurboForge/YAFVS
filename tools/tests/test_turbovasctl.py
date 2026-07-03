@@ -5570,18 +5570,18 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(planned["tag"]["value"], "Owner")
         self.assertEqual(planned["resource_names"], ["Target A", "Target B"])
 
-    def test_native_tags_from_csv_rejects_inherited_credential_and_report_semantics(self):
+    def test_native_tags_from_csv_rejects_inherited_report_filter_semantics(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             csv_file = root / "tags.csv"
-            csv_file.write_text("CREDENTIAL,Owner,Secret,Credential A\n", encoding="utf-8")
+            csv_file.write_text("REPORT,Owner,Secret,Report A\n", encoding="utf-8")
             with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
                 result = turbovasctl.command_native_tags_from_csv(root, csv_file)
                 curl.assert_not_called()
 
         self.assertEqual(result["status"], "fail")
         checks = {item["check"]: item for item in result["findings"]}
-        self.assertIn("CREDENTIAL", checks["native-tags-from-csv.rows"]["message"])
+        self.assertIn("REPORT", checks["native-tags-from-csv.rows"]["message"])
 
     def test_native_tags_from_csv_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -5820,13 +5820,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("summary: List feed inventory metadata", openapi)
         self.assertIn("does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content", openapi)
         self.assertIn("summary: List tag-dialog resource names", openapi)
-        self.assertIn("enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]", openapi)
+        self.assertIn("enum: [cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]", openapi)
         self.assertIn("redacted id/name resource-name lookup", openapi)
         self.assertIn("/api/v1/feeds", contract)
         self.assertIn("tag-dialog resource-name lookups", contract)
-        self.assertIn("including alert", contract)
+        self.assertIn("including alert and credential", contract)
         self.assertIn("/api/v1/feeds", boundary)
-        self.assertIn("tag-dialog resource-name lookups, including alert", boundary)
+        self.assertIn("tag-dialog resource-name lookups, including alert and credential", boundary)
         self.assertIn("direct feed", boundary)
         self.assertIn("inventory access", boundary)
 
@@ -6073,7 +6073,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("CSV schedule creation", write_blockers["components/gvm-tools/scripts/create-schedules-from-csv.gmp.py"])
         self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
         self.assertIn("native-tags-from-csv covers", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
-        self.assertIn("credential tags and report filter assignment", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
+        self.assertIn("report filter assignment", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
         self.assertIn("filter-based override deletion", write_blockers["components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py"])
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])

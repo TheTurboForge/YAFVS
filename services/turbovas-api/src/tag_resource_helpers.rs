@@ -49,6 +49,13 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
             extra_where: "",
         }),
+        "credential" => Ok(TagResourceSqlSpec {
+            table: "credentials",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
         "target" => Ok(TagResourceSqlSpec {
             table: "targets",
             join_on: "r.id = tr.resource",
@@ -175,6 +182,7 @@ pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -
     matches!(
         resource_type,
         "alert"
+            | "credential"
             | "config"
             | "cert_bund_adv"
             | "cpe"
@@ -205,6 +213,7 @@ pub(crate) fn tag_resource_direct_write_requires_owner_match(resource_type: &str
     matches!(
         resource_type,
         "alert"
+            | "credential"
             | "config"
             | "host"
             | "os"
@@ -362,11 +371,12 @@ mod tests {
         assert!(!alert_sql.contains("alert_method_data"));
         assert!(!alert_sql.contains("alert_event_data"));
         assert!(!alert_sql.contains("alert_condition_data"));
+        let credential_sql = tag_resource_collection_sql("credential", &sort_sql).unwrap();
+        assert!(credential_sql.contains("JOIN credentials r ON r.id = tr.resource"));
         let scanner_sql = tag_resource_collection_sql("scanner", &sort_sql).unwrap();
         assert!(scanner_sql.contains("JOIN scanners r ON r.id = tr.resource"));
         let schedule_sql = tag_resource_collection_sql("schedule", &sort_sql).unwrap();
         assert!(schedule_sql.contains("JOIN schedules r ON r.id = tr.resource"));
-        assert!(tag_resource_collection_sql("credential", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("report", &sort_sql).is_err());
         assert!(tag_resource_collection_sql("result", &sort_sql).is_err());
     }
@@ -419,7 +429,11 @@ mod tests {
         assert!(!alert_sql.contains("alert_method_data"));
         assert!(!alert_sql.contains("alert_event_data"));
         assert!(!alert_sql.contains("alert_condition_data"));
-        assert!(tag_resource_active_lookup_sql("credential").is_err());
+        let credential_sql = tag_resource_active_lookup_sql("credential").unwrap();
+        assert!(credential_sql.contains("FROM credentials r"));
+        assert!(credential_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(credential_sql.contains("r.owner::integer AS owner_id"));
+        assert!(tag_resource_direct_write_requires_owner_match("credential"));
     }
 
     #[test]
@@ -434,11 +448,12 @@ mod tests {
         assert!(!alert_sql.contains("alert_method_data"));
         assert!(!alert_sql.contains("alert_event_data"));
         assert!(!alert_sql.contains("alert_condition_data"));
+        let credential_sql = tag_resource_name_collection_sql("credential", &sort_sql).unwrap();
+        assert!(credential_sql.contains("FROM credentials r"));
         let scanner_sql = tag_resource_name_collection_sql("scanner", &sort_sql).unwrap();
         assert!(scanner_sql.contains("FROM scanners r"));
         let schedule_sql = tag_resource_name_collection_sql("schedule", &sort_sql).unwrap();
         assert!(schedule_sql.contains("FROM schedules r"));
-        assert!(tag_resource_name_collection_sql("credential", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("user", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("report", &sort_sql).is_err());
         assert!(tag_resource_name_collection_sql("result", &sort_sql).is_err());

@@ -110,11 +110,13 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   type is allowed only through the direct write-control route. Read-only feed
   inventory metadata at
   `/api/v1/feeds` is allowed only as a classified scriptable read endpoint.
-- Read-only tag-dialog resource-name lookups, including alert, are also
+- Read-only tag-dialog resource-name lookups, including alert and credential, are also
   allowlisted scriptable reads. They expose only id/type/name lookup data;
   alert name/comment metadata PATCH is direct write-control, while alert
   delivery, method/event/condition payloads, active state, task links,
-  credentials, export/test actions, and broad mutations remain inherited.
+  export/test actions, and broad mutations remain inherited. Credential lookup
+  is redacted id/name metadata only; credential secrets and control paths remain
+  inherited.
 - Credential name/comment metadata PATCH is direct write-control, while
   credential secret material, credential-store selectors, type/allow-insecure
   settings, scanner/target links, export/download, create/clone/restore/delete,
@@ -191,7 +193,7 @@ rejection, generated, safe client-supplied, and unsafe client-replaced
 access headers, valid-token non-GET rejection, request-body,
 `Transfer-Encoding`, malformed `Content-Length`, oversized-query rejection, and
 the in-flight cap's JSON `429` contract through focused Rust tests; runtime
-smoke covers direct feed inventory access, tag-dialog alert resource-name lookup, and
+smoke covers direct feed inventory access, tag-dialog alert/credential resource-name lookup, and
 internal-only endpoint denial for the retention preview when a scope report is
 available, plus continued internal native API smoke. Malformed HTTP framing can
 be rejected by the HTTP parser before native middleware; the smoke records that

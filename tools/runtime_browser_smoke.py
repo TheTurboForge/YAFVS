@@ -461,12 +461,13 @@ async function assertTagResourceNameProxy(page) {
     { status: alertNames.status, total: alertNames.body?.page?.total ?? null, item_count: alertItems?.length ?? null, sample: alertItems?.[0] ?? alertNames.textSample },
   );
 
-  const denied = await fetchNativeJsonWithBrowserToken(page, '/api/v1/tags/resource-names/credential?page_size=1');
+  const credentialNames = await fetchNativeJsonWithBrowserToken(page, '/api/v1/tags/resource-names/credential?page_size=1&sort=name');
+  const credentialItems = Array.isArray(credentialNames.body?.items) ? credentialNames.body.items : null;
   add(
-    [400, 404].includes(denied.status) ? 'pass' : 'fail',
-    'tag.resource-names-credential-blocked',
-    [400, 404].includes(denied.status) ? 'Credential resource-name lookup remains unavailable through the same-origin native proxy.' : 'Credential resource-name lookup unexpectedly returned through the same-origin native proxy.',
-    { status: denied.status, message: denied.body?.error?.message || denied.textSample },
+    credentialNames.status === 200 && credentialItems !== null ? 'pass' : 'fail',
+    'tag.resource-names-credential-native-api',
+    credentialNames.status === 200 && credentialItems !== null ? 'Credential resource-name lookup loaded through same-origin native API with redacted id/name metadata.' : 'Credential resource-name lookup did not return a JSON item collection through same-origin native API.',
+    { status: credentialNames.status, total: credentialNames.body?.page?.total ?? null, item_count: credentialItems?.length ?? null, sample: credentialItems?.[0] ?? credentialNames.textSample },
   );
 }
 

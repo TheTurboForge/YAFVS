@@ -1848,7 +1848,7 @@ paths:
     get:
       operationId: getTagsResourceNamesByResourceType
       summary: List tag-dialog resource names
-      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule id-name, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Credentials, users, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
+      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule/credential id-name, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Users, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
       x-turbovas-direct: true
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
@@ -1860,7 +1860,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]
+            enum: [cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
@@ -6375,7 +6375,7 @@ components:
           maxLength: 4096
         resource_type:
           type: string
-          enum: [alert, cert_bund_adv, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate]
+          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate]
         comment:
           type: string
           maxLength: 4096

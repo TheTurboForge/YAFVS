@@ -55,6 +55,11 @@ fn tag_resource_write_rejects_owner_mismatch_for_owner_bearing_types() {
         ensure_tag_resource_owner_matches_operator("target", None, 8),
         Err(ApiError::Forbidden)
     ));
+    assert!(ensure_tag_resource_owner_matches_operator("credential", Some(7), 7).is_ok());
+    assert!(matches!(
+        ensure_tag_resource_owner_matches_operator("credential", Some(7), 8),
+        Err(ApiError::Forbidden)
+    ));
     assert!(ensure_tag_resource_owner_matches_operator("cve", None, 8).is_ok());
     assert!(ensure_tag_resource_owner_matches_operator("nvt", None, 8).is_ok());
 }
@@ -138,7 +143,7 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
 
     let bad_type = TagCreateRequest {
         name: "owner:x".to_string(),
-        resource_type: "credential".to_string(),
+        resource_type: "report".to_string(),
         comment: None,
         value: None,
         active: true,
@@ -296,10 +301,7 @@ fn tag_resource_direct_write_support_is_narrower_than_read_support() {
     assert!(ensure_tag_resource_direct_write_type_is_supported("dfn_cert_adv").is_ok());
     assert!(ensure_tag_resource_direct_write_type_is_supported("nvt").is_ok());
     assert!(ensure_tag_resource_direct_write_type_is_supported("alert").is_ok());
-    assert!(matches!(
-        ensure_tag_resource_direct_write_type_is_supported("credential"),
-        Err(ApiError::BadRequest(_))
-    ));
+    assert!(ensure_tag_resource_direct_write_type_is_supported("credential").is_ok());
 }
 
 #[test]

@@ -145,9 +145,9 @@ tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-writ
 ```
 
 `native-tags-from-csv` supports the native-safe subset of the inherited tag CSV
-shape: Alert, Config, Scanner, Schedule, Target, and Task tags with exact
-resource-name lookup. Inherited Credential tags and Report filter tags remain
-outside this helper until their native safety contract is explicit.
+shape: Alert, Config, Credential, Scanner, Schedule, Target, and Task tags with
+exact resource-name lookup. Inherited Report filter tags remain outside this
+helper until their native safety contract is explicit.
 
 For raw `curl` probes, keep the bearer token in shell memory and read it from
 the ignored runtime secret written by the direct smoke. Do not echo the token,

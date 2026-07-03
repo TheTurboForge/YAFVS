@@ -240,20 +240,6 @@ This script creates a new task (if the target is not existing) with specific hos
 
 ---
 
-## `sync-assets.gmp.py`
-
-This script reads asset data from a csv file and sync it with the gsm.
-
-### Arguments
-
-* `<csv_file>`:    should contain a table of IP-addresses with an optional a comment
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/sync-assets.gmp.py <csv_file>`
-
----
-
 ## `update-task-target.gmp.py`
 
 This script will update target hosts information for a desired task.

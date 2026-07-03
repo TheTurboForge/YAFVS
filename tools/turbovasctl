@@ -403,7 +403,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "send-schedules.gmp.py",
         "send-targets.gmp.py",
         "send-tasks.gmp.py",
-        "sync-hosts.gmp.py",
         "update-task-target.gmp.py",
     },
 }

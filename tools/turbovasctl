@@ -444,6 +444,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "scan-new-system.gmp.py": "Inherited ad-hoc scan-new-system target/task creation is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
     "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
     "send-targets.gmp.py": "Inherited XML target import is characterized; native tooling still lacks a safe target import contract for credential references, alive-test/reverse-lookup fields, port ranges, and port-list references.",
+    "send-tasks.gmp.py": "Inherited XML task import is characterized; native tooling still lacks a safe task import contract for config/scanner/target resolution, schedule fields, and preferences.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
     "start-scans-from-csv.py": "Inherited CSV task start behavior is characterized; native tooling still lacks a safe bulk task-start contract.",
     "stop-all-scans.gmp.py": "Inherited running/requested/queued stop-all behavior is characterized; native tooling still lacks a safe bulk task-stop contract.",

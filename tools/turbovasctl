@@ -164,6 +164,7 @@ NATIVE_API_SEMGREP_CONFIG = Path("policy/semgrep-native-api.yml")
 NATIVE_API_SOURCE_DIR = NATIVE_API_CRATE / "src"
 OSV_LOCKFILES = (
     NATIVE_API_CARGO_LOCK,
+    Path("components/openvas-scanner/rust/Cargo.lock"),
     GSA_PACKAGE_LOCK,
     Path("components/python-gvm/uv.lock"),
     Path("components/gvm-tools/uv.lock"),

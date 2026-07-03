@@ -1,3 +1,5 @@
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 use std::{
     fmt::Display,
     fs::{self, File},
@@ -7,7 +9,7 @@ use std::{
 
 use flate2::{Compression, write::GzEncoder};
 use tar::Builder;
-use vergen_git2::{Emitter, Git2Builder};
+use vergen_git2::{Emitter, Git2};
 
 fn create_test_layer(name: &str) -> Option<()> {
     fn ignore_error<O, E>(input: Result<O, E>) -> Option<O>
@@ -52,12 +54,16 @@ fn create_test_binaries() {
 fn set_version() {
     if let Some(bv) = std::option_env!("BIN_VERSION") {
         println!("cargo:rustc-env=VERGEN_GIT_DESCRIBE={}", bv);
-    } else if let Ok(git2) = Git2Builder::default().describe(true, false, None).build()
-        && let Ok(g) = Emitter::default().add_instructions(&git2)
-        && g.emit().is_err()
-    {
-        // fall back if emit can not generate the env variable
-        println!("cargo:rustc-env=VERGEN_GIT_DESCRIBE=unknown");
+    } else {
+        let git2 = Git2::all().describe(true, false, None).build();
+        if Emitter::default()
+            .add_instructions(&git2)
+            .and_then(|emitter| emitter.emit())
+            .is_err()
+        {
+            // fall back if emit can not generate the env variable
+            println!("cargo:rustc-env=VERGEN_GIT_DESCRIBE=unknown");
+        }
     }
 }
 

@@ -393,7 +393,7 @@ fn cert_advisory_detail_user_tags_use_resolved_uuid_only() {
     assert!(!cert_bund_list_source.contains("catalog_user_tags"));
     assert!(!dfn_cert_list_source.contains("catalog_user_tags"));
 
-    let routes_source = include_str!("routes.rs");
+    let routes_source = include_str!("read_api_routes.rs");
     assert!(routes_source.contains("/api/v1/cert-bund-advisories/:advisory_id"));
     assert!(routes_source.contains("/api/v1/cert-bund-advisories/:advisory_id/export"));
     assert!(!routes_source.contains("/api/v1/cert-bund-advisories/*advisory_id"));
@@ -945,7 +945,7 @@ fn scan_config_detail_contract_excludes_preferences_and_secret_material() {
         .split_once("async fn scan_config_task_references")
         .expect("scan config task-reference loader must follow detail loader")
         .0;
-    let routes = include_str!("routes.rs");
+    let routes = include_str!("read_api_routes.rs");
     let detail_route = routes
         .find("get(scan_config_asset_detail)")
         .expect("scan config detail route must exist");

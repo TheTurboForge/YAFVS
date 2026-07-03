@@ -164,15 +164,15 @@ fn scope_report_list_and_detail_expose_persisted_metrics_summary() {
 
 #[test]
 fn scope_report_native_routes_remain_get_only_read_paths() {
-    let source = include_str!("routes.rs");
+    let source = include_str!("read_api_routes.rs");
     let start = ".route(\"/api/v1/scope-reports\", get(scope_reports))";
-    let end = "\n}\n\n#[cfg(test)]";
+    let end = "\n}\n";
     let routes = source
         .split_once(start)
         .expect("scope report routes must be registered")
         .1
         .split_once(end)
-        .expect("scope report routes must precede app state")
+        .expect("scope report routes must precede router end")
         .0;
 
     for path in [

@@ -7,7 +7,7 @@ use axum::http::Method;
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
-const ROUTES_RS: &str = include_str!("routes.rs");
+const ROUTES_RS: &str = include_str!("read_api_routes.rs");
 
 struct MetadataExportBoundary {
     api_path: &'static str,
@@ -128,12 +128,12 @@ fn metadata_export_routes_are_explicit_json_metadata_handlers() {
     for boundary in EXPORT_BOUNDARIES {
         assert!(
             ROUTES_RS.contains(boundary.route_path),
-            "routes.rs missing {}",
+            "read_api_routes.rs missing {}",
             boundary.route_path
         );
         assert!(
             ROUTES_RS.contains(boundary.handler),
-            "routes.rs missing handler {}",
+            "read_api_routes.rs missing handler {}",
             boundary.handler
         );
     }

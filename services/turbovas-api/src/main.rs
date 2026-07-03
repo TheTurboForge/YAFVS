@@ -87,6 +87,7 @@ mod port_list_write_validation;
 mod port_list_writes;
 mod port_lists;
 mod query;
+mod read_api_routes;
 mod report_applications;
 mod report_config_payloads;
 mod report_config_query_sql;

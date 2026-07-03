@@ -279,7 +279,7 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
 
 #[test]
 fn direct_api_allowlist_tracks_registered_get_routes_and_write_contracts() {
-    let source = include_str!("routes.rs");
+    let source = include_str!("read_api_routes.rs");
     let routes = app_route_registration_block(source);
     let api_routes = registered_routes(routes)
         .into_iter()
@@ -338,7 +338,7 @@ fn direct_api_allowlist_tracks_registered_get_routes_and_write_contracts() {
 
 #[test]
 fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
-    let routes_source = include_str!("routes.rs");
+    let routes_source = include_str!("read_api_routes.rs");
     let direct_routes_source = include_str!("direct_api_routes.rs");
     let internal_routes = registered_routes(app_route_registration_block(routes_source));
     let direct_routes =
@@ -432,8 +432,8 @@ fn app_route_registration_block(source: &str) -> &str {
         .split_once("pub(crate) fn native_api_router() -> Router<AppState> {\n    Router::new()")
         .expect("native API router must be registered")
         .1
-        .split_once("\n}\n\n#[cfg(test)]")
-        .expect("native API router must end before route tests")
+        .split_once("\n}\n")
+        .expect("native API router must end")
         .0
 }
 

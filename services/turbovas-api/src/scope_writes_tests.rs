@@ -430,13 +430,13 @@ fn scope_write_handlers_require_operator_transactions_and_payload_reload() {
 #[test]
 fn scope_write_scaffold_is_not_registered_as_a_live_route() {
     let main_source = include_str!("main.rs");
-    let routes_source = include_str!("routes.rs");
+    let routes_source = include_str!("read_api_routes.rs");
     let router_block = routes_source
         .split_once("pub(crate) fn native_api_router() -> Router<AppState> {\n    Router::new()")
         .expect("router setup must exist")
         .1
-        .split_once("\n}\n\n#[cfg(test)]")
-        .expect("base router setup must end before route tests")
+        .split_once("\n}\n")
+        .expect("base router setup must end")
         .0;
 
     assert!(main_source.contains("mod scope_writes;"));

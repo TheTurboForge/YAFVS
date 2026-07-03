@@ -7,7 +7,7 @@ use axum::http::Method;
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
-const ROUTES_RS: &str = include_str!("routes.rs");
+const ROUTES_RS: &str = include_str!("read_api_routes.rs");
 const EXPORT_PDF: &str =
     include_str!("../../../components/gvm-tools/scripts/export-pdf-report.gmp.py");
 const EXPORT_CSV: &str =

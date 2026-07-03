@@ -6580,12 +6580,12 @@ def rust_route_to_endpoint_template(route: str) -> str:
 
 
 RUST_NATIVE_API_ROUTE_SOURCE_PATHS = (
-    "services/turbovas-api/src/routes.rs",
+    "services/turbovas-api/src/read_api_routes.rs",
     "services/turbovas-api/src/direct_api_routes.rs",
     "services/turbovas-api/src/browser_proxy_routes.rs",
 )
 RUST_NATIVE_API_ROUTE_FUNCTION_SOURCES = {
-    "native_api_router": "services/turbovas-api/src/routes.rs",
+    "native_api_router": "services/turbovas-api/src/read_api_routes.rs",
     "direct_native_api_router": "services/turbovas-api/src/direct_api_routes.rs",
     "browser_proxy_native_api_router": "services/turbovas-api/src/browser_proxy_routes.rs",
 }
@@ -18165,7 +18165,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
         )
     )
 
-    if source_file_contains(repo_root, "services/turbovas-api/src/routes.rs", '.route("/api/v1/trashcan/summary"'):
+    if source_file_contains(repo_root, "services/turbovas-api/src/read_api_routes.rs", '.route("/api/v1/trashcan/summary"'):
         trashcan_summary = native_api_curl(repo_root, "/api/v1/trashcan/summary")
         trashcan_summary_json = parse_json_output(trashcan_summary)
         details["trashcan_summary"] = summarize_native_api_response(trashcan_summary_json)

@@ -15,7 +15,7 @@ struct MetadataExportBoundary {
     route_path: &'static str,
     handler: &'static str,
     replaces: &'static str,
-    inherited_tail: &'static str,
+    inherited_tail: Option<&'static str>,
     schema_ref: &'static str,
 }
 
@@ -26,7 +26,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/filters/:filter_id/export",
         handler: "export_filter_metadata",
         replaces: "saved-filter-metadata-export-read",
-        inherited_tail: "saved-filter-export-and-alert-linkage",
+        inherited_tail: Some("saved-filter-export-and-alert-linkage"),
         schema_ref: "#/components/schemas/FilterAsset",
     },
     MetadataExportBoundary {
@@ -35,7 +35,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/tags/:tag_id/export",
         handler: "export_tag_metadata",
         replaces: "tag-metadata-export-read",
-        inherited_tail: "tag-filter-actions-and-file-export",
+        inherited_tail: Some("tag-filter-actions-and-file-export"),
         schema_ref: "#/components/schemas/TagAsset",
     },
     MetadataExportBoundary {
@@ -44,7 +44,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/port-lists/:port_list_id/export",
         handler: "export_port_list_metadata",
         replaces: "port-list-metadata-export-read",
-        inherited_tail: "port-list-import-export",
+        inherited_tail: None,
         schema_ref: "#/components/schemas/PortListAssetDetail",
     },
     MetadataExportBoundary {
@@ -53,7 +53,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/schedules/:schedule_id/export",
         handler: "export_schedule_metadata",
         replaces: "schedule-metadata-export-read",
-        inherited_tail: "schedule-create-calendar-export",
+        inherited_tail: Some("schedule-create-calendar-export"),
         schema_ref: "#/components/schemas/ScheduleAssetDetail",
     },
     MetadataExportBoundary {
@@ -62,7 +62,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/scan-configs/:scan_config_id/export",
         handler: "export_scan_config_metadata",
         replaces: "scan-config-metadata-export-read",
-        inherited_tail: "scan-config-preference-selector-mutation-import-export-blank-create",
+        inherited_tail: Some("scan-config-preference-selector-mutation-import-export-blank-create"),
         schema_ref: "#/components/schemas/ScanConfigAssetDetail",
     },
     MetadataExportBoundary {
@@ -71,7 +71,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/report-configs/:report_config_id/export",
         handler: "export_report_config_metadata",
         replaces: "report-config-metadata-export-read",
-        inherited_tail: "report-config-file-export",
+        inherited_tail: None,
         schema_ref: "#/components/schemas/ReportConfigAsset",
     },
 ];
@@ -149,12 +149,24 @@ fn openapi_keeps_metadata_export_boundaries_distinct_from_inherited_file_exports
             "x-turbovas-exposure: direct-read",
             "x-turbovas-maturity: live-read",
             boundary.replaces,
-            boundary.inherited_tail,
             boundary.schema_ref,
         ] {
             assert!(
                 block.contains(required),
                 "{} export block missing {required}",
+                boundary.openapi_path
+            );
+        }
+        if let Some(inherited_tail) = boundary.inherited_tail {
+            assert!(
+                block.contains(inherited_tail),
+                "{} export block missing inherited tail {inherited_tail}",
+                boundary.openapi_path
+            );
+        } else {
+            assert!(
+                !block.contains("x-turbovas-inherited-still-owns:"),
+                "{} native metadata export must not advertise inherited ownership",
                 boundary.openapi_path
             );
         }

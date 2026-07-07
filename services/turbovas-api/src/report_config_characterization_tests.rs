@@ -329,10 +329,11 @@ fn inherited_gmp_report_config_parser_contract_is_copy_or_metadata_param_write()
 }
 
 #[test]
-fn inherited_report_config_export_is_generic_xml_metadata_export_not_report_generation() {
-    let single_export = inherited_function(GSAD_GMP_C, "export_report_config_gmp");
-    assert!(single_export.contains("export_resource (connection, \"report_config\""));
-
+fn report_config_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
+    assert!(
+        !GSAD_GMP_C.contains("export_report_config_gmp"),
+        "singular report-config metadata export must stay native JSON, not legacy gsad XML"
+    );
     let many_export = inherited_function(GSAD_GMP_C, "export_report_configs_gmp");
     assert!(many_export.contains("export_many (connection, \"report_config\""));
 
@@ -386,12 +387,8 @@ fn inherited_report_config_export_is_generic_xml_metadata_export_not_report_gene
         "report_id",
     ] {
         assert!(
-            !single_export.contains(forbidden),
-            "single report-config export must not include report-generation boundary {forbidden}"
-        );
-        assert!(
             !many_export.contains(forbidden),
-            "multi report-config export must not include report-generation boundary {forbidden}"
+            "bulk report-config export must not include report-generation boundary {forbidden}"
         );
     }
 }
@@ -570,6 +567,6 @@ fn openapi_documents_report_config_create_and_patch_as_direct_write_control() {
     assert!(export.contains("get:"));
     assert!(export.contains("x-turbovas-exposure: direct-read"));
     assert!(export.contains("x-turbovas-replaces: report-config-metadata-export-read"));
-    assert!(export.contains("x-turbovas-inherited-still-owns: report-config-file-export"));
+    assert!(!export.contains("x-turbovas-inherited-still-owns:"));
     assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));
 }

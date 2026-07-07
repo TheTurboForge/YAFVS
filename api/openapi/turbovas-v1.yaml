@@ -2554,9 +2554,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: port-list-metadata-export-read
-      x-turbovas-inherited-still-owns: port-list-import-export
       summary: Export port-list metadata
-      description: Scriptable JSON metadata export for a port list, including ranges, target backlinks, and user tags. Inherited import and file-format export remain compatibility paths.
+      description: Scriptable JSON metadata export for a port list, including ranges, target backlinks, and user tags. Inherited port-list import and bulk XML export remain compatibility paths.
       parameters:
         - $ref: '#/components/parameters/PortListId'
       responses:
@@ -3680,9 +3679,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: report-config-metadata-export-read
-      x-turbovas-inherited-still-owns: report-config-file-export
       summary: Export report-config metadata
-      description: Read-only metadata export for one live report config, backed by the same PostgreSQL loader as report-config detail. This endpoint returns the native JSON metadata/parameter payload used by GSA downloads; inherited compatibility paths still own file export semantics beyond this native JSON contract.
+      description: Read-only metadata export for one live report config, backed by the same PostgreSQL loader as report-config detail. This endpoint returns the native JSON metadata/parameter payload used by GSA downloads; inherited bulk XML export remains a compatibility path beyond this native JSON contract.
       parameters:
         - $ref: '#/components/parameters/ReportConfigId'
       responses:

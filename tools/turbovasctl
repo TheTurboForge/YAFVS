@@ -1062,7 +1062,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "port-list-metadata-detail-read",
     },
     ("get", "/port-lists/{port_list_id}/export"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "port-list-metadata-export-read",
     },
@@ -1362,7 +1361,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "report-config-metadata-detail-read",
     },
     ("get", "/report-configs/{report_config_id}/export"): {
-        "x-turbovas-inherited-still-owns": "report-config-file-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-config-metadata-export-read",
     },
@@ -1703,7 +1701,6 @@ NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS = (
     "x_turbovas_exposure",
     "x_turbovas_maturity",
     "x_turbovas_replaces",
-    "x_turbovas_inherited_still_owns",
 )
 DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
     {

@@ -381,9 +381,6 @@ char *
 export_preference_file_gmp (gvm_connection_t *, gsad_credentials_t *,
                             params_t *, gsad_command_response_data_t *);
 char *
-export_report_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
 export_report_configs_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                            gsad_command_response_data_t *);
 char *
@@ -418,9 +415,6 @@ delete_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 delete_port_range_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                        gsad_command_response_data_t *);
-char *
-export_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
 char *
 export_port_lists_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                        gsad_command_response_data_t *);

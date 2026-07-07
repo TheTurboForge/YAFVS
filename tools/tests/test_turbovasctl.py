@@ -3361,8 +3361,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["allowed_inherited_still_owns_values"], expected_inherited_still_owns_values)
         actual_inherited_still_owns_values = sorted(
             {
-                operation["x_turbovas_values"]["x-turbovas-inherited-still-owns"]
+                operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns")
                 for operation in turbovasctl.openapi_contract_operations(root)
+                if operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns") is not None
             }
         )
         self.assertTrue(set(actual_inherited_still_owns_values).issubset(set(contract["allowed_inherited_still_owns_values"])))
@@ -4527,6 +4528,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /tags/{tag_id}",
                 "GET /tags/{tag_id}/resources",
                 "GET /trashcan/summary",
+                "GET /users",
+                "GET /users/{user_id}",
                 "GET /reports/{report_id}",
                 "GET /reports/{report_id}/results",
                 "GET /reports/{report_id}/hosts",

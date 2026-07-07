@@ -7752,26 +7752,6 @@ export_overrides_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Export a Port List.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Port List XML on success.  Enveloped XML on
- *         error.
- */
-char *
-export_port_list_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "port_list", credentials, params,
-                          response_data);
-}
-
-/**
  * @brief Export a list of Port Lists.
  *
  * @param[in]  connection     Connection to manager.
@@ -7886,26 +7866,6 @@ export_preference_file_gmp (gvm_connection_t *connection,
   g_string_append (xml, "</get_preferences_response>");
   return envelope_gmp (connection, credentials, params,
                        g_string_free (xml, FALSE), response_data);
-}
-
-/**
- * @brief Export a report config.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Report config XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_report_config_gmp (gvm_connection_t *connection,
-                          gsad_credentials_t *credentials, params_t *params,
-                          gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "report_config", credentials, params,
-                          response_data);
 }
 
 /**
@@ -15862,10 +15822,8 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_filters)
   ELSE (export_override)
   ELSE (export_overrides)
-  ELSE (export_port_list)
   ELSE (export_port_lists)
   ELSE (export_preference_file)
-  ELSE (export_report_config)
   ELSE (export_report_configs)
   ELSE (export_report_format)
   ELSE (export_report_formats)

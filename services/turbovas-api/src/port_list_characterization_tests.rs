@@ -213,10 +213,11 @@ fn inherited_port_list_import_wraps_uploaded_xml_and_parser_keeps_three_create_b
 }
 
 #[test]
-fn inherited_port_list_export_is_generic_xml_resource_export() {
-    let single_export = inherited_function(GSAD_GMP_C, "export_port_list_gmp");
-    assert!(single_export.contains("export_resource (connection, \"port_list\""));
-
+fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
+    assert!(
+        !GSAD_GMP_C.contains("export_port_list_gmp"),
+        "singular port-list metadata export must stay native JSON, not legacy gsad XML"
+    );
     let many_export = inherited_function(GSAD_GMP_C, "export_port_lists_gmp");
     assert!(many_export.contains("export_many (connection, \"port_list\""));
 
@@ -228,12 +229,8 @@ fn inherited_port_list_export_is_generic_xml_resource_export() {
         "import_port_list",
     ] {
         assert!(
-            !single_export.contains(forbidden),
-            "single port-list export must not include mutation boundary {forbidden}"
-        );
-        assert!(
             !many_export.contains(forbidden),
-            "multi port-list export must not include mutation boundary {forbidden}"
+            "bulk port-list export must not include mutation boundary {forbidden}"
         );
     }
 }
@@ -453,6 +450,6 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(export.contains("get:"));
     assert!(export.contains("x-turbovas-exposure: direct-read"));
     assert!(export.contains("x-turbovas-replaces: port-list-metadata-export-read"));
-    assert!(export.contains("x-turbovas-inherited-still-owns: port-list-import-export"));
+    assert!(!export.contains("x-turbovas-inherited-still-owns:"));
     assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));
 }

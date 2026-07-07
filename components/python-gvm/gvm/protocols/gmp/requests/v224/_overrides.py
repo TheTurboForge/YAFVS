@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -215,24 +216,4 @@ class Overrides:
         if result is not None:
             cmd.set_attribute("result", to_bool(result))
 
-        return cmd
-
-    @classmethod
-    def get_override(cls, override_id: EntityID) -> Request:
-        """Request a single override
-
-        Args:
-            override_id: UUID of an existing override
-        """
-        cmd = XmlCommand("get_overrides")
-
-        if not override_id:
-            raise RequiredArgument(
-                function=cls.get_override.__name__, argument="override_id"
-            )
-
-        cmd.set_attribute("override_id", str(override_id))
-
-        # for single entity always request all details
-        cmd.set_attribute("details", "1")
         return cmd

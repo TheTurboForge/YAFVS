@@ -1037,16 +1037,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_override(self, override_id: EntityID) -> T:
-        """Request a single override
-
-        Args:
-            override_id: UUID of an existing override
-        """
-        return self._send_request_and_transform_response(
-            Overrides.get_override(override_id)
-        )
-
     def create_target(
         self,
         name: str,

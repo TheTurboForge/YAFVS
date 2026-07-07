@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -494,18 +495,3 @@ class OverridesTestCase(unittest.TestCase):
         request = Overrides.get_overrides(result=False)
 
         self.assertEqual(bytes(request), b'<get_overrides result="0"/>')
-
-    def test_get_override(self):
-        request = Overrides.get_override("o1")
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_overrides override_id="o1" details="1"/>',
-        )
-
-    def test_get_override_missing_override_id(self):
-        with self.assertRaises(RequiredArgument):
-            Overrides.get_override(None)
-
-        with self.assertRaises(RequiredArgument):
-            Overrides.get_override("")

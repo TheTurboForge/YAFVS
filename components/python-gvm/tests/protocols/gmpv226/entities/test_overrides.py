@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -8,7 +9,6 @@ from ...gmpv224.entities.overrides import (
     GmpCreateOverrideTestMixin,
     GmpDeleteOverrideTestMixin,
     GmpGetOverridesTestMixin,
-    GmpGetOverrideTestMixin,
     GmpModifyOverrideTestMixin,
 )
 from ...gmpv226 import GMPTestCase
@@ -23,10 +23,6 @@ class GMPCreateOverrideTestCase(GmpCreateOverrideTestMixin, GMPTestCase):
 
 
 class GMPDeleteOverrideTestCase(GmpDeleteOverrideTestMixin, GMPTestCase):
-    pass
-
-
-class GMPGetOverrideTestCase(GmpGetOverrideTestMixin, GMPTestCase):
     pass
 
 

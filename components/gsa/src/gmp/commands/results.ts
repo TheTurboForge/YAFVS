@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -8,14 +9,28 @@ import {
   type HttpCommandInputParams,
   type HttpCommandOptions,
 } from 'gmp/commands/http';
+import {
+  canUseNativeApi,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import type Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import Result from 'gmp/models/result';
+import {
+  fetchNativeResults,
+  nativeReportResultsQueryFromFilter,
+} from 'gmp/native-api/reports';
+import {exportNativeResultsMetadata} from 'gmp/native-api/results';
 
 interface GetAggregatesParams {
   filter?: Filter;
 }
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 export class ResultsCommand extends EntitiesCommand<Result> {
   constructor(http: Http) {
@@ -29,6 +44,60 @@ export class ResultsCommand extends EntitiesCommand<Result> {
 
   get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
     return super.get({details: 1, ...params}, options);
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+    return exportNativeResultsMetadata(this.http, ids);
+  }
+
+  export(entities: Result[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+    return this.exportByIds(
+      entities.flatMap(entity =>
+        entity.id === undefined ? [] : [entity.id],
+      ),
+    );
+  }
+
+  async exportByFilter(filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const results: Result[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; results.length < total; page += 1) {
+        const nativeResponse = await fetchNativeResults(this.http, {
+          ...nativeReportResultsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        results.push(...nativeResponse.results);
+        total = nativeResponse.page.total;
+        if (nativeResponse.results.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeResults(
+        this.http,
+        nativeReportResultsQueryFromFilter(filter),
+      );
+      results.push(...nativeResponse.results);
+    }
+
+    return exportNativeResultsMetadata(
+      this.http,
+      results.flatMap(result =>
+        result.id === undefined ? [] : [result.id],
+      ),
+    );
   }
 
   getDescriptionWordCountsAggregates({filter}: GetAggregatesParams = {}) {

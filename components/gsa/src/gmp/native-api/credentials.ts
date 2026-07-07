@@ -280,6 +280,23 @@ export const exportNativeCredentialMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeCredentialsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const credentials = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeCredentialPayload>(
+        gmp,
+        `api/v1/credentials/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({credentials}, null, 2)}\n`);
+};
+
 export const patchNativeCredential = async (
   gmp: NativeApiGmp,
   {id, name, comment}: NativeCredentialPatchArgs,

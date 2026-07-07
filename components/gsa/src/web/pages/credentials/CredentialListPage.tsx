@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -134,4 +135,5 @@ const CredentialsPage = ({
 export default withEntitiesContainer<Credential>('credential', {
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(CredentialsPage);

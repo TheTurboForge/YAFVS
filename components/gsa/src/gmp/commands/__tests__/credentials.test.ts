@@ -7,11 +7,27 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CredentialsCommand from 'gmp/commands/credentials';
 import {createHttp, createEntitiesResponse} from 'gmp/commands/testing';
+import Credential from 'gmp/models/credential';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('CredentialCommand tests', () => {
   test('should fetch credentials', async () => {
@@ -127,5 +143,172 @@ describe('CredentialCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should bulk export selected redacted credentials through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'credential-1',
+          name: 'SSH one',
+          credential_type: 'usk',
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'credential-2',
+          name: 'SSH two',
+          credential_type: 'usk',
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new CredentialsCommand(fakeHttp);
+
+    const result = await cmd.export([
+      new Credential({id: 'credential-1'}),
+      new Credential({id: 'credential-2'}),
+    ]);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/credentials/credential-1/export',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/credentials/credential-2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).credentials).toEqual([
+      {id: 'credential-1', name: 'SSH one', credential_type: 'usk'},
+      {id: 'credential-2', name: 'SSH two', credential_type: 'usk'},
+    ]);
+  });
+
+  test('should bulk export current page redacted credentials through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'ssh',
+          },
+          items: [{id: 'credential-2', name: 'SSH two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'credential-2',
+          name: 'SSH two',
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new CredentialsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=ssh');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/credentials', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'name',
+      filter: 'ssh',
+    });
+    expect(JSON.parse(result.data).credentials).toEqual([
+      {id: 'credential-2', name: 'SSH two'},
+    ]);
+  });
+
+  test('should bulk export all filtered redacted credentials through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'ssh',
+          },
+          items: [{id: 'credential-1', name: 'SSH one'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'ssh',
+          },
+          items: [{id: 'credential-2', name: 'SSH two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'credential-1',
+          name: 'SSH one',
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'credential-2',
+          name: 'SSH two',
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new CredentialsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=ssh').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/credentials', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'ssh',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/credentials', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'ssh',
+    });
+    expect(JSON.parse(result.data).credentials).toEqual([
+      {id: 'credential-1', name: 'SSH one'},
+      {id: 'credential-2', name: 'SSH two'},
+    ]);
   });
 });

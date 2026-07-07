@@ -6,7 +6,6 @@
 
 import InfoEntityCommand from 'gmp/commands/info-entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import CertBundAdv from 'gmp/models/cert-bund';
 import {exportNativeCertBundAdvisoryMetadata} from 'gmp/native-api/cert-bund-advisories';
@@ -17,14 +16,7 @@ class CertBundAdvisoryCommand extends InfoEntityCommand<CertBundAdv> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeCertBundAdvisoryMetadata(this.http, id);
-      } catch {
-        // Keep inherited info bulk export responsible for legacy advisory export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeCertBundAdvisoryMetadata(this.http, id);
   }
 }
 

@@ -10,7 +10,6 @@ import {
   createActionResultResponse,
   createHttp,
   createInfoResponse,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
@@ -64,42 +63,6 @@ describe('CertBundAdvisoryCommand tests', () => {
       name: 'CB-K26-0123',
       title: 'Native CERT-Bund advisory',
     });
-  });
-
-  test('should fall back to GMP when native CERT-Bund advisory export fails', async () => {
-    const content = '<some><xml>exported-cert-bund-advisory</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new CertBundAdvisoryCommand(fakeHttp);
-    const result = await cmd.export({id: 'CB-K26-0123'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        details: '1',
-        info_type: 'cert_bund_adv',
-        resource_type: 'info',
-        bulk_select: 1,
-        'bulk_selected:CB-K26-0123': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
   });
 
   test('should get a cert bund advisory', async () => {

@@ -7,7 +7,6 @@
 import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import TlsCertificate from 'gmp/models/tls-certificate';
 import {
   exportNativeTlsCertificateMetadata,
@@ -24,14 +23,7 @@ export class TlsCertificateCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeTlsCertificateMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy TLS certificate export.
-      }
-    }
-    return super.export({id});
+    return await exportNativeTlsCertificateMetadata(this.http, id);
   }
 }
 

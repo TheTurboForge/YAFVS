@@ -10,7 +10,6 @@ import {
   createActionResultResponse,
   createHttp,
   createInfoResponse,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
@@ -64,42 +63,6 @@ describe('DfnCertAdvisoryCommand tests', () => {
       name: 'DFN-CERT-2026-2178',
       title: 'Native DFN-CERT advisory',
     });
-  });
-
-  test('should fall back to GMP when native DFN-CERT advisory export fails', async () => {
-    const content = '<some><xml>exported-dfn-cert-advisory</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new DfnCertAdvisoryCommand(fakeHttp);
-    const result = await cmd.export({id: 'DFN-CERT-2026-2178'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        details: '1',
-        info_type: 'dfn_cert_adv',
-        resource_type: 'info',
-        bulk_select: 1,
-        'bulk_selected:DFN-CERT-2026-2178': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
   });
 
   test('should get a dfn cert advisory', async () => {

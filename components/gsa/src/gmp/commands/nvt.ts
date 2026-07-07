@@ -6,7 +6,6 @@
 
 import InfoEntityCommand from 'gmp/commands/info-entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Nvt from 'gmp/models/nvt';
 import {exportNativeNvtMetadata} from 'gmp/native-api/nvts';
@@ -17,14 +16,7 @@ class NvtCommand extends InfoEntityCommand<Nvt> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeNvtMetadata(this.http, id);
-      } catch {
-        // Keep inherited info bulk export responsible for legacy NVT export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeNvtMetadata(this.http, id);
   }
 
   async getConfigNvt({oid, configId}: {oid: string; configId: string}) {

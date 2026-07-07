@@ -10,7 +10,6 @@ import {
   createEntitiesResponse,
   createEntityResponse,
   createHttp,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import {
   TlsCertificateCommand,
@@ -53,23 +52,6 @@ describe('TlsCertificateCommand tests', () => {
       data: {
         cmd: 'delete_tls_certificate',
         tls_certificate_id: 'foo',
-      },
-    });
-  });
-
-  test('should export a TLS certificate', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new TlsCertificateCommand(fakeHttp);
-    await cmd.export({
-      id: 'foo',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'tls_certificate',
-        bulk_select: 1,
-        'bulk_selected:foo': 1,
       },
     });
   });
@@ -118,36 +100,6 @@ describe('TlsCertificateCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native TLS certificate metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new TlsCertificateCommand(fakeHttp);
-    const result = await cmd.export({id: 'tls-certificate-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'tls_certificate',
-        bulk_select: 1,
-        'bulk_selected:tls-certificate-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
 });
 
 describe('TlsCertificatesCommand tests', () => {

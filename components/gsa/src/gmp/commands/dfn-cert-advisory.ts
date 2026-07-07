@@ -6,7 +6,6 @@
 
 import InfoEntityCommand from 'gmp/commands/info-entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import DfnCertAdv from 'gmp/models/dfn-cert';
 import {exportNativeDfnCertAdvisoryMetadata} from 'gmp/native-api/dfn-cert-advisories';
@@ -17,14 +16,7 @@ class DfnCertAdvisoryCommand extends InfoEntityCommand<DfnCertAdv> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeDfnCertAdvisoryMetadata(this.http, id);
-      } catch {
-        // Keep inherited info bulk export responsible for legacy advisory export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeDfnCertAdvisoryMetadata(this.http, id);
   }
 }
 

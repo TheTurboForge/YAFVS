@@ -2824,16 +2824,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_vulnerability(self, vulnerability_id: EntityID) -> T:
-        """Request a single vulnerability
-
-        Args:
-            vulnerability_id: ID of an existing vulnerability
-        """
-        return self._send_request_and_transform_response(
-            Vulnerabilities.get_vulnerability(vulnerability_id)
-        )
-
     def clone_report_format(
         self, report_format_id: EntityID | ReportFormatType
     ) -> T:

@@ -717,7 +717,7 @@ native_api_path_is_allowed (const gchar *path)
         return is_nvt_oid_segment (id,
                                    strlen (id)
                                    - strlen (vulnerability_export_suffix));
-      return FALSE;
+      return is_nvt_oid_segment (id, strlen (id));
     }
 
   if (g_strcmp0 (path, cpes_path) == 0)

@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import unittest
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.gmp.requests.v224 import Vulnerabilities
 
 
@@ -28,17 +28,3 @@ class VulnerabilitiesTestCase(unittest.TestCase):
             bytes(request),
             b'<get_vulns filt_id="filter_id"/>',
         )
-
-    def test_get_vulnerability(self):
-        request = Vulnerabilities.get_vulnerability("vulnerability_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_vulns vuln_id="vulnerability_id"/>',
-        )
-
-    def test_get_vulnerability_missing_vulnerability_id(self):
-        with self.assertRaises(RequiredArgument):
-            Vulnerabilities.get_vulnerability(None)
-
-        with self.assertRaises(RequiredArgument):
-            Vulnerabilities.get_vulnerability("")

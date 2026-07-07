@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from .test_get_vulnerabilities import GmpGetVulnerabilitiesTestMixin
-from .test_get_vulnerability import GmpGetVulnerabilityTestMixin
 
-__all__ = ("GmpGetVulnerabilitiesTestMixin", "GmpGetVulnerabilityTestMixin")
+__all__ = ("GmpGetVulnerabilitiesTestMixin",)

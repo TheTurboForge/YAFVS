@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.core import Request
 from gvm.xml import XmlCommand
 
@@ -25,21 +25,4 @@ class Vulnerabilities:
         """
         cmd = XmlCommand("get_vulns")
         cmd.add_filter(filter_string, filter_id)
-        return cmd
-
-    @classmethod
-    def get_vulnerability(cls, vulnerability_id: EntityID) -> Request:
-        """Request a single vulnerability
-
-        Args:
-            vulnerability_id: ID of an existing vulnerability
-        """
-        if not vulnerability_id:
-            raise RequiredArgument(
-                function=cls.get_vulnerability.__name__,
-                argument="vulnerability_id",
-            )
-
-        cmd = XmlCommand("get_vulns")
-        cmd.set_attribute("vuln_id", str(vulnerability_id))
         return cmd

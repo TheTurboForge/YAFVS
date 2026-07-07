@@ -332,12 +332,16 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
     assert!(direct_api_v1_path_is_allowed(
         "/api/v1/vulnerabilities/1.3.6.1.4.1.25623.1.0.900001/export"
     ));
+    assert!(direct_api_v1_path_is_allowed(
+        "/api/v1/vulnerabilities/1.3.6.1.4.1.25623.1.0.900001"
+    ));
     assert!(!direct_api_v1_path_is_allowed(
         "/api/v1/scopes//reports/report-id/results"
     ));
     assert!(!direct_api_v1_path_is_allowed(
         "/api/v1/vulnerabilities/../export"
     ));
+    assert!(!direct_api_v1_path_is_allowed("/api/v1/vulnerabilities/.."));
     assert!(!direct_api_v1_path_is_allowed("/api/v1/reports//results"));
     assert!(!direct_api_v1_path_is_allowed(
         "/api/v1/scopes/scope-id/reports/scope-report-id"

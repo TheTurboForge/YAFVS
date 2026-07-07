@@ -351,3 +351,20 @@ export const exportNativeNvtMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeNvtsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const nvts = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeNvtPayload>(
+        gmp,
+        `api/v1/nvts/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({nvts}, null, 2)}\n`);
+};

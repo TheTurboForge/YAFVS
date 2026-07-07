@@ -11,12 +11,27 @@ import {
   createHttp,
   createInfoEntitiesResponse,
 } from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import Nvt from 'gmp/models/nvt';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('NvtsCommand tests', () => {
   test('should fetch nvts with default params', async () => {
@@ -141,16 +156,7 @@ describe('NvtsCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new NvtsCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=ssh'});
@@ -166,6 +172,147 @@ describe('NvtsCommand tests', () => {
       sort: 'created',
       filter: 'ssh',
     });
+  });
+
+  test('should use inherited bulk export on non-native http', async () => {
+    const fakeHttp = createHttp();
+    const cmd = new NvtsCommand(fakeHttp);
+
+    await cmd.exportByIds(['1.2.3', '2.3.4']);
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'info',
+        bulk_select: 1,
+        'bulk_selected:1.2.3': 1,
+        'bulk_selected:2.3.4': 1,
+      },
+    });
+  });
+
+  test('should bulk export selected NVTs through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: '1.2.3', name: 'NVT 1'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: '2.3.4', name: 'NVT 2'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new NvtsCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['1.2.3', '2.3.4']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/nvts/1.2.3/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).nvts).toEqual([
+      {id: '1.2.3', name: 'NVT 1'},
+      {id: '2.3.4', name: 'NVT 2'},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'created', filter: 'ssh'},
+          items: [{id: '2.3.4', oid: '2.3.4', name: 'NVT 2'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: '2.3.4', name: 'NVT 2'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new NvtsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=ssh');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/nvts', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'created',
+      filter: 'ssh',
+    });
+    expect(JSON.parse(result.data).nvts).toEqual([
+      {id: '2.3.4', name: 'NVT 2'},
+    ]);
+  });
+
+  test('should bulk export all filtered NVTs through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'created', filter: 'ssh'},
+          items: [{id: '1.2.3', oid: '1.2.3', name: 'NVT 1'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'created', filter: 'ssh'},
+          items: [{id: '2.3.4', oid: '2.3.4', name: 'NVT 2'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: '1.2.3', name: 'NVT 1'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: '2.3.4', name: 'NVT 2'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new NvtsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=ssh').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/nvts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'created',
+      filter: 'ssh',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/nvts', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'created',
+      filter: 'ssh',
+    });
+    expect(JSON.parse(result.data).nvts).toEqual([
+      {id: '1.2.3', name: 'NVT 1'},
+      {id: '2.3.4', name: 'NVT 2'},
+    ]);
   });
 
   test('should fetch severity aggregates', async () => {

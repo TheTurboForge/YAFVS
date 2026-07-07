@@ -18,9 +18,11 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
+import type Filter from 'gmp/models/filter';
 import type {Element} from 'gmp/models/model';
 import ReportFormat from 'gmp/models/report-format';
 import {
+  exportNativeReportFormatsMetadata,
   fetchNativeReportFormats,
   nativeReportFormatsQueryFromFilter,
 } from 'gmp/native-api/report-formats';
@@ -31,9 +33,64 @@ interface ReportFormatsResponseData extends XmlResponseData {
   };
 }
 
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
 export class ReportFormatsCommand extends EntitiesCommand<ReportFormat> {
   constructor(http: Http) {
     super(http, 'report_format', ReportFormat);
+  }
+
+  export(entities: ReportFormat[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativeReportFormatsMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const reportFormats: ReportFormat[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; reportFormats.length < total; page += 1) {
+        const nativeResponse = await fetchNativeReportFormats(this.http, {
+          ...nativeReportFormatsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        reportFormats.push(...nativeResponse.reportFormats);
+        total = nativeResponse.page.total;
+        if (nativeResponse.reportFormats.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeReportFormats(
+        this.http,
+        nativeReportFormatsQueryFromFilter(filter),
+      );
+      reportFormats.push(...nativeResponse.reportFormats);
+    }
+
+    return exportNativeReportFormatsMetadata(
+      this.http,
+      reportFormats.map(reportFormat => reportFormat.id as string),
+    );
   }
 
   getEntitiesResponse(root: XmlResponseData) {

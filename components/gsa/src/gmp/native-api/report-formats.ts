@@ -301,3 +301,22 @@ export const exportNativeReportFormatMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeReportFormatsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const reportFormats = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeReportFormatPayload>(
+        gmp,
+        `api/v1/report-formats/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(
+    `${JSON.stringify({report_formats: reportFormats}, null, 2)}\n`,
+  );
+};

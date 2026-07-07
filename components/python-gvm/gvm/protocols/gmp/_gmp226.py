@@ -15,8 +15,6 @@ from .requests.v226 import (
     EntityID,
     Filters,
     FilterType,
-    ReportConfigParameter,
-    ReportConfigs,
     ReportFormatType,
     Reports,
     ResourceNames,
@@ -351,77 +349,5 @@ class GMPv226(GMPv225[T]):
                 name=name,
                 term=term,
                 filter_type=filter_type,
-            )
-        )
-
-    def clone_report_config(self, report_config_id: EntityID) -> T:
-        """Clone a report config from an existing one
-
-        Args:
-            report_config_id: UUID of the existing report config
-        """
-        return self._send_request_and_transform_response(
-            ReportConfigs.clone_report_config(report_config_id)
-        )
-
-    def delete_report_config(
-        self,
-        report_config_id: EntityID,
-        *,
-        ultimate: bool | None = False,
-    ) -> T:
-        """Deletes an existing report config
-
-        Args:
-            report_config_id: UUID of the report config to be deleted.
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        return self._send_request_and_transform_response(
-            ReportConfigs.delete_report_config(
-                report_config_id, ultimate=ultimate
-            )
-        )
-
-    def create_report_config(
-        self,
-        name: str,
-        report_format_id: EntityID | ReportFormatType,
-        *,
-        comment: str | None = None,
-        params: Sequence[ReportConfigParameter] | None = None,
-    ) -> T:
-        """Create a report config
-
-        Args:
-            name: Name of the new report config
-            report_format_id: UUID of the report format to be used or ReportFormatType.
-            comment: An optional comment for the report config.
-            params: A list of report config parameters.
-        """
-        return self._send_request_and_transform_response(
-            ReportConfigs.create_report_config(
-                name, report_format_id, comment=comment, params=params
-            )
-        )
-
-    def modify_report_config(
-        self,
-        report_config_id: EntityID,
-        *,
-        name: str | None = None,
-        comment: str | None = None,
-        params: Sequence[ReportConfigParameter] | None = None,
-    ) -> T:
-        """Create a report config
-
-        Args:
-            name: Name of the report config
-            report_config_id: UUID of the report config to be modified.
-            comment: An optional comment for the report config.
-            params: A list of report config parameters.
-        """
-        return self._send_request_and_transform_response(
-            ReportConfigs.modify_report_config(
-                report_config_id, name=name, comment=comment, params=params
             )
         )

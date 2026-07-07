@@ -62,7 +62,6 @@ from ..v225 import (
     Vulnerabilities,
 )
 from ._filters import Filters, FilterType
-from ._report_configs import ReportConfigParameter, ReportConfigs
 from ._reports import Reports
 from ._resource_names import ResourceNames, ResourceType
 from ._scopes import Scopes
@@ -99,8 +98,6 @@ __all__ = (
     "Overrides",
     "PortLists",
     "PortRangeType",
-    "ReportConfigParameter",
-    "ReportConfigs",
     "ReportFormatType",
     "ReportFormats",
     "Reports",

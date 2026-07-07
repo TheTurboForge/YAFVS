@@ -5,7 +5,6 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
@@ -38,14 +37,7 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
   }
 
   async export({id}: {id: string}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeReportFormatMetadata(this.http, id);
-      } catch {
-        // Keep inherited GMP bulk export responsible for legacy export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeReportFormatMetadata(this.http, id);
   }
 
   save(args: {active: boolean; id: string; name: string; summary: string}) {

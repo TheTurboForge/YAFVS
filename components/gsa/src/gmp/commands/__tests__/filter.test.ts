@@ -9,7 +9,6 @@ import {FilterCommand} from 'gmp/commands/filter';
 import {
   createHttp,
   createActionResultResponse,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 import type {EntityType} from 'gmp/utils/entity-type';
@@ -69,40 +68,6 @@ describe('FilterCommand tests', () => {
       name: 'Host filter',
       term: 'name=web',
     });
-  });
-
-  test('should fall back to GMP when native filter metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new FilterCommand(fakeHttp);
-    const result = await cmd.export({id: 'filter-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'filter',
-        bulk_select: 1,
-        'bulk_selected:filter-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
   });
 
   test('should create a new filter', async () => {

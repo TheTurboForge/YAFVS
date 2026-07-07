@@ -36,17 +36,7 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeFilterMetadata(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native filter metadata export failed, falling back to GMP',
-          error,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativeFilterMetadata(this.http, id);
   }
 
   async create(args: {

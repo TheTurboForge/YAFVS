@@ -116,17 +116,7 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativePortListMetadata(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native port list metadata export failed, falling back to GMP',
-          error,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativePortListMetadata(this.http, id);
   }
 
   async create(args: PortListCommandCreateParams) {

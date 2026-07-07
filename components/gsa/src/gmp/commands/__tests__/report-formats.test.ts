@@ -89,42 +89,6 @@ describe('ReportFormatsCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native report format metadata export fails', async () => {
-    const response = createActionResultResponse({
-      action: 'bulk_export',
-      id: 'fallback-export-id',
-      message: 'Exported Report Format',
-    });
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new ReportFormatCommand(fakeHttp);
-    await cmd.export({id: 'report-format-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'report_format',
-        bulk_select: 1,
-        'bulk_selected:report-format-id': 1,
-      },
-    });
-  });
-
   test('should return report formats through inherited GMP fallback', async () => {
     const response = createEntitiesResponse('report_format', [
       {_id: '1', name: 'XML'},

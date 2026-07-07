@@ -134,18 +134,7 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeTagMetadata(this.http, id);
-      } catch (err) {
-        log.debug(
-          'Native tag metadata export failed, falling back to GMP',
-          id,
-          err,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativeTagMetadata(this.http, id);
   }
 
   async enable({id}: EntityCommandParams) {

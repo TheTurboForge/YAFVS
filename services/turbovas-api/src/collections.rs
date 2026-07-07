@@ -200,6 +200,13 @@ pub(crate) const CREDENTIAL_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
     ("created", "created_at_unix"),
     ("modified", "modified_at_unix"),
 ];
+pub(crate) const USER_ACCOUNT_DEFAULT_SORT: &str = "name";
+pub(crate) const USER_ACCOUNT_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("name", "name"),
+    ("created", "created_at_unix"),
+    ("modified", "modified_at_unix"),
+];
 pub(crate) const SCAN_CONFIG_ASSET_DEFAULT_SORT: &str = "name";
 pub(crate) const SCAN_CONFIG_ASSET_SORT_FIELDS: &[(&str, &str)] = &[
     ("id", "id"),

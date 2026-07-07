@@ -327,15 +327,15 @@ Requests the report specified and exports it as a pdf formatted report locally.
 
 **Note**: the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
 
-## `list-users.gmp.py`
+## User listing
 
-Lists all users
+The old `list-users.gmp.py` compatibility script has been removed. Use the
+redacted native API instead:
 
-### Example
+`$ tools/turbovasctl native-api-request --json --path '/api/v1/users?page_size=50'`
 
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket list-users.gmp.py`
-
-Returns user name and uuid
+Returns user name, uuid, comment, and timestamps. Password hashes, auth methods,
+permissions, sessions, and account writes remain inherited.
 
 ¹ The default order is "None" which equals sequential, meaning that if this field is empty scanning will be sequential as it will be if specifically set to sequential. Possible results are None, Sequential, Reverse, or Random.
 

@@ -222,6 +222,9 @@ mod tls_certificate_payloads;
 mod tls_certificate_query_sql;
 mod tls_certificates;
 mod trashcan;
+mod user_account_payloads;
+mod user_account_query_sql;
+mod user_accounts;
 mod user_tags;
 mod vulnerability_payloads;
 
@@ -307,3 +310,5 @@ mod tooling_task_control_characterization_tests;
 mod tooling_task_import_characterization_tests;
 #[cfg(test)]
 mod tooling_trash_write_characterization_tests;
+#[cfg(test)]
+mod user_account_contract_tests;

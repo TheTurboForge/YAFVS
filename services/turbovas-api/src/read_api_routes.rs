@@ -50,6 +50,7 @@ use crate::{
     timezones::timezones,
     tls_certificates::*,
     trashcan::trashcan_summary,
+    user_accounts::{user_account_detail, user_accounts},
     vulnerability_payloads::*,
 };
 
@@ -126,6 +127,8 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             "/api/v1/credentials/:credential_id/export",
             get(credential_asset_export),
         )
+        .route("/api/v1/users", get(user_accounts))
+        .route("/api/v1/users/:user_id", get(user_account_detail))
         .route("/api/v1/scan-configs", get(scan_config_assets))
         .route(
             "/api/v1/scan-configs/:scan_config_id",

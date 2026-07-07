@@ -370,7 +370,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     "compatibility_probe": set(),
     "credential_or_account": {
         "create-credentials-from-csv.gmp.py",
-        "list-users.gmp.py",
     },
     "export_or_report_generation": {
         "export-csv-report.gmp.py",
@@ -431,7 +430,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "export-xml-report.gmp.py": "Inherited XML nested report serialization is characterized; native tooling still lacks a direct report-export contract that fetches a report by id and writes the chosen file name locally.",
     "generate-scope-report.gmp.py": "Native tooling still lacks a direct scope-report generation contract with explicit authorization, provenance, snapshot, and metric rebuild semantics.",
-    "list-users.gmp.py": "Inherited user list behavior is characterized; native tooling still lacks an account-list contract and auth posture for exposing user identifiers.",
     "monthly-report-gos3.gmp.py": "Inherited GOS 3 monthly report-created summary behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",
     "monthly-report-gos4.gmp.py": "Inherited GOS 4 host-modified positive-result behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",
     "monthly-report-gos24.10.gmp.py": "Inherited GOS 24.10 result-window and unique-NVT behavior is characterized; native tooling still lacks explicit monthly aggregation/output semantics.",
@@ -660,12 +658,15 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tls-certificate-asset-list-read",
         "tls-certificate-asset-metadata-export-read",
         "trashcan-count-summary-read",
+        "user-redacted-detail-read",
+        "user-redacted-list-read",
         "vulnerability-list-read",
         "vulnerability-metadata-export-read",
     }
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
+        "account-auth-management",
         "alert-detail-delivery-control",
         "cert-advisory-rich-detail-export",
         "credential-secrets-writes-and-deletes",
@@ -742,6 +743,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/credentials"): "direct-read",
     ("get", "/credentials/{credential_id}"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
+    ("get", "/users"): "direct-read",
+    ("get", "/users/{user_id}"): "direct-read",
     ("get", "/filters/{filter_id}/export"): "direct-read",
     ("post", "/targets"): "direct-write",
     ("patch", "/targets/{target_id}"): "direct-write",
@@ -857,6 +860,16 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "feed-sync-import-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "feed-status-read",
+    },
+    ("get", "/users"): {
+        "x-turbovas-inherited-still-owns": "account-auth-management",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "user-redacted-list-read",
+    },
+    ("get", "/users/{user_id}"): {
+        "x-turbovas-inherited-still-owns": "account-auth-management",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "user-redacted-detail-read",
     },
     ("get", "/filters"): {
         "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
@@ -1721,6 +1734,8 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/credentials",
         "/api/v1/credentials/{}",
         "/api/v1/credentials/{}/export",
+        "/api/v1/users",
+        "/api/v1/users/{}",
         "/api/v1/filters",
         "/api/v1/filters/{}",
         "/api/v1/filters/{}/export",
@@ -6983,6 +6998,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         "tls_certificate_prefix",
         "scanner_prefix",
         "credential_prefix",
+        "user_prefix",
         "filter_prefix",
         "alert_prefix",
         "tag_resource_names_prefix",
@@ -7546,6 +7562,24 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser credential metadata PATCH for command-level metadata-only saves", "direct native credential name/comment metadata modification"],
+            },
+            {
+                "endpoint": "/api/v1/users",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["retired list-users.gmp.py", "direct native redacted user account list", "native-api-request helper"],
+                "residual_inherited": [
+                    "Password hashes, auth cache, authentication methods, timezone, permissions, session state, account writes, and password changes remain inherited."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/users/{user_id}",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["direct native redacted user account detail", "native-api-request helper"],
+                "residual_inherited": [
+                    "Password hashes, auth cache, authentication methods, timezone, permissions, session state, account writes, and password changes remain inherited."
+                ],
             },
             {
                 "endpoint": "/api/v1/scan-configs",

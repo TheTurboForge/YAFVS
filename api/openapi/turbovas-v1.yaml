@@ -2959,6 +2959,73 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /users:
+    get:
+      operationId: getUsers
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: user-redacted-list-read
+      x-turbovas-inherited-still-owns: account-auth-management
+      summary: List redacted user account metadata
+      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint replaces the retired user-list gvm-tools script and returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, account writes, and password changes remain inherited until separately designed.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Redacted user account collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAccountCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/{user_id}:
+    get:
+      operationId: getUsersByUserId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: user-redacted-detail-read
+      x-turbovas-inherited-still-owns: account-auth-management
+      summary: Read one redacted user account metadata record
+      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, account writes, and password changes remain inherited until separately designed.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Redacted user account detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs:
     get:
       operationId: getScanConfigs
@@ -5529,6 +5596,13 @@ components:
       schema:
         type: string
         format: uuid
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ScopeId:
       name: scope_id
       in: path
@@ -6251,6 +6325,33 @@ components:
           description: Scanner backlinks by id/name only. Scanner CA material and credential secret data are not returned here.
           items:
             $ref: '#/components/schemas/CredentialUsageReference'
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+    UserAccountCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserAccount'
+    UserAccount:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
         created_at:
           type: string
           format: date-time

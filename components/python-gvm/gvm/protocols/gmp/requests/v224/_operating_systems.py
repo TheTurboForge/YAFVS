@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -53,32 +54,6 @@ class OperatingSystems:
         cmd.set_attribute("type", "os")
 
         cmd.add_filter(filter_string, filter_id)
-
-        if details is not None:
-            cmd.set_attribute("details", to_bool(details))
-
-        return cmd
-
-    @classmethod
-    def get_operating_system(
-        cls, operating_system_id: EntityID, *, details: bool | None = None
-    ) -> Request:
-        """Request a single operating system
-
-        Args:
-            operating_system_id: UUID of an existing operating_system
-            details: Whether to include additional information (e.g. tags)
-        """
-        cmd = XmlCommand("get_assets")
-
-        if not operating_system_id:
-            raise RequiredArgument(
-                function=cls.get_operating_system.__name__,
-                argument="operating_system_id",
-            )
-
-        cmd.set_attribute("asset_id", str(operating_system_id))
-        cmd.set_attribute("type", "os")
 
         if details is not None:
             cmd.set_attribute("details", to_bool(details))

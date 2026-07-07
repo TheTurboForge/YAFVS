@@ -1906,21 +1906,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_operating_system(
-        self, operating_system_id: EntityID, *, details: bool | None = None
-    ) -> T:
-        """Request a single operating system
-
-        Args:
-            operating_system_id: UUID of an existing operating_system
-            details: Whether to include additional information (e.g. tags)
-        """
-        return self._send_request_and_transform_response(
-            OperatingSystems.get_operating_system(
-                operating_system_id, details=details
-            )
-        )
-
     def modify_operating_system(
         self, operating_system_id: EntityID, *, comment: str | None = None
     ) -> T:

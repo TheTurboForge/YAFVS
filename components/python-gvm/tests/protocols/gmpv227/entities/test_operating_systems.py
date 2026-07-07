@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -6,7 +7,6 @@
 from ...gmpv224.entities.operating_systems import (
     GmpDeleteOperatingSystemTestMixin,
     GmpGetOperatingSystemsTestMixin,
-    GmpGetOperatingSystemTestMixin,
     GmpModifyOperatingSystemTestMixin,
 )
 from ...gmpv227 import GMPTestCase
@@ -14,12 +14,6 @@ from ...gmpv227 import GMPTestCase
 
 class GMPDeleteOperatingSystemTestCase(
     GmpDeleteOperatingSystemTestMixin, GMPTestCase
-):
-    pass
-
-
-class GMPGetOperatingSystemTestCase(
-    GmpGetOperatingSystemTestMixin, GMPTestCase
 ):
     pass
 

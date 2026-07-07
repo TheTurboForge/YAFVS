@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -59,29 +60,6 @@ class OperatingSystemsTestCase(unittest.TestCase):
         self.assertEqual(
             bytes(request),
             b'<get_assets type="os" details="0"/>',
-        )
-
-    def test_get_operating_system(self):
-        request = OperatingSystems.get_operating_system("operating_system_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_assets asset_id="operating_system_id" type="os"/>',
-        )
-
-    def test_get_operating_system_with_details(self):
-        request = OperatingSystems.get_operating_system(
-            "operating_system_id", details=True
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<get_assets asset_id="operating_system_id" type="os" details="1"/>',
-        )
-        request = OperatingSystems.get_operating_system(
-            "operating_system_id", details=False
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<get_assets asset_id="operating_system_id" type="os" details="0"/>',
         )
 
     def test_modify_operating_system(self):

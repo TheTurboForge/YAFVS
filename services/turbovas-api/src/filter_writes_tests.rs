@@ -53,6 +53,57 @@ fn filter_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn filter_create_handler_requires_operator_before_insert() {
+    let source = include_str!("filter_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn create_filter")
+        .expect("create filter handler must exist")
+        .1
+        .split_once("pub(crate) async fn delete_filter")
+        .expect("delete filter handler must follow create handler")
+        .0;
+
+    assert!(handler.contains("let operator = require_filter_write_operator(operator)?;"));
+    assert!(
+        handler
+            .contains("let owner_id = resolve_filter_write_operator_owner(&tx, &operator).await?;")
+    );
+    assert!(
+        handler.find("resolve_filter_write_operator_owner").unwrap()
+            < handler.find("execute_filter_create_transaction").unwrap(),
+        "filter create must resolve operator owner before inserting filter"
+    );
+}
+
+#[test]
+fn filter_patch_handler_checks_owner_before_mutation_or_alert_sensitive_changes() {
+    let source = include_str!("filter_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_filter")
+        .expect("patch filter handler must exist")
+        .1
+        .split_once("#[cfg(test)]")
+        .expect("test module marker must follow patch handler")
+        .0;
+
+    let owner_check = "ensure_filter_owner_matches_operator(state.owner_id, operator_owner_id)?;";
+    assert!(handler.contains("let operator = require_filter_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_filter_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains(owner_check));
+    assert!(handler.contains("ensure_filter_not_in_use_by_alerts(&tx, state.internal_id).await?;"));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler.find("execute_filter_patch_transaction").unwrap(),
+        "filter patch must check owner before mutation"
+    );
+    assert!(
+        handler.find("ensure_filter_not_in_use_by_alerts").unwrap()
+            < handler.find("execute_filter_patch_transaction").unwrap(),
+        "filter patch must guard alert-sensitive term/type changes before mutation"
+    );
+}
+
+#[test]
 fn filter_clone_handler_enforces_source_owner_check() {
     let source = include_str!("filter_writes.rs");
     let clone_handler = source

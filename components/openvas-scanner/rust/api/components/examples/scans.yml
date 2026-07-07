@@ -1,3 +1,5 @@
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 scan_simple:
   description:
     "A small authenticated scan that will gather all packages of the target system and
@@ -98,10 +100,10 @@ scan_full_req:
           { "id": "open_sock_max_attempts", "value": "5" },
           { "id": "timeout_retry", "value": "5" },
           { "id": "optimize_test", "value": "true" },
-          { "id": "plugins_timeout", "value": "320" },
+          { "id": "plugins_timeout", "value": "180" },
           { "id": "report_host_details", "value": "true" },
           { "id": "safe_checks", "value": "true" },
-          { "id": "scanner_plugins_timeout", "value": "36000" },
+          { "id": "scanner_plugins_timeout", "value": "180" },
           { "id": "time_between_request", "value": "0" },
           { "id": "unscanned_closed", "value": "true" },
           { "id": "unscanned_closed_udp", "value": "true" },
@@ -213,10 +215,10 @@ scan_full_resp:
           { "id": "open_sock_max_attempts", "value": "5" },
           { "id": "timeout_retry", "value": "5" },
           { "id": "optimize_test", "value": "true" },
-          { "id": "plugins_timeout", "value": "320" },
+          { "id": "plugins_timeout", "value": "180" },
           { "id": "report_host_details", "value": "true" },
           { "id": "safe_checks", "value": "true" },
-          { "id": "scanner_plugins_timeout", "value": "36000" },
+          { "id": "scanner_plugins_timeout", "value": "180" },
           { "id": "time_between_request", "value": "0" },
           { "id": "unscanned_closed", "value": "true" },
           { "id": "unscanned_closed_udp", "value": "true" },
@@ -311,7 +313,7 @@ preferences:
       {
         "id": "plugins_timeout",
         "name": "Plugins Timeout",
-        "default": 320,
+        "default": 180,
         "description": "This is the maximum lifetime, in seconds of a plugin. It may happen that some plugins are slow because of the way they are written or the way the remote server behaves. This option allows you to make sure your scan is never caught in an endless loop because of a non-finishing plugin. Doesn't affect ACT_SCANNER plugins, use 'ACT_SCANNER plugins timeout' for them instead.",
       },
       {
@@ -329,7 +331,7 @@ preferences:
       {
         "id": "scanner_plugins_timeout",
         "name": "ACT_SCANNER plugins timeout",
-        "default": 36000,
+        "default": 180,
         "description": "Like 'Plugins Timeout', but for ACT_SCANNER plugins.",
       },
       {

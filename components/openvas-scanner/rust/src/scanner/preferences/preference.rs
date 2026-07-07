@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -7,6 +8,10 @@ use greenbone_scanner_framework::models::{
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+
+// TurboVAS defaults scanner plugin execution to 180 seconds because it is
+// preferable for things to fail quickly.
+const TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS: i64 = 180;
 
 pub const PREFERENCES: [ScanPreferenceInformation; 23] = [
     ScanPreferenceInformation {
@@ -89,7 +94,7 @@ pub const PREFERENCES: [ScanPreferenceInformation; 23] = [
     ScanPreferenceInformation {
         id: "plugins_timeout",
         name: "Plugins Timeout",
-        default: PreferenceValue::Int(320),
+        default: PreferenceValue::Int(TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS),
         description: "This is the maximum lifetime, in seconds of a plugin. It may happen \
         that some plugins are slow because of the way they are written or \
         the way the remote server behaves. This option allows you to make \
@@ -126,7 +131,7 @@ pub const PREFERENCES: [ScanPreferenceInformation; 23] = [
     ScanPreferenceInformation {
         id: "scanner_plugins_timeout",
         name: "ACT_SCANNER plugins timeout",
-        default: PreferenceValue::Int(36000),
+        default: PreferenceValue::Int(TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS),
         description: "Like 'Plugins Timeout', but for ACT_SCANNER plugins.",
     },
     ScanPreferenceInformation {

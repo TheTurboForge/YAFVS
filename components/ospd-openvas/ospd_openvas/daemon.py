@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -41,6 +42,10 @@ from ospd_openvas.vthelper import VtHelper
 from ospd_openvas.messaging.mqtt import MQTTClient, MQTTDaemon, MQTTSubscriber
 
 logger = logging.getLogger(__name__)
+
+# TurboVAS defaults scanner plugin execution to 180 seconds because it is
+# preferable for things to fail quickly.
+TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS = 180
 
 
 OSPD_DESC = """
@@ -140,7 +145,7 @@ OSPD_PARAMS = {
     'plugins_timeout': {
         'type': 'integer',
         'name': 'plugins_timeout',
-        'default': 5,
+        'default': TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS,
         'mandatory': 0,
         'visible_for_client': True,
         'description': 'This is the maximum lifetime, in seconds of a plugin.',
@@ -167,7 +172,7 @@ OSPD_PARAMS = {
     'scanner_plugins_timeout': {
         'type': 'integer',
         'name': 'scanner_plugins_timeout',
-        'default': 36000,
+        'default': TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS,
         'mandatory': 1,
         'visible_for_client': True,
         'description': 'Like plugins_timeout, but for ACT_SCANNER plugins.',

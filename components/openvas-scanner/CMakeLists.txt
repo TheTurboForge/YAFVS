@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -173,8 +174,10 @@ set (OPENVAS_LIB_INSTALL_DIR     "${LIBDIR}")
 
 set (OPENVAS_CONF     "${OPENVAS_SYSCONF_DIR}/openvas.conf")
 
-set (NVT_TIMEOUT "320")
-set (SCANNER_NVT_TIMEOUT "36000")
+# TurboVAS defaults scanner plugin execution to 180 seconds because it is
+# preferable for things to fail quickly.
+set (NVT_TIMEOUT "180")
+set (SCANNER_NVT_TIMEOUT "180")
 
 message ("-- Install prefix: ${CMAKE_INSTALL_PREFIX}")
 

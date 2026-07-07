@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -108,7 +109,7 @@ OSPD_PARAMS_OUT = {
     'plugins_timeout': {
         'type': 'integer',
         'name': 'plugins_timeout',
-        'default': 5,
+        'default': 180,
         'mandatory': 0,
         'visible_for_client': True,
         'description': 'This is the maximum lifetime, in seconds of a plugin.',
@@ -135,7 +136,7 @@ OSPD_PARAMS_OUT = {
     'scanner_plugins_timeout': {
         'type': 'integer',
         'name': 'scanner_plugins_timeout',
-        'default': 36000,
+        'default': 180,
         'mandatory': 1,
         'visible_for_client': True,
         'description': 'Like plugins_timeout, but for ACT_SCANNER plugins.',

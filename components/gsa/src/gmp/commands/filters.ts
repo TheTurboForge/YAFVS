@@ -24,6 +24,7 @@ import {
   NATIVE_COMMAND_PAGE_SIZE,
 } from 'gmp/commands/native';
 import {
+  exportNativeFiltersMetadata,
   fetchNativeFilters,
   nativeFiltersQueryFromFilter,
 } from 'gmp/native-api/filters';
@@ -93,9 +94,64 @@ const parseCollectionCountsFromResponse = (
   });
 };
 
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
 export class FiltersCommand extends EntitiesCommand<Filter> {
   constructor(http: Http) {
     super(http, 'filter', Filter);
+  }
+
+  export(entities: Filter[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativeFiltersMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const filters: Filter[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; filters.length < total; page += 1) {
+        const nativeResponse = await fetchNativeFilters(this.http, {
+          ...nativeFiltersQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        filters.push(...nativeResponse.filters);
+        total = nativeResponse.page.total;
+        if (nativeResponse.filters.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeFilters(
+        this.http,
+        nativeFiltersQueryFromFilter(filter),
+      );
+      filters.push(...nativeResponse.filters);
+    }
+
+    return exportNativeFiltersMetadata(
+      this.http,
+      filters.map(savedFilter => savedFilter.id as string),
+    );
   }
 
   async get(

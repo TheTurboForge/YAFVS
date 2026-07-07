@@ -685,7 +685,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "result-actions-bulk-export-tag-and-override-workflows",
         "result-exports-and-actions",
         "retention-mutations",
-        "saved-filter-export-and-alert-linkage",
+        "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "scanner-control-credentials-writes-and-deletes",
         "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "scan-config-preference-selector-mutation-import-export-blank-create",
@@ -875,22 +875,22 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "user-redacted-detail-read",
     },
     ("get", "/filters"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-list-read",
     },
     ("get", "/filters/{filter_id}"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-detail-read",
     },
     ("get", "/filters/{filter_id}/export"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "saved-filter-metadata-export-read",
     },
     ("post", "/filters"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -899,7 +899,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("patch", "/filters/{filter_id}"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -908,7 +908,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/filters/{filter_id}"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -917,7 +917,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("post", "/filters/{filter_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -926,7 +926,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/filters/{filter_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -935,7 +935,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/filters/{filter_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-export-and-alert-linkage",
+        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage-and-legacy-file-export-fallback",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",

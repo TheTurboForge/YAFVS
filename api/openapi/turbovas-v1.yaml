@@ -1293,9 +1293,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-list-read
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       summary: List saved filters
-      description: Saved-filter metadata backed by gvmd/PostgreSQL. Native direct write-control can create filters, patch filter name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, and hard-delete unlinked trashed filters; export and alert-linked semantics remain inherited while their native contracts are designed. Filter terms are operator configuration data and remain available only through authenticated operator access.
+      description: Saved-filter metadata backed by gvmd/PostgreSQL. Native direct write-control can create filters, patch filter name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, hard-delete unlinked trashed filters, and export native JSON metadata; browser bulk download composes native JSON metadata exports and legacy XML/file export fallback plus alert-linked semantics remain on compatibility paths. Filter terms are operator configuration data and remain available only through authenticated operator access.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1327,13 +1327,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: saved-filter-create
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Create a saved filter
-      description: Direct write-control endpoint for creating a saved filter owned by the direct API operator. The request accepts bounded printable name/comment/type/term metadata and creates no alert links, settings, trash rows, imports, exports, or side effects outside the filter metadata row. Export and alert-linked semantics remain inherited.
+      description: Direct write-control endpoint for creating a saved filter owned by the direct API operator. The request accepts bounded printable name/comment/type/term metadata and creates no alert links, settings, trash rows, imports, legacy file exports, or side effects outside the filter metadata row. Browser bulk download composes native JSON metadata exports; legacy XML/file export fallback and alert-linked semantics remain inherited.
       requestBody:
         required: true
         content:
@@ -1370,9 +1370,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-detail-read
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       summary: Read one saved filter
-      description: Saved-filter detail backed by gvmd/PostgreSQL. Native direct write-control can create filters, patch name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, and hard-delete unlinked trashed filters. Export and alert-linked semantics remain inherited.
+      description: Saved-filter detail backed by gvmd/PostgreSQL. Native direct write-control can create filters, patch name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, hard-delete unlinked trashed filters, and export native JSON metadata. Browser bulk download composes native JSON metadata exports; legacy XML/file export fallback and alert-linked semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -1402,13 +1402,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: saved-filter-metadata-modify
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Patch saved filter metadata
-      description: Direct write-control endpoint for changing saved filter name, comment, type, or term metadata. Term/type changes are rejected for filters referenced by live alerts or alert filter conditions; export and alert-linkage semantics remain inherited.
+      description: Direct write-control endpoint for changing saved filter name, comment, type, or term metadata. Term/type changes are rejected for filters referenced by live alerts or alert filter conditions; legacy XML/file export fallback and alert-linkage semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       requestBody:
@@ -1448,13 +1448,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: saved-filter-trash-move
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Move saved filter to trash
-      description: Direct write-control endpoint for moving an unlinked saved filter to trash. Filters referenced by live alerts or alert conditions are rejected; export and alert linkage semantics remain inherited.
+      description: Direct write-control endpoint for moving an unlinked saved filter to trash. Filters referenced by live alerts or alert conditions are rejected; legacy XML/file export fallback and alert-linkage semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -1483,9 +1483,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-export-read
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       summary: Export saved-filter metadata
-      description: Read-only metadata export for one live saved filter, backed by the same PostgreSQL loader as saved-filter detail. This endpoint returns the native JSON metadata payload only; inherited compatibility paths still own XML/file export, bulk export, and alert-linkage semantics.
+      description: Read-only metadata export for one live saved filter, backed by the same PostgreSQL loader as saved-filter detail. This endpoint returns the native JSON metadata payload used by GSA downloads; browser bulk download composes native JSON metadata exports from this endpoint when native API is available. Legacy XML/file export fallback and alert-linkage semantics remain compatibility paths beyond this native JSON contract.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -1516,13 +1516,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: saved-filter-clone
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Clone a saved filter
-      description: Direct write-control endpoint for copying an existing live saved filter into a new filter owned by the direct API operator. The clone copies the source term, type, comment, and active-table tag links; optional name/comment fields override copied metadata. Export and alert-linkage mutation semantics remain inherited.
+      description: Direct write-control endpoint for copying an existing live saved filter into a new filter owned by the direct API operator. The clone copies the source term, type, comment, and active-table tag links; optional name/comment fields override copied metadata. Legacy XML/file export fallback and alert-linkage mutation semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       requestBody:
@@ -1563,13 +1563,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: saved-filter-restore
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Restore saved filter from trash
-      description: Direct write-control endpoint for restoring a saved filter from trash. Restore preserves UUID and owner, relinks trash-side alert output filters and tag references back to live state, and rejects conflicting live UUID or same-owner live name collisions. Export and alert-linkage mutation semantics remain inherited.
+      description: Direct write-control endpoint for restoring a saved filter from trash. Restore preserves UUID and owner, relinks trash-side alert output filters and tag references back to live state, and rejects conflicting live UUID or same-owner live name collisions. Legacy XML/file export fallback and alert-linkage mutation semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -1604,13 +1604,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: saved-filter-hard-delete
-      x-turbovas-inherited-still-owns: saved-filter-export-and-alert-linkage
+      x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Hard-delete a trashed saved filter
-      description: Direct write-control endpoint for permanently deleting an unlinked trashed saved filter. Filters referenced by trash alerts or trash alert conditions are rejected. This path deletes trash filter tag links and trash filter metadata only; live filters are never deleted through this route. Export and alert-linkage mutation semantics remain inherited.
+      description: Direct write-control endpoint for permanently deleting an unlinked trashed saved filter. Filters referenced by trash alerts or trash alert conditions are rejected. This path deletes trash filter tag links and trash filter metadata only; live filters are never deleted through this route. Legacy XML/file export fallback and alert-linkage mutation semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:

@@ -26,7 +26,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/filters/:filter_id/export",
         handler: "export_filter_metadata",
         replaces: "saved-filter-metadata-export-read",
-        inherited_tail: Some("saved-filter-export-and-alert-linkage"),
+        inherited_tail: Some("saved-filter-alert-linkage-and-legacy-file-export-fallback"),
         schema_ref: "#/components/schemas/FilterAsset",
     },
     MetadataExportBoundary {

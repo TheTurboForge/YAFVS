@@ -269,6 +269,22 @@ export const exportNativeFilterMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeFiltersMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const filters = await Promise.all(
+    ids.map(id =>
+      fetchNativeJson<NativeFilterPayload>(
+        gmp,
+        `api/v1/filters/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      ),
+    ),
+  );
+  return new Response(`${JSON.stringify({filters}, null, 2)}\n`);
+};
+
 export const deleteNativeFilter = async (
   gmp: NativeApiGmp,
   id: string,

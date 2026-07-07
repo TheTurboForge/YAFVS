@@ -11,13 +11,14 @@ import {
 } from 'gmp/commands/report-metrics';
 import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import {type default as Filter, ALL_FILTER} from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import Report, {type ReportElement} from 'gmp/models/report';
-import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
+import {fetchNativeReport} from 'gmp/native-api/reports';
 
 interface ReportCommandAddAssetsParams {
   id: string;
@@ -37,7 +38,7 @@ interface ReportCommandAlertParams {
 
 interface ReportCommandGetParams {
   id?: string;
-  filter?: string;
+  filter?: Filter;
   details?: boolean;
   ignorePagination?: boolean;
   lean?: boolean;
@@ -110,25 +111,16 @@ class ReportCommand extends EntityCommand<Report, ReportElement> {
   }
 
   async get(
-    {id, ...params}: ReportCommandGetParams,
+    {id}: ReportCommandGetParams,
     {
       filter,
-      details = true,
-      ignorePagination = true,
-      lean = true,
-      ...options
     }: ReportCommandGetParams = {},
   ) {
-    const response = await this.httpGetWithTransform({
-      id,
-      filter,
-      lean: parseYesNo(lean),
-      ignore_pagination: parseYesNo(ignorePagination),
-      details: parseYesNo(details),
-      ...options,
-      ...params,
-    });
-    return this.transformResponseToModel(response);
+    if (id === undefined) {
+      throw new Error('Report id is required for native report detail reads.');
+    }
+    const nativeResponse = await fetchNativeReport(this.http, id, filter);
+    return new Response(nativeResponse.report);
   }
 
   async getMetrics({id}: ReportCommandMetricsParams) {

@@ -99,30 +99,3 @@ class SchedulesTestUnit(unittest.TestCase):
             bytes(request),
             b'<get_schedules tasks="0"/>',
         )
-
-    def test_get_schedule(self):
-        request = Schedules.get_schedule("schedule_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_schedules schedule_id="schedule_id"/>',
-        )
-
-    def test_get_schedule_with_tasks(self):
-        request = Schedules.get_schedule("schedule_id", tasks=True)
-        self.assertEqual(
-            bytes(request),
-            b'<get_schedules schedule_id="schedule_id" tasks="1"/>',
-        )
-
-        request = Schedules.get_schedule("schedule_id", tasks=False)
-        self.assertEqual(
-            bytes(request),
-            b'<get_schedules schedule_id="schedule_id" tasks="0"/>',
-        )
-
-    def test_get_schedule_missing_schedule_id(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.get_schedule(None)
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.get_schedule("")

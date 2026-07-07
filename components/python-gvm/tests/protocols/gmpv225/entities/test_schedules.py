@@ -7,13 +7,8 @@
 from ...gmpv224.entities.schedules import (
     GmpCreateScheduleTestMixin,
     GmpGetSchedulesTestMixin,
-    GmpGetScheduleTestMixin,
 )
 from ...gmpv225 import GMPTestCase
-
-
-class Gmpv225GetScheduleTestCase(GmpGetScheduleTestMixin, GMPTestCase):
-    pass
 
 
 class Gmpv225GetSchedulesTestCase(GmpGetSchedulesTestMixin, GMPTestCase):

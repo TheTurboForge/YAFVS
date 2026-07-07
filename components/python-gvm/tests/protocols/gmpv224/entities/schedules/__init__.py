@@ -5,11 +5,9 @@
 #
 
 from .test_create_schedule import GmpCreateScheduleTestMixin
-from .test_get_schedule import GmpGetScheduleTestMixin
 from .test_get_schedules import GmpGetSchedulesTestMixin
 
 __all__ = (
     "GmpCreateScheduleTestMixin",
-    "GmpGetScheduleTestMixin",
     "GmpGetSchedulesTestMixin",
 )

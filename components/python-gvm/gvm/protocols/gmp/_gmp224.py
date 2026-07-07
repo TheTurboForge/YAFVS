@@ -2101,19 +2101,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_schedule(
-        self, schedule_id: EntityID, *, tasks: bool | None = None
-    ) -> T:
-        """Request a single schedule
-
-        Args:
-            schedule_id: UUID of an existing schedule
-            tasks: Whether to include tasks using the schedules
-        """
-        return self._send_request_and_transform_response(
-            Schedules.get_schedule(schedule_id, tasks=tasks)
-        )
-
     def get_nvt_families(self, *, sort_order: str | None = None) -> T:
         """Request a list of nvt families
 

@@ -8,12 +8,7 @@ from ...gmpv224 import Gmpv224TestCase
 from .schedules import (
     GmpCreateScheduleTestMixin,
     GmpGetSchedulesTestMixin,
-    GmpGetScheduleTestMixin,
 )
-
-
-class Gmpv224GetScheduleTestCase(GmpGetScheduleTestMixin, Gmpv224TestCase):
-    pass
 
 
 class Gmpv224GetSchedulesTestCase(GmpGetSchedulesTestMixin, Gmpv224TestCase):

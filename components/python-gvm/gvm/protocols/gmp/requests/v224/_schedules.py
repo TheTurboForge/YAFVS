@@ -115,26 +115,3 @@ class Schedules:
             cmd.set_attribute("tasks", to_bool(tasks))
 
         return cmd
-    @classmethod
-    def get_schedule(
-        cls, schedule_id: EntityID, *, tasks: bool | None = None
-    ) -> Request:
-        """Request a single schedule
-
-        Args:
-            schedule_id: UUID of an existing schedule
-            tasks: Whether to include tasks using the schedules
-        """
-        cmd = XmlCommand("get_schedules")
-
-        if not schedule_id:
-            raise RequiredArgument(
-                function=cls.get_schedule.__name__, argument="schedule_id"
-            )
-
-        cmd.set_attribute("schedule_id", str(schedule_id))
-
-        if tasks is not None:
-            cmd.set_attribute("tasks", to_bool(tasks))
-
-        return cmd

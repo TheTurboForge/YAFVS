@@ -32,6 +32,100 @@ fn schedule_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn schedule_clone_handler_requires_owner_check_before_clone() {
+    let source = include_str!("schedule_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn clone_schedule")
+        .expect("clone schedule handler must exist")
+        .1
+        .split_once("pub(crate) async fn delete_schedule")
+        .expect("delete schedule handler must follow clone handler")
+        .0;
+
+    let owner_check = "ensure_schedule_owner_matches_operator(source.owner_id, owner_id)?;";
+    assert!(handler.contains("let operator = require_schedule_write_operator(operator)?;"));
+    assert!(
+        handler.contains(
+            "let owner_id = resolve_schedule_write_operator_owner(&tx, &operator).await?;"
+        )
+    );
+    assert!(handler.contains(owner_check));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler.find("execute_schedule_clone_transaction").unwrap(),
+        "schedule clone must check source owner before cloning"
+    );
+}
+
+#[test]
+fn schedule_mutating_handlers_enforce_owner_and_task_safety_before_side_effects() {
+    let source = include_str!("schedule_writes.rs");
+    for (label, start, end, owner_check, safety_guard, side_effect) in [
+        (
+            "delete",
+            "pub(crate) async fn delete_schedule",
+            "pub(crate) async fn hard_delete_schedule",
+            "ensure_schedule_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_schedule_not_in_use_by_live_tasks",
+            "execute_schedule_trash_transaction",
+        ),
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_schedule",
+            "pub(crate) async fn restore_schedule",
+            "ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_schedule_not_in_use_by_trash_tasks",
+            "execute_schedule_hard_delete_transaction",
+        ),
+        (
+            "restore",
+            "pub(crate) async fn restore_schedule",
+            "pub(crate) async fn patch_schedule",
+            "ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_schedule_uuid_not_live",
+            "execute_schedule_restore_transaction",
+        ),
+        (
+            "patch",
+            "pub(crate) async fn patch_schedule",
+            "#[cfg(test)]",
+            "ensure_schedule_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_unique_schedule_name",
+            "execute_schedule_patch_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} schedule handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} schedule handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_schedule_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.contains(safety_guard),
+            "{label} handler must check safety guard"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check owner before side effects"
+        );
+        assert!(
+            handler.find(safety_guard).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check safety guard before side effects"
+        );
+    }
+}
+
+#[test]
 fn schedule_clone_request_accepts_default_or_metadata_override() {
     let default =
         validate_schedule_clone_request(clone_request(None, None)).expect("default clone metadata");

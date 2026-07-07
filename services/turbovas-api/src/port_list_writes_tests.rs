@@ -53,6 +53,113 @@ fn port_list_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn port_list_create_and_clone_handlers_require_operator_before_insert() {
+    let source = include_str!("port_list_writes.rs");
+    for (label, start, end, owner_resolution, side_effect) in [
+        (
+            "create",
+            "pub(crate) async fn create_port_list",
+            "pub(crate) async fn clone_port_list",
+            "let owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;",
+            "execute_port_list_create_transaction",
+        ),
+        (
+            "clone",
+            "pub(crate) async fn clone_port_list",
+            "pub(crate) async fn patch_port_list",
+            "let owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;",
+            "execute_port_list_clone_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} port-list handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} port-list handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_port_list_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(handler.contains(owner_resolution));
+        assert!(
+            handler.find(owner_resolution).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must resolve operator owner before insert/clone"
+        );
+    }
+}
+
+#[test]
+fn port_list_mutating_handlers_enforce_owner_and_safety_before_side_effects() {
+    let source = include_str!("port_list_writes.rs");
+    for (label, start, end, owner_check, safety_guard, side_effect) in [
+        (
+            "patch",
+            "pub(crate) async fn patch_port_list",
+            "pub(crate) async fn delete_port_list",
+            "ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "if state.predefined",
+            "execute_port_list_patch_transaction",
+        ),
+        (
+            "delete",
+            "pub(crate) async fn delete_port_list",
+            "pub(crate) async fn hard_delete_port_list",
+            "ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_port_list_not_in_use_by_live_targets",
+            "execute_port_list_trash_transaction",
+        ),
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_port_list",
+            "pub(crate) async fn restore_port_list",
+            "ensure_port_list_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_port_list_not_in_use_by_trash_targets",
+            "execute_port_list_hard_delete_transaction",
+        ),
+        (
+            "restore",
+            "pub(crate) async fn restore_port_list",
+            "#[cfg(test)]",
+            "ensure_port_list_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_port_list_uuid_not_live",
+            "execute_port_list_restore_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} port-list handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} port-list handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_port_list_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.contains(safety_guard),
+            "{label} handler must check safety guard"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check owner before side effects"
+        );
+        assert!(
+            handler.find(safety_guard).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check safety guard before side effects"
+        );
+    }
+}
+
+#[test]
 fn port_list_clone_request_accepts_default_or_metadata_override() {
     let default = validate_port_list_clone_request(clone_request(None, None))
         .expect("default clone metadata");

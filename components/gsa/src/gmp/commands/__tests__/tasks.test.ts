@@ -11,12 +11,27 @@ import {
   createEntitiesResponse,
   createAggregatesResponse,
 } from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import Task from 'gmp/models/task';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('TasksCommand tests', () => {
   test('should fetch tasks with default params', async () => {
@@ -140,16 +155,7 @@ describe('TasksCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new TasksCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=scan'});
@@ -176,6 +182,138 @@ describe('TasksCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should bulk export selected tasks through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'task-1', name: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'task-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TasksCommand(fakeHttp);
+
+    const result = await cmd.export([
+      new Task({id: 'task-1'}),
+      new Task({id: 'task-2'}),
+    ]);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/tasks/task-1/export',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/tasks/task-2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).tasks).toEqual([
+      {id: 'task-1', name: 'One'},
+      {id: 'task-2', name: 'Two'},
+    ]);
+  });
+
+  test('should bulk export current page tasks through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'scan'},
+          items: [{id: 'task-2', name: 'Two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'task-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TasksCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=scan');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/tasks', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'name',
+      filter: 'scan',
+    });
+    expect(JSON.parse(result.data).tasks).toEqual([
+      {id: 'task-2', name: 'Two'},
+    ]);
+  });
+
+  test('should bulk export all filtered tasks through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'scan'},
+          items: [{id: 'task-1', name: 'One'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'scan'},
+          items: [{id: 'task-2', name: 'Two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'task-1', name: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'task-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TasksCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=scan').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/tasks', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'scan',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/tasks', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'scan',
+    });
+    expect(JSON.parse(result.data).tasks).toEqual([
+      {id: 'task-1', name: 'One'},
+      {id: 'task-2', name: 'Two'},
+    ]);
   });
 
   test('should keep schedules-only task lists on GMP', async () => {

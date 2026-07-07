@@ -353,6 +353,23 @@ export const exportNativeTaskMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeTasksMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const tasks = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeTaskItem>(
+        gmp,
+        `api/v1/tasks/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({tasks}, null, 2)}\n`);
+};
+
 export const patchNativeTask = async (
   gmp: NativeApiGmp,
   {id, name, comment}: NativeTaskPatchArgs,

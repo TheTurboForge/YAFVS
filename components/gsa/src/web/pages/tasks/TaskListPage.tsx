@@ -106,5 +106,6 @@ export const taskReloadInterval = ({entities = []}: {entities: Task[]}) =>
 export default withEntitiesContainer('task', {
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
   reloadInterval: taskReloadInterval,
 })(TaskListPage);

@@ -1745,16 +1745,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def clone_filter(self, filter_id: EntityID) -> T:
-        """Clone a filter
-
-        Args:
-            filter_id: ID of the filter to clone
-        """
-        return self._send_request_and_transform_response(
-            Filters.clone_filter(filter_id)
-        )
-
     def create_filter(
         self,
         name: str,

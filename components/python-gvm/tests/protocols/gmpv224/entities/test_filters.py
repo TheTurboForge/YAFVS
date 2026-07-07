@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from ...gmpv224 import Gmpv224TestCase
 from .filters import (
-    GmpCloneFilterTestMixin,
     GmpCreateFilterTestMixin,
     GmpDeleteFilterTestMixin,
     GmpGetFiltersTestMixin,
@@ -23,10 +23,6 @@ class Gmpv224GetFilterTestCase(GmpGetFilterTestMixin, Gmpv224TestCase):
 
 
 class Gmpv224GetFiltersTestCase(GmpGetFiltersTestMixin, Gmpv224TestCase):
-    pass
-
-
-class Gmpv224CloneFilterTestCase(GmpCloneFilterTestMixin, Gmpv224TestCase):
     pass
 
 

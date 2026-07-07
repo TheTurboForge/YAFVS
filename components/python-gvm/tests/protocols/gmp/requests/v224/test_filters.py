@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,20 +10,6 @@ from gvm.protocols.gmp.requests.v224 import Filters, FilterType
 
 
 class FilterTestsCase(unittest.TestCase):
-    def test_clone_filter(self):
-        request = Filters.clone_filter("filter_id")
-        self.assertEqual(
-            bytes(request),
-            b"<create_filter><copy>filter_id</copy></create_filter>",
-        )
-
-    def test_clone_filter_missing_filter_id(self):
-        with self.assertRaises(RequiredArgument):
-            Filters.clone_filter(None)
-
-        with self.assertRaises(RequiredArgument):
-            Filters.clone_filter("")
-
     def test_create_filter(self):
         request = Filters.create_filter("filter_name")
         self.assertEqual(

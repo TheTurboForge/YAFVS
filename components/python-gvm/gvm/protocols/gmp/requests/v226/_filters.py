@@ -71,22 +71,6 @@ class FilterType(Enum):
 
 class Filters:
     @classmethod
-    def clone_filter(cls, filter_id: EntityID) -> Request:
-        """Clone a filter
-
-        Args:
-            filter_id: ID of the filter to clone
-        """
-        if not filter_id:
-            raise RequiredArgument(
-                function=cls.clone_filter.__name__, argument="filter_id"
-            )
-
-        cmd = XmlCommand("create_filter")
-        cmd.add_element("copy", str(filter_id))
-        return cmd
-
-    @classmethod
     def create_filter(
         cls,
         name: str,

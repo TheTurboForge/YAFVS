@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from ...gmpv224.entities.scan_configs import (
-    GmpCloneScanConfigTestMixin,
     GmpCreateScanConfigTestMixin,
     GmpDeleteScanConfigTestMixin,
     GmpGetScanConfigsTestMixin,
@@ -18,10 +18,6 @@ from ...gmpv224.entities.scan_configs import (
     GmpModifyScanConfigSetScannerPreferenceTestMixin,
 )
 from ...gmpv225 import GMPTestCase
-
-
-class Gmpv225CloneScanConfigTestCase(GmpCloneScanConfigTestMixin, GMPTestCase):
-    pass
 
 
 class Gmpv225CreateScanConfigTestCase(

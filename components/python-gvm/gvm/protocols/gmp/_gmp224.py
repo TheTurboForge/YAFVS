@@ -415,16 +415,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def clone_scan_config(self, config_id: EntityID) -> T:
-        """Clone a scan config from an existing one
-
-        Args:
-            config_id: UUID of the existing scan config
-        """
-        return self._send_request_and_transform_response(
-            ScanConfigs.clone_scan_config(config_id)
-        )
-
     def create_scan_config(
         self,
         config_id: EntityID,

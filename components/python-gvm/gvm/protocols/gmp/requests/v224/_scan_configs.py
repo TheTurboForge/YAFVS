@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -12,22 +13,6 @@ from .._entity_id import EntityID
 
 
 class ScanConfigs:
-    @classmethod
-    def clone_scan_config(cls, config_id: EntityID) -> Request:
-        """Clone a scan config from an existing one
-
-        Args:
-            config_id: UUID of the existing scan config
-        """
-        if not config_id:
-            raise RequiredArgument(
-                function=cls.clone_scan_config.__name__, argument="config_id"
-            )
-
-        cmd = XmlCommand("create_config")
-        cmd.add_element("copy", str(config_id))
-        return cmd
-
     @classmethod
     def create_scan_config(
         cls,

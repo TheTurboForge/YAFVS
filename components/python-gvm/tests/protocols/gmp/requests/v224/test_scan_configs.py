@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,20 +10,6 @@ from gvm.protocols.gmp.requests.v224 import ScanConfigs
 
 
 class ScanConfigsTestCase(unittest.TestCase):
-    def test_clone_scan_config(self):
-        request = ScanConfigs.clone_scan_config("a1")
-
-        self.assertEqual(
-            bytes(request), b"<create_config><copy>a1</copy></create_config>"
-        )
-
-    def test_clone_scan_config_missing_id(self):
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.clone_scan_config("")
-
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.clone_scan_config(None)
-
     def test_create_scan_config(self):
         request = ScanConfigs.create_scan_config("a1", "foo")
 

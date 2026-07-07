@@ -465,14 +465,7 @@ class TargetCommand extends EntityCommand<Target> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeTargetMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy target export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeTargetMetadata(this.http, id);
   }
 
   async clone({id}: EntityCommandParams) {

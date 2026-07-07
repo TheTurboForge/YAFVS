@@ -10,7 +10,6 @@ import {
   createHttp,
   createEntityResponse,
   createActionResultResponse,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
@@ -82,40 +81,6 @@ describe('ReportConfigCommand tests', () => {
       name: 'Report config',
       report_format: {id: 'report-format-id', name: 'PDF'},
     });
-  });
-
-  test('should fall back to GMP when native report config metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new ReportConfigCommand(fakeHttp);
-    const result = await cmd.export({id: 'report-config-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'report_config',
-        bulk_select: 1,
-        'bulk_selected:report-config-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
   });
 
   test('should create report config', async () => {

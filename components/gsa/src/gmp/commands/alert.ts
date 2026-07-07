@@ -221,17 +221,7 @@ class AlertCommand extends EntityCommand<Alert> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeAlertMetadata(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native alert metadata export failed, falling back to GMP',
-          error,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativeAlertMetadata(this.http, id);
   }
 
   create({

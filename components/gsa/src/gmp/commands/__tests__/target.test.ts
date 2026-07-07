@@ -9,7 +9,6 @@ import TargetCommand from 'gmp/commands/target';
 import {
   createActionResultResponse,
   createHttp,
-  createPlainResponse,
   createResponse,
 } from 'gmp/commands/testing';
 import type Http from 'gmp/http/http';
@@ -71,40 +70,6 @@ describe('TargetCommand tests', () => {
       hosts: ['192.0.2.10'],
       credentials: [{id: 'credential-id', name: 'Credential', type: 'ssh'}],
     });
-  });
-
-  test('should fall back to GMP when native target metadata export fails', async () => {
-    const content = '<some><xml>exported-target</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    const cmd = new TargetCommand(fakeHttp);
-
-    const result = await cmd.export({id: 'target-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'target',
-        bulk_select: 1,
-        'bulk_selected:target-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
   });
 
   test('should clone target through native API when available', async () => {

@@ -10,7 +10,6 @@ import {
   createActionResultResponse,
   createEntityResponse,
   createHttp,
-  createPlainResponse,
   createResponse,
 } from 'gmp/commands/testing';
 import {
@@ -85,40 +84,6 @@ describe('AlertCommand tests', () => {
       name: 'Alert',
       method_data_redacted: true,
     });
-  });
-
-  test('should fall back to GMP when native alert metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    const cmd = new AlertCommand(fakeHttp);
-
-    const result = await cmd.export({id: 'alert_id1'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'alert',
-        bulk_select: 1,
-        'bulk_selected:alert_id1': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
   });
 
   test('should allow to clone an alert', async () => {

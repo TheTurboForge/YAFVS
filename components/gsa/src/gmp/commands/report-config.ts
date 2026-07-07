@@ -159,14 +159,7 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeReportConfigMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy report-config export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeReportConfigMetadata(this.http, id);
   }
 
   async create(args: ReportConfigCreateArgs) {

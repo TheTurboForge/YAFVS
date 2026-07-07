@@ -6,7 +6,6 @@
 
 import InfoEntityCommand from 'gmp/commands/info-entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Cpe from 'gmp/models/cpe';
 import {exportNativeCpeMetadata} from 'gmp/native-api/cpes';
@@ -17,14 +16,7 @@ class CpeCommand extends InfoEntityCommand<Cpe> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeCpeMetadata(this.http, id);
-      } catch {
-        // Keep inherited info bulk export responsible for legacy CPE export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeCpeMetadata(this.http, id);
   }
 }
 

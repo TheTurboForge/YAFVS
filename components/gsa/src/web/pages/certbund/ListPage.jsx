@@ -63,4 +63,5 @@ export default withEntitiesContainer('certbund', {
   entitiesSelector,
   fallbackFilter,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

@@ -243,3 +243,20 @@ export const exportNativeDfnCertAdvisoryMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeDfnCertAdvisoriesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const dfncerts = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeDfnCertAdvisoryPayload>(
+        gmp,
+        `api/v1/dfn-cert-advisories/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({dfncerts}, null, 2)}\n`);
+};

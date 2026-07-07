@@ -248,3 +248,20 @@ export const exportNativeCertBundAdvisoryMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeCertBundAdvisoriesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const certbunds = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeCertBundAdvisoryPayload>(
+        gmp,
+        `api/v1/cert-bund-advisories/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({certbunds}, null, 2)}\n`);
+};

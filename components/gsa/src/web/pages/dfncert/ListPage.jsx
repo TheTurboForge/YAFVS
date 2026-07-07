@@ -66,4 +66,5 @@ export default withEntitiesContainer('dfncert', {
   entitiesSelector,
   fallbackFilter,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

@@ -18,9 +18,10 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import CertBundAdv from 'gmp/models/cert-bund';
-import type Filter from 'gmp/models/filter';
+import Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import {
+  exportNativeCertBundAdvisoriesMetadata,
   fetchNativeCertBundAdvisories,
   nativeCertBundAdvisoriesQueryFromFilter,
 } from 'gmp/native-api/cert-bund-advisories';
@@ -28,9 +29,64 @@ import {isDefined} from 'gmp/utils/identity';
 
 const infoFilter = (info: Element) => isDefined(info.cert_bund_adv);
 
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
 class CertBundAdvisoriesCommand extends InfoEntitiesCommand<CertBundAdv> {
   constructor(http: Http) {
     super(http, 'cert_bund_adv', CertBundAdv, infoFilter);
+  }
+
+  export(entities: CertBundAdv[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativeCertBundAdvisoriesMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const certbunds: CertBundAdv[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; certbunds.length < total; page += 1) {
+        const nativeResponse = await fetchNativeCertBundAdvisories(this.http, {
+          ...nativeCertBundAdvisoriesQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        certbunds.push(...nativeResponse.certbunds);
+        total = nativeResponse.page.total;
+        if (nativeResponse.certbunds.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeCertBundAdvisories(
+        this.http,
+        nativeCertBundAdvisoriesQueryFromFilter(filter),
+      );
+      certbunds.push(...nativeResponse.certbunds);
+    }
+
+    return exportNativeCertBundAdvisoriesMetadata(
+      this.http,
+      certbunds.map(advisory => advisory.id as string),
+    );
   }
 
   async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {

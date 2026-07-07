@@ -12,11 +12,26 @@ import {
   createInfoEntitiesResponse,
 } from 'gmp/commands/testing';
 import DfnCertAdv from 'gmp/models/dfn-cert';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('DfnCertAdvisoriesCommand tests', () => {
   test('should fetch dfn cert advisories with default params', async () => {
@@ -148,16 +163,7 @@ describe('DfnCertAdvisoriesCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new DfnCertAdvisoriesCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=openssl'});
@@ -176,6 +182,159 @@ describe('DfnCertAdvisoriesCommand tests', () => {
         filter: 'openssl',
       },
     );
+  });
+
+  test('should use inherited bulk export on non-native http', async () => {
+    const fakeHttp = createHttp();
+    const cmd = new DfnCertAdvisoriesCommand(fakeHttp);
+
+    await cmd.exportByIds(['dfn1', 'dfn2']);
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'info',
+        bulk_select: 1,
+        'bulk_selected:dfn1': 1,
+        'bulk_selected:dfn2': 1,
+      },
+    });
+  });
+
+  test('should bulk export selected DFN-CERT advisories through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'dfn1', name: 'DFN-CERT-1'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'dfn2', name: 'DFN-CERT-2'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new DfnCertAdvisoriesCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['dfn1', 'dfn2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/dfn-cert-advisories/dfn1/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).dfncerts).toEqual([
+      {id: 'dfn1', name: 'DFN-CERT-1'},
+      {id: 'dfn2', name: 'DFN-CERT-2'},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'created', filter: 'openssl'},
+          items: [{id: 'dfn2'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'dfn2', name: 'DFN-CERT-2'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new DfnCertAdvisoriesCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=openssl');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/dfn-cert-advisories',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 1,
+        sort: 'created',
+        filter: 'openssl',
+      },
+    );
+    expect(JSON.parse(result.data).dfncerts).toEqual([
+      {id: 'dfn2', name: 'DFN-CERT-2'},
+    ]);
+  });
+
+  test('should bulk export all filtered DFN-CERT advisories through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'created', filter: 'openssl'},
+          items: [{id: 'dfn1'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'created', filter: 'openssl'},
+          items: [{id: 'dfn2'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'dfn1', name: 'DFN-CERT-1'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'dfn2', name: 'DFN-CERT-2'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new DfnCertAdvisoriesCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=openssl').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/dfn-cert-advisories',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: 500,
+        sort: 'created',
+        filter: 'openssl',
+      },
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/dfn-cert-advisories',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 500,
+        sort: 'created',
+        filter: 'openssl',
+      },
+    );
+    expect(JSON.parse(result.data).dfncerts).toEqual([
+      {id: 'dfn1', name: 'DFN-CERT-1'},
+      {id: 'dfn2', name: 'DFN-CERT-2'},
+    ]);
   });
 
   test('should fetch severity aggregates', async () => {

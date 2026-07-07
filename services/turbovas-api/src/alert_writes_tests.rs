@@ -28,6 +28,26 @@ fn alert_patch_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn alert_patch_handler_requires_operator_and_owner_before_mutation() {
+    let source = include_str!("alert_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_alert")
+        .expect("patch alert handler must exist")
+        .1;
+
+    let owner_check =
+        "ensure_alert_owner_matches_operator(alert_state.owner_id, operator_owner_id)?;";
+    assert!(handler.contains("let operator = require_alert_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_alert_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains(owner_check));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler.find("execute_alert_patch_transaction").unwrap(),
+        "alert patch must verify owner before metadata mutation"
+    );
+}
+
+#[test]
 fn alert_patch_request_trims_metadata_fields() {
     let validated =
         validate_alert_patch_request(patch_request(Some("  daily alert  "), Some("  comment  ")))

@@ -105,6 +105,26 @@ fn scanner_patch_blocks_builtin_or_unowned_scanners() {
 }
 
 #[test]
+fn scanner_patch_handler_requires_operator_and_allows_mutation_only_after_guard() {
+    let source = include_str!("scanner_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_scanner")
+        .expect("patch scanner handler must exist")
+        .1;
+
+    assert!(handler.contains("let operator = require_scanner_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_scanner_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains("ensure_scanner_metadata_patch_allowed"));
+    assert!(
+        handler
+            .find("ensure_scanner_metadata_patch_allowed")
+            .unwrap()
+            < handler.find("execute_scanner_patch_transaction").unwrap(),
+        "scanner patch must verify owner/builtin guard before metadata mutation"
+    );
+}
+
+#[test]
 fn scanner_patch_sql_is_metadata_only_and_preserves_secret_control_fields() {
     let state = scanner_write_state_sql();
     assert!(state.contains("owner::integer"));

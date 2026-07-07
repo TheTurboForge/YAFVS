@@ -26,6 +26,26 @@ fn task_patch_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn task_patch_handler_requires_operator_and_owner_before_mutation() {
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_task")
+        .expect("patch task handler must exist")
+        .1;
+
+    let owner_check =
+        "ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;";
+    assert!(handler.contains("let operator = require_task_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_task_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains(owner_check));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler.find("execute_task_patch_transaction").unwrap(),
+        "task patch must verify owner before metadata mutation"
+    );
+}
+
+#[test]
 fn task_patch_request_trims_metadata_fields() {
     let validated =
         validate_task_patch_request(patch_request(Some("  scan task  "), Some("  comment  ")))

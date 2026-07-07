@@ -337,6 +337,92 @@ fn target_patch_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn target_create_handler_requires_operator_before_insert() {
+    let source = include_str!("target_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn create_target")
+        .expect("create target handler must exist")
+        .1
+        .split_once("pub(crate) async fn clone_target")
+        .expect("clone target handler must follow create handler")
+        .0;
+
+    assert!(handler.contains("let operator = require_target_write_operator(operator)?;"));
+    assert!(
+        handler
+            .contains("let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;")
+    );
+    assert!(
+        handler.find("resolve_target_write_operator_owner").unwrap()
+            < handler.find("execute_target_create_transaction").unwrap(),
+        "target create must resolve operator owner before inserting target"
+    );
+}
+
+#[test]
+fn target_mutating_handlers_enforce_owner_before_side_effects() {
+    let source = include_str!("target_writes.rs");
+    for (label, start, end, owner_check, side_effect) in [
+        (
+            "clone",
+            "pub(crate) async fn clone_target",
+            "pub(crate) async fn delete_target",
+            "ensure_target_owner_matches_operator(source.owner_id, owner_id)?;",
+            "execute_target_clone_transaction",
+        ),
+        (
+            "delete",
+            "pub(crate) async fn delete_target",
+            "pub(crate) async fn hard_delete_target",
+            "ensure_target_owner_matches_operator(state.owner_id, owner_id)?;",
+            "execute_target_trash_transaction",
+        ),
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_target",
+            "pub(crate) async fn restore_target",
+            "ensure_target_owner_matches_operator(trash.owner_id, owner_id)?;",
+            "execute_target_hard_delete_transaction",
+        ),
+        (
+            "restore",
+            "pub(crate) async fn restore_target",
+            "pub(crate) async fn patch_target",
+            "ensure_target_owner_matches_operator(trash.owner_id, owner_id)?;",
+            "execute_target_restore_transaction",
+        ),
+        (
+            "patch",
+            "pub(crate) async fn patch_target",
+            "fn target_write_location_headers",
+            "ensure_target_owner_matches_operator(target_state.owner_id, operator_owner_id)?;",
+            "execute_target_patch_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} target handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} target handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_target_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check owner before side effects"
+        );
+    }
+}
+
+#[test]
 fn target_patch_request_trims_metadata_fields() {
     let validated =
         validate_target_patch_request(patch_request(Some("  scan target  "), Some("  comment  ")))

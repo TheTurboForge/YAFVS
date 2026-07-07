@@ -28,6 +28,28 @@ fn credential_patch_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn credential_patch_handler_requires_operator_and_owner_before_mutation() {
+    let source = include_str!("credential_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_credential")
+        .expect("patch credential handler must exist")
+        .1;
+
+    let owner_check =
+        "ensure_credential_owner_matches_operator(credential_state.owner_id, operator_owner_id)?;";
+    assert!(handler.contains("let operator = require_credential_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_credential_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains(owner_check));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler
+                .find("execute_credential_patch_transaction")
+                .unwrap(),
+        "credential patch must verify owner before metadata mutation"
+    );
+}
+
+#[test]
 fn credential_patch_request_trims_metadata_fields() {
     let validated = validate_credential_patch_request(patch_request(
         Some("  ssh credential  "),

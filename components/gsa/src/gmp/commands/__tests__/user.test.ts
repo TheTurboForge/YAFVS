@@ -166,6 +166,33 @@ describe('UserCommand tests', () => {
       token: 'test-token',
     });
   });
+
+  test('should export redacted user metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'user-id',
+        name: 'admin',
+        comment: 'redacted native account metadata',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UserCommand(fakeHttp);
+
+    const result = await cmd.export({id: 'user-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/users/user-id', {
+      token: 'test-token',
+    });
+    expect(JSON.parse(result.data)).toEqual({
+      id: 'user-id',
+      name: 'admin',
+      comment: 'redacted native account metadata',
+    });
+  });
 });
 
 describe('UserCommand transformSettingName() function tests', () => {

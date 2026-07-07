@@ -27,7 +27,7 @@ import {parseBoolean, parseInt} from 'gmp/parser';
 import {filter, forEach, map} from 'gmp/utils/array';
 import {type EntityType} from 'gmp/utils/entity-type';
 import {isArray, isDefined} from 'gmp/utils/identity';
-import {fetchNativeUser} from 'gmp/native-api/users';
+import {exportNativeUserMetadata, fetchNativeUser} from 'gmp/native-api/users';
 
 interface AuthSettingsResponseData extends XmlResponseData {
   auth_settings: {
@@ -196,6 +196,13 @@ class UserCommand extends EntityCommand<User, PortListElement> {
       return new Response(user);
     }
     return super.get({id}, options);
+  }
+
+  async export({id}: {id: string}) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export({id});
+    }
+    return exportNativeUserMetadata(this.http, id);
   }
 
   async currentAuthSettings(options: HttpCommandOptions = {}) {

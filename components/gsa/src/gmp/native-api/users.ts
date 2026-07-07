@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import User from 'gmp/models/user';
 import type QueryFilter from 'gmp/models/filter';
@@ -169,4 +171,33 @@ export const fetchNativeUser = async (
     {token: gmp.session.token},
   );
   return nativeUserToModel(payload);
+};
+
+export const exportNativeUserMetadata = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<string>> => {
+  const payload = await fetchNativeJson<NativeUserPayload>(
+    gmp,
+    `api/v1/users/${encodeURIComponent(id)}`,
+    {token: gmp.session.token},
+  );
+  return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const exportNativeUsersMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const users = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeUserPayload>(
+        gmp,
+        `api/v1/users/${encodeURIComponent(id)}`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({users}, null, 2)}\n`);
 };

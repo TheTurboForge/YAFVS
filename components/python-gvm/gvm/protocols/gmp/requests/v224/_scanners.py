@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -221,26 +222,6 @@ class Scanners:
 
         if details is not None:
             cmd.set_attribute("details", to_bool(details))
-
-        return cmd
-
-    @classmethod
-    def get_scanner(cls, scanner_id: EntityID) -> Request:
-        """Request a single scanner
-
-        Args:
-            scanner_id: UUID of an existing scanner
-        """
-        if not scanner_id:
-            raise RequiredArgument(
-                function=cls.get_scanner.__name__, argument="scanner_id"
-            )
-
-        cmd = XmlCommand("get_scanners")
-        cmd.set_attribute("scanner_id", str(scanner_id))
-
-        # for single entity always request all details
-        cmd.set_attribute("details", "1")
 
         return cmd
 

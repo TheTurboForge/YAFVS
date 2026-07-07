@@ -1,4 +1,5 @@
 #  SPDX-FileCopyrightText: 2025 Greenbone AG
+#  TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -142,16 +143,6 @@ class GMPv227(GMPv226[T]):
                 trash=trash,
                 details=details,
             )
-        )
-
-    def get_scanner(self, scanner_id: EntityID) -> T:
-        """Request a single scanner
-
-        Args:
-            scanner_id: UUID of an existing scanner
-        """
-        return self._send_request_and_transform_response(
-            Scanners.get_scanner(scanner_id)
         )
 
     def verify_scanner(self, scanner_id: EntityID) -> T:

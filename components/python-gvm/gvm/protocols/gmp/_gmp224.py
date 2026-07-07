@@ -769,16 +769,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_scanner(self, scanner_id: EntityID) -> T:
-        """Request a single scanner
-
-        Args:
-            scanner_id: UUID of an existing scanner
-        """
-        return self._send_request_and_transform_response(
-            Scanners.get_scanner(scanner_id)
-        )
-
     def verify_scanner(self, scanner_id: EntityID) -> T:
         """Verify an existing scanner
 

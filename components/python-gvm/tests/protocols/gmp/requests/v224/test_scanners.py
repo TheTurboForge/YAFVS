@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -342,21 +343,6 @@ class ScannersTestCase(unittest.TestCase):
             bytes(request),
             b'<get_scanners details="0"/>',
         )
-
-    def test_get_scanner(self):
-        request = Scanners.get_scanner("s1")
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_scanners scanner_id="s1" details="1"/>',
-        )
-
-    def test_get_scanner_missing_scanner_id(self):
-        with self.assertRaises(RequiredArgument):
-            Scanners.get_scanner(None)
-
-        with self.assertRaises(RequiredArgument):
-            Scanners.get_scanner("")
 
     def test_verify_scanner(self):
         request = Scanners.verify_scanner("s1")

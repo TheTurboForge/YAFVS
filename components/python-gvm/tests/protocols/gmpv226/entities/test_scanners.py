@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -8,7 +9,6 @@ from tests.protocols.gmpv224.entities.scanners import (
     GmpCreateScannerTestMixin,
     GmpDeleteScannerTestMixin,
     GmpGetScannersTestMixin,
-    GmpGetScannerTestMixin,
     GmpModifyScannerTestMixin,
     GmpVerifyScannerTestMixin,
 )
@@ -16,10 +16,6 @@ from tests.protocols.gmpv226 import GMPTestCase
 
 
 class GMPDeleteScannerTestCase(GmpDeleteScannerTestMixin, GMPTestCase):
-    pass
-
-
-class GMPGetScannerTestCase(GmpGetScannerTestMixin, GMPTestCase):
     pass
 
 

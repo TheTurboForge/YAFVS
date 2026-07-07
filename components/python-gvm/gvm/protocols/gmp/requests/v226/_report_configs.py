@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -92,82 +93,6 @@ class ReportConfigs:
 
         cmd.set_attribute("ultimate", to_bool(ultimate))
 
-        return cmd
-
-    @staticmethod
-    def get_report_configs(
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        trash: bool | None = None,
-        details: bool | None = None,
-    ) -> Request:
-        """Request a list of report configs
-
-        Args:
-            filter_string: Filter term to use for the query
-            filter_id: UUID of an existing filter to use for the query
-            trash: Whether to get the trashcan report configs instead
-            details: Include report config details
-
-        Examples:
-
-            .. code-block:: python
-
-                from gvm.protocols.gmp.requests.v226 import ReportConfigs
-
-                request = ReportConfigs.get_report_configs()
-
-            .. code-block:: python
-
-                from gvm.protocols.gmp.requests.v226 import ReportConfigs
-
-                request = ReportConfigs.get_report_configs(
-                    filter_string="name=foo", details=True
-                )
-        """
-        cmd = XmlCommand("get_report_configs")
-
-        cmd.add_filter(filter_string, filter_id)
-
-        if details is not None:
-            cmd.set_attribute("details", to_bool(details))
-
-        if trash is not None:
-            cmd.set_attribute("trash", to_bool(trash))
-
-        return cmd
-
-    @classmethod
-    def get_report_config(
-        cls,
-        report_config_id: EntityID,
-    ) -> Request:
-        """Request a single report config
-
-        Args:
-            report_config_id: UUID of an existing report config
-
-        Example:
-
-            .. code-block:: python
-
-                from gvm.protocols.gmp.requests.v226 import ReportConfigs
-
-                request = ReportConfigs.get_report_config("report_config_id")
-        """
-        if not report_config_id:
-            raise RequiredArgument(
-                function=cls.get_report_config.__name__,
-                argument="report_config_id",
-            )
-
-        cmd = XmlCommand("get_report_configs")
-
-        cmd.set_attribute("report_config_id", str(report_config_id))
-
-        # for single entity always request all details
-        cmd.set_attribute("details", "1")
         return cmd
 
     @classmethod

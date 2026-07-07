@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -8,8 +9,6 @@ from .report_configs import (
     GMPCloneReportConfigTestMixin,
     GMPCreateReportConfigTestMixin,
     GMPDeleteReportConfigTestMixin,
-    GMPGetReportConfigsTestMixin,
-    GMPGetReportConfigTestMixin,
     GMPModifyReportConfigTestMixin,
 )
 
@@ -27,14 +26,6 @@ class GMPCreateReportConfigTestCase(
 class GMPDeleteReportConfigTestCase(
     GMPDeleteReportConfigTestMixin, GMPTestCase
 ):
-    pass
-
-
-class GMPGetReportConfigTestCase(GMPGetReportConfigTestMixin, GMPTestCase):
-    pass
-
-
-class GMPGetReportConfigsTestCase(GMPGetReportConfigsTestMixin, GMPTestCase):
     pass
 
 

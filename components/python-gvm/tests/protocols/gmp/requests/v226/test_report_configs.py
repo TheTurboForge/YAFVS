@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -132,69 +133,6 @@ class ReportConfigsTestCase(unittest.TestCase):
 
         with self.assertRaises(RequiredArgument):
             ReportConfigs.delete_report_config("")
-
-    def test_get_report_configs(self):
-        request = ReportConfigs.get_report_configs()
-        self.assertEqual(
-            bytes(request),
-            b"<get_report_configs/>",
-        )
-
-    def test_get_report_configs_with_filter_string(self):
-        request = ReportConfigs.get_report_configs(
-            filter_string="filter_string"
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs filter="filter_string"/>',
-        )
-
-    def test_get_report_configs_with_filter_id(self):
-        request = ReportConfigs.get_report_configs(filter_id="filter_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs filt_id="filter_id"/>',
-        )
-
-    def test_get_report_configs_with_details(self):
-        request = ReportConfigs.get_report_configs(details=True)
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs details="1"/>',
-        )
-
-        request = ReportConfigs.get_report_configs(details=False)
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs details="0"/>',
-        )
-
-    def test_get_report_configs_with_trash(self):
-        request = ReportConfigs.get_report_configs(trash=True)
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs trash="1"/>',
-        )
-
-        request = ReportConfigs.get_report_configs(trash=False)
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs trash="0"/>',
-        )
-
-    def test_get_report_config(self):
-        request = ReportConfigs.get_report_config("report_config_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_report_configs report_config_id="report_config_id" details="1"/>',
-        )
-
-    def test_get_report_config_missing_report_config_id(self):
-        with self.assertRaises(RequiredArgument):
-            ReportConfigs.get_report_config(None)
-
-        with self.assertRaises(RequiredArgument):
-            ReportConfigs.get_report_config("")
 
     def test_modify_report_config(self):
         request = ReportConfigs.modify_report_config("report_config_id")

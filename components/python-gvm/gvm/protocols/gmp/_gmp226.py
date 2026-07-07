@@ -382,44 +382,6 @@ class GMPv226(GMPv225[T]):
             )
         )
 
-    def get_report_configs(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        trash: bool | None = None,
-        details: bool | None = None,
-    ) -> T:
-        """Request a list of report configs
-
-        Args:
-            filter_string: Filter term to use for the query
-            filter_id: UUID of an existing filter to use for the query
-            trash: Whether to get the trashcan report configs instead
-            details: Include report config details
-        """
-        return self._send_request_and_transform_response(
-            ReportConfigs.get_report_configs(
-                filter_string=filter_string,
-                filter_id=filter_id,
-                trash=trash,
-                details=details,
-            )
-        )
-
-    def get_report_config(
-        self,
-        report_config_id: EntityID,
-    ) -> T:
-        """Request a single report config
-
-        Args:
-            report_config_id: UUID of an existing report config
-        """
-        return self._send_request_and_transform_response(
-            ReportConfigs.get_report_config(report_config_id)
-        )
-
     def create_report_config(
         self,
         name: str,

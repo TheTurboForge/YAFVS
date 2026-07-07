@@ -14,9 +14,10 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import Cpe from 'gmp/models/cpe';
-import type Filter from 'gmp/models/filter';
+import Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import {
+  exportNativeCpesMetadata,
   fetchNativeCpes,
   nativeCpesQueryFromFilter,
 } from 'gmp/native-api/cpes';
@@ -24,9 +25,52 @@ import {isDefined} from 'gmp/utils/identity';
 
 const infoFilter = (info: Element) => isDefined(info.cpe);
 
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
 class CpesCommand extends InfoEntitiesCommand<Cpe> {
   constructor(http: Http) {
     super(http, 'cpe', Cpe, infoFilter);
+  }
+
+  export(entities: Cpe[]) {
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    return exportNativeCpesMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    const cpes: Cpe[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; cpes.length < total; page += 1) {
+        const nativeResponse = await fetchNativeCpes(this.http, {
+          ...nativeCpesQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        cpes.push(...nativeResponse.cpes);
+        total = nativeResponse.page.total;
+        if (nativeResponse.cpes.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeCpes(
+        this.http,
+        nativeCpesQueryFromFilter(filter),
+      );
+      cpes.push(...nativeResponse.cpes);
+    }
+
+    return exportNativeCpesMetadata(
+      this.http,
+      cpes.map(cpe => cpe.id as string),
+    );
   }
 
   async get(params: HttpCommandInputParams = {}) {

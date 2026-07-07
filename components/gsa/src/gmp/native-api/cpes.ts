@@ -267,3 +267,20 @@ export const exportNativeCpeMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeCpesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const cpes = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeCatalogCpePayload>(
+        gmp,
+        `api/v1/cpes/${encodeURIComponent(id)}`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({cpes}, null, 2)}\n`);
+};

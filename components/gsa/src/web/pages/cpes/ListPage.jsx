@@ -58,4 +58,5 @@ export default withEntitiesContainer('cpe', {
   entitiesSelector,
   fallbackFilter,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

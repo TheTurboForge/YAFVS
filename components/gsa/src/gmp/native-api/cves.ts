@@ -307,3 +307,20 @@ export const exportNativeCveMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeCvesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const cves = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeCatalogCvePayload>(
+        gmp,
+        `api/v1/cves/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({cves}, null, 2)}\n`);
+};

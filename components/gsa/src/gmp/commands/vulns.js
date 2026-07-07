@@ -15,10 +15,16 @@ import {
 import Response from 'gmp/http/response';
 import Vulnerability from 'gmp/models/vulnerability';
 import {
+  exportNativeVulnerabilitiesMetadata,
   exportNativeVulnerabilityMetadata,
   fetchNativeVulnerabilities,
   nativeVulnerabilitiesQueryFromFilter,
 } from 'gmp/native-api/vulnerabilities';
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 class VulnerabilityCommand extends EntityCommand {
   constructor(http) {
@@ -93,6 +99,44 @@ class VulnerabilitiesCommand extends EntitiesCommand {
       group_column: 'hosts',
       filter,
     });
+  }
+
+  exportByIds(ids) {
+    return exportNativeVulnerabilitiesMetadata(this.http, ids);
+  }
+
+  export(entities) {
+    return this.exportByIds(entities.map(element => element.id));
+  }
+
+  async exportByFilter(filter) {
+    const vulnerabilities = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; vulnerabilities.length < total; page += 1) {
+        const nativeResponse = await fetchNativeVulnerabilities(this.http, {
+          ...nativeVulnerabilitiesQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        vulnerabilities.push(...nativeResponse.vulnerabilities);
+        total = nativeResponse.page.total;
+        if (nativeResponse.vulnerabilities.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeVulnerabilities(
+        this.http,
+        nativeVulnerabilitiesQueryFromFilter(filter),
+      );
+      vulnerabilities.push(...nativeResponse.vulnerabilities);
+    }
+
+    return exportNativeVulnerabilitiesMetadata(
+      this.http,
+      vulnerabilities.map(vulnerability => vulnerability.id),
+    );
   }
 }
 

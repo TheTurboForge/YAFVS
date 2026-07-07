@@ -274,3 +274,22 @@ export const exportNativeVulnerabilityMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeVulnerabilitiesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const vulnerabilities = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeVulnerabilityPayload>(
+        gmp,
+        `api/v1/vulnerabilities/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(
+    `${JSON.stringify({vulnerabilities}, null, 2)}\n`,
+  );
+};

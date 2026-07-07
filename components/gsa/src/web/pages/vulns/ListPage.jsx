@@ -68,4 +68,5 @@ export default withEntitiesContainer('vulnerability', {
   fallbackFilter: FALLBACK_VULNS_LIST_FILTER,
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

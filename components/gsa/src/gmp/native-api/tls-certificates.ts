@@ -330,3 +330,20 @@ export const exportNativeTlsCertificateMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeTlsCertificatesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const tlsCertificates = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeTlsCertificatePayload>(
+        gmp,
+        `api/v1/tls-certificates/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({tls_certificates: tlsCertificates}, null, 2)}\n`);
+};

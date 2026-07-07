@@ -87,4 +87,5 @@ Page.propTypes = {
 export default withEntitiesContainer('tlscertificate', {
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

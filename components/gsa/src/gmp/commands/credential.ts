@@ -128,14 +128,7 @@ class CredentialCommand extends EntityCommand<
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeCredentialMetadata(this.http, id);
-      } catch {
-        // Keep inherited GMP bulk export responsible for legacy export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeCredentialMetadata(this.http, id);
   }
 
   private createBase({

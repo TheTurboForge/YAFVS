@@ -73,42 +73,6 @@ describe('CredentialCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native credential metadata export fails', async () => {
-    const response = createActionResultResponse({
-      action: 'bulk_export',
-      id: 'fallback-export-id',
-      message: 'Exported Credential',
-    });
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    const cmd = new CredentialCommand(fakeHttp);
-
-    await cmd.export({id: 'credential-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'credential',
-        bulk_select: 1,
-        'bulk_selected:credential-id': 1,
-      },
-    });
-  });
-
   test('should create KRB5 credential with empty kdcs', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

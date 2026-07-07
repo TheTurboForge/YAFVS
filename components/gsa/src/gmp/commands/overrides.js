@@ -24,12 +24,18 @@ import Override, {
 } from 'gmp/models/override';
 import {
   exportNativeOverrideMetadata,
+  exportNativeOverridesMetadata,
   fetchNativeOverrides,
   nativeOverridesQueryFromFilter,
 } from 'gmp/native-api/overrides';
 import {NO_VALUE} from 'gmp/parser';
 
 const log = logger.getLogger('gmp.commands.overrides');
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 class OverrideCommand extends EntityCommand {
   constructor(http) {
@@ -105,6 +111,44 @@ class OverridesCommand extends EntitiesCommand {
 
   getEntitiesResponse(root) {
     return root.get_overrides.get_overrides_response;
+  }
+
+  exportByIds(ids) {
+    return exportNativeOverridesMetadata(this.http, ids);
+  }
+
+  export(entities) {
+    return this.exportByIds(entities.map(entity => entity.id));
+  }
+
+  async exportByFilter(filter) {
+    const overrides = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; overrides.length < total; page += 1) {
+        const nativeResponse = await fetchNativeOverrides(this.http, {
+          ...nativeOverridesQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        overrides.push(...nativeResponse.overrides);
+        total = nativeResponse.page.total;
+        if (nativeResponse.overrides.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeOverrides(
+        this.http,
+        nativeOverridesQueryFromFilter(filter),
+      );
+      overrides.push(...nativeResponse.overrides);
+    }
+
+    return exportNativeOverridesMetadata(
+      this.http,
+      overrides.map(override => override.id),
+    );
   }
 
   async get(params = {}, options) {

@@ -10,12 +10,22 @@ import {
   createEntitiesResponse,
   createHttp,
 } from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import Override from 'gmp/models/override';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined);
+  fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('OverridesCommand tests', () => {
   test('should export override metadata through native API when available', async () => {
@@ -30,11 +40,7 @@ describe('OverridesCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new OverrideCommand(fakeHttp);
     const result = await cmd.export({id: 'override-id'});
@@ -105,11 +111,7 @@ describe('OverridesCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new OverridesCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=control'});
@@ -165,11 +167,7 @@ describe('OverridesCommand tests', () => {
       }),
     );
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new OverridesCommand(fakeHttp);
     const result = await cmd.getAll();
@@ -196,5 +194,164 @@ describe('OverridesCommand tests', () => {
       text: '',
       task_name: '',
     });
+  });
+
+  test('should bulk export selected overrides through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'override-1', text: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'override-2', text: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new OverridesCommand(fakeHttp);
+
+    const result = await cmd.export([
+      new Override({id: 'override-1'}),
+      new Override({id: 'override-2'}),
+    ]);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/overrides/override-1/export',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/overrides/override-2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).overrides).toEqual([
+      {id: 'override-1', text: 'One'},
+      {id: 'override-2', text: 'Two'},
+    ]);
+  });
+
+  test('should bulk export current page overrides through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'text',
+            filter: 'control',
+          },
+          items: [{id: 'override-2', text: 'Two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'override-2', text: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new OverridesCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=control');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/overrides', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'text',
+      filter: 'control',
+      active: '',
+      text: '',
+      task_name: '',
+    });
+    expect(JSON.parse(result.data).overrides).toEqual([
+      {id: 'override-2', text: 'Two'},
+    ]);
+  });
+
+  test('should bulk export all filtered overrides through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'text',
+            filter: 'control',
+          },
+          items: [{id: 'override-1', text: 'One'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'text',
+            filter: 'control',
+          },
+          items: [{id: 'override-2', text: 'Two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'override-1', text: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'override-2', text: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new OverridesCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=control').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/overrides', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'text',
+      filter: 'control',
+      active: '',
+      text: '',
+      task_name: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/overrides', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'text',
+      filter: 'control',
+      active: '',
+      text: '',
+      task_name: '',
+    });
+    expect(JSON.parse(result.data).overrides).toEqual([
+      {id: 'override-1', text: 'One'},
+      {id: 'override-2', text: 'Two'},
+    ]);
   });
 });

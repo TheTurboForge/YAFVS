@@ -108,4 +108,5 @@ Page.propTypes = {
 export default withEntitiesContainer('override', {
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

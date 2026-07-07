@@ -293,3 +293,20 @@ export const exportNativeOverrideMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeOverridesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const overrides = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeOverridePayload>(
+        gmp,
+        `api/v1/overrides/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({overrides}, null, 2)}\n`);
+};

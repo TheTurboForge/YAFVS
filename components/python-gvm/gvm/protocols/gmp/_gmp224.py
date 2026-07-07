@@ -1846,17 +1846,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_host(self, host_id: EntityID, *, details: bool | None = None) -> T:
-        """Request a single host
-
-        Arguments:
-            host_id: UUID of an existing host
-            details: Whether to include additional information (e.g. tags)
-        """
-        return self._send_request_and_transform_response(
-            Hosts.get_host(host_id, details=details)
-        )
-
     def modify_host(
         self, host_id: EntityID, *, comment: str | None = None
     ) -> T:

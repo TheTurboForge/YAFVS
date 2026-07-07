@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -84,33 +85,6 @@ class HostsTestCase(unittest.TestCase):
             bytes(request),
             b'<get_assets type="host" details="0"/>',
         )
-
-    def test_get_host(self):
-        request = Hosts.get_host("host_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_assets asset_id="host_id" type="host"/>',
-        )
-
-    def test_get_host_with_details(self):
-        request = Hosts.get_host("host_id", details=True)
-        self.assertEqual(
-            bytes(request),
-            b'<get_assets asset_id="host_id" type="host" details="1"/>',
-        )
-
-        request = Hosts.get_host("host_id", details=False)
-        self.assertEqual(
-            bytes(request),
-            b'<get_assets asset_id="host_id" type="host" details="0"/>',
-        )
-
-    def test_get_host_missing_host_id(self):
-        with self.assertRaises(RequiredArgument):
-            Hosts.get_host(None)
-
-        with self.assertRaises(RequiredArgument):
-            Hosts.get_host("")
 
     def test_modify_host(self):
         request = Hosts.modify_host("host_id")

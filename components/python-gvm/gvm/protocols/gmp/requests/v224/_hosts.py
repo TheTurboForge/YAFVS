@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -82,31 +83,6 @@ class Hosts:
         cmd.set_attribute("type", "host")
 
         cmd.add_filter(filter_string, filter_id)
-
-        if details is not None:
-            cmd.set_attribute("details", to_bool(details))
-
-        return cmd
-
-    @classmethod
-    def get_host(
-        cls, host_id: EntityID, *, details: bool | None = None
-    ) -> Request:
-        """Request a single host
-
-        Arguments:
-            host_id: UUID of an existing host
-            details: Whether to include additional information (e.g. tags)
-        """
-        cmd = XmlCommand("get_assets")
-
-        if not host_id:
-            raise RequiredArgument(
-                function=cls.get_host.__name__, argument="host_id"
-            )
-
-        cmd.set_attribute("asset_id", str(host_id))
-        cmd.set_attribute("type", "host")
 
         if details is not None:
             cmd.set_attribute("details", to_bool(details))

@@ -9,16 +9,11 @@ from .filters import (
     GmpCreateFilterTestMixin,
     GmpDeleteFilterTestMixin,
     GmpGetFiltersTestMixin,
-    GmpGetFilterTestMixin,
     GmpModifyFilterTestMixin,
 )
 
 
 class Gmpv224DeleteFilterTestCase(GmpDeleteFilterTestMixin, Gmpv224TestCase):
-    pass
-
-
-class Gmpv224GetFilterTestCase(GmpGetFilterTestMixin, Gmpv224TestCase):
     pass
 
 

@@ -146,33 +146,6 @@ class FilterTestsCase(unittest.TestCase):
             b'<get_filters alerts="0"/>',
         )
 
-    def test_get_filter(self):
-        request = Filters.get_filter("filter_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_filters filter_id="filter_id"/>',
-        )
-
-    def test_get_filter_with_alerts(self):
-        request = Filters.get_filter("filter_id", alerts=True)
-        self.assertEqual(
-            bytes(request),
-            b'<get_filters filter_id="filter_id" alerts="1"/>',
-        )
-
-        request = Filters.get_filter("filter_id", alerts=False)
-        self.assertEqual(
-            bytes(request),
-            b'<get_filters filter_id="filter_id" alerts="0"/>',
-        )
-
-    def test_get_filter_missing_filter_id(self):
-        with self.assertRaises(RequiredArgument):
-            Filters.get_filter(None)
-
-        with self.assertRaises(RequiredArgument):
-            Filters.get_filter("")
-
     def test_modify_filter(self):
         request = Filters.modify_filter("filter_id")
         self.assertEqual(

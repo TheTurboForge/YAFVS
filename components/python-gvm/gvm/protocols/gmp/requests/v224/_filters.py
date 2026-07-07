@@ -153,30 +153,6 @@ class Filters:
         return cmd
 
     @classmethod
-    def get_filter(
-        cls, filter_id: EntityID, *, alerts: bool | None = None
-    ) -> Request:
-        """Request a single filter
-
-        Args:
-            filter_id: UUID of an existing filter
-            alerts: Whether to include list of alerts that use the filter.
-        """
-        cmd = XmlCommand("get_filters")
-
-        if not filter_id:
-            raise RequiredArgument(
-                function=cls.get_filter.__name__, argument="filter_id"
-            )
-
-        cmd.set_attribute("filter_id", str(filter_id))
-
-        if alerts is not None:
-            cmd.set_attribute("alerts", to_bool(alerts))
-
-        return cmd
-
-    @classmethod
     def modify_filter(
         cls,
         filter_id: EntityID,

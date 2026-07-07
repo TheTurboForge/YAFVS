@@ -8,17 +8,12 @@ from ...gmpv224.entities.filters import (
     GmpCreateFilterTestMixin,
     GmpDeleteFilterTestMixin,
     GmpGetFiltersTestMixin,
-    GmpGetFilterTestMixin,
     GmpModifyFilterTestMixin,
 )
 from ...gmpv226 import GMPTestCase
 
 
 class GMPDeleteFilterTestCase(GmpDeleteFilterTestMixin, GMPTestCase):
-    pass
-
-
-class GMPGetFilterTestCase(GmpGetFilterTestMixin, GMPTestCase):
     pass
 
 

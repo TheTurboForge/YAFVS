@@ -1785,19 +1785,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_filter(
-        self, filter_id: EntityID, *, alerts: bool | None = None
-    ) -> T:
-        """Request a single filter
-
-        Args:
-            filter_id: UUID of an existing filter
-            alerts: Whether to include list of alerts that use the filter.
-        """
-        return self._send_request_and_transform_response(
-            Filters.get_filter(filter_id, alerts=alerts)
-        )
-
     def modify_filter(
         self,
         filter_id: EntityID,

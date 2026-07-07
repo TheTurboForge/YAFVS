@@ -296,6 +296,23 @@ export const exportNativeAlertMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeAlertsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const alerts = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeAlertPayload>(
+        gmp,
+        `api/v1/alerts/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({alerts}, null, 2)}\n`);
+};
+
 export const patchNativeAlert = async (
   gmp: NativeApiGmp,
   {id, name, comment}: NativeAlertPatchArgs,

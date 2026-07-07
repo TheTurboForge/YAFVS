@@ -18,15 +18,72 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import Alert from 'gmp/models/alert';
+import Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import {
+  exportNativeAlertsMetadata,
   fetchNativeAlerts,
   nativeAlertsQueryFromFilter,
 } from 'gmp/native-api/alerts';
 
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
 class AlertsCommand extends EntitiesCommand<Alert> {
   constructor(http: Http) {
     super(http, 'alert', Alert);
+  }
+
+  export(entities: Alert[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativeAlertsMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const alerts: Alert[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; alerts.length < total; page += 1) {
+        const nativeResponse = await fetchNativeAlerts(this.http, {
+          ...nativeAlertsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        alerts.push(...nativeResponse.alerts);
+        total = nativeResponse.page.total;
+        if (nativeResponse.alerts.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeAlerts(
+        this.http,
+        nativeAlertsQueryFromFilter(filter),
+      );
+      alerts.push(...nativeResponse.alerts);
+    }
+
+    return exportNativeAlertsMetadata(
+      this.http,
+      alerts.map(alert => alert.id as string),
+    );
   }
 
   getEntitiesResponse(root: Element): Element {

@@ -8,11 +8,26 @@ import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import AlertsCommand from 'gmp/commands/alerts';
 import {createHttp, createEntitiesResponse} from 'gmp/commands/testing';
 import Alert from 'gmp/models/alert';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('AlertsCommand tests', () => {
   test('should fetch alerts with default params', async () => {
@@ -93,16 +108,7 @@ describe('AlertsCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new AlertsCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=secops'});
@@ -127,5 +133,176 @@ describe('AlertsCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should use inherited bulk export on non-native http', async () => {
+    const fakeHttp = createHttp();
+    const cmd = new AlertsCommand(fakeHttp);
+
+    await cmd.exportByIds(['a1', 'a2']);
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'alert',
+        bulk_select: 1,
+        'bulk_selected:a1': 1,
+        'bulk_selected:a2': 1,
+      },
+    });
+  });
+
+  test('should bulk export selected alerts through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'a1',
+          name: 'Notify SecOps',
+          method_data_redacted: true,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'a2',
+          name: 'Notify Owner',
+          method_data_redacted: true,
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new AlertsCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['a1', 'a2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/alerts/a1/export',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/alerts/a2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).alerts).toEqual([
+      {id: 'a1', name: 'Notify SecOps', method_data_redacted: true},
+      {id: 'a2', name: 'Notify Owner', method_data_redacted: true},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'secops'},
+          items: [{id: 'a2', name: 'Notify Owner'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'a2',
+          name: 'Notify Owner',
+          method_data_redacted: true,
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new AlertsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=secops');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/alerts', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'name',
+      filter: 'secops',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/alerts/a2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).alerts).toEqual([
+      {id: 'a2', name: 'Notify Owner', method_data_redacted: true},
+    ]);
+  });
+
+  test('should bulk export all filtered alerts through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'secops'},
+          items: [{id: 'a1', name: 'Notify SecOps'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'secops'},
+          items: [{id: 'a2', name: 'Notify Owner'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'a1',
+          name: 'Notify SecOps',
+          method_data_redacted: true,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'a2',
+          name: 'Notify Owner',
+          method_data_redacted: true,
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new AlertsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=secops').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/alerts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'secops',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/alerts', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'secops',
+    });
+    expect(JSON.parse(result.data).alerts).toEqual([
+      {id: 'a1', name: 'Notify SecOps', method_data_redacted: true},
+      {id: 'a2', name: 'Notify Owner', method_data_redacted: true},
+    ]);
   });
 });

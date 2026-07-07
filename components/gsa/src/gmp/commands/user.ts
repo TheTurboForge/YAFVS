@@ -8,8 +8,9 @@ import Capabilities, {type Capability} from 'gmp/capabilities/capabilities';
 import Features, {type Feature} from 'gmp/capabilities/features';
 import EntityCommand from 'gmp/commands/entity';
 import {type HttpCommandOptions} from 'gmp/commands/http';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
-import type Response from 'gmp/http/response';
+import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import date, {type Date} from 'gmp/models/date';
@@ -26,6 +27,7 @@ import {parseBoolean, parseInt} from 'gmp/parser';
 import {filter, forEach, map} from 'gmp/utils/array';
 import {type EntityType} from 'gmp/utils/entity-type';
 import {isArray, isDefined} from 'gmp/utils/identity';
+import {fetchNativeUser} from 'gmp/native-api/users';
 
 interface AuthSettingsResponseData extends XmlResponseData {
   auth_settings: {
@@ -183,6 +185,17 @@ export const transformSettingName = (name: string) =>
 class UserCommand extends EntityCommand<User, PortListElement> {
   constructor(http: Http) {
     super(http, 'user', User);
+  }
+
+  async get(
+    {id}: {id: string},
+    options: {filter?: string} = {},
+  ) {
+    if (canUseNativeApi(this.http)) {
+      const user = await fetchNativeUser(this.http, id);
+      return new Response(user);
+    }
+    return super.get({id}, options);
   }
 
   async currentAuthSettings(options: HttpCommandOptions = {}) {

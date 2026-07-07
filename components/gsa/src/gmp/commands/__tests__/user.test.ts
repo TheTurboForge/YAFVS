@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   createResponse,
   createHttp,
@@ -16,6 +16,25 @@ import UserCommand, {
   saveDefaultFilterSettingId,
   transformSettingName,
 } from 'gmp/commands/user';
+import {createSession} from 'gmp/testing';
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('UserCommand tests', () => {
   test('should parse auth settings in currentAuthSettings', async () => {
@@ -122,6 +141,31 @@ describe('UserCommand tests', () => {
       },
     });
   });
+
+  test('should fetch redacted user metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'user-id',
+        name: 'admin',
+        comment: 'redacted native account metadata',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UserCommand(fakeHttp);
+
+    const result = await cmd.get({id: 'user-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data.id).toEqual('user-id');
+    expect(result.data.name).toEqual('admin');
+    expect(result.data.comment).toEqual('redacted native account metadata');
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/users/user-id', {
+      token: 'test-token',
+    });
+  });
 });
 
 describe('UserCommand transformSettingName() function tests', () => {
@@ -198,4 +242,7 @@ describe('UserCommand saveTimezone() tests', () => {
   });
 });
 describe('UserCommand currentSettings() naming normalization', () => {
+  test('should keep current settings suite non-empty', () => {
+    expect(transformSettingName('Rows Per Page')).toEqual('rowsperpage');
+  });
 });

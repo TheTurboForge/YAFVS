@@ -7,12 +7,26 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {ReportConfigsCommand} from 'gmp/commands/report-configs';
 import {createHttp, createEntitiesResponse} from 'gmp/commands/testing';
-import {ALL_FILTER} from 'gmp/models/filter';
+import Filter, {ALL_FILTER} from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('ReportConfigsCommand tests', () => {
   test('should return all report configs', async () => {
@@ -110,16 +124,7 @@ describe('ReportConfigsCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ReportConfigsCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=pdf'});
@@ -144,5 +149,168 @@ describe('ReportConfigsCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should use inherited bulk export on non-native http', async () => {
+    const fakeHttp = createHttp();
+    const cmd = new ReportConfigsCommand(fakeHttp);
+
+    await cmd.exportByIds(['r1', 'r2']);
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'report_config',
+        bulk_select: 1,
+        'bulk_selected:r1': 1,
+        'bulk_selected:r2': 1,
+      },
+    });
+  });
+
+  test('should bulk export selected report configs through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'r1', name: 'PDF'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'r2', name: 'HTML'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ReportConfigsCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['r1', 'r2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/report-configs/r1/export',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/report-configs/r2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).report_configs).toEqual([
+      {id: 'r1', name: 'PDF'},
+      {id: 'r2', name: 'HTML'},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'pdf'},
+          items: [{id: 'r2', name: 'PDF B'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'r2', name: 'PDF B'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ReportConfigsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=pdf');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/report-configs',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 1,
+        sort: 'name',
+        filter: 'pdf',
+      },
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/report-configs/r2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).report_configs).toEqual([
+      {id: 'r2', name: 'PDF B'},
+    ]);
+  });
+
+  test('should bulk export all filtered report configs through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'pdf'},
+          items: [{id: 'r1', name: 'PDF A'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'pdf'},
+          items: [{id: 'r2', name: 'PDF B'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'r1', name: 'PDF A'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'r2', name: 'PDF B'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ReportConfigsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=pdf').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/report-configs',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: 500,
+        sort: 'name',
+        filter: 'pdf',
+      },
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/report-configs',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 500,
+        sort: 'name',
+        filter: 'pdf',
+      },
+    );
+    expect(JSON.parse(result.data).report_configs).toEqual([
+      {id: 'r1', name: 'PDF A'},
+      {id: 'r2', name: 'PDF B'},
+    ]);
   });
 });

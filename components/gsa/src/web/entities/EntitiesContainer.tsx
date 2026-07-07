@@ -131,6 +131,7 @@ interface EntitiesContainerProps<TModel extends Model = Model> {
   gmp: Gmp;
   gmpName: EntityType;
   isLoading?: boolean;
+  listExportExtension?: string;
   loadedFilter?: Filter;
   notify: (message: string) => () => void;
   reload: (filter?: Filter) => void;
@@ -304,7 +305,8 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
 
     const {entitiesCommand} = this;
     const {entities = [], loadedFilter, selected, selectionType} = this.state;
-    const {listExportFileName, username, onDownload} = this.props;
+    const {listExportExtension, listExportFileName, username, onDownload} =
+      this.props;
 
     let promise: Promise<Response<string>>;
 
@@ -323,6 +325,7 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
       const filename = generateFilename({
         fileNameFormat: listExportFileName,
         resourceType: pluralizeType(getEntityType(entities[0])),
+        extension: listExportExtension,
         username,
       });
       const {data} = response;

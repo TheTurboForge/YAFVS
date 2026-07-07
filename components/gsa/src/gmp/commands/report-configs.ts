@@ -18,9 +18,11 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
+import type Filter from 'gmp/models/filter';
 import type {Element} from 'gmp/models/model';
 import ReportConfig from 'gmp/models/report-config';
 import {
+  exportNativeReportConfigsMetadata,
   fetchNativeReportConfigs,
   nativeReportConfigsQueryFromFilter,
 } from 'gmp/native-api/report-configs';
@@ -31,9 +33,64 @@ interface ReportConfigsResponseData extends XmlResponseData {
   };
 }
 
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
 export class ReportConfigsCommand extends EntitiesCommand<ReportConfig> {
   constructor(http: Http) {
     super(http, 'report_config', ReportConfig);
+  }
+
+  export(entities: ReportConfig[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativeReportConfigsMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const reportConfigs: ReportConfig[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; reportConfigs.length < total; page += 1) {
+        const nativeResponse = await fetchNativeReportConfigs(this.http, {
+          ...nativeReportConfigsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        reportConfigs.push(...nativeResponse.reportConfigs);
+        total = nativeResponse.page.total;
+        if (nativeResponse.reportConfigs.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeReportConfigs(
+        this.http,
+        nativeReportConfigsQueryFromFilter(filter),
+      );
+      reportConfigs.push(...nativeResponse.reportConfigs);
+    }
+
+    return exportNativeReportConfigsMetadata(
+      this.http,
+      reportConfigs.map(reportConfig => reportConfig.id as string),
+    );
   }
 
   getEntitiesResponse(root: XmlResponseData) {

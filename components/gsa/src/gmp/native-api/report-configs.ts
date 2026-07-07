@@ -336,6 +336,24 @@ export const exportNativeReportConfigMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeReportConfigsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const reportConfigs = await Promise.all(
+    ids.map(id =>
+      fetchNativeJson<NativeReportConfigPayload>(
+        gmp,
+        `api/v1/report-configs/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      ),
+    ),
+  );
+  return new Response(
+    `${JSON.stringify({report_configs: reportConfigs}, null, 2)}\n`,
+  );
+};
+
 export const createNativeReportConfig = async (
   gmp: NativeApiGmp,
   request: NativeReportConfigCreateRequest,

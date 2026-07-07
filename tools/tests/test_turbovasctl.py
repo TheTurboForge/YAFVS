@@ -3341,7 +3341,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'port-list-legacy-bulk-xml-export-fallback',
          'raw-report-generation-xml-export-retention-and-mutations',
          'remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes',
-         'report-config-file-export',
+         'report-config-legacy-file-export-fallback',
          'report-format-import-export-verify-writes-and-deletes',
          'result-actions-bulk-export-tag-and-override-workflows',
          'result-exports-and-actions',

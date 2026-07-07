@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -87,7 +88,11 @@ interface WithEntitiesContainerOptions<TEntity extends Model = Model> {
   fallbackFilter?: Filter;
   entitiesSelector: (state: unknown) => EntitiesSelector<TEntity>;
   loadEntities: (gmp: Gmp) => (filter?: Filter) => void;
+  nativeListExportExtension?: string;
 }
+
+const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
+  typeof gmp.buildUrl === 'function';
 
 const noop = () => {};
 
@@ -136,6 +141,7 @@ const withEntitiesContainer =
       loadEntities: loadEntitiesFunc,
       reloadInterval = noop,
       fallbackFilter,
+      nativeListExportExtension,
     }: WithEntitiesContainerOptions<TEntity>,
   ) =>
   (
@@ -200,6 +206,11 @@ const withEntitiesContainer =
               gmp={gmp}
               gmpName={gmpName}
               isLoading={isLoading}
+              listExportExtension={
+                nativeListExportExtension !== undefined && canUseNativeApi(gmp)
+                  ? nativeListExportExtension
+                  : undefined
+              }
               loadedFilter={loadedFilter}
               notify={notify}
               reload={reload}

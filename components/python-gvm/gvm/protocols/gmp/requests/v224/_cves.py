@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.core import Request
 from gvm.utils import to_bool
 from gvm.xml import XmlCommand
@@ -40,27 +40,5 @@ class Cves:
 
         if details is not None:
             cmd.set_attribute("details", to_bool(details))
-
-        return cmd
-
-    @classmethod
-    def get_cve(cls, cve_id: str) -> Request:
-        """Request a single CVE
-
-        Args:
-            cve_id: ID of an existing CVE
-        """
-        if not cve_id:
-            raise RequiredArgument(
-                function=cls.get_cve.__name__, argument="cve_id"
-            )
-
-        cmd = XmlCommand("get_info")
-        cmd.set_attribute("info_id", cve_id)
-
-        cmd.set_attribute("type", "CVE")
-
-        # for single entity always request all details
-        cmd.set_attribute("details", "1")
 
         return cmd

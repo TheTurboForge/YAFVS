@@ -1975,22 +1975,13 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_result(self, result_id: EntityID) -> T:
-        """Request a single result
-
-        Args:
-            result_id: UUID of an existing result
-        """
-        return self._send_request_and_transform_response(
-            Results.get_result(result_id)
-        )
-
     def get_results(
         self,
         *,
         filter_string: str | None = None,
         filter_id: str | None = None,
         task_id: str | None = None,
+        note_details: bool | None = None,
         override_details: bool | None = None,
         details: bool | None = None,
     ) -> T:
@@ -2000,6 +1991,8 @@ class GMPv224(GvmProtocol[T]):
             filter_string: Filter term to use for the query
             filter_id: UUID of an existing filter to use for the query
             task_id: UUID of task for override handling
+            note_details: If notes are included, whether to include note
+                details
             override_details: If overrides are included, whether to include
                 override details
             details: Whether to include additional details of the results
@@ -2009,6 +2002,7 @@ class GMPv224(GvmProtocol[T]):
                     filter_string=filter_string,
                     filter_id=filter_id,
                     task_id=task_id,
+                    note_details=note_details,
                     override_details=override_details,
                     details=details,
             )
@@ -2321,14 +2315,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_cve(self, cve_id: str) -> T:
-        """Request a single CVE
-
-        Args:
-            cve_id: ID of an existing CVE
-        """
-        return self._send_request_and_transform_response(Cves.get_cve(cve_id))
-
     def get_cpes(
         self,
         *,
@@ -2354,14 +2340,6 @@ class GMPv224(GvmProtocol[T]):
                 details=details,
             )
         )
-
-    def get_cpe(self, cpe_id: str) -> T:
-        """Request a single CPE
-
-        Args:
-            cpe_id: ID of an existing CPE
-        """
-        return self._send_request_and_transform_response(Cpes.get_cpe(cpe_id))
 
     def get_dfn_cert_advisories(
         self,
@@ -2389,16 +2367,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_dfn_cert_advisory(self, cert_id: EntityID) -> T:
-        """Request a single DFN-CERT Advisory
-
-        Args:
-            cert_id: ID of an existing DFN-CERT Advisory
-        """
-        return self._send_request_and_transform_response(
-            DfnCertAdvisories.get_dfn_cert_advisory(cert_id)
-        )
-
     def get_cert_bund_advisories(
         self,
         *,
@@ -2423,16 +2391,6 @@ class GMPv224(GvmProtocol[T]):
                 name=name,
                 details=details,
             )
-        )
-
-    def get_cert_bund_advisory(self, cert_id: EntityID) -> T:
-        """Request a single CERT-BUND Advisory
-
-        Args:
-            cert_id: ID of an existing CERT-BUND Advisory
-        """
-        return self._send_request_and_transform_response(
-            CertBundAdvisories.get_cert_bund_advisory(cert_id)
         )
 
     def create_tag(

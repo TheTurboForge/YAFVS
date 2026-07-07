@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import unittest
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.gmp.requests.v224 import Cpes
 
 
@@ -49,17 +49,3 @@ class CpesTestCase(unittest.TestCase):
             bytes(request),
             b'<get_info type="CPE" details="0"/>',
         )
-
-    def test_get_cpe(self):
-        request = Cpes.get_cpe("cpe_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_info info_id="cpe_id" type="CPE" details="1"/>',
-        )
-
-    def test_get_cpe_missing_cpe_id(self):
-        with self.assertRaises(RequiredArgument):
-            Cpes.get_cpe(None)
-
-        with self.assertRaises(RequiredArgument):
-            Cpes.get_cpe("")

@@ -1,16 +1,13 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from .test_get_cert_bund_advisories import GmpGetCertBundListTestMixin
-from .test_get_cert_bund_advisory import GmpGetCertBundTestMixin
-from .test_get_cpe import GmpGetCpeTestMixin
 from .test_get_cpes import GmpGetCpeListTestMixin
-from .test_get_cve import GmpGetCveTestMixin
 from .test_get_cves import GmpGetCveListTestMixin
 from .test_get_dfn_cert_advisories import GmpGetDfnCertListTestMixin
-from .test_get_dfn_cert_advisory import GmpGetDfnCertTestMixin
 from .test_get_info import GmpGetInfoTestMixin
 from .test_get_info_list import GmpGetInfoListTestMixin
 from .test_get_nvt import GmpGetNvtTestMixin
@@ -25,13 +22,9 @@ from .test_get_scan_config_nvts import GmpGetScanConfigNvtsTestMixin
 
 __all__ = (
     "GmpGetCertBundListTestMixin",
-    "GmpGetCertBundTestMixin",
     "GmpGetCpeListTestMixin",
-    "GmpGetCpeTestMixin",
     "GmpGetCveListTestMixin",
-    "GmpGetCveTestMixin",
     "GmpGetDfnCertListTestMixin",
-    "GmpGetDfnCertTestMixin",
     "GmpGetInfoListTestMixin",
     "GmpGetInfoTestMixin",
     "GmpGetNvtFamiliesTestMixin",

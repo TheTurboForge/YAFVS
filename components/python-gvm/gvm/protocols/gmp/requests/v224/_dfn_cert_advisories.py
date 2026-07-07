@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.core import Request
 from gvm.utils import to_bool
 from gvm.xml import XmlCommand
@@ -40,27 +40,5 @@ class DfnCertAdvisories:
 
         if details is not None:
             cmd.set_attribute("details", to_bool(details))
-
-        return cmd
-
-    @classmethod
-    def get_dfn_cert_advisory(cls, cert_id: EntityID) -> Request:
-        """Request a single DFN-CERT Advisory
-
-        Args:
-            cert_id: ID of an existing DFN-CERT Advisory
-        """
-        if not cert_id:
-            raise RequiredArgument(
-                function=cls.get_dfn_cert_advisory.__name__, argument="cert_id"
-            )
-
-        cmd = XmlCommand("get_info")
-        cmd.set_attribute("info_id", str(cert_id))
-
-        cmd.set_attribute("type", "DFN_CERT_ADV")
-
-        # for single entity always request all details
-        cmd.set_attribute("details", "1")
 
         return cmd

@@ -1,28 +1,14 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import unittest
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.gmp.requests.v224 import Results
 
 
 class ResultsTestCase(unittest.TestCase):
-    def test_get_result(self):
-        request = Results.get_result("result_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_results result_id="result_id" details="1"/>',
-        )
-
-    def test_get_result_missing_result_id(self):
-        with self.assertRaises(RequiredArgument):
-            Results.get_result(None)
-
-        with self.assertRaises(RequiredArgument):
-            Results.get_result("")
-
     def test_get_results(self):
         request = Results.get_results()
         self.assertEqual(

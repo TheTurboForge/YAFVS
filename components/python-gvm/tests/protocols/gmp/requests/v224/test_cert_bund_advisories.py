@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import unittest
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.gmp.requests.v224 import CertBundAdvisories
 
 
@@ -53,17 +53,3 @@ class CertBundAdvisoriesTestCase(unittest.TestCase):
             bytes(request),
             b'<get_info type="CERT_BUND_ADV" details="0"/>',
         )
-
-    def test_get_cert_bund_advisory(self):
-        request = CertBundAdvisories.get_cert_bund_advisory("cert_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_info info_id="cert_id" type="CERT_BUND_ADV" details="1"/>',
-        )
-
-    def test_get_cert_bund_advisory_missing_cert_id(self):
-        with self.assertRaises(RequiredArgument):
-            CertBundAdvisories.get_cert_bund_advisory(None)
-
-        with self.assertRaises(RequiredArgument):
-            CertBundAdvisories.get_cert_bund_advisory("")

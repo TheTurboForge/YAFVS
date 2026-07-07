@@ -1,17 +1,14 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from ...gmpv224.entities.secinfo import (
     GmpGetCertBundListTestMixin,
-    GmpGetCertBundTestMixin,
     GmpGetCpeListTestMixin,
-    GmpGetCpeTestMixin,
     GmpGetCveListTestMixin,
-    GmpGetCveTestMixin,
     GmpGetDfnCertListTestMixin,
-    GmpGetDfnCertTestMixin,
     GmpGetInfoListTestMixin,
     GmpGetInfoTestMixin,
     GmpGetNvtFamiliesTestMixin,
@@ -21,22 +18,6 @@ from ...gmpv224.entities.secinfo import (
     GmpGetScanConfigNvtTestMixin,
 )
 from ...gmpv225 import GMPTestCase
-
-
-class Gmpv225GetCertBundTestCase(GmpGetCertBundTestMixin, GMPTestCase):
-    pass
-
-
-class Gmpv225GetCpeTestCase(GmpGetCpeTestMixin, GMPTestCase):
-    pass
-
-
-class Gmpv225GetCveTestCase(GmpGetCveTestMixin, GMPTestCase):
-    pass
-
-
-class Gmpv225GetDfnCertCase(GmpGetDfnCertTestMixin, GMPTestCase):
-    pass
 
 
 class Gmpv225GetInfoListTestCase(GmpGetInfoListTestMixin, GMPTestCase):

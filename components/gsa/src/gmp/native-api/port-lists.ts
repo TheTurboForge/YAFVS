@@ -375,6 +375,22 @@ export const exportNativePortListMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativePortListsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const portLists = await Promise.all(
+    ids.map(id =>
+      fetchNativeJson<NativePortListPayload>(
+        gmp,
+        `api/v1/port-lists/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      ),
+    ),
+  );
+  return new Response(`${JSON.stringify({port_lists: portLists}, null, 2)}\n`);
+};
+
 export const createNativePortList = async (
   gmp: NativeApiGmp,
   request: NativePortListCreateRequest,

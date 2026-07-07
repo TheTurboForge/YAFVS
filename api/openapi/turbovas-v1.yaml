@@ -2370,9 +2370,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: port-list-metadata-list-read
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       summary: List port lists
-      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can create typed TCP/UDP port lists, import exported XML with explicit ranges, clone existing port lists, patch port-list name/comment metadata and complete port-range sets, move live port lists to trash, restore trashed port lists, and permanently delete trashed port-list metadata/ranges; implicit default-range imports and bulk XML export remain inherited.
+      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can create typed TCP/UDP port lists, import exported XML with explicit ranges, clone existing port lists, patch port-list name/comment metadata and complete port-range sets, move live port lists to trash, restore trashed port lists, and permanently delete trashed port-list metadata/ranges; implicit default-range imports and legacy bulk XML export fallback remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2403,13 +2403,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-create
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Create a typed port list
-      description: Direct write-control endpoint for creating a non-predefined port list with typed TCP/UDP ranges. This native contract intentionally accepts structured JSON ranges instead of the inherited GMP port-range string grammar. XML import uses the dedicated native import endpoint; bulk XML export remains inherited.
+      description: Direct write-control endpoint for creating a non-predefined port list with typed TCP/UDP ranges. This native contract intentionally accepts structured JSON ranges instead of the inherited GMP port-range string grammar. XML import uses the dedicated native import endpoint; legacy bulk XML export fallback remains inherited.
       requestBody:
         required: true
         content:
@@ -2444,7 +2444,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-import
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2485,7 +2485,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: port-list-metadata-detail-read
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       summary: Read one port list
       parameters:
         - $ref: '#/components/parameters/PortListId'
@@ -2516,7 +2516,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-metadata-and-range-modify
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2560,7 +2560,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-trash-move
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2596,7 +2596,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: port-list-metadata-export-read
       summary: Export port-list metadata
-      description: Scriptable JSON metadata export for a port list, including ranges, target backlinks, and user tags. Inherited port-list import and bulk XML export remain compatibility paths.
+      description: Scriptable JSON metadata export for a port list, including ranges, target backlinks, and user tags. Browser bulk download composes native JSON metadata exports from this endpoint when native API is available; inherited port-list import and legacy bulk XML export fallback remain compatibility paths.
       parameters:
         - $ref: '#/components/parameters/PortListId'
       responses:
@@ -2627,7 +2627,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-clone
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2672,7 +2672,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-restore
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -2711,7 +2711,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: port-list-hard-delete
-      x-turbovas-inherited-still-owns: port-list-bulk-xml-export
+      x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1

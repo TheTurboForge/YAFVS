@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -30,6 +31,7 @@ import useReload from 'web/hooks/useReload';
 import useSelection from 'web/hooks/useSelection';
 import useShallowEqualSelector from 'web/hooks/useShallowEqualSelector';
 import useTranslation from 'web/hooks/useTranslation';
+import {canUseNativeApi} from 'gmp/commands/native';
 import PortListComponent from 'web/pages/portlists/PortListComponent';
 import PortListsFilterDialog from 'web/pages/portlists/PortListFilterDialog';
 import PortListListPageToolBarIcons from 'web/pages/portlists/PortListListPageToolBarIcons';
@@ -203,6 +205,7 @@ const PortListsPage = () => {
       const filename = generateFilename({
         fileNameFormat: listExportFileName,
         resourceType: 'portlists',
+        extension: canUseNativeApi(gmp) ? 'json' : undefined,
       });
       const {data: downloadData} = response;
       handleDownload({filename, data: downloadData});

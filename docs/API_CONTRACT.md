@@ -335,8 +335,9 @@ restore, and trash-only hard delete; GSA range-add and non-empty range-delete
 actions use the native range-set replacement path. Native import accepts one
 exported port-list XML payload with an explicit UUID and TCP/UDP ranges,
 preserves the imported UUID, suffixes duplicate names, and creates the port list
-for the authenticated operator. Implicit default-range XML imports, bulk/file
-export, and empty-range-delete semantics remain inherited.
+for the authenticated operator. Browser bulk download uses native JSON metadata
+exports when available. Implicit default-range XML imports, legacy bulk XML
+export fallback, and empty-range-delete semantics remain inherited.
 
 Native schedule rows include schedule identity, comments, iCalendar recurrence
 data, timezone, task backlink references, and timestamps. Schedules are operator

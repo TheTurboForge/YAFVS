@@ -20,6 +20,7 @@ import EntityCommand from 'gmp/commands/entity';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import logger from 'gmp/log';
+import type Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import PortList, {type PortListElement} from 'gmp/models/port-list';
 import {
@@ -29,6 +30,7 @@ import {
   deleteNativePortList,
   deleteNativePortRange,
   exportNativePortListMetadata,
+  exportNativePortListsMetadata,
   fetchNativePortLists,
   importNativePortList,
   patchNativePortList,
@@ -70,6 +72,11 @@ interface PortListCommandImportParams {
 }
 
 const log = logger.getLogger('gmp.commands.portlists');
+
+const shouldExportAllByFilter = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 export const FROM_FILE = YES_VALUE;
 export const NOT_FROM_FILE = NO_VALUE;
@@ -250,6 +257,56 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
 export class PortListsCommand extends EntitiesCommand<PortList> {
   constructor(http: Http) {
     super(http, 'port_list', PortList);
+  }
+
+  export(entities: PortList[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id as string));
+  }
+
+  exportByIds(ids: string[]) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativePortListsMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const portLists: PortList[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; portLists.length < total; page += 1) {
+        const nativeResponse = await fetchNativePortLists(this.http, {
+          ...nativePortListsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        portLists.push(...nativeResponse.portLists);
+        total = nativeResponse.page.total;
+        if (nativeResponse.portLists.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativePortLists(
+        this.http,
+        nativePortListsQueryFromFilter(filter),
+      );
+      portLists.push(...nativeResponse.portLists);
+    }
+
+    return exportNativePortListsMetadata(
+      this.http,
+      portLists.map(portList => portList.id as string),
+    );
   }
 
   async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {

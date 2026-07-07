@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,6 +7,7 @@
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {PortListsCommand} from 'gmp/commands/port-lists';
 import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -161,5 +163,156 @@ describe('PortListsCommand', () => {
     expect(result.meta.counts.length).toEqual(2);
     expect(result.meta.counts.all).toEqual(2);
     expect(result.meta.counts.filtered).toEqual(2);
+  });
+
+  test('should use inherited bulk export on non-native http', async () => {
+    const http = createHttp();
+    const command = new PortListsCommand(http);
+
+    await command.exportByIds(['p1', 'p2']);
+
+    expect(http.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'bulk_export',
+        resource_type: 'port_list',
+        bulk_select: 1,
+        'bulk_selected:p1': 1,
+        'bulk_selected:p2': 1,
+      },
+    });
+  });
+
+  test('should bulk export selected port lists through native api', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'p1', name: 'Alpha'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'p2', name: 'Beta'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createNativeHttp();
+    const command = new PortListsCommand(http);
+
+    const result = await command.exportByIds(['p1', 'p2']);
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/port-lists/p1/export',
+      {token: 'test-token'},
+    );
+    expect(http.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/port-lists/p2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).port_lists).toEqual([
+      {id: 'p1', name: 'Alpha'},
+      {id: 'p2', name: 'Beta'},
+    ]);
+  });
+
+  test('should bulk export current page filter through native api', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'a'},
+          items: [{id: 'p2', name: 'Beta'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'p2', name: 'Beta'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createNativeHttp();
+    const command = new PortListsCommand(http);
+    const filter = Filter.fromString('first=2 rows=1 search=a');
+
+    const result = await command.exportByFilter(filter);
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/port-lists', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'name',
+      filter: 'a',
+    });
+    expect(http.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/port-lists/p2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).port_lists).toEqual([
+      {id: 'p2', name: 'Beta'},
+    ]);
+  });
+
+  test('should bulk export all filtered port lists through native api', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'a'},
+          items: [{id: 'p1', name: 'Alpha'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'a'},
+          items: [{id: 'p2', name: 'Beta'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'p1', name: 'Alpha'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'p2', name: 'Beta'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createNativeHttp();
+    const command = new PortListsCommand(http);
+    const filter = Filter.fromString('first=1 rows=1 search=a').all();
+
+    const result = await command.exportByFilter(filter);
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/port-lists', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'a',
+    });
+    expect(http.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/port-lists', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'a',
+    });
+    expect(JSON.parse(result.data).port_lists).toEqual([
+      {id: 'p1', name: 'Alpha'},
+      {id: 'p2', name: 'Beta'},
+    ]);
   });
 });

@@ -229,8 +229,9 @@ credential/certificate download context, and scanner writes remain inherited.
 Port-list list/detail reads are browser-proxied, including port ranges and target
 backlinks. Port-list typed create, metadata/range update, clone, trash, restore,
 hard-delete, and exported-XML import with explicit TCP/UDP ranges are native
-write-control paths; implicit default-range XML imports and bulk/file export
-remain inherited. Override
+write-control paths; browser bulk download uses native JSON metadata exports;
+implicit default-range XML imports and legacy bulk XML export fallback remain
+inherited. Override
 list/detail metadata reads are browser-proxied, including NVT identity, active
 state, task/result links, and severity override values; override create, modify,
 clone, export, delete, trashcan mutation, and result-specific expansion remain

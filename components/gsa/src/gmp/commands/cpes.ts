@@ -5,12 +5,8 @@
  */
 
 import InfoEntitiesCommand from 'gmp/commands/info-entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -33,11 +29,7 @@ class CpesCommand extends InfoEntitiesCommand<Cpe> {
     super(http, 'cpe', Cpe, infoFilter);
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeCpes(
       this.http,
@@ -49,14 +41,7 @@ class CpesCommand extends InfoEntitiesCommand<Cpe> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const cpes: Cpe[] = [];
     let total = Number.POSITIVE_INFINITY;

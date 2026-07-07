@@ -6,12 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CpesCommand from 'gmp/commands/cpes';
-import {
-  createAggregatesResponse,
-  createHttp,
-  createInfoEntitiesResponse,
-} from 'gmp/commands/testing';
-import Cpe from 'gmp/models/cpe';
+import {createAggregatesResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -19,109 +14,7 @@ afterEach(() => {
 });
 
 describe('CpesCommand tests', () => {
-  test('should fetch cpes with default params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cpe: {
-          cpe_name_id: 'cpe:/a:admin:admin:1.0',
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        cpe: {
-          cpe_name_id: 'cpe:/a:user:user:1.0',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CpesCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'cpe'},
-    });
-    expect(result.data).toEqual([
-      new Cpe({
-        id: '1',
-        name: 'Admin',
-        cpeNameId: 'cpe:/a:admin:admin:1.0',
-      }),
-      new Cpe({
-        id: '2',
-        name: 'User',
-        cpeNameId: 'cpe:/a:user:user:1.0',
-      }),
-    ]);
-  });
-
-  test('should fetch cpes with custom params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cpe: {
-          cpe_name_id: 'cpe:/a:admin:admin:1.0',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CpesCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Admin'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        info_type: 'cpe',
-        filter: "name='Admin'",
-      },
-    });
-    expect(result.data).toEqual([
-      new Cpe({id: '1', name: 'Admin', cpeNameId: 'cpe:/a:admin:admin:1.0'}),
-    ]);
-  });
-
-  test('should fetch all cpes', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cpe: {
-          cpe_name_id: 'cpe:/a:admin:admin:1.0',
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        cpe: {
-          cpe_name_id: 'cpe:/a:user:user:1.0',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CpesCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'cpe', filter: 'first=1 rows=-1'},
-    });
-    expect(result.data).toEqual([
-      new Cpe({
-        id: '1',
-        name: 'Admin',
-        cpeNameId: 'cpe:/a:admin:admin:1.0',
-      }),
-      new Cpe({
-        id: '2',
-        name: 'User',
-        cpeNameId: 'cpe:/a:user:user:1.0',
-      }),
-    ]);
-  });
-
-  test('should fetch cpes through native API when available', async () => {
+  test('should fetch cpes through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: '-modified', filter: 'Admin'},
@@ -173,6 +66,52 @@ describe('CpesCommand tests', () => {
         Authorization: 'Bearer jwt-token',
       },
     });
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 2, total: 3, sort: '-modified', filter: ''},
+        items: [
+          {id: 'cpe:/a:admin:admin:1.0', name: 'Admin', title: 'Admin 1.0'},
+          {id: 'cpe:/a:user:user:1.0', name: 'User', title: 'User 1.0'},
+        ],
+      },
+      {
+        page: {page: 2, page_size: 2, total: 3, sort: '-modified', filter: ''},
+        items: [
+          {id: 'cpe:/a:ops:ops:1.0', name: 'Ops', title: 'Ops 1.0'},
+        ],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new CpesCommand(fakeHttp);
+    const result = await cmd.getAll();
+
+    expect(result.data.map(cpe => cpe.id)).toEqual([
+      'cpe:/a:admin:admin:1.0',
+      'cpe:/a:user:user:1.0',
+      'cpe:/a:ops:ops:1.0',
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   test('should fetch severity aggregates', async () => {

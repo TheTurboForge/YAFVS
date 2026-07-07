@@ -6,12 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CvesCommand from 'gmp/commands/cves';
-import {
-  createAggregatesResponse,
-  createHttp,
-  createInfoEntitiesResponse,
-} from 'gmp/commands/testing';
-import Cve from 'gmp/models/cve';
+import {createAggregatesResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -19,109 +14,7 @@ afterEach(() => {
 });
 
 describe('CvesCommand tests', () => {
-  test('should fetch cves with default params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cve: {
-          severity: 10.0,
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        cve: {
-          severity: 5.0,
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CvesCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'cve'},
-    });
-    expect(result.data).toEqual([
-      new Cve({
-        id: '1',
-        name: 'Admin',
-        severity: 10.0,
-      }),
-      new Cve({
-        id: '2',
-        name: 'User',
-        severity: 5.0,
-      }),
-    ]);
-  });
-
-  test('should fetch cves with custom params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cve: {
-          severity: 10.0,
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CvesCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Admin'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        info_type: 'cve',
-        filter: "name='Admin'",
-      },
-    });
-    expect(result.data).toEqual([
-      new Cve({id: '1', name: 'Admin', severity: 10.0}),
-    ]);
-  });
-
-  test('should fetch all cves', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cve: {
-          severity: 10.0,
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        cve: {
-          severity: 5.0,
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CvesCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'cve', filter: 'first=1 rows=-1'},
-    });
-    expect(result.data).toEqual([
-      new Cve({
-        id: '1',
-        name: 'Admin',
-        severity: 10.0,
-      }),
-      new Cve({
-        id: '2',
-        name: 'User',
-        severity: 5.0,
-      }),
-    ]);
-  });
-
-  test('should fetch cves through native API when available', async () => {
+  test('should fetch cves through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: '-severity', filter: 'Admin'},
@@ -165,6 +58,50 @@ describe('CvesCommand tests', () => {
       sort: 'severity',
       filter: 'Admin',
     });
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 2, total: 3, sort: '-severity', filter: ''},
+        items: [
+          {id: 'CVE-2026-10001', name: 'CVE-2026-10001', severity: 9.8},
+          {id: 'CVE-2026-10002', name: 'CVE-2026-10002', severity: 7.5},
+        ],
+      },
+      {
+        page: {page: 2, page_size: 2, total: 3, sort: '-severity', filter: ''},
+        items: [{id: 'CVE-2026-10003', name: 'CVE-2026-10003', severity: 5.0}],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new CvesCommand(fakeHttp);
+    const result = await cmd.getAll();
+
+    expect(result.data.map(cve => cve.id)).toEqual([
+      'CVE-2026-10001',
+      'CVE-2026-10002',
+      'CVE-2026-10003',
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   test('should fetch severity aggregates', async () => {

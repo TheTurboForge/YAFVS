@@ -5,12 +5,8 @@
  */
 
 import InfoEntitiesCommand from 'gmp/commands/info-entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -33,11 +29,7 @@ class CvesCommand extends InfoEntitiesCommand<Cve> {
     super(http, 'cve', Cve, infoFilter);
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeCves(
       this.http,
@@ -49,14 +41,7 @@ class CvesCommand extends InfoEntitiesCommand<Cve> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const cves: Cve[] = [];
     let total = Number.POSITIVE_INFINITY;

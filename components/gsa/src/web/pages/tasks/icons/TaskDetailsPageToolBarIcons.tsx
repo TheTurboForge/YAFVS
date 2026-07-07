@@ -74,7 +74,7 @@ export const TaskDetailsPageToolBarIcons = ({
         <EditIcon entity={entity} name="task" onClick={onTaskEditClick} />
         <TrashIcon entity={entity} name="task" onClick={onTaskDeleteClick} />
         <ExportIcon
-          title={_('Export Task as XML')}
+          title={_('Export Task as JSON')}
           value={entity}
           onClick={onTaskDownloadClick}
         />

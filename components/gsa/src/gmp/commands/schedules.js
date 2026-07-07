@@ -76,17 +76,7 @@ export class ScheduleCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeScheduleMetadata(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native schedule metadata export failed, falling back to GMP',
-          error,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativeScheduleMetadata(this.http, id);
   }
 
   async clone({id}) {

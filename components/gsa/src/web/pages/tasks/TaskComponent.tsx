@@ -169,10 +169,7 @@ export const isTaskMetadataOnlyDialogSave = ({
 };
 
 const exportTask = (gmp: any, task: EntityCommandParams) => {
-  if (canUseNativeApi(gmp)) {
-    return exportNativeTaskMetadata(gmp, task.id as string);
-  }
-  return gmp.task.export(task);
+  return exportNativeTaskMetadata(gmp, task.id as string);
 };
 
 const TaskComponent = ({
@@ -578,7 +575,7 @@ const TaskComponent = ({
         children({
           clone: handleEntityClone,
           delete: handleEntityDelete,
-          download: handleEntityDownload,
+          download: task => handleEntityDownload(task, {extension: 'json'}),
           create: openTaskDialog,
           edit: handleEditTask,
           start: handleTaskStart,

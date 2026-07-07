@@ -95,7 +95,7 @@ describe('ScheduleDetailsPageToolBarIcons tests', () => {
     const cloneIcon = screen.getByTitle('Clone Schedule');
     const editIcon = screen.getByTitle('Edit Schedule');
     const deleteIcon = screen.getByTitle('Move Schedule to trashcan');
-    const exportIcon = screen.getByTitle('Export Schedule as XML');
+    const exportIcon = screen.getByTitle('Export Schedule as JSON');
 
     expect(cloneIcon).toBeInTheDocument();
     fireEvent.click(cloneIcon);
@@ -160,7 +160,7 @@ describe('ScheduleDetailsPageToolBarIcons tests', () => {
     const deleteIcon = screen.getByTitle(
       'Move Schedule to trashcan command unavailable',
     );
-    const exportIcon = screen.getByTitle('Export Schedule as XML');
+    const exportIcon = screen.getByTitle('Export Schedule as JSON');
 
     expect(cloneIcon).toBeInTheDocument();
     fireEvent.click(cloneIcon);
@@ -221,7 +221,7 @@ describe('ScheduleDetailsPageToolBarIcons tests', () => {
     const cloneIcon = screen.getByTitle('Clone Schedule');
     const editIcon = screen.getByTitle('Edit Schedule');
     const deleteIcon = screen.getByTitle('Schedule is still in use');
-    const exportIcon = screen.getByTitle('Export Schedule as XML');
+    const exportIcon = screen.getByTitle('Export Schedule as JSON');
 
     expect(cloneIcon).toBeInTheDocument();
     fireEvent.click(cloneIcon);

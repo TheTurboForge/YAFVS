@@ -208,7 +208,7 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(deleteIcon);
     expect(handleTaskDelete).toHaveBeenCalledWith(task);
 
-    const exportIcon = screen.getByTitle('Export Task as XML');
+    const exportIcon = screen.getByTitle('Export Task as JSON');
     fireEvent.click(exportIcon);
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
 
@@ -310,7 +310,7 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(deleteIcon);
     expect(handleTaskDelete).not.toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Task as XML');
+    const exportIcon = screen.getByTitle('Export Task as JSON');
     fireEvent.click(exportIcon);
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
 
@@ -417,7 +417,7 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(deleteIcon);
     expect(handleTaskDelete).toHaveBeenCalledWith(task);
 
-    const exportIcon = screen.getByTitle('Export Task as XML');
+    const exportIcon = screen.getByTitle('Export Task as JSON');
     fireEvent.click(exportIcon);
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
 
@@ -524,7 +524,7 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(deleteIcon);
     expect(handleTaskDelete).toHaveBeenCalledWith(task);
 
-    const exportIcon = screen.getByTitle('Export Task as XML');
+    const exportIcon = screen.getByTitle('Export Task as JSON');
     fireEvent.click(exportIcon);
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
 
@@ -632,7 +632,7 @@ describe('Task ToolBarIcons tests', () => {
     fireEvent.click(deleteIcon);
     expect(handleTaskDelete).not.toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Task as XML');
+    const exportIcon = screen.getByTitle('Export Task as JSON');
     fireEvent.click(exportIcon);
     expect(handleTaskDownload).toHaveBeenCalledWith(task);
 

@@ -256,37 +256,6 @@ describe('ScanConfigCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native scan config metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new ScanConfigCommand(fakeHttp);
-    const result = await cmd.export({id: 'scan-config-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'config',
-        bulk_select: 1,
-        'bulk_selected:scan-config-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
-
   test('should create a config', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

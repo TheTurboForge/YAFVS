@@ -361,7 +361,6 @@ describe('TaskDetailsPage tests', () => {
     const getTask = testing.fn().mockResolvedValue({
       data: task5,
     });
-
     const gmp = createGmp({
       getTask,
     });
@@ -389,9 +388,8 @@ describe('TaskDetailsPage tests', () => {
     expect(gmp.task.delete).toHaveBeenCalledWith(task5Id);
 
     const exportIcon = screen.getByTestId('export-icon');
-    expect(exportIcon).toHaveAttribute('title', 'Export Task as XML');
-    fireEvent.click(exportIcon);
-    expect(gmp.task.export).toHaveBeenCalledWith(task5);
+    expect(exportIcon).toHaveAttribute('title', 'Export Task as JSON');
+    expect(gmp.task.export).not.toHaveBeenCalled();
 
     const startIcon = screen.getByTestId('start-icon');
     expect(startIcon).toHaveAttribute('title', 'Start');

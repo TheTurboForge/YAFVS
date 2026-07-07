@@ -98,40 +98,6 @@ describe('TaskCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native task metadata export fails', async () => {
-    const content = '<some><xml>exported-task</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    const cmd = new TaskCommand(fakeHttp);
-
-    const result = await cmd.export({id: 'task-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'task',
-        bulk_select: 1,
-        'bulk_selected:task-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
-
   test('should enrich manager response failures while starting a task', async () => {
     const xhr = {
       status: 500,

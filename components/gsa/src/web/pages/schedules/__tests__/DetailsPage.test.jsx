@@ -172,9 +172,9 @@ describe('ScheduleDetailsPage tests', () => {
     fireEvent.click(cloneIcon);
     expect(gmp.schedule.clone).toHaveBeenCalledWith(schedule);
 
-    const exportIcon = screen.getByTitle('Export Schedule as XML');
-    fireEvent.click(exportIcon);
-    expect(gmp.schedule.export).toHaveBeenCalledWith(schedule);
+    const exportIcon = screen.getByTitle('Export Schedule as JSON');
+    expect(exportIcon).toBeInTheDocument();
+    expect(gmp.schedule.export).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTitle('Move Schedule to trashcan');
     fireEvent.click(deleteIcon);

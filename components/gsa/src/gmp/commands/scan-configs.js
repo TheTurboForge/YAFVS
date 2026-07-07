@@ -96,17 +96,7 @@ export class ScanConfigCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeScanConfigMetadata(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native scan config metadata export failed, falling back to GMP',
-          error,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativeScanConfigMetadata(this.http, id);
   }
 
   async create({baseScanConfig, name, comment}) {

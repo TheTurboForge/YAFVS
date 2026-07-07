@@ -86,18 +86,7 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeScannerMetadata(this.http, id);
-      } catch (err) {
-        log.debug(
-          'Native scanner metadata export failed, falling back to GMP',
-          id,
-          err,
-        );
-      }
-    }
-    return super.export({id});
+    return await exportNativeScannerMetadata(this.http, id);
   }
 
   create({

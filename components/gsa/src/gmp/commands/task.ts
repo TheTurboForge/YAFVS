@@ -111,14 +111,7 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
   }
 
   async export({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeTaskMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy task export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeTaskMetadata(this.http, id);
   }
 
   async start({id}: EntityCommandParams) {

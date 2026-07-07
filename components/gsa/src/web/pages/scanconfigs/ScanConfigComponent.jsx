@@ -36,10 +36,7 @@ const nativeFamiliesForEditDialog = scanConfig =>
   }));
 
 const exportScanConfig = (gmp, scanConfig) => {
-  if (canUseNativeApi(gmp)) {
-    return exportNativeScanConfigMetadata(gmp, scanConfig.id);
-  }
-  return gmp.scanconfig.export(scanConfig);
+  return exportNativeScanConfigMetadata(gmp, scanConfig.id);
 };
 
 export const createSelectedNvts = (configFamily, nvts) => {
@@ -437,6 +434,7 @@ const ScanConfigComponent = ({
     <>
       <EntityComponent
         download={entity => exportScanConfig(gmp, entity)}
+        downloadOptions={{extension: 'json'}}
         name="scanconfig"
         onCloneError={onCloneError}
         onCloned={onCloned}

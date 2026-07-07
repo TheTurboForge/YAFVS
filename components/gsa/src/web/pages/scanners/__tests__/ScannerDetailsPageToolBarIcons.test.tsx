@@ -227,7 +227,7 @@ describe('ScannerDetailsPageToolBarIcons', () => {
       />,
     );
 
-    expect(screen.getByTitle('Export Scanner as XML')).toBeInTheDocument();
+    expect(screen.getByTitle('Export Scanner as JSON')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Export Icon'}));
     expect(handleDownload).toHaveBeenCalledWith(scanner);
   });

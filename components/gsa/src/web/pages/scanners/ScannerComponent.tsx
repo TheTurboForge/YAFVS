@@ -87,10 +87,7 @@ const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
   typeof gmp?.buildUrl === 'function';
 
 const exportScanner = (gmp: any, scanner: EntityCommandParams) => {
-  if (canUseNativeApi(gmp)) {
-    return exportNativeScannerMetadata(gmp, scanner.id as string);
-  }
-  return gmp.scanner.export(scanner as Scanner);
+  return exportNativeScannerMetadata(gmp, scanner.id as string);
 };
 
 const fetchScannerCredentials = async (
@@ -392,7 +389,7 @@ const ScannerComponent = ({
         clone: handleEntityClone as (scanner: Scanner) => Promise<void>,
         create: openScannerDialog,
         delete: handleScannerDelete,
-        download: handleScannerDownload,
+        download: scanner => handleScannerDownload(scanner, {extension: 'json'}),
         downloadCertificate: handleDownloadCertificate,
         downloadCredential: handleDownloadCredential,
         edit: openScannerDialog,

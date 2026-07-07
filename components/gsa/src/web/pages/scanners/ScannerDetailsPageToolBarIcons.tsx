@@ -71,7 +71,7 @@ const ScannerDetailsPageToolBarIcons = ({
         <EditIcon<Scanner> entity={entity} onClick={onScannerEditClick} />
         <TrashIcon<Scanner> entity={entity} onClick={onScannerDeleteClick} />
         <ExportIcon<Scanner>
-          title={_('Export Scanner as XML')}
+          title={_('Export Scanner as JSON')}
           value={entity}
           onClick={onScannerDownloadClick}
         />

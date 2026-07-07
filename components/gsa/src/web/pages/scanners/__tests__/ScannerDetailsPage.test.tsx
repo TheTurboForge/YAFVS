@@ -218,7 +218,7 @@ describe('ScannerDetailsPage tests', () => {
     await wait();
 
     fetchMock.mockClear();
-    fireEvent.click(screen.getByTitle('Export Scanner as XML'));
+    fireEvent.click(screen.getByTitle('Export Scanner as JSON'));
     await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
 
     expect(exportScanner).not.toHaveBeenCalled();

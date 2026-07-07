@@ -101,40 +101,6 @@ describe('ScheduleCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native schedule metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new ScheduleCommand(fakeHttp);
-    const result = await cmd.export({id: 'schedule-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'schedule',
-        bulk_select: 1,
-        'bulk_selected:schedule-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
-
   test('should clone a schedule through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'native-schedule-clone-id'}),

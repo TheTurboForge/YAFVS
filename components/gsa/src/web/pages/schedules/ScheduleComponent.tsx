@@ -5,7 +5,6 @@
  */
 
 import {useState} from 'react';
-import type Response from 'gmp/http/response';
 import {type Duration, type Date} from 'gmp/models/date';
 import {
   type default as Event,
@@ -44,20 +43,8 @@ interface ScheduleComponentProps {
   onSaveError?: (error: Error) => void;
 }
 
-const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
-  typeof gmp?.buildUrl === 'function';
-
-interface ScheduleExportGmp {
-  schedule: {
-    export: (schedule: Schedule) => Promise<Response<string | ArrayBuffer>>;
-  };
-}
-
 const exportSchedule = (gmp: ReturnType<typeof useGmp>, schedule: Schedule) => {
-  if (canUseNativeApi(gmp)) {
-    return exportNativeScheduleMetadata(gmp, schedule.id as string);
-  }
-  return (gmp as unknown as ScheduleExportGmp).schedule.export(schedule);
+  return exportNativeScheduleMetadata(gmp, schedule.id as string);
 };
 
 const ScheduleComponent = ({
@@ -149,7 +136,7 @@ const ScheduleComponent = ({
   return (
     <EntityComponent<Schedule>
       download={schedule => exportSchedule(gmp, schedule)}
-      downloadOptions={canUseNativeApi(gmp) ? {extension: 'json'} : undefined}
+      downloadOptions={{extension: 'json'}}
       name="schedule"
       onCloneError={onCloneError}
       onCloned={onCloned}

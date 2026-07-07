@@ -286,7 +286,7 @@ describe('ScanConfigDetailsPage tests', () => {
     await wait();
 
     fetchMock.mockClear();
-    const exportIcon = screen.getByTitle('Export Scan Config as XML');
+    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
     fireEvent.click(exportIcon);
     await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
 
@@ -456,9 +456,9 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(gmp.nvtfamilies.get).toHaveBeenCalled();
     expect(gmp.scanners.getAll).toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Scan Config as XML');
-    fireEvent.click(exportIcon);
-    expect(gmp.scanconfig.export).toHaveBeenCalledWith(config);
+    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    expect(exportIcon).toBeInTheDocument();
+    expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
     const trashcanIcon = screen.getByTitle('Move Scan Config to trashcan');
     fireEvent.click(trashcanIcon);
@@ -526,9 +526,9 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(gmp.nvtfamilies.get).not.toHaveBeenCalled();
     expect(gmp.scanners.getAll).not.toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Scan Config as XML');
-    fireEvent.click(exportIcon);
-    expect(gmp.scanconfig.export).toHaveBeenCalledWith(config2);
+    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    expect(exportIcon).toBeInTheDocument();
+    expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
     const deleteIcon = screen.getByTitle(
       'Move Scan Config to trashcan command unavailable',
@@ -598,9 +598,9 @@ describe('ScanConfigDetailsPage tests', () => {
     fireEvent.click(deleteIcon);
     expect(gmp.scanconfig.delete).not.toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Scan Config as XML');
-    fireEvent.click(exportIcon);
-    expect(gmp.scanconfig.export).toHaveBeenCalledWith(config3);
+    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    expect(exportIcon).toBeInTheDocument();
+    expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
     expect(
       screen.queryByRole('heading', {name: 'Import Scan Config'}),
@@ -666,9 +666,9 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(gmp.scanconfig.delete).not.toHaveBeenCalled();
     expect(deleteIcon).toHaveAttribute('title', 'Scan Config is not writable');
 
-    const exportIcon = screen.getByTitle('Export Scan Config as XML');
-    fireEvent.click(exportIcon);
-    expect(gmp.scanconfig.export).toHaveBeenCalledWith(config4);
+    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    expect(exportIcon).toBeInTheDocument();
+    expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
     expect(
       screen.queryByRole('heading', {name: 'Import Scan Config'}),

@@ -6,7 +6,6 @@
 
 import EntitiesCommand from 'gmp/commands/entities';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -37,11 +36,7 @@ class UsersCommand extends EntitiesCommand<User> {
     return root.get_users.get_users_response;
   }
 
-  async get(params = {}, options?) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params = {}, _options?) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeUsers(
       this.http,
@@ -53,11 +48,7 @@ class UsersCommand extends EntitiesCommand<User> {
     });
   }
 
-  async getAll(params = {}, options?) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params = {}, _options?) {
     const filter = filterFromCommandParams(params).all();
     const users: User[] = [];
     let total = Number.POSITIVE_INFINITY;
@@ -82,16 +73,10 @@ class UsersCommand extends EntitiesCommand<User> {
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
     return exportNativeUsersMetadata(this.http, ids);
   }
 
   export(entities: User[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
     return this.exportByIds(
       entities.flatMap(entity =>
         entity.id === undefined ? [] : [entity.id],
@@ -100,10 +85,6 @@ class UsersCommand extends EntitiesCommand<User> {
   }
 
   async exportByFilter(filter: Filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const users: User[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;

@@ -8,7 +8,6 @@ import Capabilities, {type Capability} from 'gmp/capabilities/capabilities';
 import Features, {type Feature} from 'gmp/capabilities/features';
 import EntityCommand from 'gmp/commands/entity';
 import {type HttpCommandOptions} from 'gmp/commands/http';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
@@ -189,19 +188,13 @@ class UserCommand extends EntityCommand<User, PortListElement> {
 
   async get(
     {id}: {id: string},
-    options: {filter?: string} = {},
+    _options: {filter?: string} = {},
   ) {
-    if (canUseNativeApi(this.http)) {
-      const user = await fetchNativeUser(this.http, id);
-      return new Response(user);
-    }
-    return super.get({id}, options);
+    const user = await fetchNativeUser(this.http, id);
+    return new Response(user);
   }
 
   async export({id}: {id: string}) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export({id});
-    }
     return exportNativeUserMetadata(this.http, id);
   }
 

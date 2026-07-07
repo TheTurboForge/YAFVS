@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2020-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -119,27 +120,11 @@ class GmpCreateTagTestMixin:
             b"</create_tag>"
         )
 
-    def test_create_tag_with_resource_filter_audit(self):
+    def test_create_tag_with_resource_filter_scan_config(self):
         self.gmp.create_tag(
             name="foo",
             resource_filter="name=foo",
-            resource_type=EntityType.AUDIT,
-        )
-
-        self.connection.send.has_been_called_with(
-            b"<create_tag>"
-            b"<name>foo</name>"
-            b'<resources filter="name=foo">'
-            b"<type>task</type>"
-            b"</resources>"
-            b"</create_tag>"
-        )
-
-    def test_create_tag_with_resource_filter_policy(self):
-        self.gmp.create_tag(
-            name="foo",
-            resource_filter="name=foo",
-            resource_type=EntityType.POLICY,
+            resource_type=EntityType.SCAN_CONFIG,
         )
 
         self.connection.send.has_been_called_with(

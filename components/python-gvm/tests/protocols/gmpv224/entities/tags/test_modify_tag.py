@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2018-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -69,26 +70,11 @@ class GmpModifyTagTestMixin:
             b"</modify_tag>"
         )
 
-    def test_modify_tag_with_resource_filter_and_type_audit(self):
+    def test_modify_tag_with_resource_filter_and_type_scan_config(self):
         self.gmp.modify_tag(
             tag_id="t1",
             resource_filter="name=foo",
-            resource_type=EntityType.AUDIT,
-        )
-
-        self.connection.send.has_been_called_with(
-            b'<modify_tag tag_id="t1">'
-            b'<resources filter="name=foo">'
-            b"<type>task</type>"
-            b"</resources>"
-            b"</modify_tag>"
-        )
-
-    def test_modify_tag_with_resource_filter_and_type_policy(self):
-        self.gmp.modify_tag(
-            tag_id="t1",
-            resource_filter="name=foo",
-            resource_type=EntityType.POLICY,
+            resource_type=EntityType.SCAN_CONFIG,
         )
 
         self.connection.send.has_been_called_with(

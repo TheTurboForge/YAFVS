@@ -15,22 +15,6 @@ from ._entity_type import EntityType
 
 class Tags:
     @classmethod
-    def clone_tag(cls, tag_id: EntityID) -> Request:
-        """Clone an existing tag
-
-        Args:
-            tag_id: UUID of an existing tag to clone from
-        """
-        if not tag_id:
-            raise RequiredArgument(
-                function=cls.clone_tag.__name__, argument="tag_id"
-            )
-
-        cmd = XmlCommand("create_tag")
-        cmd.add_element("copy", str(tag_id))
-        return cmd
-
-    @classmethod
     def create_tag(
         cls,
         name: str,

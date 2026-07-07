@@ -2537,14 +2537,6 @@ class GMPv224(GvmProtocol[T]):
             CertBundAdvisories.get_cert_bund_advisory(cert_id)
         )
 
-    def clone_tag(self, tag_id: EntityID) -> T:
-        """Clone an existing tag
-
-        Args:
-            tag_id: UUID of an existing tag to clone from
-        """
-        return self._send_request_and_transform_response(Tags.clone_tag(tag_id))
-
     def create_tag(
         self,
         name: str,

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,20 +10,6 @@ from gvm.protocols.gmp.requests.v224 import Tags
 
 
 class TagsTestCase(unittest.TestCase):
-    def test_clone_tag(self):
-        request = Tags.clone_tag("tag_id")
-        self.assertEqual(
-            bytes(request),
-            b"<create_tag><copy>tag_id</copy></create_tag>",
-        )
-
-    def test_clone_tag_missing_tag_id(self):
-        with self.assertRaises(RequiredArgument):
-            Tags.clone_tag(None)
-
-        with self.assertRaises(RequiredArgument):
-            Tags.clone_tag("")
-
     def test_create_tag(self):
         request = Tags.create_tag("name", "alert")
         self.assertEqual(

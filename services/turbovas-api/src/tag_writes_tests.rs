@@ -45,6 +45,112 @@ fn tag_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn tag_create_handler_requires_operator_before_insert() {
+    let source = include_str!("tag_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn create_tag")
+        .expect("create tag handler must exist")
+        .1
+        .split_once("pub(crate) async fn restore_tag")
+        .expect("restore tag handler must follow create handler")
+        .0;
+
+    assert!(handler.contains("let operator = require_tag_write_operator(operator)?;"));
+    assert!(
+        handler.contains("let owner_id = resolve_tag_write_operator_owner(&tx, &operator).await?;")
+    );
+    assert!(
+        handler.find("resolve_tag_write_operator_owner").unwrap()
+            < handler.find("execute_tag_create_transaction").unwrap(),
+        "tag create must resolve operator owner before inserting tag"
+    );
+}
+
+#[test]
+fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
+    let source = include_str!("tag_writes.rs");
+    for (label, start, end, owner_check, type_guard, side_effect) in [
+        (
+            "restore",
+            "pub(crate) async fn restore_tag",
+            "pub(crate) async fn hard_delete_tag",
+            "ensure_tag_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(&trash.resource_type)?;",
+            "execute_tag_restore_transaction",
+        ),
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_tag",
+            "pub(crate) async fn patch_tag",
+            "ensure_tag_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(&trash.resource_type)?;",
+            "execute_tag_hard_delete_transaction",
+        ),
+        (
+            "patch",
+            "pub(crate) async fn patch_tag",
+            "pub(crate) async fn clone_tag",
+            "ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
+            "execute_tag_patch_transaction",
+        ),
+        (
+            "clone",
+            "pub(crate) async fn clone_tag",
+            "pub(crate) async fn delete_tag",
+            "ensure_tag_owner_matches_operator(source.owner_id, owner_id)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(&source.resource_type)?;",
+            "execute_tag_clone_transaction",
+        ),
+        (
+            "delete",
+            "pub(crate) async fn delete_tag",
+            "pub(crate) async fn update_tag_resources",
+            "ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
+            "execute_tag_trash_transaction",
+        ),
+        (
+            "resource update",
+            "pub(crate) async fn update_tag_resources",
+            "fn tag_write_location_headers",
+            "ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
+            "execute_tag_resource_update_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} tag handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} tag handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_tag_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.contains(type_guard),
+            "{label} handler must check resource type support"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check owner before side effects"
+        );
+        assert!(
+            handler.find(type_guard).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check resource type before side effects"
+        );
+    }
+}
+
+#[test]
 fn tag_resource_write_rejects_owner_mismatch_for_owner_bearing_types() {
     assert!(ensure_tag_resource_owner_matches_operator("target", Some(7), 7).is_ok());
     assert!(matches!(

@@ -113,6 +113,116 @@ fn scan_config_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn scan_config_create_and_clone_handlers_guard_source_before_insert() {
+    let source = include_str!("scan_config_writes.rs");
+    for (label, start, end, source_guard, side_effect) in [
+        (
+            "create",
+            "pub(crate) async fn create_scan_config",
+            "pub(crate) async fn clone_scan_config",
+            "ensure_scan_config_clone_source_allowed(&config_state, operator_owner_id)?;",
+            "execute_scan_config_create_from_base_transaction",
+        ),
+        (
+            "clone",
+            "pub(crate) async fn clone_scan_config",
+            "pub(crate) async fn delete_scan_config",
+            "ensure_scan_config_clone_source_allowed(&config_state, operator_owner_id)?;",
+            "execute_scan_config_clone_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} scan-config handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} scan-config handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_scan_config_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(
+            handler.contains(source_guard),
+            "{label} handler must guard source"
+        );
+        assert!(
+            handler.find(source_guard).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must verify source before inserting scan config"
+        );
+    }
+}
+
+#[test]
+fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effects() {
+    let source = include_str!("scan_config_writes.rs");
+    for (label, start, end, owner_check, protection_guard, side_effect) in [
+        (
+            "delete",
+            "pub(crate) async fn delete_scan_config",
+            "pub(crate) async fn hard_delete_scan_config",
+            "ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_not_predefined(&config_state)?;",
+            "execute_scan_config_trash_transaction",
+        ),
+        (
+            "hard delete",
+            "pub(crate) async fn hard_delete_scan_config",
+            "pub(crate) async fn restore_scan_config",
+            "ensure_scan_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_not_in_use_by_trash_tasks",
+            "execute_scan_config_hard_delete_transaction",
+        ),
+        (
+            "restore",
+            "pub(crate) async fn restore_scan_config",
+            "fn scan_config_write_location_headers",
+            "ensure_scan_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_trash_scanner_is_live(&trash)?;",
+            "execute_scan_config_restore_transaction",
+        ),
+        (
+            "patch",
+            "pub(crate) async fn patch_scan_config",
+            "tx.commit().await.map_err",
+            "ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_not_predefined(&config_state)?;",
+            "execute_scan_config_metadata_patch_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(start)
+            .unwrap_or_else(|| panic!("{label} scan-config handler must exist"))
+            .1
+            .split_once(end)
+            .unwrap_or_else(|| panic!("{label} scan-config handler end marker must exist"))
+            .0;
+
+        assert!(
+            handler.contains("require_scan_config_write_operator"),
+            "{label} handler must require operator"
+        );
+        assert!(
+            handler.contains(owner_check),
+            "{label} handler must check owner"
+        );
+        assert!(
+            handler.contains(protection_guard),
+            "{label} handler must check protection guard"
+        );
+        assert!(
+            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check owner before side effects"
+        );
+        assert!(
+            handler.find(protection_guard).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} handler must check protection guard before side effects"
+        );
+    }
+}
+
+#[test]
 fn scan_config_clone_source_allows_predefined_or_operator_owned_sources() {
     let operator_owned = ScanConfigWriteState {
         internal_id: 1,

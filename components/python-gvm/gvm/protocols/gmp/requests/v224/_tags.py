@@ -136,23 +136,6 @@ class Tags:
         return cmd
 
     @classmethod
-    def get_tag(cls, tag_id: EntityID) -> Request:
-        """Request a single tag
-
-        Args:
-            tag_id: UUID of an existing tag
-        """
-        cmd = XmlCommand("get_tags")
-
-        if not tag_id:
-            raise RequiredArgument(
-                function=cls.get_tag.__name__, argument="tag_id"
-            )
-
-        cmd.set_attribute("tag_id", str(tag_id))
-        return cmd
-
-    @classmethod
     def modify_tag(
         cls,
         tag_id: EntityID,

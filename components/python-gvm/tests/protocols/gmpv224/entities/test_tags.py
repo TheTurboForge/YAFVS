@@ -9,16 +9,11 @@ from .tags import (
     GmpCreateTagTestMixin,
     GmpDeleteTagTestMixin,
     GmpGetTagsTestMixin,
-    GmpGetTagTestMixin,
     GmpModifyTagTestMixin,
 )
 
 
 class Gmpv224DeleteTagTestCase(GmpDeleteTagTestMixin, Gmpv224TestCase):
-    pass
-
-
-class Gmpv224GetTagTestCase(GmpGetTagTestMixin, Gmpv224TestCase):
     pass
 
 

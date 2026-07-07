@@ -193,20 +193,6 @@ class TagsTestCase(unittest.TestCase):
             b'<get_tags names_only="0"/>',
         )
 
-    def test_get_tag(self):
-        request = Tags.get_tag("tag_id")
-        self.assertEqual(
-            bytes(request),
-            b'<get_tags tag_id="tag_id"/>',
-        )
-
-    def test_get_tag_missing_tag_id(self):
-        with self.assertRaises(RequiredArgument):
-            Tags.get_tag(None)
-
-        with self.assertRaises(RequiredArgument):
-            Tags.get_tag("")
-
     def test_modify_tag(self):
         request = Tags.modify_tag("tag_id", resource_type="alert")
         self.assertEqual(

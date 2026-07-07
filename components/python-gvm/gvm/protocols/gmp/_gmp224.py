@@ -2583,14 +2583,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_tag(self, tag_id: EntityID) -> T:
-        """Request a single tag
-
-        Args:
-            tag_id: UUID of an existing tag
-        """
-        return self._send_request_and_transform_response(Tags.get_tag(tag_id))
-
     def modify_tag(
         self,
         tag_id: EntityID,

@@ -8,17 +8,12 @@ from ...gmpv224.entities.tags import (
     GmpCreateTagTestMixin,
     GmpDeleteTagTestMixin,
     GmpGetTagsTestMixin,
-    GmpGetTagTestMixin,
     GmpModifyTagTestMixin,
 )
 from ...gmpv225 import GMPTestCase
 
 
 class Gmpv225DeleteTagTestCase(GmpDeleteTagTestMixin, GMPTestCase):
-    pass
-
-
-class Gmpv225GetTagTestCase(GmpGetTagTestMixin, GMPTestCase):
     pass
 
 

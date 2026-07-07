@@ -70,30 +70,7 @@ describe('convertPreferences tests', () => {
 });
 
 describe('ScanConfigsCommand tests', () => {
-  test('should fetch scan configs with inherited GMP fallback', async () => {
-    const response = createResponse({
-      get_configs: {
-        get_configs_response: {
-          config: [{_id: 'config-1', name: 'Inherited config'}],
-        },
-      },
-    });
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ScanConfigsCommand(fakeHttp);
-    const result = await cmd.get({filter: 'first=1 rows=25'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_configs',
-        filter: 'first=1 rows=25',
-        usage_type: 'scan',
-      },
-    });
-    expect(result.data[0].id).toEqual('config-1');
-  });
-
-  test('should fetch scan configs through native API when available', async () => {
+  test('should fetch scan configs through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'base'},

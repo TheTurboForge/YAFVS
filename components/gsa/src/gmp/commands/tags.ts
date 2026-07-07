@@ -5,12 +5,8 @@
  */
 
 import EntitiesCommand from 'gmp/commands/entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -29,11 +25,7 @@ class TagsCommand extends EntitiesCommand<Tag> {
     return root.get_tags.get_tags_response;
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeTags(
       this.http,
@@ -45,14 +37,7 @@ class TagsCommand extends EntitiesCommand<Tag> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const tags: Tag[] = [];
     let total = Number.POSITIVE_INFINITY;

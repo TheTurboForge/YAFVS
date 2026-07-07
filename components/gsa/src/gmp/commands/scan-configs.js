@@ -299,34 +299,20 @@ class ScanConfigsCommand extends EntitiesCommand {
   }
 
   get(params, options) {
-    if (canUseNativeApi(this.http)) {
-      const filter = filterFromCommandParams(params);
-      return fetchNativeScanConfigs(
-        this.http,
-        nativeScanConfigsQueryFromFilter(filter),
-      ).then(
-        nativeResponse =>
-          new Response(nativeResponse.scanConfigs, {
-            filter,
-            counts: nativeResponse.counts,
-          }),
-      );
-    }
-
-    params = {...params, usage_type: 'scan'};
-    return this.httpGetWithTransform(params, options).then(response => {
-      const {entities, filter, counts} = this.getCollectionListFromRoot(
-        response.data,
-      );
-      return response.set(entities, {filter, counts});
-    });
+    const filter = filterFromCommandParams(params);
+    return fetchNativeScanConfigs(
+      this.http,
+      nativeScanConfigsQueryFromFilter(filter),
+    ).then(
+      nativeResponse =>
+        new Response(nativeResponse.scanConfigs, {
+          filter,
+          counts: nativeResponse.counts,
+        }),
+    );
   }
 
   async getAll(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
     const filter = filterFromCommandParams(params).all();
     const scanConfigs = [];
     let total = Number.POSITIVE_INFINITY;

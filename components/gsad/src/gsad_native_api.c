@@ -231,9 +231,11 @@ is_tag_resource_type_segment (const gchar *value, gsize length)
 {
   static const gchar *allowed_types[] = {
     "alert",         "cert_bund_adv", "cpe",          "cve",
-    "dfn_cert_adv",  "host",          "nvt",          "os",
+    "credential",    "dfn_cert_adv",  "host",         "nvt",
+    "os",
     "port_list",     "report_config", "report_format", "config",
-    "target",        "task",          "tls_certificate"
+    "scanner",       "schedule",      "target",       "task",
+    "tls_certificate"
   };
 
   if (value == NULL || length == 0 || length > 32)

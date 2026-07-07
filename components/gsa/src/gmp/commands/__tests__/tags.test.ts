@@ -6,8 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import TagsCommand from 'gmp/commands/tags';
-import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
-import Tag from 'gmp/models/tag';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -15,79 +14,7 @@ afterEach(() => {
 });
 
 describe('TagsCommand tests', () => {
-  test('should fetch with default params', async () => {
-    const response = createEntitiesResponse('tag', [
-      {_id: '1', name: 'Tag 1', resources: {type: 'scanner'}},
-      {_id: '2', name: 'Tag 2', resources: {type: 'task'}},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TagsCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_tags'},
-    });
-    expect(result.data).toEqual([
-      new Tag({
-        id: '1',
-        name: 'Tag 1',
-        resourceType: 'scanner',
-      }),
-      new Tag({
-        id: '2',
-        name: 'Tag 2',
-        resourceType: 'task',
-      }),
-    ]);
-  });
-
-  test('should fetch with custom params', async () => {
-    const response = createEntitiesResponse('tag', [
-      {_id: '3', name: 'Tag 1', resources: {type: 'scanner'}},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TagsCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Tag 1'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_tags', filter: "name='Tag 1'"},
-    });
-    expect(result.data).toEqual([
-      new Tag({
-        id: '3',
-        name: 'Tag 1',
-        resourceType: 'scanner',
-      }),
-    ]);
-  });
-
-  test('should get all tags', async () => {
-    const response = createEntitiesResponse('tag', [
-      {_id: '1', name: 'Tag 1', resources: {type: 'scanner'}},
-      {_id: '2', name: 'Tag 2', resources: {type: 'task'}},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TagsCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_tags', filter: 'first=1 rows=-1'},
-    });
-    expect(result.data).toEqual([
-      new Tag({
-        id: '1',
-        name: 'Tag 1',
-        resourceType: 'scanner',
-      }),
-      new Tag({
-        id: '2',
-        name: 'Tag 2',
-        resourceType: 'task',
-      }),
-    ]);
-  });
-
-  test('should fetch tags through native API when available', async () => {
+  test('should fetch tags through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'owner'},
@@ -148,5 +75,88 @@ describe('TagsCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 2, total: 3, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'tag-1',
+            name: 'One',
+            resource_type: 'task',
+            resource_count: 1,
+            active: true,
+            writable: true,
+          },
+          {
+            id: 'tag-2',
+            name: 'Two',
+            resource_type: 'host',
+            resource_count: 2,
+            active: true,
+            writable: true,
+          },
+        ],
+      },
+      {
+        page: {page: 2, page_size: 2, total: 3, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'tag-3',
+            name: 'Three',
+            resource_type: 'result',
+            resource_count: 3,
+            active: false,
+            writable: true,
+          },
+        ],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagsCommand(fakeHttp);
+    const result = await cmd.getAll();
+
+    expect(result.data.map(tag => tag.id)).toEqual(['tag-1', 'tag-2', 'tag-3']);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/tags', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      active: '',
+      resource_type: '',
+      value: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/tags', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      active: '',
+      resource_type: '',
+      value: '',
+    });
   });
 });

@@ -88,6 +88,10 @@ export interface NativePortListCreateRequest {
   port_ranges: NativePortListCreateRangePayload[];
 }
 
+export interface NativePortListImportRequest {
+  xml_file: string;
+}
+
 export interface NativePortListRangeCommandRequest {
   portListId: string;
   portRangeStart: number;
@@ -115,6 +119,18 @@ const PORT_LIST_SORT_FIELDS: Record<string, string> = {
   udp: 'udp',
   predefined: 'predefined',
   modified: 'modified',
+};
+
+export const importNativePortList = async (
+  gmp: NativeApiGmp,
+  request: NativePortListImportRequest,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativePortListPayload>(
+    gmp,
+    'api/v1/port-list-imports',
+    request,
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 const stringValue = (value: unknown): string =>

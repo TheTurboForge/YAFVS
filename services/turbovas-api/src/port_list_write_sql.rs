@@ -9,7 +9,7 @@ pub(crate) fn port_list_write_operator_owner_sql() -> &'static str {
 pub(crate) fn port_list_create_metadata_sql() -> &'static str {
     "INSERT INTO port_lists
         (uuid, owner, name, comment, predefined, creation_time, modification_time)
-     VALUES (make_uuid(), $1, $2, $3, 0, m_now(), m_now())
+     VALUES (coalesce($4, make_uuid()), $1, $2, $3, 0, m_now(), m_now())
      RETURNING id::integer, uuid::text;"
 }
 
@@ -83,6 +83,13 @@ pub(crate) fn port_list_live_uuid_conflict_sql() -> &'static str {
     "SELECT count(*)::bigint
        FROM port_lists
       WHERE uuid = $1;"
+}
+
+pub(crate) fn port_list_live_or_trash_uuid_conflict_sql() -> &'static str {
+    "SELECT (
+        (SELECT count(*) FROM port_lists WHERE uuid = $1)
+        + (SELECT count(*) FROM port_lists_trash WHERE uuid = $1)
+      )::bigint;"
 }
 
 pub(crate) fn port_list_update_metadata_sql() -> &'static str {

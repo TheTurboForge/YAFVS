@@ -24,7 +24,12 @@ pub(crate) async fn execute_port_list_create_transaction(
     let record = query_port_list_write_record(
         tx,
         port_list_create_metadata_sql(),
-        &[&owner_id, &request.name, &request.comment],
+        &[
+            &owner_id,
+            &request.name,
+            &request.comment,
+            &request.imported_id,
+        ],
         "insert port list metadata",
     )
     .await?;

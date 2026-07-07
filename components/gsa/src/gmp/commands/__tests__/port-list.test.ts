@@ -750,4 +750,46 @@ describe('PortListCommand', () => {
     });
     expect(result.data).toEqual({id: '123'});
   });
+
+  test('should import a port list through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-imported-port-list-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+    const command = new PortListCommand(http);
+
+    const result = await command.import({
+      xmlFile: new File(['<get_port_lists_response />'], 'portlist.xml'),
+    });
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith('api/v1/port-list-imports');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/port-list-imports',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({xml_file: '<get_port_lists_response />'}),
+      },
+    );
+    expect(result.data.id).toEqual('native-imported-port-list-id');
+  });
 });

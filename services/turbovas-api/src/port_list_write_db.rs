@@ -15,6 +15,28 @@ pub(crate) struct PortListWriteRecord {
     pub(crate) uuid: String,
 }
 
+pub(crate) async fn unique_port_list_name_with_suffix(
+    tx: &Transaction<'_>,
+    name: &str,
+) -> Result<String, ApiError> {
+    let mut candidate = name.to_string();
+    let mut suffix = 1;
+    loop {
+        let count: i64 = tx
+            .query_one(port_list_unique_name_sql(), &[&candidate, &-1])
+            .await
+            .map_err(|error| {
+                map_port_list_write_db_error(error, "check imported port list name uniqueness")
+            })?
+            .get(0);
+        if count == 0 {
+            return Ok(candidate);
+        }
+        candidate = format!("{name} {suffix}");
+        suffix += 1;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PortListTrashWriteRecord {
     pub(crate) internal_id: i32,
@@ -168,6 +190,29 @@ pub(crate) async fn ensure_port_list_uuid_not_live(
     } else {
         Err(ApiError::Conflict(
             "live port list with the same id already exists".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_port_list_uuid_not_live_or_trash(
+    tx: &Transaction<'_>,
+    port_list_id: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(
+            port_list_live_or_trash_uuid_conflict_sql(),
+            &[&port_list_id],
+        )
+        .await
+        .map_err(|error| {
+            map_port_list_write_db_error(error, "check port list import UUID conflict")
+        })?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "live or trash port list with the same id already exists".to_string(),
         ))
     }
 }

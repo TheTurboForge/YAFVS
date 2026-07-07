@@ -339,6 +339,7 @@ static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *filters_path = "/api/v1/filters";
+  const gchar *port_list_imports_path = "/api/v1/port-list-imports";
   const gchar *port_lists_path = "/api/v1/port-lists";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
@@ -362,6 +363,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, port_lists_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, port_list_imports_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, scopes_path) == 0)

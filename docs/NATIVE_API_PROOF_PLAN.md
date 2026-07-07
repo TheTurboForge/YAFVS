@@ -227,7 +227,10 @@ reuses the same redacted detail JSON for scriptable operator reads. Remote
 scanner certificate context, verify/file export/download,
 credential/certificate download context, and scanner writes remain inherited.
 Port-list list/detail reads are browser-proxied, including port ranges and target
-backlinks; port-list writes and import/export actions remain inherited. Override
+backlinks. Port-list typed create, metadata/range update, clone, trash, restore,
+hard-delete, and exported-XML import with explicit TCP/UDP ranges are native
+write-control paths; implicit default-range XML imports and bulk/file export
+remain inherited. Override
 list/detail metadata reads are browser-proxied, including NVT identity, active
 state, task/result links, and severity override values; override create, modify,
 clone, export, delete, trashcan mutation, and result-specific expansion remain

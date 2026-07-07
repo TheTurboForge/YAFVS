@@ -332,7 +332,10 @@ timestamps. Port lists are operator scanner configuration, so these endpoints
 stay inside the authenticated operator boundary. Native write-control supports
 typed create, metadata patch, complete range-set replacement, clone, trash,
 restore, and trash-only hard delete; GSA range-add and non-empty range-delete
-actions use the native range-set replacement path. Port-list import, file
+actions use the native range-set replacement path. Native import accepts one
+exported port-list XML payload with an explicit UUID and TCP/UDP ranges,
+preserves the imported UUID, suffixes duplicate names, and creates the port list
+for the authenticated operator. Implicit default-range XML imports, bulk/file
 export, and empty-range-delete semantics remain inherited.
 
 Native schedule rows include schedule identity, comments, iCalendar recurrence

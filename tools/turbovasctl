@@ -552,6 +552,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "override-metadata-list-read",
         "port-list-clone",
         "port-list-create",
+        "port-list-import",
         "port-list-metadata-detail-read",
         "port-list-metadata-export-read",
         "port-list-hard-delete",
@@ -676,7 +677,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "nvt-rich-detail",
         "operating-system-writes-deletes-and-rich-history",
         "override-writes-exports-trash-and-result-expansion",
-        "port-list-import-export",
+        "port-list-bulk-xml-export",
         "raw-report-generation-xml-export-retention-and-mutations",
         "report-config-file-export",
         "report-format-import-export-verify-writes-and-deletes",
@@ -1043,12 +1044,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "override-metadata-export-read",
     },
     ("get", "/port-lists"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "port-list-metadata-list-read",
     },
     ("post", "/port-lists"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1056,8 +1057,17 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
     },
+    ("post", "/port-list-imports"): {
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "port-list-import",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
+    },
     ("get", "/port-lists/{port_list_id}"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "port-list-metadata-detail-read",
     },
@@ -1066,13 +1076,13 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "port-list-metadata-export-read",
     },
     ("patch", "/port-lists/{port_list_id}"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "port-list-metadata-and-range-modify",
         "x-turbovas-side-effect": "metadata-and-range-write",
     },
     ("delete", "/port-lists/{port_list_id}"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1081,7 +1091,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("post", "/port-lists/{port_list_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1090,7 +1100,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/port-lists/{port_list_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1099,7 +1109,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/port-lists/{port_list_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "port-list-import-export",
+        "x-turbovas-inherited-still-owns": "port-list-bulk-xml-export",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -7837,6 +7847,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native typed port-list creation"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/port-list-imports",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA Port List XML import dialog flow", "direct native exported port-list XML import"],
+                "residual_inherited": [
+                    "Native import accepts exported XML with explicit port ranges; implicit default-range imports and bulk XML export remain inherited."
+                ],
             },
             {
                 "method": "patch",

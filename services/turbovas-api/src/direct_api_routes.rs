@@ -18,7 +18,7 @@ use crate::{
     },
     port_list_writes::{
         clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
-        patch_port_list, restore_port_list,
+        import_port_list, patch_port_list, restore_port_list,
     },
     report_config_writes::{
         clone_report_config, create_report_config, delete_report_config, hard_delete_report_config,
@@ -136,6 +136,7 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_port_list),
             )
             .route("/api/v1/port-lists", post(create_port_list))
+            .route("/api/v1/port-list-imports", post(import_port_list))
             .route("/api/v1/schedules/:schedule_id", patch(patch_schedule))
             .route("/api/v1/schedules/:schedule_id", delete(delete_schedule))
             .route("/api/v1/schedules/:schedule_id/clone", post(clone_schedule))

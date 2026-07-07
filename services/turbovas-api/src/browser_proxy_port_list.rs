@@ -14,11 +14,11 @@ use crate::{
     errors::ApiError,
     port_list_payloads::PortListAssetDetail,
     port_list_write_validation::{
-        PortListCloneRequest, PortListCreateRequest, PortListPatchRequest,
+        PortListCloneRequest, PortListCreateRequest, PortListImportRequest, PortListPatchRequest,
     },
     port_list_writes::{
         clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
-        patch_port_list, restore_port_list,
+        import_port_list, patch_port_list, restore_port_list,
     },
 };
 
@@ -60,6 +60,16 @@ pub(crate) async fn browser_proxy_create_port_list(
 ) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_port_list(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_import_port_list(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<PortListImportRequest>,
+) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    import_port_list(State(state), Some(Extension(operator)), Json(request)).await
 }
 
 pub(crate) async fn browser_proxy_clone_port_list(

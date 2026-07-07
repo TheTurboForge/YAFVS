@@ -7,9 +7,9 @@ use crate::port_list_write_plans::*;
 use crate::port_list_write_sql::*;
 use crate::port_list_write_validation::{
     MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, PortListCloneRequest,
-    PortListCreateRangeRequest, PortListCreateRequest, PortListPatchRequest,
+    PortListCreateRangeRequest, PortListCreateRequest, PortListImportRequest, PortListPatchRequest,
     ValidatedPortListPatch, validate_port_list_clone_request, validate_port_list_create_request,
-    validate_port_list_patch_request,
+    validate_port_list_import_request, validate_port_list_patch_request,
 };
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequest {
@@ -284,6 +284,8 @@ fn port_list_create_request_normalizes_text_protocol_and_range_order() {
     ))
     .unwrap();
     assert_eq!(validated.name, "Web ports");
+    assert_eq!(validated.imported_id, None);
+    assert!(!validated.deduplicate_name);
     assert_eq!(validated.comment, "created by native API");
     assert_eq!(validated.port_ranges.len(), 2);
     assert_eq!(validated.port_ranges[0].protocol_id, 0);
@@ -291,6 +293,49 @@ fn port_list_create_request_normalizes_text_protocol_and_range_order() {
     assert_eq!(validated.port_ranges[0].end, 443);
     assert_eq!(validated.port_ranges[0].comment, "operator range");
     assert_eq!(validated.port_ranges[1].protocol_id, 1);
+}
+
+#[test]
+fn port_list_import_request_parses_exported_xml_shape() {
+    let validated = validate_port_list_import_request(PortListImportRequest {
+        xml_file: r#"
+          <get_port_lists_response>
+            <port_list id="12345678-1234-4234-9234-123456789abc">
+              <name> Imported Ports </name>
+              <comment> imported note </comment>
+              <port_ranges>
+                <port_range><type>UDP</type><start>53</start><end>53</end></port_range>
+                <port_range><type>TCP</type><start>80</start><end>443</end></port_range>
+              </port_ranges>
+            </port_list>
+          </get_port_lists_response>
+        "#
+        .to_string(),
+    })
+    .expect("valid import XML");
+    assert_eq!(
+        validated.imported_id.as_deref(),
+        Some("12345678-1234-4234-9234-123456789abc")
+    );
+    assert!(validated.deduplicate_name);
+    assert_eq!(validated.name, "Imported Ports");
+    assert_eq!(validated.comment, "imported note");
+    assert_eq!(validated.port_ranges.len(), 2);
+    assert_eq!(validated.port_ranges[0].protocol_id, 0);
+    assert_eq!(validated.port_ranges[0].start, 80);
+    assert_eq!(validated.port_ranges[1].protocol_id, 1);
+}
+
+#[test]
+fn port_list_import_request_rejects_missing_uuid_or_implicit_default_ranges() {
+    assert!(validate_port_list_import_request(PortListImportRequest {
+        xml_file: "<get_port_lists_response><port_list><name>x</name></port_list></get_port_lists_response>".to_string(),
+    })
+    .is_err());
+    assert!(validate_port_list_import_request(PortListImportRequest {
+        xml_file: "<get_port_lists_response><port_list id=\"12345678-1234-4234-9234-123456789abc\"><name>x</name></port_list></get_port_lists_response>".to_string(),
+    })
+    .is_err());
 }
 
 #[test]
@@ -326,7 +371,9 @@ fn port_list_create_sql_is_live_metadata_and_range_only() {
     let metadata = port_list_create_metadata_sql();
     assert!(metadata.contains("INSERT INTO port_lists"));
     assert!(metadata.contains("predefined, creation_time, modification_time"));
-    assert!(metadata.contains("VALUES (make_uuid(), $1, $2, $3, 0, m_now(), m_now())"));
+    assert!(
+        metadata.contains("VALUES (coalesce($4, make_uuid()), $1, $2, $3, 0, m_now(), m_now())")
+    );
     assert!(metadata.contains("RETURNING id::integer, uuid::text"));
 
     let range = port_list_create_range_sql();
@@ -596,6 +643,13 @@ fn port_list_patch_name_uniqueness_checks_live_and_trash_names() {
     let sql = port_list_unique_name_sql();
     assert!(sql.contains("FROM port_lists WHERE name = $1 AND id != $2"));
     assert!(sql.contains("FROM port_lists_trash WHERE name = $1"));
+}
+
+#[test]
+fn port_list_import_uuid_uniqueness_checks_live_and_trash_ids() {
+    let sql = port_list_live_or_trash_uuid_conflict_sql();
+    assert!(sql.contains("FROM port_lists WHERE uuid = $1"));
+    assert!(sql.contains("FROM port_lists_trash WHERE uuid = $1"));
 }
 
 #[test]

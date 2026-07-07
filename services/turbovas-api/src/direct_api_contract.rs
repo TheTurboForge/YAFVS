@@ -31,6 +31,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "alerts"]
             | ["", "api", "v1", "tags"]
             | ["", "api", "v1", "overrides"]
+            | ["", "api", "v1", "port-list-imports"]
             | ["", "api", "v1", "port-lists"]
             | ["", "api", "v1", "schedules"]
             | ["", "api", "v1", "timezones"]
@@ -237,6 +238,7 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
             direct_api_write_id_segment_is_allowed(filter_id)
         }
         (&Method::POST, ["", "api", "v1", "port-lists"]) => true,
+        (&Method::POST, ["", "api", "v1", "port-list-imports"]) => true,
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "port-lists", port_list_id]) => {
             direct_api_write_id_segment_is_allowed(port_list_id)
         }

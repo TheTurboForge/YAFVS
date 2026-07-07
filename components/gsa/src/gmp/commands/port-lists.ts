@@ -30,6 +30,7 @@ import {
   deleteNativePortRange,
   exportNativePortListMetadata,
   fetchNativePortLists,
+  importNativePortList,
   patchNativePortList,
   type NativePortListCreateRequest,
   nativePortListsQueryFromFilter,
@@ -223,7 +224,16 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
     return await this.get({id: portListId});
   }
 
-  import({xmlFile}: PortListCommandImportParams) {
+  async import({xmlFile}: PortListCommandImportParams) {
+    if (canUseNativeApi(this.http) && xmlFile !== undefined) {
+      try {
+        return await importNativePortList(this.http, {
+          xml_file: await xmlFile.text(),
+        });
+      } catch (error) {
+        log.debug('Native port list import failed, falling back to GMP', error);
+      }
+    }
     log.debug('Importing port list', {xml_file: xmlFile});
     return this.entityAction({
       cmd: 'import_port_list',

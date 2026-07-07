@@ -22,7 +22,8 @@ use crate::{
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
         browser_proxy_delete_port_list, browser_proxy_hard_delete_port_list,
-        browser_proxy_patch_port_list, browser_proxy_restore_port_list,
+        browser_proxy_import_port_list, browser_proxy_patch_port_list,
+        browser_proxy_restore_port_list,
     },
     browser_proxy_report_config::{
         browser_proxy_clone_report_config, browser_proxy_create_report_config,
@@ -61,7 +62,7 @@ pub(crate) fn browser_proxy_native_api_router(
     let Some(auth) = auth else {
         return router;
     };
-    let write_router = Router::new()
+    let router = router
         .route("/api/v1/alerts/:alert_id", patch(browser_proxy_patch_alert))
         .route(
             "/api/v1/credentials/:credential_id",
@@ -103,6 +104,10 @@ pub(crate) fn browser_proxy_native_api_router(
             delete(browser_proxy_hard_delete_tag),
         )
         .route("/api/v1/port-lists", post(browser_proxy_create_port_list))
+        .route(
+            "/api/v1/port-list-imports",
+            post(browser_proxy_import_port_list),
+        )
         .route(
             "/api/v1/port-lists/:port_list_id",
             patch(browser_proxy_patch_port_list),
@@ -230,5 +235,5 @@ pub(crate) fn browser_proxy_native_api_router(
         ))
         .layer(Extension(auth));
 
-    router.merge(write_router)
+    router
 }

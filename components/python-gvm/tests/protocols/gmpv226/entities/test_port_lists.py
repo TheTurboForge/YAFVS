@@ -1,39 +1,14 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from ...gmpv224.entities.port_lists import (
-    GmpClonePortListTestMixin,
-    GmpCreatePortListTestMixin,
-    GmpCreatePortRangeTestMixin,
-    GmpDeletePortListTestMixin,
-    GmpDeletePortRangeTestMixin,
     GmpGetPortListsTestMixin,
     GmpGetPortListTestMixin,
-    GmpModifyPortListTestMixin,
 )
 from ...gmpv226 import GMPTestCase
-
-
-class GMPClonePortListTestCase(GmpClonePortListTestMixin, GMPTestCase):
-    pass
-
-
-class GMPCreatePortListTestCase(GmpCreatePortListTestMixin, GMPTestCase):
-    pass
-
-
-class GMPCreatePortRangeListTestCase(GmpCreatePortRangeTestMixin, GMPTestCase):
-    pass
-
-
-class GMPDeletePortListTestCase(GmpDeletePortListTestMixin, GMPTestCase):
-    pass
-
-
-class GMPDeletePortRangeTestCase(GmpDeletePortRangeTestMixin, GMPTestCase):
-    pass
 
 
 class GMPGetPortListTestCase(GmpGetPortListTestMixin, GMPTestCase):
@@ -41,8 +16,4 @@ class GMPGetPortListTestCase(GmpGetPortListTestMixin, GMPTestCase):
 
 
 class GMPGetPortListsTestCase(GmpGetPortListsTestMixin, GMPTestCase):
-    pass
-
-
-class GMPModifyPortListTestCase(GmpModifyPortListTestMixin, GMPTestCase):
     pass

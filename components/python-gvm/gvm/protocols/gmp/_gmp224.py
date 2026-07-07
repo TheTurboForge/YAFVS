@@ -195,78 +195,6 @@ class GMPv224(GvmProtocol[T]):
         """
         return self._send_request_and_transform_response(Version.get_version())
 
-    def clone_port_list(self, port_list_id: EntityID) -> T:
-        """Clone an existing port list
-
-        Args:
-            port_list_id: UUID of an existing port list to clone from
-        """
-        return self._send_request_and_transform_response(
-            PortLists.clone_port_list(port_list_id)
-        )
-
-    def create_port_list(
-        self, name: str, port_range: str, *, comment: str | None = None
-    ) -> T:
-        """Create a new port list
-
-        Args:
-            name: Name of the new port list
-            port_range: Port list ranges e.g. `"T: 1-1234"` for tcp port
-                1 - 1234
-            comment: Comment for the port list
-        """
-        return self._send_request_and_transform_response(
-            PortLists.create_port_list(name, port_range, comment=comment)
-        )
-
-    def create_port_range(
-        self,
-        port_list_id: EntityID,
-        start: int,
-        end: int,
-        port_range_type: str | PortRangeType,
-        *,
-        comment: str | None = None,
-    ) -> T:
-        """Create new port range
-
-        Args:
-            port_list_id: UUID of the port list to which to add the range
-            start: The first port in the range
-            end: The last port in the range
-            port_range_type: The type of the ports: TCP, UDP, ...
-            comment: Comment for the port range
-        """
-        return self._send_request_and_transform_response(
-            PortLists.create_port_range(
-                port_list_id, start, end, port_range_type, comment=comment
-            )
-        )
-
-    def delete_port_list(
-        self, port_list_id: EntityID, *, ultimate: bool = False
-    ) -> T:
-        """Delete an existing port list
-
-        Args:
-            port_list_id: UUID of the port list to be deleted.
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        return self._send_request_and_transform_response(
-            PortLists.delete_port_list(port_list_id, ultimate=ultimate)
-        )
-
-    def delete_port_range(self, port_range_id: EntityID) -> T:
-        """Delete an existing port range
-
-        Args:
-            port_range_id: UUID of the port range to be deleted.
-        """
-        return self._send_request_and_transform_response(
-            PortLists.delete_port_range(port_range_id)
-        )
-
     def get_port_lists(
         self,
         *,
@@ -303,24 +231,6 @@ class GMPv224(GvmProtocol[T]):
         """
         return self._send_request_and_transform_response(
             PortLists.get_port_list(port_list_id)
-        )
-
-    def modify_port_list(
-        self,
-        port_list_id: EntityID,
-        *,
-        comment: str | None = None,
-        name: str | None = None,
-    ) -> T:
-        """Modify an existing port list.
-
-        Args:
-            port_list_id: UUID of port list to modify.
-            name: Name of port list.
-            comment: Comment on port list.
-        """
-        return self._send_request_and_transform_response(
-            PortLists.modify_port_list(port_list_id, comment=comment, name=name)
         )
 
     def get_aggregates(

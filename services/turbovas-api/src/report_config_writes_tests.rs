@@ -20,6 +20,67 @@ fn report_config_write_rejects_operator_owner_mismatch() {
 }
 
 #[test]
+fn report_config_create_handler_requires_operator_and_validates_format_before_insert() {
+    let source = include_str!("report_config_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn create_report_config")
+        .expect("create report config handler must exist")
+        .1
+        .split_once("pub(crate) async fn hard_delete_report_config")
+        .expect("hard-delete handler must follow create handler")
+        .0;
+
+    assert!(handler.contains("let operator = require_report_config_write_operator(operator)?;"));
+    assert!(handler.contains(
+        "let owner_id = resolve_report_config_write_operator_owner(&tx, &operator).await?;"
+    ));
+    assert!(handler.contains(
+        "let format = load_report_config_format_state(&tx, &request.report_format_id).await?;"
+    ));
+    assert!(handler.contains("validate_report_config_param_values(&request.params, &format)?;"));
+    assert!(
+        handler.find("validate_report_config_param_values").unwrap()
+            < handler
+                .find("execute_report_config_create_transaction")
+                .unwrap(),
+        "report-config create must validate format params before insert"
+    );
+}
+
+#[test]
+fn report_config_patch_handler_checks_owner_and_params_before_mutation() {
+    let source = include_str!("report_config_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_report_config")
+        .expect("patch report config handler must exist")
+        .1
+        .split_once("fn report_config_write_location_headers")
+        .expect("location header helper must follow patch handler")
+        .0;
+
+    let owner_check =
+        "ensure_report_config_owner_matches_operator(state.owner_id, operator_owner_id)?;";
+    assert!(handler.contains("let operator = require_report_config_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_report_config_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains(owner_check));
+    assert!(handler.contains("validate_report_config_param_values(params, &format)?;"));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler
+                .find("execute_report_config_patch_transaction")
+                .unwrap(),
+        "report-config patch must check owner before mutation"
+    );
+    assert!(
+        handler.find("validate_report_config_param_values").unwrap()
+            < handler
+                .find("execute_report_config_patch_transaction")
+                .unwrap(),
+        "report-config patch must validate params before mutation"
+    );
+}
+
+#[test]
 fn report_config_clone_handler_enforces_source_owner_check() {
     let source = include_str!("report_config_writes.rs");
     let clone_handler = source

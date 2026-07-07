@@ -250,3 +250,22 @@ export const exportNativeOperatingSystemMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeOperatingSystemsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const operatingSystems = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeOperatingSystemPayload>(
+        gmp,
+        `api/v1/operating-systems/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(
+    `${JSON.stringify({operating_systems: operatingSystems}, null, 2)}\n`,
+  );
+};

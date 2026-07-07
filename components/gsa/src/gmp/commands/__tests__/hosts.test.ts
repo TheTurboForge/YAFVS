@@ -7,12 +7,27 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {HostsCommand} from 'gmp/commands/hosts';
 import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import Host from 'gmp/models/host';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('HostsCommand tests', () => {
   test('should include assetType=host in exportByIds', async () => {
@@ -80,16 +95,7 @@ describe('HostsCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new HostsCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=web'});
@@ -104,5 +110,127 @@ describe('HostsCommand tests', () => {
       sort: 'severity',
       filter: 'web',
     });
+  });
+
+  test('should bulk export selected hosts through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({asset: {id: 'host-1'}}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({asset: {id: 'host-2'}}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new HostsCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['host-1', 'host-2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/hosts/host-1/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).hosts).toEqual([
+      {asset: {id: 'host-1'}},
+      {asset: {id: 'host-2'}},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'severity', filter: 'web'},
+          items: [{id: 'host-2', name: '192.0.2.20', severity: 5.0}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({asset: {id: 'host-2'}}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new HostsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=web');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/hosts', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'severity',
+      filter: 'web',
+    });
+    expect(JSON.parse(result.data).hosts).toEqual([{asset: {id: 'host-2'}}]);
+  });
+
+  test('should bulk export all filtered hosts through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'severity', filter: 'web'},
+          items: [{id: 'host-1', name: '192.0.2.10', severity: 7.5}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'severity', filter: 'web'},
+          items: [{id: 'host-2', name: '192.0.2.20', severity: 5.0}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({asset: {id: 'host-1'}}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({asset: {id: 'host-2'}}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new HostsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=web').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/hosts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'severity',
+      filter: 'web',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/hosts', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'severity',
+      filter: 'web',
+    });
+    expect(JSON.parse(result.data).hosts).toEqual([
+      {asset: {id: 'host-1'}},
+      {asset: {id: 'host-2'}},
+    ]);
   });
 });

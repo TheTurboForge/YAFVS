@@ -19,11 +19,17 @@ import logger from 'gmp/log';
 import Host from 'gmp/models/host';
 import {
   exportNativeHostMetadata,
+  exportNativeHostsMetadata,
   fetchNativeHosts,
   nativeHostsQueryFromFilter,
 } from 'gmp/native-api/hosts';
 
 const log = logger.getLogger('gmp.commands.hosts');
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 class HostCommand extends EntityCommand {
   constructor(http) {
@@ -140,6 +146,10 @@ class HostsCommand extends EntitiesCommand {
   }
 
   exportByIds(ids, assetType) {
+    if (canUseNativeApi(this.http)) {
+      return exportNativeHostsMetadata(this.http, ids);
+    }
+
     const data = {
       cmd: 'bulk_export',
       resource_type: this.name,
@@ -153,11 +163,49 @@ class HostsCommand extends EntitiesCommand {
   }
 
   export(entities, assetType) {
+    if (canUseNativeApi(this.http)) {
+      return this.exportByIds(entities.map(element => element.id));
+    }
+
     return this.exportByIds(
       entities.map(element => {
         return element.id;
       }),
       assetType,
+    );
+  }
+
+  async exportByFilter(filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const hosts = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; hosts.length < total; page += 1) {
+        const nativeResponse = await fetchNativeHosts(this.http, {
+          ...nativeHostsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        hosts.push(...nativeResponse.hosts);
+        total = nativeResponse.page.total;
+        if (nativeResponse.hosts.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeHosts(
+        this.http,
+        nativeHostsQueryFromFilter(filter),
+      );
+      hosts.push(...nativeResponse.hosts);
+    }
+
+    return exportNativeHostsMetadata(
+      this.http,
+      hosts.map(host => host.id),
     );
   }
 

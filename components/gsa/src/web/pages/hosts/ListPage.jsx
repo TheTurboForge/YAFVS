@@ -122,4 +122,5 @@ export default withEntitiesContainer('host', {
   fallbackFilter: FALLBACK_HOSTS_LIST_FILTER,
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

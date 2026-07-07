@@ -100,4 +100,5 @@ export default withEntitiesContainer('operatingsystem', {
   fallbackFilter: FALLBACK_OS_LIST_FILTER,
   entitiesSelector,
   loadEntities,
+  nativeListExportExtension: 'json',
 })(Page);

@@ -359,3 +359,20 @@ export const exportNativeHostMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeHostsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const hosts = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeHostDetailPayload>(
+        gmp,
+        `api/v1/hosts/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({hosts}, null, 2)}\n`);
+};

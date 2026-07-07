@@ -9,6 +9,7 @@ import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {BULK_SELECT_BY_IDS} from 'gmp/commands/http';
 import {
+  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -17,9 +18,15 @@ import Response from 'gmp/http/response';
 import OperatingSystem from 'gmp/models/os';
 import {
   exportNativeOperatingSystemMetadata,
+  exportNativeOperatingSystemsMetadata,
   fetchNativeOperatingSystems,
   nativeOperatingSystemsQueryFromFilter,
 } from 'gmp/native-api/operating-systems';
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 class OperatingSystemCommand extends EntityCommand {
   constructor(http) {
@@ -103,6 +110,10 @@ class OperatingSystemsCommand extends EntitiesCommand {
   }
 
   exportByIds(ids, assetType) {
+    if (canUseNativeApi(this.http)) {
+      return exportNativeOperatingSystemsMetadata(this.http, ids);
+    }
+
     const data = {
       cmd: 'bulk_export',
       resource_type: this.name,
@@ -116,11 +127,49 @@ class OperatingSystemsCommand extends EntitiesCommand {
   }
 
   export(entities, assetType) {
+    if (canUseNativeApi(this.http)) {
+      return this.exportByIds(entities.map(element => element.id));
+    }
+
     return this.exportByIds(
       entities.map(element => {
         return element.id;
       }),
       assetType,
+    );
+  }
+
+  async exportByFilter(filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const operatingSystems = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; operatingSystems.length < total; page += 1) {
+        const nativeResponse = await fetchNativeOperatingSystems(this.http, {
+          ...nativeOperatingSystemsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        operatingSystems.push(...nativeResponse.operatingSystems);
+        total = nativeResponse.page.total;
+        if (nativeResponse.operatingSystems.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeOperatingSystems(
+        this.http,
+        nativeOperatingSystemsQueryFromFilter(filter),
+      );
+      operatingSystems.push(...nativeResponse.operatingSystems);
+    }
+
+    return exportNativeOperatingSystemsMetadata(
+      this.http,
+      operatingSystems.map(os => os.id),
     );
   }
 

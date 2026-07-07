@@ -285,6 +285,22 @@ export const exportNativeScheduleMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeSchedulesMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const schedules = await Promise.all(
+    ids.map(id =>
+      fetchNativeJson<NativeSchedulePayload>(
+        gmp,
+        `api/v1/schedules/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      ),
+    ),
+  );
+  return new Response(`${JSON.stringify({schedules}, null, 2)}\n`);
+};
+
 export const cloneNativeSchedule = async (
   gmp: NativeApiGmp,
   id: string,

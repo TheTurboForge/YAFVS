@@ -7,13 +7,21 @@
 import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
+import {
+  canUseNativeApi,
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
 import logger from 'gmp/log';
 import Schedule from 'gmp/models/schedule';
 import {
   cloneNativeSchedule,
   deleteNativeSchedule,
   exportNativeScheduleMetadata,
+  exportNativeSchedulesMetadata,
+  fetchNativeSchedules,
+  nativeSchedulesQueryFromFilter,
   patchNativeSchedule,
 } from 'gmp/native-api/schedules';
 
@@ -29,6 +37,11 @@ const isScheduleMetadataOnlySave = args => {
     typeof args.name === 'string' &&
     (args.comment === undefined || typeof args.comment === 'string')
   );
+};
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
 };
 
 export class ScheduleCommand extends EntityCommand {
@@ -102,6 +115,56 @@ export class ScheduleCommand extends EntityCommand {
 export class SchedulesCommand extends EntitiesCommand {
   constructor(http) {
     super(http, 'schedule', Schedule);
+  }
+
+  export(entities) {
+    if (!canUseNativeApi(this.http)) {
+      return super.export(entities);
+    }
+
+    return this.exportByIds(entities.map(entity => entity.id));
+  }
+
+  exportByIds(ids) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByIds(ids);
+    }
+
+    return exportNativeSchedulesMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter) {
+    if (!canUseNativeApi(this.http)) {
+      return super.exportByFilter(filter);
+    }
+
+    const schedules = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; schedules.length < total; page += 1) {
+        const nativeResponse = await fetchNativeSchedules(this.http, {
+          ...nativeSchedulesQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        schedules.push(...nativeResponse.schedules);
+        total = nativeResponse.page.total;
+        if (nativeResponse.schedules.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeSchedules(
+        this.http,
+        nativeSchedulesQueryFromFilter(filter),
+      );
+      schedules.push(...nativeResponse.schedules);
+    }
+
+    return exportNativeSchedulesMetadata(
+      this.http,
+      schedules.map(schedule => schedule.id),
+    );
   }
 
   getEntitiesResponse(root) {

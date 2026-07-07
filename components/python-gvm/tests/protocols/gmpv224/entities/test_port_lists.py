@@ -5,11 +5,7 @@
 #
 
 from ...gmpv224 import Gmpv224TestCase
-from .port_lists import GmpGetPortListsTestMixin, GmpGetPortListTestMixin
-
-
-class Gmpv224GetPortListTestCase(GmpGetPortListTestMixin, Gmpv224TestCase):
-    pass
+from .port_lists import GmpGetPortListsTestMixin
 
 
 class Gmpv224GetPortListsTestCase(GmpGetPortListsTestMixin, Gmpv224TestCase):

@@ -6,14 +6,8 @@
 
 from ...gmpv224.entities.port_lists import (
     GmpGetPortListsTestMixin,
-    GmpGetPortListTestMixin,
 )
 from ...gmpv225 import GMPTestCase
-
-
-class Gmpv225GetPortListTestCase(GmpGetPortListTestMixin, GMPTestCase):
-    pass
-
 
 class Gmpv225GetPortListsTestCase(GmpGetPortListsTestMixin, GMPTestCase):
     pass

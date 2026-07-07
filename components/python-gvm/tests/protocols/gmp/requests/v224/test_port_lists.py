@@ -5,7 +5,6 @@
 
 import unittest
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.gmp.requests.v224 import PortLists
 
 
@@ -51,21 +50,3 @@ class PortListsTestCase(unittest.TestCase):
         request = PortLists.get_port_lists(targets=False)
 
         self.assertEqual(bytes(request), b'<get_port_lists targets="0"/>')
-
-    def test_get_port_list(self):
-        request = PortLists.get_port_list(port_list_id="port_list_id")
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_port_lists port_list_id="port_list_id" details="1"/>',
-        )
-
-    def test_get_port_list_missing_port_list_id(self):
-        with self.assertRaises(RequiredArgument):
-            PortLists.get_port_list(port_list_id=None)
-
-        with self.assertRaises(RequiredArgument):
-            PortLists.get_port_list(port_list_id="")
-
-        with self.assertRaises(RequiredArgument):
-            PortLists.get_port_list("")

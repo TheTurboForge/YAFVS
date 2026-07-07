@@ -223,16 +223,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def get_port_list(self, port_list_id: EntityID) -> T:
-        """Request a single port list
-
-        Args:
-            port_list_id: UUID of an existing port list
-        """
-        return self._send_request_and_transform_response(
-            PortLists.get_port_list(port_list_id)
-        )
-
     def get_aggregates(
         self,
         resource_type: EntityType | str,

@@ -501,3 +501,20 @@ export const exportNativeTargetMetadata = async (
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
+
+export const exportNativeTargetsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const targets = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeTargetItem>(
+        gmp,
+        `api/v1/targets/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({targets}, null, 2)}\n`);
+};

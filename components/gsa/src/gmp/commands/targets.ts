@@ -20,9 +20,15 @@ import Response from 'gmp/http/response';
 import {type Element} from 'gmp/models/model';
 import Target from 'gmp/models/target';
 import {
+  exportNativeTargetsMetadata,
   fetchNativeTargets,
   nativeTargetQueryFromFilter,
 } from 'gmp/native-api/targets';
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 class TargetsCommand extends EntitiesCommand<Target> {
   constructor(http: Http) {
@@ -81,6 +87,50 @@ class TargetsCommand extends EntitiesCommand<Target> {
         filter,
         targets,
         Number.isFinite(total) ? total : 0,
+      ),
+    );
+  }
+
+  exportByIds(ids: string[]) {
+    return exportNativeTargetsMetadata(this.http, ids);
+  }
+
+  export(entities: Target[]) {
+    return this.exportByIds(
+      entities.flatMap(entity =>
+        entity.id === undefined ? [] : [entity.id],
+      ),
+    );
+  }
+
+  async exportByFilter(filter) {
+    const targets: Target[] = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; targets.length < total; page += 1) {
+        const nativeResponse = await fetchNativeTargets(this.http, {
+          ...nativeTargetQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        targets.push(...nativeResponse.targets);
+        total = nativeResponse.page.total;
+        if (nativeResponse.targets.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeTargets(
+        this.http,
+        nativeTargetQueryFromFilter(filter),
+      );
+      targets.push(...nativeResponse.targets);
+    }
+
+    return exportNativeTargetsMetadata(
+      this.http,
+      targets.flatMap(target =>
+        target.id === undefined ? [] : [target.id],
       ),
     );
   }

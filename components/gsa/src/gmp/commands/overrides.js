@@ -49,14 +49,7 @@ class OverrideCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeOverrideMetadata(this.http, id);
-      } catch {
-        // Keep inherited GMP bulk export responsible for legacy export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeOverrideMetadata(this.http, id);
   }
 
   _save(args) {

@@ -9,7 +9,6 @@ import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {BULK_SELECT_BY_IDS} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -33,14 +32,7 @@ class OperatingSystemCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeOperatingSystemMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy OS export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeOperatingSystemMetadata(this.http, id);
   }
 }
 

@@ -7,7 +7,6 @@
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {OverrideCommand, OverridesCommand} from 'gmp/commands/overrides';
 import {
-  createActionResultResponse,
   createEntitiesResponse,
   createHttp,
 } from 'gmp/commands/testing';
@@ -60,37 +59,6 @@ describe('OverridesCommand tests', () => {
       text: 'Accepted compensating control',
       hosts: '192.0.2.10',
       port: '443/tcp',
-    });
-  });
-
-  test('should fall back to GMP when native override metadata export fails', async () => {
-    const response = createActionResultResponse({
-      action: 'bulk_export',
-      id: 'fallback-export-id',
-      message: 'Exported Override',
-    });
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new OverrideCommand(fakeHttp);
-    await cmd.export({id: 'override-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'override',
-        bulk_select: 1,
-        'bulk_selected:override-id': 1,
-      },
     });
   });
 

@@ -6,8 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {HostCommand} from 'gmp/commands/hosts';
-import {createPlainResponse, createHttp} from 'gmp/commands/testing';
-import Response from 'gmp/http/response';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -15,27 +14,6 @@ afterEach(() => {
 });
 
 describe('HostCommand tests', () => {
-  test('should include asset_type=host in export of host', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new HostCommand(fakeHttp);
-    const cmdResponse = await cmd.export({id: '123'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'asset',
-        asset_type: 'host',
-        bulk_select: 1,
-        'bulk_selected:123': 1,
-      },
-    });
-    expect(cmdResponse).toBeInstanceOf(Response);
-    expect(cmdResponse.data).toEqual(content);
-  });
-
   test('should export host metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -89,38 +67,4 @@ describe('HostCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native host metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
-    const cmd = new HostCommand(fakeHttp);
-    const result = await cmd.export({id: 'host-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'asset',
-        asset_type: 'host',
-        bulk_select: 1,
-        'bulk_selected:host-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
 });

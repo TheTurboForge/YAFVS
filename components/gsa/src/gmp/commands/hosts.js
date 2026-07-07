@@ -60,14 +60,7 @@ class HostCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeHostMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy host export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeHostMetadata(this.http, id);
   }
 
   getElementFromRoot(root) {

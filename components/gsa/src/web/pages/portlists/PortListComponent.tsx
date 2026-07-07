@@ -99,10 +99,7 @@ const loadPortList = async (
 };
 
 const exportPortList = (gmp: ReturnType<typeof useGmp>, entity: PortList) => {
-  if (canUseNativeApi(gmp)) {
-    return exportNativePortListMetadata(gmp, entity.id as string);
-  }
-  return gmp.portlist.export(entity as EntityCommandParams);
+  return exportNativePortListMetadata(gmp, entity.id as string);
 };
 
 const PortListComponent = ({
@@ -388,10 +385,7 @@ const PortListComponent = ({
       {children({
         clone: handleClone,
         download: entity =>
-          handleDownload(
-            entity,
-            canUseNativeApi(gmp) ? {extension: 'json'} : undefined,
-          ),
+          handleDownload(entity, {extension: 'json'}),
         delete: handleDelete,
         create: openPortListDialog,
         edit: openPortListDialog,

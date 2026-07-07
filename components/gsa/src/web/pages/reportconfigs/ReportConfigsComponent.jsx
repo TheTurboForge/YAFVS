@@ -27,10 +27,7 @@ const fetchReportConfig = (gmp, reportConfigData) => {
 };
 
 const exportReportConfig = (gmp, reportConfigData) => {
-  if (canUseNativeApi(gmp)) {
-    return exportNativeReportConfigMetadata(gmp, reportConfigData.id);
-  }
-  return gmp.reportconfig.export(reportConfigData);
+  return exportNativeReportConfigMetadata(gmp, reportConfigData.id);
 };
 
 const fetchAllReportFormats = async gmp => {
@@ -135,7 +132,7 @@ const ReportConfigComponent = ({
   return (
     <EntityComponent
       download={entity => exportReportConfig(gmp, entity)}
-      downloadOptions={canUseNativeApi(gmp) ? {extension: 'json'} : undefined}
+      downloadOptions={{extension: 'json'}}
       name="reportconfig"
       onCloneError={onCloneError}
       onCloned={onCloned}

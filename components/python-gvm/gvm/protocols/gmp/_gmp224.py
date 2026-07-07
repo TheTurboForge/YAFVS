@@ -2103,16 +2103,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def clone_schedule(self, schedule_id: EntityID) -> T:
-        """Clone an existing schedule
-
-        Args:
-            schedule_id: UUID of an existing schedule to clone from
-        """
-        return self._send_request_and_transform_response(
-            Schedules.clone_schedule(schedule_id)
-        )
-
     def create_schedule(
         self,
         name: str,
@@ -2165,19 +2155,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def delete_schedule(
-        self, schedule_id: EntityID, *, ultimate: bool | None = False
-    ) -> T:
-        """Deletes an existing schedule
-
-        Args:
-            schedule_id: UUID of the schedule to be deleted.
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        return self._send_request_and_transform_response(
-            Schedules.delete_schedule(schedule_id, ultimate=ultimate)
-        )
-
     def get_schedules(
         self,
         *,
@@ -2214,39 +2191,6 @@ class GMPv224(GvmProtocol[T]):
         """
         return self._send_request_and_transform_response(
             Schedules.get_schedule(schedule_id, tasks=tasks)
-        )
-
-    def modify_schedule(
-        self,
-        schedule_id: EntityID,
-        *,
-        name: str | None = None,
-        icalendar: str | None = None,
-        timezone: str | None = None,
-        comment: str | None = None,
-    ) -> T:
-        """Modifies an existing schedule
-
-        Args:
-            schedule_id: UUID of the schedule to be modified
-            name: Name of the schedule
-            icalendar: `iCalendar <https://tools.ietf.org/html/rfc5545>`_
-                (RFC 5545) based data.
-            timezone: Timezone to use for the icalendar events e.g
-                Europe/Berlin. If the datetime values in the icalendar data are
-                missing timezone information this timezone gets applied.
-                Otherwise the datetime values from the icalendar data are
-                displayed in this timezone
-            comment: Comment on schedule.
-        """
-        return self._send_request_and_transform_response(
-            Schedules.modify_schedule(
-                schedule_id,
-                name=name,
-                icalendar=icalendar,
-                timezone=timezone,
-                comment=comment,
-            )
         )
 
     def get_nvt_families(self, *, sort_order: str | None = None) -> T:

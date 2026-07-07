@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,20 +10,6 @@ from gvm.protocols.gmp.requests.v224 import Schedules
 
 
 class SchedulesTestUnit(unittest.TestCase):
-    def test_clone_schedule(self):
-        request = Schedules.clone_schedule("schedule_id")
-        self.assertEqual(
-            bytes(request),
-            b"<create_schedule><copy>schedule_id</copy></create_schedule>",
-        )
-
-    def test_clone_schedule_missing_schedule_id(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.clone_schedule(None)
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.clone_schedule("")
-
     def test_create_schedule(self):
         request = Schedules.create_schedule("name", "icalendar", "timezone")
         self.assertEqual(
@@ -68,33 +55,6 @@ class SchedulesTestUnit(unittest.TestCase):
 
         with self.assertRaises(RequiredArgument):
             Schedules.create_schedule("name", "icalendar", "")
-
-    def test_delete_schedule(self):
-        request = Schedules.delete_schedule("schedule_id")
-        self.assertEqual(
-            bytes(request),
-            b'<delete_schedule schedule_id="schedule_id" ultimate="0"/>',
-        )
-
-    def test_delete_schedule_with_ultimate(self):
-        request = Schedules.delete_schedule("schedule_id", ultimate=True)
-        self.assertEqual(
-            bytes(request),
-            b'<delete_schedule schedule_id="schedule_id" ultimate="1"/>',
-        )
-
-        request = Schedules.delete_schedule("schedule_id", ultimate=False)
-        self.assertEqual(
-            bytes(request),
-            b'<delete_schedule schedule_id="schedule_id" ultimate="0"/>',
-        )
-
-    def test_delete_schedule_missing_schedule_id(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.delete_schedule(None)
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.delete_schedule("")
 
     def test_get_schedules(self):
         request = Schedules.get_schedules()
@@ -166,54 +126,3 @@ class SchedulesTestUnit(unittest.TestCase):
 
         with self.assertRaises(RequiredArgument):
             Schedules.get_schedule("")
-
-    def test_modify_schedule(self):
-        request = Schedules.modify_schedule("schedule_id")
-        self.assertEqual(
-            bytes(request), b'<modify_schedule schedule_id="schedule_id"/>'
-        )
-
-    def test_modify_schedule_with_name(self):
-        request = Schedules.modify_schedule("schedule_id", name="name")
-        self.assertEqual(
-            bytes(request),
-            b'<modify_schedule schedule_id="schedule_id">'
-            b"<name>name</name>"
-            b"</modify_schedule>",
-        )
-
-    def test_modify_schedule_with_comment(self):
-        request = Schedules.modify_schedule("schedule_id", comment="comment")
-        self.assertEqual(
-            bytes(request),
-            b'<modify_schedule schedule_id="schedule_id">'
-            b"<comment>comment</comment>"
-            b"</modify_schedule>",
-        )
-
-    def test_modify_schedule_with_icalendar(self):
-        request = Schedules.modify_schedule(
-            "schedule_id", icalendar="icalendar"
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<modify_schedule schedule_id="schedule_id">'
-            b"<icalendar>icalendar</icalendar>"
-            b"</modify_schedule>",
-        )
-
-    def test_modify_schedule_with_timezone(self):
-        request = Schedules.modify_schedule("schedule_id", timezone="timezone")
-        self.assertEqual(
-            bytes(request),
-            b'<modify_schedule schedule_id="schedule_id">'
-            b"<timezone>timezone</timezone>"
-            b"</modify_schedule>",
-        )
-
-    def test_modify_schedule_missing_schedule_id(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.modify_schedule(None)
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.modify_schedule("")

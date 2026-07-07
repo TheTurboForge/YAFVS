@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -12,22 +13,6 @@ from .._entity_id import EntityID
 
 
 class Schedules:
-    @classmethod
-    def clone_schedule(cls, schedule_id: EntityID) -> Request:
-        """Clone an existing schedule
-
-        Args:
-            schedule_id: UUID of an existing schedule to clone from
-        """
-        if not schedule_id:
-            raise RequiredArgument(
-                function=cls.clone_schedule.__name__, argument="schedule_id"
-            )
-
-        cmd = XmlCommand("create_schedule")
-        cmd.add_element("copy", str(schedule_id))
-        return cmd
-
     @classmethod
     def create_schedule(
         cls,
@@ -103,28 +88,6 @@ class Schedules:
             cmd.add_element("comment", comment)
 
         return cmd
-
-    @classmethod
-    def delete_schedule(
-        cls, schedule_id: EntityID, *, ultimate: bool | None = False
-    ) -> Request:
-        """Deletes an existing schedule
-
-        Args:
-            schedule_id: UUID of the schedule to be deleted.
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        if not schedule_id:
-            raise RequiredArgument(
-                function=cls.delete_schedule.__name__, argument="schedule_id"
-            )
-
-        cmd = XmlCommand("delete_schedule")
-        cmd.set_attribute("schedule_id", str(schedule_id))
-        cmd.set_attribute("ultimate", to_bool(ultimate))
-
-        return cmd
-
     @staticmethod
     def get_schedules(
         *,
@@ -152,7 +115,6 @@ class Schedules:
             cmd.set_attribute("tasks", to_bool(tasks))
 
         return cmd
-
     @classmethod
     def get_schedule(
         cls, schedule_id: EntityID, *, tasks: bool | None = None
@@ -174,53 +136,5 @@ class Schedules:
 
         if tasks is not None:
             cmd.set_attribute("tasks", to_bool(tasks))
-
-        return cmd
-
-    @classmethod
-    def modify_schedule(
-        cls,
-        schedule_id: EntityID,
-        *,
-        name: str | None = None,
-        icalendar: str | None = None,
-        timezone: str | None = None,
-        comment: str | None = None,
-    ) -> Request:
-        """Modifies an existing schedule
-
-        Args:
-            schedule_id: UUID of the schedule to be modified
-            name: Name of the schedule
-            icalendar: `iCalendar`_ (RFC 5545) based data.
-            timezone: Timezone to use for the icalendar events e.g
-                Europe/Berlin. If the datetime values in the icalendar data are
-                missing timezone information this timezone gets applied.
-                Otherwise the datetime values from the icalendar data are
-                displayed in this timezone
-            comment: Comment on schedule.
-
-        .. _iCalendar:
-            https://tools.ietf.org/html/rfc5545
-        """
-        if not schedule_id:
-            raise RequiredArgument(
-                function=cls.modify_schedule.__name__, argument="schedule_id"
-            )
-
-        cmd = XmlCommand("modify_schedule")
-        cmd.set_attribute("schedule_id", str(schedule_id))
-
-        if name:
-            cmd.add_element("name", name)
-
-        if icalendar:
-            cmd.add_element("icalendar", icalendar)
-
-        if timezone:
-            cmd.add_element("timezone", timezone)
-
-        if comment:
-            cmd.add_element("comment", comment)
 
         return cmd

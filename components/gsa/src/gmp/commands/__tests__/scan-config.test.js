@@ -22,12 +22,22 @@ import {
   SCANCONFIG_TREND_STATIC,
   SCANCONFIG_TREND_DYNAMIC,
 } from 'gmp/models/scan-config';
+import Filter from 'gmp/models/filter';
 import {YES_VALUE, NO_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined);
+  fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('convertPreferences tests', () => {
   test('should convert preferences', () => {
@@ -90,11 +100,7 @@ describe('ScanConfigsCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ScanConfigsCommand(fakeHttp);
     const result = await cmd.get({filter: 'first=1 rows=25 search=base'});
@@ -145,11 +151,7 @@ describe('ScanConfigsCommand tests', () => {
       }),
     );
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ScanConfigsCommand(fakeHttp);
     const result = await cmd.getAll();
@@ -180,6 +182,163 @@ describe('ScanConfigsCommand tests', () => {
         predefined: '',
       },
     );
+  });
+
+  test('should bulk export selected scan configs through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'config-1', name: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'config-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigsCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['config-1', 'config-2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/scan-configs/config-1/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).scan_configs).toEqual([
+      {id: 'config-1', name: 'One'},
+      {id: 'config-2', name: 'Two'},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'base',
+          },
+          items: [{id: 'config-2', name: 'Two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'config-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=base');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/scan-configs',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 1,
+        sort: 'name',
+        filter: 'base',
+        predefined: '',
+      },
+    );
+    expect(JSON.parse(result.data).scan_configs).toEqual([
+      {id: 'config-2', name: 'Two'},
+    ]);
+  });
+
+  test('should bulk export all filtered scan configs through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'base',
+          },
+          items: [{id: 'config-1', name: 'One'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'base',
+          },
+          items: [{id: 'config-2', name: 'Two'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'config-1', name: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'config-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=base').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/scan-configs',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: 500,
+        sort: 'name',
+        filter: 'base',
+        predefined: '',
+      },
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/scan-configs',
+      {
+        token: 'test-token',
+        page: 2,
+        page_size: 500,
+        sort: 'name',
+        filter: 'base',
+        predefined: '',
+      },
+    );
+    expect(JSON.parse(result.data).scan_configs).toEqual([
+      {id: 'config-1', name: 'One'},
+      {id: 'config-2', name: 'Two'},
+    ]);
   });
 });
 

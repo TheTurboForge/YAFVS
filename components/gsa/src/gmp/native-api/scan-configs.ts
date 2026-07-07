@@ -430,6 +430,25 @@ export const exportNativeScanConfigMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeScanConfigsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const scanConfigs = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeScanConfigPayload>(
+        gmp,
+        `api/v1/scan-configs/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(
+    `${JSON.stringify({scan_configs: scanConfigs}, null, 2)}\n`,
+  );
+};
+
 export const cloneNativeScanConfig = async (
   gmp: NativeApiGmp,
   id: string,

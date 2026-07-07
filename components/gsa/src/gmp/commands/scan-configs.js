@@ -21,6 +21,7 @@ import {
   cloneNativeScanConfig,
   createNativeScanConfig,
   deleteNativeScanConfig,
+  exportNativeScanConfigsMetadata,
   exportNativeScanConfigMetadata,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
@@ -31,6 +32,11 @@ import {forEach, map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
 
 const log = logger.getLogger('gmp.commands.scanconfigs');
+
+const shouldExportAllByFilter = filter => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
 
 const isEmptyOptionalObject = value =>
   !isDefined(value) || Object.keys(value).length === 0;
@@ -286,6 +292,44 @@ class ScanConfigsCommand extends EntitiesCommand {
 
   getEntitiesResponse(root) {
     return root.get_configs.get_configs_response;
+  }
+
+  exportByIds(ids) {
+    return exportNativeScanConfigsMetadata(this.http, ids);
+  }
+
+  export(entities) {
+    return this.exportByIds(entities.map(entity => entity.id));
+  }
+
+  async exportByFilter(filter) {
+    const scanConfigs = [];
+    if (shouldExportAllByFilter(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; scanConfigs.length < total; page += 1) {
+        const nativeResponse = await fetchNativeScanConfigs(this.http, {
+          ...nativeScanConfigsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        scanConfigs.push(...nativeResponse.scanConfigs);
+        total = nativeResponse.page.total;
+        if (nativeResponse.scanConfigs.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeScanConfigs(
+        this.http,
+        nativeScanConfigsQueryFromFilter(filter),
+      );
+      scanConfigs.push(...nativeResponse.scanConfigs);
+    }
+
+    return exportNativeScanConfigsMetadata(
+      this.http,
+      scanConfigs.map(scanConfig => scanConfig.id),
+    );
   }
 
   get(params, options) {

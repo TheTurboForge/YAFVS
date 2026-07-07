@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -53,7 +54,7 @@ const PortListDetailsPageToolBarIcons = ({
         />
         <TrashIcon entity={entity} onClick={onPortListDeleteClick} />
         <ExportIcon
-          title={_('Export Port List as XML')}
+          title={_('Export Port List as JSON')}
           value={entity}
           onClick={onPortListDownloadClick as (entity?: PortList) => void}
         />

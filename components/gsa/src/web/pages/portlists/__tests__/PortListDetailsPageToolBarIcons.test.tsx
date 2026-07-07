@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -33,7 +34,7 @@ describe('PortListDetailsPageToolBarIcons', () => {
     expect(screen.getByTitle('Create new Port List')).toBeInTheDocument();
     expect(screen.getByTitle('Edit Port List')).toBeInTheDocument();
     expect(screen.getByTitle('Move Port List to trashcan')).toBeInTheDocument();
-    expect(screen.getByTitle('Export Port List as XML')).toBeInTheDocument();
+    expect(screen.getByTitle('Export Port List as JSON')).toBeInTheDocument();
   });
 
   test('should not render action icons when capabilities are missing', () => {
@@ -47,7 +48,7 @@ describe('PortListDetailsPageToolBarIcons', () => {
     expect(
       screen.queryByTitle('Move Port List to trashcan'),
     ).not.toBeInTheDocument();
-    expect(screen.getByTitle('Export Port List as XML')).toBeInTheDocument();
+    expect(screen.getByTitle('Export Port List as JSON')).toBeInTheDocument();
   });
 
   test('should allow to create a port list', () => {

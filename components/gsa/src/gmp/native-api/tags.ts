@@ -369,6 +369,22 @@ export const exportNativeTagMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeTagsMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const tags = await Promise.all(
+    ids.map(id =>
+      fetchNativeJson<NativeTagPayload>(
+        gmp,
+        `api/v1/tags/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      ),
+    ),
+  );
+  return new Response(`${JSON.stringify({tags}, null, 2)}\n`);
+};
+
 export const cloneNativeTag = async (
   gmp: NativeApiGmp,
   id: string,

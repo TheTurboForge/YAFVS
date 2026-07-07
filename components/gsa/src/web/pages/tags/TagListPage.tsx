@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -153,6 +154,7 @@ const TagsPage = () => {
       const filename = generateFilename({
         fileNameFormat: listExportFileName,
         resourceType: pluralizeType(getEntityType(allEntities[0])),
+        extension: 'json',
       });
       const {data} = response;
       handleDownload({filename, data});

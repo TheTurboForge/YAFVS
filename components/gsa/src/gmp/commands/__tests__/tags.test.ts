@@ -7,11 +7,26 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import TagsCommand from 'gmp/commands/tags';
 import {createHttp} from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
 
 describe('TagsCommand tests', () => {
   test('should fetch tags through native API', async () => {
@@ -35,16 +50,7 @@ describe('TagsCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new TagsCommand(fakeHttp);
     const result = await cmd.get({
@@ -122,16 +128,7 @@ describe('TagsCommand tests', () => {
       }),
     );
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new TagsCommand(fakeHttp);
     const result = await cmd.getAll();
@@ -158,5 +155,148 @@ describe('TagsCommand tests', () => {
       resource_type: '',
       value: '',
     });
+  });
+
+  test('should bulk export selected tags through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'tag-1', name: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'tag-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TagsCommand(fakeHttp);
+
+    const result = await cmd.exportByIds(['tag-1', 'tag-2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/tags/tag-1/export',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/tags/tag-2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).tags).toEqual([
+      {id: 'tag-1', name: 'One'},
+      {id: 'tag-2', name: 'Two'},
+    ]);
+  });
+
+  test('should bulk export current page filter through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'owner'},
+          items: [{id: 'tag-2', name: 'Two', resource_type: 'task'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'tag-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TagsCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=owner');
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/tags', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'name',
+      filter: 'owner',
+      active: '',
+      resource_type: '',
+      value: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/tags/tag-2/export',
+      {token: 'test-token'},
+    );
+    expect(JSON.parse(result.data).tags).toEqual([
+      {id: 'tag-2', name: 'Two'},
+    ]);
+  });
+
+  test('should bulk export all filtered tags through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'owner'},
+          items: [{id: 'tag-1', name: 'One', resource_type: 'task'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'owner'},
+          items: [{id: 'tag-2', name: 'Two', resource_type: 'task'}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'tag-1', name: 'One'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'tag-2', name: 'Two'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TagsCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=owner').all();
+
+    const result = await cmd.exportByFilter(filter);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/tags', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'owner',
+      active: '',
+      resource_type: '',
+      value: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/tags', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'owner',
+      active: '',
+      resource_type: '',
+      value: '',
+    });
+    expect(JSON.parse(result.data).tags).toEqual([
+      {id: 'tag-1', name: 'One'},
+      {id: 'tag-2', name: 'Two'},
+    ]);
   });
 });

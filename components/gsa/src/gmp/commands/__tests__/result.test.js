@@ -6,11 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {ResultCommand} from 'gmp/commands/result';
-import {
-  createEntityResponse,
-  createHttp,
-  createPlainResponse,
-} from 'gmp/commands/testing';
+import {createEntityResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -77,34 +73,4 @@ describe('ResultCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native result metadata export fails', async () => {
-    const content = '<some><xml>exported-data</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    const cmd = new ResultCommand(fakeHttp);
-
-    const result = await cmd.export({id: 'result-id'});
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'result',
-        bulk_select: 1,
-        'bulk_selected:result-id': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
 });

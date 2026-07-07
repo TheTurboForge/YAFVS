@@ -8,7 +8,6 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -27,14 +26,7 @@ class VulnerabilityCommand extends EntityCommand {
   }
 
   async export({id}) {
-    if (canUseNativeApi(this.http)) {
-      try {
-        return await exportNativeVulnerabilityMetadata(this.http, id);
-      } catch {
-        // Keep inherited bulk export responsible for legacy vulnerability export behavior.
-      }
-    }
-    return super.export({id});
+    return await exportNativeVulnerabilityMetadata(this.http, id);
   }
 }
 
@@ -47,11 +39,7 @@ class VulnerabilitiesCommand extends EntitiesCommand {
     return root.get_vulns.get_vulns_response;
   }
 
-  async get(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeVulnerabilities(
       this.http,
@@ -63,11 +51,7 @@ class VulnerabilitiesCommand extends EntitiesCommand {
     });
   }
 
-  async getAll(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params = {}) {
     const filter = filterFromCommandParams(params).all();
     const vulnerabilities = [];
     let total = Number.POSITIVE_INFINITY;

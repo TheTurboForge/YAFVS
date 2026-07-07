@@ -7,9 +7,7 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   createAggregatesResponse,
-  createEntitiesResponse,
   createHttp,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 import {VulnerabilityCommand, VulnerabilitiesCommand} from 'gmp/commands/vulns';
@@ -65,64 +63,10 @@ describe('VulnerabilityCommand tests', () => {
     });
   });
 
-  test('should fall back to GMP when native vulnerability metadata export fails', async () => {
-    const content = '<some><xml>exported-vulnerability</xml></some>';
-    const response = createPlainResponse(content);
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
-      ok: false,
-      status: 503,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    const cmd = new VulnerabilityCommand(fakeHttp);
-
-    const result = await cmd.export({
-      id: '1.3.6.1.4.1.25623.1.0.900001',
-    });
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'vuln',
-        bulk_select: 1,
-        'bulk_selected:1.3.6.1.4.1.25623.1.0.900001': 1,
-      },
-    });
-    expect(result.data).toEqual(content);
-  });
 });
 
 describe('VulnerabilitiesCommand tests', () => {
-  test('should parse get_vulns response', async () => {
-    const response = createEntitiesResponse(
-      'vuln',
-      [{id: 'v1'}, {id: 'v2'}],
-      {
-        getName: 'get_vulns',
-        responseName: 'get_vulns_response',
-        pluralName: 'vulns',
-        countName: 'vuln_count',
-      },
-    );
-    const fakeHttp = createHttp(response);
-    const cmd = new VulnerabilitiesCommand(fakeHttp);
-
-    const result = await cmd.get();
-
-    expect(result.data).toHaveLength(2);
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_vulns'},
-    });
-  });
-
-  test('should fetch vulnerabilities through native API when available', async () => {
+  test('should fetch vulnerabilities through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: '-severity', filter: 'postgres'},
@@ -165,6 +109,73 @@ describe('VulnerabilitiesCommand tests', () => {
       sort: 'severity',
       filter: 'postgres',
     });
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 2, total: 3, sort: '-severity', filter: ''},
+        items: [
+          {
+            id: '1.3.6.1.4.1.25623.1.0.900001',
+            name: 'PostgreSQL vulnerability',
+            family: 'General',
+            severity: 7.5,
+            qod: 80,
+            result_count: 3,
+            host_count: 2,
+          },
+          {
+            id: '1.3.6.1.4.1.25623.1.0.900002',
+            name: 'SSH vulnerability',
+            family: 'General',
+            severity: 5,
+            qod: 80,
+            result_count: 1,
+            host_count: 1,
+          },
+        ],
+      },
+      {
+        page: {page: 2, page_size: 2, total: 3, sort: '-severity', filter: ''},
+        items: [
+          {
+            id: '1.3.6.1.4.1.25623.1.0.900003',
+            name: 'TLS vulnerability',
+            family: 'General',
+            severity: 4,
+            qod: 80,
+            result_count: 1,
+            host_count: 1,
+          },
+        ],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new VulnerabilitiesCommand(fakeHttp);
+
+    const result = await cmd.getAll();
+
+    expect(result.data.map(vuln => vuln.id)).toEqual([
+      '1.3.6.1.4.1.25623.1.0.900001',
+      '1.3.6.1.4.1.25623.1.0.900002',
+      '1.3.6.1.4.1.25623.1.0.900003',
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   test('should request severity aggregates for vulnerabilities', async () => {

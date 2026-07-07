@@ -290,6 +290,23 @@ export const exportNativeScannerMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const exportNativeScannersMetadata = async (
+  gmp: NativeApiGmp,
+  ids: string[],
+): Promise<Response<string>> => {
+  const scanners = await Promise.all(
+    ids.map(async id => {
+      const payload = await fetchNativeJson<NativeScannerPayload>(
+        gmp,
+        `api/v1/scanners/${encodeURIComponent(id)}/export`,
+        {token: gmp.session.token},
+      );
+      return payload;
+    }),
+  );
+  return new Response(`${JSON.stringify({scanners}, null, 2)}\n`);
+};
+
 export const patchNativeScanner = async (
   gmp: NativeApiGmp,
   {id, name, comment}: NativeScannerPatchArgs,

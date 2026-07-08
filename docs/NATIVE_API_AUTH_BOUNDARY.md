@@ -110,7 +110,7 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   type is allowed only through the direct write-control route. Read-only feed
   inventory metadata at
   `/api/v1/feeds` is allowed only as a classified scriptable read endpoint.
-- Read-only tag-dialog resource-name lookups, including alert and credential, are also
+- Read-only tag-dialog resource-name lookups, including alert, credential, report, and result, are also
   allowlisted scriptable reads. They expose only id/type/name lookup data;
   alert name/comment metadata PATCH is direct write-control, while alert
   delivery, method/event/condition payloads, active state, task links,

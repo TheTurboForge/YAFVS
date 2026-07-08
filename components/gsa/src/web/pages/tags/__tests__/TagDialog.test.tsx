@@ -337,7 +337,16 @@ describe('TagDialog tests', () => {
     );
   });
 
-  test('should keep unsupported resource-name lookups on inherited GMP', async () => {
+  test('should use native resource-name lookup for report resources', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+        items: [{id: 'report-1', type: 'report', name: 'report-1'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const getResourceNames = testing.fn().mockResolvedValue(
       new Response([new ResourceName({id: 'report-1', name: 'Report', type: 'report'})]),
     );
@@ -356,7 +365,39 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(getResourceNames).toHaveBeenCalledWith({resourceType: 'report'});
+    expect(getResourceNames).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/resource-names/report',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: SELECT_MAX_RESOURCES,
+        sort: 'name',
+        filter: '',
+      },
+    );
+  });
+
+  test('should keep unsupported resource-name lookups on inherited GMP', async () => {
+    const getResourceNames = testing.fn().mockResolvedValue(
+      new Response([new ResourceName({id: 'user-1', name: 'User', type: 'user'})]),
+    );
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    const {render} = rendererWith({
+      gmp: createGmp({
+        buildUrl,
+        getResourceNames,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
+    });
+
+    render(<TagDialog resourceType="user" resourceTypes={['user']} />);
+
+    await wait();
+
+    expect(getResourceNames).toHaveBeenCalledWith({resourceType: 'user'});
     expect(buildUrl).not.toHaveBeenCalled();
   });
 

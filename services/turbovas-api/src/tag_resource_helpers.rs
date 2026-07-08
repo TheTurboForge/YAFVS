@@ -119,6 +119,20 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
             extra_where: "",
         }),
+        "report" => Ok(TagResourceSqlSpec {
+            table: "reports",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "r.uuid",
+            extra_where: "",
+        }),
+        "result" => Ok(TagResourceSqlSpec {
+            table: "results",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.hostname, ''), nullif(r.host, ''), nullif(r.port, ''), r.uuid)",
+            extra_where: "",
+        }),
         "scanner" => Ok(TagResourceSqlSpec {
             table: "scanners",
             join_on: "r.id = tr.resource",
@@ -192,8 +206,10 @@ pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -
             | "nvt"
             | "os"
             | "port_list"
+            | "report"
             | "report_config"
             | "report_format"
+            | "result"
             | "scanner"
             | "schedule"
             | "target"
@@ -218,8 +234,10 @@ pub(crate) fn tag_resource_direct_write_requires_owner_match(resource_type: &str
             | "host"
             | "os"
             | "port_list"
+            | "report"
             | "report_config"
             | "report_format"
+            | "result"
             | "scanner"
             | "schedule"
             | "target"
@@ -377,8 +395,10 @@ mod tests {
         assert!(scanner_sql.contains("JOIN scanners r ON r.id = tr.resource"));
         let schedule_sql = tag_resource_collection_sql("schedule", &sort_sql).unwrap();
         assert!(schedule_sql.contains("JOIN schedules r ON r.id = tr.resource"));
-        assert!(tag_resource_collection_sql("report", &sort_sql).is_err());
-        assert!(tag_resource_collection_sql("result", &sort_sql).is_err());
+        let report_sql = tag_resource_collection_sql("report", &sort_sql).unwrap();
+        assert!(report_sql.contains("JOIN reports r ON r.id = tr.resource"));
+        let result_sql = tag_resource_collection_sql("result", &sort_sql).unwrap();
+        assert!(result_sql.contains("JOIN results r ON r.id = tr.resource"));
     }
 
     #[test]
@@ -434,6 +454,20 @@ mod tests {
         assert!(credential_sql.contains("lower((r.uuid)::text) = lower($1)"));
         assert!(credential_sql.contains("r.owner::integer AS owner_id"));
         assert!(tag_resource_direct_write_requires_owner_match("credential"));
+
+        let report_sql = tag_resource_active_lookup_sql("report").unwrap();
+        assert!(report_sql.contains("FROM reports r"));
+        assert!(report_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(report_sql.contains("r.owner::integer AS owner_id"));
+        assert!(tag_resource_direct_write_id_must_be_uuid("report"));
+        assert!(tag_resource_direct_write_requires_owner_match("report"));
+
+        let result_sql = tag_resource_active_lookup_sql("result").unwrap();
+        assert!(result_sql.contains("FROM results r"));
+        assert!(result_sql.contains("lower((r.uuid)::text) = lower($1)"));
+        assert!(result_sql.contains("r.owner::integer AS owner_id"));
+        assert!(tag_resource_direct_write_id_must_be_uuid("result"));
+        assert!(tag_resource_direct_write_requires_owner_match("result"));
     }
 
     #[test]
@@ -454,9 +488,11 @@ mod tests {
         assert!(scanner_sql.contains("FROM scanners r"));
         let schedule_sql = tag_resource_name_collection_sql("schedule", &sort_sql).unwrap();
         assert!(schedule_sql.contains("FROM schedules r"));
+        let report_sql = tag_resource_name_collection_sql("report", &sort_sql).unwrap();
+        assert!(report_sql.contains("FROM reports r"));
+        let result_sql = tag_resource_name_collection_sql("result", &sort_sql).unwrap();
+        assert!(result_sql.contains("FROM results r"));
         assert!(tag_resource_name_collection_sql("user", &sort_sql).is_err());
-        assert!(tag_resource_name_collection_sql("report", &sort_sql).is_err());
-        assert!(tag_resource_name_collection_sql("result", &sort_sql).is_err());
     }
 
     #[test]

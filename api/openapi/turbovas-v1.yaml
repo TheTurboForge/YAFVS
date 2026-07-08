@@ -1886,7 +1886,7 @@ paths:
     get:
       operationId: getTagsResourceNamesByResourceType
       summary: List tag-dialog resource names
-      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule/credential id-name, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Users, filters, overrides, reports, results, and all other write/control surfaces remain on inherited compatibility paths.
+      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule/credential id-name, report/result UUID lookup, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Users, filters, overrides, report/result actions, and all other write/control surfaces remain on inherited compatibility paths.
       x-turbovas-direct: true
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
@@ -1898,7 +1898,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate, alert]
+            enum: [cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, alert]
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
@@ -2194,7 +2194,7 @@ paths:
       x-turbovas-replaces: tag-resource-reference-read
       x-turbovas-inherited-still-owns: tag-filter-actions-and-file-export
       summary: List assigned tag resource references
-      description: Read-only active-table tag resource references for a strict whitelist of asset and security-information resource types. Security-information resource mutation, filter-based bulk actions, export, trash behavior, credentials, users, permissions, reports, results, and other unsafe resource classes remain on inherited compatibility paths.
+      description: Read-only active-table tag resource references for a strict whitelist of asset, report/result UUID-backed, and security-information resource types. Security-information resource mutation, filter-based bulk actions, export, trash behavior, users, permissions, and other unsafe resource classes remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
         - $ref: '#/components/parameters/Page'
@@ -2234,7 +2234,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: resource-assignment-write
       summary: Add or remove active tag resource assignments
-      description: Direct write-control endpoint for adding or removing explicit resource assignments for the tag's existing resource type. UUID-backed resource types, including redacted alert metadata rows, use UUID ids; catalog-backed security-information types use their exact public ids such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. It supports only native-safe active-table resource types and explicit resource_ids. Alert delivery, method/event/condition payloads, filter-based bulk actions, set/replace semantics, trash resources, export, credentials, users, reports, and results remain inherited.
+      description: Direct write-control endpoint for adding or removing explicit resource assignments for the tag's existing resource type. UUID-backed resource types, including redacted alert metadata rows and report/result rows, use UUID ids and owner checks where applicable; catalog-backed security-information types use their exact public ids such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. It supports only native-safe active-table resource types and explicit resource_ids. Alert delivery, method/event/condition payloads, report/result actions or exports, filter-based bulk actions, set/replace semantics, trash resources, users, and credentials remain inherited.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -6541,7 +6541,7 @@ components:
           maxLength: 4096
         resource_type:
           type: string
-          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report_config, report_format, scanner, schedule, config, target, task, tls_certificate]
+          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate]
         comment:
           type: string
           maxLength: 4096

@@ -249,7 +249,7 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
 
     let bad_type = TagCreateRequest {
         name: "owner:x".to_string(),
-        resource_type: "report".to_string(),
+        resource_type: "user".to_string(),
         comment: None,
         value: None,
         active: true,

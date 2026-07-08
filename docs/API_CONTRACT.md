@@ -39,7 +39,7 @@ The first API phase is read-only and report-focused:
   files; no feed sync/import/update, mirroring, bundling, redistribution, or
   scanner control.
 - tag list and detail metadata reads, including resource type/count and value,
-  plus tag-dialog resource-name lookups for supported types including alert and credential,
+  plus tag-dialog resource-name lookups for supported types including alert, credential, report, and result,
   inside authenticated operator access only.
 - scan-config list and browser-proxied metadata-detail reads, including
   family/NVT counts, growth flags, predefined/deprecated state, active User

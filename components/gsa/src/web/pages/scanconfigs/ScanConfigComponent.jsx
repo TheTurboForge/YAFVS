@@ -10,7 +10,8 @@ import {
   fetchNativeScanConfigFamilies,
 } from 'gmp/native-api/scan-configs';
 import {fetchNativeScanners} from 'gmp/native-api/scanners';
-import {YES_VALUE} from 'gmp/parser';
+import {SCANCONFIG_TREND_STATIC} from 'gmp/models/scan-config';
+import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import {forEach} from 'gmp/utils/array';
 import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
@@ -34,6 +35,78 @@ const nativeFamiliesForEditDialog = scanConfig =>
     name: family.name,
     maxNvtCount: family.nvts?.max ?? 0,
   }));
+
+const sameFlatObject = (actual = {}, expected = {}) => {
+  const actualKeys = Object.keys(actual).sort();
+  const expectedKeys = Object.keys(expected).sort();
+
+  return (
+    actualKeys.length === expectedKeys.length &&
+    actualKeys.every(
+      (key, index) =>
+        key === expectedKeys[index] && String(actual[key]) === String(expected[key]),
+    )
+  );
+};
+
+const expectedFamilyEditValues = (scanConfigFamilies = {}, allFamilies = []) => {
+  const trend = {};
+  const select = {};
+
+  allFamilies.forEach(family => {
+    const {name} = family;
+    const configFamily = scanConfigFamilies[name];
+
+    if (isDefined(configFamily)) {
+      trend[name] = configFamily.trend;
+      select[name] =
+        configFamily.nvts.count === family.maxNvtCount ? YES_VALUE : NO_VALUE;
+    } else {
+      trend[name] = SCANCONFIG_TREND_STATIC;
+      select[name] = NO_VALUE;
+    }
+  });
+
+  return {trend, select};
+};
+
+const expectedScannerPreferenceValues = (scannerPreferences = []) => {
+  const values = {};
+  scannerPreferences.forEach(preference => {
+    values[preference.name] = preference.value;
+  });
+  return values;
+};
+
+const isEmptyFlatObject = value =>
+  !isDefined(value) || Object.keys(value).length === 0;
+
+const isUnchangedFamilyEditState = (data, scanConfig, allFamilies) => {
+  const {familyTrend, select, trend} = data;
+  const expectedFamilies = expectedFamilyEditValues(
+    scanConfig.families,
+    allFamilies,
+  );
+
+  return (
+    String(familyTrend ?? '') === String(scanConfig.families?.trend ?? '') &&
+    (isEmptyFlatObject(trend) || sameFlatObject(trend, expectedFamilies.trend)) &&
+    (isEmptyFlatObject(select) ||
+      sameFlatObject(select, expectedFamilies.select))
+  );
+};
+
+const isUnchangedScanConfigEditState = (data, scanConfig, allFamilies) => {
+  const {scannerPreferenceValues} = data;
+
+  return (
+    isUnchangedFamilyEditState(data, scanConfig, allFamilies) &&
+    sameFlatObject(
+      scannerPreferenceValues,
+      expectedScannerPreferenceValues(scanConfig.preferences?.scanner),
+    )
+  );
+};
 
 const exportScanConfig = (gmp, scanConfig) => {
   return exportNativeScanConfigMetadata(gmp, scanConfig.id);
@@ -276,7 +349,7 @@ const ScanConfigComponent = ({
   const handleSaveScanConfig = data => {
     const {name, comment, id} = data;
     let saveData = data;
-    if (config.isInUse()) {
+    if (config.isInUse() || isUnchangedScanConfigEditState(data, config, families)) {
       saveData = {name, comment, id};
     }
 

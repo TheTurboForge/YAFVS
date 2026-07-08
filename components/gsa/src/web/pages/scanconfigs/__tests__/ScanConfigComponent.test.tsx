@@ -5,7 +5,13 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {screen, rendererWith, fireEvent, waitFor} from 'web/testing';
+import {
+  changeInputValue,
+  screen,
+  rendererWith,
+  fireEvent,
+  waitFor,
+} from 'web/testing';
 import date from 'gmp/models/date';
 import type Nvt from 'gmp/models/nvt';
 import ScanConfig, {
@@ -519,13 +525,49 @@ describe('ScanConfigComponent', () => {
       fireEvent.click(saveButton);
 
       await waitFor(() => {
-        expect(mocks.saveScanConfig).toHaveBeenCalled();
+        expect(mocks.saveScanConfig).toHaveBeenCalledWith({
+          id: 'c1',
+          name: 'Test Config',
+          comment: 'A comment',
+        });
       });
 
       await waitFor(() => {
         expect(
           screen.queryByText('Edit Scan Config Test Config'),
         ).not.toBeInTheDocument();
+      });
+    });
+
+    test('should keep full save data when scanner preferences changed', async () => {
+      const {gmp, mocks} = createGmp();
+      const childFn = renderComponent(gmp);
+
+      const props = childFn.mock.calls[0]?.[0] as Record<
+        string,
+        (arg: typeof config) => void
+      >;
+      const edit = props.edit as (arg: typeof config) => void;
+      edit(config);
+
+      await screen.findByText('Edit Scan Config Test Config');
+
+      changeInputValue(screen.getByName('pref0'), '1');
+
+      const saveButton = screen.getByTestId('dialog-save-button');
+      fireEvent.click(saveButton);
+
+      await waitFor(() => {
+        expect(mocks.saveScanConfig).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'c1',
+            name: 'Test Config',
+            comment: 'A comment',
+            scannerPreferenceValues: expect.objectContaining({
+              pref0: '1',
+            }),
+          }),
+        );
       });
     });
 

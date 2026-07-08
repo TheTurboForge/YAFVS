@@ -6,7 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {FiltersCommand} from 'gmp/commands/filters';
-import {createHttp, createResponse} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -29,56 +29,6 @@ const createNativeHttp = () => {
 };
 
 describe('FiltersCommand tests', () => {
-  test('should parse filter meta and collection counts from response', async () => {
-    const response = createResponse({
-      get_filters: {
-        get_filters_response: {
-          filter: [{_id: 'f1', term: 'name=Alpha'}],
-          filters: [{term: 'name=Alpha'}, {_start: 3, _max: 20}],
-          filter_count: {page: 1, __text: 42, filtered: 7},
-        },
-      },
-    });
-
-    const fakeHttp = createHttp(response);
-    const cmd = new FiltersCommand(fakeHttp);
-    const resp = await cmd.get();
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_filters',
-      },
-    });
-    expect(resp.data.length).toEqual(1);
-    expect(resp.meta.filter.toFilterString()).toContain('name=Alpha');
-    expect(resp.meta.counts.first).toEqual(3);
-    expect(resp.meta.counts.rows).toEqual(20);
-    expect(resp.meta.counts.length).toEqual(1);
-    expect(resp.meta.counts.all).toEqual(42);
-    expect(resp.meta.counts.filtered).toEqual(7);
-  });
-
-  test('should return default collection counts when meta is missing', async () => {
-    const response = createResponse({
-      get_filters: {
-        get_filters_response: {
-          filter: [{_id: 'f1', term: 'name=Alpha'}],
-          filters: [{term: 'name=Alpha'}],
-        },
-      },
-    });
-
-    const fakeHttp = createHttp(response);
-    const cmd = new FiltersCommand(fakeHttp);
-    const resp = await cmd.get();
-
-    expect(resp.meta.counts.first).toEqual(0);
-    expect(resp.meta.counts.rows).toEqual(0);
-    expect(resp.meta.counts.length).toEqual(0);
-    expect(resp.meta.counts.all).toEqual(0);
-    expect(resp.meta.counts.filtered).toEqual(0);
-  });
-
   test('should fetch filters through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -197,23 +147,6 @@ describe('FiltersCommand tests', () => {
     expect(result.meta.counts.length).toEqual(2);
     expect(result.meta.counts.all).toEqual(2);
     expect(result.meta.counts.filtered).toEqual(2);
-  });
-
-  test('should use inherited bulk export on non-native http', async () => {
-    const fakeHttp = createHttp();
-    const cmd = new FiltersCommand(fakeHttp);
-
-    await cmd.exportByIds(['f1', 'f2']);
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'filter',
-        bulk_select: 1,
-        'bulk_selected:f1': 1,
-        'bulk_selected:f2': 1,
-      },
-    });
   });
 
   test('should bulk export selected filters through native API', async () => {

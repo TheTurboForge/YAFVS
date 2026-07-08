@@ -7,10 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import {type CollectionList, parseCollectionList} from 'gmp/collection/parser';
 import EntitiesCommand from 'gmp/commands/entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
@@ -18,7 +15,6 @@ import Filter, {type FilterModelElement} from 'gmp/models/filter';
 import type {Element} from 'gmp/models/model';
 import {isArray, isDefined} from 'gmp/utils/identity';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -105,26 +101,14 @@ export class FiltersCommand extends EntitiesCommand<Filter> {
   }
 
   export(entities: Filter[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
-
     return this.exportByIds(entities.map(entity => entity.id as string));
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
-
     return exportNativeFiltersMetadata(this.http, ids);
   }
 
   async exportByFilter(filter: Filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const filters: Filter[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;
@@ -154,14 +138,7 @@ export class FiltersCommand extends EntitiesCommand<Filter> {
     );
   }
 
-  async get(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeFilters(
       this.http,
@@ -173,14 +150,7 @@ export class FiltersCommand extends EntitiesCommand<Filter> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const filters: Filter[] = [];
     let total = Number.POSITIVE_INFINITY;

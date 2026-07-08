@@ -6,7 +6,9 @@
 
 import {canUseNativeApi} from 'gmp/commands/native';
 import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
+import type {HttpCommandOptions} from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
@@ -17,6 +19,7 @@ import {
   createNativeTag,
   deleteNativeTag,
   exportNativeTagMetadata,
+  fetchNativeTag,
   patchNativeTag,
   updateNativeTagResources,
 } from 'gmp/native-api/tags';
@@ -48,6 +51,16 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
   getElementFromRoot(root: Element): TagElement {
     // @ts-expect-error
     return root.get_tag.get_tags_response.tag;
+  }
+
+  async get(
+    {id}: EntityCommandParams,
+    {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
+  ) {
+    if (filter === undefined && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeTag(this.http, id));
+    }
+    return super.get({id}, {filter, ...options});
   }
 
   async create({

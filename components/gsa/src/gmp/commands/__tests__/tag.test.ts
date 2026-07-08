@@ -255,6 +255,80 @@ describe('TagCommand tests', () => {
     expect(data.id).toEqual('foo');
   });
 
+  test('should return single tag through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'tag-id',
+        name: 'Critical assets',
+        value: 'critical',
+        resource_type: 'host',
+        active: true,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const resp = await cmd.get({id: 'tag-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags/tag-id', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(resp.data.id).toEqual('tag-id');
+    expect(resp.data.name).toEqual('Critical assets');
+  });
+
+  test('should keep filtered single tag detail on GMP until native parity is characterized', async () => {
+    const response = createEntityResponse('tag', {_id: 'foo'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const resp = await cmd.get({id: 'foo'}, {filter: 'resources=1'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_tag',
+        tag_id: 'foo',
+        filter: 'resources=1',
+      },
+    });
+    expect(resp.data.id).toEqual('foo');
+  });
+
   test('should save a tag', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

@@ -54,6 +54,7 @@ interface NativeScannerPayload {
   host?: string;
   port?: number;
   scanner_type?: number;
+  ca_pub?: string;
   credential?: NativeScannerCredentialPayload;
   relay_host?: string;
   relay_port?: number;
@@ -220,6 +221,7 @@ const nativeScannerToModel = (
     host: stringValue(item.host),
     port: integerValue(item.port),
     type: String(integerValue(item.scanner_type)),
+    ca_pub: stringValue(item.ca_pub),
     credential: item.credential
       ? {
           _id: stringValue(item.credential.id),

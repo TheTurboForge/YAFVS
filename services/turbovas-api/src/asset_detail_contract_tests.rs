@@ -30,7 +30,9 @@ use crate::{
     scan_config_query_sql::{
         scan_config_asset_detail_sql, scan_config_asset_list_sql, scan_config_task_references_sql,
     },
-    scanner_asset_query_sql::{scanner_asset_detail_sql, scanner_task_references_sql},
+    scanner_asset_query_sql::{
+        scanner_asset_detail_sql, scanner_assets_sql, scanner_task_references_sql,
+    },
     schedule_query_sql::{schedule_asset_detail_sql, schedule_assets_sql, schedule_tasks_sql},
     tag_query_sql::{tag_asset_detail_sql, tag_assets_sql, tag_resource_lookup_sql},
     tls_certificate_query_sql::{
@@ -728,7 +730,7 @@ fn scanner_task_references_are_non_hidden_backlinks_only() {
 }
 
 #[test]
-fn scanner_detail_contract_excludes_certificate_and_secret_material() {
+fn scanner_detail_contract_includes_ca_public_certificate_but_excludes_secrets() {
     let source = include_str!("scanner_assets.rs");
     let detail_source = source
         .split_once("pub(crate) async fn scanner_asset_detail")
@@ -742,8 +744,8 @@ fn scanner_detail_contract_excludes_certificate_and_secret_material() {
     assert!(detail_source.contains("scanner_asset_detail_sql()"));
     assert!(detail_source.contains("scanner_task_references"));
     assert!(detail_source.contains("scanner_user_tags"));
+    assert!(sql.contains("nullif(s.ca_pub, '') AS ca_pub"));
     for forbidden in [
-        "ca_pub",
         "credential_value",
         "private_key",
         "password",
@@ -754,6 +756,14 @@ fn scanner_detail_contract_excludes_certificate_and_secret_material() {
         assert!(!sql.contains(forbidden));
     }
     assert!(!detail_source.contains("send_scanner_info"));
+}
+
+#[test]
+fn scanner_list_contract_does_not_include_ca_public_certificate_text() {
+    let sql = scanner_assets_sql("name ASC");
+
+    assert!(sql.contains("NULL::text AS ca_pub"));
+    assert!(!sql.contains("nullif(s.ca_pub, '') AS ca_pub"));
 }
 
 #[test]

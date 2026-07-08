@@ -103,6 +103,7 @@ describe('native API scanner detail', () => {
         host: '/runtime/run/ospd/ospd-openvas.sock',
         port: 0,
         scanner_type: 2,
+        ca_pub: 'native CA certificate',
         credential: {
           id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
           name: 'Scanner credential',
@@ -139,10 +140,10 @@ describe('native API scanner detail', () => {
     expect(scanner.comment).toEqual('detail metadata only');
     expect(scanner.hasUnixSocket()).toEqual(true);
     expect(scanner.scannerType).toEqual('2');
+    expect(scanner.caPub?.certificate).toEqual('native CA certificate');
     expect(scanner.credential?.name).toEqual('Scanner credential');
     expect(scanner.tasks[0].name).toEqual('Native task');
     expect(scanner.userTags[0].name).toEqual('Native tag');
-    expect(scanner.caPub).toBeUndefined();
     expect(scanner.credential?.certificateInfo).toBeUndefined();
     expect(gmp.buildUrl).toHaveBeenCalledWith(`api/v1/scanners/${id}`, {
       token: 'test-token',

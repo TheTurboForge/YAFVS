@@ -22,6 +22,8 @@ pub(crate) struct ScannerAssetItem {
     port: i64,
     scanner_type: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    ca_pub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     credential: Option<ScannerAssetCredential>,
     relay_host: Option<String>,
     relay_port: i64,
@@ -56,6 +58,7 @@ pub(crate) fn scanner_asset_from_row(row: &Row) -> ScannerAssetItem {
         host: row.get("host"),
         port: row.get("port"),
         scanner_type: row.get("scanner_type"),
+        ca_pub: row.get("ca_pub"),
         credential: credential_id.map(|id| ScannerAssetCredential {
             id,
             name: credential_name.unwrap_or_default(),

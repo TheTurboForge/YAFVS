@@ -284,7 +284,7 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
         detail.contains("Native direct write-control can patch scanner name/comment metadata only")
     );
     for residual in [
-        "Credential secrets, scanner CA material, credential certificate metadata",
+        "Credential secrets, credential certificate metadata",
         "live scanner status, verify/control operations",
         "host/port/type/relay mutation",
         "export/download behavior, create, clone, restore, and delete remain inherited",
@@ -302,7 +302,8 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
         "x-turbovas-replaces: scanner-metadata-export-read",
         "x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "$ref: '#/components/schemas/ScannerAssetDetail'",
-        "Credential secrets, scanner CA material",
+        "including scanner CA public certificate text when present",
+        "Credential secrets, credential certificate metadata",
         "verify/control operations",
     ] {
         assert!(

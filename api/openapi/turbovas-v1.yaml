@@ -1033,7 +1033,7 @@ paths:
       x-turbovas-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes
       summary: Read one scanner metadata record with safe backlinks
-      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags and non-hidden task backlinks. Native direct write-control can patch scanner name/comment metadata only. Credential secrets, scanner CA material, credential certificate metadata, live scanner status, verify/control operations, host/port/type/relay mutation, export/download behavior, create, clone, restore, and delete remain inherited.
+      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control can patch scanner name/comment metadata only. Credential secrets, credential certificate metadata, live scanner status, verify/control operations, host/port/type/relay mutation, export/download behavior, create, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1112,7 +1112,7 @@ paths:
       x-turbovas-replaces: scanner-metadata-export-read
       x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes
       summary: Export scanner metadata JSON
-      description: Direct scriptable scanner metadata export backed by gvmd/PostgreSQL. This returns the same redacted scanner detail JSON as the native detail read. Credential secrets, scanner CA material, credential certificate metadata, live scanner status, verify/control operations, file export/download behavior, and writes remain inherited.
+      description: Direct scriptable scanner metadata export backed by gvmd/PostgreSQL. This returns the same scanner detail JSON as the native detail read, including scanner CA public certificate text when present. Credential secrets, credential certificate metadata, live scanner status, verify/control operations, file export/download behavior, and writes remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -8062,6 +8062,9 @@ components:
         scanner_type:
           type: integer
           description: Inherited scanner type identifier used only for read-only UI metadata.
+        ca_pub:
+          type: string
+          description: Scanner CA public certificate text when present on detail/export responses. List responses do not populate this field. Credential secrets and credential certificate metadata are not exposed by this field.
         credential:
           $ref: '#/components/schemas/ScannerCredentialReference'
         relay_host:

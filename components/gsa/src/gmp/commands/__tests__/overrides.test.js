@@ -6,10 +6,7 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {OverrideCommand, OverridesCommand} from 'gmp/commands/overrides';
-import {
-  createEntitiesResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import Override from 'gmp/models/override';
 import {createSession} from 'gmp/testing';
@@ -66,23 +63,6 @@ describe('OverridesCommand tests', () => {
       hosts: '192.0.2.10',
       port: '443/tcp',
     });
-  });
-
-  test('should fetch overrides with inherited GMP fallback', async () => {
-    const response = createEntitiesResponse('override', [
-      {_id: 'override-1', text: 'Inherited override'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new OverridesCommand(fakeHttp);
-    const result = await cmd.get({filter: 'first=1 rows=25'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_overrides', details: 1, filter: 'first=1 rows=25'},
-    });
-    expect(result.data).toEqual([
-      new Override({id: 'override-1', text: 'Inherited override'}),
-    ]);
   });
 
   test('should fetch overrides through native API when available', async () => {

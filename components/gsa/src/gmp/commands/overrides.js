@@ -8,7 +8,6 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -151,11 +150,7 @@ class OverridesCommand extends EntitiesCommand {
     );
   }
 
-  async get(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeOverrides(
       this.http,
@@ -167,11 +162,7 @@ class OverridesCommand extends EntitiesCommand {
     });
   }
 
-  async getAll(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params = {}) {
     const filter = filterFromCommandParams(params).all();
     const overrides = [];
     let total = Number.POSITIVE_INFINITY;

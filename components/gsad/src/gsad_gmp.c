@@ -6105,32 +6105,6 @@ save_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
  * @return Target XML on success.  Enveloped XML
  *         on error.
  */
-char *
-export_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "tag", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of tags.
- *
- * @param[in]   connection           Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Targets XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_tags_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "tag", credentials, params, response_data);
-}
-
 /**
  * @brief Get one tag, envelope the result.
  *
@@ -14152,14 +14126,15 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
   if (str_equal (type, "filter") || str_equal (type, "port_list")
-      || str_equal (type, "report_config"))
+      || str_equal (type, "report_config") || str_equal (type, "tag"))
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);
       return gsad_http_create_gsad_message (
         credentials,
-        "Filter, port-list, and report-config XML bulk export are no longer "
-        "supported. Use the native JSON metadata export endpoints instead.",
+        "Filter, port-list, report-config, and tag XML bulk export are no "
+        "longer supported. Use the native JSON metadata export endpoints "
+        "instead.",
         response_data);
     }
 
@@ -15763,8 +15738,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_scanners)
   ELSE (export_schedule)
   ELSE (export_schedules)
-  ELSE (export_tag)
-  ELSE (export_tags)
   ELSE (export_target)
   ELSE (export_targets)
   ELSE (export_task)

@@ -93,8 +93,6 @@ gsad_init_validator ()
                      "|(export_scanners)"
                      "|(export_schedule)"
                      "|(export_schedules)"
-                     "|(export_tag)"
-                     "|(export_tags)"
                      "|(export_target)"
                      "|(export_targets)"
                      "|(export_task)"

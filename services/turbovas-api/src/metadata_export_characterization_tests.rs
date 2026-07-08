@@ -26,7 +26,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/filters/:filter_id/export",
         handler: "export_filter_metadata",
         replaces: "saved-filter-metadata-export-read",
-        inherited_tail: Some("saved-filter-alert-linkage"),
+        inherited_tail: None,
         schema_ref: "#/components/schemas/FilterAsset",
     },
     MetadataExportBoundary {
@@ -35,7 +35,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/tags/:tag_id/export",
         handler: "export_tag_metadata",
         replaces: "tag-metadata-export-read",
-        inherited_tail: Some("tag-filter-actions-and-file-export"),
+        inherited_tail: None,
         schema_ref: "#/components/schemas/TagAsset",
     },
     MetadataExportBoundary {

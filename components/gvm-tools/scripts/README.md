@@ -272,10 +272,10 @@ The sample files should serve as an example.
 Creates tags as specified in a csv-file. See tags.csv for file format/contents.
 
 TurboVAS provides `tools/turbovasctl native-tags-from-csv` for the native-safe
-subset: Alert, Config, Credential, Scanner, Schedule, Target, and Task tags
-resolved by exact resource name. Report rows in the inherited script use GMP
-`resource_filter=~tagName` semantics instead of exact report IDs, so report
-filter tags remain inherited until their native safety contract is explicit.
+subset: Alert, Config, Credential, Report, Scanner, Schedule, Target, and Task
+tags resolved by exact resource name/ID. Native Report rows require explicit
+report UUIDs in resource columns. Inherited report rows without explicit
+resources use GMP `resource_filter=~tagName` semantics and remain inherited.
 
 ### Example
 

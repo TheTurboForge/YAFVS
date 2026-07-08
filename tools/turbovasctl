@@ -422,7 +422,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
-    "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native-tags-from-csv covers the native-safe Alert/Config/Credential/Scanner/Schedule/Target/Task exact resource-name subset, but REPORT rows use GMP resource_filter=~tagName semantics rather than exact report IDs and still lack an explicit native contract.",
+    "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native-tags-from-csv covers the native-safe Alert/Config/Credential/Report/Scanner/Schedule/Target/Task exact resource-name subset, but inherited REPORT rows without explicit resource columns use GMP resource_filter=~tagName semantics and remain inherited.",
     "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "delete-overrides-by-filter.gmp.py": "Inherited filter-based override deletion is characterized; native tooling still lacks an explicit destructive override-delete contract, authorization rule, and pacing/error semantics.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
@@ -17270,12 +17270,13 @@ NATIVE_TAG_CSV_RESOURCE_TYPES: dict[str, str] = {
     "ALERT": "alert",
     "CONFIG": "config",
     "CREDENTIAL": "credential",
+    "REPORT": "report",
     "SCANNER": "scanner",
     "SCHEDULE": "schedule",
     "TARGET": "target",
     "TASK": "task",
 }
-NATIVE_TAG_CSV_UNSUPPORTED_INHERITED_TYPES = frozenset({"REPORT"})
+NATIVE_TAG_CSV_UNSUPPORTED_INHERITED_TYPES = frozenset()
 
 
 @dataclass(frozen=True)
@@ -17304,6 +17305,11 @@ def load_native_tag_csv_rows(csv_file: Path) -> list[NativeTagCsvRow]:
                 description = row[2].strip()
                 if not inherited_type or not tag_value:
                     raise ValueError(f"row {row_number} must include tag type and tag value")
+                resource_names = tuple(cell.strip() for cell in row[3:13] if cell.strip())
+                if inherited_type == "REPORT" and not resource_names:
+                    raise ValueError(
+                        f"row {row_number} uses inherited REPORT resource_filter=~tagName semantics; native REPORT rows require exact report UUID resource columns"
+                    )
                 if inherited_type in NATIVE_TAG_CSV_UNSUPPORTED_INHERITED_TYPES:
                     raise ValueError(
                         f"row {row_number} uses inherited {inherited_type} tag semantics that are not native-safe yet"
@@ -17312,7 +17318,6 @@ def load_native_tag_csv_rows(csv_file: Path) -> list[NativeTagCsvRow]:
                 if resource_type is None:
                     supported = ", ".join(sorted(NATIVE_TAG_CSV_RESOURCE_TYPES))
                     raise ValueError(f"row {row_number} has unsupported tag type {inherited_type}; supported native-safe types: {supported}")
-                resource_names = tuple(cell.strip() for cell in row[3:13] if cell.strip())
                 tag_name = f"{tag_value}:{description}:{inherited_type}"
                 rows.append(
                     NativeTagCsvRow(

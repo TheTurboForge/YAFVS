@@ -5926,11 +5926,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(planned["tag"]["value"], "Owner")
         self.assertEqual(planned["resource_names"], ["Target A", "Target B"])
 
-    def test_native_tags_from_csv_rejects_inherited_report_filter_semantics(self):
+    def test_native_tags_from_csv_rejects_report_rows_without_exact_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             csv_file = root / "tags.csv"
-            csv_file.write_text("REPORT,Owner,Secret,Report A\n", encoding="utf-8")
+            csv_file.write_text("REPORT,Owner,Secret\n", encoding="utf-8")
             with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
                 result = turbovasctl.command_native_tags_from_csv(root, csv_file)
                 curl.assert_not_called()
@@ -5938,6 +5938,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         checks = {item["check"]: item for item in result["findings"]}
         self.assertIn("REPORT", checks["native-tags-from-csv.rows"]["message"])
+        self.assertIn("exact report UUID", checks["native-tags-from-csv.rows"]["message"])
 
     def test_native_tags_from_csv_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -5951,6 +5952,49 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         checks = {item["check"]: item for item in result["findings"]}
         self.assertEqual(checks["native-tags-from-csv.write-control-intent"]["status"], "fail")
+
+    def test_native_tags_from_csv_accepts_report_rows_with_exact_resources(self):
+        captured_paths: list[str] = []
+
+        def query_value(path: str, name: str) -> str:
+            parsed = turbovasctl.urllib.parse.urlsplit(path)
+            values = turbovasctl.urllib.parse.parse_qs(parsed.query)
+            return values.get(name, [""])[0]
+
+        def fake_direct(_root, path, **kwargs):
+            captured_paths.append(path)
+            if path.startswith("/api/v1/tags?"):
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": 0}, "items": []}) + "\n200", "")
+            if path.startswith("/api/v1/tags/resource-names/report?"):
+                value = query_value(path, "filter")
+                item = {"id": value, "name": value}
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": 1}, "items": [item]}) + "\n200", "")
+            if path == "/api/v1/tags":
+                body = json.loads(kwargs["body"])
+                self.assertEqual(body["resource_type"], "report")
+                return subprocess.CompletedProcess(["curl"], 0, '{"id":"33333333-3333-4333-8333-333333333333"}\n201', "")
+            self.assertEqual(path, "/api/v1/tags/33333333-3333-4333-8333-333333333333/resources")
+            body = json.loads(kwargs["body"])
+            self.assertEqual(body["resource_ids"], ["22222222-2222-4222-8222-222222222222"])
+            return subprocess.CompletedProcess(["curl"], 0, '{"id":"33333333-3333-4333-8333-333333333333"}\n200', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tags.csv"
+            csv_file.write_text(
+                "REPORT,Owner,Report,22222222-2222-4222-8222-222222222222\n",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_tags_from_csv(root, csv_file, allow_write_control=True, status_only=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["created_tag_count"], 1)
+        self.assertEqual(result["details"]["assigned_resource_count"], 1)
+        self.assertTrue(any(path.startswith("/api/v1/tags/resource-names/report?") for path in captured_paths))
 
     def test_native_tags_from_csv_resolves_resources_skips_existing_and_creates_tags(self):
         captured_paths: list[str] = []
@@ -6434,7 +6478,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
         self.assertIn("native-tags-from-csv covers", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
         self.assertIn("resource_filter=~tagName", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
-        self.assertIn("exact report IDs", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
+        self.assertIn("without explicit resource columns", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
         self.assertIn("filter-based override deletion", write_blockers["components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py"])
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])

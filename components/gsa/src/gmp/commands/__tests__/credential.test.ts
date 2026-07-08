@@ -6,11 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CredentialCommand from 'gmp/commands/credential';
-import {
-  createHttp,
-  createActionResultResponse,
-  createEntityResponse,
-} from 'gmp/commands/testing';
+import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 import {
   CERTIFICATE_CREDENTIAL_TYPE,
@@ -28,98 +24,6 @@ afterEach(() => {
 });
 
 describe('CredentialCommand tests', () => {
-  test('should return single credential through GMP when native API is unavailable', async () => {
-    const response = createEntityResponse('credential', {_id: 'credential-id'});
-    const fakeHttp = createHttp(response);
-    const cmd = new CredentialCommand(fakeHttp);
-
-    const result = await cmd.get({id: 'credential-id'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_credential',
-        credential_id: 'credential-id',
-      },
-    });
-    expect(result.data.id).toEqual('credential-id');
-  });
-
-  test('should fetch single credential through native API when available', async () => {
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({
-        id: 'credential-id',
-        name: 'SSH credential',
-        credential_type: 'usk',
-        comment: 'Redacted metadata only',
-        targets: [{id: 'target-id', name: 'Target', use_type: 'scan'}],
-      }),
-      ok: true,
-      status: 200,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
-    const cmd = new CredentialCommand(fakeHttp);
-
-    const result = await cmd.get({id: 'credential-id'});
-
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/credentials/credential-id',
-      {token: 'test-token'},
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials/credential-id',
-      {
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-          Authorization: 'Bearer jwt-token',
-        },
-      },
-    );
-    expect(result.data.id).toEqual('credential-id');
-    expect(result.data.name).toEqual('SSH credential');
-    expect(result.data.login).toBeUndefined();
-    expect(result.data.privateKeyInfo).toBeUndefined();
-    expect(result.data.publicKeyInfo).toBeUndefined();
-  });
-
-  test('should not fall back to GMP when native credential detail fails', async () => {
-    testing.stubGlobal(
-      'fetch',
-      testing.fn().mockResolvedValue({
-        json: testing.fn().mockResolvedValue({message: 'missing'}),
-        ok: false,
-        status: 404,
-      }),
-    );
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
-    const cmd = new CredentialCommand(fakeHttp);
-
-    await expect(cmd.get({id: 'missing-credential'})).rejects.toThrow(
-      'Native API request failed with status 404',
-    );
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-  });
-
   test('should export redacted credential metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

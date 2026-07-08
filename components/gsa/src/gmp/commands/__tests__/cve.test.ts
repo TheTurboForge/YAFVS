@@ -65,26 +65,49 @@ describe('CveCommand tests', () => {
     });
   });
 
-  test('should get a cve', async () => {
-    const response = createInfoResponse({
-      id: '123',
-      name: 'Test cve',
-      comment: 'A test cve',
+  test('should get a CVE through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'CVE-2026-10001',
+        name: 'CVE-2026-10001',
+        description: 'Native CVE detail',
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
     const cmd = new CveCommand(fakeHttp);
     const result = await cmd.get({
-      id: '123',
+      id: 'CVE-2026-10001',
     });
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        details: '1',
-        info_type: 'cve',
-        info_id: '123',
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/cves/CVE-2026-10001',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/cves/CVE-2026-10001',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
-    expect(result.data.id).toEqual('123');
+    );
+    expect(result.data.id).toEqual('CVE-2026-10001');
   });
 
   test('should allow to clone a cve', async () => {

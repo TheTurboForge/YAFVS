@@ -3348,7 +3348,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',
          'scanner-control-credentials-writes-and-deletes',
-         'scap-rich-context',
          'schedule-create-calendar-export',
          'scope-report-generation',
          'scope-report-generation-retention-and-mutations',
@@ -3867,13 +3866,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(feeds["x_turbovas_inherited_still_owns"], "feed-sync-import-control")
 
         expected_catalog_metadata = {
-            "/api/v1/cves": ("getCves", "cve-catalog-list-read", "scap-rich-context"),
-            "/api/v1/cves/{cve_id}": ("getCvesByCveId", "cve-catalog-detail-epss-reference-configuration-read", "scap-rich-context"),
-            "/api/v1/cves/{cve_id}/export": ("getCvesByCveIdExport", "cve-catalog-metadata-export-read", "scap-rich-context"),
+            "/api/v1/cves": ("getCves", "cve-catalog-list-read", None),
+            "/api/v1/cves/{cve_id}": ("getCvesByCveId", "cve-catalog-detail-epss-reference-configuration-read", None),
+            "/api/v1/cves/{cve_id}/export": ("getCvesByCveIdExport", "cve-catalog-metadata-export-read", None),
             "/api/v1/vulnerabilities/{vulnerability_id}": ("getVulnerabilitiesByVulnerabilityId", "vulnerability-detail-read", "vulnerability-exports-and-actions"),
             "/api/v1/vulnerabilities/{vulnerability_id}/export": ("getVulnerabilitiesByVulnerabilityIdExport", "vulnerability-metadata-export-read", "vulnerability-exports-and-actions"),
-            "/api/v1/cpes": ("getCpes", "cpe-catalog-list-read", "scap-rich-context"),
-            "/api/v1/cpes/{cpe_id}": ("getCpesByCpeId", "cpe-catalog-detail-read", "scap-rich-context"),
+            "/api/v1/cpes": ("getCpes", "cpe-catalog-list-read", None),
+            "/api/v1/cpes/{cpe_id}": ("getCpesByCpeId", "cpe-catalog-detail-read", None),
             "/api/v1/cert-bund-advisories": ("getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
             "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}": ("getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
             "/api/v1/dfn-cert-advisories": ("getDfnCertAdvisories", "dfn-cert-advisory-list-read", "cert-advisory-rich-detail-export"),
@@ -3888,7 +3887,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
             self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertEqual(row["x_turbovas_inherited_still_owns"], inherited_still_owns)
+            self.assertEqual(row.get("x_turbovas_inherited_still_owns"), inherited_still_owns)
 
         expected_asset_metadata = {
             "/api/v1/operating-systems": ("getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
@@ -4263,18 +4262,18 @@ class TurboVASCtlTests(unittest.TestCase):
                 "replacement_candidates": ["override list automation"],
             },
             {
-                "endpoint": "/api/v1/cpes",
+                "endpoint": "/api/v1/nvts",
                 "method": "get",
-                "inventory_endpoint": "/api/v1/cpes",
-                "openapi_path": "/cpes",
+                "inventory_endpoint": "/api/v1/nvts",
+                "openapi_path": "/nvts",
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "cpe-catalog-list-read",
-                "x_turbovas_inherited_still_owns": "scap-rich-context",
-                "replacement_candidates": ["CPE list automation"],
+                "x_turbovas_replaces": "nvt-catalog-list-read",
+                "x_turbovas_inherited_still_owns": "nvt-rich-detail",
+                "replacement_candidates": ["NVT list automation"],
             },
         ]
 
@@ -4288,7 +4287,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["items"][0]["endpoint"], "/api/v1/overrides")
         self.assertEqual(compact["details"]["focus_terms"], ["rich_context_or_history"])
         self.assertEqual(compact["details"]["focus_match_count"], 1)
-        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/cpes")
+        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/nvts")
 
     def test_native_api_migration_matrix_focus_warns_on_zero_matches(self):
         root = Path(__file__).resolve().parents[2]
@@ -4368,7 +4367,7 @@ class TurboVASCtlTests(unittest.TestCase):
         rows = [
             {"endpoint": "/api/v1/tasks", "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes"},
             {"endpoint": "/api/v1/targets", "x_turbovas_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
-            {"endpoint": "/api/v1/cves", "x_turbovas_inherited_still_owns": "scap-rich-context"},
+            {"endpoint": "/api/v1/nvts", "x_turbovas_inherited_still_owns": "nvt-rich-detail"},
         ]
 
         remaining = turbovasctl.native_api_migration_matrix_remaining_surface(rows)
@@ -4628,7 +4627,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(("GET /cert-bund-advisories", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /cert-bund-advisories/{cert_bund_advisory_id}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /cpes", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /cpes/{cpe_id}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /cves", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /cves/{cve_id}", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /dfn-cert-advisories", "x-turbovas-maturity"), missing_migration)
@@ -5903,11 +5901,11 @@ class TurboVASCtlTests(unittest.TestCase):
         trashcan_summary = operations[("get", "/trashcan/summary")]
 
         expected_catalog_metadata = [
-            (cves, "getCves", "cve-catalog-list-read", "scap-rich-context"),
-            (cve_detail, "getCvesByCveId", "cve-catalog-detail-epss-reference-configuration-read", "scap-rich-context"),
-            (cve_export, "getCvesByCveIdExport", "cve-catalog-metadata-export-read", "scap-rich-context"),
-            (cpes, "getCpes", "cpe-catalog-list-read", "scap-rich-context"),
-            (cpe_detail, "getCpesByCpeId", "cpe-catalog-detail-read", "scap-rich-context"),
+            (cves, "getCves", "cve-catalog-list-read", None),
+            (cve_detail, "getCvesByCveId", "cve-catalog-detail-epss-reference-configuration-read", None),
+            (cve_export, "getCvesByCveIdExport", "cve-catalog-metadata-export-read", None),
+            (cpes, "getCpes", "cpe-catalog-list-read", None),
+            (cpe_detail, "getCpesByCpeId", "cpe-catalog-detail-read", None),
             (cert_bund_advisories, "getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
             (cert_bund_detail, "getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
             (dfn_cert_advisories, "getDfnCertAdvisories", "dfn-cert-advisory-list-read", "cert-advisory-rich-detail-export"),
@@ -5922,7 +5920,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-inherited-still-owns"], inherited_still_owns)
+            self.assertEqual(operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns"), inherited_still_owns)
 
         self.assertIn('GSA CVE detail metadata export', native_tooling)
         self.assertIn('GSA NVT detail metadata export', native_tooling)

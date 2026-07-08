@@ -230,7 +230,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cve-catalog-list-read
-      x-turbovas-inherited-still-owns: scap-rich-context
       summary: List Security Information CVEs
       description: Searchable CVE intelligence catalog backed by SCAP feed metadata in gvmd/PostgreSQL. This is distinct from observed report CVEs and vulnerability findings.
       parameters:
@@ -264,9 +263,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cve-catalog-detail-epss-reference-configuration-read
-      x-turbovas-inherited-still-owns: scap-rich-context
       summary: Read one Security Information CVE
-      description: Read-only CVE catalog detail backed by gvmd/PostgreSQL. Native detail includes EPSS score/percentile, URL/tag references, CERT advisory and NVT references, and SCAP configuration nodes for display. Export and remaining rich/raw SCAP context stay inherited.
+      description: Read-only CVE catalog detail backed by gvmd/PostgreSQL. Native detail includes EPSS score/percentile, URL/tag references, CERT advisory and NVT references, and SCAP configuration nodes for display.
       parameters:
         - $ref: '#/components/parameters/CveId'
       responses:
@@ -297,9 +295,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cve-catalog-metadata-export-read
-      x-turbovas-inherited-still-owns: scap-rich-context
       summary: Export one Security Information CVE as native JSON metadata
-      description: Direct scriptable CVE catalog metadata export backed by gvmd/PostgreSQL. This returns the same read-only native detail JSON as the CVE detail endpoint, including EPSS, references, CERT/NVT links, SCAP configuration nodes, and user tags. Raw/rich SCAP feed context remains inherited.
+      description: Direct scriptable CVE catalog metadata export backed by gvmd/PostgreSQL. This returns the same read-only native detail JSON as the CVE detail endpoint, including EPSS, references, CERT/NVT links, SCAP configuration nodes, and user tags.
       parameters:
         - $ref: '#/components/parameters/CveId'
       responses:
@@ -330,7 +327,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cpe-catalog-list-read
-      x-turbovas-inherited-still-owns: scap-rich-context
       summary: List Security Information CPEs
       description: Searchable CPE intelligence catalog backed by SCAP feed metadata in gvmd/PostgreSQL. This is distinct from observed operating-system and application evidence in raw and scope reports.
       parameters:
@@ -364,9 +360,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cpe-catalog-detail-read
-      x-turbovas-inherited-still-owns: scap-rich-context
       summary: Read one Security Information CPE
-      description: Read-only CPE catalog detail backed by SCAP feed metadata in gvmd/PostgreSQL. Native detail includes normalized CVE references, deprecation metadata, user tags, and bounded SCAP reference URLs extracted from feed detail XML. Export and remaining rich/raw SCAP context stay inherited.
+      description: Read-only CPE catalog detail backed by SCAP feed metadata in gvmd/PostgreSQL. Native detail includes normalized CVE references, deprecation metadata, user tags, and bounded SCAP reference URLs extracted from feed detail XML.
       parameters:
         - $ref: '#/components/parameters/CpeId'
       responses:

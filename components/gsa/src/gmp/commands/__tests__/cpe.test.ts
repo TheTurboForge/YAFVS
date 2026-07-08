@@ -65,27 +65,49 @@ describe('CpeCommand tests', () => {
     });
   });
 
-  test('should get a cpe', async () => {
-    const response = createInfoResponse({
-      id: '123',
-      name: 'Test cpe',
-      cpe: 'cpe:/a:test:test:1.0',
-      comment: 'A test cpe',
+  test('should get a CPE through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'cpe:/a:vendor:product:1.0',
+        name: 'cpe:/a:vendor:product:1.0',
+        title: 'Native CPE detail',
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
     const cmd = new CpeCommand(fakeHttp);
     const result = await cmd.get({
-      id: '123',
+      id: 'cpe:/a:vendor:product:1.0',
     });
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        details: '1',
-        info_type: 'cpe',
-        info_id: '123',
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/cpes/cpe%3A%2Fa%3Avendor%3Aproduct%3A1.0',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/cpes/cpe%3A%2Fa%3Avendor%3Aproduct%3A1.0',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
-    expect(result.data.id).toEqual('123');
+    );
+    expect(result.data.id).toEqual('cpe:/a:vendor:product:1.0');
   });
 
   test('should allow to clone a cpe', async () => {

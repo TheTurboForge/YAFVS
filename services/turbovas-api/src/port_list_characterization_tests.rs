@@ -218,8 +218,16 @@ fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
         !GSAD_GMP_C.contains("export_port_list_gmp"),
         "singular port-list metadata export must stay native JSON, not legacy gsad XML"
     );
-    let many_export = inherited_function(GSAD_GMP_C, "export_port_lists_gmp");
-    assert!(many_export.contains("export_many (connection, \"port_list\""));
+    assert!(
+        !GSAD_GMP_C.contains("export_port_lists_gmp"),
+        "bulk port-list XML export must not stay exposed once native JSON metadata export is retained"
+    );
+
+    let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
+    assert!(
+        bulk_export.contains("str_equal (type, \"port_list\")"),
+        "generic bulk export must reject port_list after native JSON metadata export replacement"
+    );
 
     for forbidden in [
         "create_port_list",
@@ -229,7 +237,7 @@ fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
         "import_port_list",
     ] {
         assert!(
-            !many_export.contains(forbidden),
+            !bulk_export.contains(forbidden),
             "bulk port-list export must not include mutation boundary {forbidden}"
         );
     }

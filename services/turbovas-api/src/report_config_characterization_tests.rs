@@ -334,10 +334,16 @@ fn report_config_native_metadata_export_no_longer_uses_singular_gsad_xml_export(
         !GSAD_GMP_C.contains("export_report_config_gmp"),
         "singular report-config metadata export must stay native JSON, not legacy gsad XML"
     );
-    let many_export = inherited_function(GSAD_GMP_C, "export_report_configs_gmp");
-    assert!(many_export.contains("export_many (connection, \"report_config\""));
+    assert!(
+        !GSAD_GMP_C.contains("export_report_configs_gmp"),
+        "bulk report-config XML export must not stay exposed once native JSON metadata export is retained"
+    );
 
     let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
+    assert!(
+        bulk_export.contains("str_equal (type, \"report_config\")"),
+        "generic bulk export must reject report_config after native JSON metadata export replacement"
+    );
     for required in [
         "resource_type",
         "bulk_select",
@@ -387,8 +393,8 @@ fn report_config_native_metadata_export_no_longer_uses_singular_gsad_xml_export(
         "report_id",
     ] {
         assert!(
-            !many_export.contains(forbidden),
-            "bulk report-config export must not include report-generation boundary {forbidden}"
+            !bulk_export.contains(forbidden),
+            "generic bulk export must not include report-generation boundary {forbidden}"
         );
     }
 }

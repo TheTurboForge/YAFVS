@@ -7752,26 +7752,6 @@ export_overrides_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Export a list of Port Lists.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Port Lists XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_port_lists_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "port_list", credentials, params,
-                      response_data);
-}
-
-/**
  * @brief Export a file preference.
  *
  * @param[in]  connection     Connection to manager.
@@ -7866,26 +7846,6 @@ export_preference_file_gmp (gvm_connection_t *connection,
   g_string_append (xml, "</get_preferences_response>");
   return envelope_gmp (connection, credentials, params,
                        g_string_free (xml, FALSE), response_data);
-}
-
-/**
- * @brief Export a list of Report Configs.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Report Configs XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_report_configs_gmp (gvm_connection_t *connection,
-                           gsad_credentials_t *credentials, params_t *params,
-                           gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "report_config", credentials, params,
-                      response_data);
 }
 
 /**
@@ -14229,6 +14189,17 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (type, "Bulk Export")
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
+  if (str_equal (type, "port_list") || str_equal (type, "report_config"))
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Port-list and report-config XML bulk export are no longer "
+        "supported. Use the native JSON metadata export endpoints instead.",
+        response_data);
+    }
+
   if (bulk_select && str_equal (bulk_select, "1"))
     {
       bulk_string = g_string_new ("first=1 rows=-1 uuid=");
@@ -15822,9 +15793,7 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_filters)
   ELSE (export_override)
   ELSE (export_overrides)
-  ELSE (export_port_lists)
   ELSE (export_preference_file)
-  ELSE (export_report_configs)
   ELSE (export_report_format)
   ELSE (export_report_formats)
   ELSE (export_result)

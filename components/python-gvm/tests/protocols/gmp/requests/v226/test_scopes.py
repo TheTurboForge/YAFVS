@@ -63,18 +63,6 @@ class ScopesTestCase(unittest.TestCase):
             b'<generate_scope_report scope_id="scope-1"/>',
         )
 
-    def test_get_scope_reports(self):
-        request = Scopes.get_scope_reports(
-            scope_id="scope-1",
-            filter_string="first=1 rows=25 sort-reverse=created",
-            details=True,
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<get_scope_reports scope_id="scope-1" '
-            b'filter="first=1 rows=25 sort-reverse=created" details="1"/>',
-        )
-
     def test_delete_scope_report(self):
         request = Scopes.delete_scope_report("report-1")
         self.assertEqual(

@@ -448,6 +448,12 @@ export const deleteNativeHost = async (
   id: string,
 ): Promise<void> => deleteNative(gmp, `api/v1/hosts/${encodeURIComponent(id)}`);
 
+export const deleteNativeHostIdentifier = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> =>
+  deleteNative(gmp, `api/v1/host-identifiers/${encodeURIComponent(id)}`);
+
 export const patchNativeHostComment = async (
   gmp: NativeApiGmp,
   args: NativeHostPatchArgs,

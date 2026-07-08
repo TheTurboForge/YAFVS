@@ -16,7 +16,8 @@ use crate::{
         browser_proxy_hard_delete_filter, browser_proxy_patch_filter, browser_proxy_restore_filter,
     },
     browser_proxy_host::{
-        browser_proxy_create_host, browser_proxy_delete_host, browser_proxy_patch_host,
+        browser_proxy_create_host, browser_proxy_delete_host, browser_proxy_delete_host_identifier,
+        browser_proxy_patch_host,
     },
     browser_proxy_metadata_patch::{
         browser_proxy_delete_task, browser_proxy_patch_alert, browser_proxy_patch_credential,
@@ -80,6 +81,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route("/api/v1/hosts", post(browser_proxy_create_host))
         .route("/api/v1/hosts/:host_id", patch(browser_proxy_patch_host))
         .route("/api/v1/hosts/:host_id", delete(browser_proxy_delete_host))
+        .route(
+            "/api/v1/host-identifiers/:identifier_id",
+            delete(browser_proxy_delete_host_identifier),
+        )
         .route(
             "/api/v1/filters/:filter_id",
             patch(browser_proxy_patch_filter),

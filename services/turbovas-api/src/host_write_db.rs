@@ -63,6 +63,21 @@ pub(crate) async fn load_host_write_state(
         .ok_or(ApiError::NotFound)
 }
 
+pub(crate) async fn load_host_identifier_write_state(
+    tx: &Transaction<'_>,
+    identifier_id: &str,
+) -> Result<HostWriteState, ApiError> {
+    let identifier_id = parse_uuid(identifier_id)?.to_string();
+    tx.query_opt(host_identifier_write_state_sql(), &[&identifier_id])
+        .await
+        .map_err(|error| map_host_write_db_error(error, "load host identifier write state"))?
+        .map(|row| HostWriteState {
+            internal_id: row.get(0),
+            owner_id: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
 pub(crate) fn ensure_host_owner_matches_operator(
     host_owner_id: Option<i32>,
     operator_owner_id: i32,

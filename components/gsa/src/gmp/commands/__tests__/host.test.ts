@@ -219,6 +219,68 @@ describe('HostCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should delete host identifier through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new HostCommand(fakeHttp);
+    await cmd.deleteIdentifier({id: 'identifier-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/host-identifiers/identifier-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/host-identifiers/identifier-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should not fall back to GMP when native host identifier delete fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new HostCommand(fakeHttp);
+
+    await expect(cmd.deleteIdentifier({id: 'identifier-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should export host metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

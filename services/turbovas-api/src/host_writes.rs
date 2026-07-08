@@ -17,7 +17,7 @@ use crate::{
     host_write_db::*,
     host_write_transactions::{
         execute_host_create_transaction, execute_host_delete_transaction,
-        execute_host_patch_transaction,
+        execute_host_identifier_delete_transaction, execute_host_patch_transaction,
     },
     host_write_validation::{
         HostCreateRequest, HostPatchRequest, validate_host_create_request,
@@ -101,5 +101,28 @@ pub(crate) async fn delete_host(
     tx.commit()
         .await
         .map_err(|error| map_host_write_db_error(error, "commit delete host transaction"))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn delete_host_identifier(
+    State(state): State<AppState>,
+    Path(identifier_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_host_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_host_write_db_error(error, "begin delete host identifier transaction")
+    })?;
+    let operator_owner_id = resolve_host_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute("LOCK TABLE hosts, host_identifiers IN SHARE ROW EXCLUSIVE MODE;")
+        .await
+        .map_err(|error| map_host_write_db_error(error, "lock host identifier tables"))?;
+    let identifier_state = load_host_identifier_write_state(&tx, &identifier_id).await?;
+    ensure_host_owner_matches_operator(identifier_state.owner_id, operator_owner_id)?;
+    execute_host_identifier_delete_transaction(&tx, identifier_state.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_host_write_db_error(error, "commit delete host identifier transaction")
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }

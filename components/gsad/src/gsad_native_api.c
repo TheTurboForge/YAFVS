@@ -266,6 +266,7 @@ native_api_delete_path_is_allowed (const gchar *path)
 {
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *host_prefix = "/api/v1/hosts/";
+  const gchar *host_identifier_prefix = "/api/v1/host-identifiers/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
@@ -289,6 +290,12 @@ native_api_delete_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, host_prefix))
     {
       const gchar *id = path + strlen (host_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, host_identifier_prefix))
+    {
+      const gchar *id = path + strlen (host_identifier_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

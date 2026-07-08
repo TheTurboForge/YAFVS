@@ -17,6 +17,7 @@ import logger from 'gmp/log';
 import Host from 'gmp/models/host';
 import {
   createNativeHost,
+  deleteNativeHostIdentifier,
   deleteNativeHost,
   exportNativeHostMetadata,
   exportNativeHostsMetadata,
@@ -66,6 +67,9 @@ class HostCommand extends EntityCommand {
   }
 
   deleteIdentifier({id}) {
+    if (canUseNativeApi(this.http)) {
+      return deleteNativeHostIdentifier(this.http, id);
+    }
     log.debug('Deleting Host Identifier with id', id);
     return this.httpPostWithTransform({
       cmd: 'delete_asset',

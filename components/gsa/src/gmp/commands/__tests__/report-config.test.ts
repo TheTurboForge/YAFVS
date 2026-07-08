@@ -478,7 +478,47 @@ describe('ReportConfigCommand tests', () => {
     );
   });
 
-  test('should keep report config save on GMP when default state is incomplete', async () => {
+  test('should use native report config save when only default params are value-less', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'foo'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ReportConfigCommand(fakeHttp);
+    const resp = await cmd.save({
+      id: 'foo',
+      name: 'foo',
+      params: {timezone: 'UTC'},
+      paramsUsingDefault: {timezone: true},
+      paramTypes: {timezone: 'string'},
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-configs/foo',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'foo',
+          params: [],
+        }),
+      }),
+    );
+    expect(resp.data.id).toEqual('foo');
+  });
+
+  test('should keep report config save on GMP when a non-default param value is missing', async () => {
     const response = createActionResultResponse({id: 'foo'});
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -497,7 +537,7 @@ describe('ReportConfigCommand tests', () => {
       id: 'foo',
       name: 'foo',
       params: {timezone: 'UTC'},
-      paramsUsingDefault: {subject: false, timezone: true},
+      paramsUsingDefault: {subject: false},
       paramTypes: {timezone: 'string'},
     });
 
@@ -509,7 +549,6 @@ describe('ReportConfigCommand tests', () => {
         name: 'foo',
         comment: undefined,
         'param:timezone': 'UTC',
-        'param_using_default:timezone': 1,
       },
     });
     expect(resp.data.id).toEqual('foo');

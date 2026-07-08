@@ -92,38 +92,23 @@ const nativeReportConfigCreateRequestFromCommand = ({
     })),
 });
 
-const hasNativeDefaultParam = (
+const hasNativeParamDefaultState = (
   paramsUsingDefault: Record<string, string | number | boolean | undefined>,
-): boolean =>
-  Object.values(paramsUsingDefault).some(value => parseYesNo(value));
-
-const haveSameKeys = (
-  left?: Record<string, unknown>,
-  right?: Record<string, unknown>,
-): boolean => {
-  const leftKeys = Object.keys(left ?? {}).sort();
-  const rightKeys = Object.keys(right ?? {}).sort();
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every((key, index) => key === rightKeys[index])
-  );
-};
+): boolean => Object.keys(paramsUsingDefault).length > 0;
 
 const hasCompleteNativeParamState = ({
-  params,
-  paramsUsingDefault,
-  paramTypes,
+  params = {},
+  paramsUsingDefault = {},
 }: ReportConfigSaveArgs): boolean =>
-  params !== undefined &&
-  paramsUsingDefault !== undefined &&
-  paramTypes !== undefined &&
-  haveSameKeys(params, paramsUsingDefault) &&
-  haveSameKeys(params, paramTypes);
+  Object.entries(paramsUsingDefault).every(
+    ([paramName, usingDefault]) =>
+      parseYesNo(usingDefault) || params[paramName] !== undefined,
+  );
 
 const canUseNativeReportConfigPatch = (args: ReportConfigSaveArgs): boolean => {
   const paramsUsingDefault = args.paramsUsingDefault ?? {};
   return (
-    !hasNativeDefaultParam(paramsUsingDefault) ||
+    !hasNativeParamDefaultState(paramsUsingDefault) ||
     hasCompleteNativeParamState(args)
   );
 };

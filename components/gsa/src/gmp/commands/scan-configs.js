@@ -134,14 +134,7 @@ export class ScanConfigCommand extends EntityCommand {
 
   async clone({id}) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativeScanConfig(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native scan config clone failed, falling back to GMP',
-          error,
-        );
-      }
+      return await cloneNativeScanConfig(this.http, id);
     }
     return super.clone({id});
   }

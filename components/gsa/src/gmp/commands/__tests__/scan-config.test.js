@@ -547,7 +547,7 @@ describe('ScanConfigCommand tests', () => {
     expect(result.data.id).toEqual('native-scan-config-clone-id');
   });
 
-  test('should fall back to GMP when native scan config clone fails', async () => {
+  test('should not fall back to GMP when native scan config clone fails', async () => {
     const response = createActionResultResponse({
       action: 'Clone Scan Config',
       id: 'fallback-scan-config-clone-id',
@@ -565,17 +565,12 @@ describe('ScanConfigCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new ScanConfigCommand(fakeHttp);
-    const result = await cmd.clone({id: 'scan-config-id'});
 
+    await expect(cmd.clone({id: 'scan-config-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
     expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: 'scan-config-id',
-        resource_type: 'config',
-      },
-    });
-    expect(result.data.id).toEqual('fallback-scan-config-clone-id');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete a scan config through native API when available', async () => {

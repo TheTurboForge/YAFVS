@@ -36,6 +36,64 @@ describe('ReportConfigCommand tests', () => {
     expect(data.id).toEqual('foo');
   });
 
+  test('should return single report config through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'report-config-id',
+        name: 'Native report config',
+        comment: 'native detail',
+        owner: {name: 'admin'},
+        report_format: {id: 'report-format-id', name: 'PDF'},
+        alerts: [{id: 'alert-id', name: 'Email'}],
+        params: [
+          {
+            name: 'subject',
+            type: 'string',
+            value: 'Daily',
+            default: 'Default subject',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ReportConfigCommand(fakeHttp);
+    const resp = await cmd.get({id: 'report-config-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-configs/report-config-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-configs/report-config-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(resp.data.id).toEqual('report-config-id');
+    expect(resp.data.name).toEqual('Native report config');
+    expect(resp.data.reportFormat?.id).toEqual('report-format-id');
+    expect(resp.data.alerts[0]?.id).toEqual('alert-id');
+    expect(resp.data.params[0]?.name).toEqual('subject');
+  });
+
   test('should export report config metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

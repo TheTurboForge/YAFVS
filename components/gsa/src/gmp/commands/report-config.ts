@@ -8,6 +8,7 @@ import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import type {Element} from 'gmp/models/model';
@@ -17,6 +18,7 @@ import {
   createNativeReportConfig,
   deleteNativeReportConfig,
   exportNativeReportConfigMetadata,
+  fetchNativeReportConfig,
   patchNativeReportConfig,
   type NativeReportConfigCreateRequest,
   type NativeReportConfigPatchRequest,
@@ -160,6 +162,13 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
 
   async export({id}: EntityCommandParams) {
     return await exportNativeReportConfigMetadata(this.http, id);
+  }
+
+  async get({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeReportConfig(this.http, id));
+    }
+    return super.get({id});
   }
 
   async create(args: ReportConfigCreateArgs) {

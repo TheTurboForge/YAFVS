@@ -2431,19 +2431,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def delete_tag(
-        self, tag_id: EntityID, *, ultimate: bool | None = False
-    ) -> T:
-        """Deletes an existing tag
-
-        Args:
-            tag_id: UUID of the tag to be deleted.
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        return self._send_request_and_transform_response(
-            Tags.delete_tag(tag_id, ultimate=ultimate)
-        )
-
     def get_tags(
         self,
         *,

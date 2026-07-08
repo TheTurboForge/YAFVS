@@ -86,27 +86,6 @@ class Tags:
 
         return cmd
 
-    @classmethod
-    def delete_tag(
-        cls, tag_id: EntityID, *, ultimate: bool | None = False
-    ) -> Request:
-        """Deletes an existing tag
-
-        Args:
-            tag_id: UUID of the tag to be deleted.
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        if not tag_id:
-            raise RequiredArgument(
-                function=cls.delete_tag.__name__, argument="tag_id"
-            )
-
-        cmd = XmlCommand("delete_tag")
-        cmd.set_attribute("tag_id", str(tag_id))
-        cmd.set_attribute("ultimate", to_bool(ultimate))
-
-        return cmd
-
     @staticmethod
     def get_tags(
         *,

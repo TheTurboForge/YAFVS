@@ -126,26 +126,6 @@ class TagsTestCase(unittest.TestCase):
                 resource_ids=["id1", "id2"],
             )
 
-    def test_delete_tag(self):
-        request = Tags.delete_tag("tag_id")
-        self.assertEqual(
-            bytes(request),
-            b'<delete_tag tag_id="tag_id" ultimate="0"/>',
-        )
-
-    def test_delete_tag_with_ultimate(self):
-        request = Tags.delete_tag("tag_id", ultimate=True)
-        self.assertEqual(
-            bytes(request),
-            b'<delete_tag tag_id="tag_id" ultimate="1"/>',
-        )
-
-        request = Tags.delete_tag("tag_id", ultimate=False)
-        self.assertEqual(
-            bytes(request),
-            b'<delete_tag tag_id="tag_id" ultimate="0"/>',
-        )
-
     def test_get_tags(self):
         request = Tags.get_tags()
         self.assertEqual(

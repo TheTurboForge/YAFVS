@@ -5,13 +5,11 @@
 #
 
 from .test_create_tag import GmpCreateTagTestMixin
-from .test_delete_tag import GmpDeleteTagTestMixin
 from .test_get_tags import GmpGetTagsTestMixin
 from .test_modify_tag import GmpModifyTagTestMixin
 
 __all__ = (
     "GmpCreateTagTestMixin",
-    "GmpDeleteTagTestMixin",
     "GmpGetTagsTestMixin",
     "GmpModifyTagTestMixin",
 )

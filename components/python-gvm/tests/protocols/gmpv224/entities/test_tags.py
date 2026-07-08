@@ -7,14 +7,9 @@
 from ...gmpv224 import Gmpv224TestCase
 from .tags import (
     GmpCreateTagTestMixin,
-    GmpDeleteTagTestMixin,
     GmpGetTagsTestMixin,
     GmpModifyTagTestMixin,
 )
-
-
-class Gmpv224DeleteTagTestCase(GmpDeleteTagTestMixin, Gmpv224TestCase):
-    pass
 
 
 class Gmpv224GetTagsTestCase(GmpGetTagsTestMixin, Gmpv224TestCase):

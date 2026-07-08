@@ -6,7 +6,7 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {OverrideCommand, OverridesCommand} from 'gmp/commands/overrides';
-import {createHttp} from 'gmp/commands/testing';
+import {createHttp, createResponse} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import Override from 'gmp/models/override';
 import {createSession} from 'gmp/testing';
@@ -15,8 +15,8 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
-const createNativeHttp = () => {
-  const fakeHttp = createHttp(undefined);
+const createNativeHttp = response => {
+  const fakeHttp = createHttp(response);
   fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -25,6 +25,78 @@ const createNativeHttp = () => {
 };
 
 describe('OverridesCommand tests', () => {
+  test('should fetch override detail through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'override-id',
+        owner: {name: 'admin'},
+        nvt: {id: '1.3.6.1.4.1.25623.1.0.999999', name: 'Example NVT'},
+        text: 'Accepted compensating control',
+        hosts: '192.0.2.10',
+        port: '443/tcp',
+        severity: 7.5,
+        new_severity: -1,
+        active: true,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new OverrideCommand(fakeHttp);
+    const result = await cmd.get({id: 'override-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/overrides/override-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/overrides/override-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('override-id');
+    expect(result.data.text).toEqual('Accepted compensating control');
+    expect(result.data.hosts).toEqual(['192.0.2.10']);
+    expect(result.data.newSeverity).toEqual(-1);
+  });
+
+  test('should keep filtered override detail on GMP until native parity is characterized', async () => {
+    const response = createResponse({
+      get_override: {
+        get_overrides_response: {
+          override: {
+            _id: 'override-id',
+            text: 'Accepted compensating control',
+          },
+        },
+      },
+    });
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp(response);
+
+    const cmd = new OverrideCommand(fakeHttp);
+    const result = await cmd.get({id: 'override-id'}, {filter: 'results=1'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_override',
+        override_id: 'override-id',
+        filter: 'results=1',
+      },
+    });
+    expect(result.data.id).toEqual('override-id');
+  });
+
   test('should export override metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

@@ -8,6 +8,7 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
+  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -24,6 +25,7 @@ import Override, {
 import {
   exportNativeOverrideMetadata,
   exportNativeOverridesMetadata,
+  fetchNativeOverride,
   fetchNativeOverrides,
   nativeOverridesQueryFromFilter,
 } from 'gmp/native-api/overrides';
@@ -43,6 +45,13 @@ class OverrideCommand extends EntityCommand {
 
   getElementFromRoot(root) {
     return root.get_override.get_overrides_response.override;
+  }
+
+  async get({id}, {filter, ...options} = {}) {
+    if (filter === undefined && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeOverride(this.http, id));
+    }
+    return super.get({id}, {filter, ...options});
   }
 
   create(args) {

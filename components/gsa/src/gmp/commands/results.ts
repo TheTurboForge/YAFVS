@@ -9,8 +9,13 @@ import {
   type HttpCommandInputParams,
   type HttpCommandOptions,
 } from 'gmp/commands/http';
-import {NATIVE_COMMAND_PAGE_SIZE} from 'gmp/commands/native';
+import {
+  canUseNativeApi,
+  filterFromCommandParams,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import type Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import Result from 'gmp/models/result';
@@ -29,6 +34,9 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
+const explicitlyRequestsSummaryOnly = (details: unknown): boolean =>
+  details === false || details === 0 || details === '0';
+
 export class ResultsCommand extends EntitiesCommand<Result> {
   constructor(http: Http) {
     super(http, 'result', Result);
@@ -39,7 +47,18 @@ export class ResultsCommand extends EntitiesCommand<Result> {
     return root.get_results.get_results_response;
   }
 
-  get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
+  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
+    if (canUseNativeApi(this.http) && !explicitlyRequestsSummaryOnly(params.details)) {
+      const filter = filterFromCommandParams(params);
+      const nativeResponse = await fetchNativeResults(
+        this.http,
+        nativeReportResultsQueryFromFilter(filter),
+      );
+      return new Response(nativeResponse.results, {
+        filter,
+        counts: nativeResponse.counts,
+      });
+    }
     return super.get({details: 1, ...params}, options);
   }
 

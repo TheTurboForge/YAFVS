@@ -52,6 +52,42 @@ describe('ResultsCommand tests', () => {
     expect(data.length).toEqual(2);
   });
 
+  test('should fetch results through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1, sort: 'severity', filter: ''},
+        items: [
+          {
+            id: 'result-1',
+            name: 'Native result',
+            vulnerability: {id: 'vuln-1', name: 'CVE-2026-0001'},
+            host: {id: 'host-1', name: 'web.example'},
+            severity: 5.5,
+            threat: 'Medium',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ResultsCommand(fakeHttp);
+
+    const resp = await cmd.get();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/results', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'severity',
+      filter: '',
+    });
+    expect(resp.data[0].id).toEqual('result-1');
+    expect(resp.meta.counts.filtered).toEqual(1);
+  });
+
   test('should return results', async () => {
     const response = createEntitiesResponse('result', [
       {
@@ -87,6 +123,32 @@ describe('ResultsCommand tests', () => {
     const fakeHttp = createHttp(response);
     const cmd = new ResultsCommand(fakeHttp);
     await cmd.get({details: 0});
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_results',
+        details: 0,
+      },
+    });
+  });
+
+  test('should keep explicit summary-only result reads on GMP', async () => {
+    const response = createEntitiesResponse('result', [
+      {
+        _id: '1',
+      },
+    ]);
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const cmd = new ResultsCommand(fakeHttp);
+
+    await cmd.get({details: 0});
+
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
       args: {
         cmd: 'get_results',

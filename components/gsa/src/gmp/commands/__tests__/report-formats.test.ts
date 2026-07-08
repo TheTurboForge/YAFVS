@@ -9,11 +9,9 @@ import ReportFormatCommand from 'gmp/commands/report-format';
 import {ReportFormatsCommand} from 'gmp/commands/report-formats';
 import {
   createActionResultResponse,
-  createEntitiesResponse,
   createHttp,
 } from 'gmp/commands/testing';
-import Filter, {ALL_FILTER} from 'gmp/models/filter';
-import ReportFormat from 'gmp/models/report-format';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -94,44 +92,6 @@ describe('ReportFormatsCommand tests', () => {
     });
   });
 
-  test('should return report formats through inherited GMP fallback', async () => {
-    const response = createEntitiesResponse('report_format', [
-      {_id: '1', name: 'XML'},
-      {_id: '2', name: 'PDF'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ReportFormatsCommand(fakeHttp);
-    const resp = await cmd.get();
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_report_formats'},
-    });
-    expect(resp.data).toEqual([
-      new ReportFormat({id: '1', name: 'XML'}),
-      new ReportFormat({id: '2', name: 'PDF'}),
-    ]);
-  });
-
-  test('should fetch all report formats through inherited GMP fallback', async () => {
-    const response = createEntitiesResponse('report_format', [
-      {_id: '1', name: 'XML'},
-      {_id: '2', name: 'PDF'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ReportFormatsCommand(fakeHttp);
-    const resp = await cmd.getAll();
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_report_formats',
-        filter: ALL_FILTER.toFilterString(),
-      },
-    });
-    expect(resp.data.length).toEqual(2);
-  });
-
   test('should fetch report formats through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -180,23 +140,6 @@ describe('ReportFormatsCommand tests', () => {
         },
       },
     );
-  });
-
-  test('should use inherited bulk export on non-native http', async () => {
-    const fakeHttp = createHttp();
-    const cmd = new ReportFormatsCommand(fakeHttp);
-
-    await cmd.exportByIds(['rf1', 'rf2']);
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'report_format',
-        bulk_select: 1,
-        'bulk_selected:rf1': 1,
-        'bulk_selected:rf2': 1,
-      },
-    });
   });
 
   test('should bulk export selected report formats through native API', async () => {

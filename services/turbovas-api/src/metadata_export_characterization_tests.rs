@@ -53,7 +53,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/schedules/:schedule_id/export",
         handler: "export_schedule_metadata",
         replaces: "schedule-metadata-export-read",
-        inherited_tail: Some("schedule-create-calendar-export"),
+        inherited_tail: Some("schedule-create-calendar-edit"),
         schema_ref: "#/components/schemas/ScheduleAssetDetail",
     },
     MetadataExportBoundary {

@@ -113,20 +113,27 @@ describe('ReportFormatsCommand tests', () => {
     expect(result.data.alerts[0].id).toEqual('alert-id');
   });
 
-  test('should keep unsupported filtered report format detail on GMP', async () => {
-    const response = createResponse({
-      get_report_format: {
-        get_report_formats_response: {
-          report_format: {
-            _id: 'report-format-id',
-            name: 'XML',
-          },
-        },
-      },
+  test('should fetch harmless filtered report format detail through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'report-format-id',
+        name: 'XML',
+        trust: 'yes',
+        active: true,
+        predefined: false,
+        configurable: true,
+        deprecated: false,
+        alert_count: 0,
+        report_config_count: 0,
+        alerts: [],
+        report_configs: [],
+        params: [],
+      }),
+      ok: true,
+      status: 200,
     });
-    const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp(response);
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ReportFormatCommand(fakeHttp);
     const result = await cmd.get(
@@ -134,14 +141,17 @@ describe('ReportFormatsCommand tests', () => {
       {filter: 'rows=1'},
     );
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_report_format',
-        report_format_id: 'report-format-id',
-        filter: 'rows=1',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
     expect(result.data.id).toEqual('report-format-id');
   });
 

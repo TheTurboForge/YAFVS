@@ -1093,6 +1093,51 @@ def append_finding(payload: dict[str, Any], status: str, check: str, message: st
     payload["summary"] = "Browser runtime smoke passed." if payload["status"] == "pass" else "Browser runtime smoke found issues."
 
 
+def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name: str) -> None:
+    if not path.startswith("/api/v1/filters/"):
+        raise ValueError(f"unsupported native browser-proxy DELETE path: {path}")
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        str(repo_root / "compose" / "dev.yaml"),
+        "exec",
+        "-T",
+        "-e",
+        "TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME",
+        "-e",
+        "TURBOVAS_BROWSER_SMOKE_DELETE_PATH",
+        "turbovas-api",
+        "sh",
+        "-ceu",
+        (
+            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "curl -sS --max-time 10 -X DELETE -w '\\n%{http_code}' "
+            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-operator-name: ${TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME}\" "
+            "\"http://127.0.0.1:9080${TURBOVAS_BROWSER_SMOKE_DELETE_PATH}\""
+        ),
+    ]
+    env = os.environ.copy()
+    env["TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME"] = operator_name
+    env["TURBOVAS_BROWSER_SMOKE_DELETE_PATH"] = path
+    completed = subprocess.run(
+        command,
+        cwd=repo_root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    lines = completed.stdout.splitlines()
+    status = lines[-1].strip() if lines else ""
+    body = "\n".join(lines[:-1]).strip()
+    if completed.returncode != 0 or status not in {"204", "404"}:
+        reason = completed.stderr.strip() or body or completed.stdout.strip()
+        raise RuntimeError(f"native API DELETE failed with HTTP {status or 'unknown'}: {reason}")
+
+
 def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     if not args.write_filter_smoke:
         return
@@ -1116,8 +1161,25 @@ def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]
             return
         append_finding(payload, "warn", "filter.write-cleanup", "No saved-filter write-smoke IDs were available for cleanup.")
         return
+    native_error: Exception | None = None
+    repo_root_arg = getattr(args, "repo_root", None)
+    if repo_root_arg:
+        try:
+            repo_root = Path(repo_root_arg)
+            native_deleted: list[str] = []
+            for filter_id in ids:
+                native_api_browser_proxy_delete(repo_root, f"/api/v1/filters/{filter_id}", operator_name=args.username)
+                native_api_browser_proxy_delete(repo_root, f"/api/v1/filters/{filter_id}/trash", operator_name=args.username)
+                native_deleted.append(filter_id)
+            append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through native DELETE cleanup.", {"native_deleted_ids": native_deleted})
+            return
+        except Exception as error:  # pylint: disable=broad-except
+            native_error = error
     if not args.cleanup_gmp_socket:
-        append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write smoke created filters but no cleanup GMP socket was provided.", {"filter_ids": ids})
+        details: dict[str, Any] = {"filter_ids": ids}
+        if native_error is not None:
+            details.update({"native_error_type": type(native_error).__name__, "native_error": str(native_error)})
+        append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write smoke created filters but native cleanup failed and no cleanup GMP socket was provided.", details)
         return
     try:
         add_greenbone_python_paths(Path(__file__).resolve().parents[1])
@@ -1133,7 +1195,10 @@ def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]
         for filter_id in ids:
             gmp.delete_filter(filter_id, ultimate=True)
             deleted.append(filter_id)
-        append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through GMP cleanup.", {"deleted_ids": deleted})
+        details = {"deleted_ids": deleted}
+        if native_error is not None:
+            details.update({"native_error_type": type(native_error).__name__, "native_error": str(native_error)})
+        append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through GMP fallback cleanup.", details)
     except Exception as error:  # pylint: disable=broad-except
         append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write-smoke cleanup failed.", {"filter_ids": ids, "error_type": type(error).__name__, "error": str(error)})
 
@@ -1219,6 +1284,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scope-report-path", help="preferred canonical scope-report detail path to exercise")
     parser.add_argument("--expect-result-row", action="store_true", help="fail if the selected scope report has no visible Results row")
     parser.add_argument("--write-filter-smoke", action="store_true", help="create and clone a disposable saved filter through the browser native POST proxy")
+    parser.add_argument("--repo-root", help="repository root used for native saved-filter cleanup")
     parser.add_argument("--cleanup-gmp-socket", help="gvmd socket used to delete temporary saved-filter write-smoke rows")
     return parser
 

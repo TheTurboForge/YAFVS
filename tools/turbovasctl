@@ -20000,6 +20000,7 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
         args.append("--expect-result-row")
     if write_filter_smoke:
         args.append("--write-filter-smoke")
+        args.extend(["--repo-root", str(repo_root)])
         if cleanup_socket.exists():
             args.extend(["--cleanup-gmp-socket", str(cleanup_socket)])
     for route in routes or []:

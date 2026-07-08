@@ -1084,6 +1084,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("browser_smoke.add_argument(\"--route\"", source)
         self.assertIn("browser_smoke.add_argument(\"--status-only\"", source)
         self.assertIn("browser_smoke.add_argument(\"--write-filter-smoke\"", source)
+        self.assertIn("parser.add_argument(\"--repo-root\"", browser_smoke)
+        self.assertIn('args.extend(["--repo-root", str(repo_root)])', source)
         self.assertIn("filter.write-create-native-api", browser_smoke)
         self.assertIn("filter.write-clone-native-api", browser_smoke)
         self.assertIn("filter.write-delete-${label}-native-api", browser_smoke)
@@ -1092,6 +1094,49 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('args.extend(["--route", route])', source)
         self.assertIn("runtime-browser-smoke *args:", justfile)
         self.assertIn('tools/turbovasctl runtime-browser-smoke "$@"', justfile)
+
+    def test_browser_smoke_filter_write_cleanup_uses_native_api_before_gmp(self):
+        filter_id = "11111111-1111-1111-1111-111111111111"
+        args = unittest.mock.Mock(
+            write_filter_smoke=True,
+            repo_root="/repo",
+            username="admin",
+            cleanup_gmp_socket=None,
+            password_file="/tmp/password",
+            timeout_ms=30000,
+        )
+        payload = {"status": "fail", "summary": "needs cleanup", "findings": [{"details": {"created_id": filter_id}}]}
+
+        with unittest.mock.patch.object(runtime_browser_smoke, "native_api_browser_proxy_delete") as native_delete:
+            runtime_browser_smoke.cleanup_filter_write_smoke(args, payload)
+
+        native_delete.assert_has_calls([
+            unittest.mock.call(Path("/repo"), f"/api/v1/filters/{filter_id}", operator_name="admin"),
+            unittest.mock.call(Path("/repo"), f"/api/v1/filters/{filter_id}/trash", operator_name="admin"),
+        ])
+        cleanup_finding = payload["findings"][-1]
+        self.assertEqual(cleanup_finding["status"], "pass")
+        self.assertEqual(cleanup_finding["details"], {"native_deleted_ids": [filter_id]})
+
+    def test_browser_smoke_filter_write_cleanup_reports_native_error_without_gmp(self):
+        filter_id = "22222222-2222-2222-2222-222222222222"
+        args = unittest.mock.Mock(
+            write_filter_smoke=True,
+            repo_root="/repo",
+            username="admin",
+            cleanup_gmp_socket=None,
+            password_file="/tmp/password",
+            timeout_ms=30000,
+        )
+        payload = {"status": "fail", "summary": "needs cleanup", "findings": [{"details": {"created_id": filter_id}}]}
+
+        with unittest.mock.patch.object(runtime_browser_smoke, "native_api_browser_proxy_delete", side_effect=RuntimeError("boom")):
+            runtime_browser_smoke.cleanup_filter_write_smoke(args, payload)
+
+        cleanup_finding = payload["findings"][-1]
+        self.assertEqual(cleanup_finding["status"], "fail")
+        self.assertEqual(cleanup_finding["details"]["native_error_type"], "RuntimeError")
+        self.assertIn(filter_id, cleanup_finding["details"]["filter_ids"])
 
     def test_browser_smoke_run_artifact_dir_isolates_route_focused_runs(self):
         with tempfile.TemporaryDirectory() as tmp:

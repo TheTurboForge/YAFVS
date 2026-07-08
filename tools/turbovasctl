@@ -340,6 +340,7 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "gsa-session-http-transport",
     "report-export-delete-or-rich-context",
     "report-format-config-write-or-export",
+    "report-format-file-import-export-verify-param-writes-and-deletes",
     "saved-filter-gsa-filter-actions-or-alert-linkage",
     "scan-config-preference-write-or-export",
     "scanner-control-or-credential",
@@ -7055,6 +7056,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("tls_certificate_prefix", "tls_certificate_pem_suffix"),
         ("report_config_prefix", "report_config_export_suffix"),
         ("report_format_prefix", "report_format_export_suffix"),
+        ("scope_report_prefix", "scope_report_results_suffix"),
     ):
         prefix = constants.get(prefix_variable)
         suffix = constants.get(suffix_variable)
@@ -8297,7 +8299,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/scope-reports/{scope_report_id}/results",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["scope-report result automation by scope-report id", "native-api-request helper", "python-gvm get_scope_report_results replacement"],
             },

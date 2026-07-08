@@ -673,6 +673,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *task_export_suffix = "/export";
   const gchar *scope_reports_path = "/api/v1/scope-reports";
   const gchar *scope_report_prefix = "/api/v1/scope-reports/";
+  const gchar *scope_report_results_suffix = "/results";
   const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *metrics_suffix = "/metrics";
   const gchar *results_suffix = "/results";
@@ -1029,6 +1030,11 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, scope_report_prefix))
     {
       const gchar *id = path + strlen (scope_report_prefix);
+      if (g_str_has_suffix (id, scope_report_results_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                  - strlen (scope_report_results_suffix));
+
       return is_uuid_segment (id, strlen (id));
     }
 

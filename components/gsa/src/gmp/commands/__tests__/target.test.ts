@@ -8,6 +8,7 @@ import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import TargetCommand from 'gmp/commands/target';
 import {
   createActionResultResponse,
+  createEntityResponse,
   createHttp,
   createResponse,
 } from 'gmp/commands/testing';
@@ -23,6 +24,106 @@ afterEach(() => {
 });
 
 describe('TargetCommand tests', () => {
+  test('should return single target through GMP when native API is unavailable', async () => {
+    const response = createEntityResponse('target', {_id: 'target-id'});
+    const fakeHttp = createHttp(response);
+    const cmd = new TargetCommand(fakeHttp);
+
+    const result = await cmd.get({id: 'target-id'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_target',
+        target_id: 'target-id',
+      },
+    });
+    expect(result.data.id).toEqual('target-id');
+  });
+
+  test('should fetch single target through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'target-id',
+        name: 'Native target',
+        hosts: ['192.0.2.10'],
+        exclude_hosts: ['192.0.2.11'],
+        alive_tests: ['ICMP Ping'],
+        allow_simultaneous_ips: true,
+        reverse_lookup_only: false,
+        reverse_lookup_unify: true,
+        port_list: {id: 'port-list-id', name: 'All IANA assigned TCP'},
+        credentials: {
+          ssh: {id: 'ssh-credential-id', name: 'SSH', port: 2222},
+        },
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    const result = await cmd.get({id: 'target-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/targets/target-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/targets/target-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('target-id');
+    expect(result.data.name).toEqual('Native target');
+    expect(result.data.hosts).toEqual(['192.0.2.10']);
+    expect(result.data.excludeHosts).toEqual(['192.0.2.11']);
+    expect(result.data.sshCredential?.id).toEqual('ssh-credential-id');
+    expect(result.data.sshCredential?.port).toEqual(2222);
+  });
+
+  test('should not fall back to GMP when native target detail fails', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({message: 'missing'}),
+        ok: false,
+        status: 404,
+      }),
+    );
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(cmd.get({id: 'missing-target'})).rejects.toThrow(
+      'Native API request failed with status 404',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should export target metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

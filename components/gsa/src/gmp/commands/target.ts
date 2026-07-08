@@ -9,6 +9,7 @@ import type {EntityCommandParams} from 'gmp/commands/entity';
 import {feedStatusRejection} from 'gmp/commands/feed-status';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import type Filter from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
 import Target, {
@@ -25,6 +26,7 @@ import {
   createNativeTarget,
   deleteNativeTarget,
   exportNativeTargetMetadata,
+  fetchNativeTarget,
   patchNativeTarget,
   type NativeTargetCredentialPatchArgs,
   type NativeTargetCredentialsPatchArgs,
@@ -462,6 +464,14 @@ const nativeTargetPatchArgsFromParams = ({
 class TargetCommand extends EntityCommand<Target> {
   constructor(http: Http) {
     super(http, 'target', Target);
+  }
+
+  async get({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      const nativeResponse = await fetchNativeTarget(this.http, id);
+      return new Response(nativeResponse.target);
+    }
+    return super.get({id});
   }
 
   async export({id}: EntityCommandParams) {

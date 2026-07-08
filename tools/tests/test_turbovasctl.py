@@ -791,6 +791,33 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(state["tasks"][0]["report_id"], "report-1")
         self.assertEqual(state["tasks"][0]["progress"], "100")
 
+    def test_full_test_scan_ensure_target_uses_native_create_when_repo_root_is_available(self):
+        root = Path("/tmp/turbovas-test")
+        state = {"targets": []}
+
+        with unittest.mock.patch.object(
+            runtime_full_test_scan,
+            "native_api_browser_proxy_json",
+            return_value={"id": "target-1", "name": runtime_full_test_scan.FULL_TEST_TARGET_NAME},
+        ) as native_create:
+            target_id, error = runtime_full_test_scan.ensure_target(
+                object(),
+                state,
+                repo_root=root,
+                operator_name="admin",
+            )
+
+        self.assertEqual(target_id, "target-1")
+        self.assertIsNone(error)
+        native_create.assert_called_once()
+        _repo_root, path = native_create.call_args.args
+        payload = native_create.call_args.kwargs["payload"]
+        self.assertEqual(path, "/api/v1/targets")
+        self.assertEqual(payload["hosts"], [runtime_full_test_scan.AUTHORIZED_TARGET_CIDR])
+        self.assertEqual(payload["port_list_id"], runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID)
+        self.assertEqual(payload["alive_tests"], ["Scan Config Default"])
+        self.assertNotIn("credentials", payload)
+
     def test_runtime_scope_smoke_extracts_organization_proof_finding(self):
         proof = turbovasctl.runtime_scope_organization_proof_finding(
             {

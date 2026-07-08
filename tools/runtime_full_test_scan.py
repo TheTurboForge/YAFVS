@@ -151,6 +151,73 @@ def native_api_json(repo_root: Path, path: str) -> dict[str, Any]:
     return parsed
 
 
+def native_api_browser_proxy_json(
+    repo_root: Path,
+    path: str,
+    *,
+    method: str,
+    payload: dict[str, Any],
+    operator_name: str,
+    expected_statuses: set[str],
+) -> dict[str, Any]:
+    if method != "POST":
+        raise ValueError(f"unsupported native browser-proxy JSON method: {method}")
+    if not path.startswith("/api/v1/"):
+        raise ValueError(f"unsupported native browser-proxy JSON path: {path}")
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        str(repo_root / "compose" / "dev.yaml"),
+        "exec",
+        "-T",
+        "-e",
+        "TURBOVAS_FULL_TEST_OPERATOR_NAME",
+        "-e",
+        "TURBOVAS_FULL_TEST_METHOD",
+        "-e",
+        "TURBOVAS_FULL_TEST_PATH",
+        "-e",
+        "TURBOVAS_FULL_TEST_JSON",
+        "turbovas-api",
+        "sh",
+        "-ceu",
+        (
+            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "curl -sS --max-time 10 -X \"${TURBOVAS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
+            "-H \"content-type: application/json\" "
+            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-operator-name: ${TURBOVAS_FULL_TEST_OPERATOR_NAME}\" "
+            "--data \"${TURBOVAS_FULL_TEST_JSON}\" "
+            "\"http://127.0.0.1:9080${TURBOVAS_FULL_TEST_PATH}\""
+        ),
+    ]
+    env = os.environ.copy()
+    env["TURBOVAS_FULL_TEST_OPERATOR_NAME"] = operator_name
+    env["TURBOVAS_FULL_TEST_METHOD"] = method
+    env["TURBOVAS_FULL_TEST_PATH"] = path
+    env["TURBOVAS_FULL_TEST_JSON"] = json.dumps(payload)
+    completed = subprocess.run(
+        command,
+        cwd=repo_root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    lines = completed.stdout.splitlines()
+    status = lines[-1].strip() if lines else ""
+    body = "\n".join(lines[:-1]).strip()
+    if completed.returncode != 0 or status not in expected_statuses:
+        reason = completed.stderr.strip() or body or completed.stdout.strip()
+        raise RuntimeError(f"native API {method} failed with HTTP {status or 'unknown'}: {reason}")
+    parsed = json.loads(body)
+    if not isinstance(parsed, dict):
+        raise RuntimeError(f"native API {method} returned a non-object payload")
+    return parsed
+
+
 def native_items(repo_root: Path, resource: str, *, page_size: int = 500) -> list[dict[str, Any]]:
     payload = native_api_json(repo_root, f"/api/v1/{resource}?page_size={page_size}")
     items = payload.get("items")
@@ -422,12 +489,42 @@ def preflight_state(state: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def ensure_target(gmp: Any, state: dict[str, Any]) -> tuple[str | None, str | None]:
+def ensure_target(
+    gmp: Any,
+    state: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+    operator_name: str = "admin",
+) -> tuple[str | None, str | None]:
     target, error = single_named(state["targets"], FULL_TEST_TARGET_NAME)
     if error:
         return None, error
     if target and target.get("id"):
         return target["id"], None
+    if repo_root is not None:
+        try:
+            created = native_api_browser_proxy_json(
+                repo_root,
+                "/api/v1/targets",
+                method="POST",
+                payload={
+                    "name": FULL_TEST_TARGET_NAME,
+                    "comment": "Authorized TurboVAS full test LAN target.",
+                    "alive_tests": ["Scan Config Default"],
+                    "allow_simultaneous_ips": True,
+                    "reverse_lookup_only": False,
+                    "reverse_lookup_unify": False,
+                    "port_list_id": IANA_TCP_UDP_PORT_LIST_ID,
+                    "hosts": [AUTHORIZED_TARGET_CIDR],
+                    "exclude_hosts": [],
+                },
+                operator_name=operator_name,
+                expected_statuses={"201"},
+            )
+        except Exception as error:  # pylint: disable=broad-except
+            return None, f"native target create failed: {type(error).__name__}: {error}"
+        target_id = created.get("id")
+        return (target_id, None) if isinstance(target_id, str) and target_id else (None, "Native target creation response did not include an id.")
     response = gmp.create_target(
         FULL_TEST_TARGET_NAME,
         hosts=[AUTHORIZED_TARGET_CIDR],
@@ -471,6 +568,7 @@ def command_start(
     artifact_dir: Path,
     confirm_authorized_lan: bool,
     repo_root: Path | None = None,
+    operator_name: str = "admin",
     poll_seconds: int = 90,
     poll_interval: int = 5,
     ospd_log_file: Path | None = None,
@@ -497,7 +595,7 @@ def command_start(
         return preflight
 
     scanner_id = preflight["details"]["scanner"]["id"]
-    target_id, target_error = ensure_target(gmp, state)
+    target_id, target_error = ensure_target(gmp, state, repo_root=repo_root, operator_name=operator_name)
     if target_error or not target_id:
         payload = result("fail", "Full test scan start refused because the target could not be prepared.", error=target_error)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
@@ -671,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.artifact_dir),
                 args.confirm_authorized_lan,
                 repo_root=repo_root,
+                operator_name=args.username,
                 poll_seconds=args.poll_seconds,
                 poll_interval=args.poll_interval,
                 ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None,

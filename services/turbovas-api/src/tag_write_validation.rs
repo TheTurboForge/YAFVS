@@ -57,6 +57,7 @@ pub(crate) struct ValidatedTagClone {
 pub(crate) enum TagResourceUpdateAction {
     Add,
     Remove,
+    Set,
 }
 
 #[derive(Debug, Deserialize)]

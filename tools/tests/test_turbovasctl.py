@@ -3349,7 +3349,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'schedule-create-calendar-export',
          'scope-report-generation',
          'scope-report-generation-retention-and-mutations',
-         'tag-filter-actions-and-set-resource-semantics',
+         'tag-filter-actions-and-resource-type-change-semantics',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
          'target-export-and-credential-secret-mutation',
@@ -3955,21 +3955,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tags["x_turbovas_maturity"], "live-read")
         self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-set-resource-semantics")
+        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
 
         tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
         self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-set-resource-semantics")
+        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
 
         tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
         self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
-        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-set-resource-semantics")
+        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
 
         tag_export = rows[("get", "/api/v1/tags/{tag_id}/export")]
         self.assertEqual(tag_export["operation_id"], "getTagsByTagIdExport")
@@ -3984,7 +3984,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_clone["x_turbovas_maturity"], "live-write")
         self.assertEqual(tag_clone["x_turbovas_exposure"], "direct-write")
         self.assertEqual(tag_clone["x_turbovas_replaces"], "tag-clone")
-        self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-set-resource-semantics")
+        self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
 
         tag_restore = rows[("post", "/api/v1/tags/{tag_id}/restore")]
         self.assertEqual(tag_restore["status"], "implemented_internal_and_browser_proxied")
@@ -5996,7 +5996,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-replaces"], "tag-resource-name-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-filter-actions-and-set-resource-semantics")
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-filter-actions-and-resource-type-change-semantics")
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(trashcan_summary["operation_id"], "getTrashcanSummary")
         self.assertIn("x-turbovas-direct", trashcan_summary["x_turbovas_fields"])
@@ -8290,7 +8290,7 @@ db2:keys=5,expires=0,avg_ttl=0
                         count = 1 if payload["action"] == "add" else 0
                         return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_clone_uuid, "resource_count": count}) + "\n200", "")
                     self.assertEqual(payload["resource_ids"], [report_format_uuid])
-                    count = 1 if payload["action"] == "add" else 0
+                    count = 1 if payload["action"] in {"add", "set"} else 0
                     tag_resource_count["value"] = count
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "resource_count": count}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/tags/{tag_uuid}/clone"):
@@ -8423,6 +8423,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.tag-resource-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-add"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-in-use-after-add"], "pass")
+        self.assertEqual(checks["native-api-direct.tag-resource-set"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-remove"], "pass")
         self.assertEqual(checks["native-api-direct.tag-resource-in-use-after-remove"], "pass")
         self.assertEqual(checks["native-api-direct.alert-fixture"], "pass")

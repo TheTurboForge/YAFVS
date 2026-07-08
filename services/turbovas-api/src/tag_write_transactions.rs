@@ -162,6 +162,7 @@ pub(crate) async fn execute_tag_resource_update_transaction(
     operator_owner_id: i32,
     request: &ValidatedTagResourceUpdate,
 ) -> Result<(), ApiError> {
+    let mut resources = Vec::new();
     for resource_id in &request.resource_ids {
         let resource =
             resolve_tag_resource_write_record(tx, &state.resource_type, resource_id).await?;
@@ -170,8 +171,21 @@ pub(crate) async fn execute_tag_resource_update_transaction(
             resource.owner_id,
             operator_owner_id,
         )?;
+        resources.push(resource);
+    }
+
+    if request.action == TagResourceUpdateAction::Set {
+        tx.execute(
+            tag_resource_clear_sql(),
+            &[&state.internal_id, &state.resource_type],
+        )
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "clear tag resources"))?;
+    }
+
+    for resource in resources {
         match request.action {
-            TagResourceUpdateAction::Add => {
+            TagResourceUpdateAction::Add | TagResourceUpdateAction::Set => {
                 tx.execute(
                     tag_resource_insert_sql(),
                     &[

@@ -312,10 +312,27 @@ fn tag_resource_update_request_is_explicit_ids_only() {
         ]
     );
 
-    assert!(
-        serde_json::from_str::<TagResourceUpdateRequest>(r#"{"action":"set","resource_ids":[]}"#)
-            .is_err()
+    let set_request: TagResourceUpdateRequest = serde_json::from_str(
+        r#"{"action":"set","resource_ids":["12345678-1234-1234-1234-123456789abc"]}"#,
+    )
+    .expect("valid set tag resource update request");
+    let set_validated =
+        validate_tag_resource_update_request(set_request).expect("valid set resource update");
+    assert_eq!(set_validated.action, TagResourceUpdateAction::Set);
+    assert_eq!(
+        set_validated.resource_ids,
+        vec!["12345678-1234-1234-1234-123456789abc".to_string()]
     );
+
+    assert!(matches!(
+        validate_tag_resource_update_request(
+            serde_json::from_str::<TagResourceUpdateRequest>(
+                r#"{"action":"set","resource_ids":[]}"#
+            )
+            .expect("set action with empty ids deserializes before validation")
+        ),
+        Err(ApiError::BadRequest(_))
+    ));
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"replace","resource_ids":["12345678-1234-1234-1234-123456789abc"]}"#,
@@ -431,6 +448,28 @@ fn tag_write_plans_are_metadata_only() {
         }
     );
 
+    let set_resource_update = ValidatedTagResourceUpdate {
+        action: TagResourceUpdateAction::Set,
+        resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
+    };
+    assert_eq!(
+        tag_resource_update_transaction_plan(&set_resource_update),
+        TagWriteTransactionPlan {
+            operation: TagWriteOperation::UpdateResourceAssignments,
+            steps: vec![
+                TagWriteStep::ResolveOperatorOwner,
+                TagWriteStep::VerifyTagExists,
+                TagWriteStep::VerifyOwnerMatch,
+                TagWriteStep::VerifyResourceTypeSupported,
+                TagWriteStep::VerifyResourceExists,
+                TagWriteStep::VerifyResourceOwnerMatch,
+                TagWriteStep::ClearResourceAssignments,
+                TagWriteStep::InsertResourceAssignment,
+                TagWriteStep::TouchMetadata,
+            ],
+        }
+    );
+
     let patch = ValidatedTagPatch {
         name: Some("owner:y".to_string()),
         comment: None,
@@ -538,6 +577,12 @@ fn tag_write_sql_uses_parameterized_metadata_queries_only() {
     assert!(remove_resource.contains("DELETE FROM tag_resources"));
     assert!(remove_resource.contains("resource_type = $2"));
     assert!(remove_resource.contains("resource_location = 0"));
+
+    let clear_resources = tag_resource_clear_sql();
+    assert!(clear_resources.contains("DELETE FROM tag_resources"));
+    assert!(clear_resources.contains("resource_type = $2"));
+    assert!(clear_resources.contains("resource_location = 0"));
+    assert!(!clear_resources.contains("resource = $3"));
 
     let touch = tag_touch_metadata_sql();
     assert!(touch.contains("UPDATE tags SET modification_time"));

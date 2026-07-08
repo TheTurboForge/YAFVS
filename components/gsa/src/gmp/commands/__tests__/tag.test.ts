@@ -388,7 +388,7 @@ describe('TagCommand tests', () => {
     expect(result.data.id).toEqual('native-tag-id');
   });
 
-  test.each(['add', 'remove'] as const)(
+  test.each(['add', 'remove', 'set'] as const)(
     'should not fall back to GMP when native tag resource %s fails',
     async resourcesAction => {
       const response = createActionResultResponse({id: 'fallback-tag-id'});
@@ -425,9 +425,13 @@ describe('TagCommand tests', () => {
     },
   );
 
-  test('should keep tag save on GMP when set resources action is supplied', async () => {
+  test('should update tag resources through native API for set', async () => {
     const response = createActionResultResponse({id: 'fallback-tag-id'});
-    const fetchMock = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
@@ -438,27 +442,33 @@ describe('TagCommand tests', () => {
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new TagCommand(fakeHttp);
     const result = await cmd.save({
-      id: 'foo',
+      id: 'tag-id',
       name: 'bar',
       active: true,
-      resourceIds: ['id1'],
+      resourceIds: ['id1', 'id2'],
       resourceType: 'task',
       resourcesAction: 'set',
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'save_tag',
-        tag_id: 'foo',
-        'resource_ids:': ['id1'],
-        resources_action: 'set',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/tag-id/resources',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id/resources',
+      expect.objectContaining({
+        body: JSON.stringify({
+          action: 'set',
+          resource_ids: ['id1', 'id2'],
+        }),
+        method: 'POST',
       }),
-    });
-    expect(result.data.id).toEqual('fallback-tag-id');
+    );
+    expect(result.data.id).toEqual('native-tag-id');
   });
 
   test('should not fall back to GMP when native tag save fails', async () => {

@@ -32,6 +32,7 @@ pub(crate) enum TagWriteStep {
     DeleteLiveMetadata,
     InsertResourceAssignment,
     DeleteResourceAssignment,
+    ClearResourceAssignments,
     TouchMetadata,
 }
 
@@ -44,21 +45,27 @@ pub(crate) struct TagWriteTransactionPlan {
 pub(crate) fn tag_resource_update_transaction_plan(
     request: &ValidatedTagResourceUpdate,
 ) -> TagWriteTransactionPlan {
+    let mut steps = vec![
+        TagWriteStep::ResolveOperatorOwner,
+        TagWriteStep::VerifyTagExists,
+        TagWriteStep::VerifyOwnerMatch,
+        TagWriteStep::VerifyResourceTypeSupported,
+        TagWriteStep::VerifyResourceExists,
+        TagWriteStep::VerifyResourceOwnerMatch,
+    ];
+    match request.action {
+        TagResourceUpdateAction::Add => steps.push(TagWriteStep::InsertResourceAssignment),
+        TagResourceUpdateAction::Remove => steps.push(TagWriteStep::DeleteResourceAssignment),
+        TagResourceUpdateAction::Set => {
+            steps.push(TagWriteStep::ClearResourceAssignments);
+            steps.push(TagWriteStep::InsertResourceAssignment);
+        }
+    }
+    steps.push(TagWriteStep::TouchMetadata);
+
     TagWriteTransactionPlan {
         operation: TagWriteOperation::UpdateResourceAssignments,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyTagExists,
-            TagWriteStep::VerifyOwnerMatch,
-            TagWriteStep::VerifyResourceTypeSupported,
-            TagWriteStep::VerifyResourceExists,
-            TagWriteStep::VerifyResourceOwnerMatch,
-            match request.action {
-                TagResourceUpdateAction::Add => TagWriteStep::InsertResourceAssignment,
-                TagResourceUpdateAction::Remove => TagWriteStep::DeleteResourceAssignment,
-            },
-            TagWriteStep::TouchMetadata,
-        ],
+        steps,
     }
 }
 

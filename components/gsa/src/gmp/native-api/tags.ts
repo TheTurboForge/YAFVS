@@ -112,7 +112,7 @@ interface NativeTagPatchInput {
 }
 
 interface NativeTagResourceUpdateInput {
-  action: 'add' | 'remove';
+  action: 'add' | 'remove' | 'set';
   resourceIds: string[];
 }
 

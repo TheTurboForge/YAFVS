@@ -100,6 +100,13 @@ pub(crate) fn tag_resource_delete_sql() -> &'static str {
         AND resource_location = 0;"
 }
 
+pub(crate) fn tag_resource_clear_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE tag = $1
+        AND resource_type = $2
+        AND resource_location = 0;"
+}
+
 pub(crate) fn tag_touch_metadata_sql() -> &'static str {
     "UPDATE tags SET modification_time = m_now() WHERE id = $1;"
 }

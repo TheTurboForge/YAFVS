@@ -118,7 +118,9 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
       canUseNativeApi(this.http) &&
       resourceIds.length > 0 &&
       rawFilter === undefined &&
-      (resourcesAction === 'add' || resourcesAction === 'remove')
+      (resourcesAction === 'add' ||
+        resourcesAction === 'remove' ||
+        resourcesAction === 'set')
     ) {
       return updateNativeTagResources(this.http, id, {
         action: resourcesAction,

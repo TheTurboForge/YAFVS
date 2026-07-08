@@ -231,7 +231,7 @@ fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_res
     for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, export_path, true),
-            "{method} tag metadata export must stay closed; filter actions and set/replace semantics remain inherited"
+            "{method} tag metadata export must stay closed; filter actions and resource-type changes remain inherited"
         );
     }
     assert!(direct_api_v1_method_is_allowed(
@@ -281,7 +281,7 @@ fn openapi_tag_contract_records_remaining_inherited_tail() {
     for path in ["/tags", "/tags/{tag_id}", "/tags/{tag_id}/resources"] {
         let block = openapi_path_block(path);
         assert!(block.contains(
-            "x-turbovas-inherited-still-owns: tag-filter-actions-and-set-resource-semantics"
+            "x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics"
         ));
     }
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");

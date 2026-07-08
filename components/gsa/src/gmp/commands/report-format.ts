@@ -5,12 +5,17 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import type {Element} from 'gmp/models/model';
 import ReportFormat from 'gmp/models/report-format';
-import {exportNativeReportFormatMetadata} from 'gmp/native-api/report-formats';
+import {
+  exportNativeReportFormatMetadata,
+  fetchNativeReportFormat,
+} from 'gmp/native-api/report-formats';
 
 interface ReportFormatResponseData extends XmlResponseData {
   get_report_format?: {
@@ -38,6 +43,16 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
 
   async export({id}: {id: string}) {
     return await exportNativeReportFormatMetadata(this.http, id);
+  }
+
+  async get(
+    {id}: {id: string},
+    {filter, ...options}: {filter?: string} = {},
+  ) {
+    if (filter === undefined && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeReportFormat(this.http, id));
+    }
+    return super.get({id}, {filter, ...options});
   }
 
   save(args: {active: boolean; id: string; name: string; summary: string}) {

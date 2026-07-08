@@ -10,6 +10,7 @@ import {ReportFormatsCommand} from 'gmp/commands/report-formats';
 import {
   createActionResultResponse,
   createHttp,
+  createResponse,
 } from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
@@ -18,8 +19,8 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
-const createNativeHttp = () => {
-  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
+  const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
@@ -33,6 +34,79 @@ const createNativeHttp = () => {
 };
 
 describe('ReportFormatsCommand tests', () => {
+  test('should fetch report format detail through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'report-format-id',
+        name: 'XML',
+        summary: 'Machine-readable report format',
+        extension: 'xml',
+        content_type: 'text/xml',
+        active: true,
+        configurable: true,
+        params: [{name: 'StringParam', type: 'string', value: 'ABC'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    const result = await cmd.get({id: 'report-format-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-formats/report-format-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('report-format-id');
+    expect(result.data.name).toEqual('XML');
+    expect(result.data.params[0].name).toEqual('StringParam');
+  });
+
+  test('should keep filtered report format detail on GMP until native parity is characterized', async () => {
+    const response = createResponse({
+      get_report_format: {
+        get_report_formats_response: {
+          report_format: {
+            _id: 'report-format-id',
+            name: 'XML',
+          },
+        },
+      },
+    });
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp(response);
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    const result = await cmd.get(
+      {id: 'report-format-id'},
+      {filter: 'alerts=1'},
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_report_format',
+        report_format_id: 'report-format-id',
+        filter: 'alerts=1',
+      },
+    });
+    expect(result.data.id).toEqual('report-format-id');
+  });
+
   test('should import report format through inherited GMP action', async () => {
     const response = createActionResultResponse({
       action: 'import_report_format',

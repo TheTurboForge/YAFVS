@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Exercise TurboVAS scope writes over GMP and scope-report reads over native JSON."""
+"""Exercise TurboVAS scope writes over native JSON and report generation over GMP."""
 
 from __future__ import annotations
 
@@ -231,6 +231,73 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
         raise RuntimeError(f"native API DELETE failed with HTTP {status or 'unknown'}: {reason}")
 
 
+def native_api_browser_proxy_json(
+    repo_root: Path,
+    path: str,
+    *,
+    method: str,
+    payload: dict[str, Any],
+    operator_name: str,
+    expected_statuses: set[str],
+) -> dict[str, Any]:
+    if method not in {"POST", "PATCH"}:
+        raise ValueError(f"unsupported native browser-proxy JSON method: {method}")
+    if not path.startswith("/api/v1/"):
+        raise ValueError(f"unsupported native browser-proxy JSON path: {path}")
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        str(repo_root / "compose" / "dev.yaml"),
+        "exec",
+        "-T",
+        "-e",
+        "TURBOVAS_SCOPE_OPERATOR_NAME",
+        "-e",
+        "TURBOVAS_SCOPE_METHOD",
+        "-e",
+        "TURBOVAS_SCOPE_PATH",
+        "-e",
+        "TURBOVAS_SCOPE_JSON",
+        "turbovas-api",
+        "sh",
+        "-ceu",
+        (
+            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "curl -sS --max-time 10 -X \"${TURBOVAS_SCOPE_METHOD}\" -w '\\n%{http_code}' "
+            "-H \"content-type: application/json\" "
+            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-operator-name: ${TURBOVAS_SCOPE_OPERATOR_NAME}\" "
+            "--data \"${TURBOVAS_SCOPE_JSON}\" "
+            "\"http://127.0.0.1:9080${TURBOVAS_SCOPE_PATH}\""
+        ),
+    ]
+    env = os.environ.copy()
+    env["TURBOVAS_SCOPE_OPERATOR_NAME"] = operator_name
+    env["TURBOVAS_SCOPE_METHOD"] = method
+    env["TURBOVAS_SCOPE_PATH"] = path
+    env["TURBOVAS_SCOPE_JSON"] = json.dumps(payload)
+    completed = subprocess.run(
+        command,
+        cwd=repo_root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    lines = completed.stdout.splitlines()
+    status = lines[-1].strip() if lines else ""
+    body = "\n".join(lines[:-1]).strip()
+    if completed.returncode != 0 or status not in expected_statuses:
+        reason = completed.stderr.strip() or body or completed.stdout.strip()
+        raise RuntimeError(f"native API {method} failed with HTTP {status or 'unknown'}: {reason}")
+    parsed = json.loads(body)
+    if not isinstance(parsed, dict):
+        raise RuntimeError(f"native API {method} returned a non-object payload")
+    return parsed
+
+
 def native_scope_report(repo_root: Path, scope_report_id: str) -> dict[str, Any]:
     path = f"/api/v1/scope-reports/{urllib.parse.quote(scope_report_id)}"
     return native_scope_report_row(native_api_json(repo_root, path))
@@ -307,31 +374,50 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) 
         organization_report_id = response_id(organization_response)
         if organization_report_id:
             organization_report = native_scope_report(repo_root, organization_report_id)
-        create_response = gmp.create_scope(
-            smoke_name,
-            protection_requirement="high",
-            target_ids=[target["id"]],
-            host_ids=[host["id"]],
+        created_scope = native_api_browser_proxy_json(
+            repo_root,
+            "/api/v1/scopes",
+            method="POST",
+            payload={
+                "name": smoke_name,
+                "protection_requirement": "high",
+                "target_ids": [target["id"]],
+                "host_ids": [host["id"]],
+            },
+            operator_name=username,
+            expected_statuses={"201"},
         )
-        created_scope_id = response_id(create_response)
+        created_scope_id = created_scope.get("id")
         if not created_scope_id:
-            raise RuntimeError("Scope creation response did not include an id")
+            raise RuntimeError("Native scope creation response did not include an id")
         expanded_target_ids = list(dict.fromkeys([target["id"], added_target["id"]]))
         expanded_host_ids = list(dict.fromkeys([host["id"], added_host["id"]]))
-        gmp.modify_scope(
-            created_scope_id,
-            name=smoke_name,
-            protection_requirement="high",
-            target_ids=expanded_target_ids,
-            host_ids=expanded_host_ids,
+        native_api_browser_proxy_json(
+            repo_root,
+            f"/api/v1/scopes/{urllib.parse.quote(created_scope_id)}",
+            method="PATCH",
+            payload={
+                "name": smoke_name,
+                "protection_requirement": "high",
+                "target_ids": expanded_target_ids,
+                "host_ids": expanded_host_ids,
+            },
+            operator_name=username,
+            expected_statuses={"200"},
         )
         scope_after_add = native_scope_details(repo_root, created_scope_id)
-        gmp.modify_scope(
-            created_scope_id,
-            name=smoke_name,
-            protection_requirement="high",
-            target_ids=[target["id"]],
-            host_ids=[host["id"]],
+        native_api_browser_proxy_json(
+            repo_root,
+            f"/api/v1/scopes/{urllib.parse.quote(created_scope_id)}",
+            method="PATCH",
+            payload={
+                "name": smoke_name,
+                "protection_requirement": "high",
+                "target_ids": [target["id"]],
+                "host_ids": [host["id"]],
+            },
+            operator_name=username,
+            expected_statuses={"200"},
         )
         scope_after_remove = native_scope_details(repo_root, created_scope_id)
         report_response = gmp.generate_scope_report(created_scope_id)
@@ -386,7 +472,7 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) 
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Exercise TurboVAS scope writes over GMP and scope-report reads over native JSON")
+    parser = argparse.ArgumentParser(description="Exercise TurboVAS scope writes over native JSON and report generation over GMP")
     parser.add_argument("command", choices=("smoke",))
     parser.add_argument("--socket", required=True, help="gvmd Unix socket path")
     parser.add_argument("--username", required=True, help="GMP username")

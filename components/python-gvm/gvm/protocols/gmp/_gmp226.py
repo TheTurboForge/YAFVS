@@ -7,8 +7,6 @@
 Greenbone Management Protocol (GMP) version 22.6
 """
 
-from collections.abc import Sequence
-
 from .._protocol import T
 from ._gmp225 import GMPv225
 from .requests.v226 import (
@@ -165,48 +163,6 @@ class GMPv226(GMPv225[T]):
         """Request CVSS Load and authenticated coverage metrics for a report."""
         return self._send_request_and_transform_response(
             Reports.get_report_metrics(report_id)
-        )
-
-    def create_scope(
-        self,
-        name: str,
-        *,
-        comment: str | None = None,
-        protection_requirement: str | None = None,
-        target_ids: Sequence[EntityID] | str | None = None,
-        host_ids: Sequence[EntityID] | str | None = None,
-    ) -> T:
-        """Create a scope for operator-facing reporting."""
-        return self._send_request_and_transform_response(
-            Scopes.create_scope(
-                name,
-                comment=comment,
-                protection_requirement=protection_requirement,
-                target_ids=target_ids,
-                host_ids=host_ids,
-            )
-        )
-
-    def modify_scope(
-        self,
-        scope_id: EntityID,
-        *,
-        name: str | None = None,
-        comment: str | None = None,
-        protection_requirement: str | None = None,
-        target_ids: Sequence[EntityID] | str | None = None,
-        host_ids: Sequence[EntityID] | str | None = None,
-    ) -> T:
-        """Modify an existing scope."""
-        return self._send_request_and_transform_response(
-            Scopes.modify_scope(
-                scope_id,
-                name=name,
-                comment=comment,
-                protection_requirement=protection_requirement,
-                target_ids=target_ids,
-                host_ids=host_ids,
-            )
         )
 
     def generate_scope_report(self, scope_id: EntityID) -> T:

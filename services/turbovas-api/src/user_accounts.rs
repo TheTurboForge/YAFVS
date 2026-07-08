@@ -46,6 +46,7 @@ impl UserAccountCollectionQuery {
             active: self.active.clone(),
             predefined: self.predefined.clone(),
             resource_type: self.resource_type.clone(),
+            schedules_only: None,
             text: self.text.clone(),
             task_name: self.task_name.clone(),
             value: self.value.clone(),

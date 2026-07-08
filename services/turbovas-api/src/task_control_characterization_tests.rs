@@ -434,6 +434,9 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(list.contains("x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes"));
+    assert!(list.contains("name: schedules_only"));
+    assert!(list.contains("Return only scan tasks with an attached schedule."));
+    assert!(list.contains("type: boolean"));
     assert!(list.contains("Native direct API exposes task reads plus metadata-only task updates"));
     assert!(list.contains(
         "Start, stop, delete, clone, file export, resume, target/config/schedule/scanner changes"

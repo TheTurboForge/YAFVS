@@ -83,6 +83,7 @@ export interface NativeTaskQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  schedulesOnly?: boolean;
 }
 
 export interface NativeTasksResponse {
@@ -312,6 +313,7 @@ export const fetchNativeTasks = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.schedulesOnly ? {schedules_only: 'true'} : {}),
     },
   );
   const page = {

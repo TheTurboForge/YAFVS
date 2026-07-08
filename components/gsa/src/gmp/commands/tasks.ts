@@ -78,12 +78,12 @@ class TasksCommand extends EntitiesCommand<Task, GetTasksResponse> {
     {filter, schedulesOnly}: TasksCommandGetParams = {},
     options?: HttpCommandOptions,
   ) {
-    if (canUseNativeApi(this.http) && !schedulesOnly) {
+    if (canUseNativeApi(this.http)) {
       const nativeFilter = filterFromCommandParams({filter});
-      const nativeResponse = await fetchNativeTasks(
-        this.http,
-        nativeTaskQueryFromFilter(nativeFilter),
-      );
+      const nativeResponse = await fetchNativeTasks(this.http, {
+        ...nativeTaskQueryFromFilter(nativeFilter),
+        schedulesOnly,
+      });
       return new Response(nativeResponse.tasks, {
         filter: nativeFilter,
         counts: nativeResponse.counts,
@@ -113,7 +113,7 @@ class TasksCommand extends EntitiesCommand<Task, GetTasksResponse> {
     params: HttpCommandInputParams & {schedulesOnly?: boolean} = {},
     options?: HttpCommandOptions,
   ) {
-    if (!canUseNativeApi(this.http) || params.schedulesOnly) {
+    if (!canUseNativeApi(this.http)) {
       return super.getAll(params, options);
     }
 
@@ -124,6 +124,7 @@ class TasksCommand extends EntitiesCommand<Task, GetTasksResponse> {
     for (let page = 1; tasks.length < total; page += 1) {
       const nativeResponse = await fetchNativeTasks(this.http, {
         ...nativeTaskQueryFromFilter(filter),
+        schedulesOnly: params.schedulesOnly,
         page,
         pageSize: NATIVE_COMMAND_PAGE_SIZE,
       });

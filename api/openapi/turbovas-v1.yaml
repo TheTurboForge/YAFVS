@@ -4943,6 +4943,11 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - name: schedules_only
+          in: query
+          description: Return only scan tasks with an attached schedule.
+          schema:
+            type: boolean
       responses:
         '200':
           description: Task collection

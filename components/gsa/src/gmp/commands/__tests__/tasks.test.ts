@@ -316,11 +316,17 @@ describe('TasksCommand tests', () => {
     ]);
   });
 
-  test('should keep schedules-only task lists on GMP', async () => {
-    const response = createEntitiesResponse('task', [
-      {_id: 'scheduled-task-1', name: 'Scheduled Task'},
-    ]);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+  test('should fetch schedules-only task lists through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
+        items: [{id: 'scheduled-task-1', name: 'Scheduled Task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -328,24 +334,34 @@ describe('TasksCommand tests', () => {
       (path: string) => `https://turbovas.example/${path}`,
     );
     fakeHttp.session = createSession();
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new TasksCommand(fakeHttp);
     const result = await cmd.getAll({schedulesOnly: true});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tasks',
-        filter: 'first=1 rows=-1',
-        usage_type: 'scan',
-        schedules_only: 1,
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tasks', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      schedules_only: 'true',
     });
-    expect(result.data).toEqual([
-      new Task({id: 'scheduled-task-1', name: 'Scheduled Task'}),
-    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toEqual('scheduled-task-1');
+    expect(result.data[0].name).toEqual('Scheduled Task');
   });
 
   test('should fetch severity aggregates', async () => {

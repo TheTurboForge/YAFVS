@@ -6,7 +6,11 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {ScopeReportsCommand, ScopesCommand} from 'gmp/commands/scopes';
-import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
+import {
+  createActionResultResponse,
+  createHttp,
+  createResponse,
+} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -354,10 +358,64 @@ describe('ScopesCommand tests', () => {
     });
   });
 
-  test('should keep scope report deletion on GMP when native API is available', async () => {
-    const response = createActionResultResponse({
-      action: 'delete_scope_report',
-      id: 'scope-report-id',
+  test('should fetch scope reports through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-creation_time',
+          filter: '',
+        },
+        items: [
+          {
+            id: 'scope-report-id',
+            name: 'Production scope report',
+            scope: {id: 'scope-id', name: 'Production'},
+            protection_requirement: 'high',
+            source_report_count: 1,
+            member_host_count: 2,
+            evidence_host_count: 1,
+            missing_host_count: 1,
+            result_count: 4,
+            vulnerability_count: 3,
+            severity: {high: 1, medium: 1, low: 1, log: 1, false_positive: 0},
+            max_severity: 8.1,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ScopeReportsCommand(fakeHttp);
+    const result = await cmd.get();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scope-reports', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: '-creation_time',
+      filter: '',
+    });
+    expect(result.data[0].id).toEqual('scope-report-id');
+    expect(result.data[0].scopeId).toEqual('scope-id');
+    expect(result.meta?.counts.filtered).toEqual(1);
+  });
+
+  test('should keep scoped filtered scope-report lists on GMP until native supports both predicates', async () => {
+    const response = createResponse({
+      get_scope_reports: {
+        get_scope_reports_response: {
+          scope_reports: {},
+          filters: {},
+          scope_report_count: {__text: 0, _filtered: 0, _page: 0},
+        },
+      },
     });
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -373,14 +431,56 @@ describe('ScopesCommand tests', () => {
     fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new ScopeReportsCommand(fakeHttp);
-    await cmd.delete({id: 'scope-report-id'});
+    await cmd.get({scopeId: 'scope-id', filter: 'Production'});
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_scope_report',
-        scope_report_id: 'scope-report-id',
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        scope_report_id: undefined,
+        scope_id: 'scope-id',
+        filter: 'Production',
+        details: 1,
+        cmd: 'get_scope_reports',
       },
     });
+  });
+
+  test('should delete scope reports through native API when available', async () => {
+    const response = createActionResultResponse({
+      action: 'delete_scope_report',
+      id: 'scope-report-id',
+    });
+    const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new ScopeReportsCommand(fakeHttp);
+    await cmd.delete({id: 'scope-report-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scope-reports/scope-report-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scope-reports/scope-report-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
   });
 });

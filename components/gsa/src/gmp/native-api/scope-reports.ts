@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import type {ProtectionRequirement, ScopeReport} from 'gmp/commands/scopes';
 import type {UrlParams} from 'gmp/http/utils';
+import Filter from 'gmp/models/filter';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -105,6 +106,27 @@ export interface NativeScopeReportsResponse {
   page: NativeScopeReportPage;
 }
 
+const SCOPE_REPORT_SORT_FIELDS: Record<string, string> = {
+  created: 'creation_time',
+  creation_time: 'creation_time',
+  modified: 'modification_time',
+  modification_time: 'modification_time',
+  latest_evidence: 'latest_evidence_time',
+  latest_evidence_time: 'latest_evidence_time',
+  scope: 'scope_name',
+  scope_name: 'scope_name',
+  severity: 'max_severity',
+  max_severity: 'max_severity',
+  source_reports: 'source_report_count',
+  source_report_count: 'source_report_count',
+  hosts: 'member_host_count',
+  member_host_count: 'member_host_count',
+  results: 'result_count',
+  result_count: 'result_count',
+  vulnerabilities: 'vulnerability_count',
+  vulnerability_count: 'vulnerability_count',
+};
+
 const integerValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -120,6 +142,51 @@ const stringValue = (value: unknown, fallback = ''): string =>
 
 const optionalStringValue = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const nativeSortFromFilter = (filter?: Filter): string => {
+  const reverse = filter?.get('sort-reverse');
+  const ascending = filter?.get('sort');
+  if (reverse === undefined && ascending === undefined) {
+    return '-creation_time';
+  }
+  const rawField = stringValue(reverse ?? ascending, 'creation_time');
+  const nativeField = SCOPE_REPORT_SORT_FIELDS[rawField] ?? rawField;
+  return reverse !== undefined ? `-${nativeField}` : nativeField;
+};
+
+const nativeSearchFromFilter = (filter?: Filter): string => {
+  const search = filter?.get('search');
+  if (search !== undefined) {
+    return String(search);
+  }
+  const criteria = filter?.toFilterCriteriaString().trim() ?? '';
+  return /[=<>:~]/.test(criteria) ? '' : criteria;
+};
+
+export const nativeScopeReportQueryFromFilter = (
+  filter?: Filter,
+  scopeId?: string,
+): NativeScopeReportQuery => {
+  const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
+  const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const search = nativeSearchFromFilter(filter);
+  return {
+    page: Math.floor((first - 1) / pageSize) + 1,
+    pageSize,
+    sort: nativeSortFromFilter(filter),
+    filter: search || scopeId || '',
+  };
+};
+
+export const canUseNativeScopeReportList = (
+  filter?: Filter,
+  scopeId?: string,
+): boolean => {
+  if (scopeId === undefined) {
+    return true;
+  }
+  return nativeSearchFromFilter(filter) === '';
+};
 
 const nativeCounts = (page: NativeScopeReportPage, length: number) =>
   new CollectionCounts({
@@ -307,4 +374,29 @@ export const fetchNativeScopeReports = async (
     counts: nativeCounts(page, reports.length),
     page,
   };
+};
+
+export const deleteNativeScopeReport = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/scope-reports/${encodeURIComponent(id)}`),
+    {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(gmp.session.token === undefined
+          ? {}
+          : {'X-TurboVAS-Token': gmp.session.token}),
+        ...(gmp.session.jwt === undefined
+          ? {}
+          : {Authorization: `Bearer ${gmp.session.jwt}`}),
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
 };

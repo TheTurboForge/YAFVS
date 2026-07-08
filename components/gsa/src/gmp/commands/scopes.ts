@@ -7,7 +7,11 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import HttpCommand from 'gmp/commands/http';
 import type {EntitiesMeta} from 'gmp/commands/entities';
-import {canUseNativeApi} from 'gmp/commands/native';
+import {
+  canUseNativeApi,
+  filterFromCommandParams,
+  nativeCollectionMeta,
+} from 'gmp/commands/native';
 import {getMetricsNode, parseReportMetrics} from 'gmp/commands/report-metrics';
 import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
@@ -21,6 +25,13 @@ import {
   fetchNativeScopes,
   patchNativeScope,
 } from 'gmp/native-api/scopes';
+import {
+  canUseNativeScopeReportList,
+  deleteNativeScopeReport,
+  fetchNativeScopeReport,
+  fetchNativeScopeReports,
+  nativeScopeReportQueryFromFilter,
+} from 'gmp/native-api/scope-reports';
 import {isDefined} from 'gmp/utils/identity';
 
 export type ProtectionRequirement = 'normal' | 'high' | 'very_high';
@@ -482,6 +493,30 @@ export class ScopeReportsCommand extends HttpCommand {
     filter?: Filter | string;
     details?: number;
   } = {}) {
+    if (canUseNativeApi(this.http)) {
+      const nativeFilter = filterFromCommandParams({filter});
+      if (id !== undefined) {
+        const report = await fetchNativeScopeReport(this.http, id);
+        return new Response<ScopeReport[], EntitiesMeta>([report], {
+          filter: nativeFilter,
+          counts: nativeCollectionMeta(nativeFilter, [report], 1).counts,
+        });
+      }
+      if (canUseNativeScopeReportList(nativeFilter, scopeId)) {
+        const nativeResponse = await fetchNativeScopeReports(
+          this.http,
+          nativeScopeReportQueryFromFilter(nativeFilter, scopeId),
+        );
+        return new Response<ScopeReport[], EntitiesMeta>(
+          nativeResponse.reports,
+          {
+            filter: nativeFilter,
+            counts: nativeResponse.counts,
+          },
+        );
+      }
+    }
+
     const response = await this.httpGetWithTransform({
       scope_report_id: id,
       scope_id: scopeId,
@@ -517,7 +552,12 @@ export class ScopeReportsCommand extends HttpCommand {
     return response.set<ReportMetrics>(metrics);
   }
 
-  delete({id}: {id: string}) {
+  async delete({id}: {id: string}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeScopeReport(this.http, id);
+      return;
+    }
+
     return this.httpPostWithTransform({
       cmd: 'delete_scope_report',
       scope_report_id: id,

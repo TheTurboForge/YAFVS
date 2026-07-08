@@ -107,18 +107,11 @@ export class ScanConfigCommand extends EntityCommand {
 
   async create({baseScanConfig, name, comment}) {
     if (canUseNativeApi(this.http) && isDefined(baseScanConfig)) {
-      try {
-        return await createNativeScanConfig(this.http, {
-          base_scan_config_id: baseScanConfig,
-          comment: comment ?? '',
-          name,
-        });
-      } catch (error) {
-        log.debug(
-          'Native scan config create-from-base failed, falling back to GMP',
-          error,
-        );
-      }
+      return await createNativeScanConfig(this.http, {
+        base_scan_config_id: baseScanConfig,
+        comment: comment ?? '',
+        name,
+      });
     }
 
     const data = {

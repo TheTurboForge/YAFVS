@@ -478,7 +478,7 @@ describe('ScanConfigCommand tests', () => {
     expect(result.data.id).toEqual('native-scan-config-id');
   });
 
-  test('should fall back to GMP when native scan config create from base fails', async () => {
+  test('should not fall back to GMP when native scan config create from base fails', async () => {
     const response = createActionResultResponse();
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
@@ -492,22 +492,16 @@ describe('ScanConfigCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.create({
-      baseScanConfig: 'base-scan-config-id',
-      name: 'foo',
-      comment: 'somecomment',
-    });
 
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_config',
-        base: 'base-scan-config-id',
-        comment: 'somecomment',
+    await expect(
+      cmd.create({
+        baseScanConfig: 'base-scan-config-id',
         name: 'foo',
-        usage_type: 'scan',
-      },
-    });
+        comment: 'somecomment',
+      }),
+    ).rejects.toThrow('Native API request failed with status 503');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should clone a scan config through native API when available', async () => {

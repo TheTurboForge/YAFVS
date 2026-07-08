@@ -3345,7 +3345,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'result-exports-and-actions',
          'result-tags-exports-and-actions',
          'retention-mutations',
-         'saved-filter-alert-linkage-and-legacy-file-export-fallback',
+         'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',
          'scanner-control-credentials-writes-and-deletes',
          'scap-rich-context',

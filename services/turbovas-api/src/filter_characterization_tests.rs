@@ -15,6 +15,7 @@ const MANAGE_SQL_PERMISSIONS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_permissions.c");
 const MANAGE_SQL_RESOURCES: &str =
     include_str!("../../../components/gvmd/src/manage_sql_resources.c");
+const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -335,9 +336,7 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     let list = openapi_path_block("/filters");
     assert!(list.contains("get:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(
-        list.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback")
-    );
+    assert!(list.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-replaces: saved-filter-create"));
 
@@ -350,18 +349,14 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(detail.contains("x-turbovas-replaces: saved-filter-metadata-modify"));
     assert!(detail.contains("x-turbovas-replaces: saved-filter-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(
-        detail.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback")
-    );
+    assert!(detail.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
 
     let restore = openapi_path_block("/filters/{filter_id}/restore");
     assert!(restore.contains("post:"));
     assert!(restore.contains("x-turbovas-exposure: direct-write"));
     assert!(restore.contains("x-turbovas-replaces: saved-filter-restore"));
     assert!(restore.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(
-        restore.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback")
-    );
+    assert!(restore.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
 
     let hard_delete = openapi_path_block("/filters/{filter_id}/trash");
     assert!(hard_delete.contains("delete:"));
@@ -369,8 +364,10 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
     assert!(hard_delete.contains("x-turbovas-replaces: saved-filter-hard-delete"));
     assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(
-        hard_delete
-            .contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage-and-legacy-file-export-fallback")
-    );
+    assert!(hard_delete.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+
+    assert!(!GSAD_GMP_C.contains("export_filter_gmp"));
+    assert!(!GSAD_GMP_C.contains("export_filters_gmp"));
+    let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
+    assert!(bulk_export.contains("str_equal (type, \"filter\")"));
 }

@@ -532,12 +532,6 @@ char *
 delete_filter_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *
-export_filter_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-export_filters_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                    gsad_command_response_data_t *);
-char *
 get_filter_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);
 char *

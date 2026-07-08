@@ -12943,44 +12943,6 @@ delete_filter_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Export a filter.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Filter XML on success.  Enveloped XML on error.
- */
-char *
-export_filter_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "filter", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of filters.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Filters XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_filters_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "filter", credentials, params, response_data);
-}
-
-/**
  * @brief Modify a filter, get all filters, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -14189,13 +14151,14 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (type, "Bulk Export")
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
-  if (str_equal (type, "port_list") || str_equal (type, "report_config"))
+  if (str_equal (type, "filter") || str_equal (type, "port_list")
+      || str_equal (type, "report_config"))
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);
       return gsad_http_create_gsad_message (
         credentials,
-        "Port-list and report-config XML bulk export are no longer "
+        "Filter, port-list, and report-config XML bulk export are no longer "
         "supported. Use the native JSON metadata export endpoints instead.",
         response_data);
     }
@@ -15789,8 +15752,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (download_credential)
   ELSE (export_credential)
   ELSE (export_credentials)
-  ELSE (export_filter)
-  ELSE (export_filters)
   ELSE (export_override)
   ELSE (export_overrides)
   ELSE (export_preference_file)

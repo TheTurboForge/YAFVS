@@ -81,8 +81,6 @@ gsad_init_validator ()
                      "|(export_configs)"
                      "|(export_credential)"
                      "|(export_credentials)"
-                     "|(export_filter)"
-                     "|(export_filters)"
                      "|(export_omp_doc)"
                      "|(export_override)"
                      "|(export_overrides)"

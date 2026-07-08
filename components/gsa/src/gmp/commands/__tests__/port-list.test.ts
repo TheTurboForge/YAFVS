@@ -351,7 +351,7 @@ describe('PortListCommand', () => {
     expect(result.data.id).toEqual('native-port-list-clone-id');
   });
 
-  test('should fall back to GMP when native port list clone fails', async () => {
+  test('should not fall back to GMP when native port list clone fails', async () => {
     const response = createActionResultResponse({
       action: 'Clone Port List',
       id: 'fallback-port-list-clone-id',
@@ -374,17 +374,11 @@ describe('PortListCommand', () => {
     http.session.token = 'test-token';
     const command = new PortListCommand(http);
 
-    const result = await command.clone({id: 'port-list-id'});
-
+    await expect(command.clone({id: 'port-list-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
     expect(fetchMock).toHaveBeenCalled();
-    expect(http.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: 'port-list-id',
-        resource_type: 'port_list',
-      },
-    });
-    expect(result.data.id).toEqual('fallback-port-list-clone-id');
+    expect(http.request).not.toHaveBeenCalled();
   });
 
   test('should delete a port list through native API when available', async () => {

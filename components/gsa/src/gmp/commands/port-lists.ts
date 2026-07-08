@@ -166,11 +166,7 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
 
   async clone({id}: EntityCommandParams) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativePortList(this.http, id);
-      } catch (error) {
-        log.debug('Native port list clone failed, falling back to GMP', error);
-      }
+      return await cloneNativePortList(this.http, id);
     }
     return super.clone({id});
   }

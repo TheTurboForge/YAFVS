@@ -8,7 +8,7 @@ import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
-import type Response from 'gmp/http/response';
+import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import Alert, {
   type AlertConditionType,
@@ -25,6 +25,7 @@ import {
 import {parseYesNo} from 'gmp/parser';
 import {
   exportNativeAlertMetadata,
+  fetchNativeAlert,
   patchNativeAlert,
 } from 'gmp/native-api/alerts';
 import {map} from 'gmp/utils/array';
@@ -218,6 +219,13 @@ const convertData = (
 class AlertCommand extends EntityCommand<Alert> {
   constructor(http: Http) {
     super(http, 'alert', Alert);
+  }
+
+  async get({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeAlert(this.http, id));
+    }
+    return super.get({id});
   }
 
   async export({id}: EntityCommandParams) {

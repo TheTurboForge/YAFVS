@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe('AlertCommand tests', () => {
-  test('should get an alert', async () => {
+  test('should get an alert through GMP when native API is unavailable', async () => {
     const response = createEntityResponse('alert', {_id: 'foo'});
     const fakeHttp = createHttp(response);
     const cmd = new AlertCommand(fakeHttp);
@@ -37,6 +37,77 @@ describe('AlertCommand tests', () => {
       },
     });
     expect(result.data.id).toEqual('foo');
+  });
+
+  test('should get an alert through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'alert_id1',
+        name: 'Native Alert',
+        comment: 'redacted metadata only',
+        active: true,
+        method_data_redacted: true,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    const result = await cmd.get({id: 'alert_id1'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/alerts/alert_id1', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts/alert_id1',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('alert_id1');
+    expect(result.data.name).toEqual('Native Alert');
+    expect(result.data.comment).toEqual('redacted metadata only');
+  });
+
+  test('should not fall back to GMP when native alert detail fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'not found'}}),
+      ok: false,
+      status: 404,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    await expect(cmd.get({id: 'missing-alert'})).rejects.toThrow(
+      'Native API request failed with status 404',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should export alert metadata through native API when available', async () => {

@@ -18,6 +18,7 @@ import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import type Filter from 'gmp/models/filter';
+import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import PortList, {type PortListElement} from 'gmp/models/port-list';
 import {
@@ -76,6 +77,9 @@ const shouldExportAllByFilter = (filter: Filter): boolean => {
   return Number.isFinite(rows) && rows < 0;
 };
 
+const nativePortListDetailSupportsFilter = (filter?: Filter | string): boolean =>
+  filter === undefined || filterString(filter) === 'targets=1';
+
 export const FROM_FILE = YES_VALUE;
 export const NOT_FROM_FILE = NO_VALUE;
 
@@ -129,7 +133,7 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
     {id}: EntityCommandParams,
     {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
   ) {
-    if (filter === undefined && canUseNativeApi(this.http)) {
+    if (canUseNativeApi(this.http) && nativePortListDetailSupportsFilter(filter)) {
       return new Response(await fetchNativePortList(this.http, id));
     }
     return super.get({id}, {filter, ...options});

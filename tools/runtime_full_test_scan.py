@@ -119,6 +119,34 @@ def object_rows(response: Any, object_tag: str) -> list[dict[str, str | None]]:
     return rows
 
 
+def native_report_rows(repo_root: Path, *, page_size: int = 100) -> list[dict[str, str | None]]:
+    payload = native_api_json(repo_root, f"/api/v1/reports?page_size={page_size}&sort=-creation_time")
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return []
+    rows: list[dict[str, str | None]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        task = item.get("task") if isinstance(item.get("task"), dict) else {}
+        rows.append(
+            {
+                "id": item.get("id") if isinstance(item.get("id"), str) else None,
+                "task_id": task.get("id") if isinstance(task.get("id"), str) else None,
+                "name": item.get("name") if isinstance(item.get("name"), str) else None,
+                "scan_run_status": item.get("status") if isinstance(item.get("status"), str) else None,
+                "scan_start": item.get("scan_start") if isinstance(item.get("scan_start"), str) else None,
+                "scan_end": item.get("scan_end") if isinstance(item.get("scan_end"), str) else None,
+                "result_count": str(item.get("result_count")) if item.get("result_count") is not None else None,
+                "hosts_count": str(item.get("host_count")) if item.get("host_count") is not None else None,
+                "vulns_count": str(item.get("vulnerability_count")) if item.get("vulnerability_count") is not None else None,
+                "cves_count": str(item.get("cve_count")) if item.get("cve_count") is not None else None,
+                "os_count": None,
+            }
+        )
+    return rows
+
+
 def native_api_json(repo_root: Path, path: str) -> dict[str, Any]:
     command = [
         "docker",
@@ -277,7 +305,18 @@ def report_rows(response: Any) -> list[dict[str, str | None]]:
     return rows
 
 
-def reports_for_task(gmp: Any, task_id: str, rows: int = 10) -> tuple[list[dict[str, str | None]], str | None]:
+def reports_for_task(
+    gmp: Any,
+    task_id: str,
+    rows: int = 10,
+    repo_root: Path | None = None,
+) -> tuple[list[dict[str, str | None]], str | None]:
+    if repo_root is not None:
+        try:
+            native_rows = native_report_rows(repo_root, page_size=max(rows, 100))
+        except Exception as error:  # pylint: disable=broad-except
+            return [], f"native report lookup failed: {type(error).__name__}: {error}"
+        return [row for row in native_rows if row.get("task_id") == task_id][:rows], None
     try:
         response = gmp.get_reports(
             filter_string=f"task_id={task_id} rows={rows} sort-reverse=date",
@@ -289,8 +328,8 @@ def reports_for_task(gmp: Any, task_id: str, rows: int = 10) -> tuple[list[dict[
     return [row for row in report_rows(response) if row.get("task_id") == task_id], None
 
 
-def latest_report_for_task(gmp: Any, task_id: str) -> tuple[dict[str, str | None] | None, str | None]:
-    reports, error = reports_for_task(gmp, task_id, rows=10)
+def latest_report_for_task(gmp: Any, task_id: str, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
+    reports, error = reports_for_task(gmp, task_id, rows=10, repo_root=repo_root)
     return (reports[0] if reports else None), error
 
 
@@ -363,8 +402,13 @@ def ospd_handoff_evidence(log_file: Path | None, report_id: str | None, task_id:
     }
 
 
-def task_status_snapshot(gmp: Any, task: dict[str, str | None], ospd_log_file: Path | None = None) -> dict[str, Any]:
-    reports, report_error = reports_for_task(gmp, task["id"] or "") if task.get("id") else ([], None)
+def task_status_snapshot(
+    gmp: Any,
+    task: dict[str, str | None],
+    ospd_log_file: Path | None = None,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    reports, report_error = reports_for_task(gmp, task["id"] or "", repo_root=repo_root) if task.get("id") else ([], None)
     latest_report = reports[0] if reports else None
     latest_completed_report = first_completed_report_with_start(reports)
     latest_no_start_completed_report = first_no_start_completed_report(reports)
@@ -615,7 +659,7 @@ def command_start(
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    pre_start_reports, _ = reports_for_task(gmp, task_id, rows=20)
+    pre_start_reports, _ = reports_for_task(gmp, task_id, rows=20, repo_root=repo_root)
     pre_start_report_ids = {report["id"] for report in pre_start_reports if report.get("id")}
     start_error: str | None = None
     report_id: str | None = None
@@ -643,8 +687,8 @@ def command_start(
             if not task:
                 observed = {"task_lookup_error": "full test task disappeared after start request"}
                 break
-            observed = task_status_snapshot(gmp, task, ospd_log_file=ospd_log_file)
-            reports, _ = reports_for_task(gmp, task_id, rows=10)
+            observed = task_status_snapshot(gmp, task, ospd_log_file=ospd_log_file, repo_root=repo_root)
+            reports, _ = reports_for_task(gmp, task_id, rows=10, repo_root=repo_root)
         except Exception as error:  # pylint: disable=broad-except
             poll_errors.append(f"{type(error).__name__}: {error}")
             if reconnect_gmp is not None:
@@ -726,7 +770,7 @@ def command_status(gmp: Any, artifact_dir: Path, ospd_log_file: Path | None = No
     elif not task:
         payload = result("warn", "Full test scan task does not exist yet.", target_cidr=AUTHORIZED_TARGET_CIDR)
     else:
-        payload = result("pass", "Full test scan status read.", target_cidr=AUTHORIZED_TARGET_CIDR, **task_status_snapshot(gmp, task, ospd_log_file=ospd_log_file))
+        payload = result("pass", "Full test scan status read.", target_cidr=AUTHORIZED_TARGET_CIDR, **task_status_snapshot(gmp, task, ospd_log_file=ospd_log_file, repo_root=repo_root))
     payload["artifacts"] = [write_artifact(artifact_dir, "status.json", payload)]
     return payload
 

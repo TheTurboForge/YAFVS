@@ -818,6 +818,36 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(payload["alive_tests"], ["Scan Config Default"])
         self.assertNotIn("credentials", payload)
 
+    def test_full_test_scan_reports_for_task_uses_native_api_when_repo_root_is_available(self):
+        root = Path("/tmp/turbovas-test")
+        payload = {
+            "items": [
+                {
+                    "id": "report-1",
+                    "name": "Full test report",
+                    "status": "Done",
+                    "scan_start": "2026-07-08T12:00:00Z",
+                    "scan_end": "2026-07-08T12:30:00Z",
+                    "result_count": 7,
+                    "host_count": 2,
+                    "vulnerability_count": 3,
+                    "cve_count": 4,
+                    "task": {"id": "task-1"},
+                },
+                {"id": "other-report", "task": {"id": "other-task"}},
+            ]
+        }
+
+        with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", return_value=payload) as native_json:
+            reports, error = runtime_full_test_scan.reports_for_task(object(), "task-1", repo_root=root)
+
+        self.assertIsNone(error)
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]["id"], "report-1")
+        self.assertEqual(reports[0]["scan_run_status"], "Done")
+        self.assertEqual(reports[0]["result_count"], "7")
+        native_json.assert_called_once_with(root, "/api/v1/reports?page_size=100&sort=-creation_time")
+
     def test_runtime_scope_smoke_extracts_organization_proof_finding(self):
         proof = turbovasctl.runtime_scope_organization_proof_finding(
             {

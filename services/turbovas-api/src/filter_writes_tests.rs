@@ -90,7 +90,9 @@ fn filter_patch_handler_checks_owner_before_mutation_or_alert_sensitive_changes(
     assert!(handler.contains("let operator = require_filter_write_operator(operator)?;"));
     assert!(handler.contains("resolve_filter_write_operator_owner(&tx, &operator).await?"));
     assert!(handler.contains(owner_check));
+    assert!(handler.contains("if request.changes_alert_linked_type()"));
     assert!(handler.contains("ensure_filter_not_in_use_by_alerts(&tx, state.internal_id).await?;"));
+    assert!(!handler.contains("request.term.is_some()"));
     assert!(
         handler.find(owner_check).unwrap()
             < handler.find("execute_filter_patch_transaction").unwrap(),
@@ -99,7 +101,7 @@ fn filter_patch_handler_checks_owner_before_mutation_or_alert_sensitive_changes(
     assert!(
         handler.find("ensure_filter_not_in_use_by_alerts").unwrap()
             < handler.find("execute_filter_patch_transaction").unwrap(),
-        "filter patch must guard alert-sensitive term/type changes before mutation"
+        "filter patch must guard alert-linked type changes before mutation"
     );
 }
 
@@ -127,6 +129,32 @@ fn filter_clone_handler_enforces_source_owner_check() {
                 .unwrap(),
         "clone source owner must be checked before cloning"
     );
+}
+
+#[test]
+fn filter_patch_alert_linked_guard_applies_only_to_type_changes() {
+    let term_only = validate_filter_patch_request(patch_request_with_term_type(
+        None,
+        None,
+        None,
+        Some("rows=100 sort=name"),
+    ))
+    .expect("valid term-only patch");
+    assert!(!term_only.changes_alert_linked_type());
+
+    let comment_and_name =
+        validate_filter_patch_request(patch_request(Some("Renamed filter"), Some("updated note")))
+            .expect("valid metadata-only patch");
+    assert!(!comment_and_name.changes_alert_linked_type());
+
+    let type_change = validate_filter_patch_request(patch_request_with_term_type(
+        None,
+        None,
+        Some("result"),
+        None,
+    ))
+    .expect("valid type patch");
+    assert!(type_change.changes_alert_linked_type());
 }
 
 #[test]

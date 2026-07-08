@@ -50,6 +50,12 @@ pub(crate) struct ValidatedFilterPatch {
     pub(crate) term: Option<String>,
 }
 
+impl ValidatedFilterPatch {
+    pub(crate) fn changes_alert_linked_type(&self) -> bool {
+        self.filter_type.is_some()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedFilterCreate {
     pub(crate) name: String,

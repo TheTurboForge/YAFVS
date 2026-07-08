@@ -192,7 +192,7 @@ pub(crate) async fn patch_filter(
     if let Some(name) = request.name.as_ref() {
         ensure_unique_filter_name(&tx, name, state.internal_id).await?;
     }
-    if request.filter_type.is_some() || request.term.is_some() {
+    if request.changes_alert_linked_type() {
         ensure_filter_not_in_use_by_alerts(&tx, state.internal_id).await?;
     }
     let record = execute_filter_patch_transaction(&tx, state.internal_id, &request).await?;

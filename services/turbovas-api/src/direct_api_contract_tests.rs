@@ -493,6 +493,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id"));
     assert!(browser_routes.contains("/api/v1/report-configs"));
     assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id"));
+    assert!(browser_routes.contains("/api/v1/report-formats/:report_format_id"));
     assert!(browser_routes.contains("/api/v1/tags"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/clone"));
@@ -519,6 +520,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("patch(browser_proxy_patch_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_port_list)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_report_config)"));
+    assert!(browser_routes.contains("patch(browser_proxy_patch_report_format)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scan_config)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_schedule)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scope)"));

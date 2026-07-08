@@ -16,8 +16,8 @@ use crate::{
         browser_proxy_hard_delete_filter, browser_proxy_patch_filter, browser_proxy_restore_filter,
     },
     browser_proxy_metadata_patch::{
-        browser_proxy_patch_alert, browser_proxy_patch_credential, browser_proxy_patch_scanner,
-        browser_proxy_patch_task,
+        browser_proxy_patch_alert, browser_proxy_patch_credential,
+        browser_proxy_patch_report_format, browser_proxy_patch_scanner, browser_proxy_patch_task,
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
@@ -97,6 +97,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/report-configs/:report_config_id/trash",
             delete(browser_proxy_hard_delete_report_config),
+        )
+        .route(
+            "/api/v1/report-formats/:report_format_id",
+            patch(browser_proxy_patch_report_format),
         )
         .route("/api/v1/tags/:tag_id", patch(browser_proxy_patch_tag))
         .route("/api/v1/tags/:tag_id", delete(browser_proxy_delete_tag))

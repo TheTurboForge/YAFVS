@@ -127,7 +127,7 @@ fn env_string(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn feed_metadata_root() -> PathBuf {
+pub(crate) fn feed_metadata_root() -> PathBuf {
     env_string(FEED_METADATA_ROOT_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_FEED_METADATA_ROOT))
@@ -231,7 +231,7 @@ fn decode_basic_xml_entities(value: &str) -> String {
         .replace("&amp;", "&")
 }
 
-fn read_text_file_bounded(path: &FsPath, max_bytes: u64) -> Result<String, io::Error> {
+pub(crate) fn read_text_file_bounded(path: &FsPath, max_bytes: u64) -> Result<String, io::Error> {
     let file = File::open(path)?;
     let mut limited = file.take(max_bytes + 1);
     let mut buffer = String::new();

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -103,6 +104,15 @@ describe('native API DFN-CERT advisory catalog', () => {
         severity: 9.1,
         cve_refs: 1,
         cves: ['CVE-2026-10001'],
+        rich_detail: {
+          links: [
+            {
+              href: 'https://example.test/native-dfn',
+              rel: 'alternate',
+            },
+            {href: 'https://example.test/related-dfn'},
+          ],
+        },
         created_at: '2026-06-18T20:00:00Z',
         modified_at: '2026-06-19T07:00:00Z',
         updated_at: '2026-06-19T07:00:00Z',
@@ -133,6 +143,10 @@ describe('native API DFN-CERT advisory catalog', () => {
     expect(advisory.summary).toEqual('Native summary.');
     expect(advisory.severity).toEqual(9.1);
     expect(advisory.cves).toEqual(['CVE-2026-10001']);
+    expect(advisory.advisoryLink).toEqual('https://example.test/native-dfn');
+    expect(advisory.additionalLinks).toEqual([
+      'https://example.test/related-dfn',
+    ]);
     expect(advisory.userTags).toHaveLength(1);
     expect(advisory.userTags[0].name).toEqual('Native tag');
     expect(advisory.userTags[0].value).toEqual('true');
@@ -142,33 +156,8 @@ describe('native API DFN-CERT advisory catalog', () => {
     );
   });
 
-  test('loads native catalog fields while preserving inherited rich detail', async () => {
+  test('loads native catalog fields and rich detail without inherited get', async () => {
     const id = 'DFN-CERT-2026-001';
-    const inherited = DfnCertAdv.fromElement({
-      _id: id,
-      writable: 1,
-      dfn_cert_adv: {
-        severity: 3.1,
-        cve_refs: 1,
-        title: 'Inherited title',
-        raw_data: {
-          entry: {
-            cve: ['CVE-2026-00001'],
-            link: [
-              {
-                _href: 'https://example.test/inherited-dfn',
-                _rel: 'alternate',
-              },
-              {_href: 'https://example.test/related-dfn'},
-            ],
-            summary: {__text: 'Inherited XML-only summary.'},
-          },
-        },
-      },
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Retained tag', value: 'true'}],
-      },
-    });
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         id,
@@ -179,6 +168,15 @@ describe('native API DFN-CERT advisory catalog', () => {
         severity: 9.1,
         cve_refs: 2,
         cves: ['CVE-2026-10001', 'CVE-2026-10002'],
+        rich_detail: {
+          links: [
+            {
+              href: 'https://example.test/native-dfn',
+              rel: 'alternate',
+            },
+            {href: 'https://example.test/related-dfn'},
+          ],
+        },
         created_at: '2026-06-18T20:00:00Z',
         modified_at: '2026-06-19T07:00:00Z',
         user_tags: [
@@ -197,7 +195,7 @@ describe('native API DFN-CERT advisory catalog', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       dfncert: {
-        get: testing.fn().mockResolvedValue({data: inherited}),
+        get: testing.fn(),
       },
     };
     const actions: Array<{type: string; data?: DfnCertAdv}> = [];
@@ -221,7 +219,7 @@ describe('native API DFN-CERT advisory catalog', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const advisory = success?.data;
-    expect(gmp.dfncert.get).toHaveBeenCalledWith({id});
+    expect(gmp.dfncert.get).not.toHaveBeenCalled();
     expect(advisory).toBeInstanceOf(DfnCertAdv);
     expect(advisory?.title).toEqual('Native title');
     expect(advisory?.summary).toEqual('Native summary');
@@ -229,7 +227,7 @@ describe('native API DFN-CERT advisory catalog', () => {
     expect(advisory?.cve_refs).toEqual(2);
     expect(advisory?.cves).toEqual(['CVE-2026-10001', 'CVE-2026-10002']);
     expect(advisory?.advisoryLink).toEqual(
-      'https://example.test/inherited-dfn',
+      'https://example.test/native-dfn',
     );
     expect(advisory?.additionalLinks).toEqual([
       'https://example.test/related-dfn',

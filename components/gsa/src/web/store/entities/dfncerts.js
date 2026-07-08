@@ -24,20 +24,6 @@ const {
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
 
-const mergeNativeInformation = (inherited, native) =>
-  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
-    name: native.name,
-    comment: native.comment,
-    creationTime: native.creationTime,
-    modificationTime: native.modificationTime,
-    cve_refs: native.cve_refs,
-    cves: native.cves,
-    severity: native.severity,
-    summary: native.summary,
-    title: native.title,
-    userTags: native.userTags,
-  });
-
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   if (!canUseNativeApi(gmp)) {
     return loadEntities(gmp)(filter)(dispatch, getState);
@@ -83,20 +69,8 @@ const nativeLoadEntity = gmp => id => (dispatch, getState) => {
 
   dispatch(entityLoadingActions.request(id));
 
-  return Promise.all([
-    gmp.dfncert.get({id}),
-    fetchNativeDfnCertAdvisory(gmp, id),
-  ]).then(
-    ([inheritedResponse, nativeResponse]) =>
-      dispatch(
-        entityLoadingActions.success(
-          id,
-          mergeNativeInformation(
-            inheritedResponse.data,
-            nativeResponse.dfncert,
-          ),
-        ),
-      ),
+  return fetchNativeDfnCertAdvisory(gmp, id).then(
+    response => dispatch(entityLoadingActions.success(id, response.dfncert)),
     error => dispatch(entityLoadingActions.error(id, error)),
   );
 };

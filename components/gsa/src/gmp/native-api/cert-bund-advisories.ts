@@ -40,7 +40,35 @@ interface NativeCertBundAdvisoryPayload {
   created_at?: string;
   modified_at?: string;
   updated_at?: string;
+  rich_detail?: NativeCertBundAdvisoryRichDetail;
   user_tags?: NativeUserTagPayload[];
+}
+
+interface NativeCertBundAdvisoryRichDetail {
+  additional_information?: NativeCertBundAdvisoryAdditionalInformation[];
+  categories?: string[];
+  description?: string[];
+  effect?: string;
+  platform?: string;
+  reference_source?: string;
+  reference_url?: string;
+  remote_attack?: string;
+  revision_history?: NativeCertBundAdvisoryRevision[];
+  risk?: string;
+  software?: string;
+  title?: string;
+  version?: string;
+}
+
+interface NativeCertBundAdvisoryAdditionalInformation {
+  issuer?: string;
+  url?: string;
+}
+
+interface NativeCertBundAdvisoryRevision {
+  number?: number;
+  description?: string;
+  date?: string;
 }
 
 interface NativeUserTagPayload {
@@ -142,6 +170,65 @@ const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
   })),
 });
 
+const certBundAdvisoryRawData = (item: NativeCertBundAdvisoryPayload) => {
+  const rich = item.rich_detail;
+  const descriptionElements: Array<{
+    TextBlock?: string;
+    Infos?: {
+      Info: Array<{
+        _Info_Issuer: string;
+        _Info_URL: string;
+      }>;
+    };
+  }> = (rich?.description ?? []).map(text => ({TextBlock: text}));
+  if ((rich?.additional_information ?? []).length > 0) {
+    descriptionElements.push({
+      Infos: {
+        Info: (rich?.additional_information ?? []).map(info => ({
+          _Info_Issuer: stringValue(info.issuer),
+          _Info_URL: stringValue(info.url),
+        })),
+      },
+    });
+  }
+
+  return {
+    Advisory: {
+      CategoryTree: rich?.categories ?? [],
+      CVEList: {
+        CVE: item.cves ?? [],
+      },
+      Description:
+        descriptionElements.length > 0
+          ? {Element: descriptionElements}
+          : undefined,
+      Effect: rich?.effect,
+      Platform: rich?.platform,
+      Ref_Num: {
+        __text: stringValue(item.name || item.id),
+        _update: stringValue(rich?.version || item.updated_at || item.modified_at),
+      },
+      Reference_Source: rich?.reference_source,
+      Reference_URL: rich?.reference_url,
+      RemoteAttack: rich?.remote_attack,
+      RevisionHistory:
+        (rich?.revision_history ?? []).length > 0
+          ? {
+              Revision: (rich?.revision_history ?? []).map(revision => ({
+                Number: revision.number,
+                Description: revision.description,
+                Date: revision.date,
+              })),
+            }
+          : undefined,
+      Risk: rich?.risk,
+      Software: rich?.software,
+      Title: rich?.title,
+      Version: rich?.version,
+    },
+  };
+};
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -173,22 +260,13 @@ const nativeCertBundAdvisoryToModel = (
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
     update_time: stringValue(item.updated_at || item.modified_at),
+    writable: detail ? 1 : undefined,
     cert_bund_adv: {
       cve_refs: integerValue(item.cve_refs),
       severity: numberValue(item.severity),
       summary: stringValue(item.summary),
       title: stringValue(item.title),
-      raw_data: {
-        Advisory: {
-          CVEList: {
-            CVE: item.cves ?? [],
-          },
-          Ref_Num: {
-            __text: stringValue(item.name || item.id),
-            _update: stringValue(item.updated_at || item.modified_at),
-          },
-        },
-      },
+      raw_data: certBundAdvisoryRawData(item),
     },
     user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
   });

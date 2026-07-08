@@ -25,6 +25,7 @@ mod browser_proxy_scope;
 mod browser_proxy_tag;
 mod browser_proxy_target;
 mod cert_advisories;
+mod cert_advisory_feed;
 mod cert_advisory_payloads;
 mod collections;
 mod cpe_catalog;

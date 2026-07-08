@@ -26,8 +26,23 @@ pub(crate) struct DfnCertAdvisoryItem {
 pub(crate) struct DfnCertAdvisoryDetail {
     #[serde(flatten)]
     pub(crate) item: DfnCertAdvisoryItem,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) rich_detail: Option<DfnCertAdvisoryRichDetail>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) user_tags: Vec<ReportUserTag>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct DfnCertAdvisoryRichDetail {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) links: Vec<DfnCertLink>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DfnCertLink {
+    pub(crate) href: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) rel: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,8 +64,58 @@ pub(crate) struct CertBundAdvisoryItem {
 pub(crate) struct CertBundAdvisoryDetail {
     #[serde(flatten)]
     pub(crate) item: CertBundAdvisoryItem,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) rich_detail: Option<CertBundAdvisoryRichDetail>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) user_tags: Vec<ReportUserTag>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct CertBundAdvisoryRichDetail {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) additional_information: Vec<CertBundAdvisoryAdditionalInformation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) categories: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) description: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) effect: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) platform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reference_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reference_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) remote_attack: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) revision_history: Vec<CertBundAdvisoryRevision>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) risk: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) software: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) version: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct CertBundAdvisoryAdditionalInformation {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) issuer: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) url: Option<String>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct CertBundAdvisoryRevision {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) number: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) date: Option<String>,
 }
 
 pub(crate) fn dfn_cert_advisory_from_row(row: &Row) -> DfnCertAdvisoryItem {

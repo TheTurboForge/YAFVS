@@ -7,12 +7,21 @@
 import InfoEntityCommand from 'gmp/commands/info-entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import DfnCertAdv from 'gmp/models/dfn-cert';
-import {exportNativeDfnCertAdvisoryMetadata} from 'gmp/native-api/dfn-cert-advisories';
+import {
+  exportNativeDfnCertAdvisoryMetadata,
+  fetchNativeDfnCertAdvisory,
+} from 'gmp/native-api/dfn-cert-advisories';
 
 class DfnCertAdvisoryCommand extends InfoEntityCommand<DfnCertAdv> {
   constructor(http: Http) {
     super(http, 'dfn_cert_adv', DfnCertAdv);
+  }
+
+  async get({id}: EntityCommandParams) {
+    const {dfncert} = await fetchNativeDfnCertAdvisory(this.http, id);
+    return new Response(dfncert);
   }
 
   async export({id}: EntityCommandParams) {

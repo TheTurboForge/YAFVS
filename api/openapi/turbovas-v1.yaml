@@ -392,9 +392,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cert-bund-advisory-list-read
-      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: List Security Information CERT-Bund advisories
-      description: Searchable CERT-Bund advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL. Rich advisory detail remains inherited from feed XML/XSLT.
+      description: Searchable CERT-Bund advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -426,9 +425,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cert-bund-advisory-catalog-detail-read
-      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: Read one Security Information CERT-Bund advisory catalog entry
-      description: Catalog-detail metadata backed by CERT feed metadata already imported into gvmd/PostgreSQL. This endpoint intentionally does not reconstruct XML-only rich advisory fields such as revision history, platform, risk, reference URLs, or description blocks.
+      description: Catalog-detail metadata backed by CERT feed metadata imported into gvmd/PostgreSQL plus read-only rich advisory fields parsed from the mounted CERT feed copy.
       parameters:
         - $ref: '#/components/parameters/CertBundAdvisoryId'
       responses:
@@ -459,9 +457,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: cert-bund-advisory-metadata-export-read
-      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: Export one CERT-Bund advisory metadata record
-      description: Direct scriptable CERT-Bund advisory metadata export backed by the same PostgreSQL loader as the native detail endpoint. This returns native JSON metadata, CVE references, and active user tags only; inherited rich feed/XML export and extended advisory detail remain compatibility paths.
+      description: Direct scriptable CERT-Bund advisory metadata export backed by the same PostgreSQL and mounted CERT feed detail loader as the native detail endpoint.
       parameters:
         - $ref: '#/components/parameters/CertBundAdvisoryId'
       responses:
@@ -492,9 +489,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: dfn-cert-advisory-list-read
-      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: List Security Information DFN-CERT advisories
-      description: Searchable DFN-CERT advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL. Rich advisory detail remains inherited from feed XML/XSLT.
+      description: Searchable DFN-CERT advisory list backed by CERT feed metadata already imported into gvmd/PostgreSQL.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -526,9 +522,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: dfn-cert-advisory-catalog-detail-read
-      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: Read one Security Information DFN-CERT advisory catalog entry
-      description: Catalog-detail metadata backed by CERT feed metadata already imported into gvmd/PostgreSQL. This endpoint intentionally does not reconstruct XML-only rich advisory fields such as advisory links or additional feed links.
+      description: Catalog-detail metadata backed by CERT feed metadata imported into gvmd/PostgreSQL plus read-only rich advisory links parsed from the mounted CERT feed copy.
       parameters:
         - $ref: '#/components/parameters/DfnCertAdvisoryId'
       responses:
@@ -559,9 +554,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: dfn-cert-advisory-metadata-export-read
-      x-turbovas-inherited-still-owns: cert-advisory-rich-detail-export
       summary: Export one DFN-CERT advisory metadata record
-      description: Direct scriptable DFN-CERT advisory metadata export backed by the same PostgreSQL loader as the native detail endpoint. This returns native JSON metadata, CVE references, and active user tags only; inherited rich feed/XML export and extended advisory detail remain compatibility paths.
+      description: Direct scriptable DFN-CERT advisory metadata export backed by the same PostgreSQL and mounted CERT feed detail loader as the native detail endpoint.
       parameters:
         - $ref: '#/components/parameters/DfnCertAdvisoryId'
       responses:
@@ -9015,10 +9009,26 @@ components:
         - $ref: '#/components/schemas/DfnCertAdvisory'
         - type: object
           properties:
+            rich_detail:
+              $ref: '#/components/schemas/DfnCertAdvisoryRichDetail'
             user_tags:
               type: array
               items:
                 $ref: '#/components/schemas/UserTag'
+    DfnCertAdvisoryRichDetail:
+      type: object
+      properties:
+        links:
+          type: array
+          items:
+            type: object
+            required: [href]
+            properties:
+              href:
+                type: string
+                format: uri
+              rel:
+                type: string
     CertBundAdvisory:
       type: object
       required: [id, name, cve_refs]
@@ -9056,10 +9066,63 @@ components:
         - $ref: '#/components/schemas/CertBundAdvisory'
         - type: object
           properties:
+            rich_detail:
+              $ref: '#/components/schemas/CertBundAdvisoryRichDetail'
             user_tags:
               type: array
               items:
                 $ref: '#/components/schemas/UserTag'
+    CertBundAdvisoryRichDetail:
+      type: object
+      properties:
+        additional_information:
+          type: array
+          items:
+            type: object
+            properties:
+              issuer:
+                type: string
+              url:
+                type: string
+                format: uri
+        categories:
+          type: array
+          items:
+            type: string
+        description:
+          type: array
+          items:
+            type: string
+        effect:
+          type: string
+        platform:
+          type: string
+        reference_source:
+          type: string
+        reference_url:
+          type: string
+          format: uri
+        remote_attack:
+          type: string
+        revision_history:
+          type: array
+          items:
+            type: object
+            properties:
+              number:
+                type: integer
+              description:
+                type: string
+              date:
+                type: string
+        risk:
+          type: string
+        software:
+          type: string
+        title:
+          type: string
+        version:
+          type: string
     NvtCatalogItem:
       type: object
       required: [id, oid, name, family, category, discovery, severity, qod, qod_type, solution_type, solution_method, solution, tags, cve_refs, cves, cert_refs, xrefs]

@@ -9,7 +9,6 @@ import DfnCertAdvisoryCommand from 'gmp/commands/dfn-cert-advisory';
 import {
   createActionResultResponse,
   createHttp,
-  createInfoResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
@@ -65,26 +64,41 @@ describe('DfnCertAdvisoryCommand tests', () => {
     });
   });
 
-  test('should get a dfn cert advisory', async () => {
-    const response = createInfoResponse({
-      id: '123',
-      name: 'Test advisory',
-      comment: 'A test advisory',
+  test('should get a dfn cert advisory through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'DFN-CERT-2026-2178',
+        name: 'DFN-CERT-2026-2178',
+        title: 'Native DFN-CERT advisory',
+        rich_detail: {
+          links: [{href: 'https://example.test/native', rel: 'alternate'}],
+        },
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new DfnCertAdvisoryCommand(fakeHttp);
     const result = await cmd.get({
-      id: '123',
+      id: 'DFN-CERT-2026-2178',
     });
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        details: '1',
-        info_type: 'dfn_cert_adv',
-        info_id: '123',
-      },
-    });
-    expect(result.data.id).toEqual('123');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/dfn-cert-advisories/DFN-CERT-2026-2178',
+      {token: 'test-token'},
+    );
+    expect(result.data.id).toEqual('DFN-CERT-2026-2178');
+    expect(result.data.advisoryLink).toEqual('https://example.test/native');
   });
 
   test('should allow to clone a dfn cert advisory', async () => {

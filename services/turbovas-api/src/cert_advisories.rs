@@ -9,6 +9,7 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    cert_advisory_feed::{cert_bund_rich_detail, dfn_cert_rich_detail},
     cert_advisory_payloads::{
         CertBundAdvisoryDetail, CertBundAdvisoryItem, DfnCertAdvisoryDetail, DfnCertAdvisoryItem,
         cert_bund_advisory_from_row, dfn_cert_advisory_from_row,
@@ -119,9 +120,11 @@ pub(crate) async fn dfn_cert_advisory_detail(
         })?
         .ok_or(ApiError::NotFound)?;
     let id: String = row.get("id");
+    let name: String = row.get("name");
     let user_tags = catalog_user_tags(&client, "dfn_cert_adv", &id).await?;
     Ok(Json(DfnCertAdvisoryDetail {
         item: dfn_cert_advisory_from_row(&row),
+        rich_detail: dfn_cert_rich_detail(&name),
         user_tags,
     }))
 }
@@ -229,9 +232,11 @@ pub(crate) async fn cert_bund_advisory_detail(
         })?
         .ok_or(ApiError::NotFound)?;
     let id: String = row.get("id");
+    let name: String = row.get("name");
     let user_tags = catalog_user_tags(&client, "cert_bund_adv", &id).await?;
     Ok(Json(CertBundAdvisoryDetail {
         item: cert_bund_advisory_from_row(&row),
+        rich_detail: cert_bund_rich_detail(&name),
         user_tags,
     }))
 }

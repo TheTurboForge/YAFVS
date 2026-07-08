@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -103,6 +104,11 @@ describe('native API CERT-Bund advisory catalog', () => {
         severity: 9.1,
         cve_refs: 1,
         cves: ['CVE-2026-10001'],
+        rich_detail: {
+          description: ['Native XML-only description.'],
+          reference_url: 'https://example.test/native-cert-bund',
+          software: 'Native product',
+        },
         created_at: '2026-06-18T20:00:00Z',
         modified_at: '2026-06-19T07:00:00Z',
         updated_at: '2026-06-19T07:00:00Z',
@@ -130,6 +136,11 @@ describe('native API CERT-Bund advisory catalog', () => {
     expect(advisory.summary).toEqual('Native summary.');
     expect(advisory.severity).toEqual(9.1);
     expect(advisory.cves).toEqual(['CVE-2026-10001']);
+    expect(advisory.description).toEqual(['Native XML-only description.']);
+    expect(advisory.referenceUrl).toEqual(
+      'https://example.test/native-cert-bund',
+    );
+    expect(advisory.software).toEqual('Native product');
     expect(advisory.userTags).toHaveLength(1);
     expect(advisory.userTags[0].name).toEqual('Native tag');
     expect(advisory.userTags[0].value).toEqual('true');
@@ -139,31 +150,8 @@ describe('native API CERT-Bund advisory catalog', () => {
     );
   });
 
-  test('loads native catalog fields while preserving inherited rich detail', async () => {
+  test('loads native catalog fields and rich detail without inherited get', async () => {
     const id = 'CB-K14/0001';
-    const inherited = CertBundAdv.fromElement({
-      _id: id,
-      writable: 1,
-      cert_bund_adv: {
-        severity: 3.1,
-        cve_refs: 1,
-        title: 'Inherited title',
-        summary: 'Inherited summary',
-        raw_data: {
-          Advisory: {
-            CVEList: {CVE: ['CVE-2026-00001']},
-            Description: {
-              Element: [{TextBlock: 'Inherited XML-only description.'}],
-            },
-            Reference_URL: 'https://example.test/inherited-cert-bund',
-            Software: 'Inherited product',
-          },
-        },
-      },
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Retained tag', value: 'true'}],
-      },
-    });
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         id,
@@ -174,6 +162,11 @@ describe('native API CERT-Bund advisory catalog', () => {
         severity: 9.1,
         cve_refs: 2,
         cves: ['CVE-2026-10001', 'CVE-2026-10002'],
+        rich_detail: {
+          description: ['Native XML-only description.'],
+          reference_url: 'https://example.test/native-cert-bund',
+          software: 'Native product',
+        },
         created_at: '2026-06-18T20:00:00Z',
         modified_at: '2026-06-19T07:00:00Z',
         user_tags: [
@@ -192,7 +185,7 @@ describe('native API CERT-Bund advisory catalog', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       certbund: {
-        get: testing.fn().mockResolvedValue({data: inherited}),
+        get: testing.fn(),
       },
     };
     const actions: Array<{type: string; data?: CertBundAdv}> = [];
@@ -216,20 +209,18 @@ describe('native API CERT-Bund advisory catalog', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const advisory = success?.data;
-    expect(gmp.certbund.get).toHaveBeenCalledWith({id});
+    expect(gmp.certbund.get).not.toHaveBeenCalled();
     expect(advisory).toBeInstanceOf(CertBundAdv);
     expect(advisory?.title).toEqual('Native title');
     expect(advisory?.summary).toEqual('Native summary');
     expect(advisory?.severity).toEqual(9.1);
     expect(advisory?.cve_refs).toEqual(2);
     expect(advisory?.cves).toEqual(['CVE-2026-10001', 'CVE-2026-10002']);
-    expect(advisory?.description).toEqual([
-      'Inherited XML-only description.',
-    ]);
+    expect(advisory?.description).toEqual(['Native XML-only description.']);
     expect(advisory?.referenceUrl).toEqual(
-      'https://example.test/inherited-cert-bund',
+      'https://example.test/native-cert-bund',
     );
-    expect(advisory?.software).toEqual('Inherited product');
+    expect(advisory?.software).toEqual('Native product');
     expect(advisory?.isWritable()).toEqual(true);
     expect(advisory?.userTags).toHaveLength(1);
     expect(advisory?.userTags?.[0].id).toEqual('4f1d4875-0a24-48bf-8eda-b1cb256a92cf');

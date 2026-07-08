@@ -669,7 +669,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
         "account-auth-management",
         "alert-detail-delivery-control",
-        "cert-advisory-rich-detail-export",
         "credential-secrets-writes-and-deletes",
         "feed-sync-import-control",
         "host-target-creation-tags-writes-and-rich-history",
@@ -940,17 +939,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("get", "/cert-bund-advisories"): {
-        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "cert-bund-advisory-list-read",
     },
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): {
-        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "cert-bund-advisory-catalog-detail-read",
     },
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}/export"): {
-        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "cert-bund-advisory-metadata-export-read",
     },
@@ -975,17 +971,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "cve-catalog-metadata-export-read",
     },
     ("get", "/dfn-cert-advisories"): {
-        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "dfn-cert-advisory-list-read",
     },
     ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}"): {
-        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "dfn-cert-advisory-catalog-detail-read",
     },
     ("get", "/dfn-cert-advisories/{dfn_cert_advisory_id}/export"): {
-        "x-turbovas-inherited-still-owns": "cert-advisory-rich-detail-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "dfn-cert-advisory-metadata-export-read",
     },
@@ -7430,7 +7423,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/cert-bund-advisories/{advisory_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": [
-                    "GSA Security Information CERT-Bund advisory detail metadata overlay (migrated through gsad same-origin proxy)",
+                    "GSA Security Information CERT-Bund advisory rich detail reads (migrated through gsad same-origin proxy)",
                     "read-only CERT-Bund advisory catalog-detail automation",
                     "native-api-request helper",
                 ],
@@ -7450,7 +7443,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/dfn-cert-advisories/{advisory_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": [
-                    "GSA Security Information DFN-CERT advisory detail metadata overlay (migrated through gsad same-origin proxy)",
+                    "GSA Security Information DFN-CERT advisory rich detail reads (migrated through gsad same-origin proxy)",
                     "read-only DFN-CERT advisory catalog-detail automation",
                     "native-api-request helper",
                 ],

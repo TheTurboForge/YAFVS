@@ -40,7 +40,17 @@ interface NativeDfnCertAdvisoryPayload {
   created_at?: string;
   modified_at?: string;
   updated_at?: string;
+  rich_detail?: NativeDfnCertAdvisoryRichDetail;
   user_tags?: NativeUserTagPayload[];
+}
+
+interface NativeDfnCertAdvisoryRichDetail {
+  links?: NativeDfnCertAdvisoryLink[];
+}
+
+interface NativeDfnCertAdvisoryLink {
+  href?: string;
+  rel?: string;
 }
 
 interface NativeUserTagPayload {
@@ -142,6 +152,14 @@ const nativeUserTagsElement = (tags: NativeUserTagPayload[] = []) => ({
   })),
 });
 
+const dfnCertAdvisoryLinks = (
+  richDetail?: NativeDfnCertAdvisoryRichDetail,
+) =>
+  (richDetail?.links ?? []).map(link => ({
+    _href: stringValue(link.href),
+    _rel: link.rel,
+  }));
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -173,6 +191,7 @@ const nativeDfnCertAdvisoryToModel = (
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
     update_time: stringValue(item.updated_at || item.modified_at),
+    writable: detail ? 1 : undefined,
     dfn_cert_adv: {
       cve_refs: integerValue(item.cve_refs),
       severity: numberValue(item.severity),
@@ -181,6 +200,7 @@ const nativeDfnCertAdvisoryToModel = (
       raw_data: {
         entry: {
           cve: item.cves ?? [],
+          link: dfnCertAdvisoryLinks(item.rich_detail),
           summary: {__text: stringValue(item.summary)},
         },
       },

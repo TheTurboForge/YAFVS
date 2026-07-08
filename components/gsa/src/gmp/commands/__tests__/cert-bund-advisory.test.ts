@@ -9,7 +9,6 @@ import CertBundAdvisoryCommand from 'gmp/commands/cert-bund-advisory';
 import {
   createActionResultResponse,
   createHttp,
-  createInfoResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
@@ -65,26 +64,41 @@ describe('CertBundAdvisoryCommand tests', () => {
     });
   });
 
-  test('should get a cert bund advisory', async () => {
-    const response = createInfoResponse({
-      id: '123',
-      name: 'Test advisory',
-      comment: 'A test advisory',
+  test('should get a cert bund advisory through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'CB-K26-0123',
+        name: 'CB-K26-0123',
+        title: 'Native CERT-Bund advisory',
+        rich_detail: {
+          description: ['Native detail'],
+        },
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new CertBundAdvisoryCommand(fakeHttp);
     const result = await cmd.get({
-      id: '123',
+      id: 'CB-K26-0123',
     });
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        details: '1',
-        info_type: 'cert_bund_adv',
-        info_id: '123',
-      },
-    });
-    expect(result.data.id).toEqual('123');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/cert-bund-advisories/CB-K26-0123',
+      {token: 'test-token'},
+    );
+    expect(result.data.id).toEqual('CB-K26-0123');
+    expect(result.data.description).toEqual(['Native detail']);
   });
 
   test('should allow to clone a cert bund advisory', async () => {

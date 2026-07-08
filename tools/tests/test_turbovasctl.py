@@ -2082,10 +2082,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("GSA scope-report detail summary and source reads (migrated through gsad same-origin proxy)", scope_report_detail["replacement_candidates"])
         cert_bund_detail = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/cert-bund-advisories/{advisory_id}")
         self.assertEqual(cert_bund_detail["status"], "implemented_internal_and_browser_proxied")
-        self.assertIn("GSA Security Information CERT-Bund advisory detail metadata overlay (migrated through gsad same-origin proxy)", cert_bund_detail["replacement_candidates"])
+        self.assertIn("GSA Security Information CERT-Bund advisory rich detail reads (migrated through gsad same-origin proxy)", cert_bund_detail["replacement_candidates"])
         dfn_cert_detail = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/dfn-cert-advisories/{advisory_id}")
         self.assertEqual(dfn_cert_detail["status"], "implemented_internal_and_browser_proxied")
-        self.assertIn("GSA Security Information DFN-CERT advisory detail metadata overlay (migrated through gsad same-origin proxy)", dfn_cert_detail["replacement_candidates"])
+        self.assertIn("GSA Security Information DFN-CERT advisory rich detail reads (migrated through gsad same-origin proxy)", dfn_cert_detail["replacement_candidates"])
         alerts = next(item for item in details["implemented_native_endpoints"] if item["endpoint"] == "/api/v1/alerts")
         api_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         proxy_source = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
@@ -3331,7 +3331,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'vulnerability-metadata-export-read']
         expected_inherited_still_owns_values = ['account-auth-management',
          'alert-detail-delivery-control',
-         'cert-advisory-rich-detail-export',
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
          'host-target-creation-tags-writes-and-rich-history',
@@ -3873,10 +3872,10 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/vulnerabilities/{vulnerability_id}/export": ("getVulnerabilitiesByVulnerabilityIdExport", "vulnerability-metadata-export-read", "vulnerability-exports-and-actions"),
             "/api/v1/cpes": ("getCpes", "cpe-catalog-list-read", None),
             "/api/v1/cpes/{cpe_id}": ("getCpesByCpeId", "cpe-catalog-detail-read", None),
-            "/api/v1/cert-bund-advisories": ("getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
-            "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}": ("getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
-            "/api/v1/dfn-cert-advisories": ("getDfnCertAdvisories", "dfn-cert-advisory-list-read", "cert-advisory-rich-detail-export"),
-            "/api/v1/dfn-cert-advisories/{dfn_cert_advisory_id}": ("getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
+            "/api/v1/cert-bund-advisories": ("getCertBundAdvisories", "cert-bund-advisory-list-read", None),
+            "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}": ("getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", None),
+            "/api/v1/dfn-cert-advisories": ("getDfnCertAdvisories", "dfn-cert-advisory-list-read", None),
+            "/api/v1/dfn-cert-advisories/{dfn_cert_advisory_id}": ("getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", None),
             "/api/v1/nvts": ("getNvts", "nvt-catalog-list-read", "nvt-rich-detail"),
             "/api/v1/nvts/{nvt_id}": ("getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
             "/api/v1/nvts/{nvt_id}/export": ("getNvtsByNvtIdExport", "nvt-catalog-metadata-export-read", "nvt-rich-detail"),
@@ -4003,7 +4002,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         cert_bund_detail = rows[("get", "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}")]
         self.assertEqual(cert_bund_detail["inventory_endpoint"], "/api/v1/cert-bund-advisories/{advisory_id}")
-        self.assertIn("GSA Security Information CERT-Bund advisory detail metadata overlay (migrated through gsad same-origin proxy)", cert_bund_detail["replacement_candidates"])
+        self.assertIn("GSA Security Information CERT-Bund advisory rich detail reads (migrated through gsad same-origin proxy)", cert_bund_detail["replacement_candidates"])
 
         self.assertNotIn(("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}"), rows)
 
@@ -4625,12 +4624,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(("GET /alerts", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /alerts/{alert_id}", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /cert-bund-advisories", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /cert-bund-advisories/{cert_bund_advisory_id}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /cpes", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /cves", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /cves/{cve_id}", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /dfn-cert-advisories", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /dfn-cert-advisories/{dfn_cert_advisory_id}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /feeds", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /nvts", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /nvts/{nvt_id}", "x-turbovas-replaces"), missing_migration)
@@ -5906,10 +5903,10 @@ class TurboVASCtlTests(unittest.TestCase):
             (cve_export, "getCvesByCveIdExport", "cve-catalog-metadata-export-read", None),
             (cpes, "getCpes", "cpe-catalog-list-read", None),
             (cpe_detail, "getCpesByCpeId", "cpe-catalog-detail-read", None),
-            (cert_bund_advisories, "getCertBundAdvisories", "cert-bund-advisory-list-read", "cert-advisory-rich-detail-export"),
-            (cert_bund_detail, "getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
-            (dfn_cert_advisories, "getDfnCertAdvisories", "dfn-cert-advisory-list-read", "cert-advisory-rich-detail-export"),
-            (dfn_cert_detail, "getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", "cert-advisory-rich-detail-export"),
+            (cert_bund_advisories, "getCertBundAdvisories", "cert-bund-advisory-list-read", None),
+            (cert_bund_detail, "getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", None),
+            (dfn_cert_advisories, "getDfnCertAdvisories", "dfn-cert-advisory-list-read", None),
+            (dfn_cert_detail, "getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", None),
             (nvts, "getNvts", "nvt-catalog-list-read", "nvt-rich-detail"),
             (nvt_detail, "getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
             (nvt_export, "getNvtsByNvtIdExport", "nvt-catalog-metadata-export-read", "nvt-rich-detail"),

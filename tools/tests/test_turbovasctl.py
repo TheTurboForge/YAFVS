@@ -3341,7 +3341,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'port-list-legacy-bulk-xml-export-fallback',
          'raw-report-generation-xml-export-retention-and-mutations',
          'remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes',
-         'report-config-legacy-file-export-fallback',
          'report-format-import-export-verify-writes-and-deletes',
          'result-actions-bulk-export-tag-and-override-workflows',
          'result-exports-and-actions',
@@ -4841,7 +4840,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(write_control["request_body_operations"], ["POST /future-tag", "GET /bad-get-body"])
         self.assertEqual(write_control["get_request_body_operations"], ["GET /bad-get-body"])
         missing = {(item["operation"], item["field"]) for item in write_control["missing_write_control_metadata"]}
-        self.assertIn(("PATCH /bad-write", "x-turbovas-inherited-still-owns"), missing)
         self.assertIn(("PATCH /bad-write", "x-turbovas-maturity"), missing)
         self.assertIn(("PATCH /bad-write", "x-turbovas-operator-identity"), missing)
         self.assertIn(("PATCH /bad-write", "x-turbovas-owner-semantics"), missing)

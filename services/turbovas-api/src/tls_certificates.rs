@@ -18,11 +18,12 @@ use crate::{
         normalize_collection_query, sort_clause,
     },
     tls_certificate_payloads::{
-        TlsCertificateAssetDetail, TlsCertificateAssetItem, tls_certificate_asset_from_row,
-        tls_certificate_source_from_row,
+        TlsCertificateAssetDetail, TlsCertificateAssetItem, TlsCertificatePemPayload,
+        tls_certificate_asset_from_row, tls_certificate_source_from_row,
     },
     tls_certificate_query_sql::{
-        tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_sources_sql,
+        tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_pem_sql,
+        tls_certificate_sources_sql,
     },
     user_tags::ReportUserTag,
 };
@@ -95,6 +96,27 @@ pub(crate) async fn tls_certificate_asset_export(
     path: Path<String>,
 ) -> Result<Json<TlsCertificateAssetDetail>, ApiError> {
     tls_certificate_asset_detail(state, path).await
+}
+
+pub(crate) async fn tls_certificate_pem(
+    State(state): State<AppState>,
+    Path(certificate_id): Path<String>,
+) -> Result<Json<TlsCertificatePemPayload>, ApiError> {
+    parse_uuid(&certificate_id)?;
+    let certificate_id = certificate_id.to_ascii_lowercase();
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let row = client
+        .query_opt(tls_certificate_pem_sql(), &[&certificate_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "TLS certificate PEM query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(TlsCertificatePemPayload {
+        id: row.get("id"),
+        certificate: row.get("certificate"),
+    }))
 }
 
 async fn tls_certificate_user_tags(

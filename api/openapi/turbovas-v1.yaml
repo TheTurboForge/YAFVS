@@ -883,7 +883,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-asset-list-read
-      x-turbovas-inherited-still-owns: tls-certificate-export-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
       summary: List top-level TLS certificate assets
       description: Inherited TLS certificate asset view backed by gvmd/PostgreSQL certificate, source, and location tables.
       parameters:
@@ -917,9 +917,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-asset-detail-info-read
-      x-turbovas-inherited-still-owns: tls-certificate-export-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
       summary: Read one TLS certificate asset detail
-      description: Read-only TLS certificate asset metadata, active user tags, inherited-style validity/trust status, and source provenance backed by gvmd/PostgreSQL certificate, source, location, origin, and tag tables. Certificate bytes, export, delete, scanner-control, feed-control, and write behavior are intentionally excluded.
+      description: Read-only TLS certificate asset metadata, active user tags, inherited-style validity/trust status, and source provenance backed by gvmd/PostgreSQL certificate, source, location, origin, and tag tables. Certificate bytes are exposed only through the explicit certificate endpoint; delete, scanner-control, feed-control, and write behavior remain excluded.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -950,9 +950,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-asset-metadata-export-read
-      x-turbovas-inherited-still-owns: tls-certificate-export-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
       summary: Export TLS certificate metadata JSON
-      description: Direct scriptable TLS certificate metadata export backed by gvmd/PostgreSQL. This returns the same native TLS certificate detail JSON with source provenance and active user tags. Certificate bytes, legacy export/download, delete, tag writes/actions, scanner-control, feed-control, and write behavior remain inherited.
+      description: Direct scriptable TLS certificate metadata export backed by gvmd/PostgreSQL. This returns the same native TLS certificate detail JSON with source provenance and active user tags. Certificate bytes are exposed only through the explicit certificate endpoint; delete, tag writes/actions, scanner-control, feed-control, and write behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -962,6 +962,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TlsCertificateAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /tls-certificates/{certificate_id}/certificate:
+    get:
+      operationId: getTlsCertificatesByCertificateIdCertificate
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: tls-certificate-pem-download-read
+      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
+      summary: Read TLS certificate PEM source data
+      description: Read-only TLS certificate byte source for browser PEM download. This endpoint returns the stored certificate text only, separated from metadata detail so ordinary detail/list payloads stay compact and free of byte blobs. Delete, tag writes/actions, scanner-control, feed-control, and write behavior remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/TlsCertificateId'
+      responses:
+        '200':
+          description: TLS certificate PEM source data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TlsCertificatePem'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -6393,6 +6426,16 @@ components:
               description: Active user tags attached directly to this TLS certificate asset. Write/tag actions remain inherited.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
+    TlsCertificatePem:
+      type: object
+      required: [id, certificate]
+      properties:
+        id:
+          type: string
+          format: uuid
+        certificate:
+          type: string
+          description: Stored TLS certificate text used by the browser to generate a PEM download. This is certificate evidence, not credential or private-key material.
     ScannerAssetCollection:
       type: object
       required: [page, items]

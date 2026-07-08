@@ -87,6 +87,11 @@ interface NativeTlsCertificatesPayload {
   items?: NativeTlsCertificatePayload[];
 }
 
+interface NativeTlsCertificatePemPayload {
+  id?: string;
+  certificate?: string;
+}
+
 type NativeTlsCertificateTimeStatus =
   | 'inactive'
   | 'valid'
@@ -329,6 +334,23 @@ export const exportNativeTlsCertificateMetadata = async (
     {token: gmp.session.token},
   );
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
+};
+
+export const fetchNativeTlsCertificatePem = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<TlsCertificate>> => {
+  const payload = await fetchNativeJson<NativeTlsCertificatePemPayload>(
+    gmp,
+    `api/v1/tls-certificates/${encodeURIComponent(id)}/certificate`,
+    {token: gmp.session.token},
+  );
+  return new Response(
+    TlsCertificate.fromElement({
+      _id: stringValue(payload.id),
+      certificate: {__text: stringValue(payload.certificate)},
+    }),
+  );
 };
 
 export const exportNativeTlsCertificatesMetadata = async (

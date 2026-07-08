@@ -17,6 +17,7 @@ import TlsCertificate from 'gmp/models/tls-certificate';
 import {
   exportNativeTlsCertificateMetadata,
   exportNativeTlsCertificatesMetadata,
+  fetchNativeTlsCertificatePem,
   fetchNativeTlsCertificates,
   nativeTlsCertificatesQueryFromFilter,
 } from 'gmp/native-api/tls-certificates';
@@ -38,6 +39,16 @@ export class TlsCertificateCommand extends EntityCommand {
 
   async export({id}) {
     return await exportNativeTlsCertificateMetadata(this.http, id);
+  }
+
+  async get({id}, options = {}) {
+    if (
+      Object.keys(options).length === 0 &&
+      typeof this.http?.buildUrl === 'function'
+    ) {
+      return await fetchNativeTlsCertificatePem(this.http, id);
+    }
+    return super.get({id}, options);
   }
 }
 

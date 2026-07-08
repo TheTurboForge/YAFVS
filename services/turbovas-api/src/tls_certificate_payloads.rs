@@ -75,6 +75,12 @@ pub(crate) struct TlsCertificateAssetDetail {
     pub(crate) user_tags: Vec<ReportUserTag>,
 }
 
+#[derive(Serialize)]
+pub(crate) struct TlsCertificatePemPayload {
+    pub(crate) id: String,
+    pub(crate) certificate: String,
+}
+
 pub(crate) fn tls_certificate_asset_from_row(row: &Row) -> TlsCertificateAssetItem {
     let source_count = row.get("source_count");
     TlsCertificateAssetItem {

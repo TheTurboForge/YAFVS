@@ -36,7 +36,8 @@ use crate::{
     schedule_query_sql::{schedule_asset_detail_sql, schedule_assets_sql, schedule_tasks_sql},
     tag_query_sql::{tag_asset_detail_sql, tag_assets_sql, tag_resource_lookup_sql},
     tls_certificate_query_sql::{
-        tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_sources_sql,
+        tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_pem_sql,
+        tls_certificate_sources_sql,
     },
     user_tags::catalog_user_tags_sql,
 };
@@ -678,11 +679,24 @@ fn tls_certificate_detail_contract_excludes_certificate_bytes() {
 }
 
 #[test]
+fn tls_certificate_pem_contract_is_separate_from_metadata_detail() {
+    let source = include_str!("tls_certificates.rs");
+    let pem_sql = tls_certificate_pem_sql();
+
+    assert!(source.contains("pub(crate) async fn tls_certificate_pem"));
+    assert!(source.contains("tls_certificate_pem_sql()"));
+    assert!(pem_sql.contains("c.certificate"));
+    assert!(!pem_sql.contains("private_key"));
+    assert!(!pem_sql.contains("password"));
+}
+
+#[test]
 fn tls_certificate_direct_routes_remain_get_only_until_export_or_delete_contracts_exist() {
     for path in [
         "/api/v1/tls-certificates",
         "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc",
         "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc/export",
+        "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc/certificate",
     ] {
         assert!(
             direct_api_v1_path_is_allowed(path),

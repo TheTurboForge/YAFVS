@@ -621,6 +621,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *tls_certificates_path = "/api/v1/tls-certificates";
   const gchar *tls_certificate_prefix = "/api/v1/tls-certificates/";
   const gchar *tls_certificate_export_suffix = "/export";
+  const gchar *tls_certificate_pem_suffix = "/certificate";
   const gchar *scanners_path = "/api/v1/scanners";
   const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *scanner_export_suffix = "/export";
@@ -824,6 +825,10 @@ native_api_path_is_allowed (const gchar *path)
         return is_uuid_segment (id,
                                 strlen (id)
                                 - strlen (tls_certificate_export_suffix));
+      if (g_str_has_suffix (id, tls_certificate_pem_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (tls_certificate_pem_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

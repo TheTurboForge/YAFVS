@@ -116,6 +116,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             "/api/v1/tls-certificates/:certificate_id/export",
             get(tls_certificate_asset_export),
         )
+        .route(
+            "/api/v1/tls-certificates/:certificate_id/certificate",
+            get(tls_certificate_pem),
+        )
         .route("/api/v1/scanners", get(scanner_assets))
         .route("/api/v1/scanners/:scanner_id", get(scanner_asset_detail))
         .route(

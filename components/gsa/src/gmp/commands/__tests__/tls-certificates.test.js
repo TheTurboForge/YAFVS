@@ -104,6 +104,40 @@ describe('TlsCertificateCommand tests', () => {
     });
   });
 
+  test('should fetch TLS certificate PEM data through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'tls-certificate-id',
+        certificate: 'BASE64CERTIFICATE',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new TlsCertificateCommand(fakeHttp);
+    const result = await cmd.get({id: 'tls-certificate-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tls-certificates/tls-certificate-id/certificate',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tls-certificates/tls-certificate-id/certificate',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('tls-certificate-id');
+    expect(result.data.certificate).toEqual('BASE64CERTIFICATE');
+  });
+
 });
 
 describe('TlsCertificatesCommand tests', () => {

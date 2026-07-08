@@ -60,6 +60,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "hosts", _, "export"]
             | ["", "api", "v1", "tls-certificates", _]
             | ["", "api", "v1", "tls-certificates", _, "export"]
+            | ["", "api", "v1", "tls-certificates", _, "certificate"]
             | ["", "api", "v1", "scanners", _]
             | ["", "api", "v1", "scanners", _, "export"]
             | ["", "api", "v1", "credentials", _]

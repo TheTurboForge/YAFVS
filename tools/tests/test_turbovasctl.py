@@ -2330,8 +2330,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 154)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 103)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 155)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 104)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 51)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 51)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2483,7 +2483,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 103)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 104)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 51)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -3299,7 +3299,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 154)
+        self.assertEqual(contract["operation_count"], 155)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
@@ -3476,6 +3476,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'tls-certificate-asset-detail-info-read',
          'tls-certificate-asset-list-read',
          'tls-certificate-asset-metadata-export-read',
+         'tls-certificate-pem-download-read',
          'trashcan-count-summary-read',
          'trashcan-redacted-row-metadata-read',
          'user-redacted-detail-read',
@@ -3508,7 +3509,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'target-credential-secrets-writes-and-deletes',
          'target-export-and-credential-secret-mutation',
          'task-scan-control-writes-and-deletes',
-         'tls-certificate-export-delete-and-rich-history',
+         'tls-certificate-delete-and-rich-history',
          'trashcan-deep-row-data-and-mutations',
          'trashcan-row-data-and-mutations',
          'vulnerability-exports-and-actions']
@@ -4064,9 +4065,10 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/hosts": ("getHosts", "host-asset-list-read", "host-target-creation-tags-writes-and-rich-history"),
             "/api/v1/hosts/{host_id}": ("getHostsByHostId", "host-asset-detail-info-read", "host-target-creation-tags-writes-and-rich-history"),
             "/api/v1/hosts/{host_id}/export": ("getHostsByHostIdExport", "host-asset-metadata-export-read", "host-target-creation-tags-writes-and-rich-history"),
-            "/api/v1/tls-certificates": ("getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-export-delete-and-rich-history"),
-            "/api/v1/tls-certificates/{certificate_id}": ("getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-export-delete-and-rich-history"),
-            "/api/v1/tls-certificates/{certificate_id}/export": ("getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", "tls-certificate-export-delete-and-rich-history"),
+            "/api/v1/tls-certificates": ("getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-delete-and-rich-history"),
+            "/api/v1/tls-certificates/{certificate_id}": ("getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-delete-and-rich-history"),
+            "/api/v1/tls-certificates/{certificate_id}/export": ("getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", "tls-certificate-delete-and-rich-history"),
+            "/api/v1/tls-certificates/{certificate_id}/certificate": ("getTlsCertificatesByCertificateIdCertificate", "tls-certificate-pem-download-read", "tls-certificate-delete-and-rich-history"),
             "/api/v1/scanners": ("getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
@@ -6068,6 +6070,7 @@ class TurboVASCtlTests(unittest.TestCase):
         tls_certificates = operations[("get", "/tls-certificates")]
         tls_certificate_detail = operations[("get", "/tls-certificates/{certificate_id}")]
         tls_certificate_export = operations[("get", "/tls-certificates/{certificate_id}/export")]
+        tls_certificate_pem = operations[("get", "/tls-certificates/{certificate_id}/certificate")]
         scanners = operations[("get", "/scanners")]
         scanner_detail = operations[("get", "/scanners/{scanner_id}")]
         scanner_export = operations[("get", "/scanners/{scanner_id}/export")]
@@ -6120,9 +6123,10 @@ class TurboVASCtlTests(unittest.TestCase):
             (hosts, "getHosts", "host-asset-list-read", "host-target-creation-tags-writes-and-rich-history"),
             (host_detail, "getHostsByHostId", "host-asset-detail-info-read", "host-target-creation-tags-writes-and-rich-history"),
             (host_export, "getHostsByHostIdExport", "host-asset-metadata-export-read", "host-target-creation-tags-writes-and-rich-history"),
-            (tls_certificates, "getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-export-delete-and-rich-history"),
-            (tls_certificate_detail, "getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-export-delete-and-rich-history"),
-            (tls_certificate_export, "getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", "tls-certificate-export-delete-and-rich-history"),
+            (tls_certificates, "getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-delete-and-rich-history"),
+            (tls_certificate_detail, "getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-delete-and-rich-history"),
+            (tls_certificate_export, "getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", "tls-certificate-delete-and-rich-history"),
+            (tls_certificate_pem, "getTlsCertificatesByCertificateIdCertificate", "tls-certificate-pem-download-read", "tls-certificate-delete-and-rich-history"),
             (scanners, "getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
@@ -6560,12 +6564,16 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn('c.certificate', tls_detail_source)
         self.assertIn('/tls-certificates/{certificate_id}:', openapi)
         self.assertIn('/tls-certificates/{certificate_id}/export:', openapi)
+        self.assertIn('/tls-certificates/{certificate_id}/certificate:', openapi)
         self.assertIn("#/components/parameters/TlsCertificateId", openapi)
         self.assertIn('TlsCertificateAssetDetail', openapi)
+        self.assertIn('TlsCertificatePem', openapi)
         self.assertIn('TlsCertificateSourceLocation', openapi)
         self.assertIn('/api/v1/tls-certificates/{certificate_id}', native_tooling)
         self.assertIn('/api/v1/tls-certificates/{certificate_id}/export', native_tooling)
+        self.assertIn('/api/v1/tls-certificates/{certificate_id}/certificate', native_tooling)
         self.assertIn('GSA top-level TLS Certificate metadata export', native_tooling)
+        self.assertIn('GSA top-level TLS Certificate PEM download', native_tooling)
         self.assertIn('native-api.tls-certificate-detail', native_tooling)
 
     def test_scanner_asset_detail_contract_is_internal_metadata_only(self):

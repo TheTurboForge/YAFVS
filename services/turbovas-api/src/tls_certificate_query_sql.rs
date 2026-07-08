@@ -116,3 +116,11 @@ pub(crate) fn tls_certificate_sources_sql() -> &'static str {
         WHERE c.uuid = $1
         ORDER BY src.timestamp DESC NULLS LAST, src.uuid ASC;"#
 }
+
+pub(crate) fn tls_certificate_pem_sql() -> &'static str {
+    r#"SELECT c.uuid AS id,
+              coalesce(c.certificate, '') AS certificate
+         FROM tls_certificates c
+        WHERE c.uuid = $1
+        LIMIT 1;"#
+}

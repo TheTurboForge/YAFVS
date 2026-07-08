@@ -165,11 +165,7 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
 
   async clone({id}: EntityCommandParams) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativeTag(this.http, id);
-      } catch (err) {
-        log.error('Native tag clone failed, falling back to GMP', id, err);
-      }
+      return await cloneNativeTag(this.http, id);
     }
     return super.clone({id});
   }

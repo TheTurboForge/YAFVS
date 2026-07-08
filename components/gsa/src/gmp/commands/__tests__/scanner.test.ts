@@ -19,6 +19,20 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
+
 describe('ScannerCommand tests', () => {
   test('should export scanner metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
@@ -32,16 +46,7 @@ describe('ScannerCommand tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ScannerCommand(fakeHttp);
     const result = await cmd.export({id: '123'});
@@ -308,40 +313,92 @@ describe('ScannerCommand tests', () => {
     });
   });
 
-  test('should allow to get scanner without details by default', async () => {
+  test('should fetch scanner detail through native API without details by default', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '123',
+        name: 'Test Scanner',
+        scanner_type: Number(OPENVASD_SCANNER_TYPE),
+        host: '127.0.0.1',
+        port: 9390,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+    const result = await cmd.get({id: '123'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scanners/123', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners/123',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('123');
+    expect(result.data.name).toEqual('Test Scanner');
+    expect(result.data.host).toEqual('127.0.0.1');
+    expect(result.data.port).toEqual(9390);
+    expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
+  });
+
+  test('should keep filtered scanner detail on GMP until native parity is characterized', async () => {
     const response = createEntityResponse('scanner', {
       id: '123',
       name: 'Test Scanner',
       type: OPENVASD_SCANNER_TYPE,
     });
-    const fakeHttp = createHttp(response);
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new ScannerCommand(fakeHttp);
-    const result = await cmd.get({id: '123'});
+    const result = await cmd.get({id: '123'}, {filter: 'tasks=1'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
       args: {
         cmd: 'get_scanner',
         scanner_id: '123',
+        filter: 'tasks=1',
         details: '0',
       },
     });
-    expect(result.data).toEqual(
-      new Scanner({
-        id: '123',
-        name: 'Test Scanner',
-        scannerType: OPENVASD_SCANNER_TYPE,
-      }),
-    );
+    expect(result.data.id).toEqual('123');
+    expect(result.data.name).toEqual('Test Scanner');
+    expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
   });
 
-  test('should allow to get scanner with details when requested', async () => {
+  test('should keep scanner detail with details on GMP when requested', async () => {
     const response = createEntityResponse('scanner', {
       id: '123',
       name: 'Test Scanner',
       type: OPENVASD_SCANNER_TYPE,
     });
-    const fakeHttp = createHttp(response);
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    fakeHttp.request = testing.fn().mockResolvedValue(response);
     const cmd = new ScannerCommand(fakeHttp);
     const result = await cmd.get({id: '123'}, {details: true});
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
       args: {
         cmd: 'get_scanner',
@@ -349,16 +406,36 @@ describe('ScannerCommand tests', () => {
         details: '1',
       },
     });
-    expect(result.data).toEqual(
-      new Scanner({
-        id: '123',
-        name: 'Test Scanner',
-        scannerType: OPENVASD_SCANNER_TYPE,
-      }),
-    );
+    expect(result.data.id).toEqual('123');
+    expect(result.data.name).toEqual('Test Scanner');
+    expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
   });
 
-  test('should allow to get scanner explicitly without details', async () => {
+  test('should fetch scanner detail through native API with details explicitly false', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '123',
+        name: 'Test Scanner',
+        scanner_type: Number(OPENVASD_SCANNER_TYPE),
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+    const result = await cmd.get({id: '123'}, {details: false});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scanners/123', {
+      token: 'test-token',
+    });
+    expect(result.data.id).toEqual('123');
+    expect(result.data.name).toEqual('Test Scanner');
+    expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
+  });
+
+  test('should keep explicit no-detail scanner fallback on GMP when native API is not available', async () => {
     const response = createEntityResponse('scanner', {
       id: '123',
       name: 'Test Scanner',

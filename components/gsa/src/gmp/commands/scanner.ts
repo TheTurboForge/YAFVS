@@ -7,7 +7,7 @@
 import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
-import type Response from 'gmp/http/response';
+import Response from 'gmp/http/response';
 import {type XmlMeta} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import {type Element} from 'gmp/models/model';
@@ -17,6 +17,7 @@ import Scanner, {
 } from 'gmp/models/scanner';
 import {
   exportNativeScannerMetadata,
+  fetchNativeScanner,
   patchNativeScanner,
 } from 'gmp/native-api/scanners';
 
@@ -78,6 +79,11 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     {id}: EntityCommandParams,
     {filter, details, ...options}: {filter?: string; details?: boolean} = {},
   ): Promise<Response<Scanner, XmlMeta>> {
+    if (filter === undefined && details !== true && canUseNativeApi(this.http)) {
+      const nativeResponse = await fetchNativeScanner(this.http, id);
+      return new Response(nativeResponse.scanner);
+    }
+
     const response = await this.httpGetWithTransform(
       {id, filter, details: details ? '1' : '0'},
       options,

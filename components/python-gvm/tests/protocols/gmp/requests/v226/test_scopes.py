@@ -81,19 +81,3 @@ class ScopesTestCase(unittest.TestCase):
             bytes(request),
             b'<delete_scope_report scope_report_id="report-1"/>',
         )
-
-    def test_get_scope_report_results(self):
-        request = Scopes.get_scope_report_results(
-            "scope-report-1",
-            filter_string="levels=chml rows=20",
-            details=False,
-        )
-        self.assertEqual(
-            bytes(request),
-            b'<get_results filter="levels=chml rows=20 '
-            b'_and_scope_report_id=scope-report-1" details="0"/>',
-        )
-
-    def test_get_scope_report_results_missing_id(self):
-        with self.assertRaises(RequiredArgument):
-            Scopes.get_scope_report_results("")

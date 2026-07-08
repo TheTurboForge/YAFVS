@@ -6,6 +6,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use deadpool_postgres::Client;
 
 use crate::{
     app_state::AppState,
@@ -17,7 +18,7 @@ use crate::{
         normalize_collection_query, sort_clause,
     },
     result_payload_rows::{ResultItem, result_from_row},
-    scope_report_lookup::scope_report_exists,
+    scope_report_lookup::{scope_report_exists, scope_report_scope_uuid},
 };
 
 pub(crate) async fn scope_report_results(
@@ -27,10 +28,32 @@ pub(crate) async fn scope_report_results(
 ) -> Result<Json<Collection<ResultItem>>, ApiError> {
     parse_uuid(&scope_id)?;
     parse_uuid(&scope_report_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    scope_report_results_for_ids(&client, scope_id, scope_report_id, query).await
+}
+
+pub(crate) async fn scope_report_results_by_report(
+    State(state): State<AppState>,
+    Path(scope_report_id): Path<String>,
+    ApiQuery(query): ApiQuery<CollectionQuery>,
+) -> Result<Json<Collection<ResultItem>>, ApiError> {
+    parse_uuid(&scope_report_id)?;
+    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let scope_id = scope_report_scope_uuid(&client, &scope_report_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    scope_report_results_for_ids(&client, scope_id, scope_report_id, query).await
+}
+
+async fn scope_report_results_for_ids(
+    client: &Client,
+    scope_id: String,
+    scope_report_id: String,
+    query: CollectionQuery,
+) -> Result<Json<Collection<ResultItem>>, ApiError> {
     let params = normalize_collection_query(query, REPORT_RESULT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_RESULT_SORT_FIELDS)?;
     let sql = scope_report_results_sql(&sort_sql);
-    let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
         .query(
             &sql,

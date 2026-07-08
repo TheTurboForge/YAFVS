@@ -5107,6 +5107,42 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /scope-reports/{scope_report_id}/results:
+    get:
+      operationId: getScopeReportsByScopeReportIdResults
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scope-report-result-evidence-read
+      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      summary: List deduplicated scope report results by scope report id
+      parameters:
+        - $ref: '#/components/parameters/ScopeReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Scope report result collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scopes/{scope_id}/reports/{scope_report_id}/results:
     get:
       operationId: getScopesByScopeIdReportsByScopeReportIdResults

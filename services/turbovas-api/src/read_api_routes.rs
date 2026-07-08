@@ -41,7 +41,7 @@ use crate::{
     scope_report_hosts::scope_report_hosts,
     scope_report_operating_systems::scope_report_operating_systems,
     scope_report_ports::scope_report_ports,
-    scope_report_results::scope_report_results,
+    scope_report_results::{scope_report_results, scope_report_results_by_report},
     scope_report_retention::scope_report_retention_plan,
     scope_report_tls_certificates::scope_report_tls_certificates,
     scope_reports::*,
@@ -239,6 +239,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route(
             "/api/v1/scope-reports/:scope_report_id",
             get(scope_report_detail),
+        )
+        .route(
+            "/api/v1/scope-reports/:scope_report_id/results",
+            get(scope_report_results_by_report),
         )
         .route("/api/v1/reports/:report_id/metrics", get(report_metrics))
         .route(

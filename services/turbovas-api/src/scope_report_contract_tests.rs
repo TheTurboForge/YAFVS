@@ -177,6 +177,7 @@ fn scope_report_native_routes_remain_get_only_read_paths() {
 
     for path in [
         "/api/v1/scope-reports/:scope_report_id",
+        "/api/v1/scope-reports/:scope_report_id/results",
         "/api/v1/scopes/:scope_id/reports/:scope_report_id/results",
         "/api/v1/scopes/:scope_id/reports/:scope_report_id/hosts",
         "/api/v1/scopes/:scope_id/reports/:scope_report_id/ports",
@@ -192,6 +193,7 @@ fn scope_report_native_routes_remain_get_only_read_paths() {
     }
     for handler in [
         "get(scope_report_detail)",
+        "get(scope_report_results_by_report)",
         "get(scope_report_results)",
         "get(scope_report_hosts)",
         "get(scope_report_ports)",
@@ -225,6 +227,7 @@ fn scope_report_direct_api_paths_remain_get_only() {
     let paths = [
         "/api/v1/scope-reports".to_string(),
         format!("/api/v1/scope-reports/{scope_report_id}"),
+        format!("/api/v1/scope-reports/{scope_report_id}/results"),
         format!("{scoped_prefix}/results"),
         format!("{scoped_prefix}/hosts"),
         format!("{scoped_prefix}/ports"),

@@ -782,6 +782,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/reports/{report_id}/metrics"): "direct-read",
     ("get", "/scope-reports"): "direct-read",
     ("get", "/scope-reports/{scope_report_id}"): "direct-read",
+    ("get", "/scope-reports/{scope_report_id}/results"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/results"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/hosts"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/ports"): "direct-read",
@@ -1467,6 +1468,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-detail-summary-read",
     },
+    ("get", "/scope-reports/{scope_report_id}/results"): {
+        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "scope-report-result-evidence-read",
+    },
     ("get", "/scopes"): {
         "x-turbovas-inherited-still-owns": "scope-report-generation",
         "x-turbovas-maturity": "live-read",
@@ -1764,6 +1770,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/tasks/{}/export",
         "/api/v1/scope-reports",
         "/api/v1/scope-reports/{}",
+        "/api/v1/scope-reports/{}/results",
         "/api/v1/scopes/{}/reports/{}/results",
         "/api/v1/scopes/{}/reports/{}/hosts",
         "/api/v1/scopes/{}/reports/{}/ports",
@@ -8217,6 +8224,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/scope-reports/{scope_report_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA scope-report detail summary and source reads (migrated through gsad same-origin proxy)", "read-only scope-report automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/scope-reports/{scope_report_id}/results",
+                "status": "implemented_internal_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["scope-report result automation by scope-report id", "native-api-request helper", "python-gvm get_scope_report_results replacement"],
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts",

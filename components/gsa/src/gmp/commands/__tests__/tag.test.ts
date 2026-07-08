@@ -336,7 +336,96 @@ describe('TagCommand tests', () => {
     expect(result.data.id).toEqual('native-tag-id');
   });
 
-  test('should keep tag save on GMP when resources are supplied', async () => {
+  test('should update explicit tag resources through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'tag-id',
+      name: 'bar',
+      active: true,
+      resourceIds: ['id1', 'id2'],
+      resourceType: 'task',
+      resourcesAction: 'add',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/tag-id/resources',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags/tag-id/resources',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          action: 'add',
+          resource_ids: ['id1', 'id2'],
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('native-tag-id');
+  });
+
+  test.each(['add', 'remove'] as const)(
+    'should not fall back to GMP when native tag resource %s fails',
+    async resourcesAction => {
+      const response = createActionResultResponse({id: 'fallback-tag-id'});
+      const fetchMock = testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({error: {message: 'conflict'}}),
+        ok: false,
+        status: 409,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+
+      const cmd = new TagCommand(fakeHttp);
+
+      await expect(
+        cmd.save({
+          id: 'tag-id',
+          name: 'bar',
+          active: true,
+          resourceIds: ['id1'],
+          resourceType: 'task',
+          resourcesAction,
+        }),
+      ).rejects.toThrow('Native API request failed with status 409');
+      expect(fetchMock).toHaveBeenCalled();
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test('should keep tag save on GMP when set resources action is supplied', async () => {
     const response = createActionResultResponse({id: 'fallback-tag-id'});
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -357,7 +446,7 @@ describe('TagCommand tests', () => {
       active: true,
       resourceIds: ['id1'],
       resourceType: 'task',
-      resourcesAction: 'add',
+      resourcesAction: 'set',
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -366,7 +455,7 @@ describe('TagCommand tests', () => {
         cmd: 'save_tag',
         tag_id: 'foo',
         'resource_ids:': ['id1'],
-        resources_action: 'add',
+        resources_action: 'set',
       }),
     });
     expect(result.data.id).toEqual('fallback-tag-id');

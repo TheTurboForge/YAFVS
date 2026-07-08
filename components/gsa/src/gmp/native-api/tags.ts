@@ -111,6 +111,11 @@ interface NativeTagPatchInput {
   value?: string;
 }
 
+interface NativeTagResourceUpdateInput {
+  action: 'add' | 'remove';
+  resourceIds: string[];
+}
+
 const TAG_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   value: 'value',
@@ -445,6 +450,22 @@ export const patchNativeTag = async (
       value,
     },
     'PATCH',
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const updateNativeTagResources = async (
+  gmp: NativeApiGmp,
+  id: string,
+  {action, resourceIds}: NativeTagResourceUpdateInput,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeTagPayload>(
+    gmp,
+    `api/v1/tags/${encodeURIComponent(id)}/resources`,
+    {
+      action,
+      resource_ids: resourceIds,
+    },
   );
   return new Response({id: stringValue(payload.id)});
 };

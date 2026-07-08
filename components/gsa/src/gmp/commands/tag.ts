@@ -18,6 +18,7 @@ import {
   deleteNativeTag,
   exportNativeTagMetadata,
   patchNativeTag,
+  updateNativeTagResources,
 } from 'gmp/native-api/tags';
 import {NO_VALUE, parseYesNo, YES_VALUE} from 'gmp/parser';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
@@ -110,6 +111,18 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
         comment,
         name,
         value,
+      });
+    }
+
+    if (
+      canUseNativeApi(this.http) &&
+      resourceIds.length > 0 &&
+      rawFilter === undefined &&
+      (resourcesAction === 'add' || resourcesAction === 'remove')
+    ) {
+      return updateNativeTagResources(this.http, id, {
+        action: resourcesAction,
+        resourceIds,
       });
     }
 

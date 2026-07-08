@@ -43,6 +43,7 @@ use crate::{
     browser_proxy_scope::{
         browser_proxy_create_scope, browser_proxy_delete_scope, browser_proxy_patch_scope,
     },
+    browser_proxy_scope_report::browser_proxy_delete_scope_report,
     browser_proxy_tag::{
         browser_proxy_clone_tag, browser_proxy_create_tag, browser_proxy_delete_tag,
         browser_proxy_hard_delete_tag, browser_proxy_patch_tag, browser_proxy_restore_tag,
@@ -202,6 +203,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/scopes/:scope_id",
             delete(browser_proxy_delete_scope),
+        )
+        .route(
+            "/api/v1/scope-reports/:scope_report_id",
+            delete(browser_proxy_delete_scope_report),
         )
         .route("/api/v1/tags/:tag_id/clone", post(browser_proxy_clone_tag))
         .route(

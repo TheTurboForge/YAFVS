@@ -622,6 +622,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scope-metadata-membership-write",
         "scope-report-application-evidence-read",
         "scope-report-cve-evidence-read",
+        "scope-report-delete",
         "scope-report-detail-summary-read",
         "scope-report-error-message-evidence-read",
         "scope-report-host-evidence-read",
@@ -782,6 +783,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/reports/{report_id}/metrics"): "direct-read",
     ("get", "/scope-reports"): "direct-read",
     ("get", "/scope-reports/{scope_report_id}"): "direct-read",
+    ("delete", "/scope-reports/{scope_report_id}"): "direct-write",
     ("get", "/scope-reports/{scope_report_id}/results"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/results"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/hosts"): "direct-read",
@@ -1467,6 +1469,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-detail-summary-read",
+    },
+    ("delete", "/scope-reports/{scope_report_id}"): {
+        "x-turbovas-inherited-still-owns": "scope-report-generation",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "scope-report-delete",
     },
     ("get", "/scope-reports/{scope_report_id}/results"): {
         "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
@@ -8226,6 +8233,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA scope-report detail summary and source reads (migrated through gsad same-origin proxy)", "read-only scope-report automation", "native-api-request helper"],
             },
             {
+                "method": "delete",
+                "endpoint": "/api/v1/scope-reports/{scope_report_id}",
+                "status": "implemented_direct_write_control",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["direct native scope-report delete", "GSA/browser scope-report delete through write-control proxy"],
+            },
+            {
                 "endpoint": "/api/v1/scope-reports/{scope_report_id}/results",
                 "status": "implemented_internal_and_scriptable_read",
                 "direct_access": "scriptable_read",
@@ -14160,6 +14174,47 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 check="native-api-direct.write-control-healthz",
                 ready_message="Direct write-control native API health endpoint is reachable after restart.",
                 failed_message="Direct write-control native API health endpoint did not become reachable after restart.",
+            )
+        )
+
+    if aggregate_status(findings) != "fail":
+        missing_scope_report_id = "00000000-0000-0000-0000-000000000000"
+        scope_report_delete_missing = direct_native_api_curl(
+            repo_root,
+            f"/api/v1/scope-reports/{missing_scope_report_id}",
+            token=token,
+            env=env,
+            method="DELETE",
+        )
+        scope_report_delete_missing_json, scope_report_delete_missing_status = parse_json_output_with_http_status(
+            scope_report_delete_missing
+        )
+        scope_report_delete_missing_ok = (
+            scope_report_delete_missing.returncode == 0
+            and scope_report_delete_missing_status == 404
+            and isinstance(scope_report_delete_missing_json, dict)
+            and scope_report_delete_missing_json.get("error", {}).get("code") == "not_found"
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if scope_report_delete_missing_ok else "fail",
+                "native-api-direct.scope-report-delete-missing",
+                "Direct write-control reaches scope-report DELETE and returns not_found for a missing snapshot."
+                if scope_report_delete_missing_ok
+                else "Direct write-control did not return not_found for a missing scope-report snapshot DELETE.",
+                scope_report_delete_missing,
+                direct_native_api_display_command(
+                    f"/api/v1/scope-reports/{missing_scope_report_id}",
+                    token=token,
+                    env=env,
+                    method="DELETE",
+                ),
+                scope_report_delete_missing_json,
+                {
+                    "http_status": scope_report_delete_missing_status,
+                    "scope_report_id": missing_scope_report_id,
+                    **summarize_native_api_response(scope_report_delete_missing_json),
+                },
             )
         )
 

@@ -22,6 +22,7 @@ mod browser_proxy_routes;
 mod browser_proxy_scan_config;
 mod browser_proxy_schedule;
 mod browser_proxy_scope;
+mod browser_proxy_scope_report;
 mod browser_proxy_tag;
 mod browser_proxy_target;
 mod cert_advisories;
@@ -165,6 +166,7 @@ mod scope_report_hosts;
 mod scope_report_lookup;
 #[cfg(test)]
 mod scope_report_mutation_plans;
+mod scope_report_mutations;
 mod scope_report_operating_systems;
 mod scope_report_ports;
 mod scope_report_results;

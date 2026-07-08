@@ -174,7 +174,7 @@ fn inherited_gsa_gsad_gvmd_surface_keeps_scope_report_mutations_on_gmp() {
 }
 
 #[test]
-fn native_direct_api_keeps_scope_report_mutations_closed_until_contract_lands() {
+fn native_direct_api_keeps_scope_report_generation_closed_and_delete_write_control_gated() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/scope-reports",
@@ -186,23 +186,27 @@ fn native_direct_api_keeps_scope_report_mutations_closed_until_contract_lands() 
         false,
     ));
 
-    for (method, path) in [
-        (
-            Method::POST,
-            "/api/v1/scopes/12345678-1234-1234-1234-123456789abc/reports",
-        ),
-        (
-            Method::DELETE,
-            "/api/v1/scope-reports/12345678-1234-1234-1234-123456789abc",
-        ),
-    ] {
-        assert!(
-            !direct_api_v1_method_is_allowed(&method, path, false),
-            "{method} {path} must stay closed without write-control mode"
-        );
-        assert!(
-            !direct_api_v1_method_is_allowed(&method, path, true),
-            "{method} {path} must stay closed until a scope-report mutation contract lands"
-        );
-    }
+    let generation_path = "/api/v1/scopes/12345678-1234-1234-1234-123456789abc/reports";
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        generation_path,
+        false
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        generation_path,
+        true
+    ));
+
+    let delete_path = "/api/v1/scope-reports/12345678-1234-1234-1234-123456789abc";
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        delete_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        delete_path,
+        true
+    ));
 }

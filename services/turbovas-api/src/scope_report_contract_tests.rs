@@ -163,7 +163,7 @@ fn scope_report_list_and_detail_expose_persisted_metrics_summary() {
 }
 
 #[test]
-fn scope_report_native_routes_remain_get_only_read_paths() {
+fn scope_report_native_read_routes_remain_get_only_read_paths() {
     let source = include_str!("read_api_routes.rs");
     let start = ".route(\"/api/v1/scope-reports\", get(scope_reports))";
     let end = "\n}\n";
@@ -220,6 +220,22 @@ fn scope_report_native_routes_remain_get_only_read_paths() {
 }
 
 #[test]
+fn scope_report_delete_route_is_write_control_only() {
+    let source = include_str!("direct_api_routes.rs");
+    assert!(source.contains("scope_report_mutations::delete_scope_report"));
+    assert!(source.contains("/api/v1/scope-reports/:scope_report_id"));
+    assert!(source.contains("delete(delete_scope_report)"));
+
+    let contract = include_str!("direct_api_contract.rs");
+    assert!(
+        contract.contains(
+            "&Method::DELETE, [\"\", \"api\", \"v1\", \"scope-reports\", scope_report_id]"
+        )
+    );
+    assert!(contract.contains("direct_api_write_id_segment_is_allowed(scope_report_id)"));
+}
+
+#[test]
 fn scope_report_direct_api_paths_remain_get_only() {
     let scope_id = "12345678-1234-1234-1234-123456789abc";
     let scope_report_id = "87654321-4321-4321-4321-cba987654321";
@@ -254,6 +270,12 @@ fn scope_report_direct_api_paths_remain_get_only() {
             "GET {path} must remain allowed with write-control enabled"
         );
         for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+            if path == format!("/api/v1/scope-reports/{scope_report_id}")
+                && method == Method::DELETE
+            {
+                assert!(direct_api_v1_method_is_allowed(&method, &path, true));
+                continue;
+            }
             assert!(
                 !direct_api_v1_method_is_allowed(&method, &path, true),
                 "{method} {path} must stay closed until scope-report generation, retention mutation, or destructive contracts exist"

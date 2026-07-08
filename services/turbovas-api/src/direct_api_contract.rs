@@ -146,6 +146,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scopes", scope_id]) => {
             direct_api_write_id_segment_is_allowed(scope_id)
         }
+        (&Method::DELETE, ["", "api", "v1", "scope-reports", scope_report_id]) => {
+            direct_api_write_id_segment_is_allowed(scope_report_id)
+        }
         (&Method::POST, ["", "api", "v1", "tags"]) => true,
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "tags", tag_id]) => {
             direct_api_write_id_segment_is_allowed(tag_id)

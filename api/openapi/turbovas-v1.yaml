@@ -5107,6 +5107,40 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteScopeReportsByScopeReportId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scope-report-delete
+      x-turbovas-inherited-still-owns: scope-report-generation
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Delete one generated scope report snapshot
+      description: Removes the generated scope-report snapshot and its source-link rows only. Raw reports, raw results, report hosts, and scan evidence are preserved.
+      parameters:
+        - $ref: '#/components/parameters/ScopeReportId'
+      responses:
+        '204':
+          description: Scope report snapshot deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scope-reports/{scope_report_id}/results:
     get:
       operationId: getScopeReportsByScopeReportIdResults

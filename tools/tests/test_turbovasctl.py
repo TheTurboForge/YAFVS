@@ -657,8 +657,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 self.assertIn(command.upper(), gvmd_commands)
                 self.assertIn(command, gvmd_gmp)
                 self.assertIn(command, gsad)
-                self.assertIn(command, python_gmp)
                 self.assertIn(command, schema)
+        self.assertIn("get_report_metrics", python_gmp)
+        self.assertNotIn("get_scope_report_metrics", python_gmp)
         self.assertIn("getMetrics", gsa_report)
         self.assertIn("getMetrics", gsa_scopes)
 

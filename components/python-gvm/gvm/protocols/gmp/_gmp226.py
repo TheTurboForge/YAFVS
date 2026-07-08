@@ -215,17 +215,6 @@ class GMPv226(GMPv225[T]):
             Scopes.delete_scope(scope_id)
         )
 
-    def get_scope(
-        self,
-        scope_id: EntityID,
-        *,
-        details: bool | None = True,
-    ) -> T:
-        """Request one scope."""
-        return self._send_request_and_transform_response(
-            Scopes.get_scope(scope_id, details=details)
-        )
-
     def get_scopes(
         self,
         *,
@@ -241,17 +230,6 @@ class GMPv226(GMPv225[T]):
         """Generate a persistent scope-report snapshot."""
         return self._send_request_and_transform_response(
             Scopes.generate_scope_report(scope_id)
-        )
-
-    def get_scope_report(
-        self,
-        scope_report_id: EntityID,
-        *,
-        details: bool | None = True,
-    ) -> T:
-        """Request one scope report."""
-        return self._send_request_and_transform_response(
-            Scopes.get_scope_report(scope_report_id, details=details)
         )
 
     def get_scope_reports(
@@ -284,12 +262,6 @@ class GMPv226(GMPv225[T]):
                 filter_string=filter_string,
                 details=details,
             )
-        )
-
-    def get_scope_report_metrics(self, scope_report_id: EntityID) -> T:
-        """Request CVSS Load and authenticated coverage metrics for a scope report."""
-        return self._send_request_and_transform_response(
-            Scopes.get_scope_report_metrics(scope_report_id)
         )
 
     def delete_scope_report(self, scope_report_id: EntityID) -> T:

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -47,13 +48,6 @@ class ScopesTestCase(unittest.TestCase):
         with self.assertRaises(RequiredArgument):
             Scopes.modify_scope("")
 
-    def test_get_scope(self):
-        request = Scopes.get_scope("scope-1")
-        self.assertEqual(
-            bytes(request),
-            b'<get_scopes scope_id="scope-1" details="1"/>',
-        )
-
     def test_get_scopes(self):
         request = Scopes.get_scopes(details=False)
         self.assertEqual(bytes(request), b'<get_scopes details="0"/>')
@@ -67,13 +61,6 @@ class ScopesTestCase(unittest.TestCase):
         self.assertEqual(
             bytes(request),
             b'<generate_scope_report scope_id="scope-1"/>',
-        )
-
-    def test_get_scope_report(self):
-        request = Scopes.get_scope_report("report-1")
-        self.assertEqual(
-            bytes(request),
-            b'<get_scope_reports scope_report_id="report-1" details="1"/>',
         )
 
     def test_get_scope_reports(self):
@@ -110,14 +97,3 @@ class ScopesTestCase(unittest.TestCase):
     def test_get_scope_report_results_missing_id(self):
         with self.assertRaises(RequiredArgument):
             Scopes.get_scope_report_results("")
-
-    def test_get_scope_report_metrics(self):
-        request = Scopes.get_scope_report_metrics("scope-report-1")
-        self.assertEqual(
-            bytes(request),
-            b'<get_scope_report_metrics scope_report_id="scope-report-1"/>',
-        )
-
-    def test_get_scope_report_metrics_missing_id(self):
-        with self.assertRaises(RequiredArgument):
-            Scopes.get_scope_report_metrics("")

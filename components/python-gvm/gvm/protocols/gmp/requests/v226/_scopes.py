@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -111,15 +112,6 @@ class Scopes:
         return cmd
 
     @classmethod
-    def get_scope(cls, scope_id: EntityID, *, details: bool | None = True) -> Request:
-        """Request one scope."""
-        if not scope_id:
-            raise RequiredArgument(
-                function=cls.get_scope.__name__, argument="scope_id"
-            )
-        return cls.get_scopes(scope_id=scope_id, details=details)
-
-    @classmethod
     def generate_scope_report(cls, scope_id: EntityID) -> Request:
         """Generate a persistent scope-report snapshot."""
         if not scope_id:
@@ -152,19 +144,6 @@ class Scopes:
         return cmd
 
     @classmethod
-    def get_scope_report(
-        cls, scope_report_id: EntityID, *, details: bool | None = True
-    ) -> Request:
-        """Request one scope report."""
-        if not scope_report_id:
-            raise RequiredArgument(
-                function=cls.get_scope_report.__name__, argument="scope_report_id"
-            )
-        return cls.get_scope_reports(
-            scope_report_id=scope_report_id, details=details
-        )
-
-    @classmethod
     def get_scope_report_results(
         cls,
         scope_report_id: EntityID,
@@ -184,19 +163,6 @@ class Scopes:
         cmd.add_filter(scoped_filter.strip(), None)
         if details is not None:
             cmd.set_attribute("details", to_bool(details))
-        return cmd
-
-    @classmethod
-    def get_scope_report_metrics(cls, scope_report_id: EntityID) -> Request:
-        """Request CVSS Load and authenticated coverage metrics for a scope report."""
-        if not scope_report_id:
-            raise RequiredArgument(
-                function=cls.get_scope_report_metrics.__name__,
-                argument="scope_report_id",
-            )
-
-        cmd = XmlCommand("get_scope_report_metrics")
-        cmd.set_attribute("scope_report_id", str(scope_report_id))
         return cmd
 
     @classmethod

@@ -16,11 +16,14 @@ import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import Host from 'gmp/models/host';
 import {
+  createNativeHost,
   exportNativeHostMetadata,
   exportNativeHostsMetadata,
   fetchNativeHosts,
   nativeHostsQueryFromFilter,
+  patchNativeHostComment,
 } from 'gmp/native-api/hosts';
+import {canUseNativeApi} from 'gmp/commands/native';
 
 const log = logger.getLogger('gmp.commands.hosts');
 
@@ -37,6 +40,9 @@ class HostCommand extends EntityCommand {
 
   create(args) {
     const {name, comment = ''} = args;
+    if (canUseNativeApi(this.http)) {
+      return createNativeHost(this.http, {name, comment});
+    }
     log.debug('Creating host', args);
     return this.action({
       cmd: 'create_host',
@@ -47,6 +53,9 @@ class HostCommand extends EntityCommand {
 
   save(args) {
     const {id, comment = ''} = args;
+    if (canUseNativeApi(this.http)) {
+      return patchNativeHostComment(this.http, {id, comment});
+    }
     log.debug('Saving host', args);
     return this.action({
       cmd: 'save_asset',

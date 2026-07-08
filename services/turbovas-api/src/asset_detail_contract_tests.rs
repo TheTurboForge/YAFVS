@@ -604,7 +604,7 @@ fn host_asset_detail_side_queries_are_bounded_safe_metadata() {
 }
 
 #[test]
-fn host_asset_direct_routes_remain_get_only_until_target_or_tag_contracts_exist() {
+fn host_asset_direct_routes_allow_manual_create_and_comment_patch_only() {
     for path in [
         "/api/v1/hosts",
         "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
@@ -622,12 +622,51 @@ fn host_asset_direct_routes_remain_get_only_until_target_or_tag_contracts_exist(
             direct_api_v1_method_is_allowed(&Method::GET, path, true),
             "GET {path} must remain allowed when write-control is enabled"
         );
-        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
-            assert!(
-                !direct_api_v1_method_is_allowed(&method, path, true),
-                "{method} {path} must stay closed until host target-creation, tag-write, or rich-history contracts exist"
-            );
-        }
+    }
+
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/hosts",
+        true
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        true
+    ));
+
+    for (method, path) in [
+        (Method::DELETE, "/api/v1/hosts"),
+        (Method::PUT, "/api/v1/hosts"),
+        (
+            Method::POST,
+            "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::DELETE,
+            "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::PUT,
+            "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::POST,
+            "/api/v1/hosts/12345678-1234-1234-1234-123456789abc/export",
+        ),
+        (
+            Method::PATCH,
+            "/api/v1/hosts/12345678-1234-1234-1234-123456789abc/export",
+        ),
+        (
+            Method::DELETE,
+            "/api/v1/hosts/12345678-1234-1234-1234-123456789abc/export",
+        ),
+    ] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&method, path, true),
+            "{method} {path} must stay closed outside manual create/comment patch contracts"
+        );
     }
 }
 

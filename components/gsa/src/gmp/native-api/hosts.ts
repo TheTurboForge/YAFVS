@@ -110,6 +110,16 @@ export interface NativeHostResponse {
   host: Host;
 }
 
+export interface NativeHostCreateArgs {
+  name: string;
+  comment?: string;
+}
+
+export interface NativeHostPatchArgs {
+  id: string;
+  comment?: string;
+}
+
 const HOST_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   hostname: 'hostname',
@@ -180,6 +190,31 @@ const fetchNativeJson = async <T>(
       Accept: 'application/json',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -375,4 +410,32 @@ export const exportNativeHostsMetadata = async (
     }),
   );
   return new Response(`${JSON.stringify({hosts}, null, 2)}\n`);
+};
+
+export const createNativeHost = async (
+  gmp: NativeApiGmp,
+  args: NativeHostCreateArgs,
+): Promise<Response<Host>> => {
+  const payload = await writeNativeJson<NativeHostDetailPayload>(
+    gmp,
+    'api/v1/hosts',
+    {
+      name: args.name,
+      comment: args.comment ?? '',
+    },
+  );
+  return new Response(nativeHostToModel(payload.asset, payload));
+};
+
+export const patchNativeHostComment = async (
+  gmp: NativeApiGmp,
+  args: NativeHostPatchArgs,
+): Promise<Response<Host>> => {
+  const payload = await writeNativeJson<NativeHostDetailPayload>(
+    gmp,
+    `api/v1/hosts/${encodeURIComponent(args.id)}`,
+    {comment: args.comment ?? ''},
+    'PATCH',
+  );
+  return new Response(nativeHostToModel(payload.asset, payload));
 };

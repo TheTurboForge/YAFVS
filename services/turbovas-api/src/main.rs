@@ -15,6 +15,7 @@ mod asset_user_tag_query_sql;
 mod auth;
 mod browser_proxy_api;
 mod browser_proxy_filter;
+mod browser_proxy_host;
 mod browser_proxy_metadata_patch;
 mod browser_proxy_port_list;
 mod browser_proxy_report_config;
@@ -60,6 +61,13 @@ mod formatters;
 mod host_asset_payloads;
 mod host_asset_query_sql;
 mod host_assets;
+mod host_write_db;
+mod host_write_sql;
+mod host_write_transactions;
+mod host_write_validation;
+mod host_writes;
+#[cfg(test)]
+mod host_writes_tests;
 mod metrics;
 mod metrics_payloads;
 #[cfg(test)]

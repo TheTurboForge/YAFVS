@@ -346,6 +346,7 @@ static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *filters_path = "/api/v1/filters";
+  const gchar *hosts_path = "/api/v1/hosts";
   const gchar *port_list_imports_path = "/api/v1/port-list-imports";
   const gchar *port_lists_path = "/api/v1/port-lists";
   const gchar *scopes_path = "/api/v1/scopes";
@@ -367,6 +368,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return FALSE;
 
   if (g_strcmp0 (path, filters_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, hosts_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, port_lists_path) == 0)
@@ -507,6 +511,7 @@ native_api_patch_path_is_allowed (const gchar *path)
   const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *credential_prefix = "/api/v1/credentials/";
   const gchar *filter_prefix = "/api/v1/filters/";
+  const gchar *host_prefix = "/api/v1/hosts/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
@@ -535,6 +540,12 @@ native_api_patch_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, filter_prefix))
     {
       const gchar *id = path + strlen (filter_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, host_prefix))
+    {
+      const gchar *id = path + strlen (host_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

@@ -16,6 +16,7 @@ use crate::{
         clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
         restore_filter,
     },
+    host_writes::{create_host, patch_host},
     port_list_writes::{
         clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
         import_port_list, patch_port_list, restore_port_list,
@@ -107,6 +108,8 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_scan_config),
             )
             .route("/api/v1/filters", post(create_filter))
+            .route("/api/v1/hosts", post(create_host))
+            .route("/api/v1/hosts/:host_id", patch(patch_host))
             .route("/api/v1/filters/:filter_id", patch(patch_filter))
             .route("/api/v1/filters/:filter_id", delete(delete_filter))
             .route("/api/v1/filters/:filter_id/clone", post(clone_filter))

@@ -208,7 +208,7 @@ describe('TagCommand tests', () => {
     expect(result.data.id).toEqual('native-tag-id');
   });
 
-  test('should fall back to GMP when native metadata-only tag create fails', async () => {
+  test('should not fall back to GMP when native metadata-only tag create fails', async () => {
     const response = createActionResultResponse({id: 'fallback-tag-id'});
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
@@ -227,25 +227,17 @@ describe('TagCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new TagCommand(fakeHttp);
-    const result = await cmd.create({
-      active: true,
-      comment: 'comment',
-      name: 'name',
-      resourceType: 'task',
-    });
 
-    expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        active: YES_VALUE,
-        cmd: 'create_tag',
+    await expect(
+      cmd.create({
+        active: true,
         comment: 'comment',
-        resource_type: 'task',
-        tag_name: 'name',
-        tag_value: '',
-      },
-    });
-    expect(result.data.id).toEqual('fallback-tag-id');
+        name: 'name',
+        resourceType: 'task',
+      }),
+    ).rejects.toThrow('Native API request failed with status 503');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should return single tag', async () => {

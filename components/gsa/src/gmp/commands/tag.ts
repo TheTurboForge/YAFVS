@@ -65,17 +65,13 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
       resourceIds.length === 0 &&
       nativeFilter === ''
     ) {
-      try {
-        return await createNativeTag(this.http, {
-          active,
-          comment,
-          name,
-          resourceType: resourceTypeValue,
-          value,
-        });
-      } catch (err) {
-        log.error('Native tag create failed, falling back to GMP', name, err);
-      }
+      return await createNativeTag(this.http, {
+        active,
+        comment,
+        name,
+        resourceType: resourceTypeValue,
+        value,
+      });
     }
     const data = {
       cmd: 'create_tag',

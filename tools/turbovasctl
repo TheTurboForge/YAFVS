@@ -344,7 +344,7 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "scan-config-preference-write-or-export",
     "scanner-control-or-credential",
     "scope-report-generation",
-    "schedule-write-or-export",
+    "schedule-create-or-calendar-edit",
     "tag-write-or-resource-actions",
     "task-target-scan-control-or-credential",
     "trashcan-row-or-mutation",
@@ -687,7 +687,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "scanner-control-credentials-writes-and-deletes",
         "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "scan-config-preference-selector-mutation-import-export-blank-create",
-        "schedule-create-calendar-export",
+        "schedule-create-calendar-edit",
         "scope-report-generation",
         "scope-report-generation-retention-and-mutations",
         "tag-filter-actions-and-resource-type-change-semantics",
@@ -1296,47 +1296,47 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "trashcan-redacted-row-metadata-read",
     },
     ("get", "/schedules"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-list-read",
     },
     ("get", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-detail-read",
     },
     ("get", "/schedules/{schedule_id}/export"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-export-read",
     },
     ("get", "/timezones"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "timezone-list-read",
     },
     ("patch", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-metadata-modify",
     },
     ("delete", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-trash-move",
     },
     ("post", "/schedules/{schedule_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-clone",
     },
     ("post", "/schedules/{schedule_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-restore",
     },
     ("delete", "/schedules/{schedule_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
+        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-hard-delete",
     },
@@ -3204,7 +3204,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "scan-configs.js":
         return "scan-config-preference-write-or-export", "Scan-config preferences, selectors, imports, exports, creates, deletes, and trash handling remain inherited."
     if name == "schedules.js":
-        return "schedule-write-or-export", "GSA schedule writes, calendar changes, exports, and deletes remain inherited."
+        return "schedule-create-or-calendar-edit", "GSA schedule create and calendar edit/recalculation semantics remain inherited."
     if name == "filter.ts":
         return "saved-filter-gsa-filter-actions-or-alert-linkage", "GSA saved-filter dialog actions, export/settings behavior, and alert linkage remain inherited outside the bounded direct write-control contract."
     if name == "tag.ts":

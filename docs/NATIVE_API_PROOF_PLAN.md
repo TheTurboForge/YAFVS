@@ -245,7 +245,9 @@ detail exists for internal automation; rich detail tabs, scanner/NVT
 preferences, selector/family expansion, import/export, and writes remain
 inherited. Schedule
 list/detail reads are browser-proxied with iCalendar recurrence data and task
-backlinks; schedule writes, clone, export, and delete actions remain inherited.
+backlinks; metadata patch, clone, trash, restore, hard-delete, and JSON metadata
+export are native, while schedule create, calendar edit, and task next-time
+recalculation remain inherited.
 CERT-Bund and DFN-CERT list reads are browser-proxied, while their detail
 metadata endpoints remain internal automation/catalog probes because rich GSA
 detail/export behavior still depends on XML-only feed fields that PostgreSQL

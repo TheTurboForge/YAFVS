@@ -5,12 +5,8 @@
  */
 
 import EntitiesCommand from 'gmp/commands/entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -56,38 +52,19 @@ class ReportsCommand extends EntitiesCommand<Report> {
 
   async get(
     params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
   ) {
-    if (canUseNativeApi(this.http)) {
-      const filter = filterFromCommandParams(params);
-      const nativeResponse = await fetchNativeReports(
-        this.http,
-        nativeReportQueryFromFilter(filter),
-      );
-      return new Response(nativeResponse.reports, {
-        filter,
-        counts: nativeResponse.counts,
-      });
-    }
-
-    return super.get(
-      {
-        details: 0,
-        ...params,
-        usage_type: 'scan',
-      },
-      options,
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeReports(
+      this.http,
+      nativeReportQueryFromFilter(filter),
     );
+    return new Response(nativeResponse.reports, {
+      filter,
+      counts: nativeResponse.counts,
+    });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const reports: Report[] = [];
     let total = Number.POSITIVE_INFINITY;

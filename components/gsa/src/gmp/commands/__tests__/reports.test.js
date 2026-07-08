@@ -6,62 +6,14 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ReportsCommand from 'gmp/commands/reports';
-import {createHttp, createEntitiesResponse} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
-import {ALL_FILTER} from 'gmp/models/filter';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
 
 describe('ReportsCommand tests', () => {
-  test('should return all reports', async () => {
-    const response = createEntitiesResponse('report', [
-      {
-        _id: '1',
-      },
-      {
-        _id: '2',
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-    const cmd = new ReportsCommand(fakeHttp);
-    const resp = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_reports',
-        details: 0,
-        filter: ALL_FILTER.toFilterString(),
-        usage_type: 'scan',
-      },
-    });
-    const {data} = resp;
-    expect(data.length).toEqual(2);
-  });
-
-  test('should return results', async () => {
-    const response = createEntitiesResponse('report', [
-      {
-        _id: '1',
-      },
-      {
-        _id: '2',
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-    const cmd = new ReportsCommand(fakeHttp);
-    const resp = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_reports',
-        details: 0,
-        usage_type: 'scan',
-      },
-    });
-    const {data} = resp;
-    expect(data.length).toEqual(2);
-  });
-
   test('should fetch reports through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -118,6 +70,76 @@ describe('ReportsCommand tests', () => {
       page_size: 25,
       sort: 'creation_time',
       filter: 'done',
+    });
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 500, total: 2, sort: '-creation_time', filter: ''},
+        items: [
+          {
+            id: 'report-1',
+            name: 'One',
+            status: 'Done',
+            result_count: 1,
+            vulnerability_count: 1,
+            host_count: 1,
+            max_severity: 5,
+            severity: {critical: 0, high: 0, medium: 1, low: 0, log: 0, false_positive: 0},
+          },
+        ],
+      },
+      {
+        page: {page: 2, page_size: 500, total: 2, sort: '-creation_time', filter: ''},
+        items: [
+          {
+            id: 'report-2',
+            name: 'Two',
+            status: 'Done',
+            result_count: 2,
+            vulnerability_count: 2,
+            host_count: 1,
+            max_severity: 7,
+            severity: {critical: 0, high: 1, medium: 1, low: 0, log: 0, false_positive: 0},
+          },
+        ],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new ReportsCommand(fakeHttp);
+
+    const result = await cmd.getAll();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data.map(report => report.id)).toEqual(['report-1', 'report-2']);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/reports', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'creation_time',
+      filter: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/reports', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'creation_time',
+      filter: '',
     });
   });
 });

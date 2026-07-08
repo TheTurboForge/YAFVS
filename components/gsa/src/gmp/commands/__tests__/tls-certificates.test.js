@@ -7,7 +7,6 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   createActionResultResponse,
-  createEntitiesResponse,
   createEntityResponse,
   createHttp,
 } from 'gmp/commands/testing';
@@ -15,7 +14,7 @@ import {
   TlsCertificateCommand,
   TlsCertificatesCommand,
 } from 'gmp/commands/tls-certificates';
-import Filter, {ALL_FILTER} from 'gmp/models/filter';
+import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -108,62 +107,6 @@ describe('TlsCertificateCommand tests', () => {
 });
 
 describe('TlsCertificatesCommand tests', () => {
-  test('should return all TLS certificates', async () => {
-    const response = createEntitiesResponse('tls_certificate', [
-      {
-        _id: '1',
-        certificate: {
-          __text: 'foo',
-        },
-      },
-      {
-        _id: '2',
-        certificate: {
-          __text: 'bar',
-        },
-      },
-    ]);
-
-    const fakeHttp = createHttp(response);
-    const cmd = new TlsCertificatesCommand(fakeHttp);
-    const resp = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tls_certificates',
-        filter: ALL_FILTER.toFilterString(),
-      },
-    });
-    const {data} = resp;
-    expect(data.length).toEqual(2);
-  });
-
-  test('should return TLS certificates', async () => {
-    const response = createEntitiesResponse('tls_certificate', [
-      {
-        _id: '1',
-        certificate: {
-          __text: 'foo',
-        },
-      },
-      {
-        _id: '2',
-        certificate: {
-          __text: 'foo',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-    const cmd = new TlsCertificatesCommand(fakeHttp);
-    const resp = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tls_certificates',
-      },
-    });
-    const {data} = resp;
-    expect(data.length).toEqual(2);
-  });
-
   test('should fetch TLS certificates through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -224,23 +167,6 @@ describe('TlsCertificatesCommand tests', () => {
 
     expect(result.data.map(cert => cert.id)).toEqual(['tls-1', 'tls-2']);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  test('should use inherited bulk export on non-native http', async () => {
-    const fakeHttp = createHttp();
-    const cmd = new TlsCertificatesCommand(fakeHttp);
-
-    await cmd.exportByIds(['tls-1', 'tls-2']);
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'tls_certificate',
-        bulk_select: 1,
-        'bulk_selected:tls-1': 1,
-        'bulk_selected:tls-2': 1,
-      },
-    });
   });
 
   test('should bulk export selected TLS certificates through native API', async () => {

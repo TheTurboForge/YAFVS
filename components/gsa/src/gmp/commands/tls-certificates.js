@@ -8,7 +8,6 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -48,26 +47,14 @@ export class TlsCertificatesCommand extends EntitiesCommand {
   }
 
   export(entities) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
-
     return this.exportByIds(entities.map(entity => entity.id));
   }
 
   exportByIds(ids) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
-
     return exportNativeTlsCertificatesMetadata(this.http, ids);
   }
 
   async exportByFilter(filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const tlsCertificates = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;
@@ -97,11 +84,7 @@ export class TlsCertificatesCommand extends EntitiesCommand {
     );
   }
 
-  async get(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeTlsCertificates(
       this.http,
@@ -113,11 +96,7 @@ export class TlsCertificatesCommand extends EntitiesCommand {
     });
   }
 
-  async getAll(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params = {}) {
     const filter = filterFromCommandParams(params).all();
     const tlsCertificates = [];
     let total = Number.POSITIVE_INFINITY;

@@ -14,7 +14,6 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import Filter from 'gmp/models/filter';
 import Report from 'gmp/models/report';
 import {
   fetchNativeReports,
@@ -29,25 +28,6 @@ class ReportsCommand extends EntitiesCommand<Report> {
   getEntitiesResponse(root: XmlResponseData): XmlResponseData {
     // @ts-expect-error
     return root.get_reports.get_reports_response;
-  }
-
-  getSeverityAggregates({filter}: {filter: Filter} = {filter: new Filter()}) {
-    return this.getAggregates({
-      aggregate_type: 'report',
-      group_column: 'severity',
-      filter,
-    });
-  }
-
-  getHighResultsAggregates(
-    {filter}: {filter: Filter} = {filter: new Filter()},
-  ) {
-    return this.getAggregates({
-      aggregate_type: 'report',
-      group_column: 'date',
-      dataColumns: ['high', 'high_per_host'],
-      filter,
-    });
   }
 
   async get(

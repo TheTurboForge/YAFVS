@@ -109,21 +109,6 @@ class CpesCommand extends InfoEntitiesCommand<Cpe> {
     );
   }
 
-  getCreatedAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'cpe',
-      group_column: 'created',
-      filter,
-    });
-  }
-
-  getSeverityAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'cpe',
-      group_column: 'severity',
-      filter,
-    });
-  }
 }
 
 export default CpesCommand;

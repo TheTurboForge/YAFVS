@@ -115,21 +115,6 @@ class DfnCertAdvisoriesCommand extends InfoEntitiesCommand<DfnCertAdv> {
     );
   }
 
-  getCreatedAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'dfn_cert_adv',
-      group_column: 'created',
-      filter,
-    });
-  }
-
-  getSeverityAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'dfn_cert_adv',
-      group_column: 'severity',
-      filter,
-    });
-  }
 }
 
 export default DfnCertAdvisoriesCommand;

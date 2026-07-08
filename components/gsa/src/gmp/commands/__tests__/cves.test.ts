@@ -223,37 +223,5 @@ describe('CvesCommand tests', () => {
     ]);
   });
 
-  test('should fetch severity aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
 
-    const cmd = new CvesCommand(fakeHttp);
-    const result = await cmd.getSeverityAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'cve',
-        group_column: 'severity',
-        info_type: 'cve',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
-
-  test('should fetch created aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CvesCommand(fakeHttp);
-    const result = await cmd.getCreatedAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'cve',
-        group_column: 'created',
-        info_type: 'cve',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
 });

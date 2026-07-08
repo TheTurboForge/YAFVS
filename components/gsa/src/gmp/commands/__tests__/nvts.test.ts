@@ -194,89 +194,8 @@ describe('NvtsCommand tests', () => {
     ]);
   });
 
-  test('should fetch severity aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
 
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.getSeverityAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'nvt',
-        group_column: 'severity',
-        info_type: 'nvt',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
 
-  test('should fetch created aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
 
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.getCreatedAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'nvt',
-        group_column: 'created',
-        info_type: 'nvt',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
 
-  test('should fetch family aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
-
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.getFamilyAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'nvt',
-        group_column: 'family',
-        info_type: 'nvt',
-        'data_columns:0': 'severity',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
-
-  test('should fetch qod aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
-
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.getQodAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'nvt',
-        group_column: 'qod',
-        info_type: 'nvt',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
-
-  test('should fetch qod type aggregates', async () => {
-    const response = createAggregatesResponse({});
-    const fakeHttp = createHttp(response);
-
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.getQodTypeAggregates();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_aggregate',
-        aggregate_type: 'nvt',
-        group_column: 'qod_type',
-        info_type: 'nvt',
-      },
-    });
-    expect(result.data).toEqual({groups: []});
-  });
 });

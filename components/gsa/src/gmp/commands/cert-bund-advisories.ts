@@ -115,21 +115,6 @@ class CertBundAdvisoriesCommand extends InfoEntitiesCommand<CertBundAdv> {
     );
   }
 
-  getCreatedAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'cert_bund_adv',
-      group_column: 'created',
-      filter,
-    });
-  }
-
-  getSeverityAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'cert_bund_adv',
-      group_column: 'severity',
-      filter,
-    });
-  }
 }
 
 export default CertBundAdvisoriesCommand;

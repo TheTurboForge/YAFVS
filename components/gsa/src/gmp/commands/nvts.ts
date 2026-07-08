@@ -111,46 +111,6 @@ class NvtsCommand extends InfoEntitiesCommand<Nvt> {
     );
   }
 
-  getFamilyAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'nvt',
-      group_column: 'family',
-      filter,
-      dataColumns: ['severity'],
-    });
-  }
-
-  getSeverityAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'nvt',
-      group_column: 'severity',
-      filter,
-    });
-  }
-
-  getQodAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'nvt',
-      group_column: 'qod',
-      filter,
-    });
-  }
-
-  getQodTypeAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'nvt',
-      group_column: 'qod_type',
-      filter,
-    });
-  }
-
-  getCreatedAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'nvt',
-      group_column: 'created',
-      filter,
-    });
-  }
 }
 
 export default NvtsCommand;

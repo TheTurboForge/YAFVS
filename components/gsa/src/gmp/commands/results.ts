@@ -16,7 +16,6 @@ import {
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import type Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
 import Result from 'gmp/models/result';
 import {
@@ -24,10 +23,6 @@ import {
   nativeReportResultsQueryFromFilter,
 } from 'gmp/native-api/reports';
 import {exportNativeResultsMetadata} from 'gmp/native-api/results';
-
-interface GetAggregatesParams {
-  filter?: Filter;
-}
 
 const shouldExportAllByFilter = filter => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
@@ -106,31 +101,4 @@ export class ResultsCommand extends EntitiesCommand<Result> {
     );
   }
 
-  getDescriptionWordCountsAggregates({filter}: GetAggregatesParams = {}) {
-    return this.getAggregates({
-      aggregate_type: 'result',
-      group_column: 'description',
-      aggregate_mode: 'word_counts',
-      filter,
-      maxGroups: 250,
-    });
-  }
-
-  getWordCountsAggregates({filter}: GetAggregatesParams = {}) {
-    return this.getAggregates({
-      aggregate_type: 'result',
-      group_column: 'vulnerability',
-      aggregate_mode: 'word_counts',
-      filter,
-      maxGroups: 250,
-    });
-  }
-
-  getSeverityAggregates({filter}: GetAggregatesParams = {}) {
-    return this.getAggregates({
-      aggregate_type: 'result',
-      group_column: 'severity',
-      filter,
-    });
-  }
 }

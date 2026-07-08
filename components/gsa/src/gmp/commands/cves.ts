@@ -109,21 +109,6 @@ class CvesCommand extends InfoEntitiesCommand<Cve> {
     );
   }
 
-  getCreatedAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'cve',
-      group_column: 'created',
-      filter,
-    });
-  }
-
-  getSeverityAggregates({filter}: {filter?: Filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'cve',
-      group_column: 'severity',
-      filter,
-    });
-  }
 }
 
 export default CvesCommand;

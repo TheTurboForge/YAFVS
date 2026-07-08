@@ -13,6 +13,7 @@ import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
+import {filterString} from 'gmp/models/filter/utils';
 import {
   cloneNativeFilter,
   createNativeFilter,
@@ -33,6 +34,9 @@ interface GetFilterResponseData extends XmlResponseData {
 
 const log = logger.getLogger('gmp.commands.filters');
 
+const nativeFilterDetailSupportsFilter = (filter?: Filter | string): boolean =>
+  filter === undefined || filterString(filter) === 'alerts=1';
+
 export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   constructor(http: Http) {
     super(http, 'filter', Filter);
@@ -46,7 +50,7 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     {id}: EntityCommandParams,
     {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
   ) {
-    if (filter === undefined && canUseNativeApi(this.http)) {
+    if (canUseNativeApi(this.http) && nativeFilterDetailSupportsFilter(filter)) {
       return new Response(await fetchNativeFilter(this.http, id));
     }
     return super.get({id}, {filter, ...options});

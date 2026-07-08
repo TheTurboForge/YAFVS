@@ -71,7 +71,53 @@ describe('FilterCommand tests', () => {
     expect(result.data.name).toEqual('Host filter');
   });
 
-  test('should keep filtered filter detail on GMP until native parity is characterized', async () => {
+  test('should fetch filter alert detail through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'filter-id',
+        name: 'Host filter',
+        term: 'name=web',
+        alert_count: 1,
+        alerts: [{id: 'alert-id', name: 'Notify SecOps'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+    const result = await cmd.get({id: 'filter-id'}, {filter: 'alerts=1'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/filters/filter-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/filters/filter-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('filter-id');
+    expect(result.data.alerts[0].id).toEqual('alert-id');
+  });
+
+  test('should keep unsupported filtered filter detail on GMP', async () => {
     const response = createResponse({
       get_filter: {
         get_filters_response: {
@@ -97,14 +143,14 @@ describe('FilterCommand tests', () => {
     fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new FilterCommand(fakeHttp);
-    const result = await cmd.get({id: 'filter-id'}, {filter: 'alerts=1'});
+    const result = await cmd.get({id: 'filter-id'}, {filter: 'rows=1'});
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
       args: {
         cmd: 'get_filter',
         filter_id: 'filter-id',
-        filter: 'alerts=1',
+        filter: 'rows=1',
       },
     });
     expect(result.data.id).toEqual('filter-id');

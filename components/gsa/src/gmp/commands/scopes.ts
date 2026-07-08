@@ -26,7 +26,6 @@ import {
   patchNativeScope,
 } from 'gmp/native-api/scopes';
 import {
-  canUseNativeScopeReportList,
   deleteNativeScopeReport,
   fetchNativeScopeReport,
   fetchNativeScopeReports,
@@ -502,19 +501,14 @@ export class ScopeReportsCommand extends HttpCommand {
           counts: nativeCollectionMeta(nativeFilter, [report], 1).counts,
         });
       }
-      if (canUseNativeScopeReportList(nativeFilter, scopeId)) {
-        const nativeResponse = await fetchNativeScopeReports(
-          this.http,
-          nativeScopeReportQueryFromFilter(nativeFilter, scopeId),
-        );
-        return new Response<ScopeReport[], EntitiesMeta>(
-          nativeResponse.reports,
-          {
-            filter: nativeFilter,
-            counts: nativeResponse.counts,
-          },
-        );
-      }
+      const nativeResponse = await fetchNativeScopeReports(
+        this.http,
+        nativeScopeReportQueryFromFilter(nativeFilter, scopeId),
+      );
+      return new Response<ScopeReport[], EntitiesMeta>(nativeResponse.reports, {
+        filter: nativeFilter,
+        counts: nativeResponse.counts,
+      });
     }
 
     const response = await this.httpGetWithTransform({

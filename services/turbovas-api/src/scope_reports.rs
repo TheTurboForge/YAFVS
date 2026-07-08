@@ -13,7 +13,7 @@ use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
     query::{
-        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
         normalize_collection_query, sort_clause,
     },
     scope_payload_rows::*,
@@ -23,6 +23,10 @@ pub(crate) async fn scope_reports(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ScopeReportItem>>, ApiError> {
+    let scope_filter = query.scope_id.clone().unwrap_or_default();
+    if !scope_filter.is_empty() {
+        parse_uuid(&scope_filter)?;
+    }
     let params = normalize_collection_query(query, SCOPE_REPORT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, SCOPE_REPORT_SORT_FIELDS)?;
     let sql = format!(
@@ -48,6 +52,7 @@ pub(crate) async fn scope_reports(
             WHERE ($1 = '' OR lower(sr.uuid) = lower($1)\n\
                    OR lower(sr.scope_uuid) = lower($1)\n\
                    OR lower(sr.scope_name) LIKE '%' || lower($1) || '%')\n\
+              AND ($4 = '' OR lower(sr.scope_uuid) = lower($4))\n\
          ),\n\
          selected_hosts AS (\n\
              SELECT f.id AS scope_report_id, lower(rh.host) AS host_key\n\
@@ -120,15 +125,29 @@ pub(crate) async fn scope_reports(
     );
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+                &scope_filter,
+            ],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "scope report query failed");
             ApiError::Database
         })?;
-    let total =
-        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "scope report list")
-            .await?;
+    let total = collection_total_with_empty_page_probe_params(
+        &client,
+        &rows,
+        &sql,
+        &params,
+        &[&params.filter, &1_i64, &0_i64, &scope_filter],
+        "scope report list",
+    )
+    .await?;
     let items = rows.iter().map(scope_report_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),

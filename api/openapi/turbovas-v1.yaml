@@ -5167,6 +5167,13 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - name: scope_id
+          in: query
+          required: false
+          description: Optional exact scope UUID predicate combined with the free-text filter.
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Scope report collection

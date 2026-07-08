@@ -12,6 +12,8 @@ use crate::{
     scope_report_retention::scope_report_retention_sources_sql,
 };
 
+const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
+
 #[test]
 fn scope_report_results_sql_is_source_scoped_and_deduplicated() {
     let sort_sql = sort_clause(REPORT_RESULT_DEFAULT_SORT, REPORT_RESULT_SORT_FIELDS).unwrap();
@@ -26,6 +28,39 @@ fn scope_report_results_sql_is_source_scoped_and_deduplicated() {
     assert!(sql.contains("FROM ranked WHERE rn = 1"));
     assert!(sql.contains("srs.source_report_uuid AS source_report_id"));
     assert!(sql.contains("JOIN results r ON r.report = srs.source_report"));
+}
+
+#[test]
+fn scope_report_list_supports_exact_scope_predicate_with_text_filter() {
+    let source = include_str!("scope_reports.rs");
+    let handler = source
+        .split_once("pub(crate) async fn scope_reports(")
+        .expect("scope report list handler must exist")
+        .1
+        .split_once("pub(crate) async fn scope_report_detail(")
+        .expect("scope report list handler must precede detail handler")
+        .0;
+    let openapi_scope_reports = OPENAPI
+        .split_once("  /scope-reports:")
+        .expect("OpenAPI scope report path must exist")
+        .1
+        .split_once("  /scope-reports/{scope_report_id}:")
+        .expect("OpenAPI scope report list block must precede detail path")
+        .0;
+
+    assert!(handler.contains("let scope_filter = query.scope_id.clone().unwrap_or_default()"));
+    assert!(handler.contains("parse_uuid(&scope_filter)?"));
+    assert!(handler.contains("WHERE ($1 = '' OR lower(sr.uuid) = lower($1)"));
+    assert!(handler.contains("OR lower(sr.scope_name) LIKE '%' || lower($1) || '%')"));
+    assert!(handler.contains("AND ($4 = '' OR lower(sr.scope_uuid) = lower($4))"));
+    assert!(handler.contains("&params.filter"));
+    assert!(handler.contains("&params.page_size"));
+    assert!(handler.contains("&params.offset"));
+    assert!(handler.contains("&scope_filter"));
+    assert!(handler.contains("&1_i64"));
+    assert!(handler.contains("&0_i64"));
+    assert!(openapi_scope_reports.contains("name: scope_id"));
+    assert!(openapi_scope_reports.contains("format: uuid"));
 }
 
 #[test]

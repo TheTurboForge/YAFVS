@@ -407,42 +407,52 @@ describe('ScopesCommand tests', () => {
     expect(result.meta?.counts.filtered).toEqual(1);
   });
 
-  test('should keep scoped filtered scope-report lists on GMP until native supports both predicates', async () => {
-    const response = createResponse({
-      get_scope_reports: {
-        get_scope_reports_response: {
-          scope_reports: {},
-          filters: {},
-          scope_report_count: {__text: 0, _filtered: 0, _page: 0},
+  test('should fetch scoped filtered scope-report lists through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-creation_time',
+          filter: 'Production',
         },
-      },
+        items: [
+          {
+            id: 'scope-report-id',
+            name: 'Production scope report',
+            scope: {id: 'scope-id', name: 'Production'},
+            protection_requirement: 'high',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
     });
-    const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ScopeReportsCommand(fakeHttp);
-    await cmd.get({scopeId: 'scope-id', filter: 'Production'});
+    const result = await cmd.get({scopeId: 'scope-id', filter: 'Production'});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        scope_report_id: undefined,
-        scope_id: 'scope-id',
-        filter: 'Production',
-        details: 1,
-        cmd: 'get_scope_reports',
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scope-reports', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: '-creation_time',
+      filter: 'Production',
+      scope_id: 'scope-id',
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scope-reports',
+      {
+        credentials: 'include',
+        headers: {Accept: 'application/json', Authorization: 'Bearer jwt-token'},
+      },
+    );
+    expect(result.data[0].id).toEqual('scope-report-id');
+    expect(result.data[0].scopeId).toEqual('scope-id');
   });
 
   test('should delete scope reports through native API when available', async () => {

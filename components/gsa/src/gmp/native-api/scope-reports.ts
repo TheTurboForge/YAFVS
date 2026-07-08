@@ -98,6 +98,7 @@ export interface NativeScopeReportQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  scopeId?: string;
 }
 
 export interface NativeScopeReportsResponse {
@@ -174,18 +175,9 @@ export const nativeScopeReportQueryFromFilter = (
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeSortFromFilter(filter),
-    filter: search || scopeId || '',
+    filter: search,
+    scopeId,
   };
-};
-
-export const canUseNativeScopeReportList = (
-  filter?: Filter,
-  scopeId?: string,
-): boolean => {
-  if (scopeId === undefined) {
-    return true;
-  }
-  return nativeSearchFromFilter(filter) === '';
 };
 
 const nativeCounts = (page: NativeScopeReportPage, length: number) =>
@@ -350,6 +342,7 @@ export const fetchNativeScopeReports = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.scopeId === undefined ? {} : {scope_id: query.scopeId}),
     }),
     {
       credentials: 'include',

@@ -6,7 +6,7 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {PortListsCommand} from 'gmp/commands/port-lists';
-import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -31,23 +31,6 @@ const createNativeHttp = () => {
 };
 
 describe('PortListsCommand', () => {
-  test('should use inherited get on non-native http', async () => {
-    const response = createEntitiesResponse('port_list', [
-      {id: 'p1', name: 'Legacy Port List'},
-    ]);
-    const http = createHttp(response);
-    const command = new PortListsCommand(http);
-
-    const result = await command.get();
-
-    expect(http.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_port_lists',
-      },
-    });
-    expect(result.data[0].id).toEqual('p1');
-  });
-
   test('should fetch port lists through native api when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -163,23 +146,6 @@ describe('PortListsCommand', () => {
     expect(result.meta.counts.length).toEqual(2);
     expect(result.meta.counts.all).toEqual(2);
     expect(result.meta.counts.filtered).toEqual(2);
-  });
-
-  test('should use inherited bulk export on non-native http', async () => {
-    const http = createHttp();
-    const command = new PortListsCommand(http);
-
-    await command.exportByIds(['p1', 'p2']);
-
-    expect(http.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'port_list',
-        bulk_select: 1,
-        'bulk_selected:p1': 1,
-        'bulk_selected:p2': 1,
-      },
-    });
   });
 
   test('should bulk export selected port lists through native api', async () => {

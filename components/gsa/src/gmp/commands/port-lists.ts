@@ -6,10 +6,7 @@
 
 import EntitiesCommand from 'gmp/commands/entities';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
   canUseNativeApi,
   filterFromCommandParams,
@@ -260,26 +257,14 @@ export class PortListsCommand extends EntitiesCommand<PortList> {
   }
 
   export(entities: PortList[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
-
     return this.exportByIds(entities.map(entity => entity.id as string));
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
-
     return exportNativePortListsMetadata(this.http, ids);
   }
 
   async exportByFilter(filter: Filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const portLists: PortList[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;
@@ -309,11 +294,7 @@ export class PortListsCommand extends EntitiesCommand<PortList> {
     );
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativePortLists(
       this.http,
@@ -326,14 +307,7 @@ export class PortListsCommand extends EntitiesCommand<PortList> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const portLists: PortList[] = [];
     let total = Number.POSITIVE_INFINITY;

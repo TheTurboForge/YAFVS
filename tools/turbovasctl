@@ -544,6 +544,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "host-hard-delete",
         "host-identifier-delete",
         "host-manual-create",
+        "host-operating-system-delete",
         "none",
         "nvt-catalog-detail-read",
         "nvt-catalog-list-read",
@@ -681,7 +682,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "alert-detail-delivery-control",
         "credential-secrets-writes-and-deletes",
         "feed-sync-import-control",
-        "host-os-target-creation-tags-export-and-rich-history",
+        "host-os-catalog-target-creation-tags-export-and-rich-history",
         "operating-system-writes-deletes-and-rich-history",
         "override-writes-exports-trash-and-result-expansion",
         "raw-report-generation-xml-export-retention-and-mutations",
@@ -748,6 +749,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/hosts/{host_id}"): "direct-write",
     ("delete", "/hosts/{host_id}"): "direct-write",
     ("delete", "/host-identifiers/{identifier_id}"): "direct-write",
+    ("delete", "/host-operating-systems/{host_operating_system_id}"): "direct-write",
     ("get", "/tls-certificates"): "direct-read",
     ("get", "/tls-certificates/{certificate_id}"): "direct-read",
     ("get", "/tls-certificates/{certificate_id}/certificate"): "direct-read",
@@ -1107,12 +1109,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("get", "/hosts"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "host-asset-list-read",
     },
     ("post", "/hosts"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1121,12 +1123,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/hosts/{host_id}"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "host-asset-detail-info-read",
     },
     ("patch", "/hosts/{host_id}"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1135,7 +1137,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/hosts/{host_id}"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1144,7 +1146,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("delete", "/host-identifiers/{identifier_id}"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1152,8 +1154,17 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-delete",
     },
+    ("delete", "/host-operating-systems/{host_operating_system_id}"): {
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "host-operating-system-delete",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-delete",
+    },
     ("get", "/hosts/{host_id}/export"): {
-        "x-turbovas-inherited-still-owns": "host-os-target-creation-tags-export-and-rich-history",
+        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "host-asset-metadata-export-read",
     },
@@ -7193,6 +7204,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         for prefix_variable in (
             "filter_prefix",
             "host_identifier_prefix",
+            "host_operating_system_prefix",
             "port_list_prefix",
             "report_config_prefix",
             "scan_config_prefix",
@@ -7204,7 +7216,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             prefix = delete_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
-                if prefix_variable not in {"host_identifier_prefix", "scope_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
+                if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "scope_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     templates.add(f"{prefix.rstrip('/')}/{{}}{trash_suffix}")
 
     return sorted(templates), errors
@@ -7577,7 +7589,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser manual host create", "direct native manual IP host create"],
-                "residual_inherited": ["Host OS links, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
+                "residual_inherited": ["Host OS catalog delete, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
             },
             {
                 "endpoint": "/api/v1/hosts/{host_id}",
@@ -7590,7 +7602,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser host comment save", "direct native host comment modification"],
-                "residual_inherited": ["Host name, OS/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived behavior remain inherited."],
+                "residual_inherited": ["Host name, OS catalog/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived behavior remain inherited."],
             },
             {
                 "method": "delete",
@@ -7598,7 +7610,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser host hard-delete", "direct native host hard-delete"],
-                "residual_inherited": ["Host OS links, OS catalog delete, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
+                "residual_inherited": ["OS catalog delete, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
             },
             {
                 "method": "delete",
@@ -7606,7 +7618,15 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser host identifier delete", "direct native host identifier delete"],
-                "residual_inherited": ["Host OS links, OS catalog delete, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
+                "residual_inherited": ["OS catalog delete, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/host-operating-systems/{host_operating_system_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser host operating-system link delete", "direct native host operating-system link delete"],
+                "residual_inherited": ["OS catalog delete, target creation, tag writes/actions, XML export, and rich host history remain inherited."],
             },
             {
                 "endpoint": "/api/v1/hosts/{host_id}/export",

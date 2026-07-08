@@ -21,6 +21,14 @@ pub(crate) fn host_identifier_write_state_sql() -> &'static str {
       WHERE hi.uuid = $1;"
 }
 
+pub(crate) fn host_operating_system_write_state_sql() -> &'static str {
+    "SELECT ho.id::integer,
+            h.owner::integer
+       FROM host_oss ho
+       JOIN hosts h ON h.id = ho.host
+      WHERE ho.uuid = $1;"
+}
+
 pub(crate) fn host_create_sql() -> &'static str {
     "INSERT INTO hosts
         (uuid, owner, name, comment, creation_time, modification_time)
@@ -51,6 +59,10 @@ pub(crate) fn host_delete_identifiers_sql() -> &'static str {
 
 pub(crate) fn host_delete_identifier_sql() -> &'static str {
     "DELETE FROM host_identifiers WHERE id = $1;"
+}
+
+pub(crate) fn host_delete_operating_system_link_sql() -> &'static str {
+    "DELETE FROM host_oss WHERE id = $1;"
 }
 
 pub(crate) fn host_delete_operating_system_links_sql() -> &'static str {

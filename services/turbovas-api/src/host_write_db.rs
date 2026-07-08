@@ -78,6 +78,24 @@ pub(crate) async fn load_host_identifier_write_state(
         .ok_or(ApiError::NotFound)
 }
 
+pub(crate) async fn load_host_operating_system_write_state(
+    tx: &Transaction<'_>,
+    host_operating_system_id: &str,
+) -> Result<HostWriteState, ApiError> {
+    let host_operating_system_id = parse_uuid(host_operating_system_id)?.to_string();
+    tx.query_opt(
+        host_operating_system_write_state_sql(),
+        &[&host_operating_system_id],
+    )
+    .await
+    .map_err(|error| map_host_write_db_error(error, "load host operating system write state"))?
+    .map(|row| HostWriteState {
+        internal_id: row.get(0),
+        owner_id: row.get(1),
+    })
+    .ok_or(ApiError::NotFound)
+}
+
 pub(crate) fn ensure_host_owner_matches_operator(
     host_owner_id: Option<i32>,
     operator_owner_id: i32,

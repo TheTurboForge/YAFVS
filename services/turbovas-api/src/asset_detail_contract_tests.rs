@@ -644,6 +644,11 @@ fn host_asset_direct_routes_allow_manual_create_comment_patch_and_hard_delete_on
         "/api/v1/host-identifiers/12345678-1234-1234-1234-123456789abc",
         true
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/host-operating-systems/12345678-1234-1234-1234-123456789abc",
+        true
+    ));
 
     for (method, path) in [
         (Method::DELETE, "/api/v1/hosts"),
@@ -656,6 +661,15 @@ fn host_asset_direct_routes_allow_manual_create_comment_patch_and_hard_delete_on
             "/api/v1/host-identifiers/12345678-1234-1234-1234-123456789abc",
         ),
         (Method::DELETE, "/api/v1/host-identifiers/not-a-uuid"),
+        (
+            Method::GET,
+            "/api/v1/host-operating-systems/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::PATCH,
+            "/api/v1/host-operating-systems/12345678-1234-1234-1234-123456789abc",
+        ),
+        (Method::DELETE, "/api/v1/host-operating-systems/not-a-uuid"),
         (Method::PUT, "/api/v1/hosts"),
         (
             Method::POST,

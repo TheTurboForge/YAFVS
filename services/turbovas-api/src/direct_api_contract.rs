@@ -241,6 +241,16 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::DELETE, ["", "api", "v1", "host-identifiers", identifier_id]) => {
             direct_api_write_id_segment_is_allowed(identifier_id)
         }
+        (
+            &Method::DELETE,
+            [
+                "",
+                "api",
+                "v1",
+                "host-operating-systems",
+                host_operating_system_id,
+            ],
+        ) => direct_api_write_id_segment_is_allowed(host_operating_system_id),
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "filters", filter_id]) => {
             direct_api_write_id_segment_is_allowed(filter_id)
         }

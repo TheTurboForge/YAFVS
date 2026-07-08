@@ -12,8 +12,8 @@ use crate::{
     host_write_sql::{
         host_create_ip_identifier_sql, host_create_sql, host_delete_details_sql,
         host_delete_host_sql, host_delete_identifier_sql, host_delete_identifiers_sql,
-        host_delete_max_severities_sql, host_delete_operating_system_links_sql,
-        host_delete_tags_sql, host_update_comment_sql,
+        host_delete_max_severities_sql, host_delete_operating_system_link_sql,
+        host_delete_operating_system_links_sql, host_delete_tags_sql, host_update_comment_sql,
     },
     host_write_validation::{ValidatedHostCreate, ValidatedHostPatch},
 };
@@ -92,6 +92,20 @@ pub(crate) async fn execute_host_identifier_delete_transaction(
         host_delete_identifier_sql(),
         &[&identifier_internal_id],
         "delete host identifier",
+    )
+    .await?;
+    Ok(())
+}
+
+pub(crate) async fn execute_host_operating_system_delete_transaction(
+    tx: &Transaction<'_>,
+    host_operating_system_internal_id: i32,
+) -> Result<(), ApiError> {
+    execute_host_write_sql(
+        tx,
+        host_delete_operating_system_link_sql(),
+        &[&host_operating_system_internal_id],
+        "delete host operating system link",
     )
     .await?;
     Ok(())

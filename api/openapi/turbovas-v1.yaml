@@ -783,9 +783,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: host-asset-list-read
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       summary: List top-level host assets
-      description: Inherited host asset view backed by gvmd/PostgreSQL host identifiers, details, and severity state. Native direct write-control can create manual IP host assets, patch host comments, hard-delete operator-owned hosts, and delete individual host identifiers. XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history remain inherited.
+      description: Inherited host asset view backed by gvmd/PostgreSQL host identifiers, details, and severity state. Native direct write-control can create manual IP host assets, patch host comments, hard-delete operator-owned hosts, delete individual host identifiers, and delete host operating-system links. XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -816,7 +816,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: host-manual-create
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -857,9 +857,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: host-asset-detail-info-read
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       summary: Read one top-level host asset
-      description: Host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, whitelisted host detail state, and active user tags. Native direct write-control can patch the host comment, hard-delete the operator-owned host, and delete individual host identifiers. This endpoint intentionally excludes XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history.
+      description: Host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, whitelisted host detail state, and active user tags. Native direct write-control can patch the host comment, hard-delete the operator-owned host, delete individual host identifiers, and delete host operating-system links. This endpoint intentionally excludes XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history.
       parameters:
         - $ref: '#/components/parameters/HostId'
       responses:
@@ -889,13 +889,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: host-comment-modify
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update host comment
-      description: Direct write-control endpoint for updating an operator-owned host asset comment only. Host name, OS/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived asset behavior remain inherited.
+      description: Direct write-control endpoint for updating an operator-owned host asset comment only. Host name, OS catalog/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived asset behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/HostId'
       requestBody:
@@ -933,7 +933,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: host-hard-delete
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -968,7 +968,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: host-identifier-delete
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -996,6 +996,41 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /host-operating-systems/{host_operating_system_id}:
+    delete:
+      operationId: deleteHostOperatingSystemsByHostOperatingSystemId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: host-operating-system-delete
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Delete host operating-system link
+      description: Direct write-control endpoint for deleting one host-to-operating-system link row that belongs to an operator-owned host. It intentionally excludes host hard-delete, operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
+      parameters:
+        - $ref: '#/components/parameters/HostOperatingSystemId'
+      responses:
+        '204':
+          description: Host operating-system link deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /hosts/{host_id}/export:
     get:
       operationId: getHostsByHostIdExport
@@ -1003,7 +1038,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: host-asset-metadata-export-read
-      x-turbovas-inherited-still-owns: host-os-target-creation-tags-export-and-rich-history
+      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       summary: Export host metadata JSON
       description: Direct scriptable host metadata export backed by gvmd/PostgreSQL. This returns the same native host detail JSON with whitelisted identifiers, operating-system references, selected host detail fields, and active user tags. XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history remain inherited.
       parameters:
@@ -6001,6 +6036,13 @@ components:
         format: uuid
     IdentifierId:
       name: identifier_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    HostOperatingSystemId:
+      name: host_operating_system_id
       in: path
       required: true
       schema:

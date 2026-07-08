@@ -256,6 +256,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "delete",
+        path: "/api/v1/host-operating-systems/:host_operating_system_id",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "post",
         path: "/api/v1/port-lists",
         safety_contract: "write-control-v1",

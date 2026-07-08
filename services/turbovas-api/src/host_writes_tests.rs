@@ -10,11 +10,13 @@ use crate::{
     host_write_db::{ensure_host_owner_matches_operator, require_host_write_operator},
     host_write_sql::{
         host_create_ip_identifier_sql, host_create_sql, host_delete_identifier_sql,
-        host_identifier_write_state_sql, host_update_comment_sql,
+        host_delete_operating_system_link_sql, host_identifier_write_state_sql,
+        host_operating_system_write_state_sql, host_update_comment_sql,
     },
     host_write_transactions::{
         execute_host_create_transaction, execute_host_delete_transaction,
-        execute_host_identifier_delete_transaction, execute_host_patch_transaction,
+        execute_host_identifier_delete_transaction,
+        execute_host_operating_system_delete_transaction, execute_host_patch_transaction,
     },
     host_write_validation::{
         HostCreateRequest, HostPatchRequest, validate_host_create_request,
@@ -171,7 +173,10 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
     let identifier_delete_body = source
         .split_once("pub(crate) async fn delete_host_identifier")
         .expect("identifier delete handler")
-        .1;
+        .1
+        .split_once("pub(crate) async fn delete_host_operating_system")
+        .expect("host operating system delete follows identifier delete")
+        .0;
     assert!(
         identifier_delete_body
             .find("load_host_identifier_write_state")
@@ -186,6 +191,27 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
             .unwrap()
             < identifier_delete_body
                 .find("execute_host_identifier_delete_transaction")
+                .unwrap()
+    );
+
+    let host_operating_system_delete_body = source
+        .split_once("pub(crate) async fn delete_host_operating_system")
+        .expect("host operating system delete handler")
+        .1;
+    assert!(
+        host_operating_system_delete_body
+            .find("load_host_operating_system_write_state")
+            .unwrap()
+            < host_operating_system_delete_body
+                .find("ensure_host_owner_matches_operator")
+                .unwrap()
+    );
+    assert!(
+        host_operating_system_delete_body
+            .find("ensure_host_owner_matches_operator")
+            .unwrap()
+            < host_operating_system_delete_body
+                .find("execute_host_operating_system_delete_transaction")
                 .unwrap()
     );
 }
@@ -253,4 +279,29 @@ fn host_identifier_delete_sql_matches_inherited_identifier_branch() {
         );
     }
     let _ = execute_host_identifier_delete_transaction;
+}
+
+#[test]
+fn host_operating_system_delete_sql_matches_inherited_host_os_branch() {
+    let state_sql = host_operating_system_write_state_sql();
+    assert!(state_sql.contains("FROM host_oss ho"));
+    assert!(state_sql.contains("JOIN hosts h ON h.id = ho.host"));
+    assert!(state_sql.contains("WHERE ho.uuid = $1"));
+    assert!(state_sql.contains("h.owner::integer"));
+
+    let delete_sql = host_delete_operating_system_link_sql();
+    assert_eq!(delete_sql, "DELETE FROM host_oss WHERE id = $1;");
+    for forbidden in [
+        "host_identifiers",
+        "hosts WHERE",
+        "DELETE FROM oss",
+        "tag_resources",
+        "reports",
+    ] {
+        assert!(
+            !delete_sql.contains(forbidden),
+            "host operating system link delete must not touch {forbidden}"
+        );
+    }
+    let _ = execute_host_operating_system_delete_transaction;
 }

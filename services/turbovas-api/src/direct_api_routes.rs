@@ -16,7 +16,9 @@ use crate::{
         clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
         restore_filter,
     },
-    host_writes::{create_host, delete_host, delete_host_identifier, patch_host},
+    host_writes::{
+        create_host, delete_host, delete_host_identifier, delete_host_operating_system, patch_host,
+    },
     port_list_writes::{
         clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
         import_port_list, patch_port_list, restore_port_list,
@@ -114,6 +116,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/host-identifiers/:identifier_id",
                 delete(delete_host_identifier),
+            )
+            .route(
+                "/api/v1/host-operating-systems/:host_operating_system_id",
+                delete(delete_host_operating_system),
             )
             .route("/api/v1/filters/:filter_id", patch(patch_filter))
             .route("/api/v1/filters/:filter_id", delete(delete_filter))

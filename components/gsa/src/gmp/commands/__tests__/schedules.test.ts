@@ -350,23 +350,6 @@ describe('ScheduleCommand tests', () => {
 });
 
 describe('SchedulesCommand tests', () => {
-  test('should use inherited bulk export on non-native http', async () => {
-    const fakeHttp = createHttp();
-    const cmd = new SchedulesCommand(fakeHttp);
-
-    await cmd.exportByIds(['s1', 's2']);
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'schedule',
-        bulk_select: 1,
-        'bulk_selected:s1': 1,
-        'bulk_selected:s2': 1,
-      },
-    });
-  });
-
   test('should bulk export selected schedules through native API', async () => {
     const fetchMock = testing
       .fn()

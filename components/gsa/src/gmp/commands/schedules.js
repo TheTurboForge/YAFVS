@@ -118,26 +118,14 @@ export class SchedulesCommand extends EntitiesCommand {
   }
 
   export(entities) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
-
     return this.exportByIds(entities.map(entity => entity.id));
   }
 
   exportByIds(ids) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
-
     return exportNativeSchedulesMetadata(this.http, ids);
   }
 
   async exportByFilter(filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const schedules = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;

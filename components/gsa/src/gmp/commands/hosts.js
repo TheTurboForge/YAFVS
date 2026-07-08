@@ -7,9 +7,7 @@
 import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
-import {BULK_SELECT_BY_IDS} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -84,11 +82,7 @@ class HostsCommand extends EntitiesCommand {
     return root.get_assets.get_assets_response;
   }
 
-  async get(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params = {}, _options) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeHosts(
       this.http,
@@ -100,11 +94,7 @@ class HostsCommand extends EntitiesCommand {
     });
   }
 
-  async getAll(params = {}, options) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params = {}, _options) {
     const filter = filterFromCommandParams(params).all();
     const hosts = [];
     let total = Number.POSITIVE_INFINITY;
@@ -145,41 +135,15 @@ class HostsCommand extends EntitiesCommand {
     });
   }
 
-  exportByIds(ids, assetType) {
-    if (canUseNativeApi(this.http)) {
-      return exportNativeHostsMetadata(this.http, ids);
-    }
-
-    const data = {
-      cmd: 'bulk_export',
-      resource_type: this.name,
-      assetType: assetType,
-      bulk_select: BULK_SELECT_BY_IDS,
-    };
-    for (const id of ids) {
-      data['bulk_selected:' + id] = 1;
-    }
-    return this.httpRequestWithRejectionTransform('post', {data});
+  exportByIds(ids, _assetType) {
+    return exportNativeHostsMetadata(this.http, ids);
   }
 
-  export(entities, assetType) {
-    if (canUseNativeApi(this.http)) {
-      return this.exportByIds(entities.map(element => element.id));
-    }
-
-    return this.exportByIds(
-      entities.map(element => {
-        return element.id;
-      }),
-      assetType,
-    );
+  export(entities, _assetType) {
+    return this.exportByIds(entities.map(element => element.id));
   }
 
   async exportByFilter(filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const hosts = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;

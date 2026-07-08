@@ -421,16 +421,16 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
+    assert!(!list.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
     assert!(list.contains("operationId: postPortLists"));
     assert!(list.contains("x-turbovas-replaces: port-list-create"));
 
     let import = openapi_path_block("/port-list-imports");
     assert!(import.contains("post:"));
-    assert!(import.contains("operationId: importPortList"));
+    assert!(import.contains("operationId: postPortListImports"));
     assert!(import.contains("x-turbovas-exposure: direct-write"));
     assert!(import.contains("x-turbovas-replaces: port-list-import"));
-    assert!(import.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
+    assert!(!import.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
     assert!(import.contains("PortListImportRequest"));
 
     let detail = openapi_path_block("/port-lists/{port_list_id}");
@@ -443,7 +443,7 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(detail.contains("x-turbovas-side-effect: metadata-and-range-write"));
     assert!(detail.contains("x-turbovas-replaces: port-list-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(detail.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
+    assert!(!detail.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
 
     let clone = openapi_path_block("/port-lists/{port_list_id}/clone");
     assert!(clone.contains("post:"));
@@ -451,14 +451,14 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(clone.contains("x-turbovas-exposure: direct-write"));
     assert!(clone.contains("x-turbovas-replaces: port-list-clone"));
     assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(clone.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
+    assert!(!clone.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
 
     let restore = openapi_path_block("/port-lists/{port_list_id}/restore");
     assert!(restore.contains("post:"));
     assert!(restore.contains("x-turbovas-exposure: direct-write"));
     assert!(restore.contains("x-turbovas-replaces: port-list-restore"));
     assert!(restore.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(restore.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
+    assert!(!restore.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
 
     let hard_delete = openapi_path_block("/port-lists/{port_list_id}/trash");
     assert!(hard_delete.contains("delete:"));
@@ -466,7 +466,7 @@ fn openapi_documents_port_list_write_control_boundary() {
     assert!(hard_delete.contains("x-turbovas-direct: true"));
     assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
     assert!(hard_delete.contains("x-turbovas-replaces: port-list-hard-delete"));
-    assert!(hard_delete.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
+    assert!(!hard_delete.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
     let export = openapi_path_block("/port-lists/{port_list_id}/export");
     assert!(export.contains("get:"));
     assert!(export.contains("x-turbovas-exposure: direct-read"));

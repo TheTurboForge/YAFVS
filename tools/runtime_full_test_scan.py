@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
@@ -112,6 +114,68 @@ def object_rows(response: Any, object_tag: str) -> list[dict[str, str | None]]:
                 "scanner_id": child_id(element, "scanner"),
                 "config_id": child_id(element, "config"),
                 "report_id": child_id(element, "report"),
+            }
+        )
+    return rows
+
+
+def native_api_json(repo_root: Path, path: str) -> dict[str, Any]:
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        str(repo_root / "compose" / "dev.yaml"),
+        "exec",
+        "-T",
+        "turbovas-api",
+        "curl",
+        "-fsS",
+        "--max-time",
+        "10",
+        f"http://127.0.0.1:9080{path}",
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=repo_root,
+        env=os.environ.copy(),
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"native API request failed: {completed.stderr.strip() or completed.stdout.strip()}")
+    parsed = json.loads(completed.stdout)
+    if not isinstance(parsed, dict):
+        raise RuntimeError("native API returned a non-object payload")
+    return parsed
+
+
+def native_items(repo_root: Path, resource: str, *, page_size: int = 500) -> list[dict[str, Any]]:
+    payload = native_api_json(repo_root, f"/api/v1/{resource}?page_size={page_size}")
+    items = payload.get("items")
+    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+def native_object_rows(repo_root: Path, resource: str) -> list[dict[str, str | None]]:
+    rows: list[dict[str, str | None]] = []
+    for item in native_items(repo_root, resource):
+        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        scanner = item.get("scanner") if isinstance(item.get("scanner"), dict) else {}
+        config = item.get("config") if isinstance(item.get("config"), dict) else {}
+        report = item.get("current_report") or item.get("last_report")
+        if not isinstance(report, dict):
+            report = {}
+        rows.append(
+            {
+                "id": item.get("id") if isinstance(item.get("id"), str) else None,
+                "name": item.get("name") if isinstance(item.get("name"), str) else None,
+                "status": item.get("status") if isinstance(item.get("status"), str) else None,
+                "progress": str(item.get("progress")) if item.get("progress") is not None else None,
+                "target_id": target.get("id") if isinstance(target.get("id"), str) else None,
+                "scanner_id": scanner.get("id") if isinstance(scanner.get("id"), str) else None,
+                "config_id": config.get("id") if isinstance(config.get("id"), str) else None,
+                "report_id": report.get("id") if isinstance(report.get("id"), str) else None,
             }
         )
     return rows
@@ -254,8 +318,8 @@ def task_status_snapshot(gmp: Any, task: dict[str, str | None], ospd_log_file: P
     }
 
 
-def current_full_test_task(gmp: Any) -> tuple[dict[str, str | None] | None, str | None]:
-    state = load_state(gmp)
+def current_full_test_task(gmp: Any, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
+    state = load_state(gmp, repo_root)
     return single_named(state["tasks"], FULL_TEST_TASK_NAME)
 
 
@@ -319,7 +383,15 @@ def connect_gmp(socket_path: Path, username: str, password_file: Path, timeout: 
     return gmp, password
 
 
-def load_state(gmp: Any) -> dict[str, Any]:
+def load_state(gmp: Any, repo_root: Path | None = None) -> dict[str, Any]:
+    if repo_root is not None:
+        return {
+            "scan_configs": native_object_rows(repo_root, "scan-configs"),
+            "port_lists": native_object_rows(repo_root, "port-lists"),
+            "scanners": native_object_rows(repo_root, "scanners"),
+            "targets": native_object_rows(repo_root, "targets"),
+            "tasks": native_object_rows(repo_root, "tasks"),
+        }
     return {
         "scan_configs": object_rows(gmp.get_scan_configs(), "config"),
         "port_lists": object_rows(gmp.get_port_lists(), "port_list"),
@@ -387,8 +459,8 @@ def ensure_task(gmp: Any, state: dict[str, Any], target_id: str, scanner_id: str
     return task_id, None
 
 
-def command_preflight(gmp: Any, artifact_dir: Path) -> dict[str, Any]:
-    state = load_state(gmp)
+def command_preflight(gmp: Any, artifact_dir: Path, repo_root: Path | None = None) -> dict[str, Any]:
+    state = load_state(gmp, repo_root)
     payload = preflight_state(state)
     payload["artifacts"] = [write_artifact(artifact_dir, "preflight.json", payload)]
     return payload
@@ -398,6 +470,7 @@ def command_start(
     gmp: Any,
     artifact_dir: Path,
     confirm_authorized_lan: bool,
+    repo_root: Path | None = None,
     poll_seconds: int = 90,
     poll_interval: int = 5,
     ospd_log_file: Path | None = None,
@@ -408,7 +481,7 @@ def command_start(
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    state = load_state(gmp)
+    state = load_state(gmp, repo_root)
     preflight = preflight_state(state)
     if preflight["status"] == "fail" and preflight["details"]["active_duplicate_tasks"]:
         preflight["summary"] = "Full test scan start refused because a matching task is already active."
@@ -430,14 +503,14 @@ def command_start(
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    state = load_state(gmp)
+    state = load_state(gmp, repo_root)
     task_id, task_error = ensure_task(gmp, state, target_id, scanner_id)
     if task_error or not task_id:
         payload = result("fail", "Full test scan start refused because the task could not be prepared.", error=task_error, target_id=target_id)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    refreshed = load_state(gmp)
+    refreshed = load_state(gmp, repo_root)
     active = active_full_test_tasks(refreshed["tasks"])
     if active:
         payload = result("fail", "Full test scan start refused because a matching task is already active.", active_duplicate_tasks=active)
@@ -465,7 +538,7 @@ def command_start(
     poll_errors: list[str] = []
     while time.monotonic() <= deadline:
         try:
-            task, task_error = current_full_test_task(gmp)
+            task, task_error = current_full_test_task(gmp, repo_root)
             if task_error:
                 observed = {"task_lookup_error": task_error}
                 break
@@ -547,8 +620,8 @@ def command_start(
     return payload
 
 
-def command_status(gmp: Any, artifact_dir: Path, ospd_log_file: Path | None = None) -> dict[str, Any]:
-    state = load_state(gmp)
+def command_status(gmp: Any, artifact_dir: Path, ospd_log_file: Path | None = None, repo_root: Path | None = None) -> dict[str, Any]:
+    state = load_state(gmp, repo_root)
     task, task_error = single_named(state["tasks"], FULL_TEST_TASK_NAME)
     if task_error:
         payload = result("fail", "Full test scan status failed because multiple matching tasks exist.", error=task_error)
@@ -571,6 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--poll-seconds", type=int, default=90, help="seconds to poll after start_task before accepting start state")
     parser.add_argument("--poll-interval", type=int, default=5, help="seconds between post-start status polls")
     parser.add_argument("--ospd-log-file", help="optional OSPD log file used to find scanner handoff evidence")
+    parser.add_argument("--repo-root", help="repository root for native API container reads")
     parser.add_argument("--confirm-authorized-lan", action="store_true", help="required for start; confirms authorization for 192.168.178.0/24")
     return parser
 
@@ -588,20 +662,22 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         gmp = open_gmp_connection()
+        repo_root = Path(args.repo_root) if args.repo_root else None
         if args.command == "preflight":
-            payload = command_preflight(gmp, Path(args.artifact_dir))
+            payload = command_preflight(gmp, Path(args.artifact_dir), repo_root=repo_root)
         elif args.command == "start":
             payload = command_start(
                 gmp,
                 Path(args.artifact_dir),
                 args.confirm_authorized_lan,
+                repo_root=repo_root,
                 poll_seconds=args.poll_seconds,
                 poll_interval=args.poll_interval,
                 ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None,
                 reconnect_gmp=open_gmp_connection,
             )
         else:
-            payload = command_status(gmp, Path(args.artifact_dir), ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None)
+            payload = command_status(gmp, Path(args.artifact_dir), ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None, repo_root=repo_root)
     except Exception as error:  # pylint: disable=broad-except
         payload = result("fail", "Full test scan helper failed.", error_type=type(error).__name__, error=str(error).replace(password, "[redacted]"))
     finally:

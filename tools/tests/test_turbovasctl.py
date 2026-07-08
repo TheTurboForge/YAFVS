@@ -771,6 +771,26 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("str(scope_probe)", browser_smoke_command)
         self.assertNotIn("str(scope_probe)", browser_regression_command)
 
+    def test_full_test_scan_load_state_uses_native_api_when_repo_root_is_available(self):
+        root = Path("/tmp/turbovas-test")
+        payloads = {
+            "/api/v1/scan-configs?page_size=500": {"items": [{"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}]},
+            "/api/v1/port-lists?page_size=500": {"items": [{"id": runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID, "name": "All IANA assigned TCP and UDP"}]},
+            "/api/v1/scanners?page_size=500": {"items": [{"id": "scanner-1", "name": runtime_full_test_scan.OPENVAS_SCANNER_NAME}]},
+            "/api/v1/targets?page_size=500": {"items": [{"id": "target-1", "name": runtime_full_test_scan.FULL_TEST_TARGET_NAME}]},
+            "/api/v1/tasks?page_size=500": {"items": [{"id": "task-1", "name": runtime_full_test_scan.FULL_TEST_TASK_NAME, "status": "Done", "progress": 100, "target": {"id": "target-1"}, "scanner": {"id": "scanner-1"}, "config": {"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID}, "last_report": {"id": "report-1"}}]},
+        }
+
+        with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", side_effect=lambda _root, path: payloads[path]):
+            state = runtime_full_test_scan.load_state(object(), root)
+
+        self.assertEqual(state["scan_configs"][0]["id"], runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID)
+        self.assertEqual(state["port_lists"][0]["id"], runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID)
+        self.assertEqual(state["scanners"][0]["name"], runtime_full_test_scan.OPENVAS_SCANNER_NAME)
+        self.assertEqual(state["targets"][0]["name"], runtime_full_test_scan.FULL_TEST_TARGET_NAME)
+        self.assertEqual(state["tasks"][0]["report_id"], "report-1")
+        self.assertEqual(state["tasks"][0]["progress"], "100")
+
     def test_runtime_scope_smoke_extracts_organization_proof_finding(self):
         proof = turbovasctl.runtime_scope_organization_proof_finding(
             {

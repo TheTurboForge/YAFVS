@@ -12413,6 +12413,8 @@ def command_runtime_full_test_scan(repo_root: Path, action: str, confirm_authori
         str(secret_path),
         "--artifact-dir",
         str(artifact_dir),
+        "--repo-root",
+        str(repo_root),
         "--ospd-log-file",
         str(runtime_path(repo_root, "logs", "ospd", "ospd-openvas.log")),
     ]

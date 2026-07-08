@@ -161,19 +161,14 @@ describe('ScheduleCommand tests', () => {
     expect(result.data.id).toEqual('native-schedule-clone-id');
   });
 
-  test('should fall back to GMP when native schedule clone fails', async () => {
-    const response = createActionResultResponse({
-      action: 'Clone Schedule',
-      id: 'fallback-schedule-clone-id',
-      message: 'Cloned Schedule',
-    });
+  test('should report native schedule clone failures without GMP fallback', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
       ok: false,
       status: 503,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -184,17 +179,12 @@ describe('ScheduleCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new ScheduleCommand(fakeHttp);
-    const result = await cmd.clone({id: 'schedule-id'});
+    await expect(cmd.clone({id: 'schedule-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
 
     expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: 'schedule-id',
-        resource_type: 'schedule',
-      },
-    });
-    expect(result.data.id).toEqual('fallback-schedule-clone-id');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete a schedule through native API when available', async () => {

@@ -94,11 +94,7 @@ export class ScheduleCommand extends EntityCommand {
 
   async clone({id}) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativeSchedule(this.http, id);
-      } catch (error) {
-        log.debug('Native schedule clone failed, falling back to GMP', error);
-      }
+      return await cloneNativeSchedule(this.http, id);
     }
     return super.clone({id});
   }

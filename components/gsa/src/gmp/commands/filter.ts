@@ -48,16 +48,12 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     const {term, name, type, comment = ''} = args;
     const filterType = resourceType(type);
     if (filterType !== undefined && canUseNativeApi(this.http)) {
-      try {
-        return await createNativeFilter(this.http, {
-          term,
-          name,
-          filterType,
-          comment,
-        });
-      } catch (error) {
-        log.debug('Native filter create failed, falling back to GMP', error);
-      }
+      return await createNativeFilter(this.http, {
+        term,
+        name,
+        filterType,
+        comment,
+      });
     }
 
     const data = {

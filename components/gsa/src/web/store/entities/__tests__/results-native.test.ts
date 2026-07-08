@@ -360,33 +360,24 @@ describe('native API result list', () => {
     expect(result?.scan_nvt_version).toEqual('20260618T1200');
   });
 
-  test('falls back to inherited result detail when native detail fails', async () => {
+  test('reports native detail errors without inherited GMP fallback', async () => {
     const id = '9d77c6b6-dcb2-4a38-87f7-3bb77cf60cf1';
     const calls: string[] = [];
-    const inherited = Result.fromElement({
-      _id: id,
-      name: 'Inherited result',
-      description: 'Full inherited result description',
-      severity: 5.0,
-      qod: {value: 70},
-    });
+    const nativeError = new Error('native detail failed');
     testing.stubGlobal(
       'fetch',
       testing.fn().mockImplementation(() => {
         calls.push('native');
-        return Promise.reject(new Error('404'));
+        return Promise.reject(nativeError);
       }),
     );
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       result: {
-        get: testing.fn().mockImplementation(() => {
-          calls.push('gmp');
-          return Promise.resolve({data: inherited});
-        }),
+        get: testing.fn().mockRejectedValue(new Error('unexpected GMP call')),
       },
     };
-    const actions: Array<{type: string; data?: Result}> = [];
+    const actions: Array<{type: string; data?: Result; error?: Error}> = [];
     const dispatch = testing.fn(action => {
       actions.push(action);
       return action;
@@ -403,11 +394,11 @@ describe('native API result list', () => {
 
     await loadEntity(gmp)(id)(dispatch, getState);
 
-    const success = actions.find(
-      action => action.type === 'ENTITY_LOADING_SUCCESS',
+    const error = actions.find(
+      action => action.type === 'ENTITY_LOADING_ERROR',
     );
-    expect(calls).toEqual(['native', 'gmp']);
-    expect(gmp.result.get).toHaveBeenCalledWith({id});
-    expect(success?.data).toBe(inherited);
+    expect(calls).toEqual(['native']);
+    expect(gmp.result.get).not.toHaveBeenCalled();
+    expect(error?.error).toBe(nativeError);
   });
 });

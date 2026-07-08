@@ -65,17 +65,10 @@ const nativeLoadEntity = gmp => id => (dispatch, getState) => {
 
   dispatch(entityLoadingActions.request(id));
 
-  const loadInheritedResult = () =>
-    gmp.result.get({id}).then(
-      inheritedResponse =>
-        dispatch(entityLoadingActions.success(id, inheritedResponse.data)),
-      error => dispatch(entityLoadingActions.error(id, error)),
-    );
-
   return fetchNativeResult(gmp, id).then(
     nativeResponse =>
       dispatch(entityLoadingActions.success(id, nativeResponse.result)),
-    () => loadInheritedResult(),
+    error => dispatch(entityLoadingActions.error(id, error)),
   );
 };
 

@@ -1279,9 +1279,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-list-read
-      x-turbovas-inherited-still-owns: saved-filter-alert-linkage
       summary: List saved filters
-      description: Saved-filter metadata backed by gvmd/PostgreSQL. Native direct write-control can create filters, patch filter name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, hard-delete unlinked trashed filters, and export native JSON metadata; browser bulk download composes native JSON metadata exports and alert-linked semantics remain on compatibility paths. Filter terms are operator configuration data and remain available only through authenticated operator access.
+      description: Saved-filter metadata backed by gvmd/PostgreSQL, including alert-reference counts derived from direct alert output-filter links and alert condition-data filter links. Native direct write-control can create filters, patch filter name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, hard-delete unlinked trashed filters, and export native JSON metadata. Filter terms are operator configuration data and remain available only through authenticated operator access.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1356,9 +1355,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-detail-read
-      x-turbovas-inherited-still-owns: saved-filter-alert-linkage
       summary: Read one saved filter
-      description: Saved-filter detail backed by gvmd/PostgreSQL. Native direct write-control can create filters, patch name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, hard-delete unlinked trashed filters, and export native JSON metadata. Browser bulk download composes native JSON metadata exports; alert-linked semantics remain inherited.
+      description: Saved-filter detail backed by gvmd/PostgreSQL, including direct alert output-filter backlinks and alert condition-data filter backlinks. Native direct write-control can create filters, patch name/comment/type/term metadata for filters not referenced by alerts, clone existing filters, move unlinked filters to trash, restore filters from trash, hard-delete unlinked trashed filters, and export native JSON metadata. Alert-linkage mutation semantics remain inherited on write/control paths.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -1469,9 +1467,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: saved-filter-metadata-export-read
-      x-turbovas-inherited-still-owns: saved-filter-alert-linkage
       summary: Export saved-filter metadata
-      description: Read-only metadata export for one live saved filter, backed by the same PostgreSQL loader as saved-filter detail. This endpoint returns the native JSON metadata payload used by GSA downloads; browser bulk download composes native JSON metadata exports from this endpoint when native API is available.Alert-linkage semantics remain compatibility paths beyond this native JSON contract.
+      description: Read-only metadata export for one live saved filter, backed by the same PostgreSQL loader as saved-filter detail, including alert backlinks. This endpoint returns the native JSON metadata payload used by GSA downloads; browser bulk download composes native JSON metadata exports from this endpoint when native API is available. Alert-linkage mutation semantics remain compatibility paths beyond this native JSON contract.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:

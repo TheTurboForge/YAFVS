@@ -5918,6 +5918,13 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
             self.assertEqual(operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns"), inherited_still_owns)
 
+        for operation in (
+            operations[("get", "/filters")],
+            operations[("get", "/filters/{filter_id}")],
+            operations[("get", "/filters/{filter_id}/export")],
+        ):
+            self.assertNotIn("x-turbovas-inherited-still-owns", operation["x_turbovas_values"])
+
         self.assertIn('GSA CVE detail metadata export', native_tooling)
         self.assertIn('GSA NVT detail metadata export', native_tooling)
         self.assertIn('GSA CERT-Bund advisory metadata export', native_tooling)

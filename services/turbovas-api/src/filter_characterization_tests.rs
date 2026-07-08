@@ -336,7 +336,7 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     let list = openapi_path_block("/filters");
     assert!(list.contains("get:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+    assert!(list.contains("alert-reference counts"));
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-replaces: saved-filter-create"));
 
@@ -346,6 +346,7 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
+    assert!(detail.contains("alert output-filter backlinks"));
     assert!(detail.contains("x-turbovas-replaces: saved-filter-metadata-modify"));
     assert!(detail.contains("x-turbovas-replaces: saved-filter-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));

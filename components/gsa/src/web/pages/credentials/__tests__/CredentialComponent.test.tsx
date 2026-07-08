@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -141,6 +142,7 @@ describe('CredentialComponent tests', () => {
 
     fireEvent.click(screen.getByTestId('open'));
     await wait();
+    expect(gmp.credential.get).toHaveBeenCalledExactlyOnceWith({id: '123'});
     expect(screen.getDialogTitle()).toHaveTextContent('Edit Credential foo');
     expect(screen.getByRole('textbox', {name: 'Name'})).toHaveValue('foo');
     expect(screen.getByRole('textbox', {name: 'Comment'})).toHaveValue(

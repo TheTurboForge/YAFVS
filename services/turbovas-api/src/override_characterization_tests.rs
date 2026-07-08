@@ -9,6 +9,7 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_OVERRIDES: &str =
     include_str!("../../../components/gvmd/src/manage_sql_overrides.c");
+const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 const OVERRIDES_RS: &str = include_str!("overrides.rs");
 const OVERRIDE_QUERY_SQL_RS: &str = include_str!("override_query_sql.rs");
@@ -185,6 +186,31 @@ fn native_override_reads_are_metadata_only_and_do_not_touch_report_cache_or_scan
             "native override query SQL must not contain {forbidden}"
         );
     }
+}
+
+#[test]
+fn inherited_override_result_detail_uses_result_expansion_semantics() {
+    for required in [
+        "find_attribute (attribute_names, attribute_values,\n                                \"result\", &attribute)",
+        "get_overrides_data->result = strcmp (attribute, \"0\")",
+        "override_iterator_result (overrides)",
+        "result_uuid (override_iterator_result (overrides),",
+        "buffer_override_xml (buffer, &overrides,\n                               get_overrides_data->get.details,\n                               get_overrides_data->result, &count)",
+    ] {
+        assert!(
+            GMP_C.contains(required),
+            "inherited override result detail path missing {required}"
+        );
+    }
+    assert!(
+        OVERRIDE_QUERY_SQL_RS.contains("LEFT JOIN results r ON r.id = o.result"),
+        "native override metadata may expose a linked result reference"
+    );
+    assert!(
+        !OVERRIDES_RS.contains("result = strcmp")
+            && !OVERRIDE_QUERY_SQL_RS.contains("result = strcmp"),
+        "native override reads must not claim inherited GET_OVERRIDES result expansion semantics"
+    );
 }
 
 #[test]

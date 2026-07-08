@@ -7932,6 +7932,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 {"status": "pass", "check": "native-api-direct.report-config-missing-format-denied", "message": "ok"},
                 {"status": "warn", "check": "native-api-direct.schedule-fixture", "message": "missing schedule fixture"},
                 {"status": "pass", "check": "native-api-direct.tag-resource-add", "message": "ok"},
+                {"status": "pass", "check": "native-api-direct.scope-report-delete-missing", "message": "ok"},
                 {"status": "pass", "check": "native-api-direct.write-control-restore", "message": "ok"},
             ],
         }
@@ -7946,6 +7947,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.report-config-missing-format-denied"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-fixture"], "warn")
         self.assertEqual(checks["native-api-direct.tag-resource-add"], "pass")
+        self.assertEqual(checks["native-api-direct.scope-report-delete-missing"], "pass")
         self.assertNotIn("native-api-direct.schedule-write-update", checks)
 
     def test_direct_native_api_write_smoke_uses_guarded_operator_and_cleans_up(self):
@@ -8390,6 +8392,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.scope-write-query-denied"], "pass")
         self.assertEqual(checks["native-api-direct.scope-delete-body-denied"], "pass")
         self.assertEqual(checks["native-api-direct.scope-write-delete"], "pass")
+        self.assertEqual(checks["native-api-direct.scope-report-delete-missing"], "pass")
         self.assertEqual(checks["native-api-direct.scope-write-post-delete"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.report-config-fixture"], "pass")

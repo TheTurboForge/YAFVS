@@ -13890,6 +13890,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scope-delete-body-denied",
             "native-api-direct.scope-write-delete",
             "native-api-direct.scope-write-post-delete",
+            "native-api-direct.scope-report-delete-missing",
             "native-api-direct.tag-write-create",
             "native-api-direct.report-config-fixture",
             "native-api-direct.report-config-missing-format-denied",

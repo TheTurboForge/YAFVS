@@ -5,10 +5,6 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
-import {
-  getMetricsNode,
-  parseReportMetrics,
-} from 'gmp/commands/report-metrics';
 import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
@@ -19,6 +15,7 @@ import {filterString} from 'gmp/models/filter/utils';
 import Report, {type ReportElement} from 'gmp/models/report';
 import {isDefined} from 'gmp/utils/identity';
 import {fetchNativeReport} from 'gmp/native-api/reports';
+import {fetchNativeReportMetrics} from 'gmp/native-api/report-metrics';
 
 interface ReportCommandAddAssetsParams {
   id: string;
@@ -124,14 +121,9 @@ class ReportCommand extends EntityCommand<Report, ReportElement> {
   }
 
   async getMetrics({id}: ReportCommandMetricsParams) {
-    const response = await this.httpGetWithTransform(
-      {cmd: 'get_report_metrics', report_id: id},
-      {includeDefaultParams: false},
+    return new Response<ReportMetrics>(
+      await fetchNativeReportMetrics(this.http, id),
     );
-    const metrics = parseReportMetrics(
-      getMetricsNode(response.data, 'get_report_metrics', 'report_metrics'),
-    );
-    return response.set<ReportMetrics>(metrics);
   }
 
   getElementFromRoot(root: XmlResponseData): ReportElement {

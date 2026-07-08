@@ -80,6 +80,52 @@ describe('ReportCommand tests', () => {
     expect(data.name).toEqual('Report Foo');
   });
 
+  test('should request report metrics through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'foo',
+        summary: {
+          alive_system_count: 2,
+          total_system_cvss_load: 12.5,
+          average_system_cvss_load: 6.25,
+          vulnerability_count: 3,
+          authenticated_system_count: 1,
+          authentication_failed_system_count: 0,
+          no_credential_path_system_count: 1,
+          unknown_authentication_system_count: 0,
+          authenticated_scan_coverage_percent: 50,
+        },
+        systems: [],
+        vulnerabilities: [],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ReportCommand(fakeHttp);
+    const resp = await cmd.getMetrics({id: 'foo'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/reports/foo/metrics',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/reports/foo/metrics',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(resp.data.id).toEqual('foo');
+    expect(resp.data.summary.averageSystemCvssLoad).toEqual(6.25);
+  });
+
   test('should allow to download a report', async () => {
     const data = new ArrayBuffer(8);
     const fakeHttp = createHttp(data);

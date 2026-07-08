@@ -9,9 +9,7 @@ import CertBundAdvisoriesCommand from 'gmp/commands/cert-bund-advisories';
 import {
   createAggregatesResponse,
   createHttp,
-  createInfoEntitiesResponse,
 } from 'gmp/commands/testing';
-import CertBundAdv from 'gmp/models/cert-bund';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -34,116 +32,6 @@ const createNativeHttp = () => {
 };
 
 describe('CertBundAdvisoriesCommand tests', () => {
-  test('should fetch cert bund advisories with default params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cert_bund_adv: {
-          severity: 10.0,
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        cert_bund_adv: {
-          severity: 5.0,
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CertBundAdvisoriesCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'cert_bund_adv'},
-    });
-    expect(result.data).toEqual([
-      new CertBundAdv({
-        id: '1',
-        name: 'Admin',
-        severity: 10.0,
-      }),
-      new CertBundAdv({
-        id: '2',
-        name: 'User',
-        severity: 5.0,
-      }),
-    ]);
-  });
-
-  test('should fetch cert bund advisories with custom params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cert_bund_adv: {
-          severity: 10.0,
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CertBundAdvisoriesCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Admin'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        info_type: 'cert_bund_adv',
-        filter: "name='Admin'",
-      },
-    });
-    expect(result.data).toEqual([
-      new CertBundAdv({
-        id: '1',
-        name: 'Admin',
-        severity: 10.0,
-      }),
-    ]);
-  });
-
-  test('should fetch all cert bund advisories', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        cert_bund_adv: {
-          severity: 10.0,
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        cert_bund_adv: {
-          severity: 5.0,
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CertBundAdvisoriesCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        info_type: 'cert_bund_adv',
-        filter: 'first=1 rows=-1',
-      },
-    });
-    expect(result.data).toEqual([
-      new CertBundAdv({
-        id: '1',
-        name: 'Admin',
-        severity: 10.0,
-      }),
-      new CertBundAdv({
-        id: '2',
-        name: 'User',
-        severity: 5.0,
-      }),
-    ]);
-  });
-
   test('should fetch CERT-Bund advisories through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -182,23 +70,6 @@ describe('CertBundAdvisoriesCommand tests', () => {
         filter: 'openssl',
       },
     );
-  });
-
-  test('should use inherited bulk export on non-native http', async () => {
-    const fakeHttp = createHttp();
-    const cmd = new CertBundAdvisoriesCommand(fakeHttp);
-
-    await cmd.exportByIds(['cb1', 'cb2']);
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'info',
-        bulk_select: 1,
-        'bulk_selected:cb1': 1,
-        'bulk_selected:cb2': 1,
-      },
-    });
   });
 
   test('should bulk export selected CERT-Bund advisories through native API', async () => {

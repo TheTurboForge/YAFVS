@@ -9,10 +9,8 @@ import NvtsCommand from 'gmp/commands/nvts';
 import {
   createAggregatesResponse,
   createHttp,
-  createInfoEntitiesResponse,
 } from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
-import Nvt from 'gmp/models/nvt';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -34,108 +32,6 @@ const createNativeHttp = () => {
 };
 
 describe('NvtsCommand tests', () => {
-  test('should fetch nvts with default params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        nvt: {
-          _oid: '1.2.3',
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        nvt: {
-          _oid: '2.3.4',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'nvt'},
-    });
-    expect(result.data).toEqual([
-      new Nvt({
-        id: '1.2.3',
-        name: 'Admin',
-        oid: '1.2.3',
-      }),
-      new Nvt({
-        id: '2.3.4',
-        name: 'User',
-        oid: '2.3.4',
-      }),
-    ]);
-  });
-
-  test('should fetch nvts with custom params', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        nvt: {
-          _oid: '1.2.3',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Admin'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        info_type: 'nvt',
-        filter: "name='Admin'",
-      },
-    });
-    expect(result.data).toEqual([
-      new Nvt({id: '1.2.3', name: 'Admin', oid: '1.2.3'}),
-    ]);
-  });
-
-  test('should fetch all nvts', async () => {
-    const response = createInfoEntitiesResponse([
-      {
-        _id: '1',
-        name: 'Admin',
-        nvt: {
-          _oid: '1.2.3',
-        },
-      },
-      {
-        _id: '2',
-        name: 'User',
-        nvt: {
-          _oid: '2.3.4',
-        },
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new NvtsCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_info', info_type: 'nvt', filter: 'first=1 rows=-1'},
-    });
-    expect(result.data).toEqual([
-      new Nvt({
-        id: '1.2.3',
-        name: 'Admin',
-        oid: '1.2.3',
-      }),
-      new Nvt({
-        id: '2.3.4',
-        name: 'User',
-        oid: '2.3.4',
-      }),
-    ]);
-  });
-
   test('should fetch nvts through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -171,23 +67,6 @@ describe('NvtsCommand tests', () => {
       page_size: 25,
       sort: 'created',
       filter: 'ssh',
-    });
-  });
-
-  test('should use inherited bulk export on non-native http', async () => {
-    const fakeHttp = createHttp();
-    const cmd = new NvtsCommand(fakeHttp);
-
-    await cmd.exportByIds(['1.2.3', '2.3.4']);
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'bulk_export',
-        resource_type: 'info',
-        bulk_select: 1,
-        'bulk_selected:1.2.3': 1,
-        'bulk_selected:2.3.4': 1,
-      },
     });
   });
 

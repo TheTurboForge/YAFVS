@@ -5,12 +5,8 @@
  */
 
 import InfoEntitiesCommand from 'gmp/commands/info-entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -40,26 +36,14 @@ class NvtsCommand extends InfoEntitiesCommand<Nvt> {
   }
 
   export(entities: Nvt[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
-
     return this.exportByIds(entities.map(entity => entity.id as string));
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
-
     return exportNativeNvtsMetadata(this.http, ids);
   }
 
   async exportByFilter(filter: Filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const nvts: Nvt[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;
@@ -89,11 +73,7 @@ class NvtsCommand extends InfoEntitiesCommand<Nvt> {
     );
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeNvts(
       this.http,
@@ -107,12 +87,7 @@ class NvtsCommand extends InfoEntitiesCommand<Nvt> {
 
   async getAll(
     params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
   ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
     const filter = filterFromCommandParams(params).all();
     const nvts: Nvt[] = [];
     let total = Number.POSITIVE_INFINITY;

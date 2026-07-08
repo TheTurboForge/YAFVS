@@ -9,7 +9,11 @@ use crate::{
     host_write_db::{
         HostWriteRecord, execute_host_write_sql, query_host_create_record, query_host_write_record,
     },
-    host_write_sql::{host_create_ip_identifier_sql, host_create_sql, host_update_comment_sql},
+    host_write_sql::{
+        host_create_ip_identifier_sql, host_create_sql, host_delete_details_sql,
+        host_delete_host_sql, host_delete_identifiers_sql, host_delete_max_severities_sql,
+        host_delete_operating_system_links_sql, host_delete_tags_sql, host_update_comment_sql,
+    },
     host_write_validation::{ValidatedHostCreate, ValidatedHostPatch},
 };
 
@@ -53,4 +57,27 @@ pub(crate) async fn execute_host_patch_transaction(
         "patch host comment",
     )
     .await
+}
+
+pub(crate) async fn execute_host_delete_transaction(
+    tx: &Transaction<'_>,
+    host_internal_id: i32,
+) -> Result<(), ApiError> {
+    for (sql, action) in [
+        (host_delete_identifiers_sql(), "delete host identifiers"),
+        (
+            host_delete_operating_system_links_sql(),
+            "delete host operating system links",
+        ),
+        (
+            host_delete_max_severities_sql(),
+            "delete host severity state",
+        ),
+        (host_delete_details_sql(), "delete host details"),
+        (host_delete_host_sql(), "delete host row"),
+        (host_delete_tags_sql(), "delete host tag links"),
+    ] {
+        execute_host_write_sql(tx, sql, &[&host_internal_id], action).await?;
+    }
+    Ok(())
 }

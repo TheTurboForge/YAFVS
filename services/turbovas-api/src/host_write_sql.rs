@@ -36,3 +36,30 @@ pub(crate) fn host_update_comment_sql() -> &'static str {
       WHERE id = $1
       RETURNING uuid::text;"
 }
+
+pub(crate) fn host_delete_identifiers_sql() -> &'static str {
+    "DELETE FROM host_identifiers WHERE host = $1;"
+}
+
+pub(crate) fn host_delete_operating_system_links_sql() -> &'static str {
+    "DELETE FROM host_oss WHERE host = $1;"
+}
+
+pub(crate) fn host_delete_max_severities_sql() -> &'static str {
+    "DELETE FROM host_max_severities WHERE host = $1;"
+}
+
+pub(crate) fn host_delete_details_sql() -> &'static str {
+    "DELETE FROM host_details WHERE host = $1;"
+}
+
+pub(crate) fn host_delete_host_sql() -> &'static str {
+    "DELETE FROM hosts WHERE id = $1;"
+}
+
+pub(crate) fn host_delete_tags_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE resource_type = 'host'
+        AND resource = $1
+        AND resource_location = 0;"
+}

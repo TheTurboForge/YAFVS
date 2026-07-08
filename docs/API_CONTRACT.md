@@ -273,11 +273,13 @@ existing host asset summary plus bounded safe metadata from `host_identifiers`,
 `host_oss`/`oss`, and latest whitelisted `host_details` names only:
 `best_os_cpe`, `best_os_txt`, and `traceroute`. The detail endpoint validates
 and canonicalizes UUID path IDs before parameterized PostgreSQL queries. It also
-returns active User Tags attached directly to the host. It intentionally excludes
-host create/save/delete, delete-identifier behavior, XML export, target creation
-from host, tag writes/actions, credential/privacy-sensitive identifiers, raw
-`report_host_details` expansion, report/result/port/application history,
-GMP-only `details=1` semantics, and all writes.
+returns active User Tags attached directly to the host. Native write-control
+can create manual IP hosts, patch host comments, and hard-delete operator-owned
+hosts. The detail surface intentionally excludes delete-identifier behavior,
+XML export, target creation from host, tag writes/actions,
+credential/privacy-sensitive identifiers, raw `report_host_details` expansion,
+report/result/port/application history, GMP-only `details=1` semantics, and
+all other writes.
 Direct scriptable `GET /api/v1/hosts/{host_id}/export` returns the same native
 detail JSON for metadata export; it does not replace legacy host XML export or
 target-creation workflows.

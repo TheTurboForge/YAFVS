@@ -9,7 +9,10 @@ use crate::{
     errors::ApiError,
     host_write_db::{ensure_host_owner_matches_operator, require_host_write_operator},
     host_write_sql::{host_create_ip_identifier_sql, host_create_sql, host_update_comment_sql},
-    host_write_transactions::{execute_host_create_transaction, execute_host_patch_transaction},
+    host_write_transactions::{
+        execute_host_create_transaction, execute_host_delete_transaction,
+        execute_host_patch_transaction,
+    },
     host_write_validation::{
         HostCreateRequest, HostPatchRequest, validate_host_create_request,
         validate_host_patch_request,
@@ -125,7 +128,10 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
     let patch_body = source
         .split_once("pub(crate) async fn patch_host")
         .expect("patch handler")
-        .1;
+        .1
+        .split_once("pub(crate) async fn delete_host")
+        .expect("delete follows patch")
+        .0;
     assert!(
         patch_body.find("load_host_write_state").unwrap()
             < patch_body
@@ -137,6 +143,23 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
             .find("ensure_host_owner_matches_operator")
             .unwrap()
             < patch_body.find("execute_host_patch_transaction").unwrap()
+    );
+
+    let delete_body = source
+        .split_once("pub(crate) async fn delete_host")
+        .expect("delete handler")
+        .1;
+    assert!(
+        delete_body.find("load_host_write_state").unwrap()
+            < delete_body
+                .find("ensure_host_owner_matches_operator")
+                .unwrap()
+    );
+    assert!(
+        delete_body
+            .find("ensure_host_owner_matches_operator")
+            .unwrap()
+            < delete_body.find("execute_host_delete_transaction").unwrap()
     );
 }
 
@@ -151,4 +174,37 @@ fn host_transactions_keep_create_and_patch_side_effects_narrow() {
     assert!(!source.contains("host_max_severities"));
     let _ = execute_host_create_transaction;
     let _ = execute_host_patch_transaction;
+}
+
+#[test]
+fn host_delete_transaction_matches_inherited_host_asset_table_set() {
+    let source = include_str!("host_write_transactions.rs");
+    let delete_body = source
+        .split_once("pub(crate) async fn execute_host_delete_transaction")
+        .expect("delete transaction")
+        .1;
+    for required in [
+        "host_delete_identifiers_sql()",
+        "host_delete_operating_system_links_sql()",
+        "host_delete_max_severities_sql()",
+        "host_delete_details_sql()",
+        "host_delete_host_sql()",
+        "host_delete_tags_sql()",
+    ] {
+        assert!(delete_body.contains(required), "delete missing {required}");
+    }
+    for forbidden in [
+        "DELETE FROM oss",
+        "DELETE FROM report_hosts",
+        "DELETE FROM reports",
+        "DELETE FROM results",
+        "DELETE FROM targets",
+        "DELETE FROM credentials",
+    ] {
+        assert!(
+            !delete_body.contains(forbidden),
+            "host hard-delete must not include {forbidden}"
+        );
+    }
+    let _ = execute_host_delete_transaction;
 }

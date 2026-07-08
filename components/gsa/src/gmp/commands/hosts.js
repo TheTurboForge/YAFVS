@@ -17,6 +17,7 @@ import logger from 'gmp/log';
 import Host from 'gmp/models/host';
 import {
   createNativeHost,
+  deleteNativeHost,
   exportNativeHostMetadata,
   exportNativeHostsMetadata,
   fetchNativeHosts,
@@ -70,6 +71,14 @@ class HostCommand extends EntityCommand {
       cmd: 'delete_asset',
       asset_id: id,
     });
+  }
+
+  async delete({id}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeHost(this.http, id);
+      return new Response();
+    }
+    return super.delete({id});
   }
 
   async export({id}) {

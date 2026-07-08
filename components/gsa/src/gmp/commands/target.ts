@@ -470,11 +470,7 @@ class TargetCommand extends EntityCommand<Target> {
 
   async clone({id}: EntityCommandParams) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativeTarget(this.http, id);
-      } catch {
-        // Keep inherited GMP clone responsible for legacy rejection handling.
-      }
+      return await cloneNativeTarget(this.http, id);
     }
     return super.clone({id});
   }

@@ -114,7 +114,7 @@ describe('TargetCommand tests', () => {
     expect(result.data.id).toEqual('native-target-clone-id');
   });
 
-  test('should fall back to GMP when native target clone fails', async () => {
+  test('should not fall back to GMP when native target clone fails', async () => {
     const response = createActionResultResponse({
       action: 'Clone Target',
       id: 'fallback-target-clone-id',
@@ -137,17 +137,11 @@ describe('TargetCommand tests', () => {
     fakeHttp.session.token = 'test-token';
     const cmd = new TargetCommand(fakeHttp);
 
-    const result = await cmd.clone({id: 'target-id'});
-
+    await expect(cmd.clone({id: 'target-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
     expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: 'target-id',
-        resource_type: 'target',
-      },
-    });
-    expect(result.data.id).toEqual('fallback-target-clone-id');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete target through native API when available', async () => {

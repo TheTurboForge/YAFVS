@@ -10,6 +10,7 @@ import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
+import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import Scanner, {
   type ScannerElement,
@@ -51,6 +52,9 @@ interface ScannerCommandVerifyParams {
 
 const log = logger.getLogger('gmp.commands.scanner');
 
+const nativeScannerDetailSupportsFilter = (filter?: string): boolean =>
+  filter === undefined || filterString(filter) === 'tasks=1';
+
 const SCANNER_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
 
 const isScannerMetadataOnlySave = (
@@ -79,7 +83,11 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     {id}: EntityCommandParams,
     {filter, details, ...options}: {filter?: string; details?: boolean} = {},
   ): Promise<Response<Scanner, XmlMeta>> {
-    if (filter === undefined && details !== true && canUseNativeApi(this.http)) {
+    if (
+      details !== true &&
+      canUseNativeApi(this.http) &&
+      nativeScannerDetailSupportsFilter(filter)
+    ) {
       const nativeResponse = await fetchNativeScanner(this.http, id);
       return new Response(nativeResponse.scanner);
     }

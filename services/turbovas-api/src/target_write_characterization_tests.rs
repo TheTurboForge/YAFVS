@@ -436,7 +436,7 @@ fn native_target_broad_mutation_routes_remain_closed() {
             "{path} OpenAPI block must keep {replacement}"
         );
         assert!(block.contains(
-            "x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation"
+            "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
         ));
     }
     let export = openapi_path_block("/targets/{target_id}/export");
@@ -447,10 +447,10 @@ fn native_target_broad_mutation_routes_remain_closed() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: target-metadata-export-read",
-        "x-turbovas-inherited-still-owns: target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows",
         "$ref: '#/components/schemas/Target'",
         "Credential references include id/name/type/port only",
-        "inherited file-export formats remain outside this read endpoint",
+        "file/host-filter input variants",
     ] {
         assert!(
             export.contains(required),

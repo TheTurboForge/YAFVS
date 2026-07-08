@@ -691,7 +691,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "scope-report-generation",
         "scope-report-generation-retention-and-mutations",
         "tag-filter-actions-and-resource-type-change-semantics",
-        "target-export-and-credential-secret-mutation",
+        "target-file-input-task-control-and-credential-secret-workflows",
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
@@ -1521,12 +1521,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scope-metadata-membership-write",
     },
     ("get", "/targets"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-list-read",
     },
     ("post", "/targets"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1535,17 +1535,17 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-detail-summary-read",
     },
     ("get", "/targets/{target_id}/export"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-metadata-export-read",
     },
     ("patch", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1554,7 +1554,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1563,7 +1563,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("post", "/targets/{target_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1572,7 +1572,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/targets/{target_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1581,7 +1581,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/targets/{target_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "target-export-and-credential-secret-mutation",
+        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",

@@ -6,11 +6,44 @@ use super::*;
 use crate::port_list_write_plans::*;
 use crate::port_list_write_sql::*;
 use crate::port_list_write_validation::{
-    MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, PortListCloneRequest,
-    PortListCreateRangeRequest, PortListCreateRequest, PortListImportRequest, PortListPatchRequest,
-    ValidatedPortListPatch, validate_port_list_clone_request, validate_port_list_create_request,
-    validate_port_list_import_request, validate_port_list_patch_request,
+    MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, OPENVAS_DEFAULT_TCP_RANGES,
+    PortListCloneRequest, PortListCreateRangeRequest, PortListCreateRequest, PortListImportRequest,
+    PortListPatchRequest, ValidatedPortListPatch, validate_port_list_clone_request,
+    validate_port_list_create_request, validate_port_list_import_request,
+    validate_port_list_patch_request,
 };
+
+const MANAGE_SQL_PORT_LISTS: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
+
+fn inherited_openvas_default_tcp_ranges() -> Vec<(i32, i32)> {
+    let function = MANAGE_SQL_PORT_LISTS
+        .split_once("make_port_ranges_openvas_default")
+        .expect("inherited OpenVAS default range function must exist")
+        .1
+        .split_once("create_port_list_internal")
+        .expect("create_port_list_internal must follow default range function")
+        .0;
+    function
+        .lines()
+        .filter_map(|line| {
+            let args = line
+                .split_once("RANGE (PORT_PROTOCOL_TCP,")?
+                .1
+                .split_once(");")?
+                .0;
+            let mut parts = args.split(',').map(|part| {
+                part.trim()
+                    .parse::<i32>()
+                    .expect("inherited TCP range bounds must be integers")
+            });
+            Some((
+                parts.next().expect("range start must exist"),
+                parts.next().expect("range end must exist"),
+            ))
+        })
+        .collect()
+}
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequest {
     PortListPatchRequest {
@@ -327,15 +360,48 @@ fn port_list_import_request_parses_exported_xml_shape() {
 }
 
 #[test]
-fn port_list_import_request_rejects_missing_uuid_or_implicit_default_ranges() {
+fn openvas_default_tcp_ranges_match_inherited_source() {
+    let inherited = inherited_openvas_default_tcp_ranges();
+    assert_eq!(OPENVAS_DEFAULT_TCP_RANGES, inherited.as_slice());
+    assert_eq!(OPENVAS_DEFAULT_TCP_RANGES.len(), 635);
+    assert_eq!(OPENVAS_DEFAULT_TCP_RANGES.first(), Some(&(1, 5)));
+    assert_eq!(OPENVAS_DEFAULT_TCP_RANGES.last(), Some(&(65301, 65301)));
+}
+
+#[test]
+fn port_list_import_request_rejects_missing_uuid_and_synthesizes_default_ranges() {
     assert!(validate_port_list_import_request(PortListImportRequest {
         xml_file: "<get_port_lists_response><port_list><name>x</name></port_list></get_port_lists_response>".to_string(),
     })
     .is_err());
-    assert!(validate_port_list_import_request(PortListImportRequest {
+    let validated = validate_port_list_import_request(PortListImportRequest {
         xml_file: "<get_port_lists_response><port_list id=\"12345678-1234-4234-9234-123456789abc\"><name>x</name></port_list></get_port_lists_response>".to_string(),
     })
-    .is_err());
+    .expect("implicit default-range import should be native-supported");
+    assert_eq!(
+        validated.port_ranges.len(),
+        OPENVAS_DEFAULT_TCP_RANGES.len()
+    );
+    assert!(
+        validated
+            .port_ranges
+            .iter()
+            .all(|range| range.protocol_id == 0)
+    );
+    assert_eq!(
+        validated
+            .port_ranges
+            .first()
+            .map(|range| (range.start, range.end)),
+        Some((1, 5))
+    );
+    assert_eq!(
+        validated
+            .port_ranges
+            .last()
+            .map(|range| (range.start, range.end)),
+        Some((65301, 65301))
+    );
 }
 
 #[test]

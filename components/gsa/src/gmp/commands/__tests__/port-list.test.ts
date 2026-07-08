@@ -786,4 +786,29 @@ describe('PortListCommand', () => {
     );
     expect(result.data.id).toEqual('native-imported-port-list-id');
   });
+
+  test('should not fall back to GMP when native port list import fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({message: 'bad import'}),
+      ok: false,
+      status: 400,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    http.session = createSession();
+    const command = new PortListCommand(http);
+
+    await expect(
+      command.import({
+        xmlFile: new File(['<get_port_lists_response />'], 'portlist.xml'),
+      }),
+    ).rejects.toThrow('Native API request failed with status 400');
+    expect(http.request).not.toHaveBeenCalled();
+  });
 });

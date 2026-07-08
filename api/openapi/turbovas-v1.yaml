@@ -2372,7 +2372,7 @@ paths:
       x-turbovas-replaces: port-list-metadata-list-read
       x-turbovas-inherited-still-owns: port-list-legacy-bulk-xml-export-fallback
       summary: List port lists
-      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can create typed TCP/UDP port lists, import exported XML with explicit ranges, clone existing port lists, patch port-list name/comment metadata and complete port-range sets, move live port lists to trash, restore trashed port lists, and permanently delete trashed port-list metadata/ranges; implicit default-range imports and legacy bulk XML export fallback remain inherited.
+      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can create typed TCP/UDP port lists, import exported XML with explicit ranges or inherited OpenVAS default TCP ranges, clone existing port lists, patch port-list name/comment metadata and complete port-range sets, move live port lists to trash, restore trashed port lists, and permanently delete trashed port-list metadata/ranges; legacy bulk XML export fallback remains inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2450,7 +2450,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Import a port list from exported XML
-      description: Direct write-control endpoint for importing one exported port-list XML payload. The native importer preserves the exported port-list UUID, creates the row for the authenticated operator, accepts explicit TCP/UDP ranges, suffixes duplicate names, and rejects implicit default-range imports until that inherited fallback is implemented natively. Bulk XML export remains inherited.
+      description: Direct write-control endpoint for importing one exported port-list XML payload. The native importer preserves the exported port-list UUID, creates the row for the authenticated operator, accepts explicit TCP/UDP ranges, synthesizes inherited OpenVAS default TCP ranges when the exported XML omits ranges, and suffixes duplicate names. Bulk XML export remains inherited.
       requestBody:
         required: true
         content:

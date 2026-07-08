@@ -215,17 +215,6 @@ class GMPv226(GMPv225[T]):
             Scopes.delete_scope(scope_id)
         )
 
-    def get_scopes(
-        self,
-        *,
-        scope_id: EntityID | None = None,
-        details: bool | None = None,
-    ) -> T:
-        """Request scopes."""
-        return self._send_request_and_transform_response(
-            Scopes.get_scopes(scope_id=scope_id, details=details)
-        )
-
     def generate_scope_report(self, scope_id: EntityID) -> T:
         """Generate a persistent scope-report snapshot."""
         return self._send_request_and_transform_response(

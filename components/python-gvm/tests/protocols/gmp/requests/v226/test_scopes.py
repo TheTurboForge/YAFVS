@@ -48,10 +48,6 @@ class ScopesTestCase(unittest.TestCase):
         with self.assertRaises(RequiredArgument):
             Scopes.modify_scope("")
 
-    def test_get_scopes(self):
-        request = Scopes.get_scopes(details=False)
-        self.assertEqual(bytes(request), b'<get_scopes details="0"/>')
-
     def test_delete_scope(self):
         request = Scopes.delete_scope("scope-1")
         self.assertEqual(bytes(request), b'<delete_scope scope_id="scope-1"/>')

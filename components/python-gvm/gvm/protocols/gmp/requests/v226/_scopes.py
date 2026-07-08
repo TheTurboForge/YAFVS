@@ -101,16 +101,6 @@ class Scopes:
         cmd.set_attribute("scope_id", str(scope_id))
         return cmd
 
-    @staticmethod
-    def get_scopes(*, scope_id: EntityID | None = None, details: bool | None = None) -> Request:
-        """Request scopes."""
-        cmd = XmlCommand("get_scopes")
-        if scope_id:
-            cmd.set_attribute("scope_id", str(scope_id))
-        if details is not None:
-            cmd.set_attribute("details", to_bool(details))
-        return cmd
-
     @classmethod
     def generate_scope_report(cls, scope_id: EntityID) -> Request:
         """Generate a persistent scope-report snapshot."""

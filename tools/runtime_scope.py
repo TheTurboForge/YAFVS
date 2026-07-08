@@ -97,19 +97,6 @@ def row(element: Any) -> dict[str, Any]:
     }
 
 
-def scope_row(element: Any) -> dict[str, Any]:
-    counts = child_element(element, "counts")
-    return {
-        "id": element.get("id"),
-        "name": child_text(element, "name"),
-        "global": child_text(element, "global") == "1",
-        "protection_requirement": child_text(element, "protection_requirement"),
-        "target_count": text_int(child_text(counts, "targets") if counts is not None else child_text(element, "target_count")),
-        "host_count": text_int(child_text(counts, "hosts") if counts is not None else child_text(element, "host_count")),
-        "scope_report_count": text_int(child_text(counts, "scope_reports") if counts is not None else child_text(element, "scope_report_count")),
-    }
-
-
 def native_scope_row(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": item.get("id"),
@@ -218,6 +205,15 @@ def native_scope_details(repo_root: Path, scope_id: str) -> dict[str, Any]:
     return native_scope_row(native_api_json(repo_root, path))
 
 
+def native_scopes(repo_root: Path, filter_value: str = "") -> list[dict[str, Any]]:
+    path = "/api/v1/scopes?page_size=5"
+    if filter_value:
+        path = f"{path}&filter={urllib.parse.quote(filter_value)}"
+    payload = native_api_json(repo_root, path)
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    return [native_scope_row(item) for item in items if isinstance(item, dict)]
+
+
 def native_scope_reports(repo_root: Path, scope_id: str | None = None) -> list[dict[str, Any]]:
     path = "/api/v1/scope-reports?page_size=1&sort=-creation_time"
     if scope_id:
@@ -227,9 +223,8 @@ def native_scope_reports(repo_root: Path, scope_id: str | None = None) -> list[d
     return [native_scope_report_row(item) for item in items if isinstance(item, dict)]
 
 
-def organization_scope(gmp: Any) -> dict[str, Any] | None:
-    scopes = [scope_row(element) for element in iter_elements(gmp.get_scopes(details=True), "scope")]
-    for scope in scopes:
+def organization_scope(repo_root: Path) -> dict[str, Any] | None:
+    for scope in native_scopes(repo_root, "Organization"):
         if scope.get("global") or scope.get("name") == "Organization":
             return scope
     return None
@@ -269,7 +264,7 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path) -> dict[str, An
     hosts = entity_rows(gmp, "get_hosts", "host")
     target = targets[0] if targets else None
     host = hosts[0] if hosts else None
-    org = organization_scope(gmp)
+    org = organization_scope(repo_root)
     if target is None or host is None or org is None:
         payload = result("fail", "Scope smoke prerequisites are missing.", target=target, host=host, organization_scope=org)
         payload["artifacts"] = [write_artifact(artifact_dir, "smoke-failed.json", payload)]

@@ -275,6 +275,22 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'X-TurboVAS-Token': gmp.session.token ?? '',
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+};
+
 const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -396,3 +412,8 @@ export const patchNativeTask = async (
     }),
   );
 };
+
+export const deleteNativeTask = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => deleteNative(gmp, `api/v1/tasks/${encodeURIComponent(id)}`);

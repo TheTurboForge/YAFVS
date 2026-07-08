@@ -4,7 +4,7 @@
 
 use crate::{
     errors::ApiError,
-    task_write_db::ensure_task_owner_matches_operator,
+    task_write_db::{ensure_task_not_in_use_for_native_trash, ensure_task_owner_matches_operator},
     task_write_sql::*,
     task_write_validation::{MAX_TASK_TEXT_BYTES, TaskPatchRequest, validate_task_patch_request},
 };
@@ -13,6 +13,25 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> TaskPatchRequest 
     TaskPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+    }
+}
+
+#[test]
+fn task_delete_rejects_in_use_run_statuses_before_trash_move() {
+    for status in [0, 3, 4, 10, 11, 14, 16, 17, 18, 19] {
+        assert!(
+            matches!(
+                ensure_task_not_in_use_for_native_trash(status),
+                Err(ApiError::Conflict(_))
+            ),
+            "run status {status} must stay on inherited scanner-aware delete path"
+        );
+    }
+    for status in [1, 2, 12, 13, 99] {
+        assert!(
+            ensure_task_not_in_use_for_native_trash(status).is_ok(),
+            "non-active run status {status} should be eligible for native trash move"
+        );
     }
 }
 
@@ -157,4 +176,74 @@ fn task_patch_state_and_uniqueness_are_live_scan_metadata_only() {
     assert!(unique.contains("coalesce(usage_type, 'scan') = 'scan'"));
     assert!(!unique.contains("task_alerts"));
     assert!(!unique.contains("task_preferences"));
+}
+
+#[test]
+fn task_delete_handler_requires_operator_owner_and_in_use_check_before_trash_move() {
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn delete_task")
+        .expect("delete task handler must exist")
+        .1;
+
+    let owner_check =
+        "ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;";
+    let in_use_check = "ensure_task_not_in_use_for_native_trash(task_state.run_status)?;";
+    assert!(handler.contains("let operator = require_task_write_operator(operator)?;"));
+    assert!(handler.contains("resolve_task_write_operator_owner(&tx, &operator).await?"));
+    assert!(handler.contains(owner_check));
+    assert!(handler.contains(in_use_check));
+    assert!(handler.contains("LOCK TABLE tasks, reports, report_counts, results, results_trash, tag_resources, tag_resources_trash"));
+    assert!(
+        handler.find(owner_check).unwrap()
+            < handler.find("execute_task_trash_transaction").unwrap(),
+        "task delete must verify owner before trash mutation"
+    );
+    assert!(
+        handler.find(in_use_check).unwrap()
+            < handler.find("execute_task_trash_transaction").unwrap(),
+        "task delete must reject in-use tasks before trash mutation"
+    );
+    assert!(handler.contains("StatusCode::NO_CONTENT"));
+}
+
+#[test]
+fn task_delete_sql_matches_inherited_safe_trash_subset() {
+    let state = task_write_state_sql();
+    assert!(state.contains("coalesce(run_status, 1)::integer"));
+    assert!(state.contains("coalesce(hidden, 0) = 0"));
+    assert!(state.contains("coalesce(usage_type, 'scan') = 'scan'"));
+
+    for sql in [
+        task_trash_task_tag_locations_sql(),
+        task_trash_task_trash_tag_locations_sql(),
+        task_trash_report_tag_locations_sql(),
+        task_trash_report_trash_tag_locations_sql(),
+        task_trash_result_tag_locations_sql(),
+        task_trash_result_trash_tag_locations_sql(),
+    ] {
+        assert!(sql.contains("UPDATE tag_resources") || sql.contains("UPDATE tag_resources_trash"));
+        assert!(sql.contains("SET resource_location = 1"));
+    }
+
+    let insert_results = task_trash_results_insert_sql();
+    assert!(insert_results.contains("INSERT INTO results_trash"));
+    assert!(insert_results.contains("FROM results"));
+    assert!(insert_results.contains("WHERE report IN (SELECT id FROM reports WHERE task = $1)"));
+
+    let delete_results = task_delete_live_results_sql();
+    assert!(delete_results.contains("DELETE FROM results"));
+    assert!(delete_results.contains("WHERE report IN (SELECT id FROM reports WHERE task = $1)"));
+
+    let delete_counts = task_delete_report_counts_sql();
+    assert!(delete_counts.contains("DELETE FROM report_counts"));
+    assert!(delete_counts.contains("WHERE report IN (SELECT id FROM reports WHERE task = $1)"));
+
+    let mark_hidden = task_mark_hidden_trash_sql();
+    assert!(mark_hidden.contains("UPDATE tasks"));
+    assert!(mark_hidden.contains("hidden = 2"));
+    assert!(mark_hidden.contains("modification_time = m_now()"));
+    assert!(mark_hidden.contains("coalesce(hidden, 0) = 0"));
+    assert!(mark_hidden.contains("coalesce(usage_type, 'scan') = 'scan'"));
+    assert!(mark_hidden.contains("RETURNING uuid::text"));
 }

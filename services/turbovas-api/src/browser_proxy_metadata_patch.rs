@@ -5,7 +5,7 @@
 use axum::{
     Extension, Json,
     extract::{Path, State},
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
 };
 
 use crate::{
@@ -26,7 +26,7 @@ use crate::{
     scanner_writes::patch_scanner,
     task_target_payloads::TaskItem,
     task_write_validation::TaskPatchRequest,
-    task_writes::patch_task,
+    task_writes::{delete_task, patch_task},
 };
 
 pub(crate) async fn browser_proxy_patch_scanner(
@@ -44,6 +44,16 @@ pub(crate) async fn browser_proxy_patch_scanner(
         Json(request),
     )
     .await
+}
+
+pub(crate) async fn browser_proxy_delete_task(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_task(State(state), Path(task_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_patch_credential(

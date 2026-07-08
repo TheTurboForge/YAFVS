@@ -47,6 +47,66 @@ afterAll(() => {
 });
 
 describe('TaskCommand tests', () => {
+  test('should delete task through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TaskCommand(fakeHttp);
+
+    await cmd.delete({id: 'task-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tasks/task-id');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks/task-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should not fall back to GMP when native task delete fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-task-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TaskCommand(fakeHttp);
+
+    await expect(cmd.delete({id: 'task-id'})).rejects.toThrow(
+      'Native API request failed with status 409',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should export task metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

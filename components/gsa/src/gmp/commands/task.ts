@@ -20,7 +20,11 @@ import Task, {
   AUTO_DELETE_KEEP_DEFAULT_VALUE,
   type TaskElement,
 } from 'gmp/models/task';
-import {exportNativeTaskMetadata, patchNativeTask} from 'gmp/native-api/tasks';
+import {
+  deleteNativeTask,
+  exportNativeTaskMetadata,
+  patchNativeTask,
+} from 'gmp/native-api/tasks';
 import {NO_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
@@ -112,6 +116,14 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
 
   async export({id}: EntityCommandParams) {
     return await exportNativeTaskMetadata(this.http, id);
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeTask(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   async start({id}: EntityCommandParams) {

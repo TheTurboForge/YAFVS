@@ -44,7 +44,7 @@ use crate::{
         clone_target, create_target, delete_target, hard_delete_target, patch_target,
         restore_target,
     },
-    task_writes::patch_task,
+    task_writes::{delete_task, patch_task},
 };
 
 pub(crate) fn direct_native_api_router(
@@ -131,6 +131,7 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_target),
             )
             .route("/api/v1/tasks/:task_id", patch(patch_task))
+            .route("/api/v1/tasks/:task_id", delete(delete_task))
             .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))
             .route("/api/v1/port-lists/:port_list_id", delete(delete_port_list))
             .route(

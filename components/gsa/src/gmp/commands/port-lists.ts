@@ -6,7 +6,7 @@
 
 import EntitiesCommand from 'gmp/commands/entities';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import type {HttpCommandInputParams} from 'gmp/commands/http';
+import type {HttpCommandInputParams, HttpCommandOptions} from 'gmp/commands/http';
 import {
   canUseNativeApi,
   filterFromCommandParams,
@@ -28,6 +28,7 @@ import {
   deleteNativePortRange,
   exportNativePortListMetadata,
   exportNativePortListsMetadata,
+  fetchNativePortList,
   fetchNativePortLists,
   importNativePortList,
   patchNativePortList,
@@ -122,6 +123,16 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
 
   async export({id}: EntityCommandParams) {
     return await exportNativePortListMetadata(this.http, id);
+  }
+
+  async get(
+    {id}: EntityCommandParams,
+    {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
+  ) {
+    if (filter === undefined && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativePortList(this.http, id));
+    }
+    return super.get({id}, {filter, ...options});
   }
 
   async create(args: PortListCommandCreateParams) {
@@ -221,7 +232,7 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
       port_range_id: id,
       no_redirect: 1,
     });
-    return await this.get({id: portListId});
+    return await super.get({id: portListId});
   }
 
   async import({xmlFile}: PortListCommandImportParams) {

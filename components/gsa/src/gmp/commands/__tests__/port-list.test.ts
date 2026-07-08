@@ -19,6 +19,77 @@ afterEach(() => {
 });
 
 describe('PortListCommand', () => {
+  test('should get a port list through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'port-list-id',
+        name: 'Web ports',
+        port_count: {all: 2, tcp: 2, udp: 0},
+        port_ranges: [{id: 'range-1', protocol: 'tcp', start: 80, end: 443}],
+        user_tags: [{id: 'tag-id', name: 'env', value: 'prod', comment: ''}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+
+    const command = new PortListCommand(http);
+    const result = await command.get({id: 'port-list-id'});
+
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith(
+      'api/v1/port-lists/port-list-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('port-list-id');
+    expect(result.data.name).toEqual('Web ports');
+  });
+
+  test('should keep filtered port-list detail on GMP until native parity is characterized', async () => {
+    const entityResponse = createEntityResponse('port_list', {id: '324'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(entityResponse) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+
+    const command = new PortListCommand(http);
+    const result = await command.get({id: '324'}, {filter: 'targets=1'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(http.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_port_list',
+        port_list_id: '324',
+        filter: 'targets=1',
+      },
+    });
+    expect(result.data.id).toEqual('324');
+  });
+
   test('should export port list metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

@@ -90,13 +90,6 @@ def response_id(response: Any) -> str | None:
     return root.get("id")
 
 
-def row(element: Any) -> dict[str, Any]:
-    return {
-        "id": element.get("id"),
-        "name": child_text(element, "name"),
-    }
-
-
 def native_scope_row(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": item.get("id"),
@@ -214,6 +207,16 @@ def native_scopes(repo_root: Path, filter_value: str = "") -> list[dict[str, Any
     return [native_scope_row(item) for item in items if isinstance(item, dict)]
 
 
+def native_named_rows(repo_root: Path, resource: str, page_size: int = 5) -> list[dict[str, Any]]:
+    payload = native_api_json(repo_root, f"/api/v1/{resource}?page_size={page_size}")
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    return [
+        {"id": item.get("id"), "name": item.get("name")}
+        for item in items
+        if isinstance(item, dict) and item.get("id")
+    ]
+
+
 def native_scope_reports(repo_root: Path, scope_id: str | None = None) -> list[dict[str, Any]]:
     path = "/api/v1/scope-reports?page_size=1&sort=-creation_time"
     if scope_id:
@@ -230,28 +233,6 @@ def organization_scope(repo_root: Path) -> dict[str, Any] | None:
     return None
 
 
-def entity_rows(gmp: Any, getter_name: str, element_name: str) -> list[dict[str, Any]]:
-    getter = getattr(gmp, getter_name)
-    try:
-        response = getter(filter_string="rows=-1", details=True)
-    except TypeError:
-        response = getter(filter_string="rows=-1")
-    if element_name == "host":
-        rows = [
-            row(element)
-            for element in iter_elements(response, "asset")
-            if child_text(element, "type") == "host"
-        ]
-    else:
-        rows = [row(element) for element in iter_elements(response, element_name)]
-    return [entry for entry in rows if entry.get("id")]
-
-
-def first_row(gmp: Any, getter_name: str, element_name: str) -> dict[str, Any] | None:
-    rows = entity_rows(gmp, getter_name, element_name)
-    return rows[0] if rows else None
-
-
 def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> str:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     path = artifact_dir / name
@@ -260,8 +241,8 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
 
 
 def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path) -> dict[str, Any]:
-    targets = entity_rows(gmp, "get_targets", "target")
-    hosts = entity_rows(gmp, "get_hosts", "host")
+    targets = native_named_rows(repo_root, "targets")
+    hosts = native_named_rows(repo_root, "hosts")
     target = targets[0] if targets else None
     host = hosts[0] if hosts else None
     org = organization_scope(repo_root)

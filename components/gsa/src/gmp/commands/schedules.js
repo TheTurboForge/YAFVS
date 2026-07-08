@@ -15,6 +15,7 @@ import {
 } from 'gmp/commands/native';
 import Response from 'gmp/http/response';
 import logger from 'gmp/log';
+import {filterString} from 'gmp/models/filter/utils';
 import Schedule from 'gmp/models/schedule';
 import {
   cloneNativeSchedule,
@@ -45,6 +46,9 @@ const shouldExportAllByFilter = filter => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
   return Number.isFinite(rows) && rows < 0;
 };
+
+const nativeScheduleDetailSupportsFilter = filter =>
+  filter === undefined || filterString(filter) === 'tasks=1';
 
 export class ScheduleCommand extends EntityCommand {
   constructor(http) {
@@ -91,7 +95,7 @@ export class ScheduleCommand extends EntityCommand {
   }
 
   async get({id}, {filter, ...options} = {}) {
-    if (filter === undefined && canUseNativeApi(this.http)) {
+    if (canUseNativeApi(this.http) && nativeScheduleDetailSupportsFilter(filter)) {
       return new Response(await fetchNativeSchedule(this.http, id));
     }
     return super.get({id}, {filter, ...options});

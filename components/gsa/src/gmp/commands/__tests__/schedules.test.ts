@@ -76,7 +76,36 @@ describe('ScheduleCommand tests', () => {
     expect(result.data.name).toEqual('Daily schedule');
   });
 
-  test('should keep filtered schedule detail on GMP until native parity is characterized', async () => {
+  test('should fetch schedule task detail filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'schedule-id',
+        name: 'Daily schedule',
+        comment: 'Native metadata',
+        timezone: 'UTC',
+        icalendar: TEST_ICALENDAR,
+        tasks: [{id: 'task-id', name: 'Daily task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    const result = await cmd.get({id: 'schedule-id'}, {filter: 'tasks=1'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/schedules/schedule-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.data.id).toEqual('schedule-id');
+    expect(result.data.tasks[0]?.id).toEqual('task-id');
+  });
+
+  test('should keep unsupported filtered schedule detail on GMP', async () => {
     const response = createResponse({
       get_schedule: {
         get_schedules_response: {
@@ -94,14 +123,14 @@ describe('ScheduleCommand tests', () => {
     const fakeHttp = createNativeHttp(response);
 
     const cmd = new ScheduleCommand(fakeHttp);
-    const result = await cmd.get({id: 'schedule-id'}, {filter: 'tasks=1'});
+    const result = await cmd.get({id: 'schedule-id'}, {filter: 'alerts=1'});
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
       args: {
         cmd: 'get_schedule',
         schedule_id: 'schedule-id',
-        filter: 'tasks=1',
+        filter: 'alerts=1',
       },
     });
     expect(result.data.id).toEqual('schedule-id');

@@ -61,6 +61,8 @@ interface NativeNvtPayload {
   affected?: string;
   impact?: string;
   detection?: string;
+  default_timeout?: string;
+  preferences?: NativeNvtPreferencePayload[];
   tags?: string;
   cve_refs?: number;
   cves?: string[];
@@ -72,6 +74,15 @@ interface NativeNvtPayload {
   created_at?: string;
   modified_at?: string;
   updated_at?: string;
+}
+
+interface NativeNvtPreferencePayload {
+  id?: number;
+  name?: string;
+  hr_name?: string;
+  type?: string;
+  value?: string;
+  default?: string;
 }
 
 interface NativeNvtsPayload {
@@ -110,6 +121,30 @@ const NVT_SORT_FIELDS: Record<string, string> = {
   solution_type: 'solution_type',
   epss_score: 'epss_score',
   epss_percentile: 'epss_percentile',
+};
+
+const nativePreferenceToElement = (preference: NativeNvtPreferencePayload) => {
+  const type = stringValue(preference.type);
+  let value = stringValue(preference.value);
+  let defaultValue = stringValue(preference.default);
+  let alt: string[] | undefined;
+
+  if (type === 'radio') {
+    const values = defaultValue.split(';').filter(part => part !== '');
+    value = values[0] ?? value;
+    defaultValue = values[0] ?? defaultValue;
+    alt = values.filter(part => part !== value);
+  }
+
+  return {
+    id: integerValue(preference.id),
+    name: stringValue(preference.name),
+    hr_name: stringValue(preference.hr_name),
+    type,
+    value,
+    default: defaultValue,
+    alt,
+  };
 };
 
 const NVT_FILTER_FIELDS = [
@@ -269,12 +304,14 @@ const nativeNvtToModel = (
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
     update_time: stringValue(item.updated_at || item.modified_at),
+    writable: detail ? 1 : undefined,
     nvt: {
       _oid: oid,
       name: stringValue(item.name || oid),
       family: stringValue(item.family),
       category: stringValue(item.category),
       discovery: integerValue(item.discovery),
+      default_timeout: item.default_timeout,
       cvss_base: numberValue(item.severity),
       tags: detailTagsFromNative(item),
       qod: {
@@ -293,6 +330,11 @@ const nativeNvtToModel = (
         ? {
             max_severity: maxSeverity,
             max_epss: maxEpss,
+          }
+        : undefined,
+      preferences: detail
+        ? {
+            preference: (item.preferences ?? []).map(nativePreferenceToElement),
           }
         : undefined,
     },

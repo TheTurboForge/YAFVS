@@ -672,7 +672,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "credential-secrets-writes-and-deletes",
         "feed-sync-import-control",
         "host-target-creation-tags-writes-and-rich-history",
-        "nvt-rich-detail",
         "operating-system-writes-deletes-and-rich-history",
         "override-writes-exports-trash-and-result-expansion",
         "raw-report-generation-xml-export-retention-and-mutations",
@@ -983,17 +982,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "dfn-cert-advisory-metadata-export-read",
     },
     ("get", "/nvts"): {
-        "x-turbovas-inherited-still-owns": "nvt-rich-detail",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "nvt-catalog-list-read",
     },
     ("get", "/nvts/{nvt_id}"): {
-        "x-turbovas-inherited-still-owns": "nvt-rich-detail",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "nvt-catalog-detail-read",
     },
     ("get", "/nvts/{nvt_id}/export"): {
-        "x-turbovas-inherited-still-owns": "nvt-rich-detail",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "nvt-catalog-metadata-export-read",
     },

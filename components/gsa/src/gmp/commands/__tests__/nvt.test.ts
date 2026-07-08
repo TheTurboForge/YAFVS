@@ -65,33 +65,50 @@ describe('NvtCommand tests', () => {
     });
   });
 
-  test('should request single nvt', async () => {
-    const response = createResponse({
-      get_info: {
-        get_info_response: {
-          info: [
-            {
-              nvt: {
-                _oid: '1.2.3',
-              },
-            },
-          ],
-        },
-      },
+  test('should request single NVT through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '1.2.3',
+        oid: '1.2.3',
+        name: 'Native NVT',
+        default_timeout: '180',
+        preferences: [{id: 1, name: 'entry-pref', type: 'entry', value: 'x'}],
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new NvtCommand(fakeHttp);
     const resp = await cmd.get({id: '1.2.3'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_info',
-        info_id: '1.2.3',
-        details: '1',
-        info_type: 'nvt',
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/nvts/1.2.3', {
+      token: 'test-token',
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/nvts/1.2.3',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
     const {data: nvt} = resp;
     expect(nvt.id).toEqual('1.2.3');
+    expect(nvt.name).toEqual('Native NVT');
+    expect(nvt.defaultTimeout).toEqual(180);
+    expect(nvt.preferences[0].name).toEqual('entry-pref');
   });
 
   test('should return config nvt', async () => {

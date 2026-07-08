@@ -273,6 +273,28 @@ fn catalog_detail_user_tags_are_detail_only_active_info_tags() {
 }
 
 #[test]
+fn nvt_detail_base_preferences_are_read_only_and_not_config_context() {
+    let source = include_str!("nvt_catalog.rs");
+    let detail_source = source
+        .split_once("async fn nvt_catalog_default_timeout")
+        .expect("NVT default timeout helper must exist")
+        .1
+        .split_once("pub(crate) async fn nvt_catalog_export")
+        .expect("NVT preference helpers must precede export handler")
+        .0;
+
+    assert!(detail_source.contains("FROM nvt_preferences"));
+    assert!(detail_source.contains("pref_nvt = $1"));
+    assert!(detail_source.contains("pref_type = 'entry'"));
+    assert!(detail_source.contains("pref_name = 'timeout'"));
+    assert!(detail_source.contains("WHEN pref_type = 'password' THEN ''"));
+    assert!(detail_source.contains("NOT (pref_type = 'entry' AND pref_name = 'timeout')"));
+    assert!(detail_source.contains("name NOT ILIKE 'server_info_%'"));
+    assert!(!detail_source.contains("config_preferences"));
+    assert!(!detail_source.contains("config ="));
+}
+
+#[test]
 fn cpe_catalog_detail_resolves_deprecated_by_by_cpe_name() {
     let source = include_str!("cpe_catalog.rs");
     let cpe_detail_source = source

@@ -3334,7 +3334,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
          'host-target-creation-tags-writes-and-rich-history',
-         'nvt-rich-detail',
          'operating-system-writes-deletes-and-rich-history',
          'override-writes-exports-trash-and-result-expansion',
          'raw-report-generation-xml-export-retention-and-mutations',
@@ -3876,9 +3875,9 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}": ("getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", None),
             "/api/v1/dfn-cert-advisories": ("getDfnCertAdvisories", "dfn-cert-advisory-list-read", None),
             "/api/v1/dfn-cert-advisories/{dfn_cert_advisory_id}": ("getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", None),
-            "/api/v1/nvts": ("getNvts", "nvt-catalog-list-read", "nvt-rich-detail"),
-            "/api/v1/nvts/{nvt_id}": ("getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
-            "/api/v1/nvts/{nvt_id}/export": ("getNvtsByNvtIdExport", "nvt-catalog-metadata-export-read", "nvt-rich-detail"),
+            "/api/v1/nvts": ("getNvts", "nvt-catalog-list-read", None),
+            "/api/v1/nvts/{nvt_id}": ("getNvtsByNvtId", "nvt-catalog-detail-read", None),
+            "/api/v1/nvts/{nvt_id}/export": ("getNvtsByNvtIdExport", "nvt-catalog-metadata-export-read", None),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_catalog_metadata.items():
             row = rows[("get", endpoint)]
@@ -4261,18 +4260,18 @@ class TurboVASCtlTests(unittest.TestCase):
                 "replacement_candidates": ["override list automation"],
             },
             {
-                "endpoint": "/api/v1/nvts",
+                "endpoint": "/api/v1/tls-certificates",
                 "method": "get",
-                "inventory_endpoint": "/api/v1/nvts",
-                "openapi_path": "/nvts",
+                "inventory_endpoint": "/api/v1/tls-certificates",
+                "openapi_path": "/tls-certificates",
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "nvt-catalog-list-read",
-                "x_turbovas_inherited_still_owns": "nvt-rich-detail",
-                "replacement_candidates": ["NVT list automation"],
+                "x_turbovas_replaces": "tls-certificate-asset-list-read",
+                "x_turbovas_inherited_still_owns": "tls-certificate-rich-history",
+                "replacement_candidates": ["TLS certificate list automation"],
             },
         ]
 
@@ -4286,7 +4285,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["items"][0]["endpoint"], "/api/v1/overrides")
         self.assertEqual(compact["details"]["focus_terms"], ["rich_context_or_history"])
         self.assertEqual(compact["details"]["focus_match_count"], 1)
-        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/nvts")
+        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/tls-certificates")
 
     def test_native_api_migration_matrix_focus_warns_on_zero_matches(self):
         root = Path(__file__).resolve().parents[2]
@@ -4366,7 +4365,7 @@ class TurboVASCtlTests(unittest.TestCase):
         rows = [
             {"endpoint": "/api/v1/tasks", "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes"},
             {"endpoint": "/api/v1/targets", "x_turbovas_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
-            {"endpoint": "/api/v1/nvts", "x_turbovas_inherited_still_owns": "nvt-rich-detail"},
+            {"endpoint": "/api/v1/tls-certificates", "x_turbovas_inherited_still_owns": "tls-certificate-rich-history"},
         ]
 
         remaining = turbovasctl.native_api_migration_matrix_remaining_surface(rows)
@@ -5907,9 +5906,9 @@ class TurboVASCtlTests(unittest.TestCase):
             (cert_bund_detail, "getCertBundAdvisoriesByCertBundAdvisoryId", "cert-bund-advisory-catalog-detail-read", None),
             (dfn_cert_advisories, "getDfnCertAdvisories", "dfn-cert-advisory-list-read", None),
             (dfn_cert_detail, "getDfnCertAdvisoriesByDfnCertAdvisoryId", "dfn-cert-advisory-catalog-detail-read", None),
-            (nvts, "getNvts", "nvt-catalog-list-read", "nvt-rich-detail"),
-            (nvt_detail, "getNvtsByNvtId", "nvt-catalog-detail-read", "nvt-rich-detail"),
-            (nvt_export, "getNvtsByNvtIdExport", "nvt-catalog-metadata-export-read", "nvt-rich-detail"),
+            (nvts, "getNvts", "nvt-catalog-list-read", None),
+            (nvt_detail, "getNvtsByNvtId", "nvt-catalog-detail-read", None),
+            (nvt_export, "getNvtsByNvtIdExport", "nvt-catalog-metadata-export-read", None),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_catalog_metadata:
             self.assertEqual(operation["operation_id"], operation_id)

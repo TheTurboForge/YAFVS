@@ -44,13 +44,28 @@ pub(crate) struct NvtCatalogDetail {
     #[serde(flatten)]
     catalog: NvtCatalogItem,
     comment: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    default_timeout: Option<String>,
     summary: String,
     insight: String,
     affected: String,
     impact: String,
     detection: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    preferences: Vec<NvtCatalogPreference>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     user_tags: Vec<ReportUserTag>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct NvtCatalogPreference {
+    id: i64,
+    name: String,
+    hr_name: String,
+    #[serde(rename = "type")]
+    preference_type: String,
+    value: String,
+    default: String,
 }
 
 pub(crate) fn nvt_catalog_from_row(row: &Row) -> NvtCatalogItem {
@@ -82,16 +97,31 @@ pub(crate) fn nvt_catalog_from_row(row: &Row) -> NvtCatalogItem {
 
 pub(crate) fn nvt_catalog_detail_from_row(
     row: &Row,
+    default_timeout: Option<String>,
+    preferences: Vec<NvtCatalogPreference>,
     user_tags: Vec<ReportUserTag>,
 ) -> NvtCatalogDetail {
     NvtCatalogDetail {
         catalog: nvt_catalog_from_row(row),
         comment: row.get("comment"),
+        default_timeout,
         summary: row.get("summary"),
         insight: row.get("insight"),
         affected: row.get("affected"),
         impact: row.get("impact"),
         detection: row.get("detection"),
+        preferences,
         user_tags,
+    }
+}
+
+pub(crate) fn nvt_catalog_preference_from_row(row: &Row) -> NvtCatalogPreference {
+    NvtCatalogPreference {
+        id: row.get("id"),
+        name: row.get("name"),
+        hr_name: row.get("hr_name"),
+        preference_type: row.get("type"),
+        value: row.get("value"),
+        default: row.get("default"),
     }
 }

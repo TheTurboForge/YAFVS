@@ -159,6 +159,17 @@ describe('native API NVT catalog', () => {
         affected: 'Native affected package',
         impact: 'Native impact',
         detection: 'Native detection method',
+        default_timeout: '300',
+        preferences: [
+          {
+            id: 1,
+            name: 'retained-pref',
+            hr_name: 'Retained preference',
+            type: 'entry',
+            value: 'retained',
+            default: 'retained-default',
+          },
+        ],
         tags: 'cvss_base_vector=AV:N/AC:L/Au:N/C:P/I:N/A:N',
         cves: ['CVE-2026-10001'],
         xrefs: ['url:https://example.test/advisory'],
@@ -189,6 +200,10 @@ describe('native API NVT catalog', () => {
     expect(nvt.solution?.description).toEqual(
       'Please install the updated package(s).',
     );
+    expect(nvt.defaultTimeout).toEqual(300);
+    expect(nvt.preferences[0].name).toEqual('retained-pref');
+    expect(nvt.preferences[0].hr_name).toEqual('Retained preference');
+    expect(nvt.preferences[0].default).toEqual('retained-default');
     expect(nvt.xrefs).toEqual([
       {ref: 'https://example.test/advisory', type: 'url'},
     ]);
@@ -197,39 +212,9 @@ describe('native API NVT catalog', () => {
     });
   });
 
-  test('loads inherited detail context before overlaying native Information fields', async () => {
+  test('loads NVT detail through native API without inherited get_info overlay', async () => {
     const id = '1.3.6.1.4.1.25623.1.1.9.2026.29807996710206';
-    const calls: string[] = [];
-    const inherited = Nvt.fromElement({
-      _id: id,
-      writable: 1,
-      nvt: {
-        _oid: id,
-        name: 'Inherited NVT',
-        family: 'Inherited family',
-        cvss_base: 1.0,
-        default_timeout: '300',
-        timeout: '600',
-        tags: 'summary=Inherited summary|vuldetect=Inherited detection',
-        preferences: {
-          preference: [
-            {
-              id: 1,
-              name: 'retained-pref',
-              hr_name: 'Retained preference',
-              type: 'entry',
-              value: 'retained',
-            },
-          ],
-        },
-      },
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Retained tag', value: 'true'}],
-      },
-    });
-    const fetchMock = testing.fn().mockImplementation(() => {
-      calls.push('native');
-      return Promise.resolve({
+    const fetchMock = testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
           id,
           oid: id,
@@ -248,6 +233,17 @@ describe('native API NVT catalog', () => {
           affected: 'Native affected package',
           impact: 'Native impact',
           detection: 'Native detection method',
+          default_timeout: '300',
+          preferences: [
+            {
+              id: 1,
+              name: 'retained-pref',
+              hr_name: 'Retained preference',
+              type: 'entry',
+              value: 'retained',
+              default: 'retained-default',
+            },
+          ],
           tags: 'cvss_base_vector=AV:N/AC:L/Au:N/C:P/I:N/A:N',
           cves: ['CVE-2026-10001'],
           xrefs: ['url:https://example.test/advisory'],
@@ -262,16 +258,12 @@ describe('native API NVT catalog', () => {
         }),
         ok: true,
         status: 200,
-      });
     });
     testing.stubGlobal('fetch', fetchMock);
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       nvt: {
-        get: testing.fn().mockImplementation(() => {
-          calls.push('gmp');
-          return Promise.resolve({data: inherited});
-        }),
+        get: testing.fn(),
       },
     };
     const actions: Array<{type: string; data?: Nvt}> = [];
@@ -295,8 +287,7 @@ describe('native API NVT catalog', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const nvt = success?.data;
-    expect(calls).toEqual(['gmp', 'native']);
-    expect(gmp.nvt.get).toHaveBeenCalledWith({id});
+    expect(gmp.nvt.get).not.toHaveBeenCalled();
     expect(nvt).toBeInstanceOf(Nvt);
     expect(nvt?.name).toEqual('Native NVT');
     expect(nvt?.comment).toEqual('native comment');
@@ -310,7 +301,7 @@ describe('native API NVT catalog', () => {
     expect(nvt?.tags.cvss_base_vector).toEqual('AV:N/AC:L/Au:N/C:P/I:N/A:N');
     expect(nvt?.preferences[0].name).toEqual('retained-pref');
     expect(nvt?.defaultTimeout).toEqual(300);
-    expect(nvt?.timeout).toEqual(600);
+    expect(nvt?.timeout).toBeUndefined();
     expect(nvt?.userTags).toHaveLength(1);
     expect(nvt?.userTags?.[0].id).toEqual('4a281aca-c02b-4566-8247-6a16b144ecdf');
     expect(nvt?.userTags?.[0].name).toEqual('Native tag');

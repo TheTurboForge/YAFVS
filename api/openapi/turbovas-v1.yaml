@@ -586,9 +586,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: nvt-catalog-list-read
-      x-turbovas-inherited-still-owns: nvt-rich-detail
       summary: List Security Information NVTs
-      description: Searchable NVT catalog backed by gvmd/PostgreSQL feed metadata. This list contract is intentionally separate from rich NVT detail, preferences, and export behavior, which remain inherited until a separate typed contract is designed.
+      description: Searchable NVT catalog backed by gvmd/PostgreSQL feed metadata. Config-specific NVT preference expansion, selector/config mutation, file export, scanner/feed control, and write semantics remain inherited until separate typed contracts are designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -620,9 +619,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: nvt-catalog-detail-read
-      x-turbovas-inherited-still-owns: nvt-rich-detail
       summary: Read one Security Information NVT catalog entry
-      description: Catalog-detail metadata backed by NVT feed metadata already imported into gvmd/PostgreSQL. This endpoint uses NVT numeric dotted OIDs and intentionally excludes preferences, selector/config expansion, export, feed-control, scanner-control, and write semantics.
+      description: Catalog-detail metadata backed by NVT feed metadata already imported into gvmd/PostgreSQL. This endpoint uses NVT numeric dotted OIDs and includes base NVT preferences/default timeout for ordinary detail-page reads. Config-specific NVT timeout/preference expansion, selector/config mutation, file export, feed-control, scanner-control, and write semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/NvtId'
       responses:
@@ -653,9 +651,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: nvt-catalog-metadata-export-read
-      x-turbovas-inherited-still-owns: nvt-rich-detail
       summary: Export one Security Information NVT as native JSON metadata
-      description: Direct scriptable NVT catalog metadata export backed by gvmd/PostgreSQL. This returns the same read-only native detail JSON as the NVT detail endpoint. Rich NVT detail, preference/config expansion, file export, scanner/feed control, and write semantics remain inherited.
+      description: Direct scriptable NVT catalog metadata export backed by gvmd/PostgreSQL. This returns the same read-only native detail JSON as the NVT detail endpoint. Config-specific NVT preference expansion, file export, scanner/feed control, selector/config mutation, and write semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/NvtId'
       responses:
@@ -9191,6 +9188,8 @@ components:
           properties:
             comment:
               type: string
+            default_timeout:
+              type: string
             summary:
               type: string
             insight:
@@ -9201,10 +9200,30 @@ components:
               type: string
             detection:
               type: string
+            preferences:
+              type: array
+              items:
+                $ref: '#/components/schemas/NvtCatalogPreference'
             user_tags:
               type: array
               items:
                 $ref: '#/components/schemas/UserTag'
+    NvtCatalogPreference:
+      type: object
+      required: [id, name, hr_name, type, value, default]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        hr_name:
+          type: string
+        type:
+          type: string
+        value:
+          type: string
+        default:
+          type: string
     NvtEpss:
       type: object
       required: [score, percentile, cve, severity]

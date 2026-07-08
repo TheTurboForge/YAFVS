@@ -7,12 +7,18 @@
 import InfoEntityCommand from 'gmp/commands/info-entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import Nvt from 'gmp/models/nvt';
-import {exportNativeNvtMetadata} from 'gmp/native-api/nvts';
+import {exportNativeNvtMetadata, fetchNativeNvt} from 'gmp/native-api/nvts';
 
 class NvtCommand extends InfoEntityCommand<Nvt> {
   constructor(http: Http) {
     super(http, 'nvt', Nvt);
+  }
+
+  async get({id}: EntityCommandParams) {
+    const {nvt} = await fetchNativeNvt(this.http, id);
+    return new Response(nvt);
   }
 
   async export({id}: EntityCommandParams) {

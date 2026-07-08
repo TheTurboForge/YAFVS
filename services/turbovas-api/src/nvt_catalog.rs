@@ -13,6 +13,7 @@ use crate::{
     errors::ApiError,
     nvt_catalog_payloads::{
         NvtCatalogDetail, NvtCatalogItem, nvt_catalog_detail_from_row, nvt_catalog_from_row,
+        nvt_catalog_preference_from_row,
     },
     path_ids::validate_nvt_oid,
     query::{
@@ -238,8 +239,81 @@ pub(crate) async fn nvt_catalog_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
+    let default_timeout = nvt_catalog_default_timeout(&client, &nvt_id).await?;
+    let preferences = nvt_catalog_preferences(&client, &nvt_id).await?;
     let user_tags = catalog_user_tags(&client, "nvt", &nvt_id).await?;
-    Ok(Json(nvt_catalog_detail_from_row(&row, user_tags)))
+    Ok(Json(nvt_catalog_detail_from_row(
+        &row,
+        default_timeout,
+        preferences,
+        user_tags,
+    )))
+}
+
+async fn nvt_catalog_default_timeout(
+    client: &tokio_postgres::Client,
+    nvt_id: &str,
+) -> Result<Option<String>, ApiError> {
+    let row = client
+        .query_opt(
+            r#"SELECT value
+                 FROM nvt_preferences
+                WHERE pref_nvt = $1
+                  AND pref_type = 'entry'
+                  AND pref_name = 'timeout'
+                ORDER BY pref_id ASC
+                LIMIT 1;"#,
+            &[&nvt_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "NVT default timeout query failed");
+            ApiError::Database
+        })?;
+    Ok(row.and_then(|row| row.get::<_, Option<String>>("value")))
+}
+
+async fn nvt_catalog_preferences(
+    client: &tokio_postgres::Client,
+    nvt_id: &str,
+) -> Result<Vec<crate::nvt_catalog_payloads::NvtCatalogPreference>, ApiError> {
+    let rows = client
+        .query(
+            r#"SELECT coalesce(pref_id, 0)::bigint AS id,
+                      coalesce(pref_name, '') AS name,
+                      CASE
+                        WHEN coalesce(pref_name, '') = 'timeout' THEN 'Timeout'
+                        ELSE coalesce(pref_name, '')
+                      END AS hr_name,
+                      coalesce(pref_type, '') AS type,
+                      CASE
+                        WHEN pref_type = 'password' THEN ''
+                        ELSE coalesce(value, '')
+                      END AS value,
+                      CASE
+                        WHEN pref_type = 'password' THEN ''
+                        ELSE coalesce(value, '')
+                      END AS default
+                 FROM nvt_preferences
+                WHERE pref_nvt = $1
+                  AND name != 'cache_folder'
+                  AND name != 'include_folders'
+                  AND name != 'nasl_no_signature_check'
+                  AND name != 'network_targets'
+                  AND name != 'ntp_save_sessions'
+                  AND name NOT ILIKE 'server_info_%'
+                  AND name != 'max_checks'
+                  AND name != 'max_hosts'
+                  AND NOT (pref_type = 'entry' AND pref_name = 'timeout')
+                ORDER BY name ASC;"#,
+            &[&nvt_id],
+        )
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "NVT preferences query failed");
+            ApiError::Database
+        })?;
+    Ok(rows.iter().map(nvt_catalog_preference_from_row).collect())
 }
 
 pub(crate) async fn nvt_catalog_export(

@@ -24,28 +24,6 @@ const {
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
 
-const mergeNativeInformation = (inherited, native) =>
-  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
-    name: native.name,
-    comment: native.comment,
-    creationTime: native.creationTime,
-    modificationTime: native.modificationTime,
-    category: native.category,
-    discovery: native.discovery,
-    family: native.family,
-    qod: native.qod,
-    severity: native.severity,
-    severityDate: native.severityDate,
-    severityOrigin: native.severityOrigin,
-    solution: native.solution,
-    tags: Object.assign({}, inherited.tags, native.tags),
-    certs: native.certs,
-    cves: native.cves,
-    epss: native.epss,
-    userTags: native.userTags,
-    xrefs: native.xrefs,
-  });
-
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   if (!canUseNativeApi(gmp)) {
     return loadEntities(gmp)(filter)(dispatch, getState);
@@ -88,19 +66,10 @@ const nativeLoadEntity = gmp => id => (dispatch, getState) => {
 
   dispatch(entityLoadingActions.request(id));
 
-  return gmp.nvt
-    .get({id})
-    .then(inheritedResponse =>
-      fetchNativeNvt(gmp, id).then(nativeResponse =>
-        dispatch(
-          entityLoadingActions.success(
-            id,
-            mergeNativeInformation(inheritedResponse.data, nativeResponse.nvt),
-          ),
-        ),
-      ),
-    )
-    .catch(error => dispatch(entityLoadingActions.error(id, error)));
+  return fetchNativeNvt(gmp, id).then(
+    response => dispatch(entityLoadingActions.success(id, response.nvt)),
+    error => dispatch(entityLoadingActions.error(id, error)),
+  );
 };
 
 export {

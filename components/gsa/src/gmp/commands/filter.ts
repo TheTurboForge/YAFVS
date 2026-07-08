@@ -6,8 +6,10 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
+import type {HttpCommandOptions} from 'gmp/commands/http';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
@@ -16,6 +18,7 @@ import {
   createNativeFilter,
   deleteNativeFilter,
   exportNativeFilterMetadata,
+  fetchNativeFilter,
   patchNativeFilter,
 } from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
@@ -37,6 +40,16 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
 
   async export({id}: EntityCommandParams) {
     return await exportNativeFilterMetadata(this.http, id);
+  }
+
+  async get(
+    {id}: EntityCommandParams,
+    {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
+  ) {
+    if (filter === undefined && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeFilter(this.http, id));
+    }
+    return super.get({id}, {filter, ...options});
   }
 
   async create(args: {

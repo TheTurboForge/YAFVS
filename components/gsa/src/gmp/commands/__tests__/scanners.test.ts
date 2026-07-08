@@ -6,12 +6,9 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ScannersCommand from 'gmp/commands/scanners';
-import {createEntitiesResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
-import Scanner, {
-  OPENVAS_SCANNER_TYPE,
-  OPENVASD_SCANNER_TYPE,
-} from 'gmp/models/scanner';
+import Scanner from 'gmp/models/scanner';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -33,78 +30,6 @@ const createNativeHttp = () => {
 };
 
 describe('ScannersCommand tests', () => {
-  test('should fetch with default params', async () => {
-    const response = createEntitiesResponse('scanner', [
-      {_id: '1', name: 'Scanner 1', type: OPENVASD_SCANNER_TYPE},
-      {_id: '2', name: 'Scanner 2', type: OPENVAS_SCANNER_TYPE},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ScannersCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_scanners'},
-    });
-    expect(result.data).toEqual([
-      new Scanner({
-        id: '1',
-        name: 'Scanner 1',
-        scannerType: OPENVASD_SCANNER_TYPE,
-      }),
-      new Scanner({
-        id: '2',
-        name: 'Scanner 2',
-        scannerType: OPENVAS_SCANNER_TYPE,
-      }),
-    ]);
-  });
-
-  test('should fetch with custom params', async () => {
-    const response = createEntitiesResponse('scanner', [
-      {_id: '3', name: 'Scanner 1', type: OPENVASD_SCANNER_TYPE},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ScannersCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Scanner 1'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_scanners', filter: "name='Scanner 1'"},
-    });
-    expect(result.data).toEqual([
-      new Scanner({
-        id: '3',
-        name: 'Scanner 1',
-        scannerType: OPENVASD_SCANNER_TYPE,
-      }),
-    ]);
-  });
-
-  test('should all roles', async () => {
-    const response = createEntitiesResponse('scanner', [
-      {_id: '4', name: 'Scanner 1', type: OPENVASD_SCANNER_TYPE},
-      {_id: '5', name: 'Scanner 2', type: OPENVAS_SCANNER_TYPE},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ScannersCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_scanners', filter: 'first=1 rows=-1'},
-    });
-    expect(result.data).toEqual([
-      new Scanner({
-        id: '4',
-        name: 'Scanner 1',
-        scannerType: OPENVASD_SCANNER_TYPE,
-      }),
-      new Scanner({
-        id: '5',
-        name: 'Scanner 2',
-        scannerType: OPENVAS_SCANNER_TYPE,
-      }),
-    ]);
-  });
-
   test('should fetch scanners through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -163,6 +88,51 @@ describe('ScannersCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: ''},
+        items: [{id: 'scanner-1', name: 'One', scanner_type: 2}],
+      },
+      {
+        page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: ''},
+        items: [{id: 'scanner-2', name: 'Two', scanner_type: 2}],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannersCommand(fakeHttp);
+
+    const result = await cmd.getAll();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data.map(scanner => scanner.id)).toEqual([
+      'scanner-1',
+      'scanner-2',
+    ]);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/scanners', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/scanners', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+    });
   });
 
   test('should bulk export selected scanners through native API', async () => {

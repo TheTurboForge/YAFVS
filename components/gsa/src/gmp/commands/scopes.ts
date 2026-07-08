@@ -11,11 +11,14 @@ import {canUseNativeApi} from 'gmp/commands/native';
 import {getMetricsNode, parseReportMetrics} from 'gmp/commands/report-metrics';
 import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import type {XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Filter from 'gmp/models/filter';
 import {
   createNativeScope,
   deleteNativeScope,
+  fetchNativeScope,
+  fetchNativeScopes,
   patchNativeScope,
 } from 'gmp/native-api/scopes';
 import {isDefined} from 'gmp/utils/identity';
@@ -267,14 +270,6 @@ const countValue = (
   flat: string,
 ) => integer(counts[nested] ?? data[flat]);
 
-const parseEntityRef = (node: unknown): ScopeTarget | ScopeHost => {
-  const data = getNode(node);
-  return {
-    id: idOf(data),
-    name: text(data.name),
-  };
-};
-
 const parseScopeReportSummary = (node: unknown): ScopeReportSummary => {
   const data = getNode(node);
   const counts = getNode(data.counts);
@@ -321,61 +316,6 @@ const parseScopeReportSummary = (node: unknown): ScopeReportSummary => {
       data,
       'excluded_candidate_hosts',
       'excluded_candidate_host_count',
-    ),
-  };
-};
-
-const parseCandidateHost = (node: unknown): ScopeCandidateHost => {
-  if (typeof node === 'string' || typeof node === 'number') {
-    const value = String(node);
-    return {id: value, name: value};
-  }
-  const candidate = getNode(node);
-  const target = getNode(candidate.target);
-  const report = getNode(candidate.source_report);
-  const value = text(candidate.name, text(candidate.__text, idOf(candidate)));
-  return {
-    id: idOf(candidate) || value,
-    name: value,
-    targetId: idOf(target) || undefined,
-    targetName: optionalText(target.name),
-    sourceReportId: idOf(report) || undefined,
-  };
-};
-
-const parseScope = (node: unknown): Scope => {
-  const data = getNode(node);
-  const counts = getNode(data.counts);
-  const targets = getNode(data.targets);
-  const hosts = getNode(data.hosts);
-  const candidateHosts = getNode(data.candidate_hosts);
-  const scopeReports = getNode(data.scope_reports);
-  return {
-    id: idOf(data),
-    name: text(data.name),
-    comment: optionalText(data.comment),
-    protectionRequirement: protectionValue(data),
-    protectionRequirementLabel: protectionLabel(data),
-    predefined: bool(data.predefined),
-    global: bool(data.global),
-    creationTime: optionalText(data.creation_time),
-    modificationTime: optionalText(data.modification_time),
-    targetCount: countValue(counts, data, 'targets', 'target_count'),
-    hostCount: countValue(counts, data, 'hosts', 'host_count'),
-    scopeReportCount: countValue(
-      counts,
-      data,
-      'scope_reports',
-      'scope_report_count',
-    ),
-    targets: asArray(targets.target).map(parseEntityRef),
-    hosts: asArray(hosts.host).map(parseEntityRef),
-    candidateHosts: [
-      ...asArray(candidateHosts.host).map(parseCandidateHost),
-      ...asArray(candidateHosts.candidate_host).map(parseCandidateHost),
-    ],
-    scopeReports: asArray(scopeReports.scope_report).map(
-      parseScopeReportSummary,
     ),
   };
 };
@@ -466,17 +406,16 @@ export class ScopesCommand extends HttpCommand {
     super(http, {cmd: 'get_scopes'});
   }
 
-  async get({id, details = 1}: {id?: string; details?: number} = {}) {
-    const response = await this.httpGetWithTransform({scope_id: id, details});
-    const root = responseRoot(response.data, 'get_scopes');
-    const scopes = getNode(root.scopes);
-    const parsed = asArray(scopes.scope).map(parseScope);
-    return response.set<Scope[]>(parsed);
+  async get({id, details: _details}: {id?: string; details?: number} = {}) {
+    if (id !== undefined) {
+      const scope = await fetchNativeScope(this.http, id);
+      return new Response<Scope[]>(scope === undefined ? [] : [scope]);
+    }
+    return new Response<Scope[]>(await fetchNativeScopes(this.http));
   }
 
   async getOne(id: string) {
-    const response = await this.get({id, details: 1});
-    return response.set<Scope | undefined>(response.data[0]);
+    return new Response<Scope | undefined>(await fetchNativeScope(this.http, id));
   }
 
   create(params: ScopeWriteParams) {

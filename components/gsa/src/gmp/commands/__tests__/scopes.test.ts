@@ -13,7 +13,84 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
+const createNativeHttp = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  fakeHttp.session.jwt = 'jwt-token';
+  return fakeHttp;
+};
+
 describe('ScopesCommand tests', () => {
+  test('should fetch scopes through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        items: [
+          {
+            id: 'scope-1',
+            name: 'Production',
+            comment: 'native scope',
+            protection_requirement: 'high',
+            protection_requirement_label: 'High',
+            target_count: 2,
+            host_count: 5,
+            scope_report_count: 1,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ScopesCommand(fakeHttp);
+    const result = await cmd.get();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scopes', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+    });
+    expect(result.data[0].id).toEqual('scope-1');
+    expect(result.data[0].name).toEqual('Production');
+    expect(result.data[0].protectionRequirement).toEqual('high');
+  });
+
+  test('should fetch one scope through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'scope-1',
+        name: 'Production',
+        protection_requirement: 'normal',
+        protection_requirement_label: 'Normal',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ScopesCommand(fakeHttp);
+    const result = await cmd.getOne('scope-1');
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scopes/scope-1', {
+      token: 'test-token',
+    });
+    expect(result.data?.id).toEqual('scope-1');
+    expect(result.data?.name).toEqual('Production');
+  });
+
   test('should create scope through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'scope-id'}),

@@ -10,6 +10,7 @@ import {
   createActionResultResponse,
   createHttp,
   createPlainResponse,
+  createResponse,
 } from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
@@ -18,8 +19,8 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
-const createNativeHttp = () => {
-  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
+  const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
@@ -36,6 +37,76 @@ const TEST_ICALENDAR =
   'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20210104T115400Z\nDURATION:PT0S\nUID:test-schedule\nDTSTAMP:20210111T134141Z\nEND:VEVENT\nEND:VCALENDAR';
 
 describe('ScheduleCommand tests', () => {
+  test('should fetch schedule detail through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'schedule-id',
+        name: 'Daily schedule',
+        comment: 'Native metadata',
+        timezone: 'UTC',
+        icalendar: TEST_ICALENDAR,
+        tasks: [{id: 'task-id', name: 'Daily task'}],
+        user_tags: [{id: 'tag-id', name: 'owner', value: 'ops'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    const result = await cmd.get({id: 'schedule-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/schedules/schedule-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/schedules/schedule-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('schedule-id');
+    expect(result.data.name).toEqual('Daily schedule');
+  });
+
+  test('should keep filtered schedule detail on GMP until native parity is characterized', async () => {
+    const response = createResponse({
+      get_schedule: {
+        get_schedules_response: {
+          schedule: {
+            _id: 'schedule-id',
+            name: 'Daily schedule',
+            timezone: 'UTC',
+            icalendar: TEST_ICALENDAR,
+          },
+        },
+      },
+    });
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp(response);
+
+    const cmd = new ScheduleCommand(fakeHttp);
+    const result = await cmd.get({id: 'schedule-id'}, {filter: 'tasks=1'});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_schedule',
+        schedule_id: 'schedule-id',
+        filter: 'tasks=1',
+      },
+    });
+    expect(result.data.id).toEqual('schedule-id');
+  });
+
   test('should keep schedule create on inherited GMP when native API is available', async () => {
     const response = createActionResultResponse({id: 'created-schedule-id'});
     const fetchMock = testing.fn();

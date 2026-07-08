@@ -13,6 +13,7 @@ import {
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
 } from 'gmp/commands/native';
+import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import Schedule from 'gmp/models/schedule';
 import {
@@ -20,6 +21,7 @@ import {
   deleteNativeSchedule,
   exportNativeScheduleMetadata,
   exportNativeSchedulesMetadata,
+  fetchNativeSchedule,
   fetchNativeSchedules,
   nativeSchedulesQueryFromFilter,
   patchNativeSchedule,
@@ -86,6 +88,13 @@ export class ScheduleCommand extends EntityCommand {
 
   getElementFromRoot(root) {
     return root.get_schedule.get_schedules_response.schedule;
+  }
+
+  async get({id}, {filter, ...options} = {}) {
+    if (filter === undefined && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeSchedule(this.http, id));
+    }
+    return super.get({id}, {filter, ...options});
   }
 
   async export({id}) {

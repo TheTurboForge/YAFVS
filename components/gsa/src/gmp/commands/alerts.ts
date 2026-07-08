@@ -5,12 +5,8 @@
  */
 
 import EntitiesCommand from 'gmp/commands/entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -37,26 +33,14 @@ class AlertsCommand extends EntitiesCommand<Alert> {
   }
 
   export(entities: Alert[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
-
     return this.exportByIds(entities.map(entity => entity.id as string));
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
-
     return exportNativeAlertsMetadata(this.http, ids);
   }
 
   async exportByFilter(filter: Filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const alerts: Alert[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;
@@ -91,11 +75,7 @@ class AlertsCommand extends EntitiesCommand<Alert> {
     return root.get_alerts.get_alerts_response;
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeAlerts(
       this.http,
@@ -107,14 +87,7 @@ class AlertsCommand extends EntitiesCommand<Alert> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const alerts: Alert[] = [];
     let total = Number.POSITIVE_INFINITY;

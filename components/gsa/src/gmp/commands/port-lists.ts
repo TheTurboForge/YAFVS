@@ -142,6 +142,11 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
   async create(args: PortListCommandCreateParams) {
     const {name, comment = '', fromFile, portRange, file} = args;
     if (canUseNativeApi(this.http)) {
+      if (fromFile === FROM_FILE && file !== undefined) {
+        return await importNativePortList(this.http, {
+          xml_file: await file.text(),
+        });
+      }
       const nativeRequest = nativePortListCreateRequestFromCommand(args);
       if (nativeRequest !== undefined) {
         return await createNativePortList(this.http, nativeRequest);

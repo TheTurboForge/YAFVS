@@ -10,6 +10,7 @@ import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
+import {filterString} from 'gmp/models/filter/utils';
 import type {Element} from 'gmp/models/model';
 import ReportFormat from 'gmp/models/report-format';
 import {
@@ -27,6 +28,9 @@ interface ReportFormatResponseData extends XmlResponseData {
 }
 
 const log = logger.getLogger('gmp.commands.reportformats');
+
+const nativeReportFormatDetailSupportsFilter = (filter?: string): boolean =>
+  filter === undefined || filterString(filter) === 'alerts=1';
 
 export class ReportFormatCommand extends EntityCommand<ReportFormat> {
   constructor(http: Http) {
@@ -50,7 +54,7 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
     {id}: {id: string},
     {filter, ...options}: {filter?: string} = {},
   ) {
-    if (filter === undefined && canUseNativeApi(this.http)) {
+    if (canUseNativeApi(this.http) && nativeReportFormatDetailSupportsFilter(filter)) {
       return new Response(await fetchNativeReportFormat(this.http, id));
     }
     return super.get({id}, {filter, ...options});

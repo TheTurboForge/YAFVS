@@ -75,7 +75,45 @@ describe('ReportFormatsCommand tests', () => {
     expect(result.data.params[0].name).toEqual('StringParam');
   });
 
-  test('should keep filtered report format detail on GMP until native parity is characterized', async () => {
+  test('should fetch report format alert detail through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'report-format-id',
+        name: 'XML',
+        alerts: [{id: 'alert-id', name: 'Notify SecOps'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    const result = await cmd.get(
+      {id: 'report-format-id'},
+      {filter: 'alerts=1'},
+    );
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-formats/report-format-id',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('report-format-id');
+    expect(result.data.alerts[0].id).toEqual('alert-id');
+  });
+
+  test('should keep unsupported filtered report format detail on GMP', async () => {
     const response = createResponse({
       get_report_format: {
         get_report_formats_response: {
@@ -93,7 +131,7 @@ describe('ReportFormatsCommand tests', () => {
     const cmd = new ReportFormatCommand(fakeHttp);
     const result = await cmd.get(
       {id: 'report-format-id'},
-      {filter: 'alerts=1'},
+      {filter: 'rows=1'},
     );
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -101,7 +139,7 @@ describe('ReportFormatsCommand tests', () => {
       args: {
         cmd: 'get_report_format',
         report_format_id: 'report-format-id',
-        filter: 'alerts=1',
+        filter: 'rows=1',
       },
     });
     expect(result.data.id).toEqual('report-format-id');

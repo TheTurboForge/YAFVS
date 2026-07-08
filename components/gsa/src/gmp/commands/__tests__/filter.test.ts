@@ -229,7 +229,7 @@ describe('FilterCommand tests', () => {
     expect(result.data.id).toEqual('native-clone-id');
   });
 
-  test('should fall back to GMP when native filter clone fails', async () => {
+  test('should not fall back to GMP when native filter clone fails', async () => {
     const response = createActionResultResponse({
       action: 'Clone Filter',
       id: '456',
@@ -252,17 +252,12 @@ describe('FilterCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new FilterCommand(fakeHttp);
-    const result = await cmd.clone({id: '123'});
 
+    await expect(cmd.clone({id: '123'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
     expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: '123',
-        resource_type: 'filter',
-      },
-    });
-    expect(result.data.id).toEqual('456');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete a filter through native API when available', async () => {

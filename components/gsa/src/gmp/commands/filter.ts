@@ -73,11 +73,7 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
 
   async clone({id}: EntityCommandParams) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativeFilter(this.http, id);
-      } catch (error) {
-        log.debug('Native filter clone failed, falling back to GMP', error);
-      }
+      return await cloneNativeFilter(this.http, id);
     }
     return super.clone({id});
   }

@@ -109,6 +109,11 @@ mod report_evidence_payloads;
 mod report_export_characterization_tests;
 mod report_format_payloads;
 mod report_format_query_sql;
+mod report_format_write_db;
+mod report_format_write_sql;
+mod report_format_write_transactions;
+mod report_format_write_validation;
+mod report_format_writes;
 mod report_formats;
 mod report_helpers;
 mod report_host_query_sql;
@@ -268,6 +273,8 @@ mod port_list_characterization_tests;
 mod report_config_characterization_tests;
 #[cfg(test)]
 mod report_format_characterization_tests;
+#[cfg(test)]
+mod report_format_writes_tests;
 #[cfg(test)]
 mod result_contract_tests;
 #[cfg(test)]

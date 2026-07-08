@@ -15,6 +15,7 @@ import ReportFormat from 'gmp/models/report-format';
 import {
   exportNativeReportFormatMetadata,
   fetchNativeReportFormat,
+  patchNativeReportFormat,
 } from 'gmp/native-api/report-formats';
 
 interface ReportFormatResponseData extends XmlResponseData {
@@ -55,8 +56,12 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
     return super.get({id}, {filter, ...options});
   }
 
-  save(args: {active: boolean; id: string; name: string; summary: string}) {
+  async save(args: {active: boolean; id: string; name: string; summary: string}) {
     const {active, id, name, summary} = args;
+
+    if (canUseNativeApi(this.http) && isReportFormatMetadataOnlySave(args)) {
+      return patchNativeReportFormat(this.http, id, {active, name, summary});
+    }
 
     const data = {
       cmd: 'save_report_format',
@@ -79,3 +84,8 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
 }
 
 export default ReportFormatCommand;
+
+const isReportFormatMetadataOnlySave = (args: object): boolean =>
+  Object.keys(args).every(key =>
+    ['active', 'id', 'name', 'summary'].includes(key),
+  );

@@ -71,6 +71,12 @@ interface NativeReportFormatsPayload {
   items?: NativeReportFormatPayload[];
 }
 
+export interface NativeReportFormatPatchRequest {
+  active?: boolean;
+  name?: string;
+  summary?: string;
+}
+
 export interface NativeReportFormatsQuery {
   page: number;
   pageSize: number;
@@ -156,6 +162,31 @@ const fetchNativeJson = async <T>(
       Accept: 'application/json',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -288,6 +319,20 @@ export const fetchNativeReportFormat = async (
     {token: gmp.session.token},
   );
   return nativeReportFormatToModel(payload);
+};
+
+export const patchNativeReportFormat = async (
+  gmp: NativeApiGmp,
+  id: string,
+  request: NativeReportFormatPatchRequest,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeReportFormatPayload>(
+    gmp,
+    `api/v1/report-formats/${encodeURIComponent(id)}`,
+    request,
+    'PATCH',
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const exportNativeReportFormatMetadata = async (

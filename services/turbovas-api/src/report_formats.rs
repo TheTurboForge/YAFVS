@@ -6,6 +6,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use deadpool_postgres::Client;
 
 use crate::{
     app_state::AppState,
@@ -64,8 +65,17 @@ pub(crate) async fn report_format_asset_detail(
     State(state): State<AppState>,
     Path(report_format_id): Path<String>,
 ) -> Result<Json<ReportFormatAssetItem>, ApiError> {
-    parse_uuid(&report_format_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(
+        load_report_format_asset_detail(&client, &report_format_id).await?,
+    ))
+}
+
+pub(crate) async fn load_report_format_asset_detail(
+    client: &Client,
+    report_format_id: &str,
+) -> Result<ReportFormatAssetItem, ApiError> {
+    parse_uuid(&report_format_id)?;
     let row = client
         .query_opt(report_format_asset_detail_sql(), &[&report_format_id])
         .await
@@ -118,12 +128,12 @@ pub(crate) async fn report_format_asset_detail(
         params.push(report_format_param_from_row(&param_row, options));
     }
 
-    Ok(Json(report_format_asset_from_row(
+    Ok(report_format_asset_from_row(
         &row,
         alerts,
         report_configs,
         params,
-    )))
+    ))
 }
 
 pub(crate) async fn export_report_format_metadata(

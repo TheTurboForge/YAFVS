@@ -126,6 +126,48 @@ describe('ReportFormatsCommand tests', () => {
     });
   });
 
+  test('should save report format metadata through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'report-format-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    const result = await cmd.save({
+      active: true,
+      id: 'report-format-id',
+      name: 'Custom XML',
+      summary: 'Custom report format',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-formats/report-format-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          active: true,
+          name: 'Custom XML',
+          summary: 'Custom report format',
+        }),
+      },
+    );
+    expect(result.data).toEqual({id: 'report-format-id'});
+  });
+
   test('should export report format metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

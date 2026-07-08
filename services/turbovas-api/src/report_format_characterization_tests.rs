@@ -205,7 +205,7 @@ fn inherited_report_format_import_mutates_db_files_signatures_and_events() {
 }
 
 #[test]
-fn native_report_format_import_is_not_directly_exposed_until_contract_exists() {
+fn native_report_format_file_and_param_paths_remain_inherited() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/report-formats",
@@ -215,6 +215,16 @@ fn native_report_format_import_is_not_directly_exposed_until_contract_exists() {
         &Method::GET,
         "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc/export",
         false,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc",
+        false,
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc",
+        true,
     ));
     for path in [
         "/api/v1/report-formats",
@@ -228,13 +238,31 @@ fn native_report_format_import_is_not_directly_exposed_until_contract_exists() {
 
     let list_block = openapi_path_block("/report-formats");
     let detail_block = openapi_path_block("/report-formats/{report_format_id}");
-    for block in [list_block, detail_block] {
-        for forbidden in ["\n    post:", "\n    patch:", "\n    delete:"] {
-            assert!(
-                !block.contains(forbidden),
-                "OpenAPI report-format block unexpectedly exposes write/import operation {forbidden}"
-            );
-        }
+    for forbidden in ["\n    post:", "\n    patch:", "\n    delete:"] {
+        assert!(
+            !list_block.contains(forbidden),
+            "OpenAPI report-format list block unexpectedly exposes operation {forbidden}"
+        );
+    }
+    for required in [
+        "patch:",
+        "operationId: patchReportFormatsByReportFormatId",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: report-format-metadata-modify",
+        "x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes",
+        "x-turbovas-safety-contract: write-control-v1",
+        "$ref: '#/components/schemas/ReportFormatPatchRequest'",
+    ] {
+        assert!(
+            detail_block.contains(required),
+            "OpenAPI report-format patch block missing {required}"
+        );
+    }
+    for forbidden in ["\n    post:", "\n    delete:"] {
+        assert!(
+            !detail_block.contains(forbidden),
+            "OpenAPI report-format detail block unexpectedly exposes operation {forbidden}"
+        );
     }
 
     let export_block = openapi_path_block("/report-formats/{report_format_id}/export");
@@ -245,7 +273,7 @@ fn native_report_format_import_is_not_directly_exposed_until_contract_exists() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: report-format-metadata-export-read",
-        "x-turbovas-inherited-still-owns: report-format-import-export-verify-writes-and-deletes",
+        "x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes",
         "$ref: '#/components/schemas/ReportFormatAsset'",
     ] {
         assert!(

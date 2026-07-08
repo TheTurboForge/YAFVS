@@ -6,7 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CredentialsCommand from 'gmp/commands/credentials';
-import {createHttp, createEntitiesResponse} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import Credential from 'gmp/models/credential';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
@@ -30,64 +30,6 @@ const createNativeHttp = () => {
 };
 
 describe('CredentialCommand tests', () => {
-  test('should fetch credentials', async () => {
-    const response = createEntitiesResponse('credential', [
-      {_id: '1', name: 'Credential 1'},
-      {_id: '2', name: 'Credential 2'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CredentialsCommand(fakeHttp);
-    const resp = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_credentials'},
-    });
-    expect(resp.data).toEqual([
-      expect.objectContaining({id: '1', name: 'Credential 1'}),
-      expect.objectContaining({id: '2', name: 'Credential 2'}),
-    ]);
-  });
-
-  test('should fetch credentials with custom filter', async () => {
-    const response = createEntitiesResponse('credential', [
-      {_id: '2', name: 'Credential 2'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CredentialsCommand(fakeHttp);
-    const resp = await cmd.get({filter: "name='Credential 2'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_credentials',
-        filter: "name='Credential 2'",
-      },
-    });
-    expect(resp.data).toEqual([
-      expect.objectContaining({id: '2', name: 'Credential 2'}),
-    ]);
-  });
-
-  test('should fetch all credentials', async () => {
-    const response = createEntitiesResponse('credential', [
-      {_id: '3', name: 'Credential 3'},
-      {_id: '4', name: 'Credential 4'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new CredentialsCommand(fakeHttp);
-    const resp = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_credentials',
-        filter: 'first=1 rows=-1',
-      },
-    });
-    expect(resp.data).toEqual([
-      expect.objectContaining({id: '3', name: 'Credential 3'}),
-      expect.objectContaining({id: '4', name: 'Credential 4'}),
-    ]);
-  });
-
   test('should fetch redacted credentials through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -143,6 +85,53 @@ describe('CredentialCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should page through native API for getAll', async () => {
+    const responses = [
+      {
+        page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: ''},
+        items: [{id: 'credential-1', name: 'SSH one', credential_type: 'usk'}],
+      },
+      {
+        page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: ''},
+        items: [{id: 'credential-2', name: 'SSH two', credential_type: 'usk'}],
+      },
+    ];
+    const fetchMock = testing.fn().mockImplementation(() =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(responses.shift()),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new CredentialsCommand(fakeHttp);
+
+    const result = await cmd.getAll();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data.map(credential => credential.id)).toEqual([
+      'credential-1',
+      'credential-2',
+    ]);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/credentials', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      credential_type: undefined,
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/credentials', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+      credential_type: undefined,
+    });
   });
 
   test('should bulk export selected redacted credentials through native API', async () => {

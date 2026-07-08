@@ -5,12 +5,8 @@
  */
 
 import EntitiesCommand from 'gmp/commands/entities';
-import type {
-  HttpCommandInputParams,
-  HttpCommandOptions,
-} from 'gmp/commands/http';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -41,11 +37,7 @@ class CredentialsCommand extends EntitiesCommand<Credential> {
     return root.get_credentials.get_credentials_response;
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (!canUseNativeApi(this.http)) {
-      return super.get(params, options);
-    }
-
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeCredentials(
       this.http,
@@ -57,14 +49,7 @@ class CredentialsCommand extends EntitiesCommand<Credential> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const credentials: Credential[] = [];
     let total = Number.POSITIVE_INFINITY;
@@ -93,16 +78,10 @@ class CredentialsCommand extends EntitiesCommand<Credential> {
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
     return exportNativeCredentialsMetadata(this.http, ids);
   }
 
   export(entities: Credential[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
     return this.exportByIds(
       entities.flatMap(entity =>
         entity.id === undefined ? [] : [entity.id],
@@ -111,10 +90,6 @@ class CredentialsCommand extends EntitiesCommand<Credential> {
   }
 
   async exportByFilter(filter: Filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const credentials: Credential[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;

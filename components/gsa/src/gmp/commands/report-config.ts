@@ -268,14 +268,7 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
 
   async clone({id}: EntityCommandParams) {
     if (canUseNativeApi(this.http)) {
-      try {
-        return await cloneNativeReportConfig(this.http, id);
-      } catch (error) {
-        log.debug(
-          'Native report config clone failed, falling back to GMP',
-          error,
-        );
-      }
+      return await cloneNativeReportConfig(this.http, id);
     }
     return super.clone({id});
   }

@@ -645,7 +645,7 @@ describe('ReportConfigCommand tests', () => {
     expect(result.data.id).toEqual('native-report-config-clone-id');
   });
 
-  test('should fall back to GMP when native report config clone fails', async () => {
+  test('should not fall back to GMP when native report config clone fails', async () => {
     const response = createActionResultResponse({
       action: 'Clone Report Config',
       id: 'fallback-report-config-clone-id',
@@ -668,16 +668,11 @@ describe('ReportConfigCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new ReportConfigCommand(fakeHttp);
-    const result = await cmd.clone({id: 'report-config-id'});
 
+    await expect(cmd.clone({id: 'report-config-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
     expect(fetchMock).toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: 'report-config-id',
-        resource_type: 'report_config',
-      },
-    });
-    expect(result.data.id).toEqual('fallback-report-config-clone-id');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });

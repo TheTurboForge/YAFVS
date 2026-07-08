@@ -375,7 +375,8 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) 
                 cleanup["scope_report"] = f"delete failed: {error}"
         if created_scope_id:
             try:
-                gmp.delete_scope(created_scope_id)
+                path = f"/api/v1/scopes/{urllib.parse.quote(created_scope_id)}"
+                native_api_browser_proxy_delete(repo_root, path, operator_name=username)
                 cleanup["scope"] = "deleted"
             except Exception as error:  # pylint: disable=broad-except
                 cleanup["scope"] = f"delete failed: {error}"

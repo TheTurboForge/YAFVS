@@ -747,6 +747,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("native_scopes", runtime_scope_source)
         self.assertIn("native_scope_reports", runtime_scope_source)
         self.assertIn("native_api_browser_proxy_delete", runtime_scope_source)
+        self.assertNotIn("gmp.delete_scope(", runtime_scope_source)
         self.assertNotIn("gmp.delete_scope_report", runtime_scope_source)
         self.assertNotIn("runtime_metrics_probe_path", source)
         self.assertIn("def command_runtime_scope_report_summary_native", source)

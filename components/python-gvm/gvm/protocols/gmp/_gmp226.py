@@ -209,12 +209,6 @@ class GMPv226(GMPv225[T]):
             )
         )
 
-    def delete_scope(self, scope_id: EntityID) -> T:
-        """Delete a scope."""
-        return self._send_request_and_transform_response(
-            Scopes.delete_scope(scope_id)
-        )
-
     def generate_scope_report(self, scope_id: EntityID) -> T:
         """Generate a persistent scope-report snapshot."""
         return self._send_request_and_transform_response(

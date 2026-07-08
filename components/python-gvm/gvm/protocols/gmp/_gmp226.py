@@ -221,12 +221,6 @@ class GMPv226(GMPv225[T]):
             Scopes.generate_scope_report(scope_id)
         )
 
-    def delete_scope_report(self, scope_report_id: EntityID) -> T:
-        """Delete a scope report."""
-        return self._send_request_and_transform_response(
-            Scopes.delete_scope_report(scope_report_id)
-        )
-
     def create_filter(
         self,
         name: str,

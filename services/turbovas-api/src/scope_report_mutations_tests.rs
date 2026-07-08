@@ -9,6 +9,7 @@ fn scope_report_delete_state_sql_resolves_owner_through_scope() {
     let sql = scope_report_delete_state_sql();
     assert!(sql.contains("FROM scope_reports sr"));
     assert!(sql.contains("JOIN scopes s ON s.id = sr.scope"));
+    assert!(sql.contains("sr.id::integer"));
     assert!(sql.contains("s.owner::integer"));
     assert!(sql.contains("WHERE sr.uuid = $1"));
 }

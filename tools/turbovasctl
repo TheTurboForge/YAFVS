@@ -13175,6 +13175,16 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
     artifact_dir = scope_report_artifact_dir(repo_root)
     findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
     findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading scope reports through the native API."))
+    browser_proxy_secret = running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BROWSER_PROXY_SECRET_ENV)
+    findings.append(
+        finding(
+            "pass" if browser_proxy_secret else "fail",
+            "native-api.browser-proxy-secret",
+            "turbovas-api browser-proxy secret is configured for native cleanup."
+            if browser_proxy_secret
+            else "turbovas-api is running without the browser-proxy secret; refresh the app profile before runtime scope cleanup.",
+        )
+    )
     findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
     findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
     findings.append(finding("pass" if probe.is_file() else "fail", "runtime-scope.probe", "Runtime scope helper exists." if probe.is_file() else "Runtime scope helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))

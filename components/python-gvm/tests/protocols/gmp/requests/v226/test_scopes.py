@@ -58,10 +58,3 @@ class ScopesTestCase(unittest.TestCase):
             bytes(request),
             b'<generate_scope_report scope_id="scope-1"/>',
         )
-
-    def test_delete_scope_report(self):
-        request = Scopes.delete_scope_report("report-1")
-        self.assertEqual(
-            bytes(request),
-            b'<delete_scope_report scope_report_id="report-1"/>',
-        )

@@ -188,6 +188,49 @@ def native_api_json(repo_root: Path, path: str) -> dict[str, Any]:
     return parsed
 
 
+def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name: str) -> None:
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        str(repo_root / "compose" / "dev.yaml"),
+        "exec",
+        "-T",
+        "-e",
+        "TURBOVAS_SCOPE_OPERATOR_NAME",
+        "-e",
+        "TURBOVAS_SCOPE_DELETE_PATH",
+        "turbovas-api",
+        "sh",
+        "-ceu",
+        (
+            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "curl -sS --max-time 10 -X DELETE -w '\\n%{http_code}' "
+            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-operator-name: ${TURBOVAS_SCOPE_OPERATOR_NAME}\" "
+            "\"http://127.0.0.1:9080${TURBOVAS_SCOPE_DELETE_PATH}\""
+        ),
+    ]
+    env = os.environ.copy()
+    env["TURBOVAS_SCOPE_OPERATOR_NAME"] = operator_name
+    env["TURBOVAS_SCOPE_DELETE_PATH"] = path
+    completed = subprocess.run(
+        command,
+        cwd=repo_root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    lines = completed.stdout.splitlines()
+    status = lines[-1].strip() if lines else ""
+    body = "\n".join(lines[:-1]).strip()
+    if completed.returncode != 0 or status not in {"204", "404"}:
+        reason = completed.stderr.strip() or body or completed.stdout.strip()
+        raise RuntimeError(f"native API DELETE failed with HTTP {status or 'unknown'}: {reason}")
+
+
 def native_scope_report(repo_root: Path, scope_report_id: str) -> dict[str, Any]:
     path = f"/api/v1/scope-reports/{urllib.parse.quote(scope_report_id)}"
     return native_scope_report_row(native_api_json(repo_root, path))
@@ -240,7 +283,7 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     return str(path)
 
 
-def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path) -> dict[str, Any]:
+def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) -> dict[str, Any]:
     targets = native_named_rows(repo_root, "targets")
     hosts = native_named_rows(repo_root, "hosts")
     target = targets[0] if targets else None
@@ -325,7 +368,8 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path) -> dict[str, An
     finally:
         if created_report_id:
             try:
-                gmp.delete_scope_report(created_report_id)
+                path = f"/api/v1/scope-reports/{urllib.parse.quote(created_report_id)}"
+                native_api_browser_proxy_delete(repo_root, path, operator_name=username)
                 cleanup["scope_report"] = "deleted"
             except Exception as error:  # pylint: disable=broad-except
                 cleanup["scope_report"] = f"delete failed: {error}"
@@ -358,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     gmp = None
     try:
         gmp, password = runtime_full_test_scan.connect_gmp(Path(args.socket), args.username, Path(args.password_file), args.timeout)
-        payload = command_smoke(gmp, Path(args.artifact_dir), Path(args.repo_root))
+        payload = command_smoke(gmp, Path(args.artifact_dir), Path(args.repo_root), args.username)
     except Exception as error:  # pylint: disable=broad-except
         payload = result("fail", "Runtime scope helper failed.", error_type=type(error).__name__, error=str(error).replace(password, "[redacted]"))
     finally:

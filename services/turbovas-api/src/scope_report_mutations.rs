@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ScopeReportDeleteState {
-    internal_id: i64,
+    internal_id: i32,
     scope_owner_id: i32,
 }
 
@@ -65,7 +65,7 @@ async fn load_scope_report_delete_state(
 
 async fn execute_scope_report_delete_transaction(
     tx: &Transaction<'_>,
-    scope_report_internal_id: i64,
+    scope_report_internal_id: i32,
 ) -> Result<(), ApiError> {
     execute_scope_report_delete_sql(
         tx,
@@ -100,7 +100,7 @@ async fn execute_scope_report_delete_sql(
 }
 
 pub(crate) fn scope_report_delete_state_sql() -> &'static str {
-    "SELECT sr.id::bigint, s.owner::integer
+    "SELECT sr.id::integer, s.owner::integer
        FROM scope_reports sr
        JOIN scopes s ON s.id = sr.scope
       WHERE sr.uuid = $1;"

@@ -112,16 +112,3 @@ class Scopes:
         cmd = XmlCommand("generate_scope_report")
         cmd.set_attribute("scope_id", str(scope_id))
         return cmd
-
-    @classmethod
-    def delete_scope_report(cls, scope_report_id: EntityID) -> Request:
-        """Delete a scope report."""
-        if not scope_report_id:
-            raise RequiredArgument(
-                function=cls.delete_scope_report.__name__,
-                argument="scope_report_id",
-            )
-
-        cmd = XmlCommand("delete_scope_report")
-        cmd.set_attribute("scope_report_id", str(scope_report_id))
-        return cmd

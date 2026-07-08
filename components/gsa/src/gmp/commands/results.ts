@@ -9,10 +9,7 @@ import {
   type HttpCommandInputParams,
   type HttpCommandOptions,
 } from 'gmp/commands/http';
-import {
-  canUseNativeApi,
-  NATIVE_COMMAND_PAGE_SIZE,
-} from 'gmp/commands/native';
+import {NATIVE_COMMAND_PAGE_SIZE} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import type Filter from 'gmp/models/filter';
 import {type Element} from 'gmp/models/model';
@@ -47,16 +44,10 @@ export class ResultsCommand extends EntitiesCommand<Result> {
   }
 
   exportByIds(ids: string[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByIds(ids);
-    }
     return exportNativeResultsMetadata(this.http, ids);
   }
 
   export(entities: Result[]) {
-    if (!canUseNativeApi(this.http)) {
-      return super.export(entities);
-    }
     return this.exportByIds(
       entities.flatMap(entity =>
         entity.id === undefined ? [] : [entity.id],
@@ -65,10 +56,6 @@ export class ResultsCommand extends EntitiesCommand<Result> {
   }
 
   async exportByFilter(filter) {
-    if (!canUseNativeApi(this.http)) {
-      return super.exportByFilter(filter);
-    }
-
     const results: Result[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;

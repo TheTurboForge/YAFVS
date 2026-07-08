@@ -244,6 +244,78 @@ describe('TrashCanCommand tests', () => {
     });
   });
 
+  test('should load trashcan rows through native redacted item API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 500, total: 3},
+        items: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            resource_type: 'credentials',
+            entity_type: 'credential',
+            title: 'Credentials',
+            name: 'SSH credential',
+            comment: 'redacted row',
+          },
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            resource_type: 'targets',
+            entity_type: 'target',
+            title: 'Targets',
+            name: 'Target without hosts',
+          },
+          {
+            id: '33333333-3333-3333-3333-333333333333',
+            resource_type: 'tasks',
+            entity_type: 'task',
+            title: 'Tasks',
+            name: 'Task in trash',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    const data = await cmd.get();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/trashcan/items', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'resource_type',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/trashcan/items',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(data.data.credentials[0].id).toBe(
+      '11111111-1111-1111-1111-111111111111',
+    );
+    expect(data.data.credentials[0].name).toBe('SSH credential');
+    expect(data.data.targets[0].name).toBe('Target without hosts');
+    expect(data.data.tasks[0].entityType).toBe('task');
+  });
+
   test('should handle failed requests gracefully', async () => {
     const response = createResponse({
       get_trash: {

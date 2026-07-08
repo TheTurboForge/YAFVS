@@ -49,7 +49,7 @@ use crate::{
     task_targets::*,
     timezones::timezones,
     tls_certificates::*,
-    trashcan::trashcan_summary,
+    trashcan::{trashcan_items, trashcan_summary},
     user_accounts::{user_account_detail, user_accounts},
     vulnerability_payloads::*,
 };
@@ -208,6 +208,7 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             get(export_report_format_metadata),
         )
         .route("/api/v1/trashcan/summary", get(trashcan_summary))
+        .route("/api/v1/trashcan/items", get(trashcan_items))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
         .route("/api/v1/reports/:report_id/results", get(report_results))

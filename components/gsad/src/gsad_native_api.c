@@ -662,6 +662,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *report_format_prefix = "/api/v1/report-formats/";
   const gchar *report_format_export_suffix = "/export";
   const gchar *trashcan_summary_path = "/api/v1/trashcan/summary";
+  const gchar *trashcan_items_path = "/api/v1/trashcan/items";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *targets_path = "/api/v1/targets";
   const gchar *target_prefix = "/api/v1/targets/";
@@ -1003,6 +1004,9 @@ native_api_path_is_allowed (const gchar *path)
     }
 
   if (g_strcmp0 (path, trashcan_summary_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, trashcan_items_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, scopes_path) == 0)

@@ -659,6 +659,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tls-certificate-asset-list-read",
         "tls-certificate-asset-metadata-export-read",
         "trashcan-count-summary-read",
+        "trashcan-redacted-row-metadata-read",
         "user-redacted-detail-read",
         "user-redacted-list-read",
         "vulnerability-detail-read",
@@ -694,6 +695,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
         "tls-certificate-export-delete-and-rich-history",
+        "trashcan-deep-row-data-and-mutations",
         "trashcan-row-data-and-mutations",
         "vulnerability-exports-and-actions",
     }
@@ -769,6 +771,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/tags/{tag_id}/resources"): "direct-read",
     ("get", "/tags/{tag_id}/export"): "direct-read",
     ("get", "/trashcan/summary"): "direct-read",
+    ("get", "/trashcan/items"): "direct-read",
     ("get", "/reports"): "direct-read",
     ("get", "/reports/{report_id}"): "direct-read",
     ("get", "/results/{result_id}/export"): "direct-read",
@@ -1276,9 +1279,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tag-hard-delete",
     },
     ("get", "/trashcan/summary"): {
-        "x-turbovas-inherited-still-owns": "trashcan-row-data-and-mutations",
+        "x-turbovas-inherited-still-owns": "trashcan-deep-row-data-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "trashcan-count-summary-read",
+    },
+    ("get", "/trashcan/items"): {
+        "x-turbovas-inherited-still-owns": "trashcan-deep-row-data-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "trashcan-redacted-row-metadata-read",
     },
     ("get", "/schedules"): {
         "x-turbovas-inherited-still-owns": "schedule-create-calendar-export",
@@ -1756,6 +1764,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/report-formats/{}",
         "/api/v1/report-formats/{}/export",
         "/api/v1/trashcan/summary",
+        "/api/v1/trashcan/items",
         "/api/v1/reports",
         "/api/v1/reports/{}",
         "/api/v1/reports/{}/results",
@@ -7316,6 +7325,10 @@ def trashcan_summary_endpoint_status(repo_root: Path | None) -> str:
     return native_browser_proxy_endpoint_status(repo_root, "/api/v1/trashcan/summary")
 
 
+def trashcan_items_endpoint_status(repo_root: Path | None) -> str:
+    return native_browser_proxy_endpoint_status(repo_root, "/api/v1/trashcan/items")
+
+
 def alerts_endpoint_status(repo_root: Path | None) -> str:
     return native_browser_proxy_endpoint_status(repo_root, "/api/v1/alerts")
 
@@ -8012,6 +8025,18 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 ],
             },
             {
+                "endpoint": "/api/v1/trashcan/items",
+                "status": trashcan_items_endpoint_status(repo_root),
+                "replacement_candidates": [
+                    "GSA Trashcan redacted row list (same-origin native read)",
+                    "read-only Trashcan item metadata automation",
+                ],
+                "notes": [
+                    "Redacted metadata only; no credential secret values, target hosts, scanner host/port/certificate/credential fields, scan-config preferences/selectors, alert method/condition/event data, override host text, child trash tables, or mutations.",
+                    "Deep row payloads, restore, hard-delete, and empty-trash workflows remain inherited until separately designed.",
+                ],
+            },
+            {
                 "endpoint": "/api/v1/reports",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA raw report list (migrated through gsad same-origin proxy)", "runtime-report-summary helper", "native-api-request helper"],
@@ -8303,7 +8328,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
         ],
         "next_replacement_candidates": [
             {"workflow": "remaining gvm-tools write/control scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "native write/control API after separate safety design"},
-            {"workflow": "row-level Trashcan resource reads and mutations", "current_dependency": "GSA/GMP get_trash_* plus restore/delete/empty_trashcan", "native_target": "deferred; counts-only summary first because row-level trash data is secret-adjacent"},
+            {"workflow": "deep Trashcan row reads and mutations", "current_dependency": "GSA/GMP get_trash_* plus restore/delete/empty_trashcan", "native_target": "deferred; redacted row metadata is native, while full row payloads and mutations are secret-adjacent and require separate design"},
         ],
     }
 
@@ -18357,6 +18382,83 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                 "native-api.trashcan-summary.deferred",
                 "Trashcan counts-only summary route is not declared yet; runtime probe is deferred until the implementation lands.",
                 details={"path": "/api/v1/trashcan/summary", "row_level_trash_data": "inherited/deferred"},
+            )
+        )
+
+    if source_file_contains(repo_root, "services/turbovas-api/src/read_api_routes.rs", '.route("/api/v1/trashcan/items"'):
+        trashcan_items = native_api_curl(repo_root, "/api/v1/trashcan/items?page_size=1")
+        trashcan_items_json = parse_json_output(trashcan_items)
+        details["trashcan_items"] = summarize_native_api_response(trashcan_items_json)
+        item_rows = trashcan_items_json.get("items") if isinstance(trashcan_items_json, dict) else None
+        item_page = trashcan_items_json.get("page") if isinstance(trashcan_items_json, dict) else None
+        allowed_item_keys = {"id", "resource_type", "entity_type", "title", "name", "comment", "creation_time", "modification_time"}
+        forbidden_item_keys = {
+            "password",
+            "value",
+            "hosts",
+            "exclude_hosts",
+            "scanner_credential",
+            "credential_location",
+            "ca_pub",
+            "relay_host",
+            "method_data",
+            "condition_data",
+            "event_data",
+            "nvt_selector",
+            "preferences",
+            "port",
+        }
+        unexpected_keys = sorted(
+            {
+                key
+                for item in item_rows or []
+                if isinstance(item, dict)
+                for key in item.keys()
+                if key not in allowed_item_keys
+            }
+        )
+        forbidden_keys = sorted(
+            {
+                key
+                for item in item_rows or []
+                if isinstance(item, dict)
+                for key in item.keys()
+                if key in forbidden_item_keys
+            }
+        )
+        items_ok = (
+            trashcan_items.returncode == 0
+            and isinstance(trashcan_items_json, dict)
+            and isinstance(item_rows, list)
+            and isinstance(item_page, dict)
+            and isinstance(item_page.get("total"), int)
+            and not unexpected_keys
+            and not forbidden_keys
+            and all(
+                isinstance(item, dict)
+                and isinstance(item.get("id"), str)
+                and isinstance(item.get("resource_type"), str)
+                and isinstance(item.get("entity_type"), str)
+                and isinstance(item.get("title"), str)
+                and isinstance(item.get("name"), str)
+                for item in item_rows
+            )
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if items_ok else "fail",
+                "native-api.trashcan-items",
+                "Native API Trashcan redacted item probe returned redacted collection JSON."
+                if items_ok
+                else "Native API Trashcan item probe failed or returned non-redacted payload data.",
+                trashcan_items,
+                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/trashcan/items?page_size=1"),
+                trashcan_items_json,
+                {
+                    "unexpected_keys": unexpected_keys,
+                    "forbidden_keys": forbidden_keys,
+                    **summarize_native_api_response(trashcan_items_json),
+                },
             )
         )
 

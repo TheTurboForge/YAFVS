@@ -3942,7 +3942,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: trashcan-count-summary-read
-      x-turbovas-inherited-still-owns: trashcan-row-data-and-mutations
+      x-turbovas-inherited-still-owns: trashcan-deep-row-data-and-mutations
       summary: Summarize Trashcan item counts
       description: Counts-only read of base Trashcan resources backed by gvmd/PostgreSQL. The endpoint returns all supported resource types, including zero-count rows, and intentionally excludes row payloads, identifiers, names, comments, credential data, target hosts, scanner fields, scan-config preferences, alert method data, results_trash, and child trash tables. The endpoint is read-only and may be reached through the internal/browser proxy path or the opt-in bearer-auth direct listener.
       responses:
@@ -3952,6 +3952,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TrashcanSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /trashcan/items:
+    get:
+      operationId: getTrashcanItems
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: trashcan-redacted-row-metadata-read
+      x-turbovas-inherited-still-owns: trashcan-deep-row-data-and-mutations
+      summary: List redacted Trashcan item metadata
+      description: Read-only redacted Trashcan row index backed by gvmd/PostgreSQL. The endpoint returns resource type, UUID, display name, optional comment, and timestamps for supported base resources. It intentionally excludes credential secrets, credential values, target hosts, scanner host/port/certificate/credential fields, scan-config preferences/selectors, alert method/condition/event data, override host text, results_trash, child trash tables, restore, delete, and empty-trash mutations.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Redacted Trashcan item collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrashcanItemCollection'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -7013,6 +7047,42 @@ components:
         count:
           type: integer
           minimum: 0
+    TrashcanItemCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrashcanItem'
+    TrashcanItem:
+      type: object
+      required: [id, resource_type, entity_type, title, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+          enum: [alerts, scan_configs, credentials, filters, overrides, port_lists, report_configs, report_formats, scanners, schedules, tags, targets, tasks]
+        entity_type:
+          type: string
+          enum: [alert, scanconfig, credential, filter, override, portlist, reportconfig, reportformat, scanner, schedule, tag, target, task]
+        title:
+          type: string
+        name:
+          type: string
+        comment:
+          type: string
+          nullable: true
+        creation_time:
+          type: integer
+          nullable: true
+        modification_time:
+          type: integer
+          nullable: true
     CveCollection:
       type: object
       required: [page, items]

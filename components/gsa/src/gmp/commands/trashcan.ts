@@ -6,7 +6,7 @@
 
 import HttpCommand from 'gmp/commands/http';
 import {canUseNativeApi} from 'gmp/commands/native';
-import type Response from 'gmp/http/response';
+import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Alert from 'gmp/models/alert';
 import Credential from 'gmp/models/credential';
@@ -22,14 +22,18 @@ import Schedule from 'gmp/models/schedule';
 import Tag from 'gmp/models/tag';
 import Target from 'gmp/models/target';
 import Task from 'gmp/models/task';
+import {YES_VALUE} from 'gmp/parser';
 import {
   deleteNativeTrashcanEntity,
+  fetchNativeTrashcanItems,
+  type NativeTrashcanItem,
   supportsNativeTrashcanDelete,
   restoreNativeTrashcanEntity,
   supportsNativeTrashcanRestore,
 } from 'gmp/native-api/trashcan';
 import {map} from 'gmp/utils/array';
 import {apiType, type EntityType} from 'gmp/utils/entity-type';
+import {isDefined} from 'gmp/utils/identity';
 
 export interface TrashCanGetData {
   alerts: Alert[];
@@ -115,6 +119,90 @@ type TrashCanGetResponse<TData> = Response<
 
 type TrashCanGetPromise<TData> = Promise<TrashCanGetResponse<TData>>;
 
+const nativeItemElement = (item: NativeTrashcanItem): ModelElement => ({
+  _id: item.id,
+  name: item.name,
+  comment: item.comment ?? undefined,
+  creation_time: isDefined(item.creation_time)
+    ? String(item.creation_time)
+    : undefined,
+  modification_time: isDefined(item.modification_time)
+    ? String(item.modification_time)
+    : undefined,
+  trash: YES_VALUE,
+  writable: YES_VALUE,
+});
+
+const pushNativeTrashcanItem = (
+  data: TrashCanGetData,
+  item: NativeTrashcanItem,
+) => {
+  const element = nativeItemElement(item);
+  switch (item.entity_type) {
+    case 'alert':
+      data.alerts.push(Alert.fromElement(element));
+      break;
+    case 'scanconfig':
+      data.scanConfigs.push(ScanConfig.fromElement(element as UsageTypeElement));
+      break;
+    case 'credential':
+      data.credentials.push(Credential.fromElement(element));
+      break;
+    case 'filter':
+      data.filters.push(Filter.fromElement(element));
+      break;
+    case 'override':
+      data.overrides.push(Override.fromElement(element));
+      break;
+    case 'portlist':
+      data.portLists.push(PortList.fromElement(element));
+      break;
+    case 'reportconfig':
+      data.reportConfigs.push(ReportConfig.fromElement(element));
+      break;
+    case 'reportformat':
+      data.reportFormats.push(ReportFormat.fromElement(element));
+      break;
+    case 'scanner':
+      data.scanners.push(Scanner.fromElement(element));
+      break;
+    case 'schedule':
+      data.schedules.push(Schedule.fromElement(element));
+      break;
+    case 'tag':
+      data.tags.push(Tag.fromElement(element));
+      break;
+    case 'target':
+      data.targets.push(Target.fromElement(element));
+      break;
+    case 'task':
+      data.tasks.push(Task.fromElement(element as UsageTypeElement));
+      break;
+  }
+};
+
+const nativeTrashcanItemsToData = (
+  items: NativeTrashcanItem[],
+): TrashCanGetData => {
+  const data: TrashCanGetData = {
+    alerts: [],
+    scanConfigs: [],
+    credentials: [],
+    filters: [],
+    overrides: [],
+    portLists: [],
+    reportConfigs: [],
+    reportFormats: [],
+    scanners: [],
+    schedules: [],
+    tags: [],
+    targets: [],
+    tasks: [],
+  };
+  items.forEach(item => pushNativeTrashcanItem(data, item));
+  return data;
+};
+
 class TrashCanCommand extends HttpCommand {
   async restore({id, entityType}: {id: string; entityType?: EntityType}) {
     if (
@@ -151,6 +239,12 @@ class TrashCanCommand extends HttpCommand {
   }
 
   async get(): Promise<Response<TrashCanGetData, XmlMeta>> {
+    if (canUseNativeApi(this.http)) {
+      return new Response(
+        nativeTrashcanItemsToData(await fetchNativeTrashcanItems(this.http)),
+      );
+    }
+
     const requests = [
       this.httpGetWithTransform({
         cmd: 'get_trash_alerts',

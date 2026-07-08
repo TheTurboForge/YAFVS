@@ -418,6 +418,13 @@ const MANAGEMENT_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         filter_fields: &["id", "name", "summary", "extension", "content_type"],
         tie_breakers: &["name", "id"],
     },
+    CollectionContract {
+        path: "/api/v1/trashcan/items",
+        default_sort: TRASHCAN_ITEM_DEFAULT_SORT,
+        allowed_sort_fields: TRASHCAN_ITEM_SORT_FIELDS,
+        filter_fields: &["resource_type", "title", "name", "comment"],
+        tie_breakers: &["name", "id"],
+    },
 ];
 
 fn sort_field_names(fields: &[(&'static str, &'static str)]) -> Vec<&'static str> {
@@ -482,6 +489,7 @@ fn management_collection_contracts_define_sort_filter_and_tie_breakers() {
             "/api/v1/schedules",
             "/api/v1/report-configs",
             "/api/v1/report-formats",
+            "/api/v1/trashcan/items",
         ]
     );
     for contract in MANAGEMENT_COLLECTION_CONTRACTS {
@@ -497,6 +505,7 @@ fn management_collection_contracts_define_sort_filter_and_tie_breakers() {
     assert!(sort_field_names(SCHEDULE_SORT_FIELDS).contains(&"next_run"));
     assert!(sort_field_names(REPORT_CONFIG_SORT_FIELDS).contains(&"report_format"));
     assert!(sort_field_names(REPORT_FORMAT_SORT_FIELDS).contains(&"content_type"));
+    assert!(sort_field_names(TRASHCAN_ITEM_SORT_FIELDS).contains(&"resource_type"));
     assert!(sort_clause("-modified", REPORT_FORMAT_SORT_FIELDS).is_ok());
     assert!(sort_clause("created_at", ALERT_SORT_FIELDS).is_err());
 }

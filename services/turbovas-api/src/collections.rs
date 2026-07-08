@@ -139,6 +139,14 @@ pub(crate) const REPORT_FORMAT_SORT_FIELDS: &[(&str, &str)] = &[
     ("created", "created_at_unix"),
     ("modified", "modified_at_unix"),
 ];
+pub(crate) const TRASHCAN_ITEM_DEFAULT_SORT: &str = "resource_type";
+pub(crate) const TRASHCAN_ITEM_SORT_FIELDS: &[(&str, &str)] = &[
+    ("resource_type", "resource_type"),
+    ("title", "title"),
+    ("name", "name"),
+    ("creation_time", "creation_time"),
+    ("modification_time", "modification_time"),
+];
 pub(crate) const REPORT_CONFIG_DEFAULT_SORT: &str = "name";
 pub(crate) const REPORT_CONFIG_SORT_FIELDS: &[(&str, &str)] = &[
     ("id", "id"),

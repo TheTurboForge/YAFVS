@@ -28,6 +28,28 @@ export interface NativeTrashcanSummary {
   total: number;
 }
 
+export interface NativeTrashcanItem {
+  id: string;
+  resource_type: string;
+  entity_type: EntityType;
+  title: string;
+  name: string;
+  comment?: string | null;
+  creation_time?: number | null;
+  modification_time?: number | null;
+}
+
+interface NativeTrashcanPage {
+  page?: number;
+  page_size?: number;
+  total?: number;
+}
+
+interface NativeTrashcanItemsPayload {
+  page?: NativeTrashcanPage;
+  items?: NativeTrashcanItem[];
+}
+
 export interface NativeTrashcanRestoreArgs {
   id: string;
   entityType: EntityType;
@@ -119,6 +141,35 @@ export const fetchNativeTrashcanSummary = async (
   fetchNativeJson<NativeTrashcanSummary>(gmp, 'api/v1/trashcan/summary', {
     token: gmp.session.token,
   });
+
+export const fetchNativeTrashcanItems = async (
+  gmp: NativeTrashcanApiGmp,
+): Promise<NativeTrashcanItem[]> => {
+  const items: NativeTrashcanItem[] = [];
+  let total = Number.POSITIVE_INFINITY;
+  const pageSize = 500;
+
+  for (let page = 1; items.length < total; page += 1) {
+    const payload = await fetchNativeJson<NativeTrashcanItemsPayload>(
+      gmp,
+      'api/v1/trashcan/items',
+      {
+        token: gmp.session.token,
+        page,
+        page_size: pageSize,
+        sort: 'resource_type',
+      },
+    );
+    const pageItems = payload.items ?? [];
+    items.push(...pageItems);
+    total = payload.page?.total ?? items.length;
+    if (pageItems.length === 0) {
+      break;
+    }
+  }
+
+  return items;
+};
 
 export const restoreNativeTrashcanEntity = async (
   gmp: NativeTrashcanApiGmp,

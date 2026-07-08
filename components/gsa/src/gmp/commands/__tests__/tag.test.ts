@@ -300,7 +300,42 @@ describe('TagCommand tests', () => {
     expect(resp.data.name).toEqual('Critical assets');
   });
 
-  test('should keep filtered single tag detail on GMP until native parity is characterized', async () => {
+  test('should return single tag resources filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'foo',
+        name: 'Critical assets',
+        resources: {type: 'task', count: {total: 2}},
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const resp = await cmd.get({id: 'foo'}, {filter: 'resources=1'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags/foo', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalled();
+    expect(resp.data.id).toEqual('foo');
+    expect(resp.data.resourceType).toEqual('task');
+    expect(resp.data.resourceCount).toEqual(2);
+  });
+
+  test('should keep unsupported filtered single tag detail on GMP', async () => {
     const response = createEntityResponse('tag', {_id: 'foo'});
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -316,14 +351,14 @@ describe('TagCommand tests', () => {
     fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new TagCommand(fakeHttp);
-    const resp = await cmd.get({id: 'foo'}, {filter: 'resources=1'});
+    const resp = await cmd.get({id: 'foo'}, {filter: 'alerts=1'});
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
       args: {
         cmd: 'get_tag',
         tag_id: 'foo',
-        filter: 'resources=1',
+        filter: 'alerts=1',
       },
     });
     expect(resp.data.id).toEqual('foo');

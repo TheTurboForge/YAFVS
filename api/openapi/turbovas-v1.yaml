@@ -3400,7 +3400,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-list-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: List scan configs
       description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create a scan config from an existing base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs; preference edit payloads, NVT selector expansion/family mutation, import/export, scanner control, blank create, and selector/preference mutations remain inherited while native contracts are designed.
       parameters:
@@ -3716,7 +3715,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: Read scan config NVT family selection summary
       description: Read-only expansion of the NVT Families detail tab. Scanner preferences, NVT preferences, selector edit payloads, import/export, and writes remain on inherited compatibility paths.
       parameters:

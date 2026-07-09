@@ -4269,9 +4269,9 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scanners": ("getScanners", "scanner-metadata-list-read", None),
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", None),
-            "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
+            "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", None),
             "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", None),
-            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", None),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
             row = rows[("get", endpoint)]
@@ -5109,7 +5109,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(("GET /operating-systems", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /tls-certificates/{certificate_id}", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /scanners", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /scan-configs/{scan_config_id}/families", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /tags", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /tags/{tag_id}", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /tags/{tag_id}/resources", "x-turbovas-replaces"), missing_migration)
@@ -6460,9 +6459,9 @@ class TurboVASCtlTests(unittest.TestCase):
             (scanners, "getScanners", "scanner-metadata-list-read", None),
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", None),
-            (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
+            (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", None),
             (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", None),
-            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
+            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", None),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
             self.assertEqual(operation["operation_id"], operation_id)

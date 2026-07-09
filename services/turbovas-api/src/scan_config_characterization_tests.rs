@@ -404,7 +404,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-replaces: scan-config-create-from-base"));
     assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(list.contains(
+    assert!(!list.contains(
         "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
     ));
     assert!(!list.contains("\n  patch:"));
@@ -443,7 +443,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
 
     let families = openapi_path_block("/scan-configs/{scan_config_id}/families");
     assert!(families.contains("get:"));
-    assert!(families.contains(
+    assert!(!families.contains(
         "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
     ));
     assert!(!families.contains("\n  post:"));

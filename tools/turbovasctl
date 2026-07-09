@@ -1241,7 +1241,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scan-configs"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-metadata-list-read",
     },
@@ -1278,7 +1277,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutation-import-export-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },

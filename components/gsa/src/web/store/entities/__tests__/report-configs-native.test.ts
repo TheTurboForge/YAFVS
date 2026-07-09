@@ -9,6 +9,10 @@ import {
   fetchNativeReportConfig,
   fetchNativeReportConfigs,
 } from 'gmp/native-api/report-configs';
+import Filter from 'gmp/models/filter';
+import {loadEntities, loadEntity} from 'web/store/entities/reportconfigs';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -140,5 +144,87 @@ describe('native API report configs', () => {
     ]);
     expect(config.params[0].valueLabels?.['a994b278-1f62-11e1-96ac-406186ea4fc5']).toEqual('XML');
     expect(config.params[0].valueUsingDefault).toEqual(true);
+  });
+
+  test('loads the report config store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name');
+    const rootState = createState('reportconfig', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'afde48df-7f26-4b2b-9c1e-03b0e1bfb3a6',
+            name: 'Default config',
+            report_format: {
+              id: 'a994b278-1f62-11e1-96ac-406186ea4fc5',
+              name: 'XML',
+            },
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/report-configs', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0].name).toEqual('Default config');
+  });
+
+  test('loads report config detail store entries through same-origin native API', async () => {
+    const id = 'afde48df-7f26-4b2b-9c1e-03b0e1bfb3a6';
+    const rootState = createState('reportconfig', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        name: 'Default config',
+        report_format: {
+          id: 'a994b278-1f62-11e1-96ac-406186ea4fc5',
+          name: 'XML',
+        },
+        params: [],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-configs/afde48df-7f26-4b2b-9c1e-03b0e1bfb3a6',
+      {token: 'test-token'},
+    );
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.data.name).toEqual('Default config');
   });
 });

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -37,18 +38,6 @@ const nativeReportFormatListParamPayload = {
       value: 'rf456',
       default: '',
       options: [],
-    },
-  ],
-};
-
-const nativeReportFormatsPayload = {
-  page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
-  items: [
-    {
-      id: 'rf456',
-      name: 'selectable report format',
-      configurable: true,
-      params: [],
     },
   ],
 };
@@ -138,11 +127,8 @@ describe('Report Format Component tests', () => {
     expect(gmp.reportformat.save).toHaveBeenCalled();
   });
 
-  test('should use native report format list when edit params require it', async () => {
-    const fetchMock = stubNativeFetch(
-      nativeReportFormatListParamPayload,
-      nativeReportFormatsPayload,
-    );
+  test('should edit only metadata even when report format has params', async () => {
+    const fetchMock = stubNativeFetch(nativeReportFormatListParamPayload);
     let editClick;
     const children = testing.fn(({edit}) => {
       editClick = edit;
@@ -169,19 +155,10 @@ describe('Report Format Component tests', () => {
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/report-formats/rf123', {
       token: 'test-token',
     });
-    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/report-formats', {
-      token: 'test-token',
-      page: 1,
-      page_size: 200,
-      sort: 'name',
-      filter: '',
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    expect(screen.queryDialogContent()).toHaveTextContent('format choices');
-    expect(screen.queryDialogContent()).toHaveTextContent(
-      'selectable report format',
-    );
+    expect(screen.queryDialogContent()).not.toHaveTextContent('Parameters');
+    expect(screen.queryDialogContent()).not.toHaveTextContent('format choices');
   });
 
   test('should open import dialog without native reads', async () => {

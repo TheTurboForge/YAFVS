@@ -682,7 +682,6 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
-        "account-auth-management",
         "alert-detail-delivery-control",
         "credential-secrets-writes-and-deletes",
         "feed-sync-import-control",
@@ -900,12 +899,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "feed-status-read",
     },
     ("get", "/users"): {
-        "x-turbovas-inherited-still-owns": "account-auth-management",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "user-redacted-list-read",
     },
     ("get", "/users/{user_id}"): {
-        "x-turbovas-inherited-still-owns": "account-auth-management",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "user-redacted-detail-read",
     },

@@ -3539,8 +3539,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'vulnerability-detail-read',
          'vulnerability-list-read',
          'vulnerability-metadata-export-read']
-        expected_inherited_still_owns_values = ['account-auth-management',
-         'alert-detail-delivery-control',
+        expected_inherited_still_owns_values = ['alert-detail-delivery-control',
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
          'host-os-catalog-target-creation-tags-export-and-rich-history',

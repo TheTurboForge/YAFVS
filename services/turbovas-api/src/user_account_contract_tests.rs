@@ -90,10 +90,10 @@ fn user_account_openapi_declares_redacted_read_boundary() {
             "x-turbovas-exposure: direct-read",
             "x-turbovas-maturity: live-read",
             replaces,
-            "account-auth-management",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
         }
+        assert!(!block.contains("x-turbovas-inherited-still-owns:"));
     }
 
     let tail = OPENAPI

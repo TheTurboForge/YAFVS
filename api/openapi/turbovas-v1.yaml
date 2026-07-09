@@ -3341,7 +3341,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-redacted-list-read
-      x-turbovas-inherited-still-owns: account-auth-management
       summary: List redacted user account metadata
       description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint replaces the retired user-list gvm-tools script and returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, account writes, and password changes remain inherited until separately designed.
       parameters:
@@ -3375,7 +3374,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-redacted-detail-read
-      x-turbovas-inherited-still-owns: account-auth-management
       summary: Read one redacted user account metadata record
       description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, account writes, and password changes remain inherited until separately designed.
       parameters:

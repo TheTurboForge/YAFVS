@@ -15,6 +15,7 @@ import {
 } from 'gmp/commands/native';
 import Response from 'gmp/http/response';
 import logger from 'gmp/log';
+import {filterString} from 'gmp/models/filter/utils';
 import Override, {
   ANY,
   MANUAL,
@@ -33,6 +34,11 @@ import {NO_VALUE} from 'gmp/parser';
 
 const log = logger.getLogger('gmp.commands.overrides');
 
+const nativeOverrideDetailSupportsFilter = filter => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'results=1';
+};
+
 const shouldExportAllByFilter = filter => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
   return Number.isFinite(rows) && rows < 0;
@@ -48,7 +54,10 @@ class OverrideCommand extends EntityCommand {
   }
 
   async get({id}, {filter, ...options} = {}) {
-    if (filter === undefined && canUseNativeApi(this.http)) {
+    if (
+      nativeOverrideDetailSupportsFilter(filter) &&
+      canUseNativeApi(this.http)
+    ) {
       return new Response(await fetchNativeOverride(this.http, id));
     }
     return super.get({id}, {filter, ...options});

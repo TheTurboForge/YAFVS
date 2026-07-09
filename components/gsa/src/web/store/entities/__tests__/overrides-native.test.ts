@@ -1,13 +1,18 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import Filter from 'gmp/models/filter';
 import {
   fetchNativeOverride,
   fetchNativeOverrides,
 } from 'gmp/native-api/overrides';
+import {loadEntities, loadEntity} from 'web/store/entities/overrides';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -134,5 +139,100 @@ describe('native API overrides', () => {
     expect(override.task?.id).toEqual('f65533d8-b078-441a-b09b-71a7aeb37091');
     expect(override.task?.name).toEqual('Weekly scan');
     expect(override.result?.id).toEqual('96fbeff5-793f-4e60-92aa-f1c3e40daf0c');
+  });
+
+  test('loads the override store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=text active=1');
+    const rootState = createState('override', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'text', filter: ''},
+        items: [
+          {
+            id: '9f6c71ce-4f9c-41e2-8c8d-74b8a1aef001',
+            owner: {name: 'admin'},
+            nvt: {
+              id: '1.3.6.1.4.1.25623.1.0.999999',
+              name: 'Example NVT',
+              type: 'nvt',
+            },
+            text: 'Accepted compensating control',
+            hosts: '192.0.2.10',
+            port: '443/tcp',
+            severity: 7.5,
+            new_severity: -1,
+            active: true,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/overrides', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'text',
+      filter: '',
+      active: '1',
+      text: '',
+      task_name: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0].text).toEqual('Accepted compensating control');
+    expect(successAction.data[0].nvt?.name).toEqual('Example NVT');
+  });
+
+  test('loads override detail store entries through same-origin native API', async () => {
+    const id = '9f6c71ce-4f9c-41e2-8c8d-74b8a1aef001';
+    const rootState = createState('override', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        text: 'Accepted compensating control',
+        active: false,
+        task: {
+          id: 'f65533d8-b078-441a-b09b-71a7aeb37091',
+          name: 'Weekly scan',
+          trash: false,
+        },
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/overrides/9f6c71ce-4f9c-41e2-8c8d-74b8a1aef001',
+      {token: 'test-token'},
+    );
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.data.text).toEqual('Accepted compensating control');
+    expect(successAction.data.task?.name).toEqual('Weekly scan');
   });
 });

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -52,7 +52,30 @@ const wrongCaps = new Capabilities(['get_config']);
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
+const nativeOverrideItem = {
+  id: '6d00d22f-551b-4fbe-8215-d8615eff73ea',
+  active: true,
+  created_at: '2020-12-23T14:14:11Z',
+  hosts: '127.0.0.1',
+  in_use: false,
+  modified_at: '2021-01-04T11:54:12Z',
+  new_severity: -1,
+  nvt: {
+    id: '123',
+    name: 'foo nvt',
+    type: 'nvt',
+  },
+  owner: {name: 'admin'},
+  permissions: ['everything'],
+  port: '666',
+  severity: 0.1,
+  text: 'override text',
+  writable: true,
+};
+
 const createGmp = ({
+  buildUrl,
+  nativeOverrideItems = [nativeOverrideItem],
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
@@ -94,26 +117,63 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  overrides: {
-    get: getOverrides,
-    deleteByFilter,
-    exportByFilter,
-    delete: deleteByIds,
-    export: exportByIds,
-    getActiveDaysAggregates: getAggregates,
-    getCreatedAggregates: getAggregates,
-    getWordCountsAggregates: getAggregates,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-  },
-  session: createSession(),
-  user: {currentSettings, getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeOverrideItems.length,
+                sort: 'text',
+                filter: '',
+              },
+              items: nativeOverrideItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    overrides: {
+      get: getOverrides,
+      deleteByFilter,
+      exportByFilter,
+      delete: deleteByIds,
+      export: exportByIds,
+      getActiveDaysAggregates: getAggregates,
+      getCreatedAggregates: getAggregates,
+      getWordCountsAggregates: getAggregates,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+    },
+    session: createSession(),
+    user: {currentSettings, getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('OverridesPage tests', () => {

@@ -727,6 +727,30 @@ describe('ScanConfigCommand tests', () => {
     expect(result.data.id).toEqual('scan-config-id');
   });
 
+  test('should reject unsupported native scan config save payloads without GMP fallback', async () => {
+    const response = createActionResultResponse({id: 'fallback-scan-config-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        comment: 'Native comment',
+        select: {'General': YES_VALUE},
+      }),
+    ).toThrow('Native scan config save only supports metadata fields');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should save a config family', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

@@ -161,6 +161,12 @@ export class ScanConfigCommand extends EntityCommand {
       return patchNativeScanConfig(this.http, id, {comment, name});
     }
 
+    if (canUseNativeApi(this.http)) {
+      throw new Error(
+        'Native scan config save only supports metadata fields',
+      );
+    }
+
     const trendData = isDefined(trend) ? convert(trend, 'trend:') : {};
     const scannerPreferenceData = isDefined(scannerPreferenceValues)
       ? convert(scannerPreferenceValues, 'preference:scanner:scanner:scanner:')

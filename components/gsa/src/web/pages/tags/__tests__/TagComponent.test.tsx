@@ -87,9 +87,6 @@ const createGmp = ({
   tasks: {
     get: getTasks,
   },
-  resourcenames: {
-    getAll: getResourceNames,
-  },
 });
 
 const nativeTagPayload = {

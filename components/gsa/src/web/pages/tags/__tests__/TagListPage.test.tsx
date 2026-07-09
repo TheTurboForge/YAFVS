@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -79,9 +80,6 @@ const createGmp = ({
     enable: testing.fn().mockResolvedValue(undefined),
     disable: testing.fn().mockResolvedValue(undefined),
     get: testing.fn().mockResolvedValue({data: createTag()}),
-    resourcenames: {
-      getAll: testing.fn().mockResolvedValue({data: []}),
-    },
   },
   tags: {
     get: getTags,
@@ -93,9 +91,6 @@ const createGmp = ({
   },
   filters: {
     get: getFilters,
-  },
-  resourcenames: {
-    getAll: testing.fn().mockResolvedValue({data: []}),
   },
   settings: {
     manualUrl: 'test/',

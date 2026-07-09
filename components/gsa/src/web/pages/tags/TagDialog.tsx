@@ -107,23 +107,15 @@ const TagDialog = ({
       }
 
       if (canUseNativeTagResourceNames(gmp, type)) {
-        try {
-          return await fetchNativeTagResourceNames(
-            gmp,
-            type,
-            SELECT_MAX_RESOURCES,
-            filter,
-          );
-        } catch {
-          // Fall back to the inherited GMP command when the native proxy is not
-          // available for this session or deployment.
-        }
+        return await fetchNativeTagResourceNames(
+          gmp,
+          type,
+          SELECT_MAX_RESOURCES,
+          filter,
+        );
       }
 
-      const response = isEmpty(filter)
-        ? await gmp.resourcenames.getAll({resourceType: type})
-        : await gmp.resourcenames.get({resourceType: type, filter});
-      return response.data;
+      return [];
     },
     [gmp],
   );

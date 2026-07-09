@@ -218,11 +218,9 @@ describe('BulkTags tests', () => {
     const getAllTags = testing
       .fn()
       .mockResolvedValue({data: [new Tag({id: '1'})]});
-    const getAllResourceNames = testing.fn().mockResolvedValue({data: []});
     const saveTag = testing.fn().mockResolvedValue({data: {id: '2'}});
     const gmp = {
       tags: {getAll: getAllTags},
-      resourcenames: {getAll: getAllResourceNames},
       tag: {
         create: createTag,
         get: getTag,
@@ -244,9 +242,6 @@ describe('BulkTags tests', () => {
     const tagsDialog = within(screen.getDialog());
     const newTag = tagsDialog.getByTitle('Create a new Tag');
     fireEvent.click(newTag);
-    expect(getAllResourceNames).toHaveBeenCalledWith({
-      resourceType: 'task',
-    });
 
     const dialogs = screen.getAllByRole('dialog');
     expect(dialogs).toHaveLength(2);

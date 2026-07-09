@@ -13,13 +13,9 @@ import {
   screen,
   wait,
 } from 'web/testing';
-import Response from 'gmp/http/response';
-import ResourceName from 'gmp/models/resource-name';
 import TagDialog, {SELECT_MAX_RESOURCES} from 'web/pages/tags/TagDialog';
 
 interface CreateGmpOptions {
-  getResourceNamesResponse?: Response<ResourceName[]>;
-  getResourceNames?: ReturnType<typeof testing.fn>;
   buildUrl?: (path: string, params?: unknown) => string;
   session?: {
     jwt?: string;
@@ -28,20 +24,12 @@ interface CreateGmpOptions {
 }
 
 const createGmp = ({
-  getResourceNamesResponse = new Response([
-    new ResourceName({id: '123', name: 'Task', type: 'task'}),
-  ]),
-  getResourceNames = testing.fn().mockResolvedValue(getResourceNamesResponse),
   buildUrl,
   session,
 }: CreateGmpOptions = {}) => ({
   settings: {},
   ...(buildUrl === undefined ? {} : {buildUrl}),
   ...(session === undefined ? {} : {session}),
-  resourcenames: {
-    getAll: getResourceNames,
-    get: getResourceNames,
-  },
 });
 
 afterEach(() => {
@@ -152,8 +140,20 @@ describe('TagDialog tests', () => {
 
   test('should allow to select resource IDs and change active state', async () => {
     const onSave = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+        items: [{id: '123', type: 'task', name: 'Task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const {render} = rendererWith({
-      gmp: createGmp(),
+      gmp: createGmp({
+        buildUrl: path => `https://turbovas.example/${path}`,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
     });
     render(
       <TagDialog
@@ -196,8 +196,20 @@ describe('TagDialog tests', () => {
 
   test('should allow to add a resource uuid by text input', async () => {
     const onSave = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+        items: [{id: '123', type: 'task', name: 'Task'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const {render} = rendererWith({
-      gmp: createGmp(),
+      gmp: createGmp({
+        buildUrl: path => `https://turbovas.example/${path}`,
+        session: {jwt: 'jwt-token', token: 'test-token'},
+      }),
     });
     render(
       <TagDialog
@@ -242,14 +254,12 @@ describe('TagDialog tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const getResourceNames = testing.fn();
     const buildUrl = testing.fn(
       (path: string) => `https://turbovas.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
         buildUrl,
-        getResourceNames,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -258,7 +268,6 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(getResourceNames).not.toHaveBeenCalled();
     expect(buildUrl).toHaveBeenCalledWith(
       'api/v1/tags/resource-names/alert',
       {
@@ -287,14 +296,12 @@ describe('TagDialog tests', () => {
       }),
     );
     testing.stubGlobal('fetch', fetchMock);
-    const getResourceNames = testing.fn();
     const buildUrl = testing.fn(
       (path: string) => `https://turbovas.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
         buildUrl,
-        getResourceNames,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -314,7 +321,6 @@ describe('TagDialog tests', () => {
     );
     await wait();
 
-    expect(getResourceNames).not.toHaveBeenCalled();
     expect(buildUrl).toHaveBeenCalledWith(
       'api/v1/tags/resource-names/scanner',
       {
@@ -347,16 +353,12 @@ describe('TagDialog tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const getResourceNames = testing.fn().mockResolvedValue(
-      new Response([new ResourceName({id: 'report-1', name: 'Report', type: 'report'})]),
-    );
     const buildUrl = testing.fn(
       (path: string) => `https://turbovas.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
         buildUrl,
-        getResourceNames,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -365,7 +367,6 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(getResourceNames).not.toHaveBeenCalled();
     expect(buildUrl).toHaveBeenCalledWith(
       'api/v1/tags/resource-names/report',
       {
@@ -378,17 +379,13 @@ describe('TagDialog tests', () => {
     );
   });
 
-  test('should keep unsupported resource-name lookups on inherited GMP', async () => {
-    const getResourceNames = testing.fn().mockResolvedValue(
-      new Response([new ResourceName({id: 'user-1', name: 'User', type: 'user'})]),
-    );
+  test('should not use inherited GMP for unsupported resource-name lookups', async () => {
     const buildUrl = testing.fn(
       (path: string) => `https://turbovas.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
         buildUrl,
-        getResourceNames,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -397,7 +394,6 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(getResourceNames).toHaveBeenCalledWith({resourceType: 'user'});
     expect(buildUrl).not.toHaveBeenCalled();
   });
 
@@ -412,14 +408,12 @@ describe('TagDialog tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const getResourceNames = testing.fn();
     const buildUrl = testing.fn(
       (path: string) => `https://turbovas.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
         buildUrl,
-        getResourceNames,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -432,7 +426,6 @@ describe('TagDialog tests', () => {
     await wait();
     fireEvent.click(screen.getDialogSaveButton());
 
-    expect(getResourceNames).not.toHaveBeenCalled();
     expect(buildUrl).toHaveBeenLastCalledWith(
       'api/v1/tags/resource-names/task',
       {

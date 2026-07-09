@@ -47,7 +47,6 @@ import ReportFormatCommand from 'gmp/commands/report-format';
 import ReportFormatsCommand from 'gmp/commands/report-formats';
 import ReportTlsCertificatesCommand from 'gmp/commands/report-tls-certificates';
 import ReportsCommand from 'gmp/commands/reports';
-import ResourceNamesCommand from 'gmp/commands/resource-names';
 import {ResultCommand} from 'gmp/commands/result';
 import {ResultsCommand} from 'gmp/commands/results';
 import ScannerCommand from 'gmp/commands/scanner';
@@ -119,7 +118,6 @@ class Gmp {
   public readonly reporttlscertificates: ReportTlsCertificatesCommand;
   public readonly result: ResultCommand;
   public readonly results: ResultsCommand;
-  public readonly resourcenames: ResourceNamesCommand;
   public readonly scanner: ScannerCommand;
   public readonly scanners: ScannersCommand;
   public readonly scopereports: ScopeReportsCommand;
@@ -194,7 +192,6 @@ class Gmp {
     this.reporttlscertificates = new ReportTlsCertificatesCommand(this.http);
     this.result = new ResultCommand(this.http);
     this.results = new ResultsCommand(this.http);
-    this.resourcenames = new ResourceNamesCommand(this.http);
     this.scanner = new ScannerCommand(this.http);
     this.scanners = new ScannersCommand(this.http);
     this.scopereports = new ScopeReportsCommand(this.http);

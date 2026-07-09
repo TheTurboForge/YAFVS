@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -155,9 +156,6 @@ describe('EntityTags tests', () => {
       },
       tasks: {
         get: testing.fn().mockResolvedValue({data: []}),
-      },
-      resourcenames: {
-        getAll: testing.fn().mockResolvedValue({data: []}),
       },
     });
     const {render} = rendererWith({capabilities: true, gmp});

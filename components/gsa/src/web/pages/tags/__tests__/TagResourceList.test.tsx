@@ -11,6 +11,7 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import Tag from 'gmp/models/tag';
 import Task from 'gmp/models/task';
+import type {EntityType} from 'gmp/utils/entity-type';
 import TagResourceList from 'web/pages/tags/TagResourceList';
 
 afterEach(() => {
@@ -131,7 +132,9 @@ describe('ResourceList tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const getTasks = testing.fn();
     const gmp = {
-      buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+      buildUrl: testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      ),
       session: {jwt: 'jwt-token', token: 'test-token'},
       tasks: {
         get: getTasks,
@@ -152,6 +155,61 @@ describe('ResourceList tests', () => {
     });
   });
 
+  test.each<[EntityType, 'reports' | 'results', string]>([
+    ['report', 'reports', 'Native Report'],
+    ['result', 'results', 'Native Result'],
+  ])(
+    'should use native tag resources for %s resources',
+    async (resourceType, pluralResourceType, resourceName) => {
+      const tag = new Tag({
+        id: 'tag-1',
+        name: 'Resource Tag',
+        resourceType,
+        resourceCount: 1,
+      });
+      const fetchMock = testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({
+          tag_id: 'tag-1',
+          resource_type: resourceType,
+          page: {page: 1, page_size: 40, total: 1, sort: 'name', filter: ''},
+          items: [
+            {
+              id: `${resourceType}-native`,
+              type: resourceType,
+              name: resourceName,
+            },
+          ],
+        }),
+        ok: true,
+        status: 200,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const getInheritedResources = testing.fn();
+      const gmp = {
+        buildUrl: testing.fn(
+          (path: string) => `https://turbovas.example/${path}`,
+        ),
+        session: {jwt: 'jwt-token', token: 'test-token'},
+        [pluralResourceType]: {
+          get: getInheritedResources,
+        },
+      };
+
+      const {render} = rendererWith({gmp, capabilities: true});
+      render(<TagResourceList entity={tag} />);
+
+      await screen.findByText(resourceName);
+
+      expect(getInheritedResources).not.toHaveBeenCalled();
+      expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tags/tag-1/resources', {
+        token: 'test-token',
+        page: 1,
+        page_size: 40,
+        sort: 'name',
+      });
+    },
+  );
+
   test('should keep unsupported resource types on inherited commands', async () => {
     const tag = new Tag({
       id: 'tag-1',
@@ -164,7 +222,9 @@ describe('ResourceList tests', () => {
       meta: {filter: Filter.fromString(), counts: new CollectionCounts()},
     });
     const gmp = {
-      buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+      buildUrl: testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      ),
       session: {jwt: 'jwt-token', token: 'test-token'},
       credentials: {
         get: getCredentials,

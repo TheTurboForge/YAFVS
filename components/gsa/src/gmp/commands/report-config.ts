@@ -150,10 +150,7 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   }
 
   async get({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      return new Response(await fetchNativeReportConfig(this.http, id));
-    }
-    return super.get({id});
+    return new Response(await fetchNativeReportConfig(this.http, id));
   }
 
   async create(args: ReportConfigCreateArgs) {

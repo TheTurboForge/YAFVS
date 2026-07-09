@@ -46,14 +46,8 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
     return await exportNativeReportFormatMetadata(this.http, id);
   }
 
-  async get(
-    {id}: {id: string},
-    {filter, ...options}: {filter?: string} = {},
-  ) {
-    if (canUseNativeApi(this.http)) {
-      return new Response(await fetchNativeReportFormat(this.http, id));
-    }
-    return super.get({id}, {filter, ...options});
+  async get({id}: {id: string}, _options: {filter?: string} = {}) {
+    return new Response(await fetchNativeReportFormat(this.http, id));
   }
 
   async save(args: {active: boolean; id: string; name: string; summary: string}) {

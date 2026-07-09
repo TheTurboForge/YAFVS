@@ -8,7 +8,6 @@ import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {ReportConfigCommand} from 'gmp/commands/report-config';
 import {
   createHttp,
-  createEntityResponse,
   createActionResultResponse,
 } from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
@@ -18,24 +17,6 @@ afterEach(() => {
 });
 
 describe('ReportConfigCommand tests', () => {
-  test('should return single report config', async () => {
-    const response = createEntityResponse('report_config', {
-      _id: 'foo',
-    });
-
-    const fakeHttp = createHttp(response);
-    const cmd = new ReportConfigCommand(fakeHttp);
-    const resp = await cmd.get({id: 'foo'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_report_config',
-        report_config_id: 'foo',
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
-  });
-
   test('should return single report config through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

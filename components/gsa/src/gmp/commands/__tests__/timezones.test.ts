@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {createResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import TimezonesCommand from 'gmp/commands/timezones';
 import {createSession} from 'gmp/testing';
 
@@ -59,60 +59,19 @@ describe('TimezonesCommand tests', () => {
     expect(resp.data).toEqual(['UTC', 'Europe/Berlin']);
   });
 
-  test('should return timezones list', async () => {
-    const response = createResponse({
-      get_timezones: {
-        get_timezones_response: {
-          timezone: [
-            {name: 'UTC'},
-            {name: 'Europe/Berlin'},
-            {name: 'America/New_York'},
-            {name: 'Asia/Tokyo'},
-          ],
-        },
-      },
+  test('should handle empty native timezones list', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({items: []}),
+      ok: true,
+      status: 200,
     });
-
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
 
     const cmd = new TimezonesCommand(fakeHttp);
     const resp = await cmd.get();
 
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_timezones',
-      },
-    });
-
-    const {data} = resp;
-    expect(data).toHaveLength(4);
-    expect(data).toEqual([
-      'UTC',
-      'Europe/Berlin',
-      'America/New_York',
-      'Asia/Tokyo',
-    ]);
-  });
-
-  test('should handle empty timezones list', async () => {
-    const response = createResponse({
-      get_timezones: {
-        get_timezones_response: {
-          timezone: [],
-        },
-      },
-    });
-
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TimezonesCommand(fakeHttp);
-    const resp = await cmd.get();
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_timezones',
-      },
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
 
     const {data} = resp;
     expect(data).toHaveLength(0);

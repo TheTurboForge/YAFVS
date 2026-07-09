@@ -5,10 +5,8 @@
  */
 
 import HttpCommand from 'gmp/commands/http';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {map} from 'gmp/utils/array';
 import {fetchNativeTimezones} from 'gmp/native-api/timezones';
 
 class TimezonesCommand extends HttpCommand {
@@ -17,16 +15,7 @@ class TimezonesCommand extends HttpCommand {
   }
 
   async get() {
-    if (canUseNativeApi(this.http)) {
-      return new Response(await fetchNativeTimezones(this.http));
-    }
-
-    const response = await this.httpGetWithTransform();
-    const {data} = response;
-    const {timezone: timezones} =
-      // @ts-expect-error
-      data.get_timezones.get_timezones_response;
-    return response.set(map(timezones, tz => tz.name));
+    return new Response(await fetchNativeTimezones(this.http));
   }
 }
 

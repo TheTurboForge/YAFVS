@@ -58,7 +58,6 @@ from .requests.v224 import (
     SnmpPrivacyAlgorithm,
     SortOrder,
     SystemReports,
-    Tags,
     Targets,
     Tasks,
     TLSCertificates,
@@ -2390,112 +2389,6 @@ class GMPv224(GvmProtocol[T]):
                 filter_id=filter_id,
                 name=name,
                 details=details,
-            )
-        )
-
-    def create_tag(
-        self,
-        name: str,
-        resource_type: EntityType,
-        *,
-        resource_filter: str | None = None,
-        resource_ids: list[EntityID] | None = None,
-        value: str | None = None,
-        comment: str | None = None,
-        active: bool | None = None,
-    ) -> T:
-        """Create a tag
-
-        Args:
-            name: Name of the tag. A full tag name consisting of namespace and
-                predicate e.g. `foo:bar`.
-            resource_type: Entity type the tag is to be attached to.
-            resource_filter: Filter term to select resources the tag is to be
-                attached to. Only one of resource_filter or resource_ids can be
-                provided.
-            resource_ids: IDs of the resources the tag is to be attached to.
-                Only one of resource_filter or resource_ids can be provided.
-            value: Value associated with the tag.
-            comment: Comment for the tag.
-            active: Whether the tag should be active.
-        """
-        return self._send_request_and_transform_response(
-            Tags.create_tag(
-                name,
-                resource_type,
-                resource_filter=resource_filter,
-                resource_ids=resource_ids,
-                value=value,
-                comment=comment,
-                active=active,
-            )
-        )
-
-    def get_tags(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        trash: bool | None = None,
-        names_only: bool | None = None,
-    ) -> T:
-        """Request a list of tags
-
-        Args:
-            filter_string: Filter term to use for the query
-            filter_id: UUID of an existing filter to use for the query
-            trash: Whether to get tags from the trashcan instead
-            names_only: Whether to get only distinct tag names
-        """
-        return self._send_request_and_transform_response(
-            Tags.get_tags(
-                filter_string=filter_string,
-                filter_id=filter_id,
-                trash=trash,
-                names_only=names_only,
-            )
-        )
-
-    def modify_tag(
-        self,
-        tag_id: EntityID,
-        *,
-        comment: str | None = None,
-        name: str | None = None,
-        value: str | None = None,
-        active: bool | None = None,
-        resource_action: str | None = None,
-        resource_type: EntityType | None = None,
-        resource_filter: str | None = None,
-        resource_ids: list[EntityID] | None = None,
-    ) -> T:
-        """Modifies an existing tag.
-
-        Args:
-            tag_id: UUID of the tag.
-            comment: Comment to add to the tag.
-            name: Name of the tag.
-            value: Value of the tag.
-            active: Whether the tag is active.
-            resource_action: Whether to add or remove resources instead of
-                overwriting. One of '', 'add', 'set' or 'remove'.
-            resource_type: Type of the resources to which to attach the tag.
-                Required if resource_filter is set.
-            resource_filter: Filter term to select resources the tag is to be
-                attached to.
-            resource_ids: IDs of the resources to which to attach the tag.
-        """
-        return self._send_request_and_transform_response(
-            Tags.modify_tag(
-                tag_id,
-                comment=comment,
-                name=name,
-                value=value,
-                active=active,
-                resource_action=resource_action,
-                resource_type=resource_type,
-                resource_filter=resource_filter,
-                resource_ids=resource_ids,
             )
         )
 

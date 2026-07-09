@@ -9961,6 +9961,33 @@ db2:keys=5,expires=0,avg_ttl=0
         element = ET.fromstring("<get_version_response><version>22.8</version></get_version_response>")
         self.assertEqual(runtime_gmp_smoke.parse_version(element), "22.8")
 
+    def test_gmp_smoke_raw_xml_helper_escapes_credentials_and_reads_complete_response(self):
+        xml = runtime_gmp_smoke.gmp_authenticate_xml("admin<&", "pass>&")
+        self.assertIn("<username>admin&lt;&amp;</username>", xml)
+        self.assertIn("<password>pass&gt;&amp;</password>", xml)
+
+        class FakeSocket:
+            def __init__(self):
+                self.chunks = [b"<get_version_response>", b"<version>22.9</version></get_version_response>"]
+
+            def recv(self, _size):
+                return self.chunks.pop(0)
+
+        payload = runtime_gmp_smoke.read_gmp_xml_response(FakeSocket())
+        self.assertEqual(runtime_gmp_smoke.parse_version(payload), "22.9")
+
+    def test_gmp_smoke_no_longer_imports_python_gvm_runtime_client(self):
+        source = GMP_SMOKE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("from gvm.connections", source)
+        self.assertNotIn("from gvm.protocols", source)
+        self.assertIn("socket.AF_UNIX", source)
+
+        wrapper_source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        gmp_smoke_wrapper = wrapper_source.split("def command_runtime_gmp_smoke", 1)[1].split("def wait_for_runtime_gmp_smoke", 1)[0]
+        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", gmp_smoke_wrapper)
+        self.assertNotIn("python-gvm.venv", gmp_smoke_wrapper)
+        self.assertIn("sys.executable", gmp_smoke_wrapper)
+
     def test_native_feed_object_verification_uses_detail_endpoints(self):
         calls = []
         original_native_api_curl = turbovasctl.native_api_curl

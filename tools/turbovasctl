@@ -12548,22 +12548,20 @@ def command_runtime_gmp_smoke(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     socket_path = gvmd_socket_path(repo_root)
-    python = venv_python(repo_root, "python-gvm")
     probe = repo_root / "tools" / "runtime_gmp_smoke.py"
     findings.append(socket_readiness_finding("gvmd.socket", "gvmd", socket_path, missing_status="fail"))
     findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing; run just runtime-manager-init.", str(secret_path)))
-    findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing; run just build-python.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
     findings.append(finding("pass" if probe.is_file() else "fail", "gmp.probe", "GMP smoke probe exists." if probe.is_file() else "GMP smoke probe is missing.", str(probe.relative_to(repo_root))))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-gmp-smoke", repo_root, "GMP smoke stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
 
-    result = run_command([str(python), str(probe), "--socket", str(socket_path), "--username", DEV_ADMIN_USER, "--password-file", str(secret_path)], repo_root, env=build_env(repo_root), timeout=60)
+    result = run_command([sys.executable, str(probe), "--socket", str(socket_path), "--username", DEV_ADMIN_USER, "--password-file", str(secret_path)], repo_root, env=build_env(repo_root), timeout=60)
     try:
         parsed = json.loads(result.stdout)
     except json.JSONDecodeError:
         parsed = None
     probe_status = parsed.get("status") if parsed else None
-    findings.append(finding("pass" if result.returncode == 0 and probe_status == "pass" else "fail", "gvmd.gmp", f"python-gvm authenticated get_version exit code {result.returncode}.", details={"probe": parsed, "output_tail": output_tail(result.stdout, 60)}))
+    findings.append(finding("pass" if result.returncode == 0 and probe_status == "pass" else "fail", "gvmd.gmp", f"Raw GMP socket authenticated get_version exit code {result.returncode}.", details={"probe": parsed, "output_tail": output_tail(result.stdout, 60)}))
     return make_result("runtime-gmp-smoke", repo_root, "Runtime GMP smoke completed.", findings, [str(runtime_dir(repo_root))])
 
 

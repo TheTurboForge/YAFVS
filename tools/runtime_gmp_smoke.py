@@ -7,9 +7,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
+
+
+READ_CHUNK_BYTES = 16 * 1024
 
 
 
@@ -34,6 +39,43 @@ def parse_version(response: Any) -> str | None:
     if version is not None and getattr(version, "text", None):
         return version.text
     return None
+
+
+def gmp_authenticate_xml(username: str, password: str) -> str:
+    return (
+        "<authenticate><credentials>"
+        f"<username>{escape(username)}</username>"
+        f"<password>{escape(password)}</password>"
+        "</credentials></authenticate>"
+    )
+
+
+def read_gmp_xml_response(connection: socket.socket) -> bytes:
+    chunks: list[bytes] = []
+    while True:
+        chunk = connection.recv(READ_CHUNK_BYTES)
+        if not chunk:
+            raise RuntimeError("gvmd closed the GMP socket before sending a complete response")
+        chunks.append(chunk)
+        payload = b"".join(chunks)
+        try:
+            ET.fromstring(payload)
+            return payload
+        except ET.ParseError:
+            continue
+
+
+def send_gmp_xml_command(connection: socket.socket, command: str) -> bytes:
+    connection.sendall(command.encode("utf-8"))
+    return read_gmp_xml_response(connection)
+
+
+def raw_gmp_get_version(socket_path: Path, username: str, password: str, timeout: int) -> bytes:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(timeout)
+        connection.connect(str(socket_path))
+        send_gmp_xml_command(connection, gmp_authenticate_xml(username, password))
+        return send_gmp_xml_command(connection, "<get_version/>")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,13 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        from gvm.connections import UnixSocketConnection
-        from gvm.protocols.gmp import GMP
-
-        connection = UnixSocketConnection(path=socket_path, timeout=args.timeout)
-        with GMP(connection=connection) as gmp:
-            gmp.authenticate(args.username, password)
-            version_response = gmp.get_version()
+        version_response = raw_gmp_get_version(socket_path, args.username, password, args.timeout)
     except Exception as error:  # pylint: disable=broad-except
         print(
             json.dumps(

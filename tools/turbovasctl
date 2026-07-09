@@ -1143,7 +1143,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("get", "/hosts"): {
-        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "host-asset-list-read",
     },
@@ -1156,7 +1155,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/hosts/{host_id}"): {
-        "x-turbovas-inherited-still-owns": "host-os-catalog-target-creation-tags-export-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "host-asset-detail-info-read",
     },

@@ -4125,8 +4125,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/operating-systems": ("getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
             "/api/v1/operating-systems/{os_id}": ("getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", "operating-system-writes-deletes-and-rich-history"),
             "/api/v1/operating-systems/{os_id}/export": ("getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", "operating-system-writes-deletes-and-rich-history"),
-            "/api/v1/hosts": ("getHosts", "host-asset-list-read", "host-os-catalog-target-creation-tags-export-and-rich-history"),
-            "/api/v1/hosts/{host_id}": ("getHostsByHostId", "host-asset-detail-info-read", "host-os-catalog-target-creation-tags-export-and-rich-history"),
+            "/api/v1/hosts": ("getHosts", "host-asset-list-read", None),
+            "/api/v1/hosts/{host_id}": ("getHostsByHostId", "host-asset-detail-info-read", None),
             "/api/v1/hosts/{host_id}/export": ("getHostsByHostIdExport", "host-asset-metadata-export-read", None),
             "/api/v1/tls-certificates": ("getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-rich-history"),
             "/api/v1/tls-certificates/{certificate_id}": ("getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-rich-history"),
@@ -4960,7 +4960,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(("GET /nvts", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /nvts/{nvt_id}", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /operating-systems", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /hosts/{host_id}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /tls-certificates/{certificate_id}", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /scanners", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /scan-configs/{scan_config_id}/families", "x-turbovas-inherited-still-owns"), missing_migration)
@@ -6304,8 +6303,8 @@ class TurboVASCtlTests(unittest.TestCase):
             (operating_systems, "getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
             (operating_system_detail, "getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", "operating-system-writes-deletes-and-rich-history"),
             (operating_system_export, "getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", "operating-system-writes-deletes-and-rich-history"),
-            (hosts, "getHosts", "host-asset-list-read", "host-os-catalog-target-creation-tags-export-and-rich-history"),
-            (host_detail, "getHostsByHostId", "host-asset-detail-info-read", "host-os-catalog-target-creation-tags-export-and-rich-history"),
+            (hosts, "getHosts", "host-asset-list-read", None),
+            (host_detail, "getHostsByHostId", "host-asset-detail-info-read", None),
             (host_export, "getHostsByHostIdExport", "host-asset-metadata-export-read", None),
             (tls_certificates, "getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-rich-history"),
             (tls_certificate_detail, "getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-rich-history"),

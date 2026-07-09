@@ -783,7 +783,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: host-asset-list-read
-      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       summary: List top-level host assets
       description: Inherited host asset view backed by gvmd/PostgreSQL host identifiers, details, and severity state. Native direct write-control can create manual IP host assets, patch host comments, hard-delete operator-owned hosts, delete individual host identifiers, and delete host operating-system links. XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history remain inherited.
       parameters:
@@ -856,7 +855,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: host-asset-detail-info-read
-      x-turbovas-inherited-still-owns: host-os-catalog-target-creation-tags-export-and-rich-history
       summary: Read one top-level host asset
       description: Host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, whitelisted host detail state, and active user tags. Native direct write-control can patch the host comment, hard-delete the operator-owned host, delete individual host identifiers, and delete host operating-system links. This endpoint intentionally excludes XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history.
       parameters:

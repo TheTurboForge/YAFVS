@@ -499,11 +499,33 @@ describe('ReportConfigCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-  test('should keep report config save on GMP when a non-default param value is missing', async () => {
-    const response = createActionResultResponse({id: 'foo'});
-    const fetchMock = testing.fn();
+  test('should complete sparse report config params from native detail before save', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'foo',
+          name: 'foo',
+          params: [
+            {
+              name: 'subject',
+              type: 'string',
+              value: 'Daily report',
+              default: 'Default subject',
+              using_default: false,
+            },
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'foo'}),
+        ok: true,
+        status: 200,
+      });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -522,16 +544,26 @@ describe('ReportConfigCommand tests', () => {
       paramTypes: {timezone: 'string'},
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_report_config',
-        report_config_id: 'foo',
-        name: 'foo',
-        comment: undefined,
-        'param:timezone': 'UTC',
-      },
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/report-configs/foo',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/report-configs/foo',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'foo',
+          params: [
+            {name: 'timezone', value: 'UTC'},
+            {name: 'subject', value: 'Daily report'},
+          ],
+        }),
+      }),
+    );
     expect(resp.data.id).toEqual('foo');
   });
 

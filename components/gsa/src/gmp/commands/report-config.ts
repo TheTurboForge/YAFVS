@@ -113,6 +113,41 @@ const canUseNativeReportConfigPatch = (args: ReportConfigSaveArgs): boolean => {
   );
 };
 
+const completeSparseNativeReportConfigPatch = async (
+  http: Http,
+  args: ReportConfigSaveArgs,
+): Promise<ReportConfigSaveArgs | undefined> => {
+  if (canUseNativeReportConfigPatch(args)) {
+    return args;
+  }
+
+  const current = await fetchNativeReportConfig(http, args.id);
+  const params = {...(args.params ?? {})};
+  const paramTypes = {...(args.paramTypes ?? {})};
+
+  for (const [paramName, usingDefault] of Object.entries(
+    args.paramsUsingDefault ?? {},
+  )) {
+    if (parseYesNo(usingDefault) || params[paramName] !== undefined) {
+      continue;
+    }
+    const currentParam = current.params.find(param => param.name === paramName);
+    if (currentParam?.value === undefined) {
+      return undefined;
+    }
+    params[paramName] = currentParam.value;
+    if (currentParam.type !== undefined) {
+      paramTypes[paramName] = currentParam.type;
+    }
+  }
+
+  return {
+    ...args,
+    params,
+    paramTypes,
+  };
+};
+
 const nativeReportConfigPatchRequestFromCommand = (
   args: ReportConfigSaveArgs,
 ): NativeReportConfigPatchRequest => {
@@ -211,12 +246,18 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
       paramTypes = {},
     } = args;
 
-    if (canUseNativeApi(this.http) && canUseNativeReportConfigPatch(args)) {
-      return patchNativeReportConfig(
+    if (canUseNativeApi(this.http)) {
+      const nativeArgs = await completeSparseNativeReportConfigPatch(
         this.http,
-        id,
-        nativeReportConfigPatchRequestFromCommand(args),
+        args,
       );
+      if (nativeArgs !== undefined) {
+        return patchNativeReportConfig(
+          this.http,
+          id,
+          nativeReportConfigPatchRequestFromCommand(nativeArgs),
+        );
+      }
     }
 
     const data = {

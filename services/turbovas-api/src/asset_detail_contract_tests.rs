@@ -9,7 +9,7 @@ use crate::{
     asset_user_tag_query_sql::{
         host_user_tags_sql, operating_system_user_tags_sql, port_list_user_tags_sql,
         scan_config_user_tags_sql, scanner_user_tags_sql, schedule_user_tags_sql,
-        tls_certificate_user_tags_sql,
+        target_user_tags_sql, tls_certificate_user_tags_sql,
     },
     collections::{ALERT_DEFAULT_SORT, ALERT_SORT_FIELDS},
     direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed},
@@ -35,6 +35,7 @@ use crate::{
     },
     schedule_query_sql::{schedule_asset_detail_sql, schedule_assets_sql, schedule_tasks_sql},
     tag_query_sql::{tag_asset_detail_sql, tag_assets_sql, tag_resource_lookup_sql},
+    target_query_sql::target_sql,
     tls_certificate_query_sql::{
         tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_pem_sql,
         tls_certificate_sources_sql,
@@ -200,6 +201,43 @@ fn task_detail_contract_includes_db_owned_schedule_lifecycle_metadata() {
             "task payload must keep {field}"
         );
     }
+}
+
+#[test]
+fn target_user_tags_are_detail_only_active_target_tags() {
+    let payload_source = include_str!("task_target_payloads.rs");
+    let list_sql = target_sql("lower(uuid) = lower($1)", "name ASC", "LIMIT $2 OFFSET $3");
+    let target_payload = payload_source
+        .split_once("pub(crate) struct TargetItem {")
+        .expect("target payload struct must exist")
+        .1
+        .split_once("#[derive(Debug, Serialize)]\nstruct TaskReportCount")
+        .expect("target payload struct must precede task payload structs")
+        .0;
+
+    assert!(target_payload.contains("user_tags: Vec<ReportUserTag>"));
+    assert!(list_sql.contains("FROM targets t"));
+    assert!(list_sql.contains("ORDER BY name ASC, name ASC LIMIT $2 OFFSET $3"));
+    for forbidden in [
+        "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "password", "secret",
+    ] {
+        assert!(
+            !list_sql.contains(forbidden),
+            "target read SQL must not contain {forbidden}"
+        );
+    }
+
+    let sql = target_user_tags_sql();
+    assert!(sql.contains("FROM tags t"));
+    assert!(sql.contains("JOIN tag_resources tr ON tr.tag = t.id"));
+    assert!(sql.contains("JOIN targets ON targets.id = tr.resource"));
+    assert!(sql.contains("lower(targets.uuid) = lower($1)"));
+    assert!(sql.contains("tr.resource_type = 'target'"));
+    assert!(sql.contains("tr.resource_location = 0"));
+    assert!(sql.contains("coalesce(t.active, 0) = 1"));
+    assert!(!sql.contains("credential"));
+    assert!(!sql.contains("reports"));
+    assert!(!sql.contains("results"));
 }
 
 #[test]

@@ -9,6 +9,7 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    asset_user_tag_query_sql::target_user_tags_sql,
     collections::{TARGET_DEFAULT_SORT, TARGET_SORT_FIELDS},
     errors::ApiError,
     path_ids::parse_uuid,
@@ -17,7 +18,8 @@ use crate::{
         normalize_collection_query, sort_clause,
     },
     target_query_sql::target_sql,
-    task_target_payloads::{TargetItem, target_from_row},
+    task_target_payloads::{TargetItem, target_from_row, target_from_row_with_user_tags},
+    user_tags::ReportUserTag,
 };
 
 pub(crate) async fn targets(
@@ -86,5 +88,28 @@ pub(crate) async fn load_target_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
-    Ok(target_from_row(&row))
+    let user_tags = target_user_tags(client, target_id).await?;
+    Ok(target_from_row_with_user_tags(&row, user_tags))
+}
+
+async fn target_user_tags(
+    client: &tokio_postgres::Client,
+    target_id: &str,
+) -> Result<Vec<ReportUserTag>, ApiError> {
+    let rows = client
+        .query(target_user_tags_sql(), &[&target_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "target user-tag query failed");
+            ApiError::Database
+        })?;
+    Ok(rows
+        .iter()
+        .map(|row| ReportUserTag {
+            id: row.get("id"),
+            name: row.get("name"),
+            value: row.get("value"),
+            comment: row.get("comment"),
+        })
+        .collect())
 }

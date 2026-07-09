@@ -40,6 +40,13 @@ interface NativeTargetCredentials {
   krb5?: NativeCredentialReference;
 }
 
+interface NativeUserTagPayload {
+  id: string;
+  name: string;
+  value: string;
+  comment: string;
+}
+
 interface NativeTargetItem {
   id?: string;
   name?: string;
@@ -55,6 +62,7 @@ interface NativeTargetItem {
   credentials?: NativeTargetCredentials;
   task_count?: number;
   tasks?: NativeReference[];
+  user_tags?: NativeUserTagPayload[];
   creation_time?: string;
   modification_time?: string;
 }
@@ -200,6 +208,15 @@ const credentialElement = (item?: NativeCredentialReference) => {
   };
 };
 
+const nativeUserTagsElement = (tags: NativeUserTagPayload[]) => ({
+  tag: tags.map(tag => ({
+    _id: stringValue(tag.id),
+    name: stringValue(tag.name),
+    value: stringValue(tag.value),
+    comment: stringValue(tag.comment),
+  })),
+});
+
 const targetCommandPermissions = {
   permission: [
     {name: 'get_targets'},
@@ -208,7 +225,10 @@ const targetCommandPermissions = {
   ],
 };
 
-export const nativeTargetToModel = (item: NativeTargetItem): Target => {
+export const nativeTargetToModel = (
+  item: NativeTargetItem,
+  {detail = false}: {detail?: boolean} = {},
+): Target => {
   const credentials = item.credentials ?? {};
   const element = {
     _id: stringValue(item.id),
@@ -246,6 +266,7 @@ export const nativeTargetToModel = (item: NativeTargetItem): Target => {
         usage_type: 'scan',
       })),
     },
+    user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
     creation_time: item.creation_time,
     modification_time: item.modification_time,
   };
@@ -348,7 +369,7 @@ export const fetchNativeTargets = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const targets = (payload.items ?? []).map(nativeTargetToModel);
+  const targets = (payload.items ?? []).map(item => nativeTargetToModel(item));
   return {
     targets,
     counts: nativeCounts(page, targets.length),
@@ -365,7 +386,7 @@ export const fetchNativeTarget = async (
     `api/v1/targets/${encodeURIComponent(id)}`,
     {token: gmp.session.token},
   );
-  return {target: nativeTargetToModel(payload)};
+  return {target: nativeTargetToModel(payload, {detail: true})};
 };
 
 export const cloneNativeTarget = async (

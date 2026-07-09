@@ -1,10 +1,16 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import Filter from 'gmp/models/filter';
+import Target from 'gmp/models/target';
 import {fetchNativeTarget, fetchNativeTargets} from 'gmp/native-api/targets';
+import {loadEntities, loadEntity} from 'web/store/entities/targets';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -111,6 +117,14 @@ describe('native API target list', () => {
         port_list: {id: 'port-list-1', name: 'All IANA assigned TCP'},
         credentials: {},
         tasks: [{id: 'task-1', name: 'Full and fast'}],
+        user_tags: [
+          {
+            id: 'tag-1',
+            name: 'Native tag',
+            value: 'true',
+            comment: 'Native target tag',
+          },
+        ],
       }),
       ok: true,
       status: 200,
@@ -123,6 +137,11 @@ describe('native API target list', () => {
     expect(response.target.id).toEqual('target-1');
     expect(response.target.name).toEqual('metasploitable');
     expect(response.target.tasks?.[0].id).toEqual('task-1');
+    expect(response.target.userTags).toHaveLength(1);
+    expect(response.target.userTags[0].id).toEqual('tag-1');
+    expect(response.target.userTags[0].name).toEqual('Native tag');
+    expect(response.target.userTags[0].value).toEqual('true');
+    expect(response.target.userTags[0].comment).toEqual('Native target tag');
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target-1', {
       token: 'test-token',
     });
@@ -136,5 +155,106 @@ describe('native API target list', () => {
         },
       },
     );
+  });
+
+  test('loads target list store entries through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name');
+    const rootState = createState('target', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'target-1',
+            name: 'metasploitable',
+            hosts: ['192.168.178.50'],
+            tasks: [],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp(),
+      target: {
+        getAll: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+      },
+    };
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.target.getAll).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/targets', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.data[0]).toBeInstanceOf(Target);
+    expect(successAction.data[0].name).toEqual('metasploitable');
+    expect(successAction.counts.filtered).toEqual(1);
+  });
+
+  test('loads native detail without inherited GMP double-read', async () => {
+    const id = 'target-1';
+    const rootState = createState('target', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        name: 'metasploitable',
+        hosts: ['192.168.178.50'],
+        credentials: {},
+        tasks: [],
+        user_tags: [
+          {
+            id: 'tag-1',
+            name: 'Native tag',
+            value: 'true',
+            comment: 'Native target tag',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp(),
+      target: {
+        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+      },
+    };
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.target.get).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith(`api/v1/targets/${id}`, {
+      token: 'test-token',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.id).toEqual(id);
+    expect(successAction.data).toBeInstanceOf(Target);
+    expect(successAction.data.userTags[0].id).toEqual('tag-1');
+    expect(successAction.data.userTags[0].name).toEqual('Native tag');
   });
 });

@@ -8,6 +8,7 @@ use tokio_postgres::Row;
 use crate::{
     formatters::unix_ts_to_rfc3339,
     row_helpers::{alive_test_labels, boolean_int, csv_values, task_has_active_current_report},
+    user_tags::ReportUserTag,
 };
 
 #[derive(Debug, Serialize)]
@@ -56,6 +57,7 @@ pub(crate) struct TargetItem {
     credentials: TargetCredentials,
     task_count: i64,
     tasks: Vec<TargetReference>,
+    user_tags: Vec<ReportUserTag>,
     creation_time: Option<String>,
     modification_time: Option<String>,
 }
@@ -194,6 +196,13 @@ fn target_task_references(row: &Row) -> Vec<TargetReference> {
 }
 
 pub(crate) fn target_from_row(row: &Row) -> TargetItem {
+    target_from_row_with_user_tags(row, Vec::new())
+}
+
+pub(crate) fn target_from_row_with_user_tags(
+    row: &Row,
+    user_tags: Vec<ReportUserTag>,
+) -> TargetItem {
     let hosts = csv_values(&row.get::<_, String>("hosts"));
     TargetItem {
         id: row.get("uuid"),
@@ -210,6 +219,7 @@ pub(crate) fn target_from_row(row: &Row) -> TargetItem {
         credentials: target_credentials(row),
         task_count: row.get("task_count"),
         tasks: target_task_references(row),
+        user_tags,
         creation_time: unix_ts_to_rfc3339(row.get("creation_time")),
         modification_time: unix_ts_to_rfc3339(row.get("modification_time")),
     }

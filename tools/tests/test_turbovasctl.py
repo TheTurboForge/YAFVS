@@ -4128,10 +4128,10 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/hosts": ("getHosts", "host-asset-list-read", None),
             "/api/v1/hosts/{host_id}": ("getHostsByHostId", "host-asset-detail-info-read", None),
             "/api/v1/hosts/{host_id}/export": ("getHostsByHostIdExport", "host-asset-metadata-export-read", None),
-            "/api/v1/tls-certificates": ("getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-rich-history"),
-            "/api/v1/tls-certificates/{certificate_id}": ("getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-rich-history"),
-            "/api/v1/tls-certificates/{certificate_id}/export": ("getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", "tls-certificate-rich-history"),
-            "/api/v1/tls-certificates/{certificate_id}/certificate": ("getTlsCertificatesByCertificateIdCertificate", "tls-certificate-pem-download-read", "tls-certificate-rich-history"),
+            "/api/v1/tls-certificates": ("getTlsCertificates", "tls-certificate-asset-list-read", None),
+            "/api/v1/tls-certificates/{certificate_id}": ("getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", None),
+            "/api/v1/tls-certificates/{certificate_id}/export": ("getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", None),
+            "/api/v1/tls-certificates/{certificate_id}/certificate": ("getTlsCertificatesByCertificateIdCertificate", "tls-certificate-pem-download-read", None),
             "/api/v1/scanners": ("getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
@@ -4505,18 +4505,18 @@ class TurboVASCtlTests(unittest.TestCase):
                 "replacement_candidates": ["override list automation"],
             },
             {
-                "endpoint": "/api/v1/tls-certificates",
-                "method": "get",
-                "inventory_endpoint": "/api/v1/tls-certificates",
-                "openapi_path": "/tls-certificates",
-                "direct_access": "scriptable_read",
+                "endpoint": "/api/v1/tls-certificates/{certificate_id}",
+                "method": "delete",
+                "inventory_endpoint": "/api/v1/tls-certificates/{certificate_id}",
+                "openapi_path": "/tls-certificates/{certificate_id}",
+                "direct_access": "direct_write_control",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "tls-certificate-asset-list-read",
+                "x_turbovas_exposure": "direct-write",
+                "x_turbovas_maturity": "live-write",
+                "x_turbovas_replaces": "tls-certificate-delete",
                 "x_turbovas_inherited_still_owns": "tls-certificate-rich-history",
-                "replacement_candidates": ["TLS certificate list automation"],
+                "replacement_candidates": ["TLS certificate delete semantics"],
             },
         ]
 
@@ -4530,7 +4530,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["items"][0]["endpoint"], "/api/v1/overrides")
         self.assertEqual(compact["details"]["focus_terms"], ["rich_context_or_history"])
         self.assertEqual(compact["details"]["focus_match_count"], 1)
-        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/tls-certificates")
+        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/tls-certificates/{certificate_id}")
 
     def test_native_api_migration_matrix_focus_warns_on_zero_matches(self):
         root = Path(__file__).resolve().parents[2]
@@ -4610,7 +4610,7 @@ class TurboVASCtlTests(unittest.TestCase):
         rows = [
             {"endpoint": "/api/v1/tasks", "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes"},
             {"endpoint": "/api/v1/targets", "x_turbovas_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
-            {"endpoint": "/api/v1/tls-certificates", "x_turbovas_inherited_still_owns": "tls-certificate-rich-history"},
+            {"endpoint": "/api/v1/tls-certificates/{certificate_id}", "x_turbovas_inherited_still_owns": "tls-certificate-rich-history"},
         ]
 
         remaining = turbovasctl.native_api_migration_matrix_remaining_surface(rows)
@@ -6306,10 +6306,10 @@ class TurboVASCtlTests(unittest.TestCase):
             (hosts, "getHosts", "host-asset-list-read", None),
             (host_detail, "getHostsByHostId", "host-asset-detail-info-read", None),
             (host_export, "getHostsByHostIdExport", "host-asset-metadata-export-read", None),
-            (tls_certificates, "getTlsCertificates", "tls-certificate-asset-list-read", "tls-certificate-rich-history"),
-            (tls_certificate_detail, "getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", "tls-certificate-rich-history"),
-            (tls_certificate_export, "getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", "tls-certificate-rich-history"),
-            (tls_certificate_pem, "getTlsCertificatesByCertificateIdCertificate", "tls-certificate-pem-download-read", "tls-certificate-rich-history"),
+            (tls_certificates, "getTlsCertificates", "tls-certificate-asset-list-read", None),
+            (tls_certificate_detail, "getTlsCertificatesByCertificateId", "tls-certificate-asset-detail-info-read", None),
+            (tls_certificate_export, "getTlsCertificatesByCertificateIdExport", "tls-certificate-asset-metadata-export-read", None),
+            (tls_certificate_pem, "getTlsCertificatesByCertificateIdCertificate", "tls-certificate-pem-download-read", None),
             (scanners, "getScanners", "scanner-metadata-list-read", "scanner-control-credentials-writes-and-deletes"),
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),

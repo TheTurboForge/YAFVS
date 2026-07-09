@@ -1195,12 +1195,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "host-asset-metadata-export-read",
     },
     ("get", "/tls-certificates"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-asset-list-read",
     },
     ("get", "/tls-certificates/{certificate_id}"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-asset-detail-info-read",
     },
@@ -1214,12 +1212,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("get", "/tls-certificates/{certificate_id}/export"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-asset-metadata-export-read",
     },
     ("get", "/tls-certificates/{certificate_id}/certificate"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-pem-download-read",
     },

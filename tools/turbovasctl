@@ -666,6 +666,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tls-certificate-asset-detail-info-read",
         "tls-certificate-asset-list-read",
         "tls-certificate-asset-metadata-export-read",
+        "tls-certificate-delete",
         "tls-certificate-pem-download-read",
         "trashcan-count-summary-read",
         "trashcan-redacted-row-metadata-read",
@@ -704,7 +705,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation",
         "task-scan-control-writes-and-deletes",
-        "tls-certificate-delete-and-rich-history",
+        "tls-certificate-rich-history",
         "trashcan-deep-row-data-and-mutations",
         "trashcan-row-data-and-mutations",
         "vulnerability-exports-and-actions",
@@ -752,6 +753,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("delete", "/host-operating-systems/{host_operating_system_id}"): "direct-write",
     ("get", "/tls-certificates"): "direct-read",
     ("get", "/tls-certificates/{certificate_id}"): "direct-read",
+    ("delete", "/tls-certificates/{certificate_id}"): "direct-write",
     ("get", "/tls-certificates/{certificate_id}/certificate"): "direct-read",
     ("get", "/scanners"): "direct-read",
     ("get", "/scanners/{scanner_id}"): "direct-read",
@@ -1169,22 +1171,31 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "host-asset-metadata-export-read",
     },
     ("get", "/tls-certificates"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-delete-and-rich-history",
+        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-asset-list-read",
     },
     ("get", "/tls-certificates/{certificate_id}"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-delete-and-rich-history",
+        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-asset-detail-info-read",
     },
+    ("delete", "/tls-certificates/{certificate_id}"): {
+        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "tls-certificate-delete",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-delete",
+    },
     ("get", "/tls-certificates/{certificate_id}/export"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-delete-and-rich-history",
+        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-asset-metadata-export-read",
     },
     ("get", "/tls-certificates/{certificate_id}/certificate"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-delete-and-rich-history",
+        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tls-certificate-pem-download-read",
     },
@@ -7212,11 +7223,12 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             "scope_prefix",
             "tag_prefix",
             "target_prefix",
+            "tls_certificate_prefix",
         ):
             prefix = delete_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
-                if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "scope_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
+                if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "scope_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     templates.add(f"{prefix.rstrip('/')}/{{}}{trash_suffix}")
 
     return sorted(templates), errors
@@ -7643,6 +7655,14 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/tls-certificates/{certificate_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level TLS Certificate detail Information fields, active User Tags, and source provenance (migrated through gsad same-origin proxy)", "read-only TLS certificate asset automation", "native-api-request helper"],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/tls-certificates/{certificate_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser TLS certificate delete", "direct native TLS certificate delete"],
+                "residual_inherited": ["TLS certificate rich history, tag actions, scanner-control, and feed-control remain inherited."],
             },
             {
                 "endpoint": "/api/v1/tls-certificates/{certificate_id}/export",

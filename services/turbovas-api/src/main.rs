@@ -236,6 +236,12 @@ mod task_writes_tests;
 mod timezones;
 mod tls_certificate_payloads;
 mod tls_certificate_query_sql;
+mod tls_certificate_write_db;
+mod tls_certificate_write_sql;
+mod tls_certificate_write_transactions;
+mod tls_certificate_writes;
+#[cfg(test)]
+mod tls_certificate_writes_tests;
 mod tls_certificates;
 mod trashcan;
 mod user_account_payloads;

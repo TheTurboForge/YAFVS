@@ -759,7 +759,7 @@ fn tls_certificate_pem_contract_is_separate_from_metadata_detail() {
 }
 
 #[test]
-fn tls_certificate_direct_routes_remain_get_only_until_export_or_delete_contracts_exist() {
+fn tls_certificate_direct_routes_allow_metadata_reads_and_delete_only() {
     for path in [
         "/api/v1/tls-certificates",
         "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc",
@@ -778,13 +778,24 @@ fn tls_certificate_direct_routes_remain_get_only_until_export_or_delete_contract
             direct_api_v1_method_is_allowed(&Method::GET, path, true),
             "GET {path} must remain allowed when write-control is enabled"
         );
-        for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+        for method in [Method::POST, Method::PATCH, Method::PUT] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, path, true),
-                "{method} {path} must stay closed until TLS certificate byte-export, delete, or rich-history contracts exist"
+                "{method} {path} must stay closed until TLS certificate write or rich-history contracts exist"
             );
         }
     }
+
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/tls-certificates/12345678-1234-1234-1234-123456789abc",
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/tls-certificates/not-a-uuid",
+        true
+    ));
 }
 
 #[test]

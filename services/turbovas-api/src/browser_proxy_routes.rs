@@ -20,8 +20,9 @@ use crate::{
         browser_proxy_delete_host_operating_system, browser_proxy_patch_host,
     },
     browser_proxy_metadata_patch::{
-        browser_proxy_delete_task, browser_proxy_patch_alert, browser_proxy_patch_credential,
-        browser_proxy_patch_report_format, browser_proxy_patch_scanner, browser_proxy_patch_task,
+        browser_proxy_delete_task, browser_proxy_delete_tls_certificate, browser_proxy_patch_alert,
+        browser_proxy_patch_credential, browser_proxy_patch_report_format,
+        browser_proxy_patch_scanner, browser_proxy_patch_task,
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
@@ -88,6 +89,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/host-operating-systems/:host_operating_system_id",
             delete(browser_proxy_delete_host_operating_system),
+        )
+        .route(
+            "/api/v1/tls-certificates/:certificate_id",
+            delete(browser_proxy_delete_tls_certificate),
         )
         .route(
             "/api/v1/filters/:filter_id",

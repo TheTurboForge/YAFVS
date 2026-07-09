@@ -48,6 +48,7 @@ use crate::{
         restore_target,
     },
     task_writes::{delete_task, patch_task},
+    tls_certificate_writes::delete_tls_certificate,
 };
 
 pub(crate) fn direct_native_api_router(
@@ -146,6 +147,10 @@ pub(crate) fn direct_native_api_router(
             )
             .route("/api/v1/tasks/:task_id", patch(patch_task))
             .route("/api/v1/tasks/:task_id", delete(delete_task))
+            .route(
+                "/api/v1/tls-certificates/:certificate_id",
+                delete(delete_tls_certificate),
+            )
             .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))
             .route("/api/v1/port-lists/:port_list_id", delete(delete_port_list))
             .route(

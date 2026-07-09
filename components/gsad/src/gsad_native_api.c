@@ -276,6 +276,7 @@ native_api_delete_path_is_allowed (const gchar *path)
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *target_prefix = "/api/v1/targets/";
   const gchar *task_prefix = "/api/v1/tasks/";
+  const gchar *tls_certificate_prefix = "/api/v1/tls-certificates/";
   const gchar *trash_suffix = "/trash";
 
   if (path == NULL || strchr (path, '?') != NULL)
@@ -303,6 +304,12 @@ native_api_delete_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, host_operating_system_prefix))
     {
       const gchar *id = path + strlen (host_operating_system_prefix);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, tls_certificate_prefix))
+    {
+      const gchar *id = path + strlen (tls_certificate_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 

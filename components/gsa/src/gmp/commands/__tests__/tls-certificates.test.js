@@ -66,6 +66,35 @@ describe('TlsCertificateCommand tests', () => {
     });
   });
 
+  test('should delete a TLS certificate through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TlsCertificateCommand(fakeHttp);
+
+    await cmd.delete({id: 'tls-certificate-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tls-certificates/tls-certificate-id',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tls-certificates/tls-certificate-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+          'X-TurboVAS-Token': 'test-token',
+        },
+      },
+    );
+  });
+
   test('should export TLS certificate metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

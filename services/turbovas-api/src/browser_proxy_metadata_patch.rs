@@ -27,6 +27,7 @@ use crate::{
     task_target_payloads::TaskItem,
     task_write_validation::TaskPatchRequest,
     task_writes::{delete_task, patch_task},
+    tls_certificate_writes::delete_tls_certificate,
 };
 
 pub(crate) async fn browser_proxy_patch_scanner(
@@ -54,6 +55,21 @@ pub(crate) async fn browser_proxy_delete_task(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     delete_task(State(state), Path(task_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_delete_tls_certificate(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(certificate_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_tls_certificate(
+        State(state),
+        Path(certificate_id),
+        Some(Extension(operator)),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_patch_credential(

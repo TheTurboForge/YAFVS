@@ -1071,7 +1071,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-asset-list-read
-      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-rich-history
       summary: List top-level TLS certificate assets
       description: Inherited TLS certificate asset view backed by gvmd/PostgreSQL certificate, source, and location tables.
       parameters:
@@ -1105,9 +1105,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-asset-detail-info-read
-      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-rich-history
       summary: Read one TLS certificate asset detail
-      description: Read-only TLS certificate asset metadata, active user tags, inherited-style validity/trust status, and source provenance backed by gvmd/PostgreSQL certificate, source, location, origin, and tag tables. Certificate bytes are exposed only through the explicit certificate endpoint; delete, scanner-control, feed-control, and write behavior remain excluded.
+      description: Read-only TLS certificate asset metadata, active user tags, inherited-style validity/trust status, and source provenance backed by gvmd/PostgreSQL certificate, source, location, origin, and tag tables. Certificate bytes are exposed only through the explicit certificate endpoint; scanner-control, feed-control, rich history, and other write behavior remain excluded.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -1131,6 +1131,40 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteTlsCertificatesByCertificateId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: tls-certificate-delete
+      x-turbovas-inherited-still-owns: tls-certificate-rich-history
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Delete TLS certificate asset
+      description: Direct write-control endpoint for deleting one operator-owned TLS certificate asset, its permission rows, active tag-resource links, source rows, and orphaned source location/origin rows. It intentionally excludes certificate creation/import, scanner/feed control, credential secrets, and rich report/history behavior.
+      parameters:
+        - $ref: '#/components/parameters/CertificateId'
+      responses:
+        '204':
+          description: TLS certificate deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tls-certificates/{certificate_id}/export:
     get:
       operationId: getTlsCertificatesByCertificateIdExport
@@ -1138,9 +1172,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-asset-metadata-export-read
-      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-rich-history
       summary: Export TLS certificate metadata JSON
-      description: Direct scriptable TLS certificate metadata export backed by gvmd/PostgreSQL. This returns the same native TLS certificate detail JSON with source provenance and active user tags. Certificate bytes are exposed only through the explicit certificate endpoint; delete, tag writes/actions, scanner-control, feed-control, and write behavior remain inherited.
+      description: Direct scriptable TLS certificate metadata export backed by gvmd/PostgreSQL. This returns the same native TLS certificate detail JSON with source provenance and active user tags. Certificate bytes are exposed only through the explicit certificate endpoint; tag writes/actions, scanner-control, feed-control, rich history, and other write behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -1171,9 +1205,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: tls-certificate-pem-download-read
-      x-turbovas-inherited-still-owns: tls-certificate-delete-and-rich-history
+      x-turbovas-inherited-still-owns: tls-certificate-rich-history
       summary: Read TLS certificate PEM source data
-      description: Read-only TLS certificate byte source for browser PEM download. This endpoint returns the stored certificate text only, separated from metadata detail so ordinary detail/list payloads stay compact and free of byte blobs. Delete, tag writes/actions, scanner-control, feed-control, and write behavior remain inherited.
+      description: Read-only TLS certificate byte source for browser PEM download. This endpoint returns the stored certificate text only, separated from metadata detail so ordinary detail/list payloads stay compact and free of byte blobs. Tag writes/actions, scanner-control, feed-control, rich history, and other write behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -6043,6 +6077,13 @@ components:
         format: uuid
     HostOperatingSystemId:
       name: host_operating_system_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CertificateId:
+      name: certificate_id
       in: path
       required: true
       schema:

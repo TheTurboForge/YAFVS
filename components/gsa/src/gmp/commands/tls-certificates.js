@@ -8,6 +8,7 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
+  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -15,6 +16,7 @@ import {
 import Response from 'gmp/http/response';
 import TlsCertificate from 'gmp/models/tls-certificate';
 import {
+  deleteNativeTlsCertificate,
   exportNativeTlsCertificateMetadata,
   exportNativeTlsCertificatesMetadata,
   fetchNativeTlsCertificatePem,
@@ -39,6 +41,14 @@ export class TlsCertificateCommand extends EntityCommand {
 
   async export({id}) {
     return await exportNativeTlsCertificateMetadata(this.http, id);
+  }
+
+  async delete({id}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeTlsCertificate(this.http, id);
+      return new Response();
+    }
+    return super.delete({id});
   }
 
   async get({id}, options = {}) {

@@ -5,7 +5,6 @@
  */
 
 import EntityCommand from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
@@ -53,20 +52,7 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
   async save(args: {active: boolean; id: string; name: string; summary: string}) {
     const {active, id, name, summary} = args;
 
-    if (canUseNativeApi(this.http)) {
-      return patchNativeReportFormat(this.http, id, {active, name, summary});
-    }
-
-    const data = {
-      cmd: 'save_report_format',
-      enable: active,
-      id,
-      name,
-      summary,
-    };
-
-    log.debug('Saving report format', args, data);
-    return this.action(data);
+    return patchNativeReportFormat(this.http, id, {active, name, summary});
   }
 
   getElementFromRoot(root: XmlResponseData) {

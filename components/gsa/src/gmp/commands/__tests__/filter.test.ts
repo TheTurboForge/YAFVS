@@ -316,6 +316,34 @@ describe('FilterCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should reject unsupported native filter create payloads', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(createActionResultResponse({id: 'fallback-id'})) as ReturnType<
+      typeof createHttp
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        name: 'Test Filter 1',
+        type: undefined as unknown as EntityType,
+        term: 'name=Test',
+      }),
+    ).rejects.toThrow('Native filter create received unsupported resource type');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should clone a filter through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'native-clone-id'}),
@@ -557,6 +585,35 @@ describe('FilterCommand tests', () => {
         term: 'name=Test',
       }),
     ).rejects.toThrow('Native API request failed with status 409');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject unsupported native filter save payloads', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(createActionResultResponse({id: 'fallback-id'})) as ReturnType<
+      typeof createHttp
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'filter-id',
+        name: 'Test Filter 1',
+        type: undefined as unknown as EntityType,
+        term: 'name=Test',
+      }),
+    ).rejects.toThrow('Native filter save received unsupported resource type');
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 

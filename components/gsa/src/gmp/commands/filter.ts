@@ -60,7 +60,10 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   }) {
     const {term, name, type, comment = ''} = args;
     const filterType = resourceType(type);
-    if (filterType !== undefined && canUseNativeApi(this.http)) {
+    if (canUseNativeApi(this.http)) {
+      if (filterType === undefined) {
+        throw new Error('Native filter create received unsupported resource type');
+      }
       return await createNativeFilter(this.http, {
         term,
         name,
@@ -104,7 +107,10 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   }) {
     const {id, term, name, type, comment = ''} = args;
     const filterType = resourceType(type);
-    if (filterType !== undefined && canUseNativeApi(this.http)) {
+    if (canUseNativeApi(this.http)) {
+      if (filterType === undefined) {
+        throw new Error('Native filter save received unsupported resource type');
+      }
       return patchNativeFilter(this.http, {
         id,
         term,

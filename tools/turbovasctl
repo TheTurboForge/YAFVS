@@ -1034,17 +1034,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "nvt-catalog-metadata-export-read",
     },
     ("get", "/operating-systems"): {
-        "x-turbovas-inherited-still-owns": "operating-system-writes-deletes-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "operating-system-asset-list-read",
     },
     ("get", "/operating-systems/{os_id}"): {
-        "x-turbovas-inherited-still-owns": "operating-system-writes-deletes-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "operating-system-asset-detail-info-read",
     },
     ("get", "/operating-systems/{os_id}/export"): {
-        "x-turbovas-inherited-still-owns": "operating-system-writes-deletes-and-rich-history",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "operating-system-asset-metadata-export-read",
     },

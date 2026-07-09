@@ -683,7 +683,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: operating-system-asset-list-read
-      x-turbovas-inherited-still-owns: operating-system-writes-deletes-and-rich-history
       summary: List top-level operating-system assets
       description: Inherited asset view backed by gvmd/PostgreSQL operating-system evidence, distinct from report operating-system evidence tabs.
       parameters:
@@ -717,7 +716,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: operating-system-asset-detail-info-read
-      x-turbovas-inherited-still-owns: operating-system-writes-deletes-and-rich-history
       summary: Read one top-level operating-system asset
       description: Read-only asset metadata backed by gvmd/PostgreSQL `oss` records, associated host operating-system evidence, host details, and host severity state. This endpoint does not expose export, delete, scanner-control, feed-control, or write behavior.
       parameters:
@@ -750,7 +748,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: operating-system-asset-metadata-export-read
-      x-turbovas-inherited-still-owns: operating-system-writes-deletes-and-rich-history
       summary: Export operating-system metadata JSON
       description: Direct scriptable operating-system metadata export backed by gvmd/PostgreSQL. This returns the same native operating-system detail JSON with aggregate host/severity metadata and active user tags. Operating-system writes, deletes, export, tag writes/actions, and richer history remain inherited.
       parameters:

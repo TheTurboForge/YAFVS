@@ -4122,9 +4122,9 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(row.get("x_turbovas_inherited_still_owns"), inherited_still_owns)
 
         expected_asset_metadata = {
-            "/api/v1/operating-systems": ("getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
-            "/api/v1/operating-systems/{os_id}": ("getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", "operating-system-writes-deletes-and-rich-history"),
-            "/api/v1/operating-systems/{os_id}/export": ("getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", "operating-system-writes-deletes-and-rich-history"),
+            "/api/v1/operating-systems": ("getOperatingSystems", "operating-system-asset-list-read", None),
+            "/api/v1/operating-systems/{os_id}": ("getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", None),
+            "/api/v1/operating-systems/{os_id}/export": ("getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", None),
             "/api/v1/hosts": ("getHosts", "host-asset-list-read", None),
             "/api/v1/hosts/{host_id}": ("getHostsByHostId", "host-asset-detail-info-read", None),
             "/api/v1/hosts/{host_id}/export": ("getHostsByHostIdExport", "host-asset-metadata-export-read", None),
@@ -6300,9 +6300,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('GSA scanner metadata export', native_tooling)
 
         expected_asset_metadata = [
-            (operating_systems, "getOperatingSystems", "operating-system-asset-list-read", "operating-system-writes-deletes-and-rich-history"),
-            (operating_system_detail, "getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", "operating-system-writes-deletes-and-rich-history"),
-            (operating_system_export, "getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", "operating-system-writes-deletes-and-rich-history"),
+            (operating_systems, "getOperatingSystems", "operating-system-asset-list-read", None),
+            (operating_system_detail, "getOperatingSystemsByOsId", "operating-system-asset-detail-info-read", None),
+            (operating_system_export, "getOperatingSystemsByOsIdExport", "operating-system-asset-metadata-export-read", None),
             (hosts, "getHosts", "host-asset-list-read", None),
             (host_detail, "getHostsByHostId", "host-asset-detail-info-read", None),
             (host_export, "getHostsByHostIdExport", "host-asset-metadata-export-read", None),

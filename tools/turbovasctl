@@ -5549,7 +5549,7 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
     if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):
         return "required_runtime", "TurboVAS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
     if relative_path.startswith("tools/tests/"):
-        return "required_test", "Regression tests still characterize inherited GMP/python-gvm/gvm-tools behavior."
+        return "compatibility_bridge", "Diagnostic tests characterize and guard inherited GMP/python-gvm/gvm-tools retirement; they do not require legacy clients at runtime."
     if relative_path.startswith("components/gsa/src/gmp/"):
         return "product_workflow", "GSA product workflow still reads or writes through inherited GMP command clients."
     if relative_path.startswith("components/gvm-tools/scripts/"):

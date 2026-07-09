@@ -702,7 +702,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
-        "tls-certificate-rich-history",
         "trashcan-deep-row-data-and-mutations",
         "trashcan-row-data-and-mutations",
     }
@@ -1182,7 +1181,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tls-certificate-asset-detail-info-read",
     },
     ("delete", "/tls-certificates/{certificate_id}"): {
-        "x-turbovas-inherited-still-owns": "tls-certificate-rich-history",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -7626,7 +7624,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser TLS certificate delete", "direct native TLS certificate delete"],
-                "residual_inherited": ["TLS certificate rich history, tag actions, scanner-control, and feed-control remain inherited."],
             },
             {
                 "endpoint": "/api/v1/tls-certificates/{certificate_id}/export",

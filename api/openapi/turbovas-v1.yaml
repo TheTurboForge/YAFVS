@@ -1119,13 +1119,12 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tls-certificate-delete
-      x-turbovas-inherited-still-owns: tls-certificate-rich-history
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Delete TLS certificate asset
-      description: Direct write-control endpoint for deleting one operator-owned TLS certificate asset, its permission rows, active tag-resource links, source rows, and orphaned source location/origin rows. It intentionally excludes certificate creation/import, scanner/feed control, credential secrets, and rich report/history behavior.
+      description: Direct write-control endpoint for deleting one operator-owned TLS certificate asset, its permission rows, active tag-resource links, source rows, and orphaned source location/origin rows. TLS certificates do not use Trashcan semantics in inherited gvmd; this route preserves the hard-delete behavior while excluding certificate creation/import, scanner/feed control, credential secrets, and report evidence/history reads.
       parameters:
         - $ref: '#/components/parameters/CertificateId'
       responses:

@@ -3559,7 +3559,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'target-credential-secrets-writes-and-deletes',
          'target-file-input-task-control-and-credential-secret-workflows',
          'task-scan-control-writes-and-deletes',
-         'tls-certificate-rich-history',
          'trashcan-deep-row-data-and-mutations',
          'trashcan-row-data-and-mutations',
         ]
@@ -4499,18 +4498,18 @@ class TurboVASCtlTests(unittest.TestCase):
                 "replacement_candidates": ["override list automation"],
             },
             {
-                "endpoint": "/api/v1/tls-certificates/{certificate_id}",
+                "endpoint": "/api/v1/trashcan/reports",
                 "method": "delete",
-                "inventory_endpoint": "/api/v1/tls-certificates/{certificate_id}",
-                "openapi_path": "/tls-certificates/{certificate_id}",
+                "inventory_endpoint": "/api/v1/trashcan/reports",
+                "openapi_path": "/trashcan/reports",
                 "direct_access": "direct_write_control",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
                 "x_turbovas_exposure": "direct-write",
                 "x_turbovas_maturity": "live-write",
-                "x_turbovas_replaces": "tls-certificate-delete",
-                "x_turbovas_inherited_still_owns": "tls-certificate-rich-history",
-                "replacement_candidates": ["TLS certificate delete semantics"],
+                "x_turbovas_replaces": "trashcan-report-hard-delete",
+                "x_turbovas_inherited_still_owns": "trashcan-deep-row-data-and-mutations",
+                "replacement_candidates": ["deep Trashcan report delete semantics"],
             },
         ]
 
@@ -4520,11 +4519,11 @@ class TurboVASCtlTests(unittest.TestCase):
             compact = turbovasctl.command_native_api_migration_matrix(root, status_only=True, focus="rich_context_or_history")
 
         self.assertEqual(result["details"]["focus_terms"], ["write_or_mutation"])
-        self.assertEqual(result["details"]["focus_match_count"], 1)
+        self.assertEqual(result["details"]["focus_match_count"], 2)
         self.assertEqual(result["details"]["items"][0]["endpoint"], "/api/v1/overrides")
         self.assertEqual(compact["details"]["focus_terms"], ["rich_context_or_history"])
         self.assertEqual(compact["details"]["focus_match_count"], 1)
-        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/tls-certificates/{certificate_id}")
+        self.assertEqual(compact["details"]["focus_rows"][0]["endpoint"], "/api/v1/trashcan/reports")
 
     def test_native_api_migration_matrix_focus_warns_on_zero_matches(self):
         root = Path(__file__).resolve().parents[2]
@@ -4604,14 +4603,14 @@ class TurboVASCtlTests(unittest.TestCase):
         rows = [
             {"endpoint": "/api/v1/tasks", "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes"},
             {"endpoint": "/api/v1/targets", "x_turbovas_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
-            {"endpoint": "/api/v1/tls-certificates/{certificate_id}", "x_turbovas_inherited_still_owns": "tls-certificate-rich-history"},
+            {"endpoint": "/api/v1/trashcan/reports", "x_turbovas_inherited_still_owns": "trashcan-deep-row-data-and-mutations"},
         ]
 
         remaining = turbovasctl.native_api_migration_matrix_remaining_surface(rows)
 
         self.assertEqual(remaining["rows_with_inherited_owner_tail"], 3)
         self.assertEqual(remaining["distinct_owner_tails"], 3)
-        self.assertEqual(remaining["bucket_counts"]["write_or_mutation"], 2)
+        self.assertEqual(remaining["bucket_counts"]["write_or_mutation"], 3)
         self.assertEqual(remaining["bucket_counts"]["control_or_operation"], 1)
         self.assertEqual(remaining["bucket_counts"]["credential_or_secret"], 1)
         self.assertEqual(remaining["bucket_counts"]["rich_context_or_history"], 1)

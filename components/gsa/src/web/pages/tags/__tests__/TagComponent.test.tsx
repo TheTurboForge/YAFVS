@@ -5,7 +5,14 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {fireEvent, rendererWith, screen, wait} from 'web/testing';
+import {
+  changeInputValue,
+  fireEvent,
+  getSelectItemElementsForSelect,
+  rendererWith,
+  screen,
+  wait,
+} from 'web/testing';
 import Response from 'gmp/http/response';
 import ResourceName from 'gmp/models/resource-name';
 import Setting from 'gmp/models/setting';
@@ -120,6 +127,14 @@ const stubNativeFetch = (...payloads) => {
       json: testing.fn().mockResolvedValue(payload),
     });
   });
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: testing.fn().mockResolvedValue({
+      page: {page: 1, page_size: SELECT_MAX_RESOURCES, total: 0, sort: 'name'},
+      items: [],
+    }),
+  });
   testing.stubGlobal('fetch', fetchMock);
   return fetchMock;
 };
@@ -217,12 +232,101 @@ describe('TagComponent tests', () => {
       comment: '',
       id: '1234',
       name: 'My Tag',
-      resourceIds: ['1'],
+      resourceIds: [],
       resourceType: 'task',
       value: 'Some Value',
     });
 
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  test('should reject native tag resource type changes instead of ignoring them', async () => {
+    const fetchMock = stubNativeFetch(
+      nativeTagPayload,
+      nativeTagResourcesPayload,
+      nativeTagResourceNamesPayload,
+      {
+        page: {page: 1, page_size: SELECT_MAX_RESOURCES, total: 1, sort: 'name'},
+        items: [{id: 'report-1', name: 'Report 1', type: 'report'}],
+      },
+    );
+    const gmp = createGmp({native: true});
+    const tag = new Tag({name: 'My Tag', id: '1234', resourceType: 'task'});
+    const onSaved = testing.fn();
+
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <TagComponent onSaved={onSaved}>
+        {({edit}) => <Button data-testid="button" onClick={() => edit(tag)} />}
+      </TagComponent>,
+    );
+
+    fireEvent.click(screen.getByTestId('button'));
+
+    await wait();
+
+    const resourceTypeSelect = screen.getByRole<HTMLSelectElement>('textbox', {
+      name: 'Resource Type',
+    });
+    const resourceTypeOptions =
+      await getSelectItemElementsForSelect(resourceTypeSelect);
+    fireEvent.click(resourceTypeOptions[12]);
+    fireEvent.click(screen.getDialogSaveButton());
+
+    await wait();
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(gmp.tag.save).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByText('Native tag edit cannot change resource type')).toBeInTheDocument();
+  });
+
+  test('should reject mixed native tag metadata and resource assignment edits', async () => {
+    stubNativeFetch(
+      nativeTagPayload,
+      nativeTagResourcesPayload,
+      {
+        page: {page: 1, page_size: SELECT_MAX_RESOURCES, total: 2, sort: 'name'},
+        items: [
+          {id: '1', name: 'Task 1', type: 'task'},
+          {id: '2', name: 'Task 2', type: 'task'},
+        ],
+      },
+    );
+    const gmp = createGmp({native: true});
+    const tag = new Tag({name: 'My Tag', id: '1234', resourceType: 'task'});
+    const onSaved = testing.fn();
+
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <TagComponent onSaved={onSaved}>
+        {({edit}) => <Button data-testid="button" onClick={() => edit(tag)} />}
+      </TagComponent>,
+    );
+
+    fireEvent.click(screen.getByTestId('button'));
+
+    await wait();
+
+    changeInputValue(screen.getByLabelText('Name'), 'Changed Tag');
+    const resourceSelect = screen.getByRole<HTMLSelectElement>('textbox', {
+      name: 'Select Resource',
+    });
+    const resourceOptions = await getSelectItemElementsForSelect(resourceSelect);
+    fireEvent.click(resourceOptions[1]);
+    fireEvent.click(screen.getDialogSaveButton());
+
+    await wait();
+
+    expect(gmp.tag.save).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        'Native tag edit cannot change metadata and resource assignments in one save',
+      ),
+    ).toBeInTheDocument();
   });
 
   test('should create a tag with predefined resource type and ids', async () => {

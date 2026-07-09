@@ -39,7 +39,10 @@ import {
 import useCapabilities from 'web/hooks/useCapabilities';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
-import TagDialog, {SELECT_MAX_RESOURCES} from 'web/pages/tags/TagDialog';
+import TagDialog, {
+  SELECT_MAX_RESOURCES,
+  type TagDialogState,
+} from 'web/pages/tags/TagDialog';
 
 interface AddTagData {
   name: string;
@@ -117,6 +120,10 @@ const RESOURCE_TYPES: EntityType[] = [
 
 const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
   typeof gmp?.buildUrl === 'function';
+
+const sameStringList = (first: string[] = [], second: string[] = []) =>
+  first.length === second.length &&
+  first.every((value, index) => value === second[index]);
 
 const fetchTag = async (gmp, id: string): Promise<Tag> => {
   if (canUseNativeApi(gmp)) {
@@ -365,6 +372,42 @@ const TagComponent = ({
     }
   };
 
+  const saveExistingNativeTag = async (state: TagDialogState) => {
+    if (state.resourceType !== resourceType) {
+      throw new Error('Native tag edit cannot change resource type');
+    }
+    const nextResourceIds = state.resourceIds ?? [];
+    const resourcesChanged = !sameStringList(nextResourceIds, resourceIds);
+    const metadataChanged =
+      state.active !== active ||
+      state.comment !== comment ||
+      state.name !== name ||
+      state.value !== value;
+
+    if (resourcesChanged && metadataChanged) {
+      throw new Error(
+        'Native tag edit cannot change metadata and resource assignments in one save',
+      );
+    }
+
+    if (resourcesChanged) {
+      await saveMutation.mutateAsync({
+        ...state,
+        id: state.id as string,
+        resourceType: state.resourceType as EntityType,
+        resourcesAction: 'set',
+      });
+      return;
+    }
+
+    await saveMutation.mutateAsync({
+      ...state,
+      id: state.id as string,
+      resourceIds: [],
+      resourceType: state.resourceType as EntityType,
+    });
+  };
+
   return (
     <>
       {children({
@@ -393,11 +436,15 @@ const TagComponent = ({
           onClose={handleCloseTagDialog}
           onSave={async d => {
             if (isDefined(d.id)) {
-              await saveMutation.mutateAsync({
-                ...d,
-                id: d.id,
-                resourceType: d.resourceType as EntityType,
-              });
+              if (canUseNativeApi(gmp)) {
+                await saveExistingNativeTag(d);
+              } else {
+                await saveMutation.mutateAsync({
+                  ...d,
+                  id: d.id,
+                  resourceType: d.resourceType as EntityType,
+                });
+              }
             } else {
               await createMutation.mutateAsync({
                 ...d,

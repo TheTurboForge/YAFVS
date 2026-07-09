@@ -1405,12 +1405,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "schedule-metadata-list-read",
     },
     ("get", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-detail-read",
     },
     ("get", "/schedules/{schedule_id}/export"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-export-read",
     },
@@ -1420,27 +1418,22 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "timezone-list-read",
     },
     ("patch", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-metadata-modify",
     },
     ("delete", "/schedules/{schedule_id}"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-trash-move",
     },
     ("post", "/schedules/{schedule_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-clone",
     },
     ("post", "/schedules/{schedule_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-restore",
     },
     ("delete", "/schedules/{schedule_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-hard-delete",
     },

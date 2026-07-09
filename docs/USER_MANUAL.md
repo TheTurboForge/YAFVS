@@ -168,7 +168,13 @@ tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --dry-
 tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --allow-write-control --status-only
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
+tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
 ```
+
+`native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
+table with direct native API calls. It verifies each scanner without starting a
+scan and reports remote/TLS/relay scanners as non-native verification warnings
+until those paths have explicit native contracts.
 
 `native-tags-from-csv` supports the native-safe subset of the inherited tag CSV
 shape: Alert, Config, Credential, Scanner, Schedule, Target, and Task tags with

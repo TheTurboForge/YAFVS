@@ -393,7 +393,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "start-scans-from-csv.py",
         "stop-all-scans.gmp.py",
         "stop-scans-from-csv.py",
-        "verify-scanners.gmp.py",
     },
     "write_or_mutation": {
         "bulk-modify-schedules.gmp.py",
@@ -444,7 +443,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "stop-all-scans.gmp.py": "Inherited running/requested/queued stop-all behavior is characterized; native tooling still lacks a safe bulk task-stop contract.",
     "stop-scans-from-csv.py": "Inherited CSV task stop behavior is characterized; native tooling still lacks a safe bulk task-stop contract.",
     "update-task-target.gmp.py": "Inherited task-target clone/rebind/delete behavior is characterized; native tooling still lacks a task-target swap contract that preserves settings and deletes the old target when unused.",
-    "verify-scanners.gmp.py": "Inherited scanner verification table/fallback behavior is characterized; native tooling still lacks a scanner verification readout that batches verify responses into an operator-facing table.",
 }
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]*\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
@@ -17395,6 +17393,8 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
 
 
 NATIVE_API_REQUEST_ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+NATIVE_VERIFY_SCANNERS_DEFAULT_PAGE_SIZE = 500
+NATIVE_VERIFY_SCANNERS_MAX_PAGE_SIZE = 500
 
 
 def native_api_curl(
@@ -17644,6 +17644,249 @@ def command_native_api_request(
     result["details"] = {"path": request_path, "method": method, "request_id": request_id, "body_bytes": len(body.encode("utf-8")) if body is not None else 0, "response": parsed if isinstance(parsed, dict) else None}
     if status_only:
         result = native_api_request_status_only_result(result)
+    return result
+
+
+def validate_native_verify_scanners_page_size(page_size: int) -> int:
+    if not 1 <= page_size <= NATIVE_VERIFY_SCANNERS_MAX_PAGE_SIZE:
+        raise ValueError(
+            f"page size must be between 1 and {NATIVE_VERIFY_SCANNERS_MAX_PAGE_SIZE}"
+        )
+    return page_size
+
+
+def validate_native_verify_scanner_ids(scanner_ids: Sequence[str]) -> tuple[str, ...]:
+    return tuple(
+        validate_native_api_operator_uuid_value(scanner_id, env_name="--scanner-id")
+        for scanner_id in scanner_ids
+    )
+
+
+def native_verify_scanners_collection_path(page: int, page_size: int) -> str:
+    return "/api/v1/scanners?" + urllib.parse.urlencode(
+        {"page": page, "page_size": page_size, "sort": "name"}
+    )
+
+
+def native_verify_scanners_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
+    rows = details.get("rows") if isinstance(details.get("rows"), list) else []
+    compact["details"] = {
+        key: details[key]
+        for key in (
+            "scanner_count",
+            "verified_count",
+            "warning_count",
+            "failure_count",
+            "selected_scanner_ids",
+        )
+        if key in details
+    }
+    compact["details"]["rows_sample"] = rows[:5]
+    findings = result.get("findings", [])
+    non_pass = [
+        compact_doctor_finding(item)
+        for item in findings
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ]
+    compact["findings"] = non_pass or [
+        finding("pass", "native-verify-scanners.status-only", "Native scanner verification passed; rows summarized.")
+    ]
+    return compact
+
+
+def command_native_verify_scanners(
+    repo_root: Path,
+    *,
+    scanner_ids: Sequence[str] = (),
+    allow_write_control: bool = False,
+    page_size: int = NATIVE_VERIFY_SCANNERS_DEFAULT_PAGE_SIZE,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    try:
+        selected_scanner_ids = validate_native_verify_scanner_ids(scanner_ids)
+        page_size = validate_native_verify_scanners_page_size(page_size)
+    except ValueError as exc:
+        findings.append(finding("fail", "native-verify-scanners.arguments", str(exc)))
+        return make_result("native-verify-scanners", repo_root, "Native scanner verification rejected before runtime access.", findings)
+
+    if not allow_write_control:
+        findings.append(
+            finding(
+                "fail",
+                "native-verify-scanners.write-control-intent",
+                "Verifying scanners requires --allow-write-control because it contacts scanner control sockets through the native API.",
+            )
+        )
+        return make_result("native-verify-scanners", repo_root, "Native scanner verification rejected before runtime access.", findings)
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-verify-scanners.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return make_result("native-verify-scanners", repo_root, "Direct native API scanner verification rejected before runtime access.", findings)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-verify-scanners.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        return make_result("native-verify-scanners", repo_root, "Direct native API scanner verification rejected before runtime access.", findings)
+
+    scanners: list[dict[str, Any]] = []
+    if selected_scanner_ids:
+        for scanner_id in selected_scanner_ids:
+            path = f"/api/v1/scanners/{urllib.parse.quote(scanner_id)}"
+            response = direct_native_api_curl(repo_root, path, token=token, env=env)
+            parsed, http_status = parse_json_output_with_http_status(response)
+            ok = response.returncode == 0 and http_status == 200 and isinstance(parsed, dict)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if ok else "fail",
+                    f"native-verify-scanners.scanner-detail.{scanner_id}",
+                    "Direct native API returned selected scanner metadata."
+                    if ok
+                    else "Direct native API failed to return selected scanner metadata.",
+                    response,
+                    direct_native_api_display_command(path, token=token, env=env),
+                    parsed,
+                    {"http_status": http_status, "scanner_id": scanner_id, **summarize_native_api_response(parsed)},
+                )
+            )
+            if ok:
+                scanners.append(parsed)
+    else:
+        page = 1
+        total: int | None = None
+        while True:
+            path = native_verify_scanners_collection_path(page, page_size)
+            response = direct_native_api_curl(repo_root, path, token=token, env=env)
+            parsed, http_status = parse_json_output_with_http_status(response)
+            items = parsed.get("items") if isinstance(parsed, dict) else None
+            ok = response.returncode == 0 and http_status == 200 and isinstance(items, list)
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if ok else "fail",
+                    f"native-verify-scanners.scanner-list.page-{page}",
+                    "Direct native API returned scanner metadata for verification."
+                    if ok
+                    else "Direct native API failed to return scanner metadata for verification.",
+                    response,
+                    direct_native_api_display_command(path, token=token, env=env),
+                    parsed,
+                    {"http_status": http_status, "page": page, **summarize_native_api_response(parsed)},
+                )
+            )
+            if not ok:
+                break
+            scanners.extend(item for item in items if isinstance(item, dict))
+            page_info = parsed.get("page") if isinstance(parsed, dict) else {}
+            total_value = page_info.get("total") if isinstance(page_info, dict) else None
+            total = total_value if isinstance(total_value, int) and total_value >= 0 else total
+            if total is None or len(scanners) >= total or len(items) == 0:
+                break
+            page += 1
+
+    if aggregate_status(findings) == "fail":
+        result = make_result("native-verify-scanners", repo_root, "Native scanner verification stopped before scanner probes.", findings)
+        result["details"] = {"selected_scanner_ids": list(selected_scanner_ids), "scanner_count": len(scanners)}
+        if status_only:
+            result = native_verify_scanners_status_only_result(result)
+        return result
+
+    rows: list[dict[str, Any]] = []
+    for index, scanner in enumerate(scanners, start=1):
+        scanner_id = scanner.get("id") if isinstance(scanner.get("id"), str) else ""
+        name = scanner.get("name") if isinstance(scanner.get("name"), str) else ""
+        host = scanner.get("host") if isinstance(scanner.get("host"), str) and scanner.get("host") else "local scanner"
+        if not UUID_VALUE_RE.fullmatch(scanner_id):
+            rows.append(
+                {
+                    "number": index,
+                    "name": name,
+                    "id": scanner_id,
+                    "host": host,
+                    "verified": False,
+                    "version": "*Invalid scanner id*",
+                    "status": "fail",
+                }
+            )
+            findings.append(
+                finding(
+                    "fail",
+                    f"native-verify-scanners.scanner-id.{index}",
+                    "Scanner metadata row did not contain a valid UUID; refusing to probe it.",
+                    details={"scanner_id": scanner_id},
+                )
+            )
+            continue
+        path = f"/api/v1/scanners/{urllib.parse.quote(scanner_id)}/verify"
+        response = direct_native_api_curl(repo_root, path, token=token, env=env, method="POST")
+        parsed, http_status = parse_json_output_with_http_status(response)
+        verified = bool(parsed.get("verified")) if isinstance(parsed, dict) else False
+        ok = response.returncode == 0 and http_status == 200 and isinstance(parsed, dict) and verified
+        error_code = parsed.get("error", {}).get("code") if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict) else None
+        status = "pass" if ok else "warn" if http_status == 409 else "fail"
+        version = ""
+        if isinstance(parsed, dict):
+            version_value = parsed.get("version") or parsed.get("scanner_version")
+            if isinstance(version_value, str) and version_value:
+                version = version_value
+        if not version:
+            version = "*No Response*" if status != "fail" else f"*HTTP {http_status or 'failed'}*"
+        rows.append(
+            {
+                "number": index,
+                "name": name or (parsed.get("name") if isinstance(parsed, dict) and isinstance(parsed.get("name"), str) else ""),
+                "id": scanner_id,
+                "host": host,
+                "verified": verified,
+                "version": version,
+                "verification_mode": parsed.get("verification_mode") if isinstance(parsed, dict) else None,
+                "status": status,
+                "error_code": error_code,
+            }
+        )
+        findings.append(
+            native_api_probe_finding(
+                status,
+                f"native-verify-scanners.verify.{scanner_id}",
+                "Native API verified scanner availability."
+                if ok
+                else "Native API could not verify this scanner through the currently supported native path.",
+                response,
+                direct_native_api_display_command(path, token=token, env=env, method="POST"),
+                parsed,
+                {"http_status": http_status, "scanner_id": scanner_id, "error_code": error_code, **summarize_native_api_response(parsed)},
+            )
+        )
+
+    if not rows:
+        findings.append(finding("warn", "native-verify-scanners.rows", "No scanner rows were available to verify."))
+    verified_count = sum(1 for row in rows if row.get("verified") is True)
+    warning_count = sum(1 for row in rows if row.get("status") == "warn")
+    failure_count = sum(1 for row in rows if row.get("status") == "fail")
+    result = make_result(
+        "native-verify-scanners",
+        repo_root,
+        f"Native scanner verification checked {len(rows)} scanner(s); {verified_count} verified.",
+        findings,
+    )
+    result["details"] = {
+        "selected_scanner_ids": list(selected_scanner_ids),
+        "scanner_count": len(rows),
+        "verified_count": verified_count,
+        "warning_count": warning_count,
+        "failure_count": failure_count,
+        "rows": rows,
+    }
+    if status_only:
+        result = native_verify_scanners_status_only_result(result)
     return result
 
 
@@ -21680,6 +21923,11 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_request.add_argument("--body-json", help="validated JSON request body; redacted in rendered commands")
     native_api_request.add_argument("--allow-write-control", action="store_true", help="allow intentional non-GET/write-control-shaped request probes")
     native_api_request.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_verify_scanners = subparsers.add_parser("native-verify-scanners", parents=[common], help="verify scanners through the guarded direct native API without gvm-tools")
+    native_verify_scanners.add_argument("--scanner-id", action="append", default=[], help="specific scanner UUID to verify; may be repeated")
+    native_verify_scanners.add_argument("--page-size", type=int, default=NATIVE_VERIFY_SCANNERS_DEFAULT_PAGE_SIZE, help="scanner list page size when no --scanner-id is supplied")
+    native_verify_scanners.add_argument("--allow-write-control", action="store_true", help="confirm intentional scanner verification control probes")
+    native_verify_scanners.add_argument("--status-only", action="store_true", help="emit compact verification summary and only non-pass findings")
     native_targets_host_list = subparsers.add_parser("native-targets-from-host-list", parents=[common], help="create one native target per host from a host-list file through the direct native API")
     native_targets_host_list.add_argument("--hosts-file", required=True, type=Path, help="text file containing one host/IP per non-empty line")
     native_targets_host_list.add_argument("--port-list-id", help="existing port-list UUID; defaults to All IANA assigned TCP and UDP")
@@ -21868,6 +22116,14 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-verify-scanners":
+        result = command_native_verify_scanners(
+            repo_root,
+            scanner_ids=args.scanner_id,
+            allow_write_control=args.allow_write_control,
+            page_size=args.page_size,
             status_only=args.status_only,
         )
     elif args.command == "native-targets-from-host-list":

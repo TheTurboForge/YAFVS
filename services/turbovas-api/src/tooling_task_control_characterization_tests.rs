@@ -13,8 +13,6 @@ const STOP_SCANS_FROM_CSV: &str =
     include_str!("../../../components/gvm-tools/scripts/stop-scans-from-csv.py");
 const STOP_ALL_SCANS: &str =
     include_str!("../../../components/gvm-tools/scripts/stop-all-scans.gmp.py");
-const VERIFY_SCANNERS: &str =
-    include_str!("../../../components/gvm-tools/scripts/verify-scanners.gmp.py");
 
 #[test]
 fn inherited_nvt_scan_creates_or_reuses_config_target_and_starts_default_scanner_task() {
@@ -41,7 +39,6 @@ fn inherited_nvt_scan_creates_or_reuses_config_target_and_starts_default_scanner
         assert!(NVT_SCAN.contains(required), "nvt-scan missing {required}");
     }
 }
-
 #[test]
 fn inherited_start_nvt_scan_is_interactive_and_can_clone_config_target_and_choose_scanner() {
     for required in [
@@ -68,7 +65,6 @@ fn inherited_start_nvt_scan_is_interactive_and_can_clone_config_target_and_choos
         );
     }
 }
-
 #[test]
 fn inherited_scan_new_system_creates_target_task_and_starts_full_fast_openvas_scan() {
     for required in [
@@ -154,30 +150,6 @@ fn inherited_stop_all_scans_stops_running_requested_and_queued_tasks_by_id() {
         assert!(
             STOP_ALL_SCANS.contains(required),
             "stop-all-scans missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_verify_scanners_batches_scanner_verification_into_operator_table() {
-    for required in [
-        "heading = [\"#\", \"Name\", \"Id\", \"Host\", \"Version\"]",
-        "gmp.get_scanners(filter_string=\"rows=-1\")",
-        "scanners_xml = response_xml.xpath(\"scanner\")",
-        "name = \"\".join(scanner.xpath(\"name/text()\"))",
-        "scanner_id = scanner.get(\"id\")",
-        "host = \"\".join(scanner.xpath(\"host/text()\"))",
-        "host = \"local scanner\"",
-        "status_xml = gmp.verify_scanner(str(scanner_id))",
-        "scanner_version = \"\".join(scanner_status.xpath(\"text()\"))",
-        "except GvmServerError:",
-        "scanner_version = \"*No Response*\"",
-        "rows.append([rowNumber, name, scanner_id, host, scanner_version])",
-        "print(Table(heading=heading, rows=rows))",
-    ] {
-        assert!(
-            VERIFY_SCANNERS.contains(required),
-            "verify-scanners missing {required}"
         );
     }
 }

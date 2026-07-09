@@ -1460,7 +1460,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -5841,6 +5841,89 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("large-payload-marker", rendered)
         self.assertNotIn("private-target-marker", rendered)
 
+    def test_native_verify_scanners_requires_write_control_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_verify_scanners(root)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["native-verify-scanners.write-control-intent"]["status"], "fail")
+
+    def test_native_verify_scanners_batches_direct_native_verification(self):
+        captured: list[tuple[str, str]] = []
+        scanner_uuid = "11111111-1111-4111-8111-111111111111"
+        remote_uuid = "22222222-2222-4222-8222-222222222222"
+
+        def fake_direct(_root, path, **kwargs):
+            captured.append((kwargs.get("method", "GET"), path))
+            if path == "/api/v1/scanners?page=1&page_size=500&sort=name":
+                return subprocess.CompletedProcess(
+                    ["curl"],
+                    0,
+                    json.dumps(
+                        {
+                            "page": {"page": 1, "page_size": 500, "total": 2},
+                            "items": [
+                                {"id": scanner_uuid, "name": "OpenVAS Default", "host": "/runtime/run/ospd/ospd.sock", "scanner_type": 2},
+                                {"id": remote_uuid, "name": "Remote scanner", "host": "scanner.example.invalid", "scanner_type": 2},
+                            ],
+                        }
+                    )
+                    + "\n200",
+                    "",
+                )
+            if path == f"/api/v1/scanners/{scanner_uuid}/verify":
+                return subprocess.CompletedProcess(
+                    ["curl"],
+                    0,
+                    json.dumps(
+                        {
+                            "scanner_id": scanner_uuid,
+                            "scanner_type": 2,
+                            "verified": True,
+                            "verification_mode": "osp-unix-socket",
+                            "name": "OpenVAS Default",
+                            "version": "22.9.0",
+                        }
+                    )
+                    + "\n200",
+                    "",
+                )
+            if path == f"/api/v1/scanners/{remote_uuid}/verify":
+                return subprocess.CompletedProcess(
+                    ["curl"],
+                    0,
+                    json.dumps({"error": {"code": "conflict", "message": "remote verification remains inherited"}}) + "\n409",
+                    "",
+                )
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_verify_scanners(root, allow_write_control=True, status_only=True)
+
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(
+            captured,
+            [
+                ("GET", "/api/v1/scanners?page=1&page_size=500&sort=name"),
+                ("POST", f"/api/v1/scanners/{scanner_uuid}/verify"),
+                ("POST", f"/api/v1/scanners/{remote_uuid}/verify"),
+            ],
+        )
+        self.assertEqual(result["details"]["scanner_count"], 2)
+        self.assertEqual(result["details"]["verified_count"], 1)
+        self.assertEqual(result["details"]["warning_count"], 1)
+        self.assertEqual(result["details"]["failure_count"], 0)
+        self.assertNotIn("Authorization: Bearer a", json.dumps(result))
+
     def test_native_targets_from_host_list_parses_host_file_and_port_ranges(self):
         with tempfile.TemporaryDirectory() as tmp:
             hosts_file = Path(tmp) / "hosts.txt"
@@ -6704,7 +6787,6 @@ class TurboVASCtlTests(unittest.TestCase):
         review = turbovasctl.native_tooling_removal_review(
             [
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
-                "components/gvm-tools/scripts/verify-scanners.gmp.py",
                 "components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/unclassified.gmp.py",
@@ -6712,10 +6794,9 @@ class TurboVASCtlTests(unittest.TestCase):
         )
 
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], 5)
+        self.assertEqual(review["blocked_or_review_count"], 4)
         buckets = review["buckets"]
         self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
-        self.assertEqual(buckets["scanner_or_task_control"]["count"], 1)
         self.assertEqual(buckets["write_or_mutation"]["count"], 2)
         self.assertEqual(buckets["needs_review"]["count"], 1)
 
@@ -6740,7 +6821,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/send-schedules.gmp.py",
                 "components/gvm-tools/scripts/send-tasks.gmp.py",
                 "components/gvm-tools/scripts/update-task-target.gmp.py",
-                "components/gvm-tools/scripts/verify-scanners.gmp.py",
             ]
         )
 
@@ -6759,7 +6839,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
         self.assertIn("start-alert-scan behavior", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
         self.assertIn("email alert payloads", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
-        self.assertIn("scanner verification table", control_blockers["components/gvm-tools/scripts/verify-scanners.gmp.py"])
         self.assertIn("CERT-Bund scan-config generation", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
         self.assertIn("CVE-to-NVT", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])

@@ -249,7 +249,7 @@ describe('PortListCommand', () => {
     expect(result.data.id).toEqual('native-imported-port-list-id');
   });
 
-  test('should create a typed port list through native API when available', async () => {
+  test('should create an inherited-shorthand port list through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'native-port-list-id'}),
       ok: true,
@@ -271,7 +271,7 @@ describe('PortListCommand', () => {
     const result = await command.create({
       name: 'Native Port List',
       comment: 'Created by native API',
-      portRange: 'tcp:1-1000, udp:53',
+      portRange: 'T:1-5,7,9,U:1-3,5,7,9',
     });
 
     expect(http.request).not.toHaveBeenCalled();
@@ -291,8 +291,13 @@ describe('PortListCommand', () => {
           name: 'Native Port List',
           comment: 'Created by native API',
           port_ranges: [
-            {protocol: 'tcp', start: 1, end: 1000},
-            {protocol: 'udp', start: 53, end: 53},
+            {protocol: 'tcp', start: 1, end: 5},
+            {protocol: 'tcp', start: 7, end: 7},
+            {protocol: 'tcp', start: 9, end: 9},
+            {protocol: 'udp', start: 1, end: 3},
+            {protocol: 'udp', start: 5, end: 5},
+            {protocol: 'udp', start: 7, end: 7},
+            {protocol: 'udp', start: 9, end: 9},
           ],
         }),
       },
@@ -326,7 +331,7 @@ describe('PortListCommand', () => {
     expect(http.request).not.toHaveBeenCalled();
   });
 
-  test('should fall back to GMP for file or unsupported port list create shapes', async () => {
+  test('should reject unsupported native port list create payloads', async () => {
     const response = createActionResultResponse({id: 'fallback-port-list-id'});
     const http = createHttp(response) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
@@ -339,23 +344,15 @@ describe('PortListCommand', () => {
     http.session.token = 'test-token';
     const command = new PortListCommand(http);
 
-    const result = await command.create({
-      name: 'Legacy Port List',
-      portRange: 'icmp:8',
-    });
+    await expect(
+      command.create({
+        name: 'Legacy Port List',
+        portRange: 'icmp:8',
+      }),
+    ).rejects.toThrow('Native port list create received unsupported payload shape');
 
     expect(http.buildUrl).not.toHaveBeenCalled();
-    expect(http.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_port_list',
-        name: 'Legacy Port List',
-        comment: '',
-        from_file: undefined,
-        port_range: 'icmp:8',
-        file: undefined,
-      },
-    });
-    expect(result.data.id).toEqual('fallback-port-list-id');
+    expect(http.request).not.toHaveBeenCalled();
   });
 
   test('should allow to save a port list', async () => {

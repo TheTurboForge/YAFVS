@@ -92,21 +92,29 @@ const nativePortListCreateRequestFromCommand = ({
   if (fromFile === FROM_FILE || portRange === undefined) {
     return undefined;
   }
+  let currentProtocol: 'tcp' | 'udp' | undefined;
   const port_ranges = portRange
     .split(/[\n,]+/)
     .map(range => range.trim())
     .filter(range => range.length > 0)
     .map(range => {
-      const match = /^(tcp|udp):(\d+)(?:-(\d+))?$/i.exec(range);
-      if (match === null) {
+      const prefixed = /^(tcp|udp|t|u):(\d+(?:-\d+)?)$/i.exec(range);
+      const unprefixed = /^(\d+(?:-\d+)?)$/.exec(range);
+      if (prefixed !== null) {
+        const protocol = prefixed[1].toLowerCase();
+        currentProtocol = protocol === 'udp' || protocol === 'u' ? 'udp' : 'tcp';
+      }
+      const rangeText = prefixed?.[2] ?? unprefixed?.[1];
+      if (rangeText === undefined || currentProtocol === undefined) {
         return undefined;
       }
-      const start = Number.parseInt(match[2], 10);
-      const end = Number.parseInt(match[3] ?? match[2], 10);
+      const [startText, endText] = rangeText.split('-', 2);
+      const start = Number.parseInt(startText, 10);
+      const end = Number.parseInt(endText ?? startText, 10);
       if (!Number.isInteger(start) || !Number.isInteger(end)) {
         return undefined;
       }
-      return {protocol: match[1].toLowerCase(), start, end};
+      return {protocol: currentProtocol, start, end};
     });
 
   if (port_ranges.some(range => range === undefined)) {
@@ -151,6 +159,7 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
       if (nativeRequest !== undefined) {
         return await createNativePortList(this.http, nativeRequest);
       }
+      throw new Error('Native port list create received unsupported payload shape');
     }
 
     log.debug('Creating new port list', {

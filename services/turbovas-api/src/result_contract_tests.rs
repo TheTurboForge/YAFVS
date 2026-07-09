@@ -67,7 +67,7 @@ fn result_openapi_documents_read_only_boundary() {
         (
             "/results/{result_id}/export",
             "result-metadata-export-read",
-            "result-actions-bulk-export-tag-and-override-workflows",
+            "",
         ),
     ] {
         let block = openapi_path_block(path);

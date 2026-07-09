@@ -3616,7 +3616,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'override-writes-exports-trash-and-result-expansion',
          'raw-report-generation-xml-export-retention-and-mutations',
          'report-format-file-import-export-verify-param-writes-and-deletes',
-         'result-actions-bulk-export-tag-and-override-workflows',
          'retention-mutations',
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',

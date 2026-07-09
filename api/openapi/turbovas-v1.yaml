@@ -86,9 +86,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: result-metadata-export-read
-      x-turbovas-inherited-still-owns: result-actions-bulk-export-tag-and-override-workflows
       summary: Export one scan result metadata row
-      description: Direct scriptable result metadata export backed by the same PostgreSQL loader as result detail. This returns native JSON metadata, NVT context, active result tags, and effective active override display metadata only; inherited compatibility paths still own bulk result export, result actions, result tag mutation, override create/modify/delete/export workflows, and other legacy result actions.
+      description: Direct scriptable result metadata export backed by the same PostgreSQL loader as result detail. This returns native JSON metadata, NVT context, active result tags, and effective active override display metadata only; bulk result export, result actions, result tag mutation, override create/modify/delete/export workflows, and other legacy result actions remain outside this endpoint.
       parameters:
         - $ref: '#/components/parameters/ResultId'
       responses:

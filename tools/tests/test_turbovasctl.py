@@ -1053,6 +1053,7 @@ class TurboVASCtlTests(unittest.TestCase):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertIn("def command_runtime_browser_smoke", source)
         self.assertIn("browser_smoke_run_artifact_dir(repo_root, routes)", source)
+        self.assertIn("browser_native_api_readiness_finding(repo_root, check=\"browser-smoke.native-api-ready\")", source)
         self.assertIn("browser_gmp_readiness_finding(repo_root, check=\"browser-smoke.gmp-ready\")", source)
         self.assertIn("runtime_browser_smoke_probe_path", source)
         self.assertIn("runtime-browser-smoke", source)
@@ -1175,6 +1176,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/node"), \
                 unittest.mock.patch.object(turbovasctl, "gsad_base_urls", return_value=("https://127.0.0.1:19392",)), \
                 unittest.mock.patch.object(turbovasctl, "runtime_gsa_freshness_findings", return_value=[]), \
+                unittest.mock.patch.object(turbovasctl, "browser_native_api_readiness_finding", return_value=turbovasctl.finding("pass", "browser-smoke.native-api-ready", "ready")), \
                 unittest.mock.patch.object(turbovasctl, "browser_gmp_readiness_finding", return_value=turbovasctl.finding("pass", "browser-smoke.gmp-ready", "ready")), \
                 unittest.mock.patch.object(turbovasctl, "native_scope_report_browser_target", return_value=(None, False, turbovasctl.finding("pass", "browser-smoke.scope-report-target", "target"))), \
                 unittest.mock.patch.object(turbovasctl, "runtime_env", return_value={}), \
@@ -1255,6 +1257,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/node"), \
                 unittest.mock.patch.object(turbovasctl, "gsad_base_urls", return_value=("https://127.0.0.1:19392",)), \
                 unittest.mock.patch.object(turbovasctl, "runtime_gsa_freshness_findings", return_value=[]), \
+                unittest.mock.patch.object(turbovasctl, "browser_native_api_readiness_finding", return_value=turbovasctl.finding("pass", "browser-smoke.native-api-ready", "ready")), \
                 unittest.mock.patch.object(turbovasctl, "browser_gmp_readiness_finding", return_value=turbovasctl.finding("pass", "browser-smoke.gmp-ready", "ready")), \
                 unittest.mock.patch.object(turbovasctl, "native_scope_report_browser_target", return_value=(None, False, turbovasctl.finding("pass", "browser-smoke.scope-report-target", "target"))), \
                 unittest.mock.patch.object(turbovasctl, "runtime_env", return_value={}), \
@@ -1271,6 +1274,7 @@ class TurboVASCtlTests(unittest.TestCase):
         browser_regression = (Path(__file__).resolve().parents[1] / "runtime_browser_regression.py").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertIn("def command_runtime_browser_regression", source)
+        self.assertIn("browser_native_api_readiness_finding(repo_root, check=\"browser-regression.native-api-ready\")", source)
         self.assertIn("browser_gmp_readiness_finding(repo_root, check=\"browser-regression.gmp-ready\")", source)
         self.assertIn("runtime_browser_regression_probe_path", source)
         self.assertIn("runtime-browser-regression", source)
@@ -1356,6 +1360,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/node"), \
                 unittest.mock.patch.object(turbovasctl, "gsad_base_urls", return_value=("https://127.0.0.1:19392",)), \
                 unittest.mock.patch.object(turbovasctl, "runtime_gsa_freshness_findings", return_value=[]), \
+                unittest.mock.patch.object(turbovasctl, "browser_native_api_readiness_finding", return_value=turbovasctl.finding("pass", "browser-regression.native-api-ready", "ready")), \
                 unittest.mock.patch.object(turbovasctl, "browser_gmp_readiness_finding", return_value=turbovasctl.finding("pass", "browser-regression.gmp-ready", "ready")), \
                 unittest.mock.patch.object(turbovasctl, "native_scope_report_browser_target", return_value=(None, False, turbovasctl.finding("pass", "browser-regression.scope-report-target", "target"))), \
                 unittest.mock.patch.object(turbovasctl, "runtime_env", return_value={}), \
@@ -1382,6 +1387,23 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(item["details"]["attempts"], 2)
         self.assertEqual(smoke.call_count, 2)
         sleep.assert_called_once_with(5)
+
+    def test_browser_native_api_readiness_retries_until_authenticated(self):
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "command_runtime_native_api_smoke",
+            side_effect=[
+                {"status": "fail", "summary": "not ready", "findings": [{"status": "fail", "check": "native-api.healthz"}]},
+                {"status": "pass", "summary": "ready", "findings": []},
+            ],
+        ) as smoke, unittest.mock.patch.object(turbovasctl.time, "sleep") as sleep:
+            item = turbovasctl.browser_native_api_readiness_finding(Path("/tmp"), check="browser-smoke.native-api-ready")
+
+        self.assertEqual(item["status"], "pass")
+        self.assertEqual(item["check"], "browser-smoke.native-api-ready")
+        self.assertEqual(item["details"]["attempts"], 2)
+        self.assertEqual(smoke.call_count, 2)
+        sleep.assert_called_once_with(3)
 
     def test_runtime_credential_smoke_is_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")

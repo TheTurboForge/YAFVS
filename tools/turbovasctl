@@ -12490,6 +12490,33 @@ def wait_for_runtime_gmp_smoke(repo_root: Path, *, attempts: int = 3, interval_s
     return last_result or make_result("runtime-gmp-smoke", repo_root, "Runtime GMP smoke did not run.", []), attempts
 
 
+def wait_for_runtime_native_api_smoke(repo_root: Path, *, attempts: int = 2, interval_seconds: int = 3) -> tuple[dict[str, Any], int]:
+    last_result: dict[str, Any] | None = None
+    for attempt in range(1, attempts + 1):
+        last_result = command_runtime_native_api_smoke(repo_root, status_only=True)
+        if last_result.get("status") == "pass":
+            return last_result, attempt
+        if attempt < attempts:
+            time.sleep(interval_seconds)
+    return last_result or make_result("runtime-native-api-smoke", repo_root, "Runtime native API smoke did not run.", []), attempts
+
+
+def browser_native_api_readiness_finding(repo_root: Path, *, check: str) -> dict[str, Any]:
+    native_result, attempts = wait_for_runtime_native_api_smoke(repo_root)
+    status = "pass" if native_result.get("status") == "pass" else "fail"
+    return finding(
+        status,
+        check,
+        "Native API readiness was verified before browser validation." if status == "pass" else "Native API readiness did not become available before browser validation.",
+        details={
+            "attempts": attempts,
+            "status": native_result.get("status"),
+            "summary": native_result.get("summary"),
+            "failed_checks": [item for item in native_result.get("findings", []) if item.get("status") == "fail"],
+        },
+    )
+
+
 def browser_gmp_readiness_finding(repo_root: Path, *, check: str) -> dict[str, Any]:
     gmp_result, attempts = wait_for_runtime_gmp_smoke(repo_root)
     status = "pass" if gmp_result.get("status") == "pass" else "fail"
@@ -20576,6 +20603,7 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     base_urls = gsad_base_urls(repo_root)
     findings.append(finding("pass" if base_urls else "fail", "gsad.urls", "Configured gsad base URLs are available." if base_urls else "No gsad base URLs are configured.", details={"base_urls": list(base_urls)}))
     findings.extend(runtime_gsa_freshness_findings(repo_root))
+    findings.append(browser_native_api_readiness_finding(repo_root, check="browser-smoke.native-api-ready"))
     findings.append(browser_gmp_readiness_finding(repo_root, check="browser-smoke.gmp-ready"))
     cleanup_socket = gvmd_socket_path(repo_root)
     if write_filter_smoke:
@@ -20657,6 +20685,7 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     base_urls = gsad_base_urls(repo_root)
     findings.append(finding("pass" if base_urls else "fail", "gsad.urls", "Configured gsad base URLs are available." if base_urls else "No gsad base URLs are configured.", details={"base_urls": list(base_urls)}))
     findings.extend(runtime_gsa_freshness_findings(repo_root))
+    findings.append(browser_native_api_readiness_finding(repo_root, check="browser-regression.native-api-ready"))
     findings.append(browser_gmp_readiness_finding(repo_root, check="browser-regression.gmp-ready"))
     if aggregate_status(findings) == "fail":
         result = make_result("runtime-browser-regression", repo_root, "Runtime browser regression stopped at prerequisites.", findings, [str(artifact_dir)])

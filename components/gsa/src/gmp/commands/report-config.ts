@@ -6,11 +6,9 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import logger from 'gmp/log';
 import type {Element} from 'gmp/models/model';
 import ReportConfig from 'gmp/models/report-config';
 import {
@@ -57,8 +55,6 @@ interface ReportConfigResponseData extends XmlResponseData {
     };
   };
 }
-
-const log = logger.getLogger('gmp.commands.reportconfigs');
 
 const reportConfigParamValueToString = (
   value: ReportConfigParamValue,
@@ -189,109 +185,27 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   }
 
   async create(args: ReportConfigCreateArgs) {
-    const {
-      comment,
-      name,
-      reportFormatId,
-      params = {},
-      paramsUsingDefault = {},
-      paramTypes = {},
-    } = args;
-
-    const data = {
-      cmd: 'create_report_config',
-      name,
-      comment,
-      report_format_id: reportFormatId,
-    };
-
-    for (const prefName in params) {
-      let value = params[prefName];
-      if (isArray(value)) {
-        if (paramTypes[prefName] === 'report_format_list') {
-          value = value.map(String).join(',');
-        } else {
-          value = JSON.stringify(value);
-        }
-      }
-      data['param:' + prefName] = value;
-    }
-
-    for (const param_name in paramsUsingDefault) {
-      if (paramsUsingDefault[param_name]) {
-        data['param_using_default:' + param_name] = parseYesNo(
-          paramsUsingDefault[param_name],
-        );
-      }
-    }
-
-    if (canUseNativeApi(this.http)) {
-      return createNativeReportConfig(
-        this.http,
-        nativeReportConfigCreateRequestFromCommand(args),
-      );
-    }
-
-    log.debug('Creating new report config', args);
-    return this.action(data);
+    return createNativeReportConfig(
+      this.http,
+      nativeReportConfigCreateRequestFromCommand(args),
+    );
   }
 
   async save(args: ReportConfigSaveArgs) {
-    const {
-      id,
-      comment,
-      name,
-      params = {},
-      paramsUsingDefault = {},
-      paramTypes = {},
-    } = args;
-
-    if (canUseNativeApi(this.http)) {
-      const nativeArgs = await completeSparseNativeReportConfigPatch(
+    const nativeArgs = await completeSparseNativeReportConfigPatch(
+      this.http,
+      args,
+    );
+    if (nativeArgs !== undefined) {
+      return patchNativeReportConfig(
         this.http,
-        args,
-      );
-      if (nativeArgs !== undefined) {
-        return patchNativeReportConfig(
-          this.http,
-          id,
-          nativeReportConfigPatchRequestFromCommand(nativeArgs),
-        );
-      }
-      throw new Error(
-        'Native report config save requires complete non-default parameter values',
+        args.id,
+        nativeReportConfigPatchRequestFromCommand(nativeArgs),
       );
     }
-
-    const data = {
-      cmd: 'save_report_config',
-      id,
-      name,
-      comment,
-    };
-
-    for (const paramName in paramsUsingDefault) {
-      if (paramsUsingDefault[paramName]) {
-        data['param_using_default:' + paramName] = parseYesNo(
-          paramsUsingDefault[paramName],
-        );
-      }
-    }
-
-    for (const prefName in params) {
-      let value = params[prefName];
-      if (isArray(value)) {
-        if (paramTypes[prefName] === 'report_format_list') {
-          value = value.map(String).join(',');
-        } else {
-          value = JSON.stringify(value);
-        }
-      }
-      data['param:' + prefName] = value;
-    }
-
-    log.debug('Saving report config', args, data);
-    return this.action(data);
+    throw new Error(
+      'Native report config save requires complete non-default parameter values',
+    );
   }
 
   getElementFromRoot(root: XmlResponseData) {
@@ -302,18 +216,11 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
   }
 
   async clone({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      return await cloneNativeReportConfig(this.http, id);
-    }
-    return super.clone({id});
+    return await cloneNativeReportConfig(this.http, id);
   }
 
   async delete({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeReportConfig(this.http, id);
-      return;
-    }
-    return super.delete({id});
+    await deleteNativeReportConfig(this.http, id);
   }
 }
 

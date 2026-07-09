@@ -155,6 +155,9 @@ mod scan_configs;
 mod scanner_asset_payloads;
 mod scanner_asset_query_sql;
 mod scanner_assets;
+mod scanner_verify;
+#[cfg(test)]
+mod scanner_verify_tests;
 mod scanner_write_db;
 mod scanner_write_sql;
 mod scanner_write_transactions;

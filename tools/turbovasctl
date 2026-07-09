@@ -446,7 +446,7 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "update-task-target.gmp.py": "Inherited task-target clone/rebind/delete behavior is characterized; native tooling still lacks a task-target swap contract that preserves settings and deletes the old target when unused.",
     "verify-scanners.gmp.py": "Inherited scanner verification table/fallback behavior is characterized; native tooling still lacks a scanner verification readout that batches verify responses into an operator-facing table.",
 }
-NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]+\}")
+NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]*\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OPENAPI_WRITE_CONTROL_METHODS = frozenset({"post", "put", "patch", "delete"})
 OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset(
@@ -619,6 +619,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scanner-metadata-export-read",
         "scanner-metadata-list-read",
         "scanner-metadata-modify",
+        "scanner-verify",
         "schedule-metadata-detail-read",
         "schedule-metadata-export-read",
         "schedule-metadata-list-read",
@@ -698,6 +699,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "schedule-create-calendar-edit",
         "scope-report-generation",
         "scope-report-generation-retention-and-mutations",
+        "remote-scanner-tls-relay-verification",
         "tag-filter-actions-and-resource-type-change-semantics",
         "target-file-input-task-control-and-credential-secret-workflows",
         "target-credential-secrets-create-delete-restore-export",
@@ -756,6 +758,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/scanners"): "direct-read",
     ("get", "/scanners/{scanner_id}"): "direct-read",
     ("patch", "/scanners/{scanner_id}"): "direct-write",
+    ("post", "/scanners/{scanner_id}/verify"): "direct-write",
     ("get", "/credentials"): "direct-read",
     ("get", "/credentials/{credential_id}"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
@@ -1211,6 +1214,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scanner-metadata-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
+    },
+    ("post", "/scanners/{scanner_id}/verify"): {
+        "x-turbovas-inherited-still-owns": "remote-scanner-tls-relay-verification",
+        "x-turbovas-maturity": "live-control",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "no-owner-state",
+        "x-turbovas-replaces": "scanner-verify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scanner-control",
     },
     ("get", "/scanners/{scanner_id}/export"): {
         "x-turbovas-maturity": "live-read",
@@ -7186,6 +7198,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         clone_suffix = post_constants.get("clone_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
+        verify_suffix = post_constants.get("verify_suffix")
         for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
@@ -7200,6 +7213,14 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             and "g_str_has_suffix (id, resources_suffix)" in post_function_body
         ):
             templates.add(f"{tag_prefix.rstrip('/')}/{{}}{resources_suffix}")
+        scanner_prefix = post_constants.get("scanner_prefix")
+        if (
+            scanner_prefix
+            and verify_suffix
+            and "g_str_has_prefix (path, scanner_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, verify_suffix)" in post_function_body
+        ):
+            templates.add(f"{scanner_prefix.rstrip('/')}/{{}}{verify_suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -7272,6 +7293,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         clone_suffix = post_constants.get("clone_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
+        verify_suffix = post_constants.get("verify_suffix")
         for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
@@ -7286,6 +7308,14 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             and "g_str_has_suffix (id, resources_suffix)" in post_function_body
         ):
             operations.add(f"POST {tag_prefix.rstrip('/')}/{{}}{resources_suffix}")
+        scanner_prefix = post_constants.get("scanner_prefix")
+        if (
+            scanner_prefix
+            and verify_suffix
+            and "g_str_has_prefix (path, scanner_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, verify_suffix)" in post_function_body
+        ):
+            operations.add(f"POST {scanner_prefix.rstrip('/')}/{{}}{verify_suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -7816,6 +7846,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "residual_inherited": [
                     "Scanner host, port, type, relay, CA material, credential links, live status, verify/control operations, export/download formats, create, clone, restore, and delete remain inherited.",
                     "Native PATCH is limited to operator-owned non-built-in scanner name/comment metadata."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}/verify",
+                "method": "post",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser scanner verify", "direct native scanner verify"],
+                "residual_inherited": [
+                    "Remote scanner TLS/relay verification remains inherited until scanner connection contracts are native.",
+                    "Native verify is limited to local OSP/OpenVAS socket checks plus inherited no-contact success semantics for CVE/openvasd scanner rows."
                 ],
             },
             {
@@ -14664,6 +14705,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.target-write-post-hard-delete",
             "native-api-direct.target-fixture-cleanup",
             "native-api-direct.task-scanner-fixture",
+            "native-api-direct.scanner-verify",
             "native-api-direct.task-write-create",
             "native-api-direct.task-write-update",
             "native-api-direct.task-fixture-cleanup",
@@ -16155,6 +16197,11 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 findings.append(native_api_probe_finding("pass" if task_scanner_fixture_ok else "warn", "native-api-direct.task-scanner-fixture", "Direct write-control smoke found a scan-task-capable scanner fixture for native task creation." if task_scanner_fixture_ok else "Direct write-control smoke could not find a scan-task-capable scanner fixture for native task creation.", task_scanner_fixture, direct_native_api_display_command("/api/v1/scanners?page_size=25&sort=name", token=token, env=env), task_scanner_fixture_json, {"http_status": task_scanner_fixture_status, "scanner_id": task_scanner_id, "scan_task_scanner_types": [2, 5, 6, 8], **summarize_native_api_response(task_scanner_fixture_json)}))
 
                 if task_scanner_id:
+                    scanner_verify = direct_native_api_curl(repo_root, f"/api/v1/scanners/{urllib.parse.quote(task_scanner_id)}/verify", token=token, env=env, method="POST")
+                    scanner_verify_json, scanner_verify_status = parse_json_output_with_http_status(scanner_verify)
+                    scanner_verify_ok = scanner_verify.returncode == 0 and scanner_verify_status == 200 and isinstance(scanner_verify_json, dict) and scanner_verify_json.get("scanner_id") == task_scanner_id and scanner_verify_json.get("verified") is True
+                    findings.append(native_api_probe_finding("pass" if scanner_verify_ok else "fail", "native-api-direct.scanner-verify", "Direct write-control verified a scan-capable scanner through the native API without starting a scan." if scanner_verify_ok else "Direct write-control failed to verify a scan-capable scanner through the native API.", scanner_verify, direct_native_api_display_command(f"/api/v1/scanners/{urllib.parse.quote(task_scanner_id)}/verify", token=token, env=env, method="POST"), scanner_verify_json, {"http_status": scanner_verify_status, "scanner_id": task_scanner_id, **summarize_native_api_response(scanner_verify_json)}))
+
                     task_create_body = json.dumps(
                         {
                             "name": task_name,

@@ -201,7 +201,7 @@ fn inherited_gsad_and_gmp_layers_proxy_scanner_control_and_secret_fields() {
 }
 
 #[test]
-fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands() {
+fn native_direct_api_gates_scanner_metadata_and_verify_controls() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/scanners",
@@ -251,7 +251,20 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
         false,
     ));
-    for action in ["verify", "download", "trash"] {
+    assert!(!direct_api_v1_path_is_allowed(
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/verify"
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/verify",
+        true,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/verify",
+        false,
+    ));
+    for action in ["download", "trash"] {
         let path = format!("/api/v1/scanners/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
             !direct_api_v1_path_is_allowed(&path),
@@ -261,7 +274,7 @@ fn native_direct_api_keeps_scanner_control_methods_closed_until_contract_lands()
 }
 
 #[test]
-fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
+fn openapi_documents_scanner_metadata_and_verify_control_boundary() {
     let list = openapi_path_block("/scanners");
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
@@ -279,15 +292,43 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
     assert!(!detail.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
     assert!(
-        detail.contains("Native direct write-control can patch scanner name/comment metadata only")
+        detail.contains("Native direct write-control can patch scanner name/comment metadata and verify bounded local scanner availability")
     );
     for residual in [
         "Credential secrets, credential certificate metadata",
-        "live scanner status, verify/control operations",
+        "remote/TLS/relay verification",
         "host/port/type/relay mutation",
         "export/download behavior, create, clone, restore, and delete remain inherited",
     ] {
         assert!(detail.contains(residual), "detail docs missing {residual}");
+    }
+
+    let verify = openapi_path_block("/scanners/{scanner_id}/verify");
+    for required in [
+        "post:",
+        "operationId: postScannersByScannerIdVerify",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-inherited-still-owns: remote-scanner-tls-relay-verification",
+        "x-turbovas-maturity: live-control",
+        "x-turbovas-replaces: scanner-verify",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-owner-semantics: no-owner-state",
+        "x-turbovas-safety-contract: write-control-v1",
+        "x-turbovas-side-effect: scanner-control",
+        "$ref: '#/components/schemas/ScannerVerifyResult'",
+        "local Unix-socket OSP scanners",
+        "Remote, TLS, TCP, relay",
+    ] {
+        assert!(
+            verify.contains(required),
+            "scanner verify OpenAPI block missing {required}"
+        );
+    }
+    for forbidden in ["\n    get:", "\n    patch:", "\n    delete:"] {
+        assert!(
+            !verify.contains(forbidden),
+            "scanner verify must not expose extra methods: {forbidden}"
+        );
     }
 
     let export = openapi_path_block("/scanners/{scanner_id}/export");
@@ -301,7 +342,7 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
         "$ref: '#/components/schemas/ScannerAssetDetail'",
         "including scanner CA public certificate text when present",
         "Credential secrets, credential certificate metadata",
-        "verify/control operations",
+        "remote/TLS/relay verification",
     ] {
         assert!(
             export.contains(required),

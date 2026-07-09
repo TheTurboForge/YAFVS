@@ -22,6 +22,7 @@ use crate::{
     report_format_write_validation::ReportFormatPatchRequest,
     report_format_writes::patch_report_format,
     scanner_asset_payloads::ScannerAssetDetail,
+    scanner_verify::{ScannerVerifyResult, verify_scanner},
     scanner_write_validation::ScannerPatchRequest,
     scanner_writes::patch_scanner,
     task_target_payloads::TaskItem,
@@ -45,6 +46,16 @@ pub(crate) async fn browser_proxy_patch_scanner(
         Json(request),
     )
     .await
+}
+
+pub(crate) async fn browser_proxy_verify_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ScannerVerifyResult>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    verify_scanner(State(state), Path(scanner_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_clone_alert(

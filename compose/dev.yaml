@@ -363,8 +363,8 @@ services:
         target: /runtime/run/feed-update.lock
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd/feed-update.lock
-        target: /runtime/run/ospd/feed-update.lock
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
+        target: /runtime/run/ospd
         read_only: true
     # No host port by default. Direct API exposure is added only by the
     # generated opt-in direct-API override used by turbovasctl.

@@ -23,7 +23,7 @@ use crate::{
         browser_proxy_clone_alert, browser_proxy_create_task, browser_proxy_delete_alert,
         browser_proxy_delete_task, browser_proxy_delete_tls_certificate, browser_proxy_patch_alert,
         browser_proxy_patch_credential, browser_proxy_patch_report_format,
-        browser_proxy_patch_scanner, browser_proxy_patch_task,
+        browser_proxy_patch_scanner, browser_proxy_patch_task, browser_proxy_verify_scanner,
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
@@ -86,6 +86,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/scanners/:scanner_id",
             patch(browser_proxy_patch_scanner),
+        )
+        .route(
+            "/api/v1/scanners/:scanner_id/verify",
+            post(browser_proxy_verify_scanner),
         )
         .route("/api/v1/filters", post(browser_proxy_create_filter))
         .route("/api/v1/hosts", post(browser_proxy_create_host))

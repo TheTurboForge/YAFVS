@@ -1250,7 +1250,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       summary: Read one scanner metadata record with safe backlinks
-      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control can patch scanner name/comment metadata only. Credential secrets, credential certificate metadata, live scanner status, verify/control operations, host/port/type/relay mutation, export/download behavior, create, clone, restore, and delete remain inherited.
+      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control can patch scanner name/comment metadata and verify bounded local scanner availability. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, host/port/type/relay mutation, export/download behavior, create, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1285,7 +1285,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update scanner metadata
-      description: Direct write-control endpoint for updating scanner name and comment only on operator-owned non-built-in scanners. Scanner host, port, type, relay, CA material, credential links, live status, verify/control operations, export/download formats, create, clone, restore, and delete remain inherited.
+      description: Direct write-control endpoint for updating scanner name and comment only on operator-owned non-built-in scanners. Scanner verify is exposed through the separate bounded verify endpoint. Scanner host, port, type, relay, CA material, credential links, live status beyond verify, remote/TLS/relay verification, export/download formats, create, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1319,6 +1319,47 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /scanners/{scanner_id}/verify:
+    post:
+      operationId: postScannersByScannerIdVerify
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-inherited-still-owns: remote-scanner-tls-relay-verification
+      x-turbovas-maturity: live-control
+      x-turbovas-replaces: scanner-verify
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: no-owner-state
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scanner-control
+      summary: Verify a scanner through a bounded native control probe
+      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, scanner create/delete, scanner host mutation, credential-secret, scan start/stop, and live status streaming remain inherited while their safety contracts are designed.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      responses:
+        '200':
+          description: Scanner verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerVerifyResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scanners/{scanner_id}/export:
     get:
       operationId: getScannersByScannerIdExport
@@ -1327,7 +1368,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scanner-metadata-export-read
       summary: Export scanner metadata JSON
-      description: Direct scriptable scanner metadata export backed by gvmd/PostgreSQL. This returns the same scanner detail JSON as the native detail read, including scanner CA public certificate text when present. Credential secrets, credential certificate metadata, live scanner status, verify/control operations, file export/download behavior, and writes remain inherited.
+      description: Direct scriptable scanner metadata export backed by gvmd/PostgreSQL. This returns the same scanner detail JSON as the native detail read, including scanner CA public certificate text when present. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, file export/download behavior, and writes remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -6906,6 +6947,39 @@ components:
               description: Active user tags attached directly to this scanner. Write/tag actions remain inherited.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
+    ScannerVerifyResult:
+      type: object
+      required: [scanner_id, scanner_type, verified, verification_mode]
+      properties:
+        scanner_id:
+          type: string
+          format: uuid
+        scanner_type:
+          type: integer
+          description: Inherited scanner type identifier used to select the bounded verification behavior.
+        verified:
+          type: boolean
+        verification_mode:
+          type: string
+          enum: [osp-unix-socket, openvasd-no-contact, cve-builtin]
+        name:
+          type: string
+          description: Scanner display name from gvmd/PostgreSQL metadata.
+        version:
+          type: string
+          description: Compatibility version string for simple operator tables.
+        scanner_name:
+          type: string
+        scanner_version:
+          type: string
+        daemon_name:
+          type: string
+        daemon_version:
+          type: string
+        protocol_name:
+          type: string
+        protocol_version:
+          type: string
     CredentialAssetCollection:
       type: object
       required: [page, items]

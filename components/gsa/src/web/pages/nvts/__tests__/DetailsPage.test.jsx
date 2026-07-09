@@ -73,6 +73,42 @@ const nvt = NVT.fromElement({
   },
 });
 
+const nativeNvtDetail = {
+  id: '12345',
+  oid: '12345',
+  name: 'foo',
+  comment: '',
+  family: 'A Family',
+  category: '3',
+  discovery: 0,
+  severity: 4.9,
+  qod: 80,
+  qod_type: 'remote_banner',
+  solution_type: 'VendorFix',
+  solution: 'This is a solution description',
+  summary: 'This is a CVSS description',
+  insight: 'An Insight',
+  affected: 'It is affected',
+  impact: 'An Impact',
+  detection: 'A VulDetect',
+  tags: 'cvss_base_vector=AV:N/AC:M/Au:S/C:P/I:N/A:P',
+  cves: ['CVE-2020-1234', 'CVE-2020-5678'],
+  max_epss: {
+    score: 0.9876,
+    percentile: 80.0,
+    cve: 'CVE-2020-5678',
+  },
+  max_severity: {
+    score: 0.8765,
+    percentile: 90.0,
+    cve: 'CVE-2020-1234',
+    severity: 10.0,
+  },
+  created_at: '2019-06-24T11:55:30Z',
+  modified_at: '2019-06-24T10:12:27Z',
+  updated_at: '2020-10-30T11:44:00Z',
+};
+
 const override1 = Override.fromElement({
   _id: '5221d57f-3e62-4114-8e19-000000000001',
   active: 1,
@@ -112,6 +148,49 @@ const override1 = Override.fromElement({
   threat: 'Internal Error',
   writable: 1,
 });
+
+const nativeOverrideItems = [
+  {
+    id: '5221d57f-3e62-4114-8e19-000000000001',
+    owner: {name: 'admin'},
+    nvt: {id: '12345', name: 'foo', type: 'nvt'},
+    text: 'test_override_1',
+    hosts: '127.0.01.1',
+    port: '',
+    severity: null,
+    new_severity: -1,
+    writable: true,
+    in_use: false,
+    orphan: false,
+    active: true,
+    end_time: '2021-03-13T11:35:20+01:00',
+    task: {id: '', name: '', trash: false},
+    result: {id: '', name: ''},
+    permissions: ['everything'],
+    created_at: '2021-01-14T05:35:57Z',
+    modified_at: '2021-01-14T06:20:57Z',
+  },
+  {
+    id: '5221d57f-3e62-4114-8e19-000000000000',
+    owner: {name: 'admin'},
+    nvt: {id: '12345', name: 'foo', type: 'nvt'},
+    text: 'test_override_2',
+    hosts: '127.0.01.1',
+    port: '',
+    severity: null,
+    new_severity: 1,
+    writable: true,
+    in_use: false,
+    orphan: false,
+    active: true,
+    end_time: '2021-02-13T12:35:20+01:00',
+    task: {id: '', name: '', trash: false},
+    result: {id: '', name: ''},
+    permissions: ['everything'],
+    created_at: '2020-01-14T06:35:57Z',
+    modified_at: '2020-02-14T06:35:57Z',
+  },
+];
 
 const override2 = Override.fromElement({
   _id: '5221d57f-3e62-4114-8e19-000000000000',
@@ -176,29 +255,58 @@ const createGmp = ({
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
-} = {}) => ({
-  buildUrl,
-  nvt: {
-    export: exportNvt,
-    get: getNvt,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-    enableEPSS: true,
-  },
-  session: {
-    ...createSession({timezone: 'UTC'}),
-    token: 'test-token',
-    jwt: 'jwt-token',
-  },
-  user: {
-    currentSettings,
-  },
-  overrides: {
-    get: getOverrides,
-  },
-});
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/overrides')
+          ? {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeOverrideItems.length,
+                sort: 'text',
+                filter: '',
+              },
+              items: nativeOverrideItems,
+            }
+          : nativeNvtDetail;
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    nvt: {
+      export: exportNvt,
+      get: getNvt,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+      enableEPSS: true,
+    },
+    session: {
+      ...createSession({timezone: 'UTC'}),
+      token: 'test-token',
+      jwt: 'jwt-token',
+    },
+    user: {
+      currentSettings,
+    },
+    overrides: {
+      get: getOverrides,
+    },
+  };
+};
 
 afterEach(() => {
   testing.unstubAllGlobals();

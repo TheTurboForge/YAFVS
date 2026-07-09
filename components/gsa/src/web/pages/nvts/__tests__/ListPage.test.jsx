@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   rendererWith,
@@ -66,7 +66,36 @@ const nvt = NVT.fromElement({
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
+const nativeNvtItem = {
+  id: '1.3.6.1.4.1.25623.1.0',
+  oid: '1.3.6.1.4.1.25623.1.0',
+  name: 'foo',
+  created_at: '2019-06-24T11:55:30Z',
+  modified_at: '2019-06-24T10:12:27Z',
+  updated_at: '2019-06-24T10:12:27Z',
+  family: 'bar',
+  severity: 5,
+  qod: 80,
+  tags: 'summary=This is a description|solution_type=VendorFix',
+  solution_type: 'VendorFix',
+  solution: 'This is a description',
+  cves: ['CVE-2020-1234', 'CVE-2020-5678'],
+  max_epss: {
+    score: 0.9876,
+    percentile: 80.0,
+    cve: 'CVE-2020-5678',
+  },
+  max_severity: {
+    score: 0.8765,
+    percentile: 90.0,
+    cve: 'CVE-2020-1234',
+    severity: 10.0,
+  },
+};
+
 const createGmp = ({
+  buildUrl,
+  nativeNvtItems = [nativeNvtItem],
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
@@ -113,30 +142,71 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  dashboard: {
-    getSetting: getDashboardSetting,
-  },
-  nvts: {
-    get: getNvts,
-    getFamilyAggregates: getAggregates,
-    getSeverityAggregates: getAggregates,
-    getCreatedAggregates: getAggregates,
-    deleteByFilter,
-    exportByFilter,
-    delete: deleteByIds,
-    export: exportByIds,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-    enableEPSS: true,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings, getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeNvtItems.length,
+                sort: '-created',
+                filter: '',
+              },
+              items: nativeNvtItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    dashboard: {
+      getSetting: getDashboardSetting,
+    },
+    nvts: {
+      get: getNvts,
+      getFamilyAggregates: getAggregates,
+      getSeverityAggregates: getAggregates,
+      getCreatedAggregates: getAggregates,
+      deleteByFilter,
+      exportByFilter,
+      delete: deleteByIds,
+      export: exportByIds,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+      enableEPSS: true,
+    },
+    session: {
+      ...createSession({timezone: 'CET'}),
+      token: 'test-token',
+      jwt: 'jwt-token',
+    },
+    user: {currentSettings, getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('NvtsPage tests', () => {

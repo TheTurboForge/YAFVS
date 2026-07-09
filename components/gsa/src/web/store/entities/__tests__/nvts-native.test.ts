@@ -12,7 +12,9 @@ import {
   fetchNativeNvts,
   nativeNvtsQueryFromFilter,
 } from 'gmp/native-api/nvts';
-import {loadEntity} from 'web/store/entities/nvts';
+import {loadEntities, loadEntity} from 'web/store/entities/nvts';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({
   jwt,
@@ -136,6 +138,58 @@ describe('native API NVT catalog', () => {
         Authorization: 'Bearer jwt-token',
       },
     });
+  });
+
+  test('loads the NVT store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort-reverse=created');
+    const rootState = createState('nvt', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-created', filter: ''},
+        items: [
+          {
+            id: '1.3.6.1.4.1.25623.1.0.10330',
+            oid: '1.3.6.1.4.1.25623.1.0.10330',
+            name: 'Native NVT list row',
+            family: 'Native family',
+            category: '3',
+            discovery: 1,
+            severity: 7.5,
+            qod: 80,
+            qod_type: 'remote_banner',
+            solution_type: 'Mitigation',
+            solution: 'Disable default credentials.',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/nvts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: '-created',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(Nvt);
+    expect(successAction.data[0].name).toEqual('Native NVT list row');
+    expect(successAction.data[0].family).toEqual('Native family');
   });
 
   test('fetches one NVT and folds detail text into inherited tag fields', async () => {

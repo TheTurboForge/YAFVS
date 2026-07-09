@@ -266,9 +266,7 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains(
-        "x-turbovas-inherited-still-owns: scanner-control-credentials-writes-and-deletes"
-    ));
+    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
     assert!(list.contains(
         "Credential secrets, scanner CA material, and control operations are intentionally excluded"
     ));

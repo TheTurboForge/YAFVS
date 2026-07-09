@@ -693,8 +693,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "result-actions-bulk-export-tag-and-override-workflows",
         "retention-mutations",
         "saved-filter-alert-linkage",
-        "scanner-control-credentials-writes-and-deletes",
-        "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "scan-config-preference-selector-mutation-import-export-blank-create",
         "schedule-create-calendar-edit",
         "scope-report-generation",
@@ -1201,7 +1199,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tls-certificate-pem-download-read",
     },
     ("get", "/scanners"): {
-        "x-turbovas-inherited-still-owns": "scanner-control-credentials-writes-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scanner-metadata-list-read",
     },

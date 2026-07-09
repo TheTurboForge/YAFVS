@@ -1218,7 +1218,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scanner-metadata-list-read
-      x-turbovas-inherited-still-owns: scanner-control-credentials-writes-and-deletes
       summary: List scanner metadata
       description: Read-only scanner list metadata backed by gvmd/PostgreSQL. Credential secrets, scanner CA material, and control operations are intentionally excluded.
       parameters:

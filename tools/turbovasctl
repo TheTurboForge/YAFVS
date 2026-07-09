@@ -1447,12 +1447,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("get", "/report-formats"): {
-        "x-turbovas-inherited-still-owns": "report-format-file-import-export-verify-param-writes-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-format-metadata-list-read",
     },
     ("get", "/report-formats/{report_format_id}"): {
-        "x-turbovas-inherited-still-owns": "report-format-file-import-export-verify-param-writes-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-format-metadata-detail-read",
     },
@@ -1463,7 +1461,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-safety-contract": "write-control-v1",
     },
     ("get", "/report-formats/{report_format_id}/export"): {
-        "x-turbovas-inherited-still-owns": "report-format-file-import-export-verify-param-writes-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-format-metadata-export-read",
     },

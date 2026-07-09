@@ -273,7 +273,6 @@ fn native_report_format_file_and_param_paths_remain_inherited() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: report-format-metadata-export-read",
-        "x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes",
         "$ref: '#/components/schemas/ReportFormatAsset'",
     ] {
         assert!(

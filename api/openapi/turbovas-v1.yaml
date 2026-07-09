@@ -4176,7 +4176,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: report-format-metadata-list-read
-      x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes
       summary: List report formats
       description: Report-format metadata backed by gvmd/PostgreSQL. Native write-control covers name, summary, and active metadata. Create, file import/export, verification, parameter mutations, and delete operations remain on inherited compatibility paths while native semantics are designed.
       parameters:
@@ -4210,7 +4209,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: report-format-metadata-detail-read
-      x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes
       summary: Read one report format
       parameters:
         - $ref: '#/components/parameters/ReportFormatId'
@@ -4286,7 +4284,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: report-format-metadata-export-read
-      x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes
       summary: Export report-format metadata JSON
       description: Direct scriptable report-format metadata export backed by gvmd/PostgreSQL. This returns the same native report-format detail JSON. Legacy report-format file export/import, verification, parameter and option writes, and delete behavior remain on inherited compatibility paths while native semantics are designed.
       parameters:

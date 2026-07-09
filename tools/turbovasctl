@@ -8792,6 +8792,11 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
     module_ownership = compact["module_ownership"]
     return {
         "total_items": compact["total_items"],
+        "by_category_counts": {
+            category: data.get("count", 0)
+            for category, data in compact.get("by_category", {}).items()
+            if isinstance(data, dict)
+        },
         "implemented_native_endpoint_count": compact["implemented_native_endpoint_count"],
         "candidate_for_removal_review": compact["candidate_for_removal_review"],
         "direct_api_contract": {
@@ -10355,6 +10360,7 @@ def native_api_replacement_dashboard_status_only_result(result: dict[str, Any]) 
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     compact["details"] = {
         "weighted_estimate": details.get("weighted_estimate", {}),
+        "legacy_helper_removal_readiness": details.get("legacy_helper_removal_readiness", {}),
         "remaining_tail_buckets": details.get("remaining_tail_buckets", {}),
         "next_best_slices": details.get("next_best_slices", []),
         "tooling_retirement_status": details.get("tooling_retirement_status", {}),
@@ -10390,10 +10396,21 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
     safe_removal_count = int(removal_review.get("safe_removal_count") or 0)
     removal_total = int(removal_review.get("total") or 0)
     tooling_retirement_percent = bounded_percent(100.0 - ((100.0 * safe_removal_count / removal_total) if removal_total else 0.0))
+    category_counts = tooling_details.get("by_category_counts") if isinstance(tooling_details.get("by_category_counts"), dict) else {}
+    total_tooling_items = int(tooling_details.get("total_items") or 0)
+    required_runtime_count = int(category_counts.get("required_runtime") or 0)
+    required_test_count = int(category_counts.get("required_test") or 0)
+    product_workflow_count = int(category_counts.get("product_workflow") or 0)
+    blocked_or_review_count = int(removal_review.get("blocked_or_review_count") or 0)
+    direct_legacy_blocker_count = required_runtime_count + required_test_count + product_workflow_count + blocked_or_review_count
+    direct_legacy_dependency_burndown_percent = bounded_percent(
+        (100.0 * (total_tooling_items - direct_legacy_blocker_count) / total_tooling_items) if total_tooling_items else 0.0
+    )
+    gvm_tools_script_removal_percent = bounded_percent((100.0 * safe_removal_count / removal_total) if removal_total else 100.0)
     tooling_retirement_status = {
         "status": "pass" if safe_removal_count == 0 else "warn",
         "safe_removal_count": safe_removal_count,
-        "blocked_or_review_count": int(removal_review.get("blocked_or_review_count") or 0),
+        "blocked_or_review_count": blocked_or_review_count,
         "candidate_total": removal_total,
         "bucket_counts": removal_review.get("bucket_counts", {}),
     }
@@ -10412,6 +10429,18 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
         + inherited_tail_burndown_percent * weights["inherited_tail_burndown_percent"] / 100.0
         + tooling_retirement_percent * weights["tooling_retirement_percent"] / 100.0
     )
+    legacy_helper_weights = {
+        "native_api_weighted_estimate": 35,
+        "inherited_tail_burndown_percent": 25,
+        "direct_legacy_dependency_burndown_percent": 25,
+        "gvm_tools_script_removal_percent": 15,
+    }
+    legacy_helper_removal_readiness_percent = bounded_percent(
+        headline * legacy_helper_weights["native_api_weighted_estimate"] / 100.0
+        + inherited_tail_burndown_percent * legacy_helper_weights["inherited_tail_burndown_percent"] / 100.0
+        + direct_legacy_dependency_burndown_percent * legacy_helper_weights["direct_legacy_dependency_burndown_percent"] / 100.0
+        + gvm_tools_script_removal_percent * legacy_helper_weights["gvm_tools_script_removal_percent"] / 100.0
+    )
     remaining_tail_buckets = remaining_surface.get("bucket_counts") if isinstance(remaining_surface.get("bucket_counts"), dict) else {}
     top_residuals = remaining_surface.get("top_residuals") if isinstance(remaining_surface.get("top_residuals"), list) else []
     next_best_slices = [
@@ -10426,6 +10455,8 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
     warnings: list[str] = []
     if inherited_tail_count:
         warnings.append(f"{inherited_tail_count} native API row(s) still declare inherited owner tails.")
+    if direct_legacy_blocker_count:
+        warnings.append(f"{direct_legacy_blocker_count} direct python-gvm/gvm-tools removal blocker(s) remain.")
     if safe_removal_count:
         warnings.append(f"{safe_removal_count} native-covered inherited tooling path(s) look safe to remove.")
     if tooling_result.get("status") != "pass":
@@ -10447,7 +10478,30 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
             },
             "definition": "Estimate only: combines contract coverage, browser/native usage, direct access, inherited-tail burn-down, and currently actionable tooling retirement.",
         },
+        "legacy_helper_removal_readiness": {
+            "kind": "weighted_estimate",
+            "legacy_helper_removal_readiness_percent": legacy_helper_removal_readiness_percent,
+            "definition": "Estimate only: progress toward deleting python-gvm and gvm-tools as required TurboVAS dependencies. This is intentionally separate from native API endpoint replacement progress.",
+            "weights": legacy_helper_weights,
+            "components": {
+                "native_api_weighted_estimate": headline,
+                "inherited_tail_burndown_percent": inherited_tail_burndown_percent,
+                "direct_legacy_dependency_burndown_percent": direct_legacy_dependency_burndown_percent,
+                "gvm_tools_script_removal_percent": gvm_tools_script_removal_percent,
+            },
+            "blockers": {
+                "direct_legacy_blocker_count": direct_legacy_blocker_count,
+                "required_runtime_count": required_runtime_count,
+                "required_test_count": required_test_count,
+                "product_workflow_count": product_workflow_count,
+                "gvm_tools_blocked_or_review_count": blocked_or_review_count,
+                "gvm_tools_candidate_total": removal_total,
+                "total_tooling_items": total_tooling_items,
+                "bucket_counts": removal_review.get("bucket_counts", {}),
+            },
+        },
         "headline_replacement_percent": headline,
+        "legacy_helper_removal_readiness_percent": legacy_helper_removal_readiness_percent,
         "contract_percent": contract_percent,
         "browser_native_percent": browser_native_percent,
         "direct_scriptable_percent": direct_scriptable_percent,
@@ -10464,12 +10518,15 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
     }
     findings = [
         finding("pass", "native-api-replacement-dashboard.estimate", f"Native API replacement weighted estimate is {headline}%.", details={"headline_replacement_percent": headline}),
+        finding("warn" if direct_legacy_blocker_count else "pass", "native-api-replacement-dashboard.legacy-helper-removal", f"Legacy helper removal readiness estimate is {legacy_helper_removal_readiness_percent}%.", details=details["legacy_helper_removal_readiness"]),
         finding("warn" if warnings else "pass", "native-api-replacement-dashboard.remaining", "Inherited owner tails or removable tooling candidates remain." if warnings else "No dashboard warnings found.", details={"warnings": warnings, "remaining_tail_buckets": remaining_tail_buckets}),
     ]
-    result = make_result("native-api-replacement-dashboard", repo_root, f"Native API replacement weighted estimate is {headline}%.", findings)
+    result = make_result("native-api-replacement-dashboard", repo_root, f"Native API replacement weighted estimate is {headline}%; legacy helper removal readiness estimate is {legacy_helper_removal_readiness_percent}%.", findings)
     result["details"] = details
     result["weighted_estimate"] = details["weighted_estimate"]
+    result["legacy_helper_removal_readiness"] = details["legacy_helper_removal_readiness"]
     result["headline_replacement_percent"] = headline
+    result["legacy_helper_removal_readiness_percent"] = legacy_helper_removal_readiness_percent
     result["contract_percent"] = contract_percent
     result["browser_native_percent"] = browser_native_percent
     result["direct_scriptable_percent"] = direct_scriptable_percent

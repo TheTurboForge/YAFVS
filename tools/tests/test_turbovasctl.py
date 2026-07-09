@@ -2317,6 +2317,7 @@ class TurboVASCtlTests(unittest.TestCase):
             set(status_only["details"]),
             {
                 "total_items",
+                "by_category_counts",
                 "implemented_native_endpoint_count",
                 "candidate_for_removal_review",
                 "direct_api_contract",
@@ -4712,6 +4713,12 @@ class TurboVASCtlTests(unittest.TestCase):
             "status": "pass",
             "summary": "tooling ok",
             "details": {
+                "total_items": 100,
+                "by_category_counts": {
+                    "required_runtime": 2,
+                    "required_test": 1,
+                    "product_workflow": 7,
+                },
                 "candidate_for_removal_review": {
                     "total": 4,
                     "safe_removal_count": 1,
@@ -4755,6 +4762,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(weighted["components"]["direct_scriptable_percent"], 70.0)
         self.assertEqual(weighted["components"]["inherited_tail_burndown_percent"], 60.0)
         self.assertEqual(result["tooling_retirement_status"]["safe_removal_count"], 1)
+        legacy = result["legacy_helper_removal_readiness"]
+        self.assertEqual(result["legacy_helper_removal_readiness_percent"], 66.0)
+        self.assertEqual(legacy["kind"], "weighted_estimate")
+        self.assertEqual(legacy["components"]["direct_legacy_dependency_burndown_percent"], 87.0)
+        self.assertEqual(legacy["components"]["gvm_tools_script_removal_percent"], 25.0)
+        self.assertEqual(legacy["blockers"]["direct_legacy_blocker_count"], 13)
+        self.assertEqual(legacy["blockers"]["gvm_tools_blocked_or_review_count"], 3)
         self.assertEqual(result["next_best_slices"][0]["focus"], "target-writes")
 
     def test_closeout_readiness_downgrades_optional_production_posture_to_watch(self):

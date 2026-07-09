@@ -5,7 +5,12 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import Filter from 'gmp/models/filter';
+import Task from 'gmp/models/task';
 import {fetchNativeTask, fetchNativeTasks} from 'gmp/native-api/tasks';
+import {loadEntities, loadEntity} from 'web/store/entities/tasks';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({
   jwt,
@@ -143,5 +148,83 @@ describe('native API task list', () => {
         },
       },
     );
+  });
+
+  test('loads task list store entries through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name');
+    const rootState = createState('task', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'task-1',
+            name: 'Full and fast',
+            status: 'Done',
+            progress: 100,
+            target: {id: 'target-1', name: 'LAN target'},
+            config: {id: 'config-1', name: 'Full and fast'},
+            report_count: {total: 1, finished: 1},
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp(),
+      tasks: {
+        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+      },
+    };
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.tasks.get).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tasks', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(Task);
+    expect(successAction.data[0].name).toEqual('Full and fast');
+  });
+
+  test('keeps inherited task detail fallback when native API is unavailable', async () => {
+    const id = 'task-1';
+    const rootState = createState('task', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const gmp = {
+      task: {
+        get: testing.fn().mockResolvedValue({data: {id, name: 'Inherited detail'}}),
+      },
+    };
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.task.get).toHaveBeenCalledWith({id});
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.id).toEqual(id);
+    expect(successAction.data.name).toEqual('Inherited detail');
   });
 });

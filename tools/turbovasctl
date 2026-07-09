@@ -14510,6 +14510,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scan-config-hard-delete-disabled",
             "native-api-direct.target-create-disabled",
             "native-api-direct.target-patch-disabled",
+            "native-api-direct.task-create-disabled",
             "native-api-direct.override-patch-disabled",
             "native-api-direct.tag-write-disabled",
             "native-api-direct.tag-delete-disabled",
@@ -14636,7 +14637,8 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.target-write-hard-delete",
             "native-api-direct.target-write-post-hard-delete",
             "native-api-direct.target-fixture-cleanup",
-            "native-api-direct.task-fixture",
+            "native-api-direct.task-scanner-fixture",
+            "native-api-direct.task-write-create",
             "native-api-direct.task-write-update",
             "native-api-direct.task-fixture-cleanup",
             "native-api-direct.alert-tag-write-create",
@@ -16111,23 +16113,39 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     target_clone_post_hard_delete_ok = target_clone_post_hard_delete.returncode == 0 and target_clone_post_hard_delete_status == 404
                     findings.append(native_api_probe_finding("pass" if target_clone_post_hard_delete_ok else "fail", "native-api-direct.target-write-post-hard-delete-clone", "Direct native API no longer returns the hard-deleted target clone." if target_clone_post_hard_delete_ok else "Direct native API still returned the hard-deleted target clone.", target_clone_post_hard_delete, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_clone_id)}", token=token, env=env), target_clone_post_hard_delete_json, {"http_status": target_clone_post_hard_delete_status, "target_clone_id": target_clone_id, **summarize_native_api_response(target_clone_post_hard_delete_json)}))
 
-                task_fixture_sql = (
-                    "WITH live_target AS (SELECT id, owner FROM targets "
-                    f"WHERE uuid = {sql_literal(target_id)} AND name = {sql_literal(target_name)}), "
-                    "inserted AS (INSERT INTO tasks "
-                    "(uuid, owner, name, comment, target, target_location, hidden, usage_type, run_status, creation_time, modification_time) "
-                    f"SELECT make_uuid(), owner, {sql_literal(task_name)}, 'TurboVAS direct write smoke temporary task', "
-                    "id, 0, 0, 'scan', 0, m_now(), m_now() FROM live_target RETURNING id, uuid) "
-                    "SELECT uuid FROM inserted;"
-                )
-                task_fixture = psql(repo_root, task_fixture_sql)
-                task_id = psql_value(task_fixture)
-                task_fixture_ok = task_fixture.returncode == 0 and bool(task_id)
-                task_fixture_finding = process_step_finding("pass" if task_fixture_ok else "fail", "native-api-direct.task-fixture", "Direct write-control smoke created a temporary task fixture linked to the temporary target." if task_fixture_ok else "Direct write-control smoke failed to create a temporary task fixture.", task_fixture, ["psql", "fixed-task-smoke-fixture"])
-                task_fixture_details = task_fixture_finding.setdefault("details", {})
-                if isinstance(task_fixture_details, dict):
-                    task_fixture_details.update({"task_id": task_id, "task_name": task_name, "target_id": target_id})
-                findings.append(task_fixture_finding)
+                task_scanner_fixture = direct_native_api_curl(repo_root, "/api/v1/scanners?page_size=25&sort=name", token=token, env=env)
+                task_scanner_fixture_json, task_scanner_fixture_status = parse_json_output_with_http_status(task_scanner_fixture)
+                task_scanner_items = task_scanner_fixture_json.get("items", []) if isinstance(task_scanner_fixture_json, dict) else []
+                task_scanner_id = None
+                for task_scanner_item in task_scanner_items:
+                    if not isinstance(task_scanner_item, dict):
+                        continue
+                    if task_scanner_item.get("scanner_type") not in {2, 5, 6, 8}:
+                        continue
+                    if isinstance(task_scanner_item.get("id"), str):
+                        task_scanner_id = task_scanner_item["id"]
+                        break
+                task_scanner_fixture_ok = task_scanner_fixture.returncode == 0 and task_scanner_fixture_status == 200 and bool(task_scanner_id)
+                findings.append(native_api_probe_finding("pass" if task_scanner_fixture_ok else "warn", "native-api-direct.task-scanner-fixture", "Direct write-control smoke found a scan-task-capable scanner fixture for native task creation." if task_scanner_fixture_ok else "Direct write-control smoke could not find a scan-task-capable scanner fixture for native task creation.", task_scanner_fixture, direct_native_api_display_command("/api/v1/scanners?page_size=25&sort=name", token=token, env=env), task_scanner_fixture_json, {"http_status": task_scanner_fixture_status, "scanner_id": task_scanner_id, "scan_task_scanner_types": [2, 5, 6, 8], **summarize_native_api_response(task_scanner_fixture_json)}))
+
+                if task_scanner_id:
+                    task_create_body = json.dumps(
+                        {
+                            "name": task_name,
+                            "comment": "TurboVAS direct write smoke temporary task",
+                            "target_id": target_id,
+                            "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
+                            "scanner_id": task_scanner_id,
+                        },
+                        separators=(",", ":"),
+                    )
+                    task_create = direct_native_api_curl(repo_root, "/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type)
+                    task_create_json, task_create_status = parse_json_output_with_http_status(task_create)
+                    task_id = task_create_json.get("id") if isinstance(task_create_json, dict) and isinstance(task_create_json.get("id"), str) else None
+                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task"
+                    findings.append(native_api_probe_finding("pass" if task_create_ok else "fail", "native-api-direct.task-write-create", "Direct write-control created a temporary scan task through the native API without starting a scan." if task_create_ok else "Direct write-control failed to create a temporary scan task through the native API.", task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type), task_create_json, {"http_status": task_create_status, "task_id": task_id, "target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID, "scanner_id": task_scanner_id, **summarize_native_api_response(task_create_json)}))
+                else:
+                    findings.append(finding("warn", "native-api-direct.task-write-create", "Direct write-control smoke skipped native task creation because no scanner fixture was available.", details={"target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID}))
 
                 if task_id:
                     target_scan_settings_before_in_use_denial = psql_value(psql(repo_root, f"SELECT allow_simultaneous_ips::text || '|' || reverse_lookup_only::text || '|' || reverse_lookup_unify::text FROM targets WHERE uuid = {sql_literal(target_id)};"))
@@ -16190,6 +16208,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         f"WHERE uuid = {sql_literal(task_id)} AND name = {sql_literal(task_name)}), "
                         "deleted_task_tags AS (DELETE FROM tag_resources WHERE resource_type = 'task' AND resource IN (SELECT id FROM live_task)), "
                         "deleted_task_trash_tags AS (DELETE FROM tag_resources_trash WHERE resource_type = 'task' AND resource IN (SELECT id FROM live_task)), "
+                        "deleted_task_preferences AS (DELETE FROM task_preferences WHERE task IN (SELECT id FROM live_task)), "
                         "deleted_task AS (DELETE FROM tasks WHERE id IN (SELECT id FROM live_task) RETURNING id) "
                         "SELECT count(*) FROM deleted_task;"
                     )
@@ -16949,6 +16968,28 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_target_hard_delete_json, disabled_target_hard_delete_status = parse_json_output_with_http_status(disabled_target_hard_delete)
     disabled_target_hard_delete_ok = disabled_target_hard_delete.returncode == 0 and disabled_target_hard_delete_status == 405 and isinstance(disabled_target_hard_delete_json, dict) and disabled_target_hard_delete_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_target_hard_delete_ok else "fail", "native-api-direct.target-hard-delete-disabled", "Direct native API rejects target hard deletes while direct write-control is disabled." if disabled_target_hard_delete_ok else "Direct native API did not reject a target hard delete while direct write-control is disabled.", disabled_target_hard_delete, direct_native_api_display_command("/api/v1/targets/00000000-0000-0000-0000-000000000000/trash", token=token, env=env, method="DELETE"), disabled_target_hard_delete_json, {"http_status": disabled_target_hard_delete_status, **summarize_native_api_response(disabled_target_hard_delete_json)}))
+
+    disabled_task_create_body = json.dumps(
+        {
+            "name": "turbovas-direct-disabled-task-create",
+            "target_id": "00000000-0000-0000-0000-000000000000",
+            "config_id": "00000000-0000-0000-0000-000000000000",
+            "scanner_id": "00000000-0000-0000-0000-000000000000",
+        },
+        separators=(",", ":"),
+    )
+    disabled_task_create = direct_native_api_curl(
+        repo_root,
+        "/api/v1/tasks",
+        token=token,
+        env=env,
+        method="POST",
+        body=disabled_task_create_body,
+        extra_headers=content_type,
+    )
+    disabled_task_create_json, disabled_task_create_status = parse_json_output_with_http_status(disabled_task_create)
+    disabled_task_create_ok = disabled_task_create.returncode == 0 and disabled_task_create_status == 405 and isinstance(disabled_task_create_json, dict) and disabled_task_create_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_task_create_ok else "fail", "native-api-direct.task-create-disabled", "Direct native API rejects task creates while direct write-control is disabled." if disabled_task_create_ok else "Direct native API did not reject a task create while direct write-control is disabled.", disabled_task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=disabled_task_create_body, extra_headers=content_type), disabled_task_create_json, {"http_status": disabled_task_create_status, **summarize_native_api_response(disabled_task_create_json)}))
 
     disabled_task_patch = direct_native_api_curl(
         repo_root,

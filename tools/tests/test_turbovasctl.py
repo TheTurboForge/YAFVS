@@ -8402,6 +8402,7 @@ db2:keys=5,expires=0,avg_ttl=0
             target_live = {"value": True}
             target_clone_live = {"value": True}
             target_updated_comment = "TurboVAS direct write smoke updated target metadata"
+            scanner_uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd"
             task_uuid = "cccccccc-cccc-cccc-cccc-cccccccccccc"
             task_updated_comment = "TurboVAS direct write smoke updated task metadata"
             original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
@@ -8440,9 +8441,6 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess(command, 0, credential_uuid + "\n", "")
                 if "INSERT INTO targets" in command_text:
                     return turbovasctl.subprocess.CompletedProcess(command, 0, target_uuid + "\n", "")
-                if "INSERT INTO tasks" in command_text:
-                    target_in_use["value"] = True
-                    return turbovasctl.subprocess.CompletedProcess(command, 0, task_uuid + "\n", "")
                 if any(part == "psql" for part in command):
                     if "md5(string_agg" in command_text and "credentials_data" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "credential-secret-checksum\n", "")
@@ -8594,6 +8592,15 @@ db2:keys=5,expires=0,avg_ttl=0
                     if target_live["value"]:
                         return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "name": target_name, "comment": target_updated_comment}) + "\n200", "")
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
+                if method == "GET" and path == "/api/v1/scanners?page_size=25&sort=name":
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": "ffffffff-ffff-ffff-ffff-ffffffffffff", "name": "CVE", "scanner_type": 3}, {"id": scanner_uuid, "name": "OpenVAS Default", "scanner_type": 2}], "page": {"total": 2}}) + "\n200", "")
+                if method == "POST" and path == "/api/v1/tasks":
+                    payload = json.loads(body)
+                    self.assertEqual(payload["target_id"], target_uuid)
+                    self.assertEqual(payload["config_id"], turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
+                    self.assertEqual(payload["scanner_id"], scanner_uuid)
+                    target_in_use["value"] = True
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": task_uuid, "name": payload["name"], "comment": payload["comment"]}) + "\n201", "")
                 if method == "PATCH" and path.startswith(f"/api/v1/tasks/{task_uuid}"):
                     payload = json.loads(body)
                     self.assertEqual(payload["comment"], task_updated_comment)
@@ -8928,6 +8935,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.target-hosts-in-use-denied"], "pass")
         self.assertEqual(checks["native-api-direct.target-write-clone"], "pass")
         self.assertEqual(checks["native-api-direct.target-fixture-cleanup"], "pass")
+        self.assertEqual(checks["native-api-direct.task-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-query-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-delete-body-denied"], "pass")
@@ -8942,6 +8950,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn(("GET", f"/api/v1/tags/{alert_tag_uuid}"), probes)
         self.assertIn(("PATCH", f"/api/v1/targets/{target_uuid}"), probes)
         self.assertIn(("POST", f"/api/v1/targets/{target_uuid}/clone"), probes)
+        self.assertIn(("POST", "/api/v1/tasks"), probes)
         self.assertEqual(probes[0], ("GET", "/healthz"))
         self.assertTrue(any(method == "GET" for method, _path in probes))
         rendered = json.dumps(result, sort_keys=True)

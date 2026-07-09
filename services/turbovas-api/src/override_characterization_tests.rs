@@ -262,7 +262,7 @@ fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains(
+    assert!(!list.contains(
         "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
     ));
 
@@ -271,7 +271,7 @@ fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
     assert!(!detail.contains("patch:"));
     assert!(!detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(detail.contains(
+    assert!(!detail.contains(
         "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
     ));
 
@@ -283,7 +283,6 @@ fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: override-metadata-export-read",
-        "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion",
         "$ref: '#/components/schemas/OverrideAsset'",
     ] {
         assert!(
@@ -291,6 +290,9 @@ fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
             "override metadata export OpenAPI block missing {required}"
         );
     }
+    assert!(!export.contains(
+        "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
+    ));
     for forbidden in [
         "x-turbovas-exposure: direct-write",
         "x-turbovas-safety-contract: write-control-v1",

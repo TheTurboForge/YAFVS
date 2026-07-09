@@ -1046,17 +1046,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "operating-system-asset-metadata-export-read",
     },
     ("get", "/overrides"): {
-        "x-turbovas-inherited-still-owns": "override-writes-exports-trash-and-result-expansion",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-list-read",
     },
     ("get", "/overrides/{override_id}"): {
-        "x-turbovas-inherited-still-owns": "override-writes-exports-trash-and-result-expansion",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-detail-read",
     },
     ("get", "/overrides/{override_id}/export"): {
-        "x-turbovas-inherited-still-owns": "override-writes-exports-trash-and-result-expansion",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-export-read",
     },

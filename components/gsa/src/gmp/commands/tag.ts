@@ -82,10 +82,10 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
   }: TagCommandCreateParams) {
     const rawFilter = filterString(filter);
     const nativeFilter = rawFilter ?? '';
-    if (
-      canUseNativeApi(this.http) &&
-      nativeFilter === ''
-    ) {
+    if (canUseNativeApi(this.http)) {
+      if (nativeFilter !== '') {
+        throw new Error('Native tag create with filters is not supported');
+      }
       return await createNativeTag(this.http, {
         active,
         comment,
@@ -121,32 +121,32 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     value = '',
   }: TagCommandSaveParams) {
     const rawFilter = filterString(filter);
-    if (
-      canUseNativeApi(this.http) &&
-      resourceIds.length === 0 &&
-      rawFilter === undefined &&
-      resourcesAction === undefined
-    ) {
-      return patchNativeTag(this.http, id, {
-        active,
-        comment,
-        name,
-        value,
-      });
-    }
-
-    if (
-      canUseNativeApi(this.http) &&
-      resourceIds.length > 0 &&
-      rawFilter === undefined &&
-      (resourcesAction === 'add' ||
-        resourcesAction === 'remove' ||
-        resourcesAction === 'set')
-    ) {
-      return updateNativeTagResources(this.http, id, {
-        action: resourcesAction,
-        resourceIds,
-      });
+    if (canUseNativeApi(this.http)) {
+      if (rawFilter !== undefined) {
+        throw new Error('Native tag save with filters is not supported');
+      }
+      if (resourceIds.length === 0 && resourcesAction === undefined) {
+        return patchNativeTag(this.http, id, {
+          active,
+          comment,
+          name,
+          value,
+        });
+      }
+      if (
+        resourceIds.length > 0 &&
+        (resourcesAction === 'add' ||
+          resourcesAction === 'remove' ||
+          resourcesAction === 'set')
+      ) {
+        return updateNativeTagResources(this.http, id, {
+          action: resourcesAction,
+          resourceIds,
+        });
+      }
+      throw new Error(
+        'Native tag resource updates require explicit add, remove, or set action',
+      );
     }
 
     const data = {

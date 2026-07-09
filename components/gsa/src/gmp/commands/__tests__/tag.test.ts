@@ -286,6 +286,34 @@ describe('TagCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should reject native tag create with filter instead of falling back to GMP', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        active: true,
+        filter: 'some filter',
+        name: 'name',
+        resourceType: 'task',
+      }),
+    ).rejects.toThrow('Native tag create with filters is not supported');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should not fall back to GMP when native selected-resource tag create fails', async () => {
     const response = createActionResultResponse({id: 'fallback-tag-id'});
     const fetchMock = testing.fn().mockResolvedValue({
@@ -315,6 +343,68 @@ describe('TagCommand tests', () => {
       }),
     ).rejects.toThrow('Native API request failed with status 403');
     expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject native tag save with filter instead of falling back to GMP', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'tag-id',
+        name: 'bar',
+        active: true,
+        filter: 'some filter',
+        resourceIds: ['id1'],
+        resourceType: 'task',
+        resourcesAction: 'add',
+      }),
+    ).rejects.toThrow('Native tag save with filters is not supported');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject ambiguous native tag resource save instead of falling back to GMP', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'tag-id',
+        name: 'bar',
+        active: true,
+        resourceIds: ['id1'],
+        resourceType: 'task',
+      }),
+    ).rejects.toThrow(
+      'Native tag resource updates require explicit add, remove, or set action',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 

@@ -29,9 +29,6 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-const explicitlyRequestsSummaryOnly = (details: unknown): boolean =>
-  details === false || details === 0 || details === '0';
-
 export class ResultsCommand extends EntitiesCommand<Result> {
   constructor(http: Http) {
     super(http, 'result', Result);
@@ -43,7 +40,7 @@ export class ResultsCommand extends EntitiesCommand<Result> {
   }
 
   async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (canUseNativeApi(this.http) && !explicitlyRequestsSummaryOnly(params.details)) {
+    if (canUseNativeApi(this.http)) {
       const filter = filterFromCommandParams(params);
       const nativeResponse = await fetchNativeResults(
         this.http,
@@ -55,6 +52,31 @@ export class ResultsCommand extends EntitiesCommand<Result> {
       });
     }
     return super.get({details: 1, ...params}, options);
+  }
+
+  getDescriptionWordCountsAggregates() {
+    return this.getAggregates({
+      aggregate_type: 'result',
+      group_column: 'description',
+      aggregateMode: 'word_counts',
+      maxGroups: 250,
+    });
+  }
+
+  getWordCountsAggregates() {
+    return this.getAggregates({
+      aggregate_type: 'result',
+      group_column: 'vulnerability',
+      aggregateMode: 'word_counts',
+      maxGroups: 250,
+    });
+  }
+
+  getSeverityAggregates() {
+    return this.getAggregates({
+      aggregate_type: 'result',
+      group_column: 'severity',
+    });
   }
 
   exportByIds(ids: string[]) {

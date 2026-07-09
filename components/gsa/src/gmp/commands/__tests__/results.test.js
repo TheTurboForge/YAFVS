@@ -131,30 +131,56 @@ describe('ResultsCommand tests', () => {
     });
   });
 
-  test('should keep explicit summary-only result reads on GMP', async () => {
-    const response = createEntitiesResponse('result', [
-      {
-        _id: '1',
-      },
-    ]);
-    const fakeHttp = createHttp(response);
+  test('should fetch explicit summary-only result reads through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1},
+        items: [
+          {
+            id: 'result-id',
+            host: '192.0.2.1',
+            port: '443/tcp',
+            nvt_oid: '1.3.6.1.4.1.25623.1.0.1',
+            name: 'Native result',
+            severity: 7.5,
+            qod: 80,
+            source_report_id: 'report-id',
+            raw_evidence_href: '/reports/report-id/results/result-id',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined);
     fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
     const cmd = new ResultsCommand(fakeHttp);
 
-    await cmd.get({details: 0});
+    const result = await cmd.get({details: 0});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_results',
-        details: 0,
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/results', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'severity',
+      filter: '',
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/results',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data[0].id).toEqual('result-id');
   });
 
   test('should aggregate Description Word Counts', async () => {

@@ -9,8 +9,11 @@ import {
   fetchNativeOperatingSystem,
   fetchNativeOperatingSystems,
 } from 'gmp/native-api/operating-systems';
+import Filter from 'gmp/models/filter';
 import OperatingSystem from 'gmp/models/os';
-import {loadEntity} from 'web/store/entities/operatingsystems';
+import {loadEntities, loadEntity} from 'web/store/entities/operatingsystems';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -83,6 +86,62 @@ describe('native API operating systems list', () => {
         },
       },
     );
+  });
+
+  test('loads the operating-system store through same-origin native API', async () => {
+    const filter = Filter.fromString(
+      'first=1 rows=10 sort-reverse=latest_severity',
+    );
+    const rootState = createState('operatingsystem', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {
+          page: 1,
+          page_size: 10,
+          total: 1,
+          sort: '-latest_severity',
+          filter: '',
+        },
+        items: [
+          {
+            id: 'f3a25f89-2b6c-4e58-92b2-942c686f9342',
+            name: 'cpe:/o:example:linux:1.0',
+            title: 'Example Linux 1.0',
+            latest_severity: 7.5,
+            highest_severity: 9.1,
+            average_severity: 4.25,
+            hosts: 2,
+            all_hosts: 3,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/operating-systems', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: '-latest_severity',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(OperatingSystem);
+    expect(successAction.data[0].title).toEqual('Example Linux 1.0');
   });
 
   test('fetches one operating system from the native detail endpoint', async () => {

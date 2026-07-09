@@ -340,7 +340,8 @@ const nativeHostToModel = (
     comment: stringValue(item.comment),
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
-    writable: detail ? 1 : undefined,
+    writable: 1,
+    permissions: {permission: [{name: 'everything'}]},
     user_tags: detail
       ? nativeUserTagsElement(detail.user_tags ?? item.user_tags ?? [])
       : undefined,

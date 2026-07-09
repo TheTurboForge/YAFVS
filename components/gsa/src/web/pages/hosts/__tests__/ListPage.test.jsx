@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -72,7 +72,40 @@ const host = Host.fromElement({
   },
 });
 
+const nativeHostItem = {
+  id: '1234',
+  name: 'Foo',
+  comment: 'bar',
+  hostname: 'foo',
+  ip: '123.456.789.10',
+  best_os_cpe: 'cpe:/o:linux:kernel',
+  severity: 10.0,
+  identifiers: [
+    {
+      id: '5678',
+      name: 'hostname',
+      value: 'foo',
+      source_type: 'Report Host Detail',
+      source_id: '910',
+    },
+    {
+      id: '1112',
+      name: 'ip',
+      value: '123.456.789.10',
+    },
+    {
+      id: '1314',
+      name: 'OS',
+      value: 'cpe:/o:linux:kernel',
+    },
+  ],
+  created_at: '2019-06-02T12:00:22Z',
+  modified_at: '2019-06-03T11:00:22Z',
+};
+
 const createGmp = ({
+  buildUrl,
+  nativeHostItems = [nativeHostItem],
   getHosts = testing.fn().mockResolvedValue({
     data: [host],
     meta: {
@@ -114,25 +147,66 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  hosts: {
-    get: getHosts,
-    getSeverityAggregates: getAggregates,
-    getModifiedAggregates: getAggregates,
-    deleteByFilter,
-    exportByFilter,
-    delete: deleteByIds,
-    export: exportByIds,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeHostItems.length,
+                sort: '-severity',
+                filter: '',
+              },
+              items: nativeHostItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    hosts: {
+      get: getHosts,
+      getSeverityAggregates: getAggregates,
+      getModifiedAggregates: getAggregates,
+      deleteByFilter,
+      exportByFilter,
+      delete: deleteByIds,
+      export: exportByIds,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+    },
+    session: {
+      ...createSession({timezone: 'CET'}),
+      token: 'test-token',
+      jwt: 'jwt-token',
+    },
+    user: {currentSettings},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('Host ListPage tests', () => {

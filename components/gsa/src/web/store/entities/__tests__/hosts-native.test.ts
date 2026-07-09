@@ -6,8 +6,11 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {fetchNativeHost, fetchNativeHosts} from 'gmp/native-api/hosts';
+import Filter from 'gmp/models/filter';
 import Host from 'gmp/models/host';
-import {loadEntity} from 'web/store/entities/hosts';
+import {loadEntities, loadEntity} from 'web/store/entities/hosts';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -79,6 +82,9 @@ describe('native API hosts list', () => {
     expect(host.os).toEqual('cpe:/o:canonical:ubuntu_linux');
     expect(host.details?.best_os_txt?.value).toEqual('Ubuntu Linux');
     expect(host.severity).toEqual(7.5);
+    expect(host.isWritable()).toEqual(true);
+    expect(host.userCapabilities.mayEdit('host')).toEqual(true);
+    expect(host.userCapabilities.mayDelete('host')).toEqual(true);
     expect(host.identifiers).toHaveLength(2);
     expect(host.identifiers[0].id).toEqual('identifier-ip');
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/hosts', {
@@ -95,6 +101,56 @@ describe('native API hosts list', () => {
         Authorization: 'Bearer jwt-token',
       },
     });
+  });
+
+  test('loads the host store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort-reverse=severity');
+    const rootState = createState('host', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-severity', filter: ''},
+        items: [
+          {
+            id: 'a4be8ecf-4f23-4c83-b0fd-3b65161d652b',
+            name: '192.0.2.42',
+            hostname: 'workstation.example',
+            ip: '192.0.2.42',
+            best_os_cpe: 'cpe:/o:canonical:ubuntu_linux',
+            best_os_txt: 'Ubuntu Linux',
+            severity: 7.5,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/hosts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: '-severity',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(Host);
+    expect(successAction.data[0].name).toEqual('192.0.2.42');
+    expect(successAction.data[0].isWritable()).toEqual(true);
+    expect(successAction.data[0].userCapabilities.mayEdit('host')).toEqual(true);
+    expect(successAction.data[0].userCapabilities.mayDelete('host')).toEqual(true);
   });
 
   test('fetches one host from the native detail endpoint', async () => {

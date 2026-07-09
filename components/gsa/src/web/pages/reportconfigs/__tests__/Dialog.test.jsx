@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   changeInputValue,
   getSelectItemElementsForSelect,
@@ -14,12 +15,15 @@ import {
   wait,
 } from 'web/testing';
 import ReportConfig from 'gmp/models/report-config';
-import ReportFormat from 'gmp/models/report-format';
 import {mockReportConfig} from 'web/pages/reportconfigs/__fixtures__/MockReportConfig';
 import {mockReportFormats} from 'web/pages/reportconfigs/__fixtures__/MockReportFormats';
 import ReportConfigDialog from 'web/pages/reportconfigs/Dialog';
 
 const config = ReportConfig.fromElement(mockReportConfig);
+
+afterEach(() => {
+  testing.unstubAllGlobals();
+});
 
 describe('Edit Report Config Dialog component tests', () => {
   test('should render dialog with disabled report format selection', () => {
@@ -326,61 +330,52 @@ describe('New Report Config Dialog component tests', () => {
   test('should allow to change name, comment, report_format and params', async () => {
     const handleClose = testing.fn();
     const handleSave = testing.fn();
-    const mockReportFormatDetails = ReportFormat.fromElement({
-      _id: '1234567',
+    const nativeReportFormatDetails = {
+      id: '1234567',
       name: 'example-configurable-2',
-      configurable: '1',
-      param: [
+      configurable: true,
+      params: [
         {
           name: 'Param1',
           value: 'ABC',
-          type: {
-            __text: 'string',
-            min: 0,
-            max: 100,
-          },
+          type: 'string',
+          min: 0,
+          max: 100,
         },
         {
           name: 'Param2',
           value: 'DEF',
-          type: {
-            __text: 'string',
-            min: 0,
-            max: 100,
-          },
+          type: 'string',
+          min: 0,
+          max: 100,
         },
         {
           name: 'ReportFormatListParam',
-          value: {
-            __text: 'RF01',
-            report_format: {
-              _id: 'RF01',
-              name: 'report format 1',
-            },
-          },
-          default: {
-            __text: 'RF01',
-            report_format: {
-              _id: 'RF01',
-              name: 'report format 1',
-            },
-          },
-          type: {
-            __text: 'report_format_list',
-            min: 0,
-            max: 100,
-          },
+          value: 'RF01',
+          default: 'RF01',
+          type: 'report_format_list',
+          min: 0,
+          max: 100,
         },
       ],
-    });
+    };
 
-    const getReportFormat = testing.fn().mockResolvedValue({
-      data: mockReportFormatDetails,
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue(nativeReportFormatDetails),
+      ok: true,
+      status: 200,
     });
+    testing.stubGlobal('fetch', fetchMock);
+    const getReportFormat = testing.fn();
 
     const gmp = {
+      buildUrl: testing.fn(path => `https://turbovas.example/${path}`),
       reportformat: {
         get: getReportFormat,
+      },
+      session: {
+        token: 'test-token',
+        jwt: 'jwt-token',
       },
     };
     const formats = mockReportFormats;
@@ -413,7 +408,20 @@ describe('New Report Config Dialog component tests', () => {
     await wait();
 
     // Set params
-    expect(getReportFormat).toHaveBeenCalledWith({id: '1234567'});
+    expect(getReportFormat).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/report-formats/1234567', {
+      token: 'test-token',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/1234567',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
     const param2Input = content.getByName('Param2');
     changeInputValue(param2Input, 'XYZ');
 

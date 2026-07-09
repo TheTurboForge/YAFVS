@@ -28,14 +28,7 @@ import TableRow from 'web/components/table/TableRow';
 import PropTypes from 'web/utils/PropTypes';
 import withGmp from 'web/utils/withGmp';
 
-const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
-
-const fetchReportFormat = (gmp, id) => {
-  if (canUseNativeApi(gmp)) {
-    return fetchNativeReportFormat(gmp, id);
-  }
-  return gmp.reportformat.get({id}).then(response => response.data);
-};
+const fetchReportFormat = (gmp, id) => fetchNativeReportFormat(gmp, id);
 
 const Param = ({
   data,

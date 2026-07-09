@@ -633,6 +633,45 @@ describe('ReportConfigCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should not fall back to GMP when sparse native report config params are unrecoverable', async () => {
+    const response = createActionResultResponse({id: 'fallback-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'foo',
+        name: 'foo',
+        params: [],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ReportConfigCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'foo',
+        name: 'foo',
+        params: {timezone: 'UTC'},
+        paramsUsingDefault: {subject: false},
+        paramTypes: {timezone: 'string'},
+      }),
+    ).rejects.toThrow(
+      'Native report config save requires complete non-default parameter values',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should delete report config', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

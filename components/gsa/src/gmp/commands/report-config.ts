@@ -258,6 +258,9 @@ export class ReportConfigCommand extends EntityCommand<ReportConfig> {
           nativeReportConfigPatchRequestFromCommand(nativeArgs),
         );
       }
+      throw new Error(
+        'Native report config save requires complete non-default parameter values',
+      );
     }
 
     const data = {

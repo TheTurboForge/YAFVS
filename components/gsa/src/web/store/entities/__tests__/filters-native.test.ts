@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -10,6 +11,9 @@ import {
   fetchNativeFilters,
   nativeFiltersQueryFromFilter,
 } from 'gmp/native-api/filters';
+import {loadEntities, loadEntity} from 'web/store/entities/filters';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -123,5 +127,92 @@ describe('native API filters', () => {
       filter: '',
       filterType: 'result',
     });
+  });
+
+  test('loads the filter store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name type=report');
+    const rootState = createState('filter', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'f8df35ce-e8a2-4c27-90a6-76b29a1e1b41',
+            name: 'High Severity Reports',
+            filter_type: 'report',
+            term: 'severity>7.0',
+            alert_count: 1,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/filters', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+      filter_type: 'report',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0].name).toEqual('High Severity Reports');
+    expect(successAction.data[0].filter_type).toEqual('report');
+  });
+
+  test('loads filter detail store entries through same-origin native API', async () => {
+    const id = 'f8df35ce-e8a2-4c27-90a6-76b29a1e1b41';
+    const rootState = createState('filter', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        name: 'High Severity Reports',
+        filter_type: 'report',
+        term: 'severity>7.0',
+        alerts: [
+          {
+            id: 'a9483e36-b9e4-43df-9ddc-d28ec1df9c23',
+            name: 'Notify SecOps',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/filters/f8df35ce-e8a2-4c27-90a6-76b29a1e1b41',
+      {token: 'test-token'},
+    );
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.data.name).toEqual('High Severity Reports');
+    expect(successAction.data.alerts).toHaveLength(1);
   });
 });

@@ -1,9 +1,18 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import * as funcs from 'web/store/entities/tags';
-import {testAll} from 'web/store/entities/utils/testing';
+import {
+  testEntitiesActions,
+  testEntityActions,
+  testReducerForEntities,
+  testReducerForEntity,
+} from 'web/store/entities/utils/testing';
 
-testAll('tag', funcs);
+testEntitiesActions('tag', funcs.entitiesLoadingActions);
+testEntityActions('tag', funcs.entityLoadingActions);
+testReducerForEntities('tag', funcs.reducer, funcs.entitiesLoadingActions);
+testReducerForEntity('tag', funcs.reducer, funcs.entityLoadingActions);

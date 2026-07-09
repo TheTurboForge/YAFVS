@@ -1,13 +1,18 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import Filter from 'gmp/models/filter';
 import {
   fetchNativePortList,
   fetchNativePortLists,
 } from 'gmp/native-api/port-lists';
+import {loadEntities, loadEntity} from 'web/store/entities/portlists';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -127,5 +132,90 @@ describe('native API port lists', () => {
     expect(portList.userTags[0].name).toEqual('Native tag');
     expect(portList.userTags[0].value).toEqual('true');
     expect(portList.userTags[0].comment).toEqual('Native port list tag');
+  });
+
+  test('loads the port-list store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name');
+    const rootState = createState('portlist', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: '33d0cd82-57c6-11e1-8ed1-406186ea4fc5',
+            name: 'All IANA assigned TCP',
+            port_count: {all: 7594, tcp: 7594, udp: 0},
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/port-lists', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0].name).toEqual('All IANA assigned TCP');
+    expect(successAction.data[0].portCount.tcp).toEqual(7594);
+  });
+
+  test('loads port-list detail store entries through same-origin native API', async () => {
+    const id = '33d0cd82-57c6-11e1-8ed1-406186ea4fc5';
+    const rootState = createState('portlist', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        name: 'All IANA assigned TCP',
+        port_count: {all: 3, tcp: 3, udp: 0},
+        port_ranges: [
+          {
+            id: '2a8ef847-e89b-4b1c-a019-e7ff5d0c4721',
+            protocol: 'tcp',
+            start: 22,
+            end: 24,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/port-lists/33d0cd82-57c6-11e1-8ed1-406186ea4fc5',
+      {token: 'test-token'},
+    );
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.data.name).toEqual('All IANA assigned TCP');
+    expect(successAction.data.portRanges).toHaveLength(1);
   });
 });

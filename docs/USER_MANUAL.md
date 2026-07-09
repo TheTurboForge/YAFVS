@@ -16,10 +16,34 @@ deployment guidance.
 
 ## Operator Access And Security Boundary
 
-TurboVAS is designed for scanner operators. Anyone who can log in can administer
-the scanner. User accounts remain useful for login identity, preferences, and
-attribution, but TurboVAS does not expose a product-level distinction between
-admin and super admin accounts.
+TurboVAS is designed as an operator-only scanner console, not as a general
+vulnerability-management collaboration portal. Every person who can log in to
+TurboVAS is expected to be a trusted scanner operator who may administer scanner
+workflows, targets, schedules, reports, credentials, and related scanner
+configuration.
+
+People who should not administer the scanner should not receive TurboVAS
+console accounts. System owners, IT operations teams, application teams,
+service owners, remediation teams, and ticket handlers should normally receive
+findings through controlled outbound workflows such as reports, exports,
+notifications, ticket-system integrations, or future delivery integrations.
+
+This keeps the scanner administration boundary simple and explicit:
+
+- TurboVAS console access is restricted to trusted scanner operators.
+- Remediation work is delivered outward to the systems where operational teams
+  already work.
+- TurboVAS does not try to model every organization's internal workflow as
+  in-product roles.
+- Login, network exposure, TLS, host access, backups, deployment controls,
+  auditability, and credential handling are the enterprise controls around
+  scanner administration.
+
+User accounts remain useful for login identity, authentication source,
+preferences, and attribution, but TurboVAS does not expose a product-level
+distinction between admin and super admin accounts. If a person should not be
+allowed to administer the scanner, that person should not be able to log in to
+TurboVAS.
 
 The current local development runtime uses the development credentials
 `admin` / `admin`. Treat those credentials as a private development convenience
@@ -310,9 +334,12 @@ available for individual scan evidence, and scopes define the operational
 population being reported on. This supports environments where one meaningful
 reporting population requires several technical targets.
 
-The operator-account model replaces inherited product RBAC. Anyone who can log
-in can administer the scanner. Authentication and deployment exposure are
-therefore the scanner administration boundary.
+The operator-only console model replaces inherited product RBAC. A TurboVAS
+account is an operator account: anyone who can log in can administer the
+scanner. This is a deliberate simplification of the scanner administration
+boundary, not a statement that enterprise controls are unnecessary. Stakeholder
+delivery belongs in reports, exports, notifications, ticket integrations, or
+future delivery workflows rather than in broad console accounts.
 
 Dedicated OCI/container-image scanning was removed. TurboVAS is moving toward
 inventory-based vulnerability matching, where scanner-collected and future

@@ -96,9 +96,13 @@ TurboVAS uses an operator-account model:
 authenticated account -> full scanner operator rights -> per-user identity, attribution, and preferences
 ```
 
-There is no product-level distinction between admin and super admin. Login is
-the scanner administration boundary. Development credentials are `admin` /
-`admin`; they are not production guidance.
+There is no product-level distinction between admin and super admin because the
+console is intentionally operator-only. People who should not administer the
+scanner should receive findings through reports, exports, notifications, ticket
+integrations, or future delivery workflows rather than console accounts. Login,
+network exposure, TLS, deployment controls, auditability, and credential
+handling define the scanner administration boundary. Development credentials
+are `admin` / `admin`; they are not production guidance.
 
 ## Deletion, Retention, And Provenance Flow
 

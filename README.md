@@ -5,6 +5,13 @@
 
 TurboVAS is an OpenVAS-derived monorepo for vulnerability scanner operators. It is intentionally organized around the components required to run TurboVAS as one coherent scanner system.
 
+TurboVAS uses an operator-only console model. A TurboVAS login is for trusted
+scanner operators who may administer the scanner; remediation stakeholders
+should receive findings through reports, exports, notifications, or future
+delivery integrations rather than through broad in-product accounts. This is an
+intentional product/security boundary, not an attempt to model every
+organization's internal workflow as roles inside the scanner console.
+
 This repository is currently in an early development phase. The initial source snapshot preserves upstream component boundaries and provenance so future changes can be made with clear licensing and attribution context. Public source visibility, if enabled, is for source transparency only and is not a binary release, container release, hosted service, production deployment, feed mirror, or feed redistribution.
 
 ## Relationship To Greenbone

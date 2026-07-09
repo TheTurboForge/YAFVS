@@ -4,7 +4,7 @@
 # Trust Boundaries
 
 TurboVAS is derived from OpenVAS/GVM, but TurboVAS changes the product model:
-all authenticated users are scanner operators, raw scan reports remain evidence,
+the console is for trusted scanner operators, raw scan reports remain evidence,
 and scope reports provide aggregated operator reporting. The trust boundaries
 below describe the current development architecture and the validation mindset
 for future changes.
@@ -13,6 +13,19 @@ This document is descriptive, not a production security claim. See
 `docs/PRODUCTION_POSTURE.md` before any production-like deployment.
 
 ## Current Boundaries
+
+### Operator Console Access
+
+TurboVAS uses an operator-only console model. Any authenticated console account
+is expected to be trusted to administer scanner workflows and retained scanner
+resources. People who should not administer the scanner should receive findings
+through outbound reporting or integration workflows instead of console accounts.
+
+This simplifies product authorization, but it raises the importance of the
+surrounding access controls: authentication source, credential handling, TLS,
+host binding, network exposure, backups, deployment controls, and auditability
+must be reviewed before production-like use. Development credentials and
+development bindings are not production guidance.
 
 ### Browser To `gsad`
 

@@ -5,9 +5,14 @@
 # Operator Account Model
 
 TurboVAS does not expose the inherited Greenbone/OpenVAS role, group, or
-permission administration model. Authentication is the administration boundary:
-any authenticated operator account can see and manage all retained TurboVAS
-resources.
+permission administration model. The TurboVAS console is an operator-only
+scanner administration surface: any authenticated operator account can see and
+manage all retained TurboVAS resources.
+
+People who should not administer scans, targets, credentials, schedules,
+reports, and scanner configuration should not receive TurboVAS console accounts.
+Their findings belong in outbound reports, exports, notifications, ticket-system
+integrations, or future delivery workflows.
 
 User accounts remain for login identity, authentication source, preferences, and
 attribution. Owner fields are retained as metadata, not as access-control

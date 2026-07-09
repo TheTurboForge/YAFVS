@@ -43,13 +43,23 @@ scope target, preserve raw source-report provenance, expose coverage/freshness,
 and provide report-like drill-down under `/scopes/reports` and
 `/scopes/:scope_id/reports/:scope_report_id`.
 
-## Operator Account Model
+## Operator-Only Console Model
 
-TurboVAS removed the inherited product RBAC model. Anyone who can authenticate
-to the scanner is a trusted scanner operator with full administration rights.
-User accounts remain for login identity, preferences, and attribution.
+TurboVAS removed the inherited product RBAC model because the TurboVAS console
+is an operator-only scanner administration surface, not a general stakeholder
+collaboration portal. Anyone who can authenticate to the console is a trusted
+scanner operator with scanner administration rights.
 
-The security boundary is therefore authentication plus deployment exposure.
+People who should not administer scans, targets, credentials, schedules,
+reports, and scanner configuration should not receive TurboVAS console accounts.
+Their findings should be delivered through reports, exports, notifications,
+ticket-system integrations, or future delivery workflows. User accounts remain
+for login identity, authentication source, preferences, and attribution, not for
+modeling every organization's internal workflow as product roles.
+
+The administration boundary is therefore explicit: restrict console login,
+network exposure, TLS, host access, backups, deployment controls, auditability,
+and credential handling to trusted scanner operators.
 Development credentials are `admin` / `admin` and are not production guidance.
 
 ## Removed Inherited Product Surfaces

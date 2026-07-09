@@ -8,9 +8,19 @@ development runtime, not production deployment guidance.
 
 ## Security Boundary
 
-Any authenticated TurboVAS user can administer the scanner. Before production
-use, operators must treat login, network exposure, TLS, backups, and host access
-as the primary scanner administration boundary.
+TurboVAS uses an operator-only console model. Anyone who can authenticate to
+the TurboVAS console or an approved operator API surface can administer scanner
+workflows, targets, schedules, reports, credentials, and related scanner
+configuration.
+
+People who should not administer the scanner should not receive TurboVAS
+console or operator API access. Remediation stakeholders should receive
+findings through controlled outbound workflows such as reports, exports,
+notifications, ticket-system integrations, or future delivery integrations.
+
+Before production use, operators must therefore treat login, network exposure,
+TLS, backups, host access, auditability, credential handling, and deployment
+controls as the scanner administration boundary.
 
 ## Minimum Production Questions
 

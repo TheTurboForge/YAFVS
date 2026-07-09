@@ -3608,8 +3608,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'vulnerability-detail-read',
          'vulnerability-list-read',
          'vulnerability-metadata-export-read']
-        expected_inherited_still_owns_values = ['alert-detail-delivery-control',
-         'credential-secrets-writes-and-deletes',
+        expected_inherited_still_owns_values = ['credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
          'host-os-catalog-target-creation-tags-export-and-rich-history',
          'operating-system-writes-deletes-and-rich-history',
@@ -4521,7 +4520,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "alert-metadata-list-read",
-                "x_turbovas_inherited_still_owns": "alert-detail-delivery-control",
                 "replacement_candidates": ["alert list automation"],
             },
             {

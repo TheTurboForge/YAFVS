@@ -494,7 +494,6 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "    delete:",
         "operationId: deleteAlertsByAlertId",
         "x-turbovas-replaces: alert-trash-move",
-        "x-turbovas-inherited-still-owns: alert-detail-delivery-control",
         "x-turbovas-side-effect: metadata-delete",
     ] {
         assert!(
@@ -509,7 +508,6 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "operationId: postAlertsByAlertIdClone",
         "x-turbovas-exposure: direct-write",
         "x-turbovas-replaces: alert-clone",
-        "x-turbovas-inherited-still-owns: alert-detail-delivery-control",
         "x-turbovas-safety-contract: write-control-v1",
         "AlertCloneRequest",
     ] {
@@ -518,4 +516,6 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
             "/alerts/{{alert_id}}/clone missing {required}"
         );
     }
+    assert!(!delete.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
+    assert!(!clone.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
 }

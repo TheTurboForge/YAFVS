@@ -3567,7 +3567,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'tls-certificate-rich-history',
          'trashcan-deep-row-data-and-mutations',
          'trashcan-row-data-and-mutations',
-         'vulnerability-exports-and-actions']
+        ]
         self.assertEqual(contract["allowed_replaces_values"], expected_replaces_values)
         actual_replaces_values = sorted(
             {
@@ -4100,8 +4100,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/cves": ("getCves", "cve-catalog-list-read", None),
             "/api/v1/cves/{cve_id}": ("getCvesByCveId", "cve-catalog-detail-epss-reference-configuration-read", None),
             "/api/v1/cves/{cve_id}/export": ("getCvesByCveIdExport", "cve-catalog-metadata-export-read", None),
-            "/api/v1/vulnerabilities/{vulnerability_id}": ("getVulnerabilitiesByVulnerabilityId", "vulnerability-detail-read", "vulnerability-exports-and-actions"),
-            "/api/v1/vulnerabilities/{vulnerability_id}/export": ("getVulnerabilitiesByVulnerabilityIdExport", "vulnerability-metadata-export-read", "vulnerability-exports-and-actions"),
+            "/api/v1/vulnerabilities/{vulnerability_id}": ("getVulnerabilitiesByVulnerabilityId", "vulnerability-detail-read", None),
+            "/api/v1/vulnerabilities/{vulnerability_id}/export": ("getVulnerabilitiesByVulnerabilityIdExport", "vulnerability-metadata-export-read", None),
             "/api/v1/cpes": ("getCpes", "cpe-catalog-list-read", None),
             "/api/v1/cpes/{cpe_id}": ("getCpesByCpeId", "cpe-catalog-detail-read", None),
             "/api/v1/cert-bund-advisories": ("getCertBundAdvisories", "cert-bund-advisory-list-read", None),

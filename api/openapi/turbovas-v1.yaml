@@ -121,7 +121,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: vulnerability-list-read
-      x-turbovas-inherited-still-owns: vulnerability-exports-and-actions
       summary: List top-level vulnerabilities from scan results
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -154,7 +153,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: vulnerability-detail-read
-      x-turbovas-inherited-still-owns: vulnerability-exports-and-actions
       summary: Get vulnerability metadata
       description: Direct native JSON metadata detail for one observed top-level vulnerability aggregated from positive-severity raw scan results. This does not replace inherited bulk XML/table export or future vulnerability actions.
       parameters:
@@ -192,7 +190,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: vulnerability-metadata-export-read
-      x-turbovas-inherited-still-owns: vulnerability-exports-and-actions
       summary: Export vulnerability metadata
       description: Direct native JSON metadata export for one observed top-level vulnerability aggregated from positive-severity raw scan results. This does not replace inherited bulk XML/table export or future vulnerability actions.
       parameters:

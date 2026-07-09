@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {screen, within, rendererWith, wait} from 'web/testing';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import DfnCertAdv from 'gmp/models/dfn-cert';
@@ -32,7 +33,19 @@ const dfnCert = DfnCertAdv.fromElement({
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
+const nativeDfnCertItem = {
+  id: 'dfncert-1',
+  name: 'DFN-CERT-2026-001',
+  created_at: '2026-02-10T09:00:00Z',
+  cve_refs: 1,
+  severity: 9.1,
+  title: 'Example DFN-CERT advisory',
+  summary: 'Example summary',
+};
+
 const createGmp = ({
+  buildUrl,
+  nativeDfnCertItems = [nativeDfnCertItem],
   getDfnCerts = testing.fn().mockResolvedValue({
     data: [dfnCert],
     meta: {
@@ -53,19 +66,56 @@ const createGmp = ({
   getSetting = testing.fn().mockResolvedValue({
     filter: null,
   }),
-} = {}) => ({
-  dfncerts: {
-    get: getDfnCerts,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings, getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeDfnCertItems.length,
+                sort: '-created',
+                filter: '',
+              },
+              items: nativeDfnCertItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    dfncerts: {
+      get: getDfnCerts,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+    },
+    session: createSession({timezone: 'CET'}),
+    user: {currentSettings, getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('DfnCertPage tests', () => {

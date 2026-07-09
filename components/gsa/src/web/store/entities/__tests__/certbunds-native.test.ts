@@ -6,11 +6,14 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import CertBundAdv from 'gmp/models/cert-bund';
+import Filter from 'gmp/models/filter';
 import {
   fetchNativeCertBundAdvisory,
   fetchNativeCertBundAdvisories,
 } from 'gmp/native-api/cert-bund-advisories';
-import {loadEntity} from 'web/store/entities/certbund';
+import {loadEntities, loadEntity} from 'web/store/entities/certbund';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({
   jwt,
@@ -227,5 +230,52 @@ describe('native API CERT-Bund advisory catalog', () => {
     expect(advisory?.userTags?.[0].name).toEqual('Native tag');
     expect(advisory?.userTags?.[0].value).toEqual('true');
     expect(advisory?.userTags?.[0].comment).toEqual('Native CERT-Bund tag');
+  });
+
+  test('loads the CERT-Bund store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort-reverse=created');
+    const rootState = createState('certbund', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-created', filter: ''},
+        items: [
+          {
+            id: 'cert-bund-uuid-1',
+            name: 'CERT-Bund-2026-001',
+            title: 'Example CERT-Bund advisory',
+            summary: 'OpenSSL update advisory.',
+            severity: 8.7,
+            cve_refs: 2,
+            cves: ['CVE-2026-10001', 'CVE-2026-10002'],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/cert-bund-advisories', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: '-created',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0].name).toEqual('CERT-Bund-2026-001');
+    expect(successAction.data[0].cve_refs).toEqual(2);
   });
 });

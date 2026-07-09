@@ -1,9 +1,22 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import * as dfncert from 'web/store/entities/dfncerts';
-import {testAll} from 'web/store/entities/utils/testing';
+import {
+  testEntitiesActions,
+  testEntityActions,
+  testReducerForEntities,
+  testReducerForEntity,
+} from 'web/store/entities/utils/testing';
 
-testAll('dfncert', dfncert);
+testEntitiesActions('dfncert', dfncert.entitiesLoadingActions);
+testEntityActions('dfncert', dfncert.entityLoadingActions);
+testReducerForEntities(
+  'dfncert',
+  dfncert.reducer,
+  dfncert.entitiesLoadingActions,
+);
+testReducerForEntity('dfncert', dfncert.reducer, dfncert.entityLoadingActions);

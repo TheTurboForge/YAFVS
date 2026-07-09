@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import importlib.util
+import io
 import json
 import os
 import socket
@@ -817,6 +818,36 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(payload["port_list_id"], runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID)
         self.assertEqual(payload["alive_tests"], ["Scan Config Default"])
         self.assertNotIn("credentials", payload)
+
+    def test_full_test_scan_ensure_task_uses_native_create_when_repo_root_is_available(self):
+        root = Path("/tmp/turbovas-test")
+        state = {"tasks": []}
+
+        with unittest.mock.patch.object(
+            runtime_full_test_scan,
+            "native_api_browser_proxy_json",
+            return_value={"id": "task-1", "name": runtime_full_test_scan.FULL_TEST_TASK_NAME},
+        ) as native_create:
+            task_id, error = runtime_full_test_scan.ensure_task(
+                object(),
+                state,
+                "target-1",
+                "scanner-1",
+                repo_root=root,
+                operator_name="admin",
+            )
+
+        self.assertEqual(task_id, "task-1")
+        self.assertIsNone(error)
+        native_create.assert_called_once()
+        _repo_root, path = native_create.call_args.args
+        payload = native_create.call_args.kwargs["payload"]
+        self.assertEqual(path, "/api/v1/tasks")
+        self.assertEqual(payload["target_id"], "target-1")
+        self.assertEqual(payload["config_id"], runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID)
+        self.assertEqual(payload["scanner_id"], "scanner-1")
+        self.assertNotIn("schedule_id", payload)
+        self.assertNotIn("alert_ids", payload)
 
     def test_full_test_scan_reports_for_task_uses_native_api_when_repo_root_is_available(self):
         root = Path("/tmp/turbovas-test")
@@ -9988,6 +10019,61 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn("python-gvm.venv", gmp_smoke_wrapper)
         self.assertIn("sys.executable", gmp_smoke_wrapper)
 
+    def test_full_test_scan_no_longer_imports_python_gvm_runtime_client(self):
+        source = FULL_TEST_SCAN_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("from gvm", source)
+        self.assertNotIn("UnixSocketConnection", source)
+        self.assertNotIn("GMP(", source)
+        self.assertNotIn("gmp.", source)
+        self.assertIn("RawGmpStartClient", source)
+
+        wrapper_source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        full_test_scan_wrapper = wrapper_source.split("def command_runtime_full_test_scan", 1)[1].split("def command_runtime_report", 1)[0]
+        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", full_test_scan_wrapper)
+        self.assertNotIn("python-gvm.venv", full_test_scan_wrapper)
+        self.assertIn("sys.executable", full_test_scan_wrapper)
+
+    def test_full_test_scan_raw_start_client_quotes_task_id_attribute(self):
+        client = runtime_full_test_scan.RawGmpStartClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
+        client.connection = object()
+        commands = []
+
+        def fake_send(_connection, command):
+            commands.append(command)
+            return b"<start_task_response status='202'><report_id>report-1</report_id></start_task_response>"
+
+        with unittest.mock.patch.object(runtime_full_test_scan, "send_gmp_xml_command", side_effect=fake_send):
+            response = client.start_task('task"&<>')
+
+        self.assertEqual(response, b"<start_task_response status='202'><report_id>report-1</report_id></start_task_response>")
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(ET.fromstring(commands[0]).get("task_id"), 'task"&<>')
+
+    def test_full_test_scan_main_handles_preflight_failure_without_empty_password_redaction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stdout = io.StringIO()
+            with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", side_effect=RuntimeError("native API boom")):
+                with unittest.mock.patch("sys.stdout", stdout):
+                    exit_code = runtime_full_test_scan.main(
+                        [
+                            "preflight",
+                            "--socket",
+                            str(Path(tmp) / "gvmd.sock"),
+                            "--username",
+                            "admin",
+                            "--password-file",
+                            str(Path(tmp) / "password"),
+                            "--artifact-dir",
+                            str(Path(tmp) / "artifacts"),
+                            "--repo-root",
+                            tmp,
+                        ]
+                    )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["details"]["error"], "native API boom")
+
     def test_native_feed_object_verification_uses_detail_endpoints(self):
         calls = []
         original_native_api_curl = turbovasctl.native_api_curl
@@ -10195,7 +10281,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 confirm_authorized_lan=True,
                 poll_seconds=1,
                 poll_interval=0,
-                reconnect_gmp=reconnect,
+                reconnect_client=reconnect,
             )
         self.assertEqual(payload["status"], "pass")
         self.assertIn("Remote closed", payload["details"]["start_error"])

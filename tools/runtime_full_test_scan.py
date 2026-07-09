@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -15,6 +16,9 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import quoteattr
+
+from runtime_gmp_smoke import gmp_authenticate_xml, send_gmp_xml_command
 
 
 AUTHORIZED_TARGET_CIDR = "192.168.178.0/24"
@@ -306,7 +310,7 @@ def report_rows(response: Any) -> list[dict[str, str | None]]:
 
 
 def reports_for_task(
-    gmp: Any,
+    client: Any,
     task_id: str,
     rows: int = 10,
     repo_root: Path | None = None,
@@ -318,7 +322,7 @@ def reports_for_task(
             return [], f"native report lookup failed: {type(error).__name__}: {error}"
         return [row for row in native_rows if row.get("task_id") == task_id][:rows], None
     try:
-        response = gmp.get_reports(
+        response = getattr(client, "get_reports")(
             filter_string=f"task_id={task_id} rows={rows} sort-reverse=date",
             details=True,
             ignore_pagination=True,
@@ -328,8 +332,8 @@ def reports_for_task(
     return [row for row in report_rows(response) if row.get("task_id") == task_id], None
 
 
-def latest_report_for_task(gmp: Any, task_id: str, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
-    reports, error = reports_for_task(gmp, task_id, rows=10, repo_root=repo_root)
+def latest_report_for_task(client: Any, task_id: str, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
+    reports, error = reports_for_task(client, task_id, rows=10, repo_root=repo_root)
     return (reports[0] if reports else None), error
 
 
@@ -403,12 +407,12 @@ def ospd_handoff_evidence(log_file: Path | None, report_id: str | None, task_id:
 
 
 def task_status_snapshot(
-    gmp: Any,
+    client: Any,
     task: dict[str, str | None],
     ospd_log_file: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    reports, report_error = reports_for_task(gmp, task["id"] or "", repo_root=repo_root) if task.get("id") else ([], None)
+    reports, report_error = reports_for_task(client, task["id"] or "", repo_root=repo_root) if task.get("id") else ([], None)
     latest_report = reports[0] if reports else None
     latest_completed_report = first_completed_report_with_start(reports)
     latest_no_start_completed_report = first_no_start_completed_report(reports)
@@ -429,8 +433,8 @@ def task_status_snapshot(
     }
 
 
-def current_full_test_task(gmp: Any, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
-    state = load_state(gmp, repo_root)
+def current_full_test_task(client: Any, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
+    state = load_state(client, repo_root)
     return single_named(state["tasks"], FULL_TEST_TASK_NAME)
 
 
@@ -475,7 +479,39 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     return str(path)
 
 
-def connect_gmp(socket_path: Path, username: str, password_file: Path, timeout: int):
+class RawGmpStartClient:
+    """Minimal raw GMP bridge for the remaining task-start side effect."""
+
+    def __init__(self, socket_path: Path, username: str, password: str, timeout: int) -> None:
+        self.socket_path = socket_path
+        self.username = username
+        self.password = password
+        self.timeout = timeout
+        self.connection: socket.socket | None = None
+
+    def connect(self) -> None:
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(self.timeout)
+            connection.connect(str(self.socket_path))
+            send_gmp_xml_command(connection, gmp_authenticate_xml(self.username, self.password))
+        except Exception:
+            connection.close()
+            raise
+        self.connection = connection
+
+    def start_task(self, task_id: str) -> bytes:
+        if self.connection is None:
+            raise RuntimeError("GMP socket is not connected")
+        return send_gmp_xml_command(self.connection, f"<start_task task_id={quoteattr(task_id)}/>")
+
+    def disconnect(self) -> None:
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
+
+
+def connect_task_start_client(socket_path: Path, username: str, password_file: Path, timeout: int):
     if not socket_path.is_socket():
         raise RuntimeError(f"gvmd socket is not ready: {socket_path}")
     if not password_file.is_file():
@@ -484,17 +520,12 @@ def connect_gmp(socket_path: Path, username: str, password_file: Path, timeout: 
     if not password:
         raise RuntimeError(f"password file is empty: {password_file}")
 
-    from gvm.connections import UnixSocketConnection
-    from gvm.protocols.latest import GMP
-
-    connection = UnixSocketConnection(path=socket_path, timeout=timeout)
-    gmp = GMP(connection=connection)
-    gmp.connect()
-    gmp.authenticate(username, password)
-    return gmp, password
+    client = RawGmpStartClient(socket_path, username, password, timeout)
+    client.connect()
+    return client, password
 
 
-def load_state(gmp: Any, repo_root: Path | None = None) -> dict[str, Any]:
+def load_state(client: Any, repo_root: Path | None = None) -> dict[str, Any]:
     if repo_root is not None:
         return {
             "scan_configs": native_object_rows(repo_root, "scan-configs"),
@@ -504,11 +535,11 @@ def load_state(gmp: Any, repo_root: Path | None = None) -> dict[str, Any]:
             "tasks": native_object_rows(repo_root, "tasks"),
         }
     return {
-        "scan_configs": object_rows(gmp.get_scan_configs(), "config"),
-        "port_lists": object_rows(gmp.get_port_lists(), "port_list"),
-        "scanners": object_rows(gmp.get_scanners(details=True), "scanner"),
-        "targets": object_rows(gmp.get_targets(tasks=True), "target"),
-        "tasks": object_rows(gmp.get_tasks(details=True, ignore_pagination=True), "task"),
+        "scan_configs": object_rows(getattr(client, "get_scan_configs")(), "config"),
+        "port_lists": object_rows(getattr(client, "get_port_lists")(), "port_list"),
+        "scanners": object_rows(getattr(client, "get_scanners")(details=True), "scanner"),
+        "targets": object_rows(getattr(client, "get_targets")(tasks=True), "target"),
+        "tasks": object_rows(getattr(client, "get_tasks")(details=True, ignore_pagination=True), "task"),
     }
 
 
@@ -534,7 +565,7 @@ def preflight_state(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def ensure_target(
-    gmp: Any,
+    client: Any,
     state: dict[str, Any],
     *,
     repo_root: Path | None = None,
@@ -569,7 +600,7 @@ def ensure_target(
             return None, f"native target create failed: {type(error).__name__}: {error}"
         target_id = created.get("id")
         return (target_id, None) if isinstance(target_id, str) and target_id else (None, "Native target creation response did not include an id.")
-    response = gmp.create_target(
+    response = getattr(client, "create_target")(
         FULL_TEST_TARGET_NAME,
         hosts=[AUTHORIZED_TARGET_CIDR],
         port_list_id=IANA_TCP_UDP_PORT_LIST_ID,
@@ -581,13 +612,41 @@ def ensure_target(
     return target_id, None
 
 
-def ensure_task(gmp: Any, state: dict[str, Any], target_id: str, scanner_id: str) -> tuple[str | None, str | None]:
+def ensure_task(
+    client: Any,
+    state: dict[str, Any],
+    target_id: str,
+    scanner_id: str,
+    *,
+    repo_root: Path | None = None,
+    operator_name: str = "admin",
+) -> tuple[str | None, str | None]:
     task, error = single_named(state["tasks"], FULL_TEST_TASK_NAME)
     if error:
         return None, error
     if task and task.get("id"):
         return task["id"], None
-    response = gmp.create_task(
+    if repo_root is not None:
+        try:
+            created = native_api_browser_proxy_json(
+                repo_root,
+                "/api/v1/tasks",
+                method="POST",
+                payload={
+                    "name": FULL_TEST_TASK_NAME,
+                    "comment": "Authorized TurboVAS full test LAN scan.",
+                    "target_id": target_id,
+                    "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
+                    "scanner_id": scanner_id,
+                },
+                operator_name=operator_name,
+                expected_statuses={"201"},
+            )
+        except Exception as error:  # pylint: disable=broad-except
+            return None, f"native task create failed: {type(error).__name__}: {error}"
+        task_id = created.get("id")
+        return (task_id, None) if isinstance(task_id, str) and task_id else (None, "Native task creation response did not include an id.")
+    response = getattr(client, "create_task")(
         FULL_TEST_TASK_NAME,
         FULL_AND_FAST_SCAN_CONFIG_ID,
         target_id,
@@ -600,15 +659,15 @@ def ensure_task(gmp: Any, state: dict[str, Any], target_id: str, scanner_id: str
     return task_id, None
 
 
-def command_preflight(gmp: Any, artifact_dir: Path, repo_root: Path | None = None) -> dict[str, Any]:
-    state = load_state(gmp, repo_root)
+def command_preflight(client: Any, artifact_dir: Path, repo_root: Path | None = None) -> dict[str, Any]:
+    state = load_state(client, repo_root)
     payload = preflight_state(state)
     payload["artifacts"] = [write_artifact(artifact_dir, "preflight.json", payload)]
     return payload
 
 
 def command_start(
-    gmp: Any,
+    client: Any,
     artifact_dir: Path,
     confirm_authorized_lan: bool,
     repo_root: Path | None = None,
@@ -616,14 +675,14 @@ def command_start(
     poll_seconds: int = 90,
     poll_interval: int = 5,
     ospd_log_file: Path | None = None,
-    reconnect_gmp: Callable[[], Any] | None = None,
+    reconnect_client: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     if not confirm_authorized_lan:
         payload = result("fail", "Full test scan start refused without --confirm-authorized-lan.", target_cidr=AUTHORIZED_TARGET_CIDR)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    state = load_state(gmp, repo_root)
+    state = load_state(client, repo_root)
     preflight = preflight_state(state)
     if preflight["status"] == "fail" and preflight["details"]["active_duplicate_tasks"]:
         preflight["summary"] = "Full test scan start refused because a matching task is already active."
@@ -639,38 +698,38 @@ def command_start(
         return preflight
 
     scanner_id = preflight["details"]["scanner"]["id"]
-    target_id, target_error = ensure_target(gmp, state, repo_root=repo_root, operator_name=operator_name)
+    target_id, target_error = ensure_target(client, state, repo_root=repo_root, operator_name=operator_name)
     if target_error or not target_id:
         payload = result("fail", "Full test scan start refused because the target could not be prepared.", error=target_error)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    state = load_state(gmp, repo_root)
-    task_id, task_error = ensure_task(gmp, state, target_id, scanner_id)
+    state = load_state(client, repo_root)
+    task_id, task_error = ensure_task(client, state, target_id, scanner_id, repo_root=repo_root, operator_name=operator_name)
     if task_error or not task_id:
         payload = result("fail", "Full test scan start refused because the task could not be prepared.", error=task_error, target_id=target_id)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    refreshed = load_state(gmp, repo_root)
+    refreshed = load_state(client, repo_root)
     active = active_full_test_tasks(refreshed["tasks"])
     if active:
         payload = result("fail", "Full test scan start refused because a matching task is already active.", active_duplicate_tasks=active)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
-    pre_start_reports, _ = reports_for_task(gmp, task_id, rows=20, repo_root=repo_root)
+    pre_start_reports, _ = reports_for_task(client, task_id, rows=20, repo_root=repo_root)
     pre_start_report_ids = {report["id"] for report in pre_start_reports if report.get("id")}
     start_error: str | None = None
     report_id: str | None = None
     try:
-        start_response = gmp.start_task(task_id)
+        start_response = getattr(client, "start_task")(task_id)
         report_id = response_id(start_response)
     except Exception as error:  # pylint: disable=broad-except
         start_error = f"{type(error).__name__}: {error}"
-        if reconnect_gmp is not None:
+        if reconnect_client is not None:
             try:
-                gmp = reconnect_gmp()
+                client = reconnect_client()
             except Exception as reconnect_error:  # pylint: disable=broad-except
                 start_error = f"{start_error}; reconnect failed: {type(reconnect_error).__name__}: {reconnect_error}"
 
@@ -680,20 +739,20 @@ def command_start(
     poll_errors: list[str] = []
     while time.monotonic() <= deadline:
         try:
-            task, task_error = current_full_test_task(gmp, repo_root)
+            task, task_error = current_full_test_task(client, repo_root)
             if task_error:
                 observed = {"task_lookup_error": task_error}
                 break
             if not task:
                 observed = {"task_lookup_error": "full test task disappeared after start request"}
                 break
-            observed = task_status_snapshot(gmp, task, ospd_log_file=ospd_log_file, repo_root=repo_root)
-            reports, _ = reports_for_task(gmp, task_id, rows=10, repo_root=repo_root)
+            observed = task_status_snapshot(client, task, ospd_log_file=ospd_log_file, repo_root=repo_root)
+            reports, _ = reports_for_task(client, task_id, rows=10, repo_root=repo_root)
         except Exception as error:  # pylint: disable=broad-except
             poll_errors.append(f"{type(error).__name__}: {error}")
-            if reconnect_gmp is not None:
+            if reconnect_client is not None:
                 try:
-                    gmp = reconnect_gmp()
+                    client = reconnect_client()
                     continue
                 except Exception as reconnect_error:  # pylint: disable=broad-except
                     poll_errors.append(f"reconnect failed: {type(reconnect_error).__name__}: {reconnect_error}")
@@ -762,15 +821,15 @@ def command_start(
     return payload
 
 
-def command_status(gmp: Any, artifact_dir: Path, ospd_log_file: Path | None = None, repo_root: Path | None = None) -> dict[str, Any]:
-    state = load_state(gmp, repo_root)
+def command_status(client: Any, artifact_dir: Path, ospd_log_file: Path | None = None, repo_root: Path | None = None) -> dict[str, Any]:
+    state = load_state(client, repo_root)
     task, task_error = single_named(state["tasks"], FULL_TEST_TASK_NAME)
     if task_error:
         payload = result("fail", "Full test scan status failed because multiple matching tasks exist.", error=task_error)
     elif not task:
         payload = result("warn", "Full test scan task does not exist yet.", target_cidr=AUTHORIZED_TARGET_CIDR)
     else:
-        payload = result("pass", "Full test scan status read.", target_cidr=AUTHORIZED_TARGET_CIDR, **task_status_snapshot(gmp, task, ospd_log_file=ospd_log_file, repo_root=repo_root))
+        payload = result("pass", "Full test scan status read.", target_cidr=AUTHORIZED_TARGET_CIDR, **task_status_snapshot(client, task, ospd_log_file=ospd_log_file, repo_root=repo_root))
     payload["artifacts"] = [write_artifact(artifact_dir, "status.json", payload)]
     return payload
 
@@ -794,22 +853,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     password = ""
-    gmp_connections = []
+    connections = []
 
-    def open_gmp_connection():
+    def open_connection():
         nonlocal password
-        gmp_connection, password = connect_gmp(Path(args.socket), args.username, Path(args.password_file), args.timeout)
-        gmp_connections.append(gmp_connection)
-        return gmp_connection
+        connection, password = connect_task_start_client(Path(args.socket), args.username, Path(args.password_file), args.timeout)
+        connections.append(connection)
+        return connection
 
     try:
-        gmp = open_gmp_connection()
         repo_root = Path(args.repo_root) if args.repo_root else None
         if args.command == "preflight":
-            payload = command_preflight(gmp, Path(args.artifact_dir), repo_root=repo_root)
+            payload = command_preflight(None, Path(args.artifact_dir), repo_root=repo_root)
         elif args.command == "start":
+            client = open_connection()
             payload = command_start(
-                gmp,
+                client,
                 Path(args.artifact_dir),
                 args.confirm_authorized_lan,
                 repo_root=repo_root,
@@ -817,16 +876,19 @@ def main(argv: list[str] | None = None) -> int:
                 poll_seconds=args.poll_seconds,
                 poll_interval=args.poll_interval,
                 ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None,
-                reconnect_gmp=open_gmp_connection,
+                reconnect_client=open_connection,
             )
         else:
-            payload = command_status(gmp, Path(args.artifact_dir), ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None, repo_root=repo_root)
+            payload = command_status(None, Path(args.artifact_dir), ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None, repo_root=repo_root)
     except Exception as error:  # pylint: disable=broad-except
-        payload = result("fail", "Full test scan helper failed.", error_type=type(error).__name__, error=str(error).replace(password, "[redacted]"))
+        error_text = str(error)
+        if password:
+            error_text = error_text.replace(password, "[redacted]")
+        payload = result("fail", "Full test scan helper failed.", error_type=type(error).__name__, error=error_text)
     finally:
-        for gmp in reversed(gmp_connections):
+        for connection in reversed(connections):
             try:
-                gmp.disconnect()
+                connection.disconnect()
             except Exception:
                 pass
     print(json.dumps(payload, indent=2, sort_keys=True))

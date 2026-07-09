@@ -479,8 +479,8 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     return str(path)
 
 
-class RawGmpStartClient:
-    """Minimal raw GMP bridge for the remaining task-start side effect."""
+class RawGmpClient:
+    """Minimal raw GMP bridge for retained helper side effects."""
 
     def __init__(self, socket_path: Path, username: str, password: str, timeout: int) -> None:
         self.socket_path = socket_path
@@ -500,10 +500,16 @@ class RawGmpStartClient:
             raise
         self.connection = connection
 
-    def start_task(self, task_id: str) -> bytes:
+    def send_xml(self, command: str) -> bytes:
         if self.connection is None:
             raise RuntimeError("GMP socket is not connected")
-        return send_gmp_xml_command(self.connection, f"<start_task task_id={quoteattr(task_id)}/>")
+        return send_gmp_xml_command(self.connection, command)
+
+    def start_task(self, task_id: str) -> bytes:
+        return self.send_xml(f"<start_task task_id={quoteattr(task_id)}/>")
+
+    def generate_scope_report(self, scope_id: str) -> bytes:
+        return self.send_xml(f"<generate_scope_report scope_id={quoteattr(scope_id)}/>")
 
     def disconnect(self) -> None:
         if self.connection is not None:
@@ -511,7 +517,7 @@ class RawGmpStartClient:
             self.connection = None
 
 
-def connect_task_start_client(socket_path: Path, username: str, password_file: Path, timeout: int):
+def connect_raw_gmp_client(socket_path: Path, username: str, password_file: Path, timeout: int):
     if not socket_path.is_socket():
         raise RuntimeError(f"gvmd socket is not ready: {socket_path}")
     if not password_file.is_file():
@@ -520,7 +526,7 @@ def connect_task_start_client(socket_path: Path, username: str, password_file: P
     if not password:
         raise RuntimeError(f"password file is empty: {password_file}")
 
-    client = RawGmpStartClient(socket_path, username, password, timeout)
+    client = RawGmpClient(socket_path, username, password, timeout)
     client.connect()
     return client, password
 
@@ -857,7 +863,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def open_connection():
         nonlocal password
-        connection, password = connect_task_start_client(Path(args.socket), args.username, Path(args.password_file), args.timeout)
+        connection, password = connect_raw_gmp_client(Path(args.socket), args.username, Path(args.password_file), args.timeout)
         connections.append(connection)
         return connection
 

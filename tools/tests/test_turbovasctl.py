@@ -10025,7 +10025,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn("UnixSocketConnection", source)
         self.assertNotIn("GMP(", source)
         self.assertNotIn("gmp.", source)
-        self.assertIn("RawGmpStartClient", source)
+        self.assertIn("RawGmpClient", source)
 
         wrapper_source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         full_test_scan_wrapper = wrapper_source.split("def command_runtime_full_test_scan", 1)[1].split("def command_runtime_report", 1)[0]
@@ -10034,7 +10034,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("sys.executable", full_test_scan_wrapper)
 
     def test_full_test_scan_raw_start_client_quotes_task_id_attribute(self):
-        client = runtime_full_test_scan.RawGmpStartClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
+        client = runtime_full_test_scan.RawGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
         client.connection = object()
         commands = []
 
@@ -10048,6 +10048,22 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(response, b"<start_task_response status='202'><report_id>report-1</report_id></start_task_response>")
         self.assertEqual(len(commands), 1)
         self.assertEqual(ET.fromstring(commands[0]).get("task_id"), 'task"&<>')
+
+    def test_raw_gmp_client_quotes_scope_report_scope_id_attribute(self):
+        client = runtime_full_test_scan.RawGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
+        client.connection = object()
+        commands = []
+
+        def fake_send(_connection, command):
+            commands.append(command)
+            return b"<generate_scope_report_response status='201' id='report-1'/>"
+
+        with unittest.mock.patch.object(runtime_full_test_scan, "send_gmp_xml_command", side_effect=fake_send):
+            response = client.generate_scope_report('scope"&<>')
+
+        self.assertEqual(response, b"<generate_scope_report_response status='201' id='report-1'/>")
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(ET.fromstring(commands[0]).get("scope_id"), 'scope"&<>')
 
     def test_full_test_scan_main_handles_preflight_failure_without_empty_password_redaction(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -10073,6 +10089,22 @@ db2:keys=5,expires=0,avg_ttl=0
         payload = json.loads(stdout.getvalue())
         self.assertEqual(exit_code, 1)
         self.assertEqual(payload["details"]["error"], "native API boom")
+
+    def test_runtime_scope_uses_raw_bridge_not_python_gvm_connection_helper(self):
+        source = RUNTIME_SCOPE_PATH.read_text(encoding="utf-8")
+        wrapper_source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        scope_wrapper = wrapper_source.split("def command_runtime_scope", 1)[1].split("def runtime_scope_organization_proof_finding", 1)[0]
+        self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
+        self.assertNotIn("gmp.", source)
+        self.assertIn("connect_raw_gmp_client", source)
+        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", scope_wrapper)
+        self.assertNotIn("python-gvm.venv", scope_wrapper)
+        self.assertIn("sys.executable", scope_wrapper)
+
+    def test_runtime_rbac_smoke_reads_admin_password_before_python_gvm_connection(self):
+        source = (Path(__file__).resolve().parents[1] / "runtime_rbac_smoke.py").read_text(encoding="utf-8")
+        self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
+        self.assertIn("connect_with_password(socket_path, args.username, admin_password, args.timeout)", source)
 
     def test_native_feed_object_verification_uses_detail_endpoints(self):
         calls = []

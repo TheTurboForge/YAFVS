@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Exercise TurboVAS scope writes over native JSON and report generation over GMP."""
+"""Exercise TurboVAS scope writes over native JSON and raw XML report generation."""
 
 from __future__ import annotations
 
@@ -350,7 +350,7 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     return str(path)
 
 
-def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) -> dict[str, Any]:
+def command_smoke(client: Any, artifact_dir: Path, repo_root: Path, username: str) -> dict[str, Any]:
     targets = native_named_rows(repo_root, "targets")
     hosts = native_named_rows(repo_root, "hosts")
     target = targets[0] if targets else None
@@ -370,7 +370,7 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) 
     organization_report: dict[str, Any] | None = None
     cleanup: dict[str, Any] = {}
     try:
-        organization_response = gmp.generate_scope_report(org["id"])
+        organization_response = getattr(client, "generate_scope_report")(org["id"])
         organization_report_id = response_id(organization_response)
         if organization_report_id:
             organization_report = native_scope_report(repo_root, organization_report_id)
@@ -420,7 +420,7 @@ def command_smoke(gmp: Any, artifact_dir: Path, repo_root: Path, username: str) 
             expected_statuses={"200"},
         )
         scope_after_remove = native_scope_details(repo_root, created_scope_id)
-        report_response = gmp.generate_scope_report(created_scope_id)
+        report_response = getattr(client, "generate_scope_report")(created_scope_id)
         created_report_id = response_id(report_response)
         if not created_report_id:
             raise RuntimeError("Scope report generation response did not include an id")
@@ -486,16 +486,19 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     password = ""
-    gmp = None
+    client = None
     try:
-        gmp, password = runtime_full_test_scan.connect_gmp(Path(args.socket), args.username, Path(args.password_file), args.timeout)
-        payload = command_smoke(gmp, Path(args.artifact_dir), Path(args.repo_root), args.username)
+        client, password = runtime_full_test_scan.connect_raw_gmp_client(Path(args.socket), args.username, Path(args.password_file), args.timeout)
+        payload = command_smoke(client, Path(args.artifact_dir), Path(args.repo_root), args.username)
     except Exception as error:  # pylint: disable=broad-except
-        payload = result("fail", "Runtime scope helper failed.", error_type=type(error).__name__, error=str(error).replace(password, "[redacted]"))
+        error_text = str(error)
+        if password:
+            error_text = error_text.replace(password, "[redacted]")
+        payload = result("fail", "Runtime scope helper failed.", error_type=type(error).__name__, error=error_text)
     finally:
-        if gmp is not None:
+        if client is not None:
             try:
-                gmp.disconnect()
+                client.disconnect()
             except Exception:
                 pass
     print(json.dumps(payload, indent=2, sort_keys=True))

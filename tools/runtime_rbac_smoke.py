@@ -199,7 +199,12 @@ def main(argv: list[str] | None = None) -> int:
     admin_gmp = None
     secondary_gmp = None
     try:
-        admin_gmp, admin_password = runtime_full_test_scan.connect_gmp(socket_path, args.username, password_path, args.timeout)
+        if not password_path.is_file():
+            raise RuntimeError(f"admin password file is missing: {password_path}")
+        admin_password = password_path.read_text(encoding="utf-8").strip()
+        if not admin_password:
+            raise RuntimeError(f"admin password file is empty: {password_path}")
+        admin_gmp = connect_with_password(socket_path, args.username, admin_password, args.timeout)
         secondary_user = ensure_secondary_user(admin_gmp, secondary_password)
         secondary_gmp = connect_with_password(socket_path, SECONDARY_USER, secondary_password, args.timeout)
         visibility = verify_full_test_visibility(secondary_gmp)
@@ -214,11 +219,15 @@ def main(argv: list[str] | None = None) -> int:
             scans_started=0,
         )
     except Exception as error:  # pylint: disable=broad-except
+        error_text = str(error)
+        for secret in (admin_password, secondary_password):
+            if secret:
+                error_text = error_text.replace(secret, "[redacted]")
         payload = result(
             "fail",
             "Runtime RBAC smoke helper failed.",
             error_type=type(error).__name__,
-            error=str(error).replace(admin_password, "[redacted]").replace(secondary_password, "[redacted]"),
+            error=error_text,
             scans_started=0,
         )
     finally:

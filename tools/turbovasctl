@@ -13800,7 +13800,6 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
 
     findings: list[dict[str, Any]] = []
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    python = venv_python(repo_root, "python-gvm")
     probe = runtime_scope_probe_path(repo_root)
     artifact_dir = scope_report_artifact_dir(repo_root)
     findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
@@ -13816,7 +13815,6 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
         )
     )
     findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
-    findings.append(finding("pass" if python.is_file() else "fail", "python-gvm.venv", "python-gvm runtime venv exists." if python.is_file() else "python-gvm venv is missing.", str(python.relative_to(repo_root)) if python.exists() else str(python)))
     findings.append(finding("pass" if probe.is_file() else "fail", "runtime-scope.probe", "Runtime scope helper exists." if probe.is_file() else "Runtime scope helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
     try:
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -13829,7 +13827,7 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
         return make_result(command_name, repo_root, "Runtime scope command stopped at prerequisites.", findings, [str(artifact_dir)])
 
     args = [
-        str(python),
+        sys.executable,
         str(probe),
         action,
         "--socket",

@@ -6,8 +6,7 @@
 
 import {useState} from 'react';
 import {type Duration, type Date} from 'gmp/models/date';
-import {
-  type default as Event,
+import Event, {
   type RecurrenceFrequencyType,
   type WeekDays,
 } from 'gmp/models/event';
@@ -21,7 +20,9 @@ import {type OnDownloadedFunc} from 'web/entity/hooks/useEntityDownload';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import useUserTimezone from 'web/hooks/useUserTimezone';
-import ScheduleDialog from 'web/pages/schedules/ScheduleDialog';
+import ScheduleDialog, {
+  type ScheduleDialogSaveData,
+} from 'web/pages/schedules/ScheduleDialog';
 
 interface ScheduleRenderProps {
   create: () => void;
@@ -47,6 +48,68 @@ const exportSchedule = (gmp: ReturnType<typeof useGmp>, schedule: Schedule) => {
   return exportNativeScheduleMetadata(gmp, schedule.id as string);
 };
 
+interface ScheduleDialogState {
+  duration?: Duration;
+  eventUid?: string;
+  freq?: RecurrenceFrequencyType;
+  interval?: number;
+  monthDays?: number[];
+  scheduleTimezone?: string;
+  startDate?: Date;
+  weekdays?: WeekDays;
+}
+
+export const metadataOnlyScheduleSaveData = (
+  data: ScheduleDialogSaveData,
+  state: ScheduleDialogState,
+):
+  | ScheduleDialogSaveData
+  | Pick<ScheduleDialogSaveData, 'id' | 'name' | 'comment'> => {
+  const {
+    duration,
+    eventUid,
+    freq,
+    interval,
+    monthDays,
+    scheduleTimezone,
+    startDate,
+    weekdays,
+  } = state;
+
+  if (
+    !isDefined(data.id) ||
+    !isDefined(startDate) ||
+    data.timezone !== scheduleTimezone
+  ) {
+    return data;
+  }
+
+  const expectedCalendar = Event.fromData(
+    {
+      description: data.comment,
+      duration,
+      freq,
+      interval: interval ?? 1,
+      monthDays,
+      startDate,
+      summary: `${data.name}`,
+      uid: eventUid,
+      weekDays: weekdays,
+    },
+    data.timezone,
+  ).toIcalString();
+
+  if (data.icalendar !== expectedCalendar) {
+    return data;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    comment: data.comment,
+  };
+};
+
 const ScheduleComponent = ({
   children,
   onCloned,
@@ -69,6 +132,7 @@ const ScheduleComponent = ({
   const [comment, setComment] = useState<string | undefined>();
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [duration, setDuration] = useState<Duration | undefined>();
+  const [eventUid, setEventUid] = useState<string | undefined>();
   const [freq, setFreq] = useState<RecurrenceFrequencyType | undefined>();
   const [id, setId] = useState<string | undefined>();
   const [interval, setInterval] = useState<number | undefined>();
@@ -84,6 +148,7 @@ const ScheduleComponent = ({
     setComment(undefined);
     setDialogVisible(true);
     setDuration(undefined);
+    setEventUid(undefined);
     setFreq(undefined);
     setId(undefined);
     setInterval(undefined);
@@ -97,6 +162,9 @@ const ScheduleComponent = ({
 
   const openEditScheduleDialog = (schedule: Schedule) => {
     const {event} = schedule;
+    if (!isDefined(event)) {
+      return;
+    }
     const {
       startDate: eventStartDate,
       recurrence,
@@ -115,6 +183,7 @@ const ScheduleComponent = ({
     setStartDate(eventStartDate);
     setDialogVisible(true);
     setDuration(durationInSeconds > 0 ? eventDuration : undefined);
+    setEventUid(event.event.uid);
     setFreq(recFreq);
     setId(schedule.id);
     setInterval(recInterval);
@@ -171,7 +240,17 @@ const ScheduleComponent = ({
               weekdays={weekdays}
               onClose={handleCloseScheduleDialog}
               onSave={d => {
-                const promise = isDefined(d.id) ? save(d) : create(d);
+                const saveData = metadataOnlyScheduleSaveData(d, {
+                  duration,
+                  eventUid,
+                  freq,
+                  interval,
+                  monthDays,
+                  scheduleTimezone,
+                  startDate,
+                  weekdays,
+                });
+                const promise = isDefined(d.id) ? save(saveData) : create(d);
                 return promise.then(() => closeScheduleDialog());
               }}
             />

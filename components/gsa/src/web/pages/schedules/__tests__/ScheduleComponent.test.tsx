@@ -11,12 +11,17 @@ import Event from 'gmp/models/event';
 import Schedule from 'gmp/models/schedule';
 import {createSession} from 'gmp/testing';
 import Button from 'web/components/form/Button';
-import ScheduleComponent from 'web/pages/schedules/ScheduleComponent';
+import ScheduleComponent, {
+  metadataOnlyScheduleSaveData,
+} from 'web/pages/schedules/ScheduleComponent';
 
 const createGmp = ({
   currentSettings = testing.fn().mockResolvedValue({}),
-  exportSchedule = testing.fn().mockResolvedValue({data: '<schedule id="123"/>'}),
+  exportSchedule = testing
+    .fn()
+    .mockResolvedValue({data: '<schedule id="123"/>'}),
   native = false,
+  saveSchedule = testing.fn().mockResolvedValue({}),
 } = {}) => ({
   ...(native
     ? {
@@ -26,7 +31,7 @@ const createGmp = ({
       }
     : {}),
   session: {...createSession({timezone: 'UTC'}), token: 'test-token'},
-  schedule: {export: exportSchedule},
+  schedule: {export: exportSchedule, save: saveSchedule},
   user: {currentSettings},
 });
 
@@ -200,5 +205,81 @@ describe('ScheduleComponent tests', () => {
       data: `${JSON.stringify(nativePayload, null, 2)}\n`,
     });
     expect(onDownloadError).not.toHaveBeenCalled();
+  });
+
+  test('should strip unchanged-calendar metadata edits to native patch shape', () => {
+    const startDate = date('2024-01-01T12:00:00Z');
+    const scheduleDuration = duration({seconds: 3600});
+    const icalendar = Event.fromData(
+      {
+        startDate,
+        duration: scheduleDuration,
+        freq: 'WEEKLY',
+        interval: 1,
+        summary: 'Updated Schedule',
+        description: 'This is a test schedule',
+        uid: 'schedule-event-uid',
+      },
+      'UTC',
+    ).toIcalString();
+
+    expect(
+      metadataOnlyScheduleSaveData(
+        {
+          id: '1',
+          name: 'Updated Schedule',
+          comment: 'This is a test schedule',
+          icalendar,
+          timezone: 'UTC',
+        },
+        {
+          startDate,
+          duration: scheduleDuration,
+          eventUid: 'schedule-event-uid',
+          freq: 'WEEKLY',
+          interval: 1,
+          scheduleTimezone: 'UTC',
+        },
+      ),
+    ).toEqual({
+      id: '1',
+      name: 'Updated Schedule',
+      comment: 'This is a test schedule',
+    });
+  });
+
+  test('should keep changed-calendar schedule edits on full save shape', () => {
+    const startDate = date('2024-01-01T12:00:00Z');
+    const scheduleDuration = duration({seconds: 3600});
+    const changedCalendar = Event.fromData(
+      {
+        startDate,
+        duration: duration({seconds: 7200}),
+        freq: 'WEEKLY',
+        interval: 1,
+        summary: 'Updated Schedule',
+        description: 'This is a test schedule',
+        uid: 'schedule-event-uid',
+      },
+      'UTC',
+    ).toIcalString();
+    const data = {
+      id: '1',
+      name: 'Updated Schedule',
+      comment: 'This is a test schedule',
+      icalendar: changedCalendar,
+      timezone: 'UTC',
+    };
+
+    expect(
+      metadataOnlyScheduleSaveData(data, {
+        startDate,
+        duration: scheduleDuration,
+        eventUid: 'schedule-event-uid',
+        freq: 'WEEKLY',
+        interval: 1,
+        scheduleTimezone: 'UTC',
+      }),
+    ).toBe(data);
   });
 });

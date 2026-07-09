@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -38,6 +39,19 @@ const schedule = Schedule.fromElement({
   _id: '41fc25b4-fc21-4b81-ab30-35c95adc032a',
 });
 
+const nativeScheduleItem = {
+  id: '41fc25b4-fc21-4b81-ab30-35c95adc032a',
+  name: 'schedule 1',
+  comment: 'hello world',
+  icalendar:
+    'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Greenbone.net//NONSGML Greenbone Security Manager \n 21.4.0~dev1~git-5f8b6cf-master//EN\nBEGIN:VEVENT\nDTSTART:20210104T115400Z\nDURATION:PT0S\nUID:foo\nDTSTAMP:20210111T134141Z\nEND:VEVENT\nEND:VCALENDAR',
+  timezone: 'UTC',
+  timezone_abbrev: 'UTC',
+  tasks: [],
+  created_at: '2020-12-23T14:14:11Z',
+  modified_at: '2021-01-04T11:54:12Z',
+};
+
 const caps = new Capabilities(['everything']);
 const wrongCaps = new Capabilities(['get_config']);
 
@@ -45,6 +59,8 @@ const reloadInterval = -1;
 const manualUrl = 'test/';
 
 const createGmp = ({
+  buildUrl,
+  nativeScheduleItems = [nativeScheduleItem],
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
@@ -77,23 +93,64 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  schedules: {
-    get: getSchedules,
-    deleteByFilter,
-    exportByFilter,
-    export: exportByIds,
-    delete: deleteByIds,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-  },
-  session: createSession(),
-  user: {currentSettings, getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeScheduleItems.length,
+                sort: 'name',
+                filter: '',
+              },
+              items: nativeScheduleItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    schedules: {
+      get: getSchedules,
+      deleteByFilter,
+      exportByFilter,
+      export: exportByIds,
+      delete: deleteByIds,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+    },
+    session: {
+      ...createSession(),
+      token: 'test-token',
+      jwt: 'jwt-token',
+    },
+    user: {currentSettings, getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('SchedulePage tests', () => {
@@ -129,6 +186,7 @@ describe('SchedulePage tests', () => {
     const {baseElement} = render(<SchedulePage />);
 
     await screen.findByTitle('New Schedule');
+    await screen.findByText('schedule 1');
 
     const powerFilter = within(screen.queryPowerFilter());
     const select = powerFilter.getByTestId('powerfilter-select');

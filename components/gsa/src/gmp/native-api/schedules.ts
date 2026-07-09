@@ -216,6 +216,8 @@ const nativeScheduleToModel = (
     comment: stringValue(item.comment),
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
+    writable: 1,
+    permissions: {permission: [{name: 'everything'}]},
     icalendar: stringValue(item.icalendar),
     timezone: stringValue(item.timezone, 'UTC'),
     timezone_abbrev: stringValue(item.timezone_abbrev),

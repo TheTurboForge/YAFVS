@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   screen,
   testBulkTrashcanDialog,
@@ -53,12 +54,36 @@ const config = ScanConfig.fromElement({
   },
 });
 
+const nativeScanConfigItem = {
+  id: '12345',
+  name: 'foo',
+  comment: 'bar',
+  owner: {name: 'admin'},
+  family_count: 2,
+  families_growing: SCANCONFIG_TREND_STATIC,
+  nvt_count: 4,
+  nvts_growing: SCANCONFIG_TREND_DYNAMIC,
+  predefined: false,
+  deprecated: false,
+  writable: true,
+  in_use: false,
+  usage_type: 'scan',
+  tasks: [
+    {id: '1234', name: 'task1'},
+    {id: '5678', name: 'task2'},
+  ],
+  created_at: '2019-07-16T06:31:29Z',
+  modified_at: '2019-07-16T06:44:55Z',
+};
+
 const wrongCaps = new Capabilities(['get_config']);
 
 const reloadInterval = 1;
 const manualUrl = 'test/';
 
 const createGmp = ({
+  buildUrl,
+  nativeScanConfigItems = [nativeScanConfigItem],
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
@@ -83,21 +108,62 @@ const createGmp = ({
   exportByFilter = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  scanconfigs: {
-    get: getConfigs,
-    deleteByFilter,
-    exportByFilter,
-  },
-  filters: {
-    get: getFilters,
-  },
-  reloadInterval,
-  settings: {
-    manualUrl,
-  },
-  session: createSession(),
-  user: {currentSettings, getSetting: getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeScanConfigItems.length,
+                sort: 'name',
+                filter: '',
+              },
+              items: nativeScanConfigItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    scanconfigs: {
+      get: getConfigs,
+      deleteByFilter,
+      exportByFilter,
+    },
+    filters: {
+      get: getFilters,
+    },
+    reloadInterval,
+    settings: {
+      manualUrl,
+    },
+    session: {
+      ...createSession(),
+      token: 'test-token',
+      jwt: 'jwt-token',
+    },
+    user: {currentSettings, getSetting: getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('ScanConfigsPage tests', () => {

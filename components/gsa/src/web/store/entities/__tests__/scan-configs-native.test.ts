@@ -1,16 +1,20 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import ScanConfig from 'gmp/models/scan-config';
+import Filter from 'gmp/models/filter';
 import {
   fetchNativeScanConfig,
   fetchNativeScanConfigFamilies,
   fetchNativeScanConfigs,
 } from 'gmp/native-api/scan-configs';
-import {loadEntity} from 'web/store/entities/scanconfigs';
+import {loadEntities, loadEntity} from 'web/store/entities/scanconfigs';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -89,6 +93,60 @@ describe('native API scan configs', () => {
         },
       },
     );
+  });
+
+  test('loads the scan-config store list through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name predefined=1');
+    const rootState = createState('scanconfig', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: 'daba56c8-73ec-11df-a475-002264764cea',
+            name: 'Full and fast',
+            comment: 'Default scanner config',
+            owner: {name: 'admin'},
+            family_count: 33,
+            families_growing: 1,
+            nvt_count: 177000,
+            nvts_growing: 1,
+            predefined: true,
+            deprecated: false,
+            writable: false,
+            in_use: true,
+            usage_type: 'scan',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/scan-configs', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+      predefined: '1',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(ScanConfig);
+    expect(successAction.data[0].name).toEqual('Full and fast');
   });
 
   test('fetches one scan config from the native detail endpoint', async () => {

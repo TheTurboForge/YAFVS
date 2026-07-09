@@ -3072,8 +3072,7 @@ def native_api_direct_base_url(env: dict[str, str]) -> str:
     return f"http://{native_api_direct_host(env)}:{native_api_direct_port(env)}"
 
 
-def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
-    env = runtime_env(repo_root)
+def ensure_native_api_direct_runtime_env_defaults(repo_root: Path, env: dict[str, str]) -> dict[str, str]:
     env[TURBOVAS_API_DIRECT_ENV] = "1"
     env.setdefault(TURBOVAS_API_DIRECT_HOST_ENV, TURBOVAS_API_DIRECT_DEFAULT_HOST)
     env.setdefault(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT)
@@ -3082,6 +3081,10 @@ def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
         read_or_create_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
         env[TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE
     return env
+
+
+def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
+    return ensure_native_api_direct_runtime_env_defaults(repo_root, runtime_env(repo_root))
 
 
 def native_api_direct_bearer_token(repo_root: Path, env: dict[str, str]) -> str:
@@ -4394,6 +4397,13 @@ def runtime_app_env(repo_root: Path) -> dict[str, str]:
     if not env.get(TURBOVAS_API_BROWSER_PROXY_SECRET_ENV):
         secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_API_BROWSER_PROXY_SECRET)
         env[TURBOVAS_API_BROWSER_PROXY_SECRET_ENV] = secret
+    return env
+
+
+def runtime_native_api_rebuild_env(repo_root: Path) -> dict[str, str]:
+    env = runtime_app_env(repo_root)
+    if native_api_direct_requested(env):
+        ensure_native_api_direct_runtime_env_defaults(repo_root, env)
     return env
 
 
@@ -14252,19 +14262,22 @@ def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[s
 def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
-    app_env = runtime_app_env(repo_root)
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=app_env)
+    app_env = runtime_native_api_rebuild_env(repo_root)
+    config_command = compose_command(repo_root, "config", "--quiet", env=app_env)
+    config = run_command(config_command, repo_root, env=app_env)
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
 
-    build = run_command(compose_command(repo_root, "build", "turbovas-api"), repo_root, env=app_env, timeout=1200)
-    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "turbovas-api")))
+    build_command = compose_command(repo_root, "build", "turbovas-api", env=app_env)
+    build = run_command(build_command, repo_root, env=app_env, timeout=1200)
+    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, build_command))
     if build.returncode != 0:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because image build failed.", findings, [str(runtime_dir(repo_root))])
 
-    up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api"), repo_root, env=app_env, timeout=300)
-    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-up", f"docker compose up --no-deps turbovas-api exit code {up.returncode}.", up, compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api")))
+    up_command = compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api", env=app_env)
+    up = run_command(up_command, repo_root, env=app_env, timeout=300)
+    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-up", f"docker compose up --no-deps turbovas-api exit code {up.returncode}.", up, up_command))
     if up.returncode != 0:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because turbovas-api restart failed.", findings, [str(runtime_dir(repo_root))])
 

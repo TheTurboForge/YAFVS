@@ -9734,6 +9734,17 @@ db2:keys=5,expires=0,avg_ttl=0
         calls = []
         original_run_command = turbovasctl.run_command
         original_smoke = turbovasctl.command_runtime_native_api_smoke
+        direct_override_path = ""
+        direct_override_text = ""
+        env_names = (
+            turbovasctl.TURBOVAS_API_DIRECT_ENV,
+            turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV,
+            turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV,
+            turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV,
+            turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV,
+            turbovasctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV,
+        )
+        original_env = {name: turbovasctl.os.environ.get(name) for name in env_names}
         try:
             def fake_run_command(command, *_args, **_kwargs):
                 calls.append(command)
@@ -9744,18 +9755,40 @@ db2:keys=5,expires=0,avg_ttl=0
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "TurboVAS"
                 root.mkdir()
+                for name in env_names:
+                    turbovasctl.os.environ.pop(name, None)
+
                 result = turbovasctl.command_runtime_native_api_rebuild(root)
+
+                direct_override = turbovasctl.native_api_direct_ports_override_file(root)
+                direct_override_path = str(direct_override)
+                self.assertFalse(any(direct_override_path in command for command in calls))
+
+                calls.clear()
+                turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_ENV] = "1"
+                direct_result = turbovasctl.command_runtime_native_api_rebuild(root)
+                direct_override_text = direct_override.read_text(encoding="utf-8")
         finally:
             turbovasctl.run_command = original_run_command
             turbovasctl.command_runtime_native_api_smoke = original_smoke
+            for name, value in original_env.items():
+                if value is None:
+                    turbovasctl.os.environ.pop(name, None)
+                else:
+                    turbovasctl.os.environ[name] = value
 
         self.assertEqual(result["status"], "pass")
+        config_commands = [command for command in calls if "config" in command]
         build_commands = [command for command in calls if "build" in command and "turbovas-api" in command]
         up_commands = [command for command in calls if "up" in command and "turbovas-api" in command]
+        self.assertEqual(direct_result["status"], "pass")
+        self.assertTrue(config_commands)
         self.assertTrue(build_commands)
         self.assertTrue(up_commands)
         self.assertIn("--no-deps", up_commands[-1])
         self.assertNotIn("--build", up_commands[-1])
+        self.assertTrue(all(direct_override_path in command for command in config_commands + build_commands + up_commands))
+        self.assertIn('"127.0.0.1:19080:9081"', direct_override_text)
 
     def test_runtime_db_introspect_uses_fixed_catalog_queries(self):
         calls = []

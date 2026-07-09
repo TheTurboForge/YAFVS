@@ -8,7 +8,6 @@ import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {ResultsCommand} from 'gmp/commands/results';
 import {
   createHttp,
-  createEntitiesResponse,
   createAggregatesResponse,
 } from 'gmp/commands/testing';
 import Filter, {ALL_FILTER} from 'gmp/models/filter';
@@ -29,29 +28,6 @@ const createNativeHttp = () => {
 };
 
 describe('ResultsCommand tests', () => {
-  test('should return all results', async () => {
-    const response = createEntitiesResponse('result', [
-      {
-        _id: '1',
-      },
-      {
-        _id: '2',
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-    const cmd = new ResultsCommand(fakeHttp);
-    const resp = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_results',
-        details: 1,
-        filter: ALL_FILTER.toFilterString(),
-      },
-    });
-    const {data} = resp;
-    expect(data.length).toEqual(2);
-  });
-
   test('should fetch results through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -86,49 +62,6 @@ describe('ResultsCommand tests', () => {
     });
     expect(resp.data[0].id).toEqual('result-1');
     expect(resp.meta.counts.filtered).toEqual(1);
-  });
-
-  test('should return results', async () => {
-    const response = createEntitiesResponse('result', [
-      {
-        _id: '1',
-      },
-      {
-        _id: '2',
-      },
-    ]);
-    const fakeHttp = createHttp(response);
-    const cmd = new ResultsCommand(fakeHttp);
-    const resp = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_results',
-        details: 1,
-      },
-    });
-    const {data} = resp;
-    expect(data.length).toEqual(2);
-  });
-
-  test('should allow to overwrite details parameter', async () => {
-    const response = createEntitiesResponse('result', [
-      {
-        _id: '1',
-      },
-      {
-        _id: '2',
-      },
-    ]);
-
-    const fakeHttp = createHttp(response);
-    const cmd = new ResultsCommand(fakeHttp);
-    await cmd.get({details: 0});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_results',
-        details: 0,
-      },
-    });
   });
 
   test('should fetch explicit summary-only result reads through native API', async () => {

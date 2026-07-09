@@ -6,7 +6,6 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import Response from 'gmp/http/response';
 import type Http from 'gmp/http/http';
 import {type Element} from 'gmp/models/model';
@@ -20,11 +19,8 @@ export class ResultCommand extends EntityCommand<Result> {
   }
 
   async get({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      const nativeResponse = await fetchNativeResult(this.http, id);
-      return new Response(nativeResponse.result);
-    }
-    return super.get({id});
+    const nativeResponse = await fetchNativeResult(this.http, id);
+    return new Response(nativeResponse.result);
   }
 
   async export({id}: EntityCommandParams) {

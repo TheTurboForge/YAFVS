@@ -6,7 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {ResultCommand} from 'gmp/commands/result';
-import {createEntityResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -14,21 +14,6 @@ afterEach(() => {
 });
 
 describe('ResultCommand tests', () => {
-  test('should return single result through GMP when native API is unavailable', async () => {
-    const response = createEntityResponse('result', {_id: 'foo'});
-    const fakeHttp = createHttp(response);
-    const cmd = new ResultCommand(fakeHttp);
-    const resp = await cmd.get({id: 'foo'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_result',
-        result_id: 'foo',
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
-  });
-
   test('should fetch single result through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

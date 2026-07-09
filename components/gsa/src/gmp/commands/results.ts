@@ -5,12 +5,8 @@
  */
 
 import EntitiesCommand from 'gmp/commands/entities';
+import {type HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  type HttpCommandInputParams,
-  type HttpCommandOptions,
-} from 'gmp/commands/http';
-import {
-  canUseNativeApi,
   filterFromCommandParams,
   NATIVE_COMMAND_PAGE_SIZE,
 } from 'gmp/commands/native';
@@ -39,19 +35,16 @@ export class ResultsCommand extends EntitiesCommand<Result> {
     return root.get_results.get_results_response;
   }
 
-  async get(params: HttpCommandInputParams = {}, options?: HttpCommandOptions) {
-    if (canUseNativeApi(this.http)) {
-      const filter = filterFromCommandParams(params);
-      const nativeResponse = await fetchNativeResults(
-        this.http,
-        nativeReportResultsQueryFromFilter(filter),
-      );
-      return new Response(nativeResponse.results, {
-        filter,
-        counts: nativeResponse.counts,
-      });
-    }
-    return super.get({details: 1, ...params}, options);
+  async get(params: HttpCommandInputParams = {}) {
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeResults(
+      this.http,
+      nativeReportResultsQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.results, {
+      filter,
+      counts: nativeResponse.counts,
+    });
   }
 
   getDescriptionWordCountsAggregates() {

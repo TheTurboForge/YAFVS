@@ -90,8 +90,8 @@ browser, direct API, production-posture, or release-readiness question.
 - `just build-core-c`: build the initial core C chain.
 - `just build-c-services`: build the current C service baseline.
 - `just build-ui`: install and build the web UI.
-- `just build-python`: build/import-check Python components.
-- `just build-baseline`: run the inherited-stack build baseline.
+- `just build-python`: build/import-check all Python components, including inherited compatibility clients.
+- `just build-baseline`: run the current required build baseline without `python-gvm` or `gvm-tools`.
 - `just runtime-plan`: show the persistent Docker runtime layout and deferred surfaces.
 - `just up`: start the current Docker infrastructure services.
 - `just down`: stop the current Docker infrastructure services.

@@ -216,7 +216,12 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_expanded_chains_are_stable(self):
         self.assertEqual(turbovasctl.C_SERVICES_CHAIN, ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad"))
+        self.assertEqual(turbovasctl.LEGACY_GMP_PYTHON_CHAIN, ("python-gvm", "gvm-tools"))
+        self.assertEqual(turbovasctl.RUNTIME_PYTHON_CHAIN, ("greenbone-feed-sync", "ospd-openvas", "notus-scanner"))
         self.assertEqual(turbovasctl.PYTHON_CHAIN, ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner"))
+        self.assertEqual(turbovasctl.BASELINE_CHAIN, (*turbovasctl.C_SERVICES_CHAIN, "gsa", *turbovasctl.RUNTIME_PYTHON_CHAIN))
+        self.assertNotIn("python-gvm", turbovasctl.BASELINE_CHAIN)
+        self.assertNotIn("gvm-tools", turbovasctl.BASELINE_CHAIN)
 
     def test_aggregate_status_prefers_highest_severity(self):
         findings = [
@@ -2119,9 +2124,10 @@ class TurboVASCtlTests(unittest.TestCase):
         result = turbovasctl.command_native_tooling_state(root)
         details = result["details"]
         self.assertEqual(result["status"], "pass")
-        self.assertGreater(details["by_category"]["required_runtime"]["count"], 0)
+        self.assertEqual(details["by_category"]["required_runtime"]["count"], 0)
         self.assertGreater(details["by_category"]["product_workflow"]["count"], 0)
         self.assertGreater(details["by_category"]["compatibility_bridge"]["count"], 0)
+        self.assertIn("tools/turbovasctl", details["by_category"]["compatibility_bridge"]["paths"])
         self.assertNotIn("tools/runtime_browser_smoke.py", details["by_category"]["required_runtime"]["paths"])
         self.assertIn("tools/runtime_browser_smoke.py", details["by_category"]["compatibility_bridge"]["paths"])
         self.assertNotIn("tools/runtime_report.py", details["by_category"]["required_runtime"]["paths"])
@@ -6677,6 +6683,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_native_tooling_category_keeps_scripts_and_docs_distinct(self):
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_scope.py")[0], "required_runtime")
+        self.assertEqual(turbovasctl.native_tooling_category("tools/turbovasctl")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_browser_smoke.py")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("tools/tests/test_turbovasctl.py")[0], "required_test")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/scopes.ts")[0], "product_workflow")
@@ -9381,7 +9388,6 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(turbovasctl.feed_gnupg_home(root), Path(tmp) / "TurboVAS-runtime" / "state" / "feed-gnupg")
             self.assertEqual(turbovasctl.feed_keyring_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "feed-keyring")
             self.assertEqual(turbovasctl.feed_community_key_path(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "feed-keyring" / "GBCommunitySigningKey.asc")
-            self.assertEqual(turbovasctl.gvm_cli_path(root), root / "build" / "venvs" / "gvm-tools" / "bin" / "gvm-cli")
 
     def test_feed_keyring_constants_match_greenbone_community_key(self):
         self.assertEqual(turbovasctl.GREENBONE_COMMUNITY_FEED_URL, "rsync://feed.community.greenbone.net/community")
@@ -9635,12 +9641,30 @@ db2:keys=5,expires=0,avg_ttl=0
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             command = turbovasctl.ospd_vts_version_probe_command(root)
-            self.assertEqual(command[0], str(turbovasctl.gvm_cli_path(root)))
-            self.assertIn("--protocol", command)
-            self.assertEqual(command[command.index("--protocol") + 1], "OSP")
-            self.assertIn("--socketpath", command)
-            self.assertEqual(command[command.index("--socketpath") + 1], str(turbovasctl.ospd_socket_path(root)))
-            self.assertIn('<get_vts version_only="1"/>', command)
+            self.assertEqual(command, '<get_vts version_only="1"/>')
+
+    def test_run_ospd_vts_version_probe_uses_raw_unix_socket(self):
+        original_raw = turbovasctl.raw_unix_xml_command
+        calls = []
+
+        def fake_raw(socket_path, command, timeout=60):
+            calls.append((socket_path, command, timeout))
+            return '<get_vts_response status="200" status_text="OK"><vts vts_version="202605221736" /></get_vts_response>'
+
+        try:
+            turbovasctl.raw_unix_xml_command = fake_raw
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "TurboVAS"
+                root.mkdir()
+                result = turbovasctl.run_ospd_vts_version_probe(root)
+                expected_socket = turbovasctl.ospd_socket_path(root)
+        finally:
+            turbovasctl.raw_unix_xml_command = original_raw
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(calls[0][0], expected_socket)
+        self.assertEqual(calls[0][1], '<get_vts version_only="1"/>')
+        self.assertEqual(calls[0][2], 60)
 
     def test_parse_ospd_vts_version(self):
         response = (
@@ -9657,21 +9681,21 @@ db2:keys=5,expires=0,avg_ttl=0
             '<error_response status="400" status_text="OSPd OpenVAS is still starting" />',
             '<get_vts_response status="200" status_text="OK"><vts vts_version="202605221736" /></get_vts_response>',
         ]
-        original_run_command = turbovasctl.run_command
+        original_run_probe = turbovasctl.run_ospd_vts_version_probe
         original_sleep = turbovasctl.time.sleep
 
-        def fake_run_command(*_args, **_kwargs):
+        def fake_run_probe(_root):
             return turbovasctl.subprocess.CompletedProcess([], 0, responses.pop(0), "")
 
         try:
-            turbovasctl.run_command = fake_run_command
+            turbovasctl.run_ospd_vts_version_probe = fake_run_probe
             turbovasctl.time.sleep = lambda _seconds: None
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "TurboVAS"
                 root.mkdir()
                 version, output = turbovasctl.wait_for_ospd_vts_version(root)
         finally:
-            turbovasctl.run_command = original_run_command
+            turbovasctl.run_ospd_vts_version_probe = original_run_probe
             turbovasctl.time.sleep = original_sleep
 
         self.assertEqual(version, "202605221736")

@@ -170,8 +170,10 @@ OSV_LOCKFILES = (
     Path("components/gvm-tools/uv.lock"),
 )
 OSV_HIGH_SEVERITIES = {"high", "critical"}
-PYTHON_CHAIN = ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner")
-BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *PYTHON_CHAIN)
+LEGACY_GMP_PYTHON_CHAIN = ("python-gvm", "gvm-tools")
+RUNTIME_PYTHON_CHAIN = ("greenbone-feed-sync", "ospd-openvas", "notus-scanner")
+PYTHON_CHAIN = (*LEGACY_GMP_PYTHON_CHAIN, *RUNTIME_PYTHON_CHAIN)
+BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *RUNTIME_PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
 FULL_TEST_TARGET_CIDR = "192.168.178.0/24"
@@ -4319,10 +4321,6 @@ def json_artifact_history(artifact_dir: Path, stem: str) -> list[dict[str, Any]]
     return history
 
 
-def gvm_cli_path(repo_root: Path) -> Path:
-    return repo_root / "build" / "venvs" / "gvm-tools" / "bin" / "gvm-cli"
-
-
 def unix_socket_status(path: Path, *, timeout_seconds: float = 1.0) -> dict[str, Any]:
     details: dict[str, Any] = {"path": str(path)}
     if not path.exists():
@@ -5204,18 +5202,44 @@ def nvts_feed_version_query() -> str:
     return "SELECT COALESCE((SELECT value FROM meta WHERE name = 'nvts_feed_version'), '');"
 
 
-def ospd_vts_version_probe_command(repo_root: Path) -> list[str]:
-    return [
-        str(gvm_cli_path(repo_root)),
-        "--protocol",
-        "OSP",
-        "socket",
-        "--socketpath",
-        str(ospd_socket_path(repo_root)),
-        "--raw",
-        "-X",
-        '<get_vts version_only="1"/>',
-    ]
+OSPD_VTS_VERSION_PROBE_XML = '<get_vts version_only="1"/>'
+
+
+def ospd_vts_version_probe_command(_repo_root: Path) -> str:
+    return OSPD_VTS_VERSION_PROBE_XML
+
+
+def read_unix_xml_response(connection: socket.socket) -> str:
+    chunks: list[bytes] = []
+    while True:
+        chunk = connection.recv(16 * 1024)
+        if not chunk:
+            raise RuntimeError("Unix socket closed before sending a complete XML response")
+        chunks.append(chunk)
+        payload = b"".join(chunks)
+        try:
+            ET.fromstring(payload)
+            return payload.decode("utf-8", errors="replace")
+        except ET.ParseError:
+            continue
+
+
+def raw_unix_xml_command(socket_path: Path, command: str, timeout: int = 60) -> str:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(timeout)
+        connection.connect(str(socket_path))
+        connection.sendall(command.encode("utf-8"))
+        return read_unix_xml_response(connection)
+
+
+def run_ospd_vts_version_probe(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    command = ospd_vts_version_probe_command(repo_root)
+    args = [str(ospd_socket_path(repo_root)), command]
+    try:
+        output = raw_unix_xml_command(ospd_socket_path(repo_root), command, timeout=60)
+        return subprocess.CompletedProcess(args, 0, output, "")
+    except Exception as error:  # pylint: disable=broad-except
+        return subprocess.CompletedProcess(args, 1, str(error), "")
 
 
 def xml_local_name(tag: str) -> str:
@@ -5238,13 +5262,13 @@ def wait_for_ospd_vts_version(repo_root: Path, timeout_seconds: int = 180) -> tu
     deadline = time.monotonic() + timeout_seconds
     last_output: list[str] = []
     while time.monotonic() < deadline:
-        result = run_command(ospd_vts_version_probe_command(repo_root), repo_root, env=build_env(repo_root), timeout=60)
+        result = run_ospd_vts_version_probe(repo_root)
         last_output = output_tail(result.stdout, 40)
         if result.returncode == 0:
             version = parse_ospd_vts_version(result.stdout)
             if version:
                 return version, last_output
-        if "OSPd OpenVAS is still starting" not in result.stdout and result.returncode != 0:
+        if "OSPd OpenVAS is still starting" not in result.stdout:
             break
         time.sleep(5)
     return None, last_output
@@ -5522,7 +5546,9 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return None
     if relative_path == "tools/runtime_browser_smoke.py":
         return "compatibility_bridge", "Browser smoke uses native cleanup first; inherited GMP/python-gvm remains only as optional fallback cleanup plumbing."
-    if relative_path == "tools/turbovasctl" or (relative_path.startswith("tools/runtime_") and relative_path.endswith(".py")):
+    if relative_path == "tools/turbovasctl":
+        return "compatibility_bridge", "turbovasctl can still build or describe inherited compatibility components, but default runtime/baseline paths no longer require python-gvm or gvm-tools."
+    if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):
         return "required_runtime", "TurboVAS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
     if relative_path.startswith("tools/tests/"):
         return "required_test", "Regression tests still characterize inherited GMP/python-gvm/gvm-tools behavior."
@@ -12797,10 +12823,7 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     if vt_status != "pass":
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because OSPD did not finish loading VTs.", findings, [str(runtime_dir(repo_root))])
 
-    gvm_cli = gvm_cli_path(repo_root)
-    findings.append(finding("pass" if gvm_cli.is_file() else "fail", "gvm-tools.cli", "gvm-cli is available for direct OSP readiness probes." if gvm_cli.is_file() else "gvm-cli is missing; run just build-python or just build-baseline.", str(gvm_cli.relative_to(repo_root)) if gvm_cli.exists() else str(gvm_cli)))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because the OSP readiness probe is unavailable.", findings, [str(runtime_dir(repo_root))])
+    findings.append(finding("pass", "ospd.vts-probe", "OSPD VT-version readiness probe uses the runtime Unix socket directly; gvm-tools is not required."))
 
     ospd_feed_version, ospd_probe_tail = wait_for_ospd_vts_version(repo_root, timeout_seconds=180)
     findings.append(

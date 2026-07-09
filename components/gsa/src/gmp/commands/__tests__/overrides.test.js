@@ -68,33 +68,33 @@ describe('OverridesCommand tests', () => {
     expect(result.data.newSeverity).toEqual(-1);
   });
 
-  test('should fetch result-filtered override detail through native API when available', async () => {
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({
-        id: 'override-id',
-        text: 'Accepted compensating control',
-        result: {
-          id: 'result-id',
-          name: 'Result 1',
+  test('should keep filtered override detail on GMP until native parity is characterized', async () => {
+    const response = createResponse({
+      get_override: {
+        get_overrides_response: {
+          override: {
+            _id: 'override-id',
+            text: 'Accepted compensating control',
+          },
         },
-      }),
-      ok: true,
-      status: 200,
+      },
     });
+    const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp();
+    const fakeHttp = createNativeHttp(response);
 
     const cmd = new OverrideCommand(fakeHttp);
     const result = await cmd.get({id: 'override-id'}, {filter: 'results=1'});
 
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/overrides/override-id',
-      {token: 'test-token'},
-    );
-    expect(fetchMock).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'get_override',
+        override_id: 'override-id',
+        filter: 'results=1',
+      },
+    });
     expect(result.data.id).toEqual('override-id');
-    expect(result.data.result.id).toEqual('result-id');
   });
 
   test('should export override metadata through native API when available', async () => {

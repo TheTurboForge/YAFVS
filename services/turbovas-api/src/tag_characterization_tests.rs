@@ -278,12 +278,17 @@ fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_res
 
 #[test]
 fn openapi_tag_contract_records_remaining_inherited_tail() {
-    for path in ["/tags", "/tags/{tag_id}", "/tags/{tag_id}/resources"] {
+    for path in ["/tags", "/tags/{tag_id}/resources"] {
         let block = openapi_path_block(path);
         assert!(block.contains(
             "x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics"
         ));
     }
+    let patch_block = openapi_path_block("/tags/{tag_id}");
+    assert!(patch_block.contains("x-turbovas-replaces: tag-metadata-write"));
+    assert!(!patch_block.contains(
+        "x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics"
+    ));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-turbovas-replaces: tag-clone"));
     assert!(clone_block.contains("x-turbovas-safety-contract: write-control-v1"));

@@ -1305,7 +1305,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-and-resource-assignment-write",
     },
     ("patch", "/tags/{tag_id}"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-metadata-write",
     },

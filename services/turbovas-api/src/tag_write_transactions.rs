@@ -33,7 +33,7 @@ pub(crate) async fn execute_tag_create_transaction(
     owner_id: i32,
     request: &ValidatedTagCreate,
 ) -> Result<TagWriteRecord, ApiError> {
-    query_tag_write_record(
+    let record = query_tag_write_record(
         tx,
         tag_insert_metadata_sql(),
         &[
@@ -46,7 +46,28 @@ pub(crate) async fn execute_tag_create_transaction(
         ],
         "insert tag metadata",
     )
-    .await
+    .await?;
+    for resource_id in &request.resource_ids {
+        let resource =
+            resolve_tag_resource_write_record(tx, &request.resource_type, resource_id).await?;
+        ensure_tag_resource_owner_matches_operator(
+            &request.resource_type,
+            resource.owner_id,
+            owner_id,
+        )?;
+        tx.execute(
+            tag_resource_insert_sql(),
+            &[
+                &record.internal_id,
+                &request.resource_type,
+                &resource.internal_id,
+                &resource.uuid,
+            ],
+        )
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "insert tag resource on create"))?;
+    }
+    Ok(record)
 }
 
 pub(crate) async fn execute_tag_trash_transaction(

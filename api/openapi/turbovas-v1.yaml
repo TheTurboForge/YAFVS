@@ -2161,14 +2161,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: tag-metadata-write
+      x-turbovas-replaces: tag-metadata-and-explicit-resource-assignment-write
       x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Create tag metadata
-      description: Direct write-control endpoint for creating tag metadata only. Explicit resource assignment happens through the native resource endpoint after creation; filter-based resource actions and resource-type change semantics remain compatibility paths.
+      x-turbovas-side-effect: metadata-and-resource-assignment-write
+      summary: Create tag metadata and optional explicit assignments
+      description: Direct write-control endpoint for creating tag metadata and optional explicit resource-id assignments. Filter-based implicit resource selection and resource-type change semantics remain compatibility paths.
       requestBody:
         required: true
         content:
@@ -7124,6 +7124,12 @@ components:
         resource_type:
           type: string
           enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate]
+        resource_ids:
+          type: array
+          maxItems: 100
+          description: Optional explicit resource ids to assign to the new tag. Filter-based implicit selection remains inherited.
+          items:
+            type: string
         comment:
           type: string
           maxLength: 4096

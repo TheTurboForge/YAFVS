@@ -17,6 +17,8 @@ pub(crate) struct TagCreateRequest {
     pub(crate) name: String,
     pub(crate) resource_type: String,
     #[serde(default)]
+    pub(crate) resource_ids: Vec<String>,
+    #[serde(default)]
     pub(crate) comment: Option<String>,
     #[serde(default)]
     pub(crate) value: Option<String>,
@@ -71,6 +73,7 @@ pub(crate) struct TagResourceUpdateRequest {
 pub(crate) struct ValidatedTagCreate {
     pub(crate) name: String,
     pub(crate) resource_type: String,
+    pub(crate) resource_ids: Vec<String>,
     pub(crate) comment: Option<String>,
     pub(crate) value: Option<String>,
     pub(crate) active: bool,
@@ -97,29 +100,37 @@ pub(crate) fn default_tag_active() -> bool {
 pub(crate) fn validate_tag_resource_update_request(
     request: TagResourceUpdateRequest,
 ) -> Result<ValidatedTagResourceUpdate, ApiError> {
-    if request.resource_ids.is_empty() {
+    let resource_ids = validate_tag_resource_ids(request.resource_ids, false)?;
+    Ok(ValidatedTagResourceUpdate {
+        action: request.action,
+        resource_ids,
+    })
+}
+
+fn validate_tag_resource_ids(
+    resource_ids: Vec<String>,
+    allow_empty: bool,
+) -> Result<Vec<String>, ApiError> {
+    if !allow_empty && resource_ids.is_empty() {
         return Err(ApiError::BadRequest(
             "resource_ids must contain at least one resource id".to_string(),
         ));
     }
 
-    if request.resource_ids.len() > MAX_TAG_RESOURCE_WRITE_IDS {
+    if resource_ids.len() > MAX_TAG_RESOURCE_WRITE_IDS {
         return Err(ApiError::BadRequest(format!(
             "resource_ids must contain at most {MAX_TAG_RESOURCE_WRITE_IDS} ids"
         )));
     }
     let mut seen = BTreeSet::new();
-    let mut resource_ids = Vec::new();
-    for resource_id in request.resource_ids {
+    let mut normalized_resource_ids = Vec::new();
+    for resource_id in resource_ids {
         let normalized = normalize_tag_resource_id(resource_id)?;
         if seen.insert(normalized.clone()) {
-            resource_ids.push(normalized);
+            normalized_resource_ids.push(normalized);
         }
     }
-    Ok(ValidatedTagResourceUpdate {
-        action: request.action,
-        resource_ids,
-    })
+    Ok(normalized_resource_ids)
 }
 
 fn normalize_tag_resource_id(value: String) -> Result<String, ApiError> {
@@ -141,6 +152,7 @@ pub(crate) fn validate_tag_create_request(
     Ok(ValidatedTagCreate {
         name: normalize_required_tag_text(request.name, "name")?,
         resource_type: normalize_tag_write_resource_type(request.resource_type)?,
+        resource_ids: validate_tag_resource_ids(request.resource_ids, true)?,
         comment: normalize_optional_tag_text(request.comment, "comment")?,
         value: normalize_optional_tag_text(request.value, "value")?,
         active: request.active,

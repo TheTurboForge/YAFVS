@@ -69,16 +69,22 @@ pub(crate) fn tag_resource_update_transaction_plan(
     }
 }
 
-pub(crate) fn tag_create_transaction_plan(
-    _request: &ValidatedTagCreate,
-) -> TagWriteTransactionPlan {
+pub(crate) fn tag_create_transaction_plan(request: &ValidatedTagCreate) -> TagWriteTransactionPlan {
+    let mut steps = vec![
+        TagWriteStep::ResolveOperatorOwner,
+        TagWriteStep::VerifyResourceTypeSupported,
+        TagWriteStep::InsertMetadata,
+    ];
+    if !request.resource_ids.is_empty() {
+        steps.extend([
+            TagWriteStep::VerifyResourceExists,
+            TagWriteStep::VerifyResourceOwnerMatch,
+            TagWriteStep::InsertResourceAssignment,
+        ]);
+    }
     TagWriteTransactionPlan {
         operation: TagWriteOperation::CreateMetadata,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyResourceTypeSupported,
-            TagWriteStep::InsertMetadata,
-        ],
+        steps,
     }
 }
 

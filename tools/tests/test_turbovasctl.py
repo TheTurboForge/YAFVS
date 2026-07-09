@@ -3502,6 +3502,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'tag-active-resource-assignment-write',
          'tag-clone',
          'tag-hard-delete',
+         'tag-metadata-and-explicit-resource-assignment-write',
          'tag-metadata-export-read',
          'tag-metadata-read',
          'tag-metadata-write',
@@ -3986,7 +3987,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(create_tag["direct_access"], "direct_write_control")
         self.assertEqual(create_tag["x_turbovas_maturity"], "live-write")
         self.assertEqual(create_tag["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(create_tag["x_turbovas_replaces"], "tag-metadata-write")
+        self.assertEqual(create_tag["x_turbovas_replaces"], "tag-metadata-and-explicit-resource-assignment-write")
 
         update_tag = rows[("patch", "/api/v1/tags/{tag_id}")]
         self.assertEqual(update_tag["status"], "implemented_internal_and_browser_proxied")

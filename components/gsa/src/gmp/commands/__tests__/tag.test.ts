@@ -208,6 +208,52 @@ describe('TagCommand tests', () => {
     expect(result.data.id).toEqual('native-tag-id');
   });
 
+  test('should create a selected-resource tag through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-tag-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new TagCommand(fakeHttp);
+    const result = await cmd.create({
+      active: true,
+      comment: 'comment',
+      name: 'name',
+      resourceIds: ['target-id-1', 'target-id-2'],
+      resourceType: 'target',
+      value: 'value',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          active: true,
+          comment: 'comment',
+          name: 'name',
+          resource_ids: ['target-id-1', 'target-id-2'],
+          resource_type: 'target',
+          value: 'value',
+        }),
+      }),
+    );
+    expect(result.data.id).toEqual('native-tag-id');
+  });
+
   test('should not fall back to GMP when native metadata-only tag create fails', async () => {
     const response = createActionResultResponse({id: 'fallback-tag-id'});
     const fetchMock = testing.fn().mockResolvedValue({
@@ -236,6 +282,38 @@ describe('TagCommand tests', () => {
         resourceType: 'task',
       }),
     ).rejects.toThrow('Native API request failed with status 503');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should not fall back to GMP when native selected-resource tag create fails', async () => {
+    const response = createActionResultResponse({id: 'fallback-tag-id'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'forbidden'}}),
+      ok: false,
+      status: 403,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TagCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        active: true,
+        name: 'name',
+        resourceIds: ['target-id-1'],
+        resourceType: 'target',
+      }),
+    ).rejects.toThrow('Native API request failed with status 403');
     expect(fetchMock).toHaveBeenCalled();
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });

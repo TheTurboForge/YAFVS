@@ -84,13 +84,13 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     const nativeFilter = rawFilter ?? '';
     if (
       canUseNativeApi(this.http) &&
-      resourceIds.length === 0 &&
       nativeFilter === ''
     ) {
       return await createNativeTag(this.http, {
         active,
         comment,
         name,
+        resourceIds,
         resourceType: resourceTypeValue,
         value,
       });

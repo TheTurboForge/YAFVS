@@ -20,6 +20,7 @@ fn tag_create_request_normalizes_metadata_only_contract() {
     let validated = validate_tag_create_request(request).expect("valid create request");
     assert_eq!(validated.name, "owner:critical");
     assert_eq!(validated.resource_type, "task");
+    assert!(validated.resource_ids.is_empty());
     assert_eq!(validated.comment.as_deref(), Some("note"));
     assert_eq!(validated.value.as_deref(), Some("yes"));
     assert!(!validated.active);
@@ -27,12 +28,47 @@ fn tag_create_request_normalizes_metadata_only_contract() {
     let default_active = validate_tag_create_request(TagCreateRequest {
         name: "owner:default".to_string(),
         resource_type: "target".to_string(),
+        resource_ids: Vec::new(),
         comment: None,
         value: None,
         active: default_tag_active(),
     })
     .expect("default active create request");
     assert!(default_active.active);
+}
+
+#[test]
+fn tag_create_request_accepts_explicit_resource_ids_only() {
+    let request: TagCreateRequest = serde_json::from_str(
+        r#"{"name":"owner:selected","resource_type":"task","resource_ids":["12345678-1234-1234-1234-123456789abc","12345678-1234-1234-1234-123456789abc"]}"#,
+    )
+    .expect("valid explicit-resource tag create request");
+    let validated = validate_tag_create_request(request).expect("valid create request");
+    assert_eq!(
+        validated.resource_ids,
+        vec!["12345678-1234-1234-1234-123456789abc".to_string()]
+    );
+    assert_eq!(
+        tag_create_transaction_plan(&validated),
+        TagWriteTransactionPlan {
+            operation: TagWriteOperation::CreateMetadata,
+            steps: vec![
+                TagWriteStep::ResolveOperatorOwner,
+                TagWriteStep::VerifyResourceTypeSupported,
+                TagWriteStep::InsertMetadata,
+                TagWriteStep::VerifyResourceExists,
+                TagWriteStep::VerifyResourceOwnerMatch,
+                TagWriteStep::InsertResourceAssignment,
+            ],
+        }
+    );
+
+    assert!(
+        serde_json::from_str::<TagCreateRequest>(
+            r#"{"name":"x","resource_type":"task","resource_ids":["id"],"resource_filter":"name~x"}"#
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -211,7 +247,7 @@ fn tag_clone_request_rejects_unknown_fields_empty_name_and_bad_text() {
 fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
     assert!(
         serde_json::from_str::<TagCreateRequest>(
-            r#"{"name":"x","resource_type":"task","resource_ids":[]}"#
+            r#"{"name":"x","resource_type":"task","resource_filter":"name~x"}"#
         )
         .is_err()
     );
@@ -238,6 +274,7 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
     let empty_name = TagCreateRequest {
         name: " ".to_string(),
         resource_type: "task".to_string(),
+        resource_ids: Vec::new(),
         comment: None,
         value: None,
         active: true,
@@ -250,6 +287,7 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
     let bad_type = TagCreateRequest {
         name: "owner:x".to_string(),
         resource_type: "user".to_string(),
+        resource_ids: Vec::new(),
         comment: None,
         value: None,
         active: true,
@@ -432,6 +470,7 @@ fn tag_write_plans_are_metadata_only() {
     let create = ValidatedTagCreate {
         name: "owner:x".to_string(),
         resource_type: "task".to_string(),
+        resource_ids: Vec::new(),
         comment: None,
         value: None,
         active: true,

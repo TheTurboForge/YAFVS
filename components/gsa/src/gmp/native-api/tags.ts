@@ -415,20 +415,27 @@ export const createNativeTag = async (
     active,
     comment,
     name,
+    resourceIds,
     resourceType,
     value,
   }: {
     active: boolean;
     comment: string;
     name: string;
+    resourceIds?: string[];
     resourceType: EntityType;
     value: string;
   },
 ): Promise<Response<{id: string}>> => {
+  const resourceIdsPayload =
+    resourceIds !== undefined && resourceIds.length > 0
+      ? {resource_ids: resourceIds}
+      : {};
   const payload = await writeNativeJson<NativeTagPayload>(gmp, 'api/v1/tags', {
     active,
     comment,
     name,
+    ...resourceIdsPayload,
     resource_type: nativeResourceType(resourceType),
     value,
   });

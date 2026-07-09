@@ -6,7 +6,7 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {canUseNativeApi} from 'gmp/commands/native';
+import {canUseNativeApi, NATIVE_COMMAND_PAGE_SIZE} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import logger from 'gmp/log';
@@ -28,6 +28,11 @@ import {
   fetchNativeAlert,
   patchNativeAlert,
 } from 'gmp/native-api/alerts';
+import {fetchNativeCredentials} from 'gmp/native-api/credentials';
+import {fetchNativeFilters} from 'gmp/native-api/filters';
+import {fetchNativeReportConfigs} from 'gmp/native-api/report-configs';
+import {fetchNativeReportFormats} from 'gmp/native-api/report-formats';
+import {fetchNativeTasks} from 'gmp/native-api/tasks';
 import {map} from 'gmp/utils/array';
 
 interface AlertCreateParams {
@@ -191,6 +196,34 @@ const method_data_fields = [
   'vfire_call_urgency_name',
 ];
 
+const nativeAlertSettingsQuery = {
+  page: 1,
+  pageSize: NATIVE_COMMAND_PAGE_SIZE,
+  sort: 'name',
+  filter: '',
+};
+
+const fetchNativeAlertSettings = async (
+  http: Http,
+): Promise<NewAlertSettings> => {
+  const [reportFormats, reportConfigs, credentials, tasks, filters] =
+    await Promise.all([
+      fetchNativeReportFormats(http, nativeAlertSettingsQuery),
+      fetchNativeReportConfigs(http, nativeAlertSettingsQuery),
+      fetchNativeCredentials(http, nativeAlertSettingsQuery),
+      fetchNativeTasks(http, nativeAlertSettingsQuery),
+      fetchNativeFilters(http, nativeAlertSettingsQuery),
+    ]);
+
+  return {
+    report_formats: reportFormats.reportFormats,
+    report_configs: reportConfigs.reportConfigs,
+    credentials: credentials.credentials,
+    tasks: tasks.tasks,
+    filters: filters.filters,
+  };
+};
+
 const condition_data_fields = [
   'severity',
   'direction',
@@ -314,6 +347,10 @@ class AlertCommand extends EntityCommand<Alert> {
   }
 
   async newAlertSettings() {
+    if (canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeAlertSettings(this.http));
+    }
+
     // newAlertSettings should be removed after all corresponding gmp commands are implemented
     // and UI queries are adapted to use them directly
     const response = (await this.httpGetWithTransform({
@@ -345,7 +382,18 @@ class AlertCommand extends EntityCommand<Alert> {
     return response.setData(newAlert);
   }
 
-  async editAlertSettings({id}) {
+  async editAlertSettings({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      const [alert, settings] = await Promise.all([
+        fetchNativeAlert(this.http, id),
+        fetchNativeAlertSettings(this.http),
+      ]);
+      return new Response({
+        ...settings,
+        alert,
+      });
+    }
+
     const response = (await this.httpGetWithTransform({
       cmd: 'edit_alert',
       id,

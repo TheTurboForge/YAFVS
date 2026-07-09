@@ -24,6 +24,12 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
+const nativeJsonResponse = (payload: unknown, status = 200) => ({
+  json: testing.fn().mockResolvedValue(payload),
+  ok: status >= 200 && status < 300,
+  status,
+});
+
 describe('AlertCommand tests', () => {
   test('should get an alert through GMP when native API is unavailable', async () => {
     const response = createEntityResponse('alert', {_id: 'foo'});
@@ -364,6 +370,69 @@ describe('AlertCommand tests', () => {
     expect(resp.data.filters.length).toBe(2);
   });
 
+  test('should get new alert settings through native API when available', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 'rf1', name: 'PDF'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 'rc1', name: 'Default config'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 'cr1', name: 'Credential'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 't1', name: 'Task'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({
+          items: [{id: 'f1', name: 'Task filter', filter_type: 'task'}],
+        }),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    const resp = await cmd.newAlertSettings();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-formats',
+      expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/report-configs',
+      expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/credentials',
+      expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tasks',
+      expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/filters',
+      expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
+    );
+    expect(resp.data.report_formats.length).toBe(1);
+    expect(resp.data.report_configs.length).toBe(1);
+    expect(resp.data.credentials.length).toBe(1);
+    expect(resp.data.tasks.length).toBe(1);
+    expect(resp.data.filters.length).toBe(1);
+  });
+
   test('should allow to get edit alert settings', async () => {
     const response = createResponse({
       edit_alert: {
@@ -402,5 +471,60 @@ describe('AlertCommand tests', () => {
     expect(resp.data.credentials.length).toBe(2);
     expect(resp.data.tasks.length).toBe(2);
     expect(resp.data.filters.length).toBe(2);
+  });
+
+  test('should get edit alert settings through native API when available', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(
+        nativeJsonResponse({
+          id: 'alert_id1',
+          name: 'Native Alert',
+          active: true,
+          method_data_redacted: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 'rf1', name: 'PDF'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 'rc1', name: 'Default config'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 'cr1', name: 'Credential'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({items: [{id: 't1', name: 'Task'}]}),
+      )
+      .mockResolvedValueOnce(
+        nativeJsonResponse({
+          items: [{id: 'f1', name: 'Task filter', filter_type: 'task'}],
+        }),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    const resp = await cmd.editAlertSettings({id: 'alert_id1'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/alerts/alert_id1', {
+      token: 'test-token',
+    });
+    expect(resp.data.alert.id).toBe('alert_id1');
+    expect(resp.data.report_formats.length).toBe(1);
+    expect(resp.data.report_configs.length).toBe(1);
+    expect(resp.data.credentials.length).toBe(1);
+    expect(resp.data.tasks.length).toBe(1);
+    expect(resp.data.filters.length).toBe(1);
   });
 });

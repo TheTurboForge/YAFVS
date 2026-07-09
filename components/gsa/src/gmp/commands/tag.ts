@@ -43,8 +43,10 @@ interface TagCommandSaveParams extends TagCommandCreateParams {
 
 const log = logger.getLogger('gmp.commands.tag');
 
-const nativeTagDetailSupportsFilter = (filter?: Filter | string): boolean =>
-  filter === undefined || filterString(filter) === 'resources=1';
+const nativeTagDetailSupportsFilter = (filter?: Filter | string): boolean => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'resources=1' || value === 'alerts=1';
+};
 
 class TagCommand extends EntityCommand<Tag, TagElement> {
   constructor(http: Http) {

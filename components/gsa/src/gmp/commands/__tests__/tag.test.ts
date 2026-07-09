@@ -335,11 +335,18 @@ describe('TagCommand tests', () => {
     expect(resp.data.resourceCount).toEqual(2);
   });
 
-  test('should keep unsupported filtered single tag detail on GMP', async () => {
-    const response = createEntityResponse('tag', {_id: 'foo'});
-    const fetchMock = testing.fn();
+  test('should return single tag alerts filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'foo',
+        name: 'Critical assets',
+        resources: {type: 'task', count: {total: 2}},
+      }),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -353,15 +360,14 @@ describe('TagCommand tests', () => {
     const cmd = new TagCommand(fakeHttp);
     const resp = await cmd.get({id: 'foo'}, {filter: 'alerts=1'});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tag',
-        tag_id: 'foo',
-        filter: 'alerts=1',
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tags/foo', {
+      token: 'test-token',
     });
+    expect(fetchMock).toHaveBeenCalled();
     expect(resp.data.id).toEqual('foo');
+    expect(resp.data.resourceType).toEqual('task');
+    expect(resp.data.resourceCount).toEqual(2);
   });
 
   test('should save a tag', async () => {

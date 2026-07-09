@@ -279,7 +279,7 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
     assert!(!detail.contains("delete:"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
+    assert!(!detail.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
     assert!(
         detail.contains("Native direct write-control can patch scanner name/comment metadata only")
     );
@@ -300,7 +300,6 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: scanner-metadata-export-read",
-        "x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "$ref: '#/components/schemas/ScannerAssetDetail'",
         "including scanner CA public certificate text when present",
         "Credential secrets, credential certificate metadata",
@@ -311,6 +310,7 @@ fn openapi_documents_scanners_as_read_only_until_control_contract_lands() {
             "scanner metadata export OpenAPI block missing {required}"
         );
     }
+    assert!(!export.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
     for forbidden in [
         "x-turbovas-exposure: direct-write",
         "x-turbovas-safety-contract: write-control-v1",

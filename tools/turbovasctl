@@ -1213,12 +1213,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scanner-metadata-list-read",
     },
     ("get", "/scanners/{scanner_id}"): {
-        "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scanner-metadata-detail-info-tags-and-task-backlink-read",
     },
     ("patch", "/scanners/{scanner_id}"): {
-        "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
@@ -1227,7 +1225,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scanners/{scanner_id}/export"): {
-        "x-turbovas-inherited-still-owns": "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scanner-metadata-export-read",
     },

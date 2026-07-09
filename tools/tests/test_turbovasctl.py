@@ -4136,7 +4136,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
-            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", None),
             "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
@@ -4145,7 +4145,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
             self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertEqual(row["x_turbovas_inherited_still_owns"], inherited_still_owns)
+            self.assertEqual(row.get("x_turbovas_inherited_still_owns"), inherited_still_owns)
 
         expected_raw_report_metadata = {
             "/api/v1/reports/{report_id}/results": ("getReportsByReportIdResults", "raw-report-result-evidence-read"),
@@ -6314,7 +6314,7 @@ class TurboVASCtlTests(unittest.TestCase):
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", "remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"),
             (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
-            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
+            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", None),
             (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-selector-mutation-import-export-blank-create"),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
@@ -6323,7 +6323,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
             self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-inherited-still-owns"], inherited_still_owns)
+            self.assertEqual(operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns"), inherited_still_owns)
 
         self.assertEqual(alerts["operation_id"], "getAlerts")
         self.assertIn("x-turbovas-direct", alerts["x_turbovas_fields"])

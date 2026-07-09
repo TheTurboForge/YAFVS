@@ -62,7 +62,7 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         route_path: "/api/v1/scan-configs/:scan_config_id/export",
         handler: "export_scan_config_metadata",
         replaces: "scan-config-metadata-export-read",
-        inherited_tail: Some("scan-config-preference-selector-mutation-import-export-blank-create"),
+        inherited_tail: None,
         schema_ref: "#/components/schemas/ScanConfigAssetDetail",
     },
     MetadataExportBoundary {

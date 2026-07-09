@@ -3488,7 +3488,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-create-from-base
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -3536,7 +3535,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-detail-info-tags-and-task-backlink-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: Read one scan config metadata record
       description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Native direct write-control can create from base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference edit payloads, import/export, scanner control, blank create, and selector/preference mutations remain inherited while native contracts are designed.
       parameters:
@@ -3568,7 +3566,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-metadata-modify
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -3612,7 +3609,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-trash-move
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -3647,7 +3643,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-clone
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -3697,7 +3692,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-restore
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -3736,7 +3730,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scan-config-hard-delete
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -3804,7 +3797,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-export-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create
       summary: Export scan-config metadata
       description: Scriptable JSON metadata export for one scan config, including active User Tags and shallow task backlinks. Preference edit payloads, NVT selector/family mutation, import/export, scanner control, and blank create remain compatibility paths.
       parameters:

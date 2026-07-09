@@ -404,6 +404,9 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-replaces: scan-config-create-from-base"));
     assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(list.contains(
+        "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
+    ));
     assert!(!list.contains("\n  patch:"));
     assert!(!list.contains("\n  delete:"));
 
@@ -416,7 +419,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(detail.contains("x-turbovas-replaces: scan-config-metadata-modify"));
     assert!(detail.contains("x-turbovas-replaces: scan-config-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(detail.contains(
+    assert!(!detail.contains(
         "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
     ));
 
@@ -424,7 +427,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(clone.contains("post:"));
     assert!(clone.contains("x-turbovas-replaces: scan-config-clone"));
     assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(clone.contains(
+    assert!(!clone.contains(
         "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
     ));
 
@@ -440,6 +443,9 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
 
     let families = openapi_path_block("/scan-configs/{scan_config_id}/families");
     assert!(families.contains("get:"));
+    assert!(families.contains(
+        "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutation-import-export-blank-create"
+    ));
     assert!(!families.contains("\n  post:"));
     assert!(!families.contains("\n  patch:"));
     assert!(!families.contains("\n  delete:"));

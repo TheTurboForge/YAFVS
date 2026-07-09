@@ -13,18 +13,8 @@ import useTranslation from 'web/hooks/useTranslation';
 import ReportFormatDialog from 'web/pages/reportformats/Dialog';
 import PropTypes from 'web/utils/PropTypes';
 
-const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
-
 const reportFormatId = reportFormatData =>
   typeof reportFormatData === 'string' ? reportFormatData : reportFormatData.id;
-
-const fetchReportFormat = async (gmp, reportFormatData) => {
-  if (canUseNativeApi(gmp)) {
-    return fetchNativeReportFormat(gmp, reportFormatId(reportFormatData));
-  }
-  const response = await gmp.reportformat.get(reportFormatData);
-  return response.data;
-};
 
 const ReportFormatComponent = ({
   children,
@@ -53,7 +43,10 @@ const ReportFormatComponent = ({
   const openReportFormatDialog = async reportFormatParam => {
     if (isDefined(reportFormatParam)) {
       try {
-        const format = await fetchReportFormat(gmp, reportFormatParam);
+        const format = await fetchNativeReportFormat(
+          gmp,
+          reportFormatId(reportFormatParam),
+        );
 
         setDialogVisible(true);
         setReportFormat(format);

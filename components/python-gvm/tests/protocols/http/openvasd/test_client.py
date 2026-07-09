@@ -1,4 +1,5 @@
 #  SPDX-FileCopyrightText: 2025 Greenbone AG
+#  TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -15,8 +16,9 @@ class TestOpenvasdClient(unittest.TestCase):
         create_openvasd_http_client("localhost")
         mock_httpx_client.assert_called_once()
         _, kwargs = mock_httpx_client.call_args
-        self.assertEqual(kwargs["base_url"], "http://localhost:3000")
-        self.assertFalse(kwargs["verify"])
+        self.assertEqual(kwargs["base_url"], "https://localhost:3000")
+        self.assertTrue(kwargs["verify"])
+        self.assertIsNone(kwargs["cert"])
         self.assertNotIn("X-API-KEY", kwargs["headers"])
 
     @patch("gvm.protocols.http.openvasd._client.Client")
@@ -24,8 +26,8 @@ class TestOpenvasdClient(unittest.TestCase):
         create_openvasd_http_client("localhost", api_key="secret")
         _, kwargs = mock_httpx_client.call_args
         self.assertEqual(kwargs["headers"]["X-API-KEY"], "secret")
-        self.assertEqual(kwargs["base_url"], "http://localhost:3000")
-        self.assertFalse(kwargs["verify"])
+        self.assertEqual(kwargs["base_url"], "https://localhost:3000")
+        self.assertTrue(kwargs["verify"])
 
     @patch("gvm.protocols.http.openvasd._client.ssl.create_default_context")
     @patch("gvm.protocols.http.openvasd._client.Client")
@@ -51,6 +53,7 @@ class TestOpenvasdClient(unittest.TestCase):
         _, kwargs = mock_httpx_client.call_args
         self.assertEqual(kwargs["base_url"], "https://localhost:3000")
         self.assertEqual(kwargs["verify"], mock_context)
+        self.assertIsNone(kwargs["cert"])
 
     @patch("gvm.protocols.http.openvasd._client.ssl.create_default_context")
     @patch("gvm.protocols.http.openvasd._client.Client")
@@ -72,3 +75,15 @@ class TestOpenvasdClient(unittest.TestCase):
         _, kwargs = mock_httpx_client.call_args
         self.assertEqual(kwargs["base_url"], "https://localhost:3000")
         self.assertEqual(kwargs["verify"], mock_context)
+        self.assertIsNone(kwargs["cert"])
+
+    @patch("gvm.protocols.http.openvasd._client.Client")
+    def test_init_with_client_cert_and_system_trust(self, mock_httpx_client):
+        create_openvasd_http_client(
+            "localhost", client_cert_paths=("/path/cert.pem", "/path/key.pem")
+        )
+
+        _, kwargs = mock_httpx_client.call_args
+        self.assertEqual(kwargs["base_url"], "https://localhost:3000")
+        self.assertTrue(kwargs["verify"])
+        self.assertEqual(kwargs["cert"], ("/path/cert.pem", "/path/key.pem"))

@@ -141,7 +141,7 @@ describe('ScopesCommand tests', () => {
     expect(result.data.id).toEqual('scope-id');
   });
 
-  test('should keep unexpected scope create payloads on GMP', async () => {
+  test('should not fall back to GMP for unexpected native scope create payloads', async () => {
     const response = createActionResultResponse({id: 'scope-id'});
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -156,23 +156,16 @@ describe('ScopesCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new ScopesCommand(fakeHttp);
-    await cmd.create({
-      id: 'unexpected-scope-id',
-      name: 'New Scope',
-      protectionRequirement: 'normal',
-    });
+    expect(() =>
+      cmd.create({
+        id: 'unexpected-scope-id',
+        name: 'New Scope',
+        protectionRequirement: 'normal',
+      }),
+    ).toThrow('Native scope create received unsupported payload shape');
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_scope',
-        name: 'New Scope',
-        comment: undefined,
-        protection_requirement: 'normal',
-        target_ids: undefined,
-        host_ids: undefined,
-      },
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should modify scope metadata and membership through native API when available', async () => {
@@ -228,7 +221,7 @@ describe('ScopesCommand tests', () => {
     expect(result.data.id).toEqual('scope-id');
   });
 
-  test('should keep unexpected scope modify payloads on GMP', async () => {
+  test('should not fall back to GMP for unexpected native scope modify payloads', async () => {
     const response = createActionResultResponse({id: 'scope-id'});
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -243,28 +236,20 @@ describe('ScopesCommand tests', () => {
     fakeHttp.session.token = 'test-token';
 
     const cmd = new ScopesCommand(fakeHttp);
-    await cmd.modify({
-      id: 'scope-id',
-      name: 'Updated Scope',
-      comment: 'metadata and membership',
-      protectionRequirement: 'high',
-      targetIds: ['11111111-1111-1111-1111-111111111111'],
-      hostIds: [],
-      unexpected: true,
-    } as unknown as Parameters<ScopesCommand['modify']>[0]);
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'modify_scope',
-        scope_id: 'scope-id',
+    expect(() =>
+      cmd.modify({
+        id: 'scope-id',
         name: 'Updated Scope',
         comment: 'metadata and membership',
-        protection_requirement: 'high',
-        target_ids: '11111111-1111-1111-1111-111111111111',
-        host_ids: '',
-      },
-    });
+        protectionRequirement: 'high',
+        targetIds: ['11111111-1111-1111-1111-111111111111'],
+        hostIds: [],
+        unexpected: true,
+      } as unknown as Parameters<ScopesCommand['modify']>[0]),
+    ).toThrow('Native scope modify received unsupported payload shape');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete scope through native API when available', async () => {

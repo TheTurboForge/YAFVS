@@ -429,8 +429,11 @@ export class ScopesCommand extends HttpCommand {
   }
 
   create(params: ScopeWriteParams) {
-    if (canUseNativeApi(this.http) && isNativeScopeCreate(params)) {
-      return createNativeScope(this.http, params);
+    if (canUseNativeApi(this.http)) {
+      if (isNativeScopeCreate(params)) {
+        return createNativeScope(this.http, params);
+      }
+      throw new Error('Native scope create received unsupported payload shape');
     }
 
     return this.httpPostWithTransform({
@@ -444,8 +447,11 @@ export class ScopesCommand extends HttpCommand {
   }
 
   modify(params: ScopeWriteParams) {
-    if (canUseNativeApi(this.http) && isNativeScopeModify(params)) {
-      return patchNativeScope(this.http, params);
+    if (canUseNativeApi(this.http)) {
+      if (isNativeScopeModify(params)) {
+        return patchNativeScope(this.http, params);
+      }
+      throw new Error('Native scope modify received unsupported payload shape');
     }
 
     return this.httpPostWithTransform({

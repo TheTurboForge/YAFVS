@@ -6,12 +6,10 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import type {HttpCommandOptions} from 'gmp/commands/http';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import logger from 'gmp/log';
 import Filter, {type FilterModelElement} from 'gmp/models/filter';
 import {
   cloneNativeFilter,
@@ -31,7 +29,11 @@ interface GetFilterResponseData extends XmlResponseData {
   };
 }
 
-const log = logger.getLogger('gmp.commands.filters');
+const requireNativeFilterApi = (http: Http) => {
+  if (!canUseNativeApi(http)) {
+    throw new Error('Native filter API is required for filter command');
+  }
+};
 
 export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   constructor(http: Http) {
@@ -44,12 +46,10 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
 
   async get(
     {id}: EntityCommandParams,
-    {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
+    _options: {filter?: Filter | string} = {},
   ) {
-    if (canUseNativeApi(this.http)) {
-      return new Response(await fetchNativeFilter(this.http, id));
-    }
-    return super.get({id}, {filter, ...options});
+    requireNativeFilterApi(this.http);
+    return new Response(await fetchNativeFilter(this.http, id));
   }
 
   async create(args: {
@@ -60,42 +60,26 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   }) {
     const {term, name, type, comment = ''} = args;
     const filterType = resourceType(type);
-    if (canUseNativeApi(this.http)) {
-      if (filterType === undefined) {
-        throw new Error('Native filter create received unsupported resource type');
-      }
-      return await createNativeFilter(this.http, {
-        term,
-        name,
-        filterType,
-        comment,
-      });
+    requireNativeFilterApi(this.http);
+    if (filterType === undefined) {
+      throw new Error('Native filter create received unsupported resource type');
     }
-
-    const data = {
-      cmd: 'create_filter',
+    return await createNativeFilter(this.http, {
       term,
       name,
-      resource_type: filterType,
+      filterType,
       comment,
-    };
-    log.debug('Creating new filter', args, data);
-    return this.action(data);
+    });
   }
 
   async clone({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      return await cloneNativeFilter(this.http, id);
-    }
-    return super.clone({id});
+    requireNativeFilterApi(this.http);
+    return await cloneNativeFilter(this.http, id);
   }
 
   async delete({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeFilter(this.http, id);
-      return;
-    }
-    return super.delete({id});
+    requireNativeFilterApi(this.http);
+    await deleteNativeFilter(this.http, id);
   }
 
   async save(args: {
@@ -107,29 +91,17 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
   }) {
     const {id, term, name, type, comment = ''} = args;
     const filterType = resourceType(type);
-    if (canUseNativeApi(this.http)) {
-      if (filterType === undefined) {
-        throw new Error('Native filter save received unsupported resource type');
-      }
-      return patchNativeFilter(this.http, {
-        id,
-        term,
-        name,
-        filterType,
-        comment,
-      });
+    requireNativeFilterApi(this.http);
+    if (filterType === undefined) {
+      throw new Error('Native filter save received unsupported resource type');
     }
-
-    const data = {
-      cmd: 'save_filter',
-      comment,
+    return patchNativeFilter(this.http, {
       id,
-      name,
-      resource_type: filterType,
       term,
-    };
-    log.debug('Saving filter', args, data);
-    return this.action(data);
+      name,
+      filterType,
+      comment,
+    });
   }
 
   getElementFromRoot(root: XmlResponseData): FilterModelElement {

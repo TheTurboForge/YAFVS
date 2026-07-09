@@ -206,30 +206,18 @@ describe('FilterCommand tests', () => {
     });
   });
 
-  test('should create a new filter', async () => {
-    const response = createActionResultResponse({
-      action: 'create_filter',
-      id: '123',
-      message: 'Filter created successfully',
-    });
-    const fakeHttp = createHttp(response);
-
+  test('should require native API support for filter create', async () => {
+    const fakeHttp = createHttp(createActionResultResponse({id: 'fallback-id'}));
     const cmd = new FilterCommand(fakeHttp);
-    const result = await cmd.create({
-      name: 'Test Filter 1',
-      type: 'host',
-      term: 'name=Test',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_filter',
+
+    await expect(
+      cmd.create({
         name: 'Test Filter 1',
-        comment: '',
-        resource_type: 'host',
+        type: 'host',
         term: 'name=Test',
-      },
-    });
-    expect(result.data.id).toEqual('123');
+      }),
+    ).rejects.toThrow('Native filter API is required for filter command');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should create a new filter through native API when available', async () => {
@@ -478,32 +466,19 @@ describe('FilterCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should save an existing filter', async () => {
-    const response = createActionResultResponse({
-      action: 'save_filter',
-      id: '123',
-      message: 'Filter saved successfully',
-    });
-    const fakeHttp = createHttp(response);
-
+  test('should require native API support for filter save', async () => {
+    const fakeHttp = createHttp(createActionResultResponse({id: 'fallback-id'}));
     const cmd = new FilterCommand(fakeHttp);
-    const result = await cmd.save({
-      id: '123',
-      name: 'Test Filter 1',
-      type: 'host',
-      term: 'name=Test',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_filter',
-        filter_id: '123',
+
+    await expect(
+      cmd.save({
+        id: '123',
         name: 'Test Filter 1',
-        comment: '',
-        resource_type: 'host',
+        type: 'host',
         term: 'name=Test',
-      },
-    });
-    expect(result.data.id).toEqual('123');
+      }),
+    ).rejects.toThrow('Native filter API is required for filter command');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should save an existing filter through native API when available', async () => {
@@ -624,14 +599,24 @@ describe('FilterCommand tests', () => {
     {entityType: 'result', resourceType: 'result'},
     {entityType: 'task', resourceType: 'task'},
   ])(
-    'should create $entityType filter with $resourceType',
+    'should create $entityType filter with native $resourceType resource type',
     async ({entityType, resourceType}) => {
-      const response = createActionResultResponse({
-        action: 'create_filter',
-        id: '123',
-        message: 'Filter created successfully',
+      const fetchMock = testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({id: 'native-filter-id'}),
+        ok: true,
+        status: 201,
       });
-      const fakeHttp = createHttp(response);
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      fakeHttp.session.jwt = 'jwt-token';
 
       const cmd = new FilterCommand(fakeHttp);
       const result = await cmd.create({
@@ -639,16 +624,27 @@ describe('FilterCommand tests', () => {
         term: 'name=Test',
         type: entityType,
       });
-      expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-        data: {
-          cmd: 'create_filter',
-          name: 'Test Filter',
-          comment: '',
-          resource_type: resourceType,
-          term: 'name=Test',
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://turbovas.example/api/v1/filters',
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-TurboVAS-Token': 'test-token',
+            Authorization: 'Bearer jwt-token',
+          },
+          body: JSON.stringify({
+            name: 'Test Filter',
+            comment: '',
+            filter_type: resourceType,
+            term: 'name=Test',
+          }),
         },
-      });
-      expect(result.data.id).toEqual('123');
+      );
+      expect(result.data.id).toEqual('native-filter-id');
     },
   );
 });

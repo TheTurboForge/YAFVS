@@ -4191,21 +4191,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tags["x_turbovas_maturity"], "live-read")
         self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tags["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
+        self.assertIsNone(tags["x_turbovas_inherited_still_owns"])
 
         tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
         self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertEqual(tag_detail["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
+        self.assertIsNone(tag_detail["x_turbovas_inherited_still_owns"])
 
         tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
         self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
         self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
         self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
-        self.assertEqual(tag_resources["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
+        self.assertIsNone(tag_resources["x_turbovas_inherited_still_owns"])
 
         tag_export = rows[("get", "/api/v1/tags/{tag_id}/export")]
         self.assertEqual(tag_export["operation_id"], "getTagsByTagIdExport")
@@ -4220,17 +4220,19 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_clone["x_turbovas_maturity"], "live-write")
         self.assertEqual(tag_clone["x_turbovas_exposure"], "direct-write")
         self.assertEqual(tag_clone["x_turbovas_replaces"], "tag-clone")
-        self.assertEqual(tag_clone["x_turbovas_inherited_still_owns"], "tag-filter-actions-and-resource-type-change-semantics")
+        self.assertIsNone(tag_clone["x_turbovas_inherited_still_owns"])
 
         tag_restore = rows[("post", "/api/v1/tags/{tag_id}/restore")]
         self.assertEqual(tag_restore["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_restore["direct_access"], "direct_write_control")
         self.assertEqual(tag_restore["x_turbovas_replaces"], "tag-restore")
+        self.assertIsNone(tag_restore["x_turbovas_inherited_still_owns"])
 
         tag_hard_delete = rows[("delete", "/api/v1/tags/{tag_id}/trash")]
         self.assertEqual(tag_hard_delete["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_hard_delete["direct_access"], "direct_write_control")
         self.assertEqual(tag_hard_delete["x_turbovas_replaces"], "tag-hard-delete")
+        self.assertIsNone(tag_hard_delete["x_turbovas_inherited_still_owns"])
 
         retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
         self.assertEqual(retention["status"], "implemented_internal_browser_proxied_and_scriptable_read")
@@ -4963,7 +4965,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn(("GET /scanners", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /scan-configs/{scan_config_id}/families", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /tags", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /tags/resource-names/{resource_type}", "x-turbovas-inherited-still-owns"), missing_migration)
         self.assertIn(("GET /tags/{tag_id}", "x-turbovas-maturity"), missing_migration)
         self.assertIn(("GET /tags/{tag_id}/resources", "x-turbovas-replaces"), missing_migration)
         self.assertIn(("GET /trashcan/summary", "x-turbovas-inherited-still-owns"), missing_migration)
@@ -6357,7 +6358,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
         self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-replaces"], "tag-resource-name-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "tag-filter-actions-and-resource-type-change-semantics")
+        self.assertNotIn("x-turbovas-inherited-still-owns", tag_resource_names["x_turbovas_values"])
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(trashcan_summary["operation_id"], "getTrashcanSummary")
         self.assertIn("x-turbovas-direct", trashcan_summary["x_turbovas_fields"])

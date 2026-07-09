@@ -1322,17 +1322,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/tags/resource-names/{resource_type}"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-resource-name-read",
     },
     ("get", "/tags"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-metadata-read",
     },
     ("get", "/tags/{tag_id}"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-metadata-read",
     },
@@ -1352,12 +1349,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tag-metadata-write",
     },
     ("delete", "/tags/{tag_id}"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-trash-move",
     },
     ("get", "/tags/{tag_id}/resources"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "tag-resource-reference-read",
     },
@@ -1367,17 +1362,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tag-active-resource-assignment-write",
     },
     ("post", "/tags/{tag_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-clone",
     },
     ("post", "/tags/{tag_id}/restore"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-restore",
     },
     ("delete", "/tags/{tag_id}/trash"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-hard-delete",
     },

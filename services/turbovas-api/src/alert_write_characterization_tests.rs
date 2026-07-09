@@ -46,6 +46,32 @@ fn openapi_path_block(path: &str) -> String {
         .unwrap_or_else(|| tail.to_string())
 }
 
+fn openapi_operation_block(path_block: &str, method: &str) -> String {
+    let marker = format!("    {method}:");
+    let start = path_block
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{method} operation block must exist"));
+    let tail = &path_block[start..];
+    tail.lines()
+        .enumerate()
+        .skip(1)
+        .find_map(|(index, line)| {
+            let trimmed = line.trim_end();
+            if line.starts_with("    ")
+                && !line.starts_with("      ")
+                && matches!(
+                    trimmed,
+                    "    get:" | "    post:" | "    patch:" | "    put:" | "    delete:"
+                )
+            {
+                Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| tail.to_string())
+}
+
 #[test]
 fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
     let create = inherited_function(MANAGE_SQL_ALERTS_C, "create_alert");
@@ -447,6 +473,7 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         }
     }
     let detail = openapi_path_block("/alerts/{alert_id}");
+    let patch = openapi_operation_block(&detail, "patch");
     for required in [
         "    patch:",
         "operationId: patchAlertsByAlertId",
@@ -457,18 +484,21 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths",
     ] {
         assert!(
-            detail.contains(required),
+            patch.contains(required),
             "/alerts/{{alert_id}} missing {required}"
         );
     }
+    assert!(!patch.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
+    let delete = openapi_operation_block(&detail, "delete");
     for required in [
         "    delete:",
         "operationId: deleteAlertsByAlertId",
         "x-turbovas-replaces: alert-trash-move",
+        "x-turbovas-inherited-still-owns: alert-detail-delivery-control",
         "x-turbovas-side-effect: metadata-delete",
     ] {
         assert!(
-            detail.contains(required),
+            delete.contains(required),
             "/alerts/{{alert_id}} delete missing {required}"
         );
     }
@@ -479,6 +509,7 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "operationId: postAlertsByAlertIdClone",
         "x-turbovas-exposure: direct-write",
         "x-turbovas-replaces: alert-clone",
+        "x-turbovas-inherited-still-owns: alert-detail-delivery-control",
         "x-turbovas-safety-contract: write-control-v1",
         "AlertCloneRequest",
     ] {

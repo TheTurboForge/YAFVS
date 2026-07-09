@@ -873,7 +873,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "alert-metadata-export-read",
     },
     ("patch", "/alerts/{alert_id}"): {
-        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",

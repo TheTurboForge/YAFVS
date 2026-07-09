@@ -1956,7 +1956,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: alert-metadata-modify
-      x-turbovas-inherited-still-owns: alert-detail-delivery-control
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1

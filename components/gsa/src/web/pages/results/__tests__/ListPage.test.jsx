@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -98,7 +98,49 @@ export const result3 = Result.fromElement({
 
 const results = [result1, result2, result3];
 
+const nativeResultItems = [
+  {
+    id: '101',
+    name: 'Result 1',
+    host: '123.456.78.910',
+    hostname: 'foo',
+    port: '80/tcp',
+    nvt_oid: '201',
+    nvt_family: 'General',
+    solution_type: 'Mitigation',
+    severity: 10.0,
+    qod: 80,
+    created_at: '2019-06-03T11:06:31Z',
+  },
+  {
+    id: '102',
+    name: 'Result 2',
+    host: '109.876.54.321',
+    port: '80/tcp',
+    nvt_oid: '202',
+    nvt_family: 'General',
+    solution_type: 'VendorFix',
+    severity: 5.0,
+    qod: 70,
+    created_at: '2019-06-03T11:06:31Z',
+  },
+  {
+    id: '103',
+    name: 'Result 3',
+    host: '109.876.54.321',
+    hostname: 'bar',
+    port: '80/tcp',
+    nvt_oid: '201',
+    nvt_family: 'General',
+    solution_type: 'Mitigation',
+    severity: 5.0,
+    qod: 80,
+    created_at: '2019-06-03T11:06:31Z',
+  },
+];
+
 const createGmp = ({
+  buildUrl = testing.fn((path, _params) => `https://turbovas.example/${path}`),
   getResults = testing.fn().mockResolvedValue({
     data: results,
     meta: {
@@ -132,24 +174,42 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  results: {
-    get: getResults,
-    getSeverityAggregates: getAggregates,
-    getWordCountsAggregates: getAggregates,
-    exportByFilter,
-    export: exportByIds,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-    severityRating: SEVERITY_RATING_CVSS_3,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings},
+} = {}) => {
+  testing.stubGlobal(
+    'fetch',
+    testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: nativeResultItems.length, sort: '-severity', filter: ''},
+        items: nativeResultItems,
+      }),
+      ok: true,
+      status: 200,
+    }),
+  );
+  return {
+    buildUrl,
+    results: {
+      get: getResults,
+      getSeverityAggregates: getAggregates,
+      getWordCountsAggregates: getAggregates,
+      exportByFilter,
+      export: exportByIds,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+      severityRating: SEVERITY_RATING_CVSS_3,
+    },
+    session: createSession({timezone: 'CET'}),
+    user: {currentSettings},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('Results listpage tests', () => {

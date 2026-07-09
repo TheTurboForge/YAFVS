@@ -54,6 +54,40 @@ const alert = Alert.fromElement({
   },
 });
 
+const nativeAlertItem = {
+  id: '1234',
+  owner: {name: 'admin'},
+  name: 'foo',
+  comment: 'bar',
+  active: true,
+  in_use: false,
+  event: {type: 'Task run status changed'},
+  condition: {type: 'Always'},
+  method: {type: 'SMB'},
+  method_data_redacted: true,
+  filter: {
+    id: 'filter id',
+    name: 'report results filter',
+  },
+};
+
+const nativeRedactedAlertItem = {
+  id: '5678',
+  owner: {name: 'admin'},
+  name: 'native redacted',
+  comment: 'list metadata only',
+  active: true,
+  in_use: false,
+  event: {type: 'Task run status changed'},
+  condition: {type: 'Filter count at least'},
+  method: {type: 'SCP'},
+  method_data_redacted: true,
+  filter: {
+    id: 'filter id',
+    name: 'report results filter',
+  },
+};
+
 const nativeRedactedAlert = Alert.fromElement({
   _id: '5678',
   owner: {name: 'admin'},
@@ -78,6 +112,7 @@ const nativeRedactedAlert = Alert.fromElement({
 
 const createGmp = ({
   buildUrl,
+  nativeAlertItems = [nativeAlertItem],
   session = createSession({timezone: 'CET'}),
   getAlerts = testing.fn().mockResolvedValue({
     data: [alert],
@@ -118,38 +153,55 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  ...(buildUrl ? {buildUrl} : {}),
-  alerts: {
-    get: getAlerts,
-    deleteByFilter,
-    exportByFilter,
-    delete: deleteByIds,
-    export: exportByIds,
-  },
-  credentials: {
-    getAll: getCredentials,
-  },
-  filters: {
-    get: getFilters,
-    getAll: getAllFilters,
-  },
-  reportconfigs: {
-    getAll: getReportConfigs,
-  },
-  reportformats: {
-    getAll: getReportFormats,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-  },
-  session,
-  tasks: {
-    getAll: getTasks,
-  },
-  user: {currentSettings, getReportComposerDefaults, getSetting},
-});
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 10, total: nativeAlertItems.length, sort: 'name', filter: ''},
+          items: nativeAlertItems,
+        }),
+        ok: true,
+        status: 200,
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    alerts: {
+      get: getAlerts,
+      deleteByFilter,
+      exportByFilter,
+      delete: deleteByIds,
+      export: exportByIds,
+    },
+    credentials: {
+      getAll: getCredentials,
+    },
+    filters: {
+      get: getFilters,
+      getAll: getAllFilters,
+    },
+    reportconfigs: {
+      getAll: getReportConfigs,
+    },
+    reportformats: {
+      getAll: getReportFormats,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+    },
+    session,
+    tasks: {
+      getAll: getTasks,
+    },
+    user: {currentSettings, getReportComposerDefaults, getSetting},
+  };
+};
 
 afterEach(() => {
   testing.unstubAllGlobals();
@@ -217,7 +269,7 @@ describe('Alert ListPage tests', () => {
 
     expect(row[1]).toHaveTextContent('foo');
     expect(row[1]).toHaveTextContent('(bar)');
-    expect(row[1]).toHaveTextContent('Task run status changed to Done');
+    expect(row[1]).toHaveTextContent('Task run status changed');
     expect(row[1]).toHaveTextContent('Always');
     expect(row[1]).toHaveTextContent('SMB');
     expect(row[1]).toHaveTextContent('report results filter');
@@ -226,6 +278,7 @@ describe('Alert ListPage tests', () => {
 
   test('should render redacted native alert type labels', async () => {
     const gmp = createGmp({
+      nativeAlertItems: [nativeRedactedAlertItem],
       getAlerts: testing.fn().mockResolvedValue({
         data: [nativeRedactedAlert],
         meta: {

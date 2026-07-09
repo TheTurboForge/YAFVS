@@ -9,8 +9,11 @@ import {
   fetchNativeTlsCertificate,
   fetchNativeTlsCertificates,
 } from 'gmp/native-api/tls-certificates';
+import Filter from 'gmp/models/filter';
 import TlsCertificate from 'gmp/models/tls-certificate';
-import {loadEntity} from 'web/store/entities/tlscertificates';
+import {loadEntities, loadEntity} from 'web/store/entities/tlscertificates';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
@@ -175,6 +178,52 @@ describe('native API TLS certificates list', () => {
       'api/v1/tls-certificates/a4d44986-29ce-4b85-9def-0ac63108d198',
       {token: 'test-token'},
     );
+  });
+
+  test('loads the TLS certificate store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort-reverse=last_seen');
+    const rootState = createState('tlscertificate', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-last_seen', filter: ''},
+        items: [
+          {
+            id: 'a4d44986-29ce-4b85-9def-0ac63108d198',
+            name: 'CN=example.local',
+            subject_dn: 'CN=example.local',
+            issuer_dn: 'CN=Example Issuer',
+            sha256_fingerprint: 'sha256-value',
+            in_use: true,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tls-certificates', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: '-last_seen',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(TlsCertificate);
+    expect(successAction.data[0].name).toEqual('CN=example.local');
   });
 
   test('loads native detail without inherited GMP detail request', async () => {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {screen, within, rendererWith, wait} from 'web/testing';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
@@ -12,7 +12,7 @@ import TlsCertificate from 'gmp/models/tls-certificate';
 import {createSession} from 'gmp/testing';
 import {currentSettingsDefaultResponse} from 'web/pages/__fixtures__/current-settings';
 import TlsCertificatePage from 'web/pages/tlscertificates/ListPage';
-import {entitiesLoadingActions} from 'web/store/entities/tasks';
+import {entitiesLoadingActions} from 'web/store/entities/tlscertificates';
 import {defaultFilterLoadingActions} from 'web/store/usersettings/defaultfilters/actions';
 import {loadingActions} from 'web/store/usersettings/defaults/actions';
 
@@ -38,7 +38,22 @@ const tlsCertificate = TlsCertificate.fromElement({
 const reloadInterval = 1;
 const manualUrl = 'test/';
 
+const nativeTlsCertificateItem = {
+  id: '1234',
+  owner: {name: 'admin'},
+  comment: 'bar',
+  issuer_dn: 'CN=LoremIpsumIssuer C=Dolor',
+  subject_dn: 'CN=LoremIpsumSubject C=Dolor',
+  activation_time: '2019-08-10T12:51:27Z',
+  expiration_time: '2019-09-10T12:51:27Z',
+  last_seen: '2019-10-10T12:51:27Z',
+  serial: '123',
+  sha256_fingerprint: '2142',
+  md5_fingerprint: '4221',
+};
+
 const createGmp = ({
+  buildUrl = testing.fn((path, _params) => `https://turbovas.example/${path}`),
   getTlsCertificates = testing.fn().mockResolvedValue({
     data: [tlsCertificate],
     meta: {
@@ -68,22 +83,40 @@ const createGmp = ({
   currentSettings = testing
     .fn()
     .mockResolvedValue(currentSettingsDefaultResponse),
-} = {}) => ({
-  tlscertificates: {
-    get: getTlsCertificates,
-    getAll: getTlsCertificates,
-    getTimeStatusAggregates: getAggregates,
-    getModifiedAggregates: getAggregates,
-  },
-  filters: {
-    get: getFilters,
-  },
-  reloadInterval,
-  settings: {
-    manualUrl,
-  },
-  session: createSession(),
-  user: {currentSettings, getSetting: getUserSetting},
+} = {}) => {
+  testing.stubGlobal(
+    'fetch',
+    testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-last_seen', filter: ''},
+        items: [nativeTlsCertificateItem],
+      }),
+      ok: true,
+      status: 200,
+    }),
+  );
+  return {
+    buildUrl,
+    tlscertificates: {
+      get: getTlsCertificates,
+      getAll: getTlsCertificates,
+      getTimeStatusAggregates: getAggregates,
+      getModifiedAggregates: getAggregates,
+    },
+    filters: {
+      get: getFilters,
+    },
+    reloadInterval,
+    settings: {
+      manualUrl,
+    },
+    session: createSession(),
+    user: {currentSettings, getSetting: getUserSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('TlsCertificatePage tests', () => {

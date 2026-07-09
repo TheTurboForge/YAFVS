@@ -1358,7 +1358,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "schedule-metadata-export-read",
     },
     ("get", "/timezones"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "timezone-list-read",
     },

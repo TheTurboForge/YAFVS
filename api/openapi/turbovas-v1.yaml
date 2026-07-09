@@ -3785,9 +3785,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: timezone-list-read
-      x-turbovas-inherited-still-owns: schedule-create-calendar-edit
       summary: List supported timezones
-      description: Read-only PostgreSQL timezone list for schedule dialogs and automation. Schedule create, calendar mutation, and task next-time recalculation remain inherited.
+      description: Read-only PostgreSQL timezone list for schedule dialogs and automation. Schedule create, calendar mutation, and task next-time recalculation remain separate schedule semantics.
       responses:
         '200':
           description: Supported timezone names

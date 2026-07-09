@@ -267,23 +267,13 @@ Creates credentials as specified in a csv-file. See credentials.csv for file for
 **Note**: create schedules, then credentials, then targets, then tasks and make sure to use the same names between the input csv-files.
 The sample files should serve as an example.
 
-## `create-tags-from-csv.gmp.py`
+## CSV tag creation
 
-Creates tags as specified in a csv-file. See tags.csv for file format/contents.
-
-TurboVAS provides `tools/turbovasctl native-tags-from-csv` for the native-safe
-subset: Alert, Config, Credential, Report, Scanner, Schedule, Target, and Task
-tags resolved by exact resource name/ID. Native Report rows require explicit
-report UUIDs in resource columns. Inherited report rows without explicit
-resources use GMP `resource_filter=~tagName` semantics and remain inherited.
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket create-tags-from-csv.gmp.py ./tags.csv`
-
-- May contain up to 10 resources to assign to tag. Currently only creates tags for Credential, Target, and Tasks
-- Use tag:*searchforthis* as filter. Example: *tag:bsecure*
-- Will add reports when I've figured out if tags are really dynamic and a filter will do it for new reports.
+TurboVAS retired the inherited GMP `create-tags-from-csv.gmp.py` script. Use
+`tools/turbovasctl native-tags-from-csv` for explicit native tag creation from
+CSV. It supports Alert, Config, Credential, Report, Scanner, Schedule, Target,
+and Task tags resolved by exact resource name/ID, and it rejects inherited
+implicit report-filter rows that lacked explicit resources.
 
 ## `create-tasks-from-csv.gmp.py`
 

@@ -6044,11 +6044,9 @@ class TurboVASCtlTests(unittest.TestCase):
             if path == "/api/v1/tags":
                 body = json.loads(kwargs["body"])
                 self.assertEqual(body["resource_type"], "report")
+                self.assertEqual(body["resource_ids"], ["22222222-2222-4222-8222-222222222222"])
                 return subprocess.CompletedProcess(["curl"], 0, '{"id":"33333333-3333-4333-8333-333333333333"}\n201', "")
-            self.assertEqual(path, "/api/v1/tags/33333333-3333-4333-8333-333333333333/resources")
-            body = json.loads(kwargs["body"])
-            self.assertEqual(body["resource_ids"], ["22222222-2222-4222-8222-222222222222"])
-            return subprocess.CompletedProcess(["curl"], 0, '{"id":"33333333-3333-4333-8333-333333333333"}\n200', "")
+            self.fail(f"unexpected direct native API path: {path}")
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -6071,7 +6069,6 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_native_tags_from_csv_resolves_resources_skips_existing_and_creates_tags(self):
         captured_paths: list[str] = []
         created_bodies: list[dict[str, object]] = []
-        resource_bodies: list[dict[str, object]] = []
 
         def query_value(path: str, name: str) -> str:
             parsed = turbovasctl.urllib.parse.urlsplit(path)
@@ -6092,9 +6089,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 body = json.loads(kwargs["body"])
                 created_bodies.append(body)
                 return subprocess.CompletedProcess(["curl"], 0, '{"id":"33333333-3333-4333-8333-333333333333"}\n201', "")
-            self.assertEqual(path, "/api/v1/tags/33333333-3333-4333-8333-333333333333/resources")
-            resource_bodies.append(json.loads(kwargs["body"]))
-            return subprocess.CompletedProcess(["curl"], 0, '{"id":"33333333-3333-4333-8333-333333333333"}\n200', "")
+            self.fail(f"unexpected direct native API path: {path}")
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -6116,7 +6111,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["assigned_resource_count"], 1)
         self.assertEqual(result["details"]["skipped_existing_tag_count"], 2)
         self.assertEqual(created_bodies[0]["name"], "Owner:Prod:TASK")
-        self.assertEqual(resource_bodies[0]["resource_ids"], ["22222222-2222-4222-8222-222222222222"])
+        self.assertEqual(created_bodies[0]["resource_ids"], ["22222222-2222-4222-8222-222222222222"])
         self.assertIn("/api/v1/tags", captured_paths)
 
     def test_native_tags_from_csv_exact_lookup_pages_until_match(self):
@@ -6324,10 +6319,11 @@ class TurboVASCtlTests(unittest.TestCase):
         write_bucket = next(bucket for bucket in details["buckets"] if bucket["name"] == "write_or_mutation")
         self.assertGreater(write_bucket["count"], 0)
         self.assertIn("reason", write_bucket)
-        self.assertIn("components/gvm-tools/scripts/create-tags-from-csv.gmp.py", write_bucket["paths"])
+        self.assertNotIn("components/gvm-tools/scripts/create-tags-from-csv.gmp.py", write_bucket["paths"])
+        self.assertIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_bucket["paths"])
         self.assertIn(
-            "CSV tag behavior is characterized",
-            write_bucket["path_blockers"]["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"],
+            "CSV bulk-task behavior is characterized",
+            write_bucket["path_blockers"]["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"],
         )
         self.assertNotIn("items", details)
         self.assertNotIn("implemented_native_endpoints", details)
@@ -6482,7 +6478,6 @@ class TurboVASCtlTests(unittest.TestCase):
             [
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/verify-scanners.gmp.py",
-                "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
                 "components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/unclassified.gmp.py",
@@ -6490,15 +6485,11 @@ class TurboVASCtlTests(unittest.TestCase):
         )
 
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], 6)
+        self.assertEqual(review["blocked_or_review_count"], 5)
         buckets = review["buckets"]
         self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
         self.assertEqual(buckets["scanner_or_task_control"]["count"], 1)
-        self.assertEqual(buckets["write_or_mutation"]["count"], 3)
-        self.assertIn(
-            "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
-            buckets["write_or_mutation"]["path_blockers"],
-        )
+        self.assertEqual(buckets["write_or_mutation"]["count"], 2)
         self.assertEqual(buckets["needs_review"]["count"], 1)
 
     def test_native_tooling_removal_review_documents_known_blocker_paths(self):
@@ -6516,7 +6507,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-schedules-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
-                "components/gvm-tools/scripts/create-tags-from-csv.gmp.py",
                 "components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
@@ -6548,9 +6538,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
         self.assertIn("CSV schedule creation", write_blockers["components/gvm-tools/scripts/create-schedules-from-csv.gmp.py"])
         self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
-        self.assertIn("native-tags-from-csv covers", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
-        self.assertIn("resource_filter=~tagName", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
-        self.assertIn("without explicit resource columns", write_blockers["components/gvm-tools/scripts/create-tags-from-csv.gmp.py"])
         self.assertIn("filter-based override deletion", write_blockers["components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py"])
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])

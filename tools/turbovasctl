@@ -398,7 +398,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "cfg-gen-for-certs.gmp.py",
         "create-alerts-from-csv.gmp.py",
         "create-schedules-from-csv.gmp.py",
-        "create-tags-from-csv.gmp.py",
         "create-tasks-from-csv.gmp.py",
         "delete-overrides-by-filter.gmp.py",
         "empty-trash.gmp.py",
@@ -423,7 +422,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
-    "create-tags-from-csv.gmp.py": "Inherited CSV tag behavior is characterized; native-tags-from-csv covers the native-safe Alert/Config/Credential/Report/Scanner/Schedule/Target/Task exact resource-name subset, but inherited REPORT rows without explicit resource columns use GMP resource_filter=~tagName semantics and remain inherited.",
     "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "delete-overrides-by-filter.gmp.py": "Inherited filter-based override deletion is characterized; native tooling still lacks an explicit destructive override-delete contract, authorization rule, and pacing/error semantics.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
@@ -17577,14 +17575,17 @@ def native_tag_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def native_tag_csv_tag_body(row: NativeTagCsvRow, *, timestamp: str) -> dict[str, Any]:
-    return {
+def native_tag_csv_tag_body(row: NativeTagCsvRow, *, timestamp: str, resource_ids: Sequence[str] = ()) -> dict[str, Any]:
+    payload = {
         "name": row.tag_name,
         "comment": f"Created: {timestamp}",
         "value": row.tag_value,
         "resource_type": row.resource_type,
         "active": True,
     }
+    if resource_ids:
+        payload["resource_ids"] = list(resource_ids)
+    return payload
 
 
 def native_tag_csv_exact_items(parsed: dict[str, Any] | None, value: str) -> list[dict[str, Any]]:
@@ -17747,7 +17748,7 @@ def command_native_tags_from_csv(
     assigned_resource_count = 0
     create_failures: list[dict[str, Any]] = []
     for row, resource_ids in rows_to_create:
-        tag_body = json.dumps(native_tag_csv_tag_body(row, timestamp=timestamp), separators=(",", ":"))
+        tag_body = json.dumps(native_tag_csv_tag_body(row, timestamp=timestamp, resource_ids=resource_ids), separators=(",", ":"))
         tag_create = direct_native_api_curl(repo_root, "/api/v1/tags", token=token, env=env, method="POST", body=tag_body, extra_headers=content_type)
         tag_create_json, tag_create_status = parse_json_output_with_http_status(tag_create)
         tag_id = tag_create_json.get("id") if isinstance(tag_create_json, dict) and isinstance(tag_create_json.get("id"), str) else None
@@ -17755,20 +17756,13 @@ def command_native_tags_from_csv(
             create_failures.append({"row": row.row_number, "tag": row.tag_name, "stage": "create", "http_status": tag_create_status, **summarize_native_api_response(tag_create_json)})
             break
         created_tag_ids.append(tag_id)
-        if resource_ids:
-            resource_body = json.dumps({"action": "add", "resource_ids": resource_ids}, separators=(",", ":"))
-            resource_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=resource_body, extra_headers=content_type)
-            resource_add_json, resource_add_status = parse_json_output_with_http_status(resource_add)
-            if resource_add.returncode != 0 or resource_add_status != 200:
-                create_failures.append({"row": row.row_number, "tag": row.tag_name, "tag_id": tag_id, "stage": "resource-add", "http_status": resource_add_status, **summarize_native_api_response(resource_add_json)})
-                break
-            assigned_resource_count += len(resource_ids)
+        assigned_resource_count += len(resource_ids)
     details["created_tag_ids"] = created_tag_ids
     details["created_tag_count"] = len(created_tag_ids)
     details["assigned_resource_count"] = assigned_resource_count
     if create_failures:
         details["create_failures"] = create_failures
-        findings.append(finding("fail", "native-tags-from-csv.tag-create", "One or more native tag create/resource requests failed.", details={"failure_count": len(create_failures), "failures": create_failures[:10]}))
+        findings.append(finding("fail", "native-tags-from-csv.tag-create", "One or more native tag create requests failed.", details={"failure_count": len(create_failures), "failures": create_failures[:10]}))
     else:
         findings.append(finding("pass", "native-tags-from-csv.tag-create", f"Created {len(created_tag_ids)} tag(s) and assigned {assigned_resource_count} resource(s) through the native API."))
 

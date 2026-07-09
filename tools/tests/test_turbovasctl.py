@@ -2360,9 +2360,12 @@ class TurboVASCtlTests(unittest.TestCase):
                 "browser_delete_proxy_requires_design",
                 "browser_delete_proxy_design_count",
                 "missing_gsad_proxy_allowlist_count",
+                "missing_gsad_proxy_write_allowlist_count",
                 "unexpected_gsad_proxy_allowlist_count",
+                "unexpected_gsad_proxy_write_allowlist_count",
                 "internal_only_gsad_proxy_allowlist_count",
                 "parse_error_count",
+                "write_parse_error_count",
                 "method_parse_error_count",
             },
         )
@@ -3097,6 +3100,12 @@ class TurboVASCtlTests(unittest.TestCase):
                 "direct_access": "direct_write_control",
             },
             {
+                "endpoint": "/api/v1/report-formats/{report_format_id}",
+                "method": "patch",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+            },
+            {
                 "endpoint": "/api/v1/scan-configs",
                 "method": "post",
                 "status": "implemented_internal_and_browser_proxied",
@@ -3165,6 +3174,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 "static gboolean\n"
                 "native_api_path_is_allowed (const gchar *path)\n"
                 "{\n"
+                "  const gchar *report_format_prefix = \"/api/v1/report-formats/\";\n"
+                "  if (g_str_has_prefix (path, report_format_prefix))\n"
+                "    return TRUE;\n"
                 "  return FALSE;\n"
                 "}\n"
                 "static gboolean\n"
@@ -3179,6 +3191,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  const gchar *filter_prefix = \"/api/v1/filters/\";\n"
                 "  const gchar *port_list_prefix = \"/api/v1/port-lists/\";\n"
                 "  const gchar *report_config_prefix = \"/api/v1/report-configs/\";\n"
+                "  const gchar *report_format_prefix = \"/api/v1/report-formats/\";\n"
                 "  const gchar *scan_config_prefix = \"/api/v1/scan-configs/\";\n"
                 "  const gchar *scanner_prefix = \"/api/v1/scanners/\";\n"
                 "  const gchar *schedule_prefix = \"/api/v1/schedules/\";\n"
@@ -3204,6 +3217,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, report_config_prefix))\n"
                 "    return TRUE;\n"
+                "  if (g_str_has_prefix (path, report_format_prefix))\n"
+                "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, scan_config_prefix))\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, scanner_prefix))\n"
@@ -3228,6 +3243,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  const gchar *filter_prefix = \"/api/v1/filters/\";\n"
                 "  const gchar *port_list_prefix = \"/api/v1/port-lists/\";\n"
                 "  const gchar *report_config_prefix = \"/api/v1/report-configs/\";\n"
+                "  const gchar *report_format_prefix = \"/api/v1/report-formats/\";\n"
                 "  const gchar *scan_config_prefix = \"/api/v1/scan-configs/\";\n"
                 "  const gchar *scanner_prefix = \"/api/v1/scanners/\";\n"
                 "  const gchar *schedule_prefix = \"/api/v1/schedules/\";\n"
@@ -3238,6 +3254,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "  if (g_str_has_prefix (path, port_list_prefix))\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, report_config_prefix))\n"
+                "    return TRUE;\n"
+                "  if (g_str_has_prefix (path, report_format_prefix))\n"
                 "    return TRUE;\n"
                 "  if (g_str_has_prefix (path, scan_config_prefix))\n"
                 "    return TRUE;\n"
@@ -3264,8 +3282,59 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(summary["alignment_status"], "pass")
         self.assertEqual(summary["gsad_proxy_methods"], ["GET", "PATCH", "POST"])
-        self.assertEqual(summary["browser_write_proxy_operations"], ["PATCH /api/v1/filters/{filter_id}", "PATCH /api/v1/port-lists/{port_list_id}", "PATCH /api/v1/report-configs/{report_config_id}", "PATCH /api/v1/scan-configs/{scan_config_id}", "PATCH /api/v1/scanners/{scanner_id}", "PATCH /api/v1/schedules/{schedule_id}", "PATCH /api/v1/tags/{tag_id}", "PATCH /api/v1/targets/{target_id}", "POST /api/v1/filters", "POST /api/v1/filters/{filter_id}/clone", "POST /api/v1/port-list-imports", "POST /api/v1/port-lists", "POST /api/v1/port-lists/{port_list_id}/clone", "POST /api/v1/report-configs", "POST /api/v1/report-configs/{report_config_id}/clone", "POST /api/v1/scan-configs", "POST /api/v1/scan-configs/{scan_config_id}/clone", "POST /api/v1/schedules/{schedule_id}/clone", "POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/clone", "POST /api/v1/tags/{tag_id}/resources", "POST /api/v1/targets/{target_id}/clone"])
+        self.assertEqual(summary["browser_write_proxy_operations"], ["PATCH /api/v1/filters/{filter_id}", "PATCH /api/v1/port-lists/{port_list_id}", "PATCH /api/v1/report-configs/{report_config_id}", "PATCH /api/v1/report-formats/{report_format_id}", "PATCH /api/v1/scan-configs/{scan_config_id}", "PATCH /api/v1/scanners/{scanner_id}", "PATCH /api/v1/schedules/{schedule_id}", "PATCH /api/v1/tags/{tag_id}", "PATCH /api/v1/targets/{target_id}", "POST /api/v1/filters", "POST /api/v1/filters/{filter_id}/clone", "POST /api/v1/port-list-imports", "POST /api/v1/port-lists", "POST /api/v1/port-lists/{port_list_id}/clone", "POST /api/v1/report-configs", "POST /api/v1/report-configs/{report_config_id}/clone", "POST /api/v1/scan-configs", "POST /api/v1/scan-configs/{scan_config_id}/clone", "POST /api/v1/schedules/{schedule_id}/clone", "POST /api/v1/tags", "POST /api/v1/tags/{tag_id}/clone", "POST /api/v1/tags/{tag_id}/resources", "POST /api/v1/targets/{target_id}/clone"])
         self.assertEqual(summary["missing_gsad_proxy_allowlist"], [])
+        self.assertEqual(summary["missing_gsad_proxy_write_allowlist"], [])
+
+    def test_browser_proxy_contract_reports_method_specific_write_allowlist_gap(self):
+        endpoints = [
+            {
+                "endpoint": "/api/v1/report-formats/{report_format_id}",
+                "method": "get",
+                "status": "implemented_internal_and_browser_proxied",
+            },
+            {
+                "endpoint": "/api/v1/report-formats/{report_format_id}",
+                "method": "patch",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            proxy_source = root / "components" / "gsad" / "src" / "gsad_native_api.c"
+            proxy_source.parent.mkdir(parents=True)
+            proxy_source.write_text(
+                "static gboolean\n"
+                "native_api_path_is_allowed (const gchar *path)\n"
+                "{\n"
+                "  const gchar *report_format_prefix = \"/api/v1/report-formats/\";\n"
+                "  if (g_str_has_prefix (path, report_format_prefix))\n"
+                "    return TRUE;\n"
+                "  return FALSE;\n"
+                "}\n"
+                "static gboolean\n"
+                "native_api_patch_path_is_allowed (const gchar *path)\n"
+                "{\n"
+                "  return FALSE;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            request_source = root / "components" / "gsad" / "src" / "gsad_http_handle_request.c"
+            request_source.write_text(
+                'gsad_http_url_handler_new ("^/api/v1/.+$",\n'
+                "  gsad_http_method_handler_new_with_patch_handler (native_api_get_handler, native_api_post_handler, native_api_patch_handler));\n",
+                encoding="utf-8",
+            )
+
+            summary = turbovasctl.native_api_browser_proxy_contract_summary(root, endpoints)
+
+        self.assertEqual(summary["alignment_status"], "warn")
+        self.assertEqual(summary["missing_gsad_proxy_allowlist"], [])
+        self.assertEqual(
+            summary["missing_gsad_proxy_write_allowlist"],
+            ["PATCH /api/v1/report-formats/{report_format_id}"],
+        )
 
     def test_native_tooling_state_reports_direct_api_contract_drift(self):
         endpoints = [

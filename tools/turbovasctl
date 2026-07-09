@@ -5566,6 +5566,11 @@ def normalize_native_api_endpoint_template(endpoint: str) -> str:
     return NATIVE_API_TEMPLATE_PLACEHOLDER.sub("{}", endpoint)
 
 
+def normalize_native_api_operation_template(operation: str) -> str:
+    method, _, endpoint = operation.partition(" ")
+    return f"{method.upper()} {normalize_native_api_endpoint_template(endpoint)}" if endpoint else operation.upper()
+
+
 def native_api_direct_access(endpoint: str) -> str:
     normalized = normalize_native_api_endpoint_template(endpoint)
     if normalized in DIRECT_API_SCRIPTABLE_ENDPOINTS:
@@ -7156,7 +7161,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
         patch_constants = c_string_constants(patch_function_body)
-        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "report_format_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
@@ -7192,6 +7197,111 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             templates.add(f"{port_list_prefix.rstrip('/')}/{{}}/ranges/{{}}")
 
     return sorted(templates), errors
+
+
+def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> tuple[list[str], list[str]]:
+    if repo_root is None:
+        return [], []
+    relative_path = "components/gsad/src/gsad_native_api.c"
+    try:
+        source = (repo_root / relative_path).read_text(encoding="utf-8")
+    except OSError:
+        return [], [f"missing_source:{relative_path}"]
+
+    operations: set[str] = set()
+    errors: list[str] = []
+
+    post_function_body = c_source_function_body(source, "native_api_post_path_is_allowed")
+    if post_function_body:
+        post_constants = c_string_constants(post_function_body)
+        for match in re.finditer(
+            r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
+            post_function_body,
+            re.DOTALL,
+        ):
+            variable = match.group(1)
+            value = post_constants.get(variable)
+            if value and value.startswith("/api/v1"):
+                operations.add(f"POST {value}")
+            else:
+                errors.append(f"unresolved_post_exact_path:{variable}")
+
+        clone_suffix = post_constants.get("clone_suffix")
+        restore_suffix = post_constants.get("restore_suffix")
+        resources_suffix = post_constants.get("resources_suffix")
+        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+            prefix = post_constants.get(prefix_variable)
+            if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+                operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
+            if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+                operations.add(f"POST {prefix.rstrip('/')}/{{}}{restore_suffix}")
+        tag_prefix = post_constants.get("tag_prefix")
+        if (
+            tag_prefix
+            and resources_suffix
+            and "g_str_has_prefix (path, tag_prefix)" in post_function_body
+            and "g_str_has_suffix (id, resources_suffix)" in post_function_body
+        ):
+            operations.add(f"POST {tag_prefix.rstrip('/')}/{{}}{resources_suffix}")
+
+    patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
+    if patch_function_body:
+        patch_constants = c_string_constants(patch_function_body)
+        for prefix_variable in (
+            "alert_prefix",
+            "credential_prefix",
+            "filter_prefix",
+            "host_prefix",
+            "port_list_prefix",
+            "report_config_prefix",
+            "report_format_prefix",
+            "scan_config_prefix",
+            "scanner_prefix",
+            "schedule_prefix",
+            "scope_prefix",
+            "tag_prefix",
+            "target_prefix",
+            "task_prefix",
+        ):
+            prefix = patch_constants.get(prefix_variable)
+            if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
+                operations.add(f"PATCH {prefix.rstrip('/')}/{{}}")
+
+    delete_function_body = c_source_function_body(source, "native_api_delete_path_is_allowed")
+    if delete_function_body:
+        delete_constants = c_string_constants(delete_function_body)
+        trash_suffix = delete_constants.get("trash_suffix")
+        for prefix_variable in (
+            "alert_prefix",
+            "filter_prefix",
+            "host_prefix",
+            "host_identifier_prefix",
+            "host_operating_system_prefix",
+            "port_list_prefix",
+            "report_config_prefix",
+            "scan_config_prefix",
+            "schedule_prefix",
+            "scope_prefix",
+            "scope_report_prefix",
+            "tag_prefix",
+            "target_prefix",
+            "task_prefix",
+            "tls_certificate_prefix",
+        ):
+            prefix = delete_constants.get(prefix_variable)
+            if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
+                operations.add(f"DELETE {prefix.rstrip('/')}/{{}}")
+                if prefix_variable not in {"alert_prefix", "host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
+                    operations.add(f"DELETE {prefix.rstrip('/')}/{{}}{trash_suffix}")
+        port_list_prefix = delete_constants.get("port_list_prefix")
+        if (
+            port_list_prefix
+            and "is_uuid_segment_pair_with_middle" in delete_function_body
+            and '"/ranges/"' in delete_function_body
+        ):
+            operations.add(f"DELETE {port_list_prefix.rstrip('/')}/{{}}/ranges/{{}}")
+
+    return sorted(operations), errors
 
 
 def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], list[str]]:
@@ -7269,18 +7379,23 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         and operation["x_turbovas_values"].get("x-turbovas-exposure") == "internal-only"
     )
     gsad_allowed, parse_errors = native_api_gsad_proxy_allowlist_templates(repo_root)
+    gsad_write_allowed, write_parse_errors = native_api_gsad_proxy_write_allowlist_operations(repo_root)
     gsad_methods, method_errors = native_api_gsad_proxy_methods(repo_root)
 
     browser_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in browser_proxied}
     internal_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_internal_only}
     internal_by_normalized.update({normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in internal_only})
     gsad_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in gsad_allowed}
+    browser_write_by_normalized = {normalize_native_api_operation_template(operation): operation for operation in browser_write_proxied}
+    gsad_write_by_normalized = {normalize_native_api_operation_template(operation): operation for operation in gsad_write_allowed}
 
     missing_gsad = [browser_by_normalized[key] for key in sorted(set(browser_by_normalized) - set(gsad_by_normalized))]
+    missing_gsad_write = [browser_write_by_normalized[key] for key in sorted(set(browser_write_by_normalized) - set(gsad_write_by_normalized))]
+    unexpected_gsad_write = [gsad_write_by_normalized[key] for key in sorted(set(gsad_write_by_normalized) - set(browser_write_by_normalized))]
     internal_only_in_gsad = [internal_by_normalized[key] for key in sorted(set(internal_by_normalized) & set(gsad_by_normalized))]
     unexpected_gsad = [gsad_by_normalized[key] for key in sorted(set(gsad_by_normalized) - set(browser_by_normalized) - set(internal_by_normalized))]
     write_boundary_drift = method_errors or (browser_write_proxied and gsad_methods == ["GET"])
-    drift = parse_errors or missing_gsad or unexpected_gsad or internal_only_in_gsad or write_boundary_drift
+    drift = parse_errors or write_parse_errors or missing_gsad or missing_gsad_write or unexpected_gsad or unexpected_gsad_write or internal_only_in_gsad or write_boundary_drift
     return {
         "alignment_status": "pass" if not drift else "warn",
         "browser_proxied_count": len(browser_proxied),
@@ -7291,6 +7406,8 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         "gsad_proxy_allowlist_count": len(gsad_allowed),
         "gsad_proxy_methods": gsad_methods,
         "gsad_proxy_method_parse_errors": method_errors,
+        "gsad_proxy_write_allowlist_operations": gsad_write_allowed,
+        "gsad_proxy_write_parse_errors": write_parse_errors,
         "write_proxy_boundary_status": "pass" if not write_boundary_drift else "warn",
         "write_proxy_requires_design": bool(direct_write_control and gsad_methods == ["GET"]),
         "browser_delete_proxy_requires_design": bool(browser_delete_proxy_design),
@@ -7302,7 +7419,9 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         "openapi_internal_only_endpoints": openapi_internal_only,
         "gsad_proxy_allowlist_endpoints": gsad_allowed,
         "missing_gsad_proxy_allowlist": missing_gsad,
+        "missing_gsad_proxy_write_allowlist": missing_gsad_write,
         "unexpected_gsad_proxy_allowlist": unexpected_gsad,
+        "unexpected_gsad_proxy_write_allowlist": unexpected_gsad_write,
         "internal_only_gsad_proxy_allowlist": internal_only_in_gsad,
         "parse_errors": parse_errors,
     }
@@ -8563,9 +8682,12 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "browser_delete_proxy_requires_design": browser_proxy_contract.get("browser_delete_proxy_requires_design", False) if isinstance(browser_proxy_contract, dict) else False,
         "browser_delete_proxy_design_count": len(browser_proxy_contract.get("browser_delete_proxy_design_operations", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "missing_gsad_proxy_allowlist_count": len(browser_proxy_contract.get("missing_gsad_proxy_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
+        "missing_gsad_proxy_write_allowlist_count": len(browser_proxy_contract.get("missing_gsad_proxy_write_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "unexpected_gsad_proxy_allowlist_count": len(browser_proxy_contract.get("unexpected_gsad_proxy_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
+        "unexpected_gsad_proxy_write_allowlist_count": len(browser_proxy_contract.get("unexpected_gsad_proxy_write_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "internal_only_gsad_proxy_allowlist_count": len(browser_proxy_contract.get("internal_only_gsad_proxy_allowlist", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "parse_error_count": len(browser_proxy_contract.get("parse_errors", [])) if isinstance(browser_proxy_contract, dict) else 0,
+        "write_parse_error_count": len(browser_proxy_contract.get("gsad_proxy_write_parse_errors", [])) if isinstance(browser_proxy_contract, dict) else 0,
         "method_parse_error_count": len(browser_proxy_contract.get("gsad_proxy_method_parse_errors", [])) if isinstance(browser_proxy_contract, dict) else 0,
     }
     openapi_contract = summary.get("openapi_contract", {})
@@ -8710,9 +8832,12 @@ def native_tooling_status_only_details(summary: dict[str, Any]) -> dict[str, Any
             "browser_delete_proxy_requires_design": browser_proxy_contract.get("browser_delete_proxy_requires_design", False),
             "browser_delete_proxy_design_count": browser_proxy_contract.get("browser_delete_proxy_design_count", 0),
             "missing_gsad_proxy_allowlist_count": browser_proxy_contract.get("missing_gsad_proxy_allowlist_count", 0),
+            "missing_gsad_proxy_write_allowlist_count": browser_proxy_contract.get("missing_gsad_proxy_write_allowlist_count", 0),
             "unexpected_gsad_proxy_allowlist_count": browser_proxy_contract.get("unexpected_gsad_proxy_allowlist_count", 0),
+            "unexpected_gsad_proxy_write_allowlist_count": browser_proxy_contract.get("unexpected_gsad_proxy_write_allowlist_count", 0),
             "internal_only_gsad_proxy_allowlist_count": browser_proxy_contract.get("internal_only_gsad_proxy_allowlist_count", 0),
             "parse_error_count": browser_proxy_contract.get("parse_error_count", 0),
+            "write_parse_error_count": browser_proxy_contract.get("write_parse_error_count", 0),
             "method_parse_error_count": browser_proxy_contract.get("method_parse_error_count", 0),
         },
         "openapi_contract": {

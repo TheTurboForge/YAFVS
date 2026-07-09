@@ -5280,7 +5280,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-list-read
       summary: List scan tasks
-      description: Native direct API exposes task reads, metadata-only task updates, metadata export, and safe non-running live-task trash moves. Start, stop, clone, hard-delete, file export, resume, target/config/schedule/scanner changes, preferences, alerts, and scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
+      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references, metadata-only task updates, metadata export, and safe non-running live-task trash moves. Start, stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation, preferences, alerts, and scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -5310,6 +5310,50 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postTasks
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: task-create-with-target-config-scanner
+      x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Create a scan task
+      description: Direct write-control endpoint for creating a new operator-owned scan task from explicit target, scan config, and scanner references. The endpoint writes task metadata and inherited default task preferences only; it does not start scans, attach alerts or schedules, mutate preferences beyond inherited defaults, import files, or perform scanner lifecycle control.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /tasks/{task_id}:
     get:
       operationId: getTasksByTaskId
@@ -5318,7 +5362,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-detail-summary-read
       summary: Read one scan task summary
-      description: Native direct API exposes task summary reads, metadata-only task updates, and safe non-running live-task trash moves. Start/stop lifecycle control, clone, hard-delete, inherited file-export formats, target/config/schedule/scanner mutation, alerts, and preferences remain inherited until native scanner-control and full task-mutation contracts define report creation, scanner side effects, task/report status transitions, audit behavior, and failure mapping.
+      description: Native direct API exposes task summary reads, bounded task creation, metadata-only task updates, and safe non-running live-task trash moves. Start/stop lifecycle control, clone, hard-delete, inherited file-export formats, broad target/config/schedule/scanner mutation, alerts, and preferences remain inherited until native scanner-control and full task-mutation contracts define report creation, scanner side effects, task/report status transitions, audit behavior, and failure mapping.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -6591,6 +6635,31 @@ components:
           type: string
           maxLength: 4096
           description: Optional clone comment. If omitted, the source target comment is copied.
+    TaskCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, target_id, config_id, scanner_id]
+      properties:
+        name:
+          type: string
+          maxLength: 4096
+          description: Task name. Blank names are rejected after trimming.
+        comment:
+          type: string
+          maxLength: 4096
+          description: Optional task comment. Blank comments are stored as empty comments after trimming.
+        target_id:
+          type: string
+          format: uuid
+          description: Operator-owned target to scan.
+        config_id:
+          type: string
+          format: uuid
+          description: Operator-owned or predefined scan config.
+        scanner_id:
+          type: string
+          format: uuid
+          description: Operator-owned or built-in scanner capable of running scan tasks.
     TaskPatchRequest:
       type: object
       additionalProperties: false

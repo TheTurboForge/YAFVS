@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use crate::errors::ApiError;
+use crate::{errors::ApiError, path_ids::parse_uuid};
 
 pub(crate) const MAX_TASK_TEXT_BYTES: usize = 4096;
 
@@ -17,10 +17,42 @@ pub(crate) struct TaskPatchRequest {
     pub(crate) comment: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TaskCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) target_id: String,
+    pub(crate) config_id: String,
+    pub(crate) scanner_id: String,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedTaskPatch {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedTaskCreate {
+    pub(crate) name: String,
+    pub(crate) comment: Option<String>,
+    pub(crate) target_id: String,
+    pub(crate) config_id: String,
+    pub(crate) scanner_id: String,
+}
+
+pub(crate) fn validate_task_create_request(
+    request: TaskCreateRequest,
+) -> Result<ValidatedTaskCreate, ApiError> {
+    Ok(ValidatedTaskCreate {
+        name: normalize_required_task_text(request.name, "name")?,
+        comment: normalize_optional_task_text(request.comment, "comment")?,
+        target_id: normalize_task_uuid(request.target_id, "target_id")?,
+        config_id: normalize_task_uuid(request.config_id, "config_id")?,
+        scanner_id: normalize_task_uuid(request.scanner_id, "scanner_id")?,
+    })
 }
 
 pub(crate) fn validate_task_patch_request(
@@ -73,4 +105,10 @@ fn normalize_task_text_value(value: String, field_name: &str) -> Result<String, 
         )));
     }
     Ok(value)
+}
+
+fn normalize_task_uuid(value: String, field_name: &str) -> Result<String, ApiError> {
+    parse_uuid(value.trim())
+        .map(|uuid| uuid.to_string())
+        .map_err(|_| ApiError::BadRequest(format!("{field_name} must be a UUID")))
 }

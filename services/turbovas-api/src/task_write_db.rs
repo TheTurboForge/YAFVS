@@ -13,10 +13,21 @@ pub(crate) struct TaskWriteRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TaskWriteRecordWithInternalId {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TaskWriteState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: i32,
     pub(crate) run_status: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AssignableTaskResource {
+    pub(crate) internal_id: i32,
 }
 
 pub(crate) fn require_task_write_operator(
@@ -27,6 +38,105 @@ pub(crate) fn require_task_write_operator(
         return Err(ApiError::Forbidden);
     };
     Ok(operator)
+}
+
+pub(crate) async fn load_assignable_task_target(
+    tx: &Transaction<'_>,
+    target_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTaskResource, ApiError> {
+    let row =
+        load_task_resource_row(tx, task_assignable_target_state_sql(), target_id, "target").await?;
+    let internal_id: i32 = row.get(0);
+    let owner_id: i32 = row.get(1);
+    if owner_id == operator_owner_id {
+        Ok(AssignableTaskResource { internal_id })
+    } else {
+        tracing::warn!(
+            target_owner_id = owner_id,
+            operator_owner_id,
+            "direct API task create operator cannot assign target"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
+pub(crate) async fn load_assignable_task_config(
+    tx: &Transaction<'_>,
+    config_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTaskResource, ApiError> {
+    let row =
+        load_task_resource_row(tx, task_assignable_config_state_sql(), config_id, "config").await?;
+    let internal_id: i32 = row.get(0);
+    let owner_id: i32 = row.get(1);
+    let predefined: i32 = row.get(2);
+    if predefined != 0 || owner_id == operator_owner_id {
+        Ok(AssignableTaskResource { internal_id })
+    } else {
+        tracing::warn!(
+            config_owner_id = owner_id,
+            operator_owner_id,
+            "direct API task create operator cannot assign scan config"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
+pub(crate) async fn load_assignable_task_scanner(
+    tx: &Transaction<'_>,
+    scanner_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTaskResource, ApiError> {
+    const SCANNER_TYPE_OPENVAS: i32 = 2;
+    const SCANNER_TYPE_OSP_SENSOR: i32 = 5;
+    const SCANNER_TYPE_OPENVASD: i32 = 6;
+    const SCANNER_TYPE_OPENVASD_SENSOR: i32 = 8;
+
+    let row = load_task_resource_row(
+        tx,
+        task_assignable_scanner_state_sql(),
+        scanner_id,
+        "scanner",
+    )
+    .await?;
+    let internal_id: i32 = row.get(0);
+    let owner_id: Option<i32> = row.get(1);
+    let scanner_type: i32 = row.get(2);
+    if !matches!(
+        scanner_type,
+        SCANNER_TYPE_OPENVAS
+            | SCANNER_TYPE_OSP_SENSOR
+            | SCANNER_TYPE_OPENVASD
+            | SCANNER_TYPE_OPENVASD_SENSOR
+    ) {
+        return Err(ApiError::BadRequest(
+            "scanner_id must reference a scanner type that can run scan tasks".to_string(),
+        ));
+    }
+    if owner_id.is_none() || owner_id == Some(operator_owner_id) {
+        Ok(AssignableTaskResource { internal_id })
+    } else {
+        tracing::warn!(
+            scanner_owner_id = ?owner_id,
+            operator_owner_id,
+            "direct API task create operator cannot assign scanner"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
+async fn load_task_resource_row(
+    tx: &Transaction<'_>,
+    sql: &str,
+    resource_id: &str,
+    resource_name: &'static str,
+) -> Result<tokio_postgres::Row, ApiError> {
+    let resource_id = parse_uuid(resource_id)?.to_string();
+    tx.query_opt(sql, &[&resource_id])
+        .await
+        .map_err(|error| map_task_write_db_error(error, resource_name))?
+        .ok_or(ApiError::NotFound)
 }
 
 pub(crate) async fn resolve_task_write_operator_owner(
@@ -41,6 +151,22 @@ pub(crate) async fn resolve_task_write_operator_owner(
             tracing::warn!("direct API task write operator does not resolve to a database user");
             ApiError::Forbidden
         })
+}
+
+pub(crate) async fn query_task_write_record_with_internal_id(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<TaskWriteRecordWithInternalId, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_task_write_db_error(error, action))?
+        .map(|row| TaskWriteRecordWithInternalId {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
 }
 
 pub(crate) async fn load_task_write_state(

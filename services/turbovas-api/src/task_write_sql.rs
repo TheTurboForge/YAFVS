@@ -6,6 +6,46 @@ pub(crate) fn task_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn task_assignable_target_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer
+       FROM targets
+      WHERE uuid = $1;"
+}
+
+pub(crate) fn task_assignable_config_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer,
+            coalesce(predefined, 0)::integer
+       FROM configs
+      WHERE uuid = $1
+        AND coalesce(usage_type, 'scan') = 'scan';"
+}
+
+pub(crate) fn task_assignable_scanner_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer,
+            coalesce(type, 0)::integer
+       FROM scanners
+      WHERE uuid = $1;"
+}
+
+pub(crate) fn task_create_metadata_sql() -> &'static str {
+    "INSERT INTO tasks
+        (uuid, owner, name, hidden, comment, run_status, config, target,
+         schedule, schedule_next_time, scanner, config_location,
+         target_location, schedule_location, scanner_location, alterable,
+         creation_time, modification_time, usage_type)
+     VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5,
+             0, 0, $6, 0, 0, 0, 0, 1, m_now(), m_now(), 'scan')
+     RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn task_insert_preference_sql() -> &'static str {
+    "INSERT INTO task_preferences (task, name, value)
+     VALUES ($1, $2, $3);"
+}
+
 pub(crate) fn task_write_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer,

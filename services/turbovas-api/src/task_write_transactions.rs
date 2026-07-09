@@ -6,10 +6,53 @@ use tokio_postgres::Transaction;
 
 use crate::{
     errors::ApiError,
-    task_write_db::{TaskWriteRecord, execute_task_write_sql, query_task_write_record},
+    task_write_db::{
+        TaskWriteRecord, TaskWriteRecordWithInternalId, execute_task_write_sql,
+        query_task_write_record, query_task_write_record_with_internal_id,
+    },
     task_write_sql::*,
-    task_write_validation::ValidatedTaskPatch,
+    task_write_validation::{ValidatedTaskCreate, ValidatedTaskPatch},
 };
+
+pub(crate) async fn execute_task_create_transaction(
+    tx: &Transaction<'_>,
+    owner_id: i32,
+    target_internal_id: i32,
+    config_internal_id: i32,
+    scanner_internal_id: i32,
+    request: &ValidatedTaskCreate,
+) -> Result<TaskWriteRecordWithInternalId, ApiError> {
+    let record = query_task_write_record_with_internal_id(
+        tx,
+        task_create_metadata_sql(),
+        &[
+            &owner_id,
+            &request.name,
+            &request.comment,
+            &config_internal_id,
+            &target_internal_id,
+            &scanner_internal_id,
+        ],
+        "create task metadata",
+    )
+    .await?;
+    for (name, value) in [
+        ("in_assets", "yes"),
+        ("assets_apply_overrides", "yes"),
+        ("assets_min_qod", "70"),
+        ("auto_delete", "keep"),
+        ("auto_delete_data", "10"),
+    ] {
+        execute_task_write_sql(
+            tx,
+            task_insert_preference_sql(),
+            &[&record.internal_id, &name, &value],
+            "create task default preference",
+        )
+        .await?;
+    }
+    Ok(record)
+}
 
 pub(crate) async fn execute_task_patch_transaction(
     tx: &Transaction<'_>,

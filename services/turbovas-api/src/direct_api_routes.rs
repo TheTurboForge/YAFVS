@@ -47,7 +47,7 @@ use crate::{
         clone_target, create_target, delete_target, hard_delete_target, patch_target,
         restore_target,
     },
-    task_writes::{delete_task, patch_task},
+    task_writes::{create_task, delete_task, patch_task},
     tls_certificate_writes::delete_tls_certificate,
 };
 
@@ -147,6 +147,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/targets/:target_id/trash",
                 delete(hard_delete_target),
             )
+            .route("/api/v1/tasks", post(create_task))
             .route("/api/v1/tasks/:task_id", patch(patch_task))
             .route("/api/v1/tasks/:task_id", delete(delete_task))
             .route(

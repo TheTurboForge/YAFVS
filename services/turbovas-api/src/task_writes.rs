@@ -5,7 +5,7 @@
 use axum::{
     Json,
     extract::{Extension, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
 };
 
 use crate::{
@@ -15,9 +15,57 @@ use crate::{
     task_handlers::load_task_detail,
     task_target_payloads::TaskItem,
     task_write_db::*,
-    task_write_transactions::{execute_task_patch_transaction, execute_task_trash_transaction},
-    task_write_validation::{TaskPatchRequest, validate_task_patch_request},
+    task_write_transactions::{
+        execute_task_create_transaction, execute_task_patch_transaction,
+        execute_task_trash_transaction,
+    },
+    task_write_validation::{
+        TaskCreateRequest, TaskPatchRequest, validate_task_create_request,
+        validate_task_patch_request,
+    },
 };
+
+pub(crate) async fn create_task(
+    State(state): State<AppState>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<TaskCreateRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<TaskItem>), ApiError> {
+    let operator = require_task_write_operator(operator)?;
+    let request = validate_task_create_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_task_write_db_error(error, "begin create task transaction"))?;
+    let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE tasks, task_preferences, targets, configs, scanners IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_task_write_db_error(error, "lock task create tables"))?;
+    ensure_unique_task_name(&tx, &request.name, -1, operator_owner_id).await?;
+    let target = load_assignable_task_target(&tx, &request.target_id, operator_owner_id).await?;
+    let config = load_assignable_task_config(&tx, &request.config_id, operator_owner_id).await?;
+    let scanner = load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?;
+    let record = execute_task_create_transaction(
+        &tx,
+        operator_owner_id,
+        target.internal_id,
+        config.internal_id,
+        scanner.internal_id,
+        &request,
+    )
+    .await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_task_write_db_error(error, "commit create task transaction"))?;
+
+    Ok((
+        StatusCode::CREATED,
+        task_write_location_headers(&record.uuid)?,
+        Json(load_task_detail(&client, &record.uuid).await?),
+    ))
+}
 
 pub(crate) async fn patch_task(
     State(state): State<AppState>,
@@ -75,4 +123,12 @@ pub(crate) async fn delete_task(
         .map_err(|error| map_task_write_db_error(error, "commit delete task transaction"))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn task_write_location_headers(task_id: &str) -> Result<HeaderMap, ApiError> {
+    let mut headers = HeaderMap::new();
+    let location =
+        HeaderValue::from_str(&format!("/api/v1/tasks/{task_id}")).map_err(|_| ApiError::Config)?;
+    headers.insert(header::LOCATION, location);
+    Ok(headers)
 }

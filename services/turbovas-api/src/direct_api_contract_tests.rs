@@ -206,6 +206,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/tasks",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/tasks/:task_id",
         safety_contract: "write-control-v1",

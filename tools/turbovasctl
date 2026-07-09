@@ -661,6 +661,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "target-metadata-simple-scan-inputs-and-credential-links-modify",
         "target-restore",
         "target-trash-move",
+        "task-create-with-target-config-scanner",
         "task-metadata-modify",
         "task-metadata-export-read",
         "task-detail-summary-read",
@@ -766,6 +767,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/targets/{target_id}/clone"): "direct-write",
     ("post", "/targets/{target_id}/restore"): "direct-write",
     ("delete", "/targets/{target_id}/trash"): "direct-write",
+    ("post", "/tasks"): "direct-write",
     ("patch", "/tasks/{task_id}"): "direct-write",
     ("delete", "/tasks/{task_id}"): "direct-write",
     ("get", "/tasks/{task_id}/export"): "direct-read",
@@ -1623,6 +1625,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/tasks"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "task-list-read",
+    },
+    ("post", "/tasks"): {
+        "x-turbovas-inherited-still-owns": "task-scan-control-writes-and-deletes",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "task-create-with-target-config-scanner",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/tasks/{task_id}"): {
         "x-turbovas-maturity": "live-read",
@@ -8495,6 +8506,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/tasks",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA task list reads (migrated through gsad same-origin proxy)", "read-only task automation", "native-api-request helper"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/tasks",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser task create with explicit target/config/scanner references", "direct native task create without scanner lifecycle start"],
+                "residual_inherited": [
+                    "Task start/stop/resume, clone, hard-delete, schedules, alerts, broad target/config/scanner mutation, preference edits, report creation, scanner side effects, and inherited file export remain inherited until separately migrated."
+                ],
             },
             {
                 "endpoint": "/api/v1/tasks/{task_id}",

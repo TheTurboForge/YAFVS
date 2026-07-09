@@ -384,7 +384,17 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
         "/api/v1/tasks/12345678-1234-1234-1234-123456789abc",
         true,
     ));
-    for method in [Method::POST, Method::PUT] {
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/tasks",
+        false,
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/tasks",
+        true,
+    ));
+    for method in [Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, "/api/v1/tasks", true),
             "{method} /api/v1/tasks must remain closed"
@@ -445,15 +455,21 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
 fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     let list = openapi_path_block("/tasks");
     assert!(list.contains("get:"));
-    assert!(!list.contains("post:"));
+    assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
+    assert!(list.contains("x-turbovas-exposure: direct-write"));
+    assert!(list.contains("x-turbovas-replaces: task-create-with-target-config-scanner"));
+    assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
+    assert!(list.contains("x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes"));
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
-    assert!(list.contains("Native direct API exposes task reads, metadata-only task updates"));
+    assert!(list.contains("bounded task creation with explicit target/config/scanner references"));
+    assert!(
+        list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
+    );
     assert!(list.contains(
-        "Start, stop, clone, hard-delete, file export, resume, target/config/schedule/scanner changes"
+        "Start, stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation"
     ));
 
     let detail = openapi_path_block("/tasks/{task_id}");

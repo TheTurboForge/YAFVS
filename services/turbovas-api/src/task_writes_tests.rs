@@ -6,14 +6,166 @@ use crate::{
     errors::ApiError,
     task_write_db::{ensure_task_not_in_use_for_native_trash, ensure_task_owner_matches_operator},
     task_write_sql::*,
-    task_write_validation::{MAX_TASK_TEXT_BYTES, TaskPatchRequest, validate_task_patch_request},
+    task_write_validation::{
+        MAX_TASK_TEXT_BYTES, TaskCreateRequest, TaskPatchRequest, validate_task_create_request,
+        validate_task_patch_request,
+    },
 };
+
+const VALID_TARGET_ID: &str = "11111111-1111-4111-8111-111111111111";
+const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
+const VALID_SCANNER_ID: &str = "33333333-3333-4333-8333-333333333333";
+
+fn create_request(name: &str) -> TaskCreateRequest {
+    TaskCreateRequest {
+        name: name.to_string(),
+        comment: Some("  comment  ".to_string()),
+        target_id: VALID_TARGET_ID.to_string(),
+        config_id: VALID_CONFIG_ID.to_string(),
+        scanner_id: VALID_SCANNER_ID.to_string(),
+    }
+}
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> TaskPatchRequest {
     TaskPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn task_create_request_trims_metadata_and_normalizes_references() {
+    let validated = validate_task_create_request(TaskCreateRequest {
+        name: "  scan task  ".to_string(),
+        ..create_request("ignored")
+    })
+    .expect("valid task create");
+    assert_eq!(validated.name, "scan task");
+    assert_eq!(validated.comment.as_deref(), Some("comment"));
+    assert_eq!(validated.target_id, VALID_TARGET_ID);
+    assert_eq!(validated.config_id, VALID_CONFIG_ID);
+    assert_eq!(validated.scanner_id, VALID_SCANNER_ID);
+}
+
+#[test]
+fn task_create_request_rejects_blank_name_invalid_ids_and_unknown_fields() {
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            name: "   ".to_string(),
+            ..create_request("ignored")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            target_id: "not-a-uuid".to_string(),
+            ..create_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+    let request = serde_json::json!({
+        "name": "Task",
+        "target_id": VALID_TARGET_ID,
+        "config_id": VALID_CONFIG_ID,
+        "scanner_id": VALID_SCANNER_ID,
+        "schedule_id": VALID_SCANNER_ID,
+    });
+    assert!(serde_json::from_value::<TaskCreateRequest>(request).is_err());
+}
+
+#[test]
+fn task_create_request_rejects_control_characters_and_oversized_text() {
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            name: "bad\nname".to_string(),
+            ..create_request("ignored")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            comment: Some("x".repeat(MAX_TASK_TEXT_BYTES + 1)),
+            ..create_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn task_create_handler_requires_operator_references_and_uniqueness_before_insert() {
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn create_task")
+        .expect("create task handler must exist")
+        .1;
+
+    for required in [
+        "let operator = require_task_write_operator(operator)?;",
+        "validate_task_create_request(request)?",
+        "resolve_task_write_operator_owner(&tx, &operator).await?",
+        "LOCK TABLE tasks, task_preferences, targets, configs, scanners",
+        "ensure_unique_task_name(&tx, &request.name, -1, operator_owner_id).await?;",
+        "load_assignable_task_target(&tx, &request.target_id, operator_owner_id).await?;",
+        "load_assignable_task_config(&tx, &request.config_id, operator_owner_id).await?;",
+        "load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?;",
+        "execute_task_create_transaction",
+        "StatusCode::CREATED",
+        "task_write_location_headers(&record.uuid)?",
+    ] {
+        assert!(
+            handler.contains(required),
+            "create task handler missing {required}"
+        );
+    }
+    assert!(
+        handler.find("load_assignable_task_scanner").unwrap()
+            < handler.find("execute_task_create_transaction").unwrap(),
+        "task create must validate assignable scanner before insert"
+    );
+}
+
+#[test]
+fn task_create_sql_writes_scan_task_metadata_and_inherited_defaults_only() {
+    let target = task_assignable_target_state_sql();
+    assert!(target.contains("FROM targets"));
+    assert!(target.contains("WHERE uuid = $1"));
+
+    let config = task_assignable_config_state_sql();
+    assert!(config.contains("FROM configs"));
+    assert!(config.contains("coalesce(predefined, 0)::integer"));
+    assert!(config.contains("coalesce(usage_type, 'scan') = 'scan'"));
+
+    let scanner = task_assignable_scanner_state_sql();
+    assert!(scanner.contains("FROM scanners"));
+    assert!(scanner.contains("coalesce(type, 0)::integer"));
+
+    let create = task_create_metadata_sql();
+    assert!(create.contains("INSERT INTO tasks"));
+    assert!(create.contains("run_status"));
+    assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5"));
+    assert!(create.contains("0, 0, $6, 0, 0, 0, 0, 1"));
+    assert!(create.contains("alterable"));
+    assert!(create.contains("RETURNING id::integer, uuid::text"));
+    for forbidden in [
+        "task_alerts",
+        "schedules",
+        "credentials",
+        "reports",
+        "results",
+        "start_time",
+        "end_time",
+        "schedule_periods",
+        "upload_result_count",
+    ] {
+        assert!(
+            !create.contains(forbidden),
+            "task create SQL must not touch {forbidden}"
+        );
+    }
+
+    let prefs = task_insert_preference_sql();
+    assert!(prefs.contains("INSERT INTO task_preferences"));
+    assert!(prefs.contains("VALUES ($1, $2, $3)"));
 }
 
 #[test]

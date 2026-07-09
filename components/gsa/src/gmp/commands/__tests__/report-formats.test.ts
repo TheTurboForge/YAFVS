@@ -216,6 +216,38 @@ describe('ReportFormatsCommand tests', () => {
     expect(result.data).toEqual({id: 'report-format-id'});
   });
 
+  test('should ignore extra dialog fields when saving report format metadata natively', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'report-format-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new ReportFormatCommand(fakeHttp);
+    await cmd.save({
+      active: false,
+      id: 'report-format-id',
+      name: 'Custom XML',
+      summary: 'Custom report format',
+      params: [{name: 'format-param'}],
+    } as never);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          active: false,
+          name: 'Custom XML',
+          summary: 'Custom report format',
+        }),
+      }),
+    );
+  });
+
   test('should export report format metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

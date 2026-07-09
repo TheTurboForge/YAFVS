@@ -59,7 +59,7 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
   async save(args: {active: boolean; id: string; name: string; summary: string}) {
     const {active, id, name, summary} = args;
 
-    if (canUseNativeApi(this.http) && isReportFormatMetadataOnlySave(args)) {
+    if (canUseNativeApi(this.http)) {
       return patchNativeReportFormat(this.http, id, {active, name, summary});
     }
 
@@ -84,8 +84,3 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
 }
 
 export default ReportFormatCommand;
-
-const isReportFormatMetadataOnlySave = (args: object): boolean =>
-  Object.keys(args).every(key =>
-    ['active', 'id', 'name', 'summary'].includes(key),
-  );

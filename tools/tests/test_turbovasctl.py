@@ -3563,7 +3563,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
          'target-file-input-task-control-and-credential-secret-workflows',
-         'task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation',
          'task-scan-control-writes-and-deletes',
          'tls-certificate-rich-history',
          'trashcan-deep-row-data-and-mutations',

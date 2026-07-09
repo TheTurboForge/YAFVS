@@ -447,9 +447,7 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains(
-        "x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation"
-    ));
+    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
@@ -466,9 +464,7 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
     assert!(detail.contains("x-turbovas-replaces: task-metadata-modify"));
     assert!(detail.contains("$ref: '#/components/schemas/TaskPatchRequest'"));
-    assert!(
-        detail.contains("x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation")
-    );
+    assert!(!detail.contains("x-turbovas-inherited-still-owns:"));
     assert!(
         detail.contains("Direct write-control endpoint for updating task name and comment only")
     );
@@ -488,7 +484,6 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: task-metadata-export-read",
-        "x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation",
         "$ref: '#/components/schemas/Task'",
         "Scanner lifecycle control, report creation",
         "inherited file-export formats remain outside this endpoint",
@@ -499,6 +494,7 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
         );
     }
     for forbidden in [
+        "x-turbovas-inherited-still-owns:",
         "x-turbovas-exposure: direct-write",
         "x-turbovas-safety-contract: write-control-v1",
         "\n    post:",

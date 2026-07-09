@@ -5293,7 +5293,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-list-read
-      x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation
       summary: List scan tasks
       description: Native direct API exposes task reads, metadata-only task updates, metadata export, and safe non-running live-task trash moves. Start, stop, clone, hard-delete, file export, resume, target/config/schedule/scanner changes, preferences, alerts, and scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
       parameters:
@@ -5332,7 +5331,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-detail-summary-read
-      x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation
       summary: Read one scan task summary
       description: Native direct API exposes task summary reads, metadata-only task updates, and safe non-running live-task trash moves. Start/stop lifecycle control, clone, hard-delete, inherited file-export formats, target/config/schedule/scanner mutation, alerts, and preferences remain inherited until native scanner-control and full task-mutation contracts define report creation, scanner side effects, task/report status transitions, audit behavior, and failure mapping.
       parameters:
@@ -5364,7 +5362,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: task-metadata-modify
-      x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5408,7 +5405,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: task-trash-move
-      x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5445,7 +5441,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-metadata-export-read
-      x-turbovas-inherited-still-owns: task-scan-control-start-stop-clone-hard-delete-file-export-and-rich-mutation
       summary: Export scan task metadata
       description: Scriptable metadata export for one task, backed by the same task summary payload. Scanner lifecycle control, report creation, task/report status transitions, target/config/schedule/scanner mutation, alerts, preferences, and inherited file-export formats remain outside this endpoint.
       parameters:

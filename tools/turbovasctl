@@ -691,9 +691,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "override-writes-exports-trash-and-result-expansion",
         "raw-report-generation-xml-export-retention-and-mutations",
         "report-format-file-import-export-verify-param-writes-and-deletes",
-        "result-tags-exports-and-actions",
         "result-actions-bulk-export-tag-and-override-workflows",
-        "result-exports-and-actions",
         "retention-mutations",
         "saved-filter-alert-linkage",
         "scanner-control-credentials-writes-and-deletes",
@@ -1456,12 +1454,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "raw-report-list-read",
     },
     ("get", "/results"): {
-        "x-turbovas-inherited-still-owns": "result-tags-exports-and-actions",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "result-list-and-effective-overrides-read",
     },
     ("get", "/results/{result_id}"): {
-        "x-turbovas-inherited-still-owns": "result-exports-and-actions",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "result-detail-metadata-tags-and-overrides-read",
     },

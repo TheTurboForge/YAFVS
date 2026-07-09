@@ -3550,8 +3550,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes',
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'result-actions-bulk-export-tag-and-override-workflows',
-         'result-exports-and-actions',
-         'result-tags-exports-and-actions',
          'retention-mutations',
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',

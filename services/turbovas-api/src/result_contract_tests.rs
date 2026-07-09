@@ -58,15 +58,11 @@ fn result_routes_are_direct_get_only_until_action_contracts_exist() {
 #[test]
 fn result_openapi_documents_read_only_boundary() {
     for (path, replaces, inherited) in [
-        (
-            "/results",
-            "result-list-and-effective-overrides-read",
-            "result-tags-exports-and-actions",
-        ),
+        ("/results", "result-list-and-effective-overrides-read", ""),
         (
             "/results/{result_id}",
             "result-detail-metadata-tags-and-overrides-read",
-            "result-exports-and-actions",
+            "",
         ),
         (
             "/results/{result_id}/export",
@@ -81,9 +77,16 @@ fn result_openapi_documents_read_only_boundary() {
             "x-turbovas-exposure: direct-read",
             "x-turbovas-maturity: live-read",
             replaces,
-            inherited,
         ] {
             assert!(block.contains(required), "{path} block missing {required}");
+        }
+        if inherited.is_empty() {
+            assert!(!block.contains("x-turbovas-inherited-still-owns:"));
+        } else {
+            assert!(
+                block.contains(inherited),
+                "{path} block missing {inherited}"
+            );
         }
         for forbidden in [
             "x-turbovas-exposure: direct-write",

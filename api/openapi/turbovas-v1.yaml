@@ -21,7 +21,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: result-list-and-effective-overrides-read
-      x-turbovas-inherited-still-owns: result-tags-exports-and-actions
       summary: List top-level scan results
       description: Read-only scan result list backed by gvmd/PostgreSQL. Rows include page-bounded effective override metadata for display; result tag mutation, exports, and actions remain on inherited compatibility paths.
       parameters:
@@ -55,7 +54,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: result-detail-metadata-tags-and-overrides-read
-      x-turbovas-inherited-still-owns: result-exports-and-actions
       summary: Read one scan result metadata row
       description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text, NVT-level EPSS context, active result user tags, and effective active override metadata for display. Inherited paths still own exports, actions, create-override, and override/tag mutation workflows.
       parameters:

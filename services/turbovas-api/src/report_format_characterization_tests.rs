@@ -86,6 +86,28 @@ fn gsad_import_wraps_uploaded_xml_in_create_report_format() {
 }
 
 #[test]
+fn report_format_metadata_export_reuses_detail_loader() {
+    let source = include_str!("report_formats.rs");
+    let export_source = source
+        .split_once("pub(crate) async fn export_report_format_metadata")
+        .expect("report-format export wrapper must exist")
+        .1;
+
+    assert!(export_source.contains("report_format_asset_detail(state, path).await"));
+    for inherited_workflow in [
+        "export_report_format_gmp",
+        "import_report_format",
+        "verify_report_format",
+        "delete_report_format",
+    ] {
+        assert!(
+            !export_source.contains(inherited_workflow),
+            "report-format metadata export must not call inherited workflow {inherited_workflow}"
+        );
+    }
+}
+
+#[test]
 fn inherited_gmp_report_format_create_parses_copy_or_import_payloads() {
     let create_run = inherited_function(GMP_REPORT_FORMATS_C, "create_report_format_run");
     for required in [

@@ -99,6 +99,26 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
 }
 
 #[test]
+fn operating_system_metadata_export_reuses_detail_loader() {
+    let source = include_str!("operating_systems.rs");
+    let export_source = source
+        .split_once("pub(crate) async fn operating_system_asset_export")
+        .expect("operating-system export wrapper must exist")
+        .1
+        .split_once("async fn operating_system_user_tags")
+        .expect("operating-system export wrapper must precede user-tag loader")
+        .0;
+
+    assert!(export_source.contains("operating_system_asset_detail(state, path).await"));
+    for inherited_workflow in ["export_", "create_", "modify_", "delete_"] {
+        assert!(
+            !export_source.contains(inherited_workflow),
+            "operating-system metadata export must not call inherited workflow {inherited_workflow}"
+        );
+    }
+}
+
+#[test]
 fn port_list_read_sql_is_metadata_ranges_and_target_backlinks_only() {
     let list_sql = port_list_assets_sql("name ASC");
     let detail_sql = port_list_asset_detail_sql();
@@ -733,6 +753,26 @@ fn host_asset_direct_routes_allow_manual_create_comment_patch_and_hard_delete_on
         assert!(
             !direct_api_v1_method_is_allowed(&method, path, true),
             "{method} {path} must stay closed outside manual create/comment patch contracts"
+        );
+    }
+}
+
+#[test]
+fn host_metadata_export_reuses_detail_loader() {
+    let source = include_str!("host_assets.rs");
+    let export_source = source
+        .split_once("pub(crate) async fn host_asset_export")
+        .expect("host export wrapper must exist")
+        .1
+        .split_once("async fn host_user_tags")
+        .expect("host export wrapper must precede user-tag loader")
+        .0;
+
+    assert!(export_source.contains("host_asset_detail(state, path).await"));
+    for inherited_workflow in ["export_", "create_", "modify_", "delete_"] {
+        assert!(
+            !export_source.contains(inherited_workflow),
+            "host metadata export must not call inherited workflow {inherited_workflow}"
         );
     }
 }

@@ -156,6 +156,16 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "delete",
+        path: "/api/v1/alerts/:alert_id",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/alerts/:alert_id/clone",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/credentials/:credential_id",
         safety_contract: "write-control-v1",
@@ -532,6 +542,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(startup_source.contains("let browser_proxy_auth = browser_proxy_api_config()?;"));
     assert!(browser_routes.contains("let Some(auth) = auth else"));
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id"));
+    assert!(browser_routes.contains("/api/v1/alerts/:alert_id/clone"));
     assert!(browser_routes.contains("/api/v1/filters"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id"));
     assert!(browser_routes.contains("/api/v1/port-lists"));
@@ -560,6 +571,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/targets/:target_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/resources"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_alert)"));
+    assert!(browser_routes.contains("post(browser_proxy_clone_alert)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_credential)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scanner)"));
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
@@ -593,6 +605,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_restore_target)"));
     assert!(browser_routes.contains("post(browser_proxy_update_tag_resources)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_scope)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_alert)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_tag)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_tag)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_filter)"));

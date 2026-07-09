@@ -70,6 +70,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "filters", _]
             | ["", "api", "v1", "filters", _, "export"]
             | ["", "api", "v1", "alerts", _]
+            | ["", "api", "v1", "alerts", _, "clone"]
             | ["", "api", "v1", "alerts", _, "export"]
             | ["", "api", "v1", "tags", _]
             | ["", "api", "v1", "overrides", _]
@@ -205,7 +206,10 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::DELETE, ["", "api", "v1", "scan-configs", scan_config_id, "trash"]) => {
             direct_api_write_id_segment_is_allowed(scan_config_id)
         }
-        (&Method::PATCH, ["", "api", "v1", "alerts", alert_id]) => {
+        (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "alerts", alert_id]) => {
+            direct_api_write_id_segment_is_allowed(alert_id)
+        }
+        (&Method::POST, ["", "api", "v1", "alerts", alert_id, "clone"]) => {
             direct_api_write_id_segment_is_allowed(alert_id)
         }
         (&Method::PATCH, ["", "api", "v1", "credentials", credential_id]) => {

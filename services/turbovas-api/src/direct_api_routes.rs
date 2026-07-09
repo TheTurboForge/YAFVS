@@ -9,7 +9,7 @@ use axum::{
 };
 
 use crate::{
-    alert_writes::patch_alert,
+    alert_writes::{clone_alert, delete_alert, patch_alert},
     app_state::AppState,
     credential_writes::patch_credential,
     filter_writes::{
@@ -131,6 +131,8 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_filter),
             )
             .route("/api/v1/alerts/:alert_id", patch(patch_alert))
+            .route("/api/v1/alerts/:alert_id", delete(delete_alert))
+            .route("/api/v1/alerts/:alert_id/clone", post(clone_alert))
             .route(
                 "/api/v1/credentials/:credential_id",
                 patch(patch_credential),

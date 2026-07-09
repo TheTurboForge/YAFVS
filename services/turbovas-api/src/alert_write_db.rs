@@ -9,6 +9,7 @@ use crate::{alert_write_sql::*, auth::DirectApiOperator, errors::ApiError, path_
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AlertWriteRecord {
+    pub(crate) internal_id: i32,
     pub(crate) uuid: String,
 }
 
@@ -101,8 +102,40 @@ pub(crate) async fn query_alert_write_record(
     tx.query_opt(sql, params)
         .await
         .map_err(|error| map_alert_write_db_error(error, action))?
-        .map(|row| AlertWriteRecord { uuid: row.get(0) })
+        .map(|row| AlertWriteRecord {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) async fn execute_alert_write_sql(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<u64, ApiError> {
+    tx.execute(sql, params)
+        .await
+        .map_err(|error| map_alert_write_db_error(error, action))
+}
+
+pub(crate) async fn ensure_alert_not_in_use_by_live_tasks(
+    tx: &Transaction<'_>,
+    alert_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(alert_live_task_count_sql(), &[&alert_internal_id])
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "check alert live task usage"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "alert is still referenced by a visible task".to_string(),
+        ))
+    }
 }
 
 pub(crate) fn map_alert_write_db_error(

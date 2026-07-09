@@ -321,13 +321,33 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
             direct_api_v1_method_is_allowed(&Method::GET, path, false),
             "alert read path must allow GET without write control: {path}"
         );
-        for method in [Method::POST, Method::PUT, Method::DELETE] {
+        for method in [Method::POST, Method::PUT] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, path, true),
                 "alert native mutation must remain closed for {method} {path}"
             );
         }
     }
+    assert!(
+        !direct_api_v1_method_is_allowed(&Method::DELETE, "/api/v1/alerts", true),
+        "alert collection DELETE must remain closed"
+    );
+    assert!(
+        !direct_api_v1_method_is_allowed(
+            &Method::DELETE,
+            "/api/v1/alerts/12345678-1234-1234-1234-123456789abc",
+            false
+        ),
+        "alert metadata DELETE must require direct write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(
+            &Method::DELETE,
+            "/api/v1/alerts/12345678-1234-1234-1234-123456789abc",
+            true
+        ),
+        "alert metadata DELETE must be allowed when direct write-control is enabled"
+    );
     assert!(
         !direct_api_v1_method_is_allowed(&Method::PATCH, "/api/v1/alerts", true),
         "alert collection PATCH must remain closed"
@@ -349,9 +369,22 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "alert metadata PATCH must be allowed when direct write-control is enabled"
     );
 
+    let clone_path = "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/clone";
+    assert!(
+        direct_api_v1_path_is_allowed(clone_path),
+        "alert clone path is now direct allowlisted"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::POST, clone_path, true),
+        "alert clone must require direct write-control"
+    );
+    assert!(
+        !direct_api_v1_method_is_allowed(&Method::POST, clone_path, false),
+        "alert clone must stay closed without direct write-control"
+    );
+
     for path in [
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/test",
-        "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/clone",
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/restore",
     ] {
         assert!(
@@ -393,7 +426,7 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         (
             "/alerts/{alert_id}",
             "alert-metadata-detail-read",
-            ["    post:", "    put:", "    delete:"].as_slice(),
+            ["    post:", "    put:"].as_slice(),
         ),
     ] {
         let block = openapi_path_block(path);
@@ -401,7 +434,9 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
             "x-turbovas-exposure: direct-read",
             replaces,
             "alert-detail-delivery-control",
-            "condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, export/test actions, and all alert mutations",
+            "condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates",
+            "inherited XML export/test actions",
+            "create, restore, hard-delete, and delivery-payload mutations",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
         }
@@ -420,11 +455,37 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         "x-turbovas-replaces: alert-metadata-modify",
         "x-turbovas-safety-contract: write-control-v1",
         "AlertPatchRequest",
-        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, clone, restore, and delete remain on inherited compatibility paths",
+        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths",
     ] {
         assert!(
             detail.contains(required),
             "/alerts/{{alert_id}} missing {required}"
+        );
+    }
+    for required in [
+        "    delete:",
+        "operationId: deleteAlertsByAlertId",
+        "x-turbovas-replaces: alert-trash-move",
+        "x-turbovas-side-effect: metadata-delete",
+    ] {
+        assert!(
+            detail.contains(required),
+            "/alerts/{{alert_id}} delete missing {required}"
+        );
+    }
+
+    let clone = openapi_path_block("/alerts/{alert_id}/clone");
+    for required in [
+        "    post:",
+        "operationId: postAlertsByAlertIdClone",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: alert-clone",
+        "x-turbovas-safety-contract: write-control-v1",
+        "AlertCloneRequest",
+    ] {
+        assert!(
+            clone.contains(required),
+            "/alerts/{{alert_id}}/clone missing {required}"
         );
     }
 }

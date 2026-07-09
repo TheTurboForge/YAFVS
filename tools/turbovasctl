@@ -521,6 +521,8 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-detail-read",
         "alert-metadata-export-read",
         "alert-metadata-modify",
+        "alert-clone",
+        "alert-trash-move",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
         "cert-bund-advisory-metadata-export-read",
@@ -726,6 +728,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts/{alert_id}"): "direct-read",
     ("get", "/alerts/{alert_id}/export"): "direct-read",
     ("patch", "/alerts/{alert_id}"): "direct-write",
+    ("delete", "/alerts/{alert_id}"): "direct-write",
+    ("post", "/alerts/{alert_id}/clone"): "direct-write",
     ("get", "/cert-bund-advisories"): "direct-read",
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): "direct-read",
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}/export"): "direct-read",
@@ -877,6 +881,24 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
         "x-turbovas-replaces": "alert-metadata-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
+    },
+    ("delete", "/alerts/{alert_id}"): {
+        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "alert-trash-move",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-delete",
+    },
+    ("post", "/alerts/{alert_id}/clone"): {
+        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "alert-clone",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
     },
@@ -7195,11 +7217,11 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         clone_suffix = post_constants.get("clone_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
-        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
-            if prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+            if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
         if (
@@ -7927,7 +7949,29 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser alert name/comment metadata PATCH", "direct native alert name/comment metadata modification"],
                 "notes": [
-                    "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, test, create, clone, restore, and delete remain inherited.",
+                    "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, test, create, restore, hard-delete, and delivery-payload mutation remain inherited.",
+                ],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/alerts/{alert_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser alert trash move", "direct native alert trash move"],
+                "notes": [
+                    "Moves alert metadata, child condition/event/method data, task references, and tag links to trash; visible live task-linked alerts are rejected.",
+                    "Alert create, delivery-payload mutation, inherited XML export, test, restore, and hard-delete remain inherited.",
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/alerts/{alert_id}/clone",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser alert clone", "direct native alert clone"],
+                "notes": [
+                    "Clones existing alert metadata and delivery child rows without accepting client-supplied delivery payloads.",
+                    "Alert create, delivery-payload mutation, inherited XML export, test, restore, and hard-delete remain inherited.",
                 ],
             },
             {

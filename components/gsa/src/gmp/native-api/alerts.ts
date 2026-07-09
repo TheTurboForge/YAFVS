@@ -80,6 +80,11 @@ export interface NativeAlertPatchArgs {
   comment?: string;
 }
 
+export interface NativeAlertCloneArgs {
+  name?: string;
+  comment?: string;
+}
+
 const ALERT_SORT_FIELDS: Record<string, string> = {
   active: 'active',
   condition: 'condition',
@@ -161,6 +166,22 @@ const fetchNativeJson = async <T>(
   }
 
   return (await response.json()) as T;
+};
+
+const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
 };
 
 const writeNativeJson = async <T>(
@@ -336,3 +357,22 @@ export const patchNativeAlert = async (
     }),
   );
 };
+
+export const cloneNativeAlert = async (
+  gmp: NativeApiGmp,
+  id: string,
+  request: NativeAlertCloneArgs = {},
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeAlertPayload>(
+    gmp,
+    `api/v1/alerts/${encodeURIComponent(id)}/clone`,
+    request,
+    'POST',
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const deleteNativeAlert = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => deleteNative(gmp, `api/v1/alerts/${encodeURIComponent(id)}`);

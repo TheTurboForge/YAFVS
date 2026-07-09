@@ -1908,7 +1908,7 @@ paths:
       x-turbovas-replaces: alert-metadata-list-read
       x-turbovas-inherited-still-owns: alert-detail-delivery-control
       summary: List redacted alert metadata
-      description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, export/test actions, and all alert mutations.
+      description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export/test actions, create, restore, hard-delete, and delivery-payload mutations.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1942,7 +1942,7 @@ paths:
       x-turbovas-replaces: alert-metadata-detail-read
       x-turbovas-inherited-still-owns: alert-detail-delivery-control
       summary: Read one redacted alert metadata row
-      description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, export/test actions, and all alert mutations; task references are id/name metadata only.
+      description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export/test actions, create, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -1978,7 +1978,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update alert metadata
-      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, clone, restore, and delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2010,6 +2010,85 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteAlertsByAlertId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: alert-trash-move
+      x-turbovas-inherited-still-owns: alert-detail-delivery-control
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Move alert to trash
+      description: Direct write-control endpoint for moving an operator-owned live alert to trash. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Alert create, delivery-payload mutation, inherited XML export, test/trigger, restore, and hard-delete remain on inherited compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '204':
+          description: Alert moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /alerts/{alert_id}/clone:
+    post:
+      operationId: postAlertsByAlertIdClone
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: alert-clone
+      x-turbovas-inherited-still-owns: alert-detail-delivery-control
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Clone an alert
+      description: Direct write-control endpoint for cloning an operator-owned live alert. The clone copies alert metadata, active state, filter reference, condition data, event data, method data, and active user-tag links with a fresh alert id and optional name/comment override. Alert create, delivery-payload mutation, inherited XML export, test/trigger, restore, and hard-delete remain on inherited compatibility paths.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertCloneRequest'
+      responses:
+        '201':
+          description: Alert cloned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /alerts/{alert_id}/export:
     get:
       operationId: getAlertsByAlertIdExport
@@ -2019,7 +2098,7 @@ paths:
       x-turbovas-replaces: alert-metadata-export-read
       x-turbovas-inherited-still-owns: alert-detail-delivery-control
       summary: Export redacted alert metadata
-      description: Direct native JSON metadata export for one alert backed by gvmd/PostgreSQL. This export intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export semantics, test actions, and all alert mutations; task references are id/name metadata only.
+      description: Direct native JSON metadata export for one alert backed by gvmd/PostgreSQL. This export intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export semantics, test actions, create, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -8842,6 +8921,18 @@ components:
           type: string
           maxLength: 4096
           description: New alert comment. Blank comments clear the comment after trimming.
+    AlertCloneRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 4096
+          description: Optional cloned alert name. Blank names are rejected after trimming.
+        comment:
+          type: string
+          maxLength: 4096
+          description: Optional cloned alert comment. Blank comments clear the comment after trimming.
     TagResourcesSummary:
       type: object
       required: [type, count]

@@ -24,6 +24,8 @@ import {
 } from 'gmp/models/model';
 import {parseYesNo} from 'gmp/parser';
 import {
+  cloneNativeAlert,
+  deleteNativeAlert,
   exportNativeAlertMetadata,
   fetchNativeAlert,
   patchNativeAlert,
@@ -263,6 +265,21 @@ class AlertCommand extends EntityCommand<Alert> {
 
   async export({id}: EntityCommandParams) {
     return await exportNativeAlertMetadata(this.http, id);
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return await cloneNativeAlert(this.http, id);
+    }
+    return super.clone({id});
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeAlert(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   create({

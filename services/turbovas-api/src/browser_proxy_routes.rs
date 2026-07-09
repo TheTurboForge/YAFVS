@@ -20,7 +20,8 @@ use crate::{
         browser_proxy_delete_host_operating_system, browser_proxy_patch_host,
     },
     browser_proxy_metadata_patch::{
-        browser_proxy_delete_task, browser_proxy_delete_tls_certificate, browser_proxy_patch_alert,
+        browser_proxy_clone_alert, browser_proxy_delete_alert, browser_proxy_delete_task,
+        browser_proxy_delete_tls_certificate, browser_proxy_patch_alert,
         browser_proxy_patch_credential, browser_proxy_patch_report_format,
         browser_proxy_patch_scanner, browser_proxy_patch_task,
     },
@@ -70,6 +71,14 @@ pub(crate) fn browser_proxy_native_api_router(
     };
     let router = router
         .route("/api/v1/alerts/:alert_id", patch(browser_proxy_patch_alert))
+        .route(
+            "/api/v1/alerts/:alert_id",
+            delete(browser_proxy_delete_alert),
+        )
+        .route(
+            "/api/v1/alerts/:alert_id/clone",
+            post(browser_proxy_clone_alert),
+        )
         .route(
             "/api/v1/credentials/:credential_id",
             patch(browser_proxy_patch_credential),

@@ -17,8 +17,23 @@ pub(crate) struct AlertPatchRequest {
     pub(crate) comment: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AlertCloneRequest {
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedAlertPatch {
+    pub(crate) name: Option<String>,
+    pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedAlertClone {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
 }
@@ -36,6 +51,15 @@ pub(crate) fn validate_alert_patch_request(
         ));
     }
     Ok(validated)
+}
+
+pub(crate) fn validate_alert_clone_request(
+    request: AlertCloneRequest,
+) -> Result<ValidatedAlertClone, ApiError> {
+    Ok(ValidatedAlertClone {
+        name: normalize_optional_required_alert_text(request.name, "name")?,
+        comment: normalize_optional_alert_text(request.comment, "comment")?,
+    })
 }
 
 fn normalize_optional_required_alert_text(

@@ -10,8 +10,8 @@ use axum::{
 
 use crate::{
     alert_payloads::AlertAssetItem,
-    alert_write_validation::AlertPatchRequest,
-    alert_writes::patch_alert,
+    alert_write_validation::{AlertCloneRequest, AlertPatchRequest},
+    alert_writes::{clone_alert, delete_alert, patch_alert},
     app_state::AppState,
     browser_proxy_api::{BrowserProxyAuth, browser_proxy_operator_from_headers},
     credential_payloads::CredentialAssetItem,
@@ -45,6 +45,33 @@ pub(crate) async fn browser_proxy_patch_scanner(
         Json(request),
     )
     .await
+}
+
+pub(crate) async fn browser_proxy_clone_alert(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(alert_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<AlertCloneRequest>,
+) -> Result<(StatusCode, Json<AlertAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_alert(
+        State(state),
+        Path(alert_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_delete_alert(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(alert_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_alert(State(state), Path(alert_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_delete_task(

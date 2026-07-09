@@ -393,6 +393,7 @@ native_api_delete_path_is_allowed (const gchar *path)
 static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
+  const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *filters_path = "/api/v1/filters";
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *port_list_imports_path = "/api/v1/port-list-imports";
@@ -438,6 +439,12 @@ native_api_post_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, targets_path) == 0)
     return TRUE;
+
+  if (g_str_has_prefix (path, alert_prefix))
+    {
+      const gchar *id = path + strlen (alert_prefix);
+      return is_uuid_segment_with_suffix (id, clone_suffix);
+    }
 
   if (g_str_has_prefix (path, filter_prefix))
     {

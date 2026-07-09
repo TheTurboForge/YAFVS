@@ -143,8 +143,11 @@ export class PortListCommand extends EntityCommand<PortList, PortListElement> {
     {id}: EntityCommandParams,
     {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
   ) {
-    if (canUseNativeApi(this.http) && nativePortListDetailSupportsFilter(filter)) {
-      return new Response(await fetchNativePortList(this.http, id));
+    if (canUseNativeApi(this.http)) {
+      if (nativePortListDetailSupportsFilter(filter)) {
+        return new Response(await fetchNativePortList(this.http, id));
+      }
+      throw new Error('Native port list detail filter is not supported');
     }
     return super.get({id}, {filter, ...options});
   }

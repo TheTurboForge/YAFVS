@@ -127,6 +127,27 @@ describe('PortListCommand', () => {
     expect(result.data.targets[0]?.id).toEqual('target-id');
   });
 
+  test('should reject unsupported native port list detail filters', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    http.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    http.session = createSession();
+    http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
+
+    const command = new PortListCommand(http);
+    await expect(
+      command.get({id: 'port-list-id'}, {filter: 'results=1'}),
+    ).rejects.toThrow('Native port list detail filter is not supported');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(http.request).not.toHaveBeenCalled();
+  });
+
   test('should export port list metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

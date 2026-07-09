@@ -97,8 +97,11 @@ export class ScheduleCommand extends EntityCommand {
   }
 
   async get({id}, {filter, ...options} = {}) {
-    if (canUseNativeApi(this.http) && nativeScheduleDetailSupportsFilter(filter)) {
-      return new Response(await fetchNativeSchedule(this.http, id));
+    if (canUseNativeApi(this.http)) {
+      if (nativeScheduleDetailSupportsFilter(filter)) {
+        return new Response(await fetchNativeSchedule(this.http, id));
+      }
+      throw new Error('Native schedule detail filter is not supported');
     }
     return super.get({id}, {filter, ...options});
   }

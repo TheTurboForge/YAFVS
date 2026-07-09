@@ -370,6 +370,29 @@ describe('TagCommand tests', () => {
     expect(resp.data.resourceCount).toEqual(2);
   });
 
+  test('should reject unsupported native tag detail filters', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TagCommand(fakeHttp);
+
+    await expect(cmd.get({id: 'foo'}, {filter: 'results=1'})).rejects.toThrow(
+      'Native tag detail filter is not supported',
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should save a tag', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

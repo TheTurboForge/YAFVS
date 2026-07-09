@@ -62,8 +62,11 @@ class TagCommand extends EntityCommand<Tag, TagElement> {
     {id}: EntityCommandParams,
     {filter, ...options}: {filter?: Filter | string} & HttpCommandOptions = {},
   ) {
-    if (canUseNativeApi(this.http) && nativeTagDetailSupportsFilter(filter)) {
-      return new Response(await fetchNativeTag(this.http, id));
+    if (canUseNativeApi(this.http)) {
+      if (nativeTagDetailSupportsFilter(filter)) {
+        return new Response(await fetchNativeTag(this.http, id));
+      }
+      throw new Error('Native tag detail filter is not supported');
     }
     return super.get({id}, {filter, ...options});
   }

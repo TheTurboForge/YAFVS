@@ -133,6 +133,20 @@ describe('ScheduleCommand tests', () => {
     expect(result.data.name).toEqual('Daily schedule');
   });
 
+  test('should reject unsupported native schedule detail filters', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScheduleCommand(fakeHttp);
+
+    await expect(
+      cmd.get({id: 'schedule-id'}, {filter: 'results=1'}),
+    ).rejects.toThrow('Native schedule detail filter is not supported');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should keep schedule create on inherited GMP when native API is available', async () => {
     const response = createActionResultResponse({id: 'created-schedule-id'});
     const fetchMock = testing.fn();

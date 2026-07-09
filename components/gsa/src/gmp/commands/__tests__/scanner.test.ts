@@ -380,37 +380,31 @@ describe('ScannerCommand tests', () => {
     expect(result.data.tasks[0]?.id).toEqual('task-id');
   });
 
-  test('should keep unsupported filtered scanner detail on GMP', async () => {
-    const response = createEntityResponse('scanner', {
-      id: '123',
-      name: 'Test Scanner',
-      type: OPENVASD_SCANNER_TYPE,
+  test('should fetch scanner alert detail filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '123',
+        name: 'Test Scanner',
+        scanner_type: Number(OPENVASD_SCANNER_TYPE),
+        host: '127.0.0.1',
+        port: 9390,
+      }),
+      ok: true,
+      status: 200,
     });
-    const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
     const cmd = new ScannerCommand(fakeHttp);
     const result = await cmd.get({id: '123'}, {filter: 'alerts=1'});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_scanner',
-        scanner_id: '123',
-        filter: 'alerts=1',
-        details: '0',
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scanners/123', {
+      token: 'test-token',
     });
+    expect(fetchMock).toHaveBeenCalled();
     expect(result.data.id).toEqual('123');
+    expect(result.data.name).toEqual('Test Scanner');
+    expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
   });
 
   test('should keep scanner detail with details on GMP when requested', async () => {

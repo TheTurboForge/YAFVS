@@ -52,8 +52,10 @@ interface ScannerCommandVerifyParams {
 
 const log = logger.getLogger('gmp.commands.scanner');
 
-const nativeScannerDetailSupportsFilter = (filter?: string): boolean =>
-  filter === undefined || filterString(filter) === 'tasks=1';
+const nativeScannerDetailSupportsFilter = (filter?: string): boolean => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'tasks=1' || value === 'alerts=1';
+};
 
 const SCANNER_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
 

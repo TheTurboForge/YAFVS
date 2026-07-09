@@ -339,6 +339,7 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(list.contains("alert-reference counts"));
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-replaces: saved-filter-create"));
+    assert!(!list.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
 
     let detail = openapi_path_block("/filters/{filter_id}");
     assert!(detail.contains("get:"));
@@ -351,6 +352,13 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(detail.contains("x-turbovas-replaces: saved-filter-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(detail.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+
+    let clone = openapi_path_block("/filters/{filter_id}/clone");
+    assert!(clone.contains("post:"));
+    assert!(clone.contains("x-turbovas-exposure: direct-write"));
+    assert!(clone.contains("x-turbovas-replaces: saved-filter-clone"));
+    assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(!clone.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
 
     let restore = openapi_path_block("/filters/{filter_id}/restore");
     assert!(restore.contains("post:"));

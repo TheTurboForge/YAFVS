@@ -927,7 +927,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "saved-filter-metadata-export-read",
     },
     ("post", "/filters"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -954,7 +953,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-delete",
     },
     ("post", "/filters/{filter_id}/clone"): {
-        "x-turbovas-inherited-still-owns": "saved-filter-alert-linkage",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",

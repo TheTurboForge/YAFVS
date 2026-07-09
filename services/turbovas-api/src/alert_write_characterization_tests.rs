@@ -433,7 +433,6 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         for required in [
             "x-turbovas-exposure: direct-read",
             replaces,
-            "alert-detail-delivery-control",
             "condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates",
             "inherited XML export/test actions",
             "create, restore, hard-delete, and delivery-payload mutations",

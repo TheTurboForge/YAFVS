@@ -861,17 +861,14 @@ OPENAPI_REQUIRED_EXPOSURE = {
 }
 OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts"): {
-        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "alert-metadata-list-read",
     },
     ("get", "/alerts/{alert_id}"): {
-        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "alert-metadata-detail-read",
     },
     ("get", "/alerts/{alert_id}/export"): {
-        "x-turbovas-inherited-still-owns": "alert-detail-delivery-control",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "alert-metadata-export-read",
     },

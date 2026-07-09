@@ -1894,7 +1894,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: alert-metadata-list-read
-      x-turbovas-inherited-still-owns: alert-detail-delivery-control
       summary: List redacted alert metadata
       description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export/test actions, create, restore, hard-delete, and delivery-payload mutations.
       parameters:
@@ -1928,7 +1927,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: alert-metadata-detail-read
-      x-turbovas-inherited-still-owns: alert-detail-delivery-control
       summary: Read one redacted alert metadata row
       description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export/test actions, create, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
       parameters:
@@ -2084,7 +2082,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: alert-metadata-export-read
-      x-turbovas-inherited-still-owns: alert-detail-delivery-control
       summary: Export redacted alert metadata
       description: Direct native JSON metadata export for one alert backed by gvmd/PostgreSQL. This export intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export semantics, test actions, create, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
       parameters:

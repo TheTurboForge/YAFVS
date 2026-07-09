@@ -6,9 +6,12 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import Credential, {type CredentialElement} from 'gmp/models/credential';
+import Filter from 'gmp/models/filter';
 import Scanner from 'gmp/models/scanner';
 import {fetchNativeScanner, fetchNativeScanners} from 'gmp/native-api/scanners';
-import {loadEntity} from 'web/store/entities/scanners';
+import {loadEntities, loadEntity} from 'web/store/entities/scanners';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({
   jwt,
@@ -89,6 +92,57 @@ describe('native API scanners list', () => {
         },
       },
     );
+  });
+
+  test('loads scanner list store entries through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort=name');
+    const rootState = createState('scanner', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: 'name', filter: ''},
+        items: [
+          {
+            id: '08b69003-5fc2-4037-a479-93b440211c73',
+            name: 'OpenVAS Default',
+            host: '/runtime/run/ospd/ospd-openvas.sock',
+            port: 0,
+            scanner_type: 2,
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp(),
+      scanners: {
+        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+      },
+    };
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.scanners.get).not.toHaveBeenCalled();
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/scanners', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: 'name',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0]).toBeInstanceOf(Scanner);
+    expect(successAction.data[0].name).toEqual('OpenVAS Default');
   });
 });
 

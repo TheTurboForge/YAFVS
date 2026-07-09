@@ -65,10 +65,6 @@ const canUseNativeOnlyDetail = scanner =>
   scanner.hasUnixSocket() || scanner.scannerType === CVE_SCANNER_TYPE;
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
-  if (!canUseNativeApi(gmp)) {
-    return loadEntities(gmp)(filter)(dispatch, getState);
-  }
-
   const rootState = getState();
   const state = selector(rootState);
 

@@ -4947,7 +4947,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: target-list-read
-      x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       summary: List scan targets
       description: Read-only target metadata backed by gvmd/PostgreSQL. Native direct write-control can create operator-owned target metadata with explicit safe scan inputs and optional existing credential references, patch target name/comment metadata, bounded scan inputs, and credential-link references, clone an owned target with existing credential references, move an unscoped target to trash, restore it, and hard-delete trash metadata. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
       parameters:
@@ -5030,7 +5029,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: target-detail-summary-read
-      x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       summary: Read one scan target summary
       description: Read-only target metadata backed by gvmd/PostgreSQL. Detail includes safe credential references already visible in the inherited UI. Native direct write-control can create operator-owned target metadata, patch target name/comment metadata plus bounded scan inputs and credential-link references, clone an owned target with existing credential references, move an unscoped target to trash, restore it, and hard-delete trash metadata. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
       parameters:
@@ -5143,7 +5141,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: target-metadata-export-read
-      x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       summary: Export scan target metadata
       description: Scriptable metadata export for one target, backed by the same redacted target detail payload. Credential references include id/name/type/port only; file/host-filter input variants, credential secret material, and task/control semantics remain outside this read endpoint.
       parameters:

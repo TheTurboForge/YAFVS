@@ -289,7 +289,9 @@ fn openapi_documents_schedule_metadata_patch_and_trash_move_boundary() {
     assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
     assert!(hard_delete.contains("x-turbovas-replaces: schedule-hard-delete"));
     assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(!hard_delete.contains("x-turbovas-inherited-still-owns: schedule-create-calendar-edit"));
+    assert!(
+        !hard_delete.contains("x-turbovas-inherited-still-owns: schedule-create-calendar-edit")
+    );
     let export = openapi_path_block("/schedules/{schedule_id}/export");
     assert!(export.contains("get:"));
     assert!(export.contains("x-turbovas-exposure: direct-read"));

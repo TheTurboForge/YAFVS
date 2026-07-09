@@ -46,6 +46,32 @@ fn openapi_path_block(path: &str) -> String {
         .unwrap_or_else(|| tail.to_string())
 }
 
+fn openapi_operation_block(path_block: &str, method: &str) -> String {
+    let marker = format!("    {method}:");
+    let start = path_block
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{method} operation block must exist"));
+    let tail = &path_block[start..];
+    tail.lines()
+        .enumerate()
+        .skip(1)
+        .find_map(|(index, line)| {
+            let trimmed = line.trim_end();
+            if line.starts_with("    ")
+                && !line.starts_with("      ")
+                && matches!(
+                    trimmed,
+                    "    get:" | "    post:" | "    patch:" | "    put:" | "    delete:"
+                )
+            {
+                Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| tail.to_string())
+}
+
 #[test]
 fn inherited_target_create_and_modify_are_host_port_credential_and_in_use_guarded() {
     let create = inherited_function(MANAGE_SQL_TARGETS_C, "create_target");
@@ -426,6 +452,28 @@ fn native_target_broad_mutation_routes_remain_closed() {
     for (path, replacement) in [
         ("/targets", "target-list-read"),
         ("/targets/{target_id}", "target-detail-summary-read"),
+    ] {
+        let block = openapi_path_block(path);
+        let get = openapi_operation_block(&block, "get");
+        assert!(
+            get.contains(replacement),
+            "{path} GET OpenAPI block must keep {replacement}"
+        );
+        assert!(!get.contains(
+            "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
+        ));
+    }
+
+    for (path, replacement) in [
+        (
+            "/targets/{target_id}",
+            "target-metadata-simple-scan-inputs-and-credential-links-modify",
+        ),
+        ("/targets/{target_id}", "target-trash-move"),
+        (
+            "/targets",
+            "target-create-with-optional-credential-references",
+        ),
         ("/targets/{target_id}/clone", "target-clone"),
         ("/targets/{target_id}/restore", "target-restore"),
         ("/targets/{target_id}/trash", "target-hard-delete"),
@@ -447,7 +495,6 @@ fn native_target_broad_mutation_routes_remain_closed() {
         "x-turbovas-exposure: direct-read",
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: target-metadata-export-read",
-        "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows",
         "$ref: '#/components/schemas/Target'",
         "Credential references include id/name/type/port only",
         "file/host-filter input variants",
@@ -457,6 +504,9 @@ fn native_target_broad_mutation_routes_remain_closed() {
             "target metadata export OpenAPI block missing {required}"
         );
     }
+    assert!(!export.contains(
+        "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
+    ));
     for forbidden in [
         "x-turbovas-exposure: direct-write",
         "x-turbovas-safety-contract: write-control-v1",

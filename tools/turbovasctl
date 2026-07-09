@@ -1588,7 +1588,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scope-metadata-membership-write",
     },
     ("get", "/targets"): {
-        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-list-read",
     },
@@ -1602,12 +1601,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/targets/{target_id}"): {
-        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-detail-summary-read",
     },
     ("get", "/targets/{target_id}/export"): {
-        "x-turbovas-inherited-still-owns": "target-file-input-task-control-and-credential-secret-workflows",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "target-metadata-export-read",
     },

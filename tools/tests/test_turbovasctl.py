@@ -168,6 +168,13 @@ assert RUNTIME_SCOPE_SPEC.loader is not None
 sys.modules["runtime_scope"] = runtime_scope
 RUNTIME_SCOPE_SPEC.loader.exec_module(runtime_scope)
 
+RUNTIME_RBAC_PATH = Path(__file__).resolve().parents[1] / "runtime_rbac_smoke.py"
+RUNTIME_RBAC_SPEC = importlib.util.spec_from_loader("runtime_rbac_smoke", SourceFileLoader("runtime_rbac_smoke", str(RUNTIME_RBAC_PATH)))
+runtime_rbac_smoke = importlib.util.module_from_spec(RUNTIME_RBAC_SPEC)
+assert RUNTIME_RBAC_SPEC.loader is not None
+sys.modules["runtime_rbac_smoke"] = runtime_rbac_smoke
+RUNTIME_RBAC_SPEC.loader.exec_module(runtime_rbac_smoke)
+
 BROWSER_SMOKE_PATH = Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py"
 BROWSER_SMOKE_SPEC = importlib.util.spec_from_loader("runtime_browser_smoke", SourceFileLoader("runtime_browser_smoke", str(BROWSER_SMOKE_PATH)))
 runtime_browser_smoke = importlib.util.module_from_spec(BROWSER_SMOKE_SPEC)
@@ -10101,10 +10108,50 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn("python-gvm.venv", scope_wrapper)
         self.assertIn("sys.executable", scope_wrapper)
 
-    def test_runtime_rbac_smoke_reads_admin_password_before_python_gvm_connection(self):
-        source = (Path(__file__).resolve().parents[1] / "runtime_rbac_smoke.py").read_text(encoding="utf-8")
+    def test_runtime_rbac_smoke_uses_raw_bridge_not_python_gvm_connection(self):
+        source = RUNTIME_RBAC_PATH.read_text(encoding="utf-8")
+        wrapper_source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        rbac_wrapper = wrapper_source.split("def command_runtime_rbac_smoke", 1)[1].split("def command_feed_state", 1)[0]
         self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
-        self.assertIn("connect_with_password(socket_path, args.username, admin_password, args.timeout)", source)
+        self.assertNotIn("from gvm", source)
+        self.assertNotIn("gmp.", source)
+        self.assertIn("RbacGmpClient", source)
+        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", rbac_wrapper)
+        self.assertNotIn("python-gvm.venv", rbac_wrapper)
+        self.assertIn("sys.executable", rbac_wrapper)
+
+    def test_runtime_rbac_raw_client_emits_expected_xml_subset(self):
+        client = runtime_rbac_smoke.RbacGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
+        sent = []
+
+        def fake_send(command):
+            sent.append(command)
+            return b'<ok_response id="generated" status="201"/>'
+
+        client.send_xml = fake_send
+
+        client.get_users(filter_string="name=turbovas-rbac-smoke")
+        client.create_user("user<one>", password="secret&value")
+        client.modify_user("user-id", name="renamed", password="new-secret", comment="comment")
+        client.get_tasks(details=True, ignore_pagination=True)
+        client.get_reports(filter_string="task_id=task-1 rows=10 sort-reverse=date", details=True, ignore_pagination=True)
+        client.create_filter("filter", filter_type="task", term="rows=1", comment="comment")
+        client.modify_filter("filter-id", name="filter two", term="rows=2", filter_type="task", comment="changed")
+        client.delete_filter("filter-id", ultimate=True)
+
+        self.assertEqual(sent[0], '<get_users filter="name=turbovas-rbac-smoke"/>')
+        self.assertEqual(sent[1], '<create_user><name>user&lt;one&gt;</name><password>secret&amp;value</password></create_user>')
+        self.assertEqual(sent[2], '<modify_user user_id="user-id"><new_name>renamed</new_name><comment>comment</comment><password>new-secret</password></modify_user>')
+        self.assertEqual(sent[3], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
+        self.assertEqual(sent[4], '<get_reports usage_type="scan" report_filter="task_id=task-1 rows=10 sort-reverse=date" details="1" ignore_pagination="1"/>')
+        self.assertEqual(sent[5], '<create_filter><name>filter</name><comment>comment</comment><term>rows=1</term><type>task</type></create_filter>')
+        self.assertEqual(sent[6], '<modify_filter filter_id="filter-id"><comment>changed</comment><name>filter two</name><term>rows=2</term><type>task</type></modify_filter>')
+        self.assertEqual(sent[7], '<delete_filter filter_id="filter-id" ultimate="1"/>')
+
+    def test_runtime_rbac_raw_mutation_failures_raise(self):
+        response = b'<modify_filter_response status="400" status_text="bad filter"/>'
+        with self.assertRaisesRegex(RuntimeError, "modify temporary filter failed"):
+            runtime_rbac_smoke.require_ok_response(response, "modify temporary filter")
 
     def test_native_feed_object_verification_uses_detail_endpoints(self):
         calls = []

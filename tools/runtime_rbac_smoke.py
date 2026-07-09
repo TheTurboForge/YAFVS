@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape, quoteattr
 
 import runtime_full_test_scan
 
@@ -61,8 +62,129 @@ def object_rows(response: Any, object_tag: str) -> list[dict[str, str | None]]:
     return rows
 
 
-def named_row(gmp: Any, object_tag: str, getter_name: str, name: str) -> dict[str, str | None] | None:
-    getter = getattr(gmp, getter_name)
+def xml_text_element(name: str, value: str) -> str:
+    return f"<{name}>{escape(value)}</{name}>"
+
+
+def xml_bool(value: bool | None) -> str:
+    return "1" if value else "0"
+
+
+def require_ok_response(response: Any, action: str) -> Any:
+    root_node = response_root(response)
+    if root_node is None:
+        raise RuntimeError(f"{action} returned an unparsable GMP response")
+    status = root_node.get("status")
+    if status and not status.startswith("2"):
+        status_text = root_node.get("status_text") or ""
+        raise RuntimeError(f"{action} failed with GMP status {status}: {status_text}")
+    return response
+
+
+class RbacGmpClient(runtime_full_test_scan.RawGmpClient):
+    """Tiny raw GMP subset for the operator-account runtime smoke."""
+
+    def get_users(self, *, filter_string: str | None = None) -> bytes:
+        attributes = f" filter={quoteattr(filter_string)}" if filter_string else ""
+        return self.send_xml(f"<get_users{attributes}/>")
+
+    def create_user(self, name: str, *, password: str | None = None) -> bytes:
+        body = xml_text_element("name", name)
+        if password:
+            body += xml_text_element("password", password)
+        return self.send_xml(f"<create_user>{body}</create_user>")
+
+    def modify_user(
+        self,
+        user_id: str,
+        *,
+        name: str | None = None,
+        password: str | None = None,
+        comment: str | None = None,
+    ) -> bytes:
+        body = ""
+        if name:
+            body += xml_text_element("new_name", name)
+        if comment:
+            body += xml_text_element("comment", comment)
+        if password:
+            body += xml_text_element("password", password)
+        return self.send_xml(f"<modify_user user_id={quoteattr(user_id)}>{body}</modify_user>")
+
+    def get_tasks(
+        self,
+        *,
+        details: bool | None = None,
+        ignore_pagination: bool | None = None,
+    ) -> bytes:
+        attributes = " usage_type=\"scan\""
+        if details is not None:
+            attributes += f" details={quoteattr(xml_bool(details))}"
+        if ignore_pagination is not None:
+            attributes += f" ignore_pagination={quoteattr(xml_bool(ignore_pagination))}"
+        return self.send_xml(f"<get_tasks{attributes}/>")
+
+    def get_reports(
+        self,
+        *,
+        filter_string: str | None = None,
+        details: bool | None = None,
+        ignore_pagination: bool | None = None,
+    ) -> bytes:
+        attributes = " usage_type=\"scan\""
+        if filter_string:
+            attributes += f" report_filter={quoteattr(filter_string)}"
+        if details is not None:
+            attributes += f" details={quoteattr(xml_bool(details))}"
+        if ignore_pagination is not None:
+            attributes += f" ignore_pagination={quoteattr(xml_bool(ignore_pagination))}"
+        return self.send_xml(f"<get_reports{attributes}/>")
+
+    def create_filter(
+        self,
+        name: str,
+        *,
+        filter_type: str | None = None,
+        term: str | None = None,
+        comment: str | None = None,
+    ) -> bytes:
+        body = xml_text_element("name", name)
+        if comment:
+            body += xml_text_element("comment", comment)
+        if term:
+            body += xml_text_element("term", term)
+        if filter_type:
+            body += xml_text_element("type", filter_type)
+        return self.send_xml(f"<create_filter>{body}</create_filter>")
+
+    def modify_filter(
+        self,
+        filter_id: str,
+        *,
+        name: str | None = None,
+        term: str | None = None,
+        filter_type: str | None = None,
+        comment: str | None = None,
+    ) -> bytes:
+        body = ""
+        if comment:
+            body += xml_text_element("comment", comment)
+        if name:
+            body += xml_text_element("name", name)
+        if term:
+            body += xml_text_element("term", term)
+        if filter_type:
+            body += xml_text_element("type", filter_type)
+        return self.send_xml(f"<modify_filter filter_id={quoteattr(filter_id)}>{body}</modify_filter>")
+
+    def delete_filter(self, filter_id: str, *, ultimate: bool | None = False) -> bytes:
+        return self.send_xml(
+            f"<delete_filter filter_id={quoteattr(filter_id)} ultimate={quoteattr(xml_bool(ultimate))}/>"
+        )
+
+
+def named_row(client: Any, object_tag: str, getter_name: str, name: str) -> dict[str, str | None] | None:
+    getter = getattr(client, getter_name)
     try:
         response = getter(filter_string=f"name={name}")
     except TypeError:
@@ -76,74 +198,82 @@ def named_row(gmp: Any, object_tag: str, getter_name: str, name: str) -> dict[st
 def connect_with_password(socket_path: Path, username: str, password: str, timeout: int):
     if not socket_path.is_socket():
         raise RuntimeError(f"gvmd socket is not ready: {socket_path}")
-
-    from gvm.connections import UnixSocketConnection
-    from gvm.protocols.latest import GMP
-
-    connection = UnixSocketConnection(path=socket_path, timeout=timeout)
-    gmp = GMP(connection=connection)
-    gmp.connect()
-    gmp.authenticate(username, password)
-    return gmp
+    client = RbacGmpClient(socket_path, username, password, timeout)
+    client.connect()
+    return client
 
 
-def ensure_secondary_user(admin_gmp: Any, password: str) -> dict[str, Any]:
-    existing = named_row(admin_gmp, "user", "get_users", SECONDARY_USER)
+def ensure_secondary_user(admin_client: Any, password: str) -> dict[str, Any]:
+    existing = named_row(admin_client, "user", "get_users", SECONDARY_USER)
     action = "reused"
     if existing is None:
-        response = admin_gmp.create_user(SECONDARY_USER, password=password)
+        response = require_ok_response(admin_client.create_user(SECONDARY_USER, password=password), "create secondary user")
         user_id = runtime_full_test_scan.response_id(response)
         action = "created"
     else:
         user_id = existing.get("id")
-        admin_gmp.modify_user(user_id, name=SECONDARY_USER, password=password, comment="TurboVAS RBAC smoke secondary operator")
+        require_ok_response(
+            admin_client.modify_user(
+                user_id,
+                name=SECONDARY_USER,
+                password=password,
+                comment="TurboVAS RBAC smoke secondary operator",
+            ),
+            "modify secondary user",
+        )
     if not user_id:
-        refreshed = named_row(admin_gmp, "user", "get_users", SECONDARY_USER)
+        refreshed = named_row(admin_client, "user", "get_users", SECONDARY_USER)
         user_id = refreshed.get("id") if refreshed else None
     if not user_id:
         raise RuntimeError("Could not determine secondary smoke user id")
     return {"id": user_id, "name": SECONDARY_USER, "action": action}
 
 
-def verify_full_test_visibility(gmp: Any) -> dict[str, Any]:
-    state = runtime_full_test_scan.load_state(gmp)
+def verify_full_test_visibility(client: Any) -> dict[str, Any]:
+    task_rows = runtime_full_test_scan.object_rows(client.get_tasks(details=True, ignore_pagination=True), "task")
     task, task_error = runtime_full_test_scan.single_named(
-        state["tasks"], runtime_full_test_scan.FULL_TEST_TASK_NAME
+        task_rows, runtime_full_test_scan.FULL_TEST_TASK_NAME
     )
     if task_error:
         return {"status": "fail", "task_error": task_error, "task": None, "latest_report": None}
     if not task or not task.get("id"):
         return {"status": "fail", "task_error": "Full-test task is not visible.", "task": task, "latest_report": None}
-    latest_report, report_error = runtime_full_test_scan.latest_report_for_task(gmp, task["id"])
+    latest_report, report_error = runtime_full_test_scan.latest_report_for_task(client, task["id"])
     if report_error or latest_report is None:
         return {"status": "fail", "task_error": None, "task": task, "latest_report": latest_report, "report_error": report_error or "Latest full-test report is not visible."}
     return {"status": "pass", "task_error": None, "task": task, "latest_report": latest_report, "report_error": None}
 
 
-def verify_cross_user_filter_admin(admin_gmp: Any, secondary_gmp: Any) -> dict[str, Any]:
+def verify_cross_user_filter_admin(admin_client: Any, secondary_client: Any) -> dict[str, Any]:
     filter_name = f"{TEMP_FILTER_PREFIX} {secrets.token_hex(4)}"
     modified_name = filter_name + " modified"
     filter_id: str | None = None
     deleted_by_secondary = False
     admin_cleanup = None
     try:
-        response = admin_gmp.create_filter(
-            filter_name,
-            filter_type="task",
-            term="rows=1",
-            comment="Temporary filter created by runtime-rbac-smoke.",
+        response = require_ok_response(
+            admin_client.create_filter(
+                filter_name,
+                filter_type="task",
+                term="rows=1",
+                comment="Temporary filter created by runtime-rbac-smoke.",
+            ),
+            "create temporary filter",
         )
         filter_id = runtime_full_test_scan.response_id(response)
         if not filter_id:
             raise RuntimeError("Could not parse created filter id")
-        secondary_gmp.modify_filter(
-            filter_id,
-            name=modified_name,
-            term="rows=2",
-            filter_type="task",
-            comment="Modified by the secondary runtime-rbac-smoke account.",
+        require_ok_response(
+            secondary_client.modify_filter(
+                filter_id,
+                name=modified_name,
+                term="rows=2",
+                filter_type="task",
+                comment="Modified by the secondary runtime-rbac-smoke account.",
+            ),
+            "modify temporary filter as secondary user",
         )
-        secondary_gmp.delete_filter(filter_id, ultimate=True)
+        require_ok_response(secondary_client.delete_filter(filter_id, ultimate=True), "delete temporary filter as secondary user")
         deleted_by_secondary = True
         return {
             "status": "pass",
@@ -156,7 +286,7 @@ def verify_cross_user_filter_admin(admin_gmp: Any, secondary_gmp: Any) -> dict[s
     except Exception as error:  # pylint: disable=broad-except
         if filter_id and not deleted_by_secondary:
             try:
-                admin_gmp.delete_filter(filter_id, ultimate=True)
+                require_ok_response(admin_client.delete_filter(filter_id, ultimate=True), "admin cleanup temporary filter")
                 admin_cleanup = "deleted"
             except Exception as cleanup_error:  # pylint: disable=broad-except
                 admin_cleanup = f"failed: {type(cleanup_error).__name__}: {cleanup_error}"
@@ -196,19 +326,19 @@ def main(argv: list[str] | None = None) -> int:
     artifact_dir = Path(args.artifact_dir)
     admin_password = ""
     secondary_password = secrets.token_urlsafe(24)
-    admin_gmp = None
-    secondary_gmp = None
+    admin_client = None
+    secondary_client = None
     try:
         if not password_path.is_file():
             raise RuntimeError(f"admin password file is missing: {password_path}")
         admin_password = password_path.read_text(encoding="utf-8").strip()
         if not admin_password:
             raise RuntimeError(f"admin password file is empty: {password_path}")
-        admin_gmp = connect_with_password(socket_path, args.username, admin_password, args.timeout)
-        secondary_user = ensure_secondary_user(admin_gmp, secondary_password)
-        secondary_gmp = connect_with_password(socket_path, SECONDARY_USER, secondary_password, args.timeout)
-        visibility = verify_full_test_visibility(secondary_gmp)
-        filter_admin = verify_cross_user_filter_admin(admin_gmp, secondary_gmp)
+        admin_client = connect_with_password(socket_path, args.username, admin_password, args.timeout)
+        secondary_user = ensure_secondary_user(admin_client, secondary_password)
+        secondary_client = connect_with_password(socket_path, SECONDARY_USER, secondary_password, args.timeout)
+        visibility = verify_full_test_visibility(secondary_client)
+        filter_admin = verify_cross_user_filter_admin(admin_client, secondary_client)
         status = "pass" if visibility["status"] == "pass" and filter_admin["status"] == "pass" else "fail"
         payload = result(
             status,
@@ -231,10 +361,10 @@ def main(argv: list[str] | None = None) -> int:
             scans_started=0,
         )
     finally:
-        for gmp in (secondary_gmp, admin_gmp):
-            if gmp is not None:
+        for client in (secondary_client, admin_client):
+            if client is not None:
                 try:
-                    gmp.disconnect()
+                    client.disconnect()
                 except Exception:
                     pass
     payload["artifacts"] = [write_artifact(artifact_dir, payload)]

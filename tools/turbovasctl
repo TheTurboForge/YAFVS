@@ -558,6 +558,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "port-list-clone",
         "port-list-create",
         "port-list-import",
+        "port-list-range-delete",
         "port-list-metadata-detail-read",
         "port-list-metadata-export-read",
         "port-list-hard-delete",
@@ -838,6 +839,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/port-lists/{port_list_id}"): "direct-write",
     ("get", "/port-lists/{port_list_id}/export"): "direct-read",
     ("delete", "/port-lists/{port_list_id}"): "direct-write",
+    ("delete", "/port-lists/{port_list_id}/ranges/{port_range_id}"): "direct-write",
     ("delete", "/port-lists/{port_list_id}/trash"): "direct-write",
     ("post", "/port-lists/{port_list_id}/clone"): "direct-write",
     ("post", "/port-lists/{port_list_id}/restore"): "direct-write",
@@ -1083,6 +1085,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
         "x-turbovas-replaces": "port-list-trash-move",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-delete",
+    },
+    ("delete", "/port-lists/{port_list_id}/ranges/{port_range_id}"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "port-list-range-delete",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-delete",
     },
@@ -7230,6 +7240,13 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
                 if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "scope_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     templates.add(f"{prefix.rstrip('/')}/{{}}{trash_suffix}")
+        port_list_prefix = delete_constants.get("port_list_prefix")
+        if (
+            port_list_prefix
+            and "is_uuid_segment_pair_with_middle" in delete_function_body
+            and '"/ranges/"' in delete_function_body
+        ):
+            templates.add(f"{port_list_prefix.rstrip('/')}/{{}}/ranges/{{}}")
 
     return sorted(templates), errors
 
@@ -8004,7 +8021,14 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/port-lists/{port_list_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["GSA Port List range add and non-empty range delete actions", "direct native port-list name/comment/range-set modification"],
+                "replacement_candidates": ["GSA Port List range add and non-empty range replacement actions", "direct native port-list name/comment/range-set modification"],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/port-lists/{port_list_id}/ranges/{port_range_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA Port List single port-range delete action", "direct native port-list range deletion"],
             },
             {
                 "method": "delete",
@@ -14163,6 +14187,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.port-list-predefined-delete-denied",
             "native-api-direct.port-list-write-create",
             "native-api-direct.port-list-write-range-replace",
+            "native-api-direct.port-list-write-range-delete",
             "native-api-direct.port-list-write-clone",
             "native-api-direct.port-list-write-hard-delete-clone",
             "native-api-direct.port-list-write-post-hard-delete-clone",
@@ -15120,6 +15145,18 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             port_list_range_patch_ok = port_list_range_patch.returncode == 0 and port_list_range_patch_status == 200 and isinstance(port_list_range_patch_json, dict) and port_list_range_patch_json.get("id") == port_list_id and isinstance(port_list_range_patch_ranges, list) and len(port_list_range_patch_ranges) == 1 and port_list_range_patch_ranges[0].get("protocol") == "udp" and port_list_range_patch_ranges[0].get("start") == 65002 and port_list_range_patch_ranges[0].get("end") == 65002
             findings.append(native_api_probe_finding("pass" if port_list_range_patch_ok else "fail", "native-api-direct.port-list-write-range-replace", "Direct write-control replaced the temporary port list range set." if port_list_range_patch_ok else "Direct write-control failed to replace the temporary port list range set.", port_list_range_patch, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type), port_list_range_patch_json, {"http_status": port_list_range_patch_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_patch_json)}))
 
+            port_range_id = port_list_range_patch_ranges[0].get("id") if isinstance(port_list_range_patch_ranges, list) and len(port_list_range_patch_ranges) == 1 and isinstance(port_list_range_patch_ranges[0], dict) else None
+            if isinstance(port_range_id, str):
+                port_list_range_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/ranges/{urllib.parse.quote(port_range_id)}", token=token, env=env, method="DELETE")
+                port_list_range_delete_json, port_list_range_delete_status = parse_json_output_with_http_status(port_list_range_delete)
+                port_list_after_range_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env)
+                port_list_after_range_delete_json, port_list_after_range_delete_status = parse_json_output_with_http_status(port_list_after_range_delete)
+                port_list_after_range_delete_ranges = port_list_after_range_delete_json.get("port_ranges") if isinstance(port_list_after_range_delete_json, dict) else None
+                port_list_range_delete_ok = port_list_range_delete.returncode == 0 and port_list_range_delete_status == 204 and port_list_after_range_delete.returncode == 0 and port_list_after_range_delete_status == 200 and isinstance(port_list_after_range_delete_ranges, list) and len(port_list_after_range_delete_ranges) == 0
+                findings.append(native_api_probe_finding("pass" if port_list_range_delete_ok else "fail", "native-api-direct.port-list-write-range-delete", "Direct write-control deleted the temporary port list's last range without deleting the list." if port_list_range_delete_ok else "Direct write-control failed to delete the temporary port list range cleanly.", port_list_range_delete, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/ranges/{urllib.parse.quote(port_range_id)}", token=token, env=env, method="DELETE"), port_list_range_delete_json, {"http_status": port_list_range_delete_status, "port_list_id": port_list_id, "port_range_id": port_range_id, "detail_http_status": port_list_after_range_delete_status, **summarize_native_api_response(port_list_after_range_delete_json)}))
+            else:
+                findings.append(native_api_probe_finding("fail", "native-api-direct.port-list-write-range-delete", "Direct write-control smoke could not find the replacement port range ID needed for range deletion.", port_list_range_patch, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type), port_list_range_patch_json, {"http_status": port_list_range_patch_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_patch_json)}))
+
             port_list_clone_body = json.dumps(
                 {"name": port_list_clone_name, "comment": "TurboVAS direct write smoke cloned temporary port list"},
                 separators=(",", ":"),
@@ -15128,8 +15165,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             port_list_clone_json, port_list_clone_status = parse_json_output_with_http_status(port_list_clone)
             port_list_clone_id = port_list_clone_json.get("id") if isinstance(port_list_clone_json, dict) else None
             port_list_clone_ranges = port_list_clone_json.get("port_ranges") if isinstance(port_list_clone_json, dict) else None
-            port_list_clone_ok = port_list_clone.returncode == 0 and port_list_clone_status == 201 and isinstance(port_list_clone_id, str) and port_list_clone_id != port_list_id and port_list_clone_json.get("name") == port_list_clone_name and port_list_clone_json.get("predefined") is False and isinstance(port_list_clone_ranges, list) and len(port_list_clone_ranges) == 1
-            findings.append(native_api_probe_finding("pass" if port_list_clone_ok else "fail", "native-api-direct.port-list-write-clone", "Direct write-control cloned the temporary port list with copied ranges." if port_list_clone_ok else "Direct write-control failed to clone the temporary port list with copied ranges.", port_list_clone, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/clone", token=token, env=env, method="POST", body=port_list_clone_body, extra_headers=content_type), port_list_clone_json, {"http_status": port_list_clone_status, "port_list_id": port_list_id, "port_list_clone_id": port_list_clone_id, **summarize_native_api_response(port_list_clone_json)}))
+            port_list_clone_ok = port_list_clone.returncode == 0 and port_list_clone_status == 201 and isinstance(port_list_clone_id, str) and port_list_clone_id != port_list_id and port_list_clone_json.get("name") == port_list_clone_name and port_list_clone_json.get("predefined") is False and isinstance(port_list_clone_ranges, list) and len(port_list_clone_ranges) == 0
+            findings.append(native_api_probe_finding("pass" if port_list_clone_ok else "fail", "native-api-direct.port-list-write-clone", "Direct write-control cloned the temporary port list after its range set was emptied." if port_list_clone_ok else "Direct write-control failed to clone the temporary port list after range deletion.", port_list_clone, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/clone", token=token, env=env, method="POST", body=port_list_clone_body, extra_headers=content_type), port_list_clone_json, {"http_status": port_list_clone_status, "port_list_id": port_list_id, "port_list_clone_id": port_list_clone_id, **summarize_native_api_response(port_list_clone_json)}))
 
             if port_list_clone_id:
                 port_list_clone_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_clone_id)}", token=token, env=env, method="DELETE")

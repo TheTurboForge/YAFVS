@@ -53,6 +53,20 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequ
     }
 }
 
+#[test]
+fn port_list_range_delete_sql_deletes_single_live_range_only() {
+    let state = port_list_range_write_state_sql();
+    assert!(state.contains("FROM port_ranges pr"));
+    assert!(state.contains("JOIN port_lists pl ON pl.id = pr.port_list"));
+    assert!(state.contains("WHERE pl.uuid = $1"));
+    assert!(state.contains("AND pr.uuid = $2"));
+
+    let delete = port_list_delete_range_sql();
+    assert_eq!(delete, "DELETE FROM port_ranges WHERE id = $1;");
+    assert!(!delete.contains("port_ranges_trash"));
+    assert!(!delete.contains("port_lists"));
+}
+
 fn patch_request_with_ranges(ranges: Vec<PortListCreateRangeRequest>) -> PortListPatchRequest {
     PortListPatchRequest {
         name: None,
@@ -275,6 +289,21 @@ fn port_list_create_plan_validates_ranges_before_insert() {
             PortListWriteStep::VerifyUniqueLiveAndTrashName,
             PortListWriteStep::InsertPortList,
             PortListWriteStep::ReplacePortRanges,
+        ]
+    );
+}
+
+#[test]
+fn port_list_range_delete_plan_keeps_parent_safety_explicit() {
+    assert_eq!(
+        port_list_range_delete_transaction_plan().steps,
+        vec![
+            PortListWriteStep::ResolveOperatorOwner,
+            PortListWriteStep::VerifyExistingPortListMutable,
+            PortListWriteStep::VerifyNotPredefined,
+            PortListWriteStep::VerifyTargetDeleteSafety,
+            PortListWriteStep::VerifyTrashTargetDeleteSafety,
+            PortListWriteStep::DeletePortRange,
         ]
     );
 }
@@ -748,6 +777,41 @@ fn port_list_patch_plan_replaces_ranges_only_after_reference_safety_checks() {
             PortListWriteStep::ReplacePortRanges,
         ]
     );
+}
+
+#[test]
+fn port_list_range_delete_handler_checks_parent_safety_before_delete() {
+    let source = include_str!("port_list_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn delete_port_list_range")
+        .expect("delete_port_list_range handler must exist")
+        .1
+        .split_once("pub(crate) async fn delete_port_list")
+        .expect("delete_port_list should follow range delete handler")
+        .0;
+    let load = handler
+        .find("load_port_list_range_write_state")
+        .expect("handler must load parent/range state");
+    let owner = handler
+        .find("ensure_port_list_owner_matches_operator")
+        .expect("handler must check owner");
+    let predefined = handler
+        .find("state.predefined")
+        .expect("handler must block predefined parent lists");
+    let live_targets = handler
+        .find("ensure_port_list_not_in_use_by_live_targets")
+        .expect("handler must reject live target references");
+    let trash_targets = handler
+        .find("ensure_port_list_not_in_use_by_live_location_trash_targets")
+        .expect("handler must reject trash target references to live list");
+    let delete = handler
+        .find("execute_port_list_range_delete_transaction")
+        .expect("handler must delete the range after safety checks");
+    assert!(load < owner);
+    assert!(owner < predefined);
+    assert!(predefined < live_targets);
+    assert!(live_targets < trash_targets);
+    assert!(trash_targets < delete);
 }
 
 #[test]

@@ -9,6 +9,7 @@ pub(crate) enum PortListWriteOperation {
     Create,
     Clone,
     Patch,
+    DeleteRange,
     Delete,
     Restore,
     HardDelete,
@@ -28,6 +29,7 @@ pub(crate) enum PortListWriteStep {
     ClonePortListRanges,
     ClonePortListTags,
     ReplacePortRanges,
+    DeletePortRange,
     UpdatePortListMetadata,
     MovePortListToTrash,
     MovePortRangesToTrash,
@@ -39,6 +41,20 @@ pub(crate) enum PortListWriteStep {
     RestorePortRangesFromTrash,
     RelocateTargets,
     RelocatePermissionsAndTags,
+}
+
+pub(crate) fn port_list_range_delete_transaction_plan() -> PortListWriteTransactionPlan {
+    PortListWriteTransactionPlan {
+        operation: PortListWriteOperation::DeleteRange,
+        steps: vec![
+            PortListWriteStep::ResolveOperatorOwner,
+            PortListWriteStep::VerifyExistingPortListMutable,
+            PortListWriteStep::VerifyNotPredefined,
+            PortListWriteStep::VerifyTargetDeleteSafety,
+            PortListWriteStep::VerifyTrashTargetDeleteSafety,
+            PortListWriteStep::DeletePortRange,
+        ],
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

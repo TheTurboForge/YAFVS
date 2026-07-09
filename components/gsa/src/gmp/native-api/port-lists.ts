@@ -472,11 +472,16 @@ export const deleteNativePortRange = async (
   const current = await fetchNativePortListPayload(gmp, portListId);
   const currentRanges = current.port_ranges ?? [];
   const remainingRanges = currentRanges.filter(range => range.id !== id);
-  if (
-    remainingRanges.length === currentRanges.length ||
-    remainingRanges.length === 0
-  ) {
+  if (remainingRanges.length === currentRanges.length) {
     return undefined;
+  }
+  if (remainingRanges.length === 0) {
+    await deleteNative(
+      gmp,
+      `api/v1/port-lists/${encodeURIComponent(portListId)}/ranges/${encodeURIComponent(id)}`,
+    );
+    const payload = await fetchNativePortListPayload(gmp, portListId);
+    return new Response(nativePortListToModel(payload, {detail: true}));
   }
   const payload = await patchNativePortListPayload(gmp, portListId, {
     port_ranges: remainingRanges.map(nativePortRangePatchRequest),

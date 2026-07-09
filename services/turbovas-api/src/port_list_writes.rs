@@ -165,6 +165,39 @@ pub(crate) async fn patch_port_list(
     ))
 }
 
+pub(crate) async fn delete_port_list_range(
+    State(state): State<AppState>,
+    Path((port_list_id, port_range_id)): Path<(String, String)>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_port_list_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_port_list_write_db_error(error, "begin delete port list range transaction")
+    })?;
+    let operator_owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE port_lists, port_ranges, targets, targets_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_port_list_write_db_error(error, "lock port list range delete tables"))?;
+    let state = load_port_list_range_write_state(&tx, &port_list_id, &port_range_id).await?;
+    ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    if state.predefined {
+        return Err(ApiError::Conflict(
+            "predefined port list ranges cannot be deleted".to_string(),
+        ));
+    }
+    ensure_port_list_not_in_use_by_live_targets(&tx, state.port_list_internal_id).await?;
+    ensure_port_list_not_in_use_by_live_location_trash_targets(&tx, state.port_list_internal_id)
+        .await?;
+    execute_port_list_range_delete_transaction(&tx, state.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_port_list_write_db_error(error, "commit delete port list range transaction")
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub(crate) async fn delete_port_list(
     State(state): State<AppState>,
     Path(port_list_id): Path<String>,

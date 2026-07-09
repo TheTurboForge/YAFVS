@@ -262,6 +262,25 @@ is_uuid_segment_with_suffix (const gchar *value, const gchar *suffix)
 }
 
 static gboolean
+is_uuid_segment_pair_with_middle (const gchar *value, const gchar *middle)
+{
+  const gchar *second;
+  gsize first_length;
+
+  if (value == NULL || middle == NULL)
+    return FALSE;
+
+  second = strstr (value, middle);
+  if (second == NULL)
+    return FALSE;
+
+  first_length = second - value;
+  second += strlen (middle);
+  return is_uuid_segment (value, first_length)
+         && is_uuid_segment (second, strlen (second));
+}
+
+static gboolean
 native_api_delete_path_is_allowed (const gchar *path)
 {
   const gchar *filter_prefix = "/api/v1/filters/";
@@ -317,7 +336,8 @@ native_api_delete_path_is_allowed (const gchar *path)
     {
       const gchar *id = path + strlen (port_list_prefix);
       return is_uuid_segment (id, strlen (id))
-             || is_uuid_segment_with_suffix (id, trash_suffix);
+             || is_uuid_segment_with_suffix (id, trash_suffix)
+             || is_uuid_segment_pair_with_middle (id, "/ranges/");
     }
 
   if (g_str_has_prefix (path, report_config_prefix))

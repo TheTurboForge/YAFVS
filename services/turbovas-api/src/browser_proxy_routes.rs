@@ -26,9 +26,9 @@ use crate::{
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
-        browser_proxy_delete_port_list, browser_proxy_hard_delete_port_list,
-        browser_proxy_import_port_list, browser_proxy_patch_port_list,
-        browser_proxy_restore_port_list,
+        browser_proxy_delete_port_list, browser_proxy_delete_port_list_range,
+        browser_proxy_hard_delete_port_list, browser_proxy_import_port_list,
+        browser_proxy_patch_port_list, browser_proxy_restore_port_list,
     },
     browser_proxy_report_config::{
         browser_proxy_clone_report_config, browser_proxy_create_report_config,
@@ -140,6 +140,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/port-lists/:port_list_id",
             delete(browser_proxy_delete_port_list),
+        )
+        .route(
+            "/api/v1/port-lists/:port_list_id/ranges/:port_range_id",
+            delete(browser_proxy_delete_port_list_range),
         )
         .route(
             "/api/v1/port-lists/:port_list_id/trash",

@@ -17,8 +17,8 @@ use crate::{
         PortListCloneRequest, PortListCreateRequest, PortListImportRequest, PortListPatchRequest,
     },
     port_list_writes::{
-        clone_port_list, create_port_list, delete_port_list, hard_delete_port_list,
-        import_port_list, patch_port_list, restore_port_list,
+        clone_port_list, create_port_list, delete_port_list, delete_port_list_range,
+        hard_delete_port_list, import_port_list, patch_port_list, restore_port_list,
     },
 };
 
@@ -40,6 +40,21 @@ pub(crate) async fn browser_proxy_delete_port_list(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     delete_port_list(State(state), Path(port_list_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_delete_port_list_range(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path((port_list_id, port_range_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_port_list_range(
+        State(state),
+        Path((port_list_id, port_range_id)),
+        Some(Extension(operator)),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_hard_delete_port_list(

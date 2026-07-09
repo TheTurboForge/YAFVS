@@ -2330,10 +2330,10 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 163)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 164)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 104)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 59)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 59)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 60)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 60)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
@@ -2364,8 +2364,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 59)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 59)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 60)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 60)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
@@ -2445,8 +2445,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 59)
-        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 59)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 60)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 60)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_path_parameter_count"], 0)
@@ -2484,7 +2484,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
         self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 104)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 59)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 60)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
@@ -2494,6 +2494,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "DELETE /api/v1/host-operating-systems/{host_operating_system_id}",
                 "DELETE /api/v1/hosts/{host_id}",
                 "DELETE /api/v1/port-lists/{port_list_id}",
+                "DELETE /api/v1/port-lists/{port_list_id}/ranges/{port_range_id}",
                 "DELETE /api/v1/port-lists/{port_list_id}/trash",
                 "DELETE /api/v1/report-configs/{report_config_id}",
                 "DELETE /api/v1/report-configs/{report_config_id}/trash",
@@ -2549,7 +2550,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/targets/{target_id}/restore",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 59)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 60)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
@@ -2559,6 +2560,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "DELETE /api/v1/host-operating-systems/{host_operating_system_id}",
                 "DELETE /api/v1/hosts/{host_id}",
                 "DELETE /api/v1/port-lists/{port_list_id}",
+                "DELETE /api/v1/port-lists/{port_list_id}/ranges/{port_range_id}",
                 "DELETE /api/v1/port-lists/{port_list_id}/trash",
                 "DELETE /api/v1/report-configs/{report_config_id}",
                 "DELETE /api/v1/report-configs/{report_config_id}/trash",
@@ -2773,8 +2775,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 59)
-        self.assertEqual(contract["direct_write_control_count"], 59)
+        self.assertEqual(contract["browser_write_proxy_count"], 60)
+        self.assertEqual(contract["direct_write_control_count"], 60)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
@@ -2785,6 +2787,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("DELETE /api/v1/host-identifiers/{identifier_id}", contract["browser_write_proxy_operations"])
         self.assertIn("DELETE /api/v1/host-operating-systems/{host_operating_system_id}", contract["browser_write_proxy_operations"])
         self.assertIn("DELETE /api/v1/hosts/{host_id}", contract["browser_write_proxy_operations"])
+        self.assertIn("DELETE /api/v1/port-lists/{port_list_id}/ranges/{port_range_id}", contract["browser_write_proxy_operations"])
         self.assertIn("DELETE /api/v1/tls-certificates/{certificate_id}", contract["browser_write_proxy_operations"])
         self.assertIn("DELETE /api/v1/filters/{filter_id}/trash", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/alerts/{alert_id}", contract["browser_write_proxy_operations"])
@@ -3331,7 +3334,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 163)
+        self.assertEqual(contract["operation_count"], 164)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertEqual(
@@ -3412,6 +3415,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'port-list-metadata-detail-read',
          'port-list-metadata-export-read',
          'port-list-metadata-list-read',
+         'port-list-range-delete',
          'port-list-restore',
          'port-list-trash-move',
          'raw-report-application-evidence-read',
@@ -3625,12 +3629,12 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 163)
-        self.assertEqual(details["direct_operation_count"], 163)
+        self.assertEqual(details["operation_count"], 164)
+        self.assertEqual(details["direct_operation_count"], 164)
         self.assertEqual(details["direct_read_operation_count"], 104)
         self.assertEqual(
             details["non_get_direct_operations"],
-            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "DELETE /scope-reports/{scope_report_id}"],
+            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "DELETE /scope-reports/{scope_report_id}"],
         )
         self.assertIn("/api/v1", details["servers"])
         self.assertIn("http://127.0.0.1:19080/api/v1", details["servers"])
@@ -3657,9 +3661,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 59)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 59)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 59)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 60)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 60)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 60)
         self.assertEqual(status_only["details"]["operation_request_body_count"], 31)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
@@ -3840,11 +3844,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 163)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 163)
-        self.assertEqual(details["summary"]["inventory_rows"], 163)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 163)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 163)
+        self.assertEqual(details["summary"]["total_rows"], 164)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 164)
+        self.assertEqual(details["summary"]["inventory_rows"], 164)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 164)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 164)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -3897,6 +3901,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(delete_port_list["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_port_list["x_turbovas_exposure"], "direct-write")
         self.assertEqual(delete_port_list["x_turbovas_replaces"], "port-list-trash-move")
+
+        delete_port_list_range = rows[("delete", "/api/v1/port-lists/{port_list_id}/ranges/{port_range_id}")]
+        self.assertEqual(delete_port_list_range["status"], "implemented_internal_and_browser_proxied")
+        self.assertEqual(delete_port_list_range["direct_access"], "direct_write_control")
+        self.assertEqual(delete_port_list_range["x_turbovas_maturity"], "live-write")
+        self.assertEqual(delete_port_list_range["x_turbovas_exposure"], "direct-write")
+        self.assertEqual(delete_port_list_range["x_turbovas_replaces"], "port-list-range-delete")
 
         clone_port_list = rows[("post", "/api/v1/port-lists/{port_list_id}/clone")]
         self.assertEqual(clone_port_list["status"], "implemented_internal_and_browser_proxied")
@@ -4607,7 +4618,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 163)
+        self.assertEqual(len(operation_ids), 164)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -4732,6 +4743,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /tags/{tag_id}/export",
                 "POST /tags/{tag_id}/clone",
                 "DELETE /port-lists/{port_list_id}",
+                "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}",
                 "DELETE /port-lists/{port_list_id}/trash",
                 "PATCH /port-lists/{port_list_id}",
                 "POST /port-lists",
@@ -8198,6 +8210,9 @@ db2:keys=5,expires=0,avg_ttl=0
             port_list_uuid = "66666666-6666-6666-6666-666666666666"
             temp_port_list_uuid = "66666666-6666-6666-6666-666666666667"
             temp_port_list_clone_uuid = "66666666-6666-6666-6666-666666666668"
+            temp_port_range_uuid = "66666666-6666-6666-6666-666666666669"
+            temp_port_list_ranges = {"value": []}
+            temp_port_list_live = {"value": True}
             schedule_uuid = "77777777-7777-7777-7777-777777777777"
             schedule_clone_uuid = "77777777-7777-7777-7777-777777777778"
             scan_config_uuid = "77777777-7777-7777-7777-777777777779"
@@ -8530,10 +8545,14 @@ db2:keys=5,expires=0,avg_ttl=0
                 if method == "PATCH" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}"):
                     payload = json.loads(body)
                     self.assertEqual(payload["port_ranges"][0]["protocol"], "udp")
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "turbovas-direct-write-smoke-port-list-1-1", "predefined": False, "port_ranges": [{"protocol": "udp", "start": 65002, "end": 65002}]}) + "\n200", "")
+                    temp_port_list_ranges["value"] = [{"id": temp_port_range_uuid, "protocol": "udp", "start": 65002, "end": 65002}]
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "turbovas-direct-write-smoke-port-list-1-1", "predefined": False, "port_ranges": temp_port_list_ranges["value"]}) + "\n200", "")
+                if method == "DELETE" and path == f"/api/v1/port-lists/{temp_port_list_uuid}/ranges/{temp_port_range_uuid}":
+                    temp_port_list_ranges["value"] = []
+                    return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "POST" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}/clone"):
                     payload = json.loads(body)
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_clone_uuid, "name": payload["name"], "predefined": False, "port_ranges": [{"protocol": "udp", "start": 65002, "end": 65002}]}) + "\n201", "")
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_clone_uuid, "name": payload["name"], "predefined": False, "port_ranges": temp_port_list_ranges["value"]}) + "\n201", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_clone_uuid}/trash"):
                     return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_clone_uuid}"):
@@ -8541,12 +8560,16 @@ db2:keys=5,expires=0,avg_ttl=0
                 if method == "GET" and path.startswith(f"/api/v1/port-lists/{temp_port_list_clone_uuid}"):
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "POST" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}/restore"):
+                    temp_port_list_live["value"] = True
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "turbovas-direct-write-smoke-port-list-1-" + str(turbovasctl.os.getpid())}) + "\n200", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}/trash"):
                     return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}"):
+                    temp_port_list_live["value"] = False
                     return turbovasctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "GET" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}"):
+                    if temp_port_list_live["value"]:
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "port_ranges": temp_port_list_ranges["value"]}) + "\n200", "")
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "PATCH" and path.startswith("/api/v1/port-lists/"):
                     payload = json.loads(body)
@@ -8688,6 +8711,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.port-list-predefined-delete-denied"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-range-replace"], "pass")
+        self.assertEqual(checks["native-api-direct.port-list-write-range-delete"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-clone"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-hard-delete-clone"], "pass")
         self.assertEqual(checks["native-api-direct.port-list-write-post-hard-delete-clone"], "pass")

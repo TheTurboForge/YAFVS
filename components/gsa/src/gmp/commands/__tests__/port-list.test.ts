@@ -829,25 +829,33 @@ describe('PortListCommand', () => {
     expect(result.data.id).toEqual('port-list-id');
   });
 
-  test('should keep GMP delete for last port range until empty range-set semantics are native', async () => {
-    const fetchMock = testing.fn().mockResolvedValueOnce({
-      json: testing.fn().mockResolvedValue({
-        id: 'port-list-id',
-        name: 'Web ports',
-        port_ranges: [{id: 'range-1', protocol: 'tcp', start: 80, end: 80}],
-      }),
-      ok: true,
-      status: 200,
-    });
+  test('should delete the last port range through native range delete when available', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [{id: 'range-1', protocol: 'tcp', start: 80, end: 80}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'port-list-id',
+          name: 'Web ports',
+          port_ranges: [],
+        }),
+        ok: true,
+        status: 200,
+      });
     testing.stubGlobal('fetch', fetchMock);
-    const response = createActionResultResponse({
-      action: 'delete_port_range',
-      id: 'range-1',
-    });
-    const entityResponse = createEntityResponse('port_list', {id: 'port-list-id'});
-    const http = createHttpMany([response, entityResponse]) as ReturnType<
-      typeof createHttpMany
-    > & {
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -856,6 +864,7 @@ describe('PortListCommand', () => {
     );
     http.session = createSession();
     http.session.token = 'test-token';
+    http.session.jwt = 'jwt-token';
     const command = new PortListCommand(http);
 
     const result = await command.deletePortRange({
@@ -863,14 +872,25 @@ describe('PortListCommand', () => {
       portListId: 'port-list-id',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(http.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_port_range',
-        port_range_id: 'range-1',
-        no_redirect: 1,
+    expect(http.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/port-lists/port-list-id/ranges/range-1',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://turbovas.example/api/v1/port-lists/port-list-id',
+      expect.objectContaining({headers: expect.objectContaining({Accept: 'application/json'})}),
+    );
     expect(result.data.id).toEqual('port-list-id');
   });
 

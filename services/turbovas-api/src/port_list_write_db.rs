@@ -58,6 +58,14 @@ pub(crate) struct PortListWriteState {
     pub(crate) predefined: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PortListRangeWriteState {
+    pub(crate) internal_id: i32,
+    pub(crate) port_list_internal_id: i32,
+    pub(crate) owner_id: i32,
+    pub(crate) predefined: bool,
+}
+
 pub(crate) fn require_port_list_write_operator(
     operator: Option<Extension<DirectApiOperator>>,
 ) -> Result<DirectApiOperator, ApiError> {
@@ -99,6 +107,28 @@ pub(crate) async fn load_port_list_write_state(
             predefined: row.get::<_, i32>(2) != 0,
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) async fn load_port_list_range_write_state(
+    tx: &Transaction<'_>,
+    port_list_id: &str,
+    port_range_id: &str,
+) -> Result<PortListRangeWriteState, ApiError> {
+    let port_list_id = parse_uuid(port_list_id)?.to_string();
+    let port_range_id = parse_uuid(port_range_id)?.to_string();
+    tx.query_opt(
+        port_list_range_write_state_sql(),
+        &[&port_list_id, &port_range_id],
+    )
+    .await
+    .map_err(|error| map_port_list_write_db_error(error, "load port list range write state"))?
+    .map(|row| PortListRangeWriteState {
+        internal_id: row.get(0),
+        port_list_internal_id: row.get(1),
+        owner_id: row.get(2),
+        predefined: row.get::<_, i32>(3) != 0,
+    })
+    .ok_or(ApiError::NotFound)
 }
 
 pub(crate) fn ensure_port_list_owner_matches_operator(

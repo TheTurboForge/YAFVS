@@ -2608,7 +2608,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: port-list-metadata-list-read
       summary: List port lists
-      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can create typed TCP/UDP port lists, import exported XML with explicit ranges or inherited OpenVAS default TCP ranges, clone existing port lists, patch port-list name/comment metadata and complete port-range sets, move live port lists to trash, restore trashed port lists, and permanently delete trashed port-list metadata/ranges.
+      description: Read-only port-list metadata backed by gvmd/PostgreSQL. Native direct write-control can create typed TCP/UDP port lists, import exported XML with explicit ranges or inherited OpenVAS default TCP ranges, clone existing port lists, patch port-list name/comment metadata and complete port-range sets, delete individual port ranges, move live port lists to trash, restore trashed port lists, and permanently delete trashed port-list metadata/ranges.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2807,6 +2807,43 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /port-lists/{port_list_id}/ranges/{port_range_id}:
+    delete:
+      operationId: deletePortListsByPortListIdRangesByPortRangeId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: port-list-range-delete
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Delete one port-list range
+      description: Direct write-control endpoint for deleting one range row from a non-predefined operator-owned port list. Unlike inherited GMP delete_port_range, this native contract rejects deletion while the parent port list is referenced by live targets or trash targets pointing at the live list.
+      parameters:
+        - $ref: '#/components/parameters/PortListId'
+        - $ref: '#/components/parameters/PortRangeId'
+      responses:
+        '204':
+          description: Port range deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '405':
@@ -6175,6 +6212,13 @@ components:
         format: uuid
     PortListId:
       name: port_list_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PortRangeId:
+      name: port_range_id
       in: path
       required: true
       schema:

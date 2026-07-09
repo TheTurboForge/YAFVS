@@ -51,6 +51,20 @@ pub(crate) async fn execute_port_list_create_transaction(
     Ok(record)
 }
 
+pub(crate) async fn execute_port_list_range_delete_transaction(
+    tx: &Transaction<'_>,
+    port_range_internal_id: i32,
+) -> Result<(), ApiError> {
+    execute_port_list_write_sql(
+        tx,
+        port_list_delete_range_sql(),
+        &[&port_range_internal_id],
+        "delete port list range",
+    )
+    .await?;
+    Ok(())
+}
+
 pub(crate) async fn execute_port_list_patch_transaction(
     tx: &Transaction<'_>,
     port_list_internal_id: i32,

@@ -59,6 +59,17 @@ pub(crate) fn port_list_write_state_sql() -> &'static str {
       WHERE uuid = $1;"
 }
 
+pub(crate) fn port_list_range_write_state_sql() -> &'static str {
+    "SELECT pr.id::integer,
+            pr.port_list::integer,
+            pl.owner::integer,
+            coalesce(pl.predefined, 0)::integer
+       FROM port_ranges pr
+       JOIN port_lists pl ON pl.id = pr.port_list
+      WHERE pl.uuid = $1
+        AND pr.uuid = $2;"
+}
+
 pub(crate) fn port_list_trash_state_sql() -> &'static str {
     "SELECT id::integer, uuid::text, name, owner::integer
        FROM port_lists_trash
@@ -166,6 +177,10 @@ pub(crate) fn port_list_trash_tag_locations_to_trash_sql() -> &'static str {
 
 pub(crate) fn port_list_delete_ranges_sql() -> &'static str {
     "DELETE FROM port_ranges WHERE port_list = $1;"
+}
+
+pub(crate) fn port_list_delete_range_sql() -> &'static str {
+    "DELETE FROM port_ranges WHERE id = $1;"
 }
 
 pub(crate) fn port_list_delete_metadata_sql() -> &'static str {

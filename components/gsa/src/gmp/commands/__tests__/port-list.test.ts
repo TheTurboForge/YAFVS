@@ -95,11 +95,18 @@ describe('PortListCommand', () => {
     expect(result.data.targets[0]?.id).toEqual('target-id');
   });
 
-  test('should keep unsupported filtered port-list detail on GMP', async () => {
-    const entityResponse = createEntityResponse('port_list', {id: '324'});
-    const fetchMock = testing.fn();
+  test('should fetch port-list task detail filter through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '324',
+        name: 'Web ports',
+        targets: [{id: 'target-id', name: 'Target'}],
+      }),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const http = createHttp(entityResponse) as ReturnType<typeof createHttp> & {
+    const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -111,15 +118,13 @@ describe('PortListCommand', () => {
     const command = new PortListCommand(http);
     const result = await command.get({id: '324'}, {filter: 'tasks=1'});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(http.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_port_list',
-        port_list_id: '324',
-        filter: 'tasks=1',
-      },
+    expect(http.request).not.toHaveBeenCalled();
+    expect(http.buildUrl).toHaveBeenCalledWith('api/v1/port-lists/324', {
+      token: 'test-token',
     });
+    expect(fetchMock).toHaveBeenCalled();
     expect(result.data.id).toEqual('324');
+    expect(result.data.targets[0]?.id).toEqual('target-id');
   });
 
   test('should export port list metadata through native API when available', async () => {

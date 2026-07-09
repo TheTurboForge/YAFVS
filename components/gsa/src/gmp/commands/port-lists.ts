@@ -77,8 +77,10 @@ const shouldExportAllByFilter = (filter: Filter): boolean => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-const nativePortListDetailSupportsFilter = (filter?: Filter | string): boolean =>
-  filter === undefined || filterString(filter) === 'targets=1';
+const nativePortListDetailSupportsFilter = (filter?: Filter | string): boolean => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'targets=1' || value === 'tasks=1';
+};
 
 export const FROM_FILE = YES_VALUE;
 export const NOT_FROM_FILE = NO_VALUE;

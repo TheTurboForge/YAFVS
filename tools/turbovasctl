@@ -5499,6 +5499,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
     path = Path(relative_path)
     if relative_path.startswith(GSA_NATIVE_API_CLIENT_PREFIX):
         return None
+    if relative_path == "tools/runtime_browser_smoke.py":
+        return "compatibility_bridge", "Browser smoke uses native cleanup first; inherited GMP/python-gvm remains only as optional fallback cleanup plumbing."
     if relative_path == "tools/turbovasctl" or (relative_path.startswith("tools/runtime_") and relative_path.endswith(".py")):
         return "required_runtime", "TurboVAS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
     if relative_path.startswith("tools/tests/"):

@@ -2062,6 +2062,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertGreater(details["by_category"]["required_runtime"]["count"], 0)
         self.assertGreater(details["by_category"]["product_workflow"]["count"], 0)
         self.assertGreater(details["by_category"]["compatibility_bridge"]["count"], 0)
+        self.assertNotIn("tools/runtime_browser_smoke.py", details["by_category"]["required_runtime"]["paths"])
+        self.assertIn("tools/runtime_browser_smoke.py", details["by_category"]["compatibility_bridge"]["paths"])
         self.assertNotIn("tools/runtime_report.py", details["by_category"]["required_runtime"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-scopes.gmp.py", details["by_category"]["product_workflow"]["paths"])
@@ -6595,6 +6597,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_native_tooling_category_keeps_scripts_and_docs_distinct(self):
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_scope.py")[0], "required_runtime")
+        self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_browser_smoke.py")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("tools/tests/test_turbovasctl.py")[0], "required_test")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/scopes.ts")[0], "product_workflow")
         self.assertIsNone(turbovasctl.native_tooling_category("components/gsa/src/gmp/native-api/tags.ts"))

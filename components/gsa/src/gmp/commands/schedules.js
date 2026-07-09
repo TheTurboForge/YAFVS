@@ -47,8 +47,10 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-const nativeScheduleDetailSupportsFilter = filter =>
-  filter === undefined || filterString(filter) === 'tasks=1';
+const nativeScheduleDetailSupportsFilter = filter => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'tasks=1' || value === 'alerts=1';
+};
 
 export class ScheduleCommand extends EntityCommand {
   constructor(http) {

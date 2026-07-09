@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -48,7 +48,25 @@ const cpe = CPE.fromElement({
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
+const nativeCpeItem = {
+  id: 'cpe:/a:foo',
+  name: 'foo',
+  created_at: '2019-06-24T11:55:30Z',
+  modified_at: '2019-06-24T10:12:27Z',
+  updated_at: '2019-06-24T10:12:27Z',
+  cve_refs: 3,
+  cves: [
+    {id: 'CVE-2020-1234', severity: 9.8},
+    {id: 'CVE-2020-5678', severity: 7.8},
+    {id: 'CVE-2019-5678', severity: 7.8},
+  ],
+  severity: 9.8,
+  title: 'bar',
+};
+
 const createGmp = ({
+  buildUrl,
+  nativeCpeItems = [nativeCpeItem],
   getCpes = testing.fn().mockResolvedValue({
     data: [cpe],
     meta: {
@@ -97,30 +115,67 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  dashboard: {
-    getSetting: getDashboardSetting,
-  },
-  cpes: {
-    get: getCpes,
-    getSeverityAggregates: getAggregates,
-    getCreatedAggregates: getAggregates,
-    getActiveDaysAggregates: getAggregates,
-    deleteByFilter,
-    exportByFilter,
-    delete: deleteByIds,
-    export: exportByIds,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-    severityRating: SEVERITY_RATING_CVSS_3,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings, getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeCpeItems.length,
+                sort: '-modified',
+                filter: '',
+              },
+              items: nativeCpeItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    dashboard: {
+      getSetting: getDashboardSetting,
+    },
+    cpes: {
+      get: getCpes,
+      getSeverityAggregates: getAggregates,
+      getCreatedAggregates: getAggregates,
+      getActiveDaysAggregates: getAggregates,
+      deleteByFilter,
+      exportByFilter,
+      delete: deleteByIds,
+      export: exportByIds,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+      severityRating: SEVERITY_RATING_CVSS_3,
+    },
+    session: createSession({timezone: 'CET'}),
+    user: {currentSettings, getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('CpesPage tests', () => {

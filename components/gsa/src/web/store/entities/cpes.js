@@ -14,21 +14,13 @@ import {
 
 const {
   loadAllEntities,
-  loadEntities,
-  loadEntity,
   reducer,
   selector,
   entitiesLoadingActions,
   entityLoadingActions,
 } = createAll('cpe');
 
-const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
-
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
-  if (!canUseNativeApi(gmp)) {
-    return loadEntities(gmp)(filter)(dispatch, getState);
-  }
-
   const rootState = getState();
   const state = selector(rootState);
 
@@ -53,10 +45,6 @@ const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
 };
 
 const nativeLoadEntity = gmp => id => (dispatch, getState) => {
-  if (!canUseNativeApi(gmp)) {
-    return loadEntity(gmp)(id)(dispatch, getState);
-  }
-
   const rootState = getState();
   const state = selector(rootState);
 

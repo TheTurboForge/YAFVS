@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -42,7 +42,22 @@ const cve = Cve.fromElement({
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
+const nativeCveItem = {
+  id: 'CVE-2020-9992',
+  name: 'CVE-2020-9992',
+  published_at: '2020-10-22T19:15:00Z',
+  description: 'foo bar baz',
+  cvss_base_vector: 'AV:N/AC:M/Au:N/C:C/I:C/A:C',
+  severity: 9.3,
+  epss: {
+    score: 0.5,
+    percentile: 75.0,
+  },
+};
+
 const createGmp = ({
+  buildUrl,
+  nativeCveItems = [nativeCveItem],
   getCves = testing.fn().mockResolvedValue({
     data: [cve],
     meta: {
@@ -89,31 +104,68 @@ const createGmp = ({
   exportByIds = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  dashboard: {
-    getSetting: getDashboardSetting,
-  },
-  cves: {
-    get: getCves,
-    getSeverityAggregates: getAggregates,
-    getCreatedAggregates: getAggregates,
-    getActiveDaysAggregates: getAggregates,
-    deleteByFilter,
-    exportByFilter,
-    delete: deleteByIds,
-    export: exportByIds,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-    enableEPSS: true,
-    severityRating: SEVERITY_RATING_CVSS_3,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings, getSetting},
+} = {}) => {
+  const resolvedBuildUrl =
+    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+  if (buildUrl === undefined) {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(url => {
+        const path = String(url);
+        const payload = path.includes('/api/v1/filters')
+          ? {
+              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              items: [],
+            }
+          : {
+              page: {
+                page: 1,
+                page_size: 10,
+                total: nativeCveItems.length,
+                sort: '-severity',
+                filter: '',
+              },
+              items: nativeCveItems,
+            };
+        return Promise.resolve({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        });
+      }),
+    );
+  }
+  return {
+    buildUrl: resolvedBuildUrl,
+    dashboard: {
+      getSetting: getDashboardSetting,
+    },
+    cves: {
+      get: getCves,
+      getSeverityAggregates: getAggregates,
+      getCreatedAggregates: getAggregates,
+      getActiveDaysAggregates: getAggregates,
+      deleteByFilter,
+      exportByFilter,
+      delete: deleteByIds,
+      export: exportByIds,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+      enableEPSS: true,
+      severityRating: SEVERITY_RATING_CVSS_3,
+    },
+    session: createSession({timezone: 'CET'}),
+    user: {currentSettings, getSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('CvesPage tests', () => {

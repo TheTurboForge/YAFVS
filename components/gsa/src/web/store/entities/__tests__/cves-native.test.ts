@@ -5,7 +5,11 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import Filter from 'gmp/models/filter';
 import {fetchNativeCve, fetchNativeCves} from 'gmp/native-api/cves';
+import {loadEntities, loadEntity} from 'web/store/entities/cves';
+import {createState} from 'web/store/entities/utils/testing';
+import {filterIdentifier} from 'web/store/utils';
 
 const createGmp = ({
   jwt,
@@ -189,5 +193,83 @@ describe('native API CVE catalog', () => {
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/cves/CVE-2026-26220', {
       token: 'test-token',
     });
+  });
+
+  test('loads the CVE store through same-origin native API', async () => {
+    const filter = Filter.fromString('first=1 rows=10 sort-reverse=severity');
+    const rootState = createState('cve', {
+      isLoading: {
+        [filterIdentifier(filter)]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 10, total: 1, sort: '-severity', filter: ''},
+        items: [
+          {
+            id: 'CVE-2026-26220',
+            description: 'LightLLM remote code execution vulnerability.',
+            severity: 9.8,
+            products: ['cpe:/a:example:lightllm:1.1.0'],
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntities(gmp)(filter)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/cves', {
+      token: 'test-token',
+      page: 1,
+      page_size: 10,
+      sort: '-severity',
+      filter: '',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITIES_LOADING_SUCCESS');
+    expect(successAction.counts.filtered).toEqual(1);
+    expect(successAction.data[0].name).toEqual('CVE-2026-26220');
+    expect(successAction.data[0].severity).toEqual(9.8);
+  });
+
+  test('loads CVE detail store entries through same-origin native API', async () => {
+    const id = 'CVE-2026-26220';
+    const rootState = createState('cve', {
+      isLoading: {
+        [id]: false,
+      },
+    });
+    const getState = testing.fn().mockReturnValue(rootState);
+    const dispatch = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id,
+        description: 'LightLLM remote code execution vulnerability.',
+        severity: 9.8,
+        products: ['cpe:/a:example:lightllm:1.1.0'],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp();
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/cves/CVE-2026-26220', {
+      token: 'test-token',
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const successAction = dispatch.mock.calls[1][0];
+    expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
+    expect(successAction.data.name).toEqual('CVE-2026-26220');
+    expect(successAction.data.products).toEqual(['cpe:/a:example:lightllm:1.1.0']);
   });
 });

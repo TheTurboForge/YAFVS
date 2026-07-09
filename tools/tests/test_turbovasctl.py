@@ -1395,7 +1395,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -1407,6 +1407,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("args.status_only or args.compact or args.summary", source)
         self.assertIn("status_only=args.status_only", source)
         self.assertIn("def command_native_api_client_contract", source)
+        self.assertIn("def command_native_api_replacement_dashboard", source)
+        self.assertIn("def command_closeout_readiness", source)
         self.assertIn("def command_native_api_cargo_audit", source)
         self.assertIn("def command_native_api_semgrep_audit", source)
         self.assertIn("def command_gsa_npm_audit", source)
@@ -4618,6 +4620,76 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(remaining["bucket_counts"]["credential_or_secret"], 1)
         self.assertEqual(remaining["bucket_counts"]["rich_context_or_history"], 1)
         self.assertIn("dedicated design packet", remaining["planning_hint"])
+
+    def test_native_api_replacement_dashboard_calculates_weighted_estimate(self):
+        root = Path(__file__).resolve().parents[2]
+        tooling = {
+            "status": "pass",
+            "summary": "tooling ok",
+            "details": {
+                "candidate_for_removal_review": {
+                    "total": 4,
+                    "safe_removal_count": 1,
+                    "blocked_or_review_count": 3,
+                    "bucket_counts": {"write_or_mutation": 3},
+                }
+            },
+            "findings": [],
+        }
+        matrix = {
+            "status": "pass",
+            "summary": "matrix ok",
+            "details": {
+                "summary": {
+                    "total_rows": 10,
+                    "progress_percentages": {
+                        "openapi_operation_rows_percent": 100.0,
+                        "inventory_rows_percent": 90.0,
+                        "rows_with_checked_migration_metadata_percent": 80.0,
+                        "browser_proxied_percent": 70.0,
+                    },
+                    "by_direct_access": {"scriptable_read": 5, "direct_write_control": 2},
+                },
+                "remaining_inherited_surface": {
+                    "rows_with_inherited_owner_tail": 4,
+                    "bucket_counts": {"write_or_mutation": 4},
+                    "top_residuals": [{"residue": "target-writes", "example_endpoint": "/api/v1/targets", "count": 4}],
+                },
+            },
+            "findings": [],
+        }
+
+        with unittest.mock.patch.object(turbovasctl, "command_native_tooling_state", return_value=tooling), \
+             unittest.mock.patch.object(turbovasctl, "command_native_api_migration_matrix", return_value=matrix):
+            result = turbovasctl.command_native_api_replacement_dashboard(root, status_only=True)
+
+        weighted = result["weighted_estimate"]
+        self.assertEqual(result["headline_replacement_percent"], 73.0)
+        self.assertEqual(weighted["kind"], "weighted_estimate")
+        self.assertEqual(weighted["components"]["contract_percent"], 90.0)
+        self.assertEqual(weighted["components"]["direct_scriptable_percent"], 70.0)
+        self.assertEqual(weighted["components"]["inherited_tail_burndown_percent"], 60.0)
+        self.assertEqual(result["tooling_retirement_status"]["safe_removal_count"], 1)
+        self.assertEqual(result["next_best_slices"][0]["focus"], "target-writes")
+
+    def test_closeout_readiness_downgrades_optional_production_posture_to_watch(self):
+        root = Path(__file__).resolve().parents[2]
+        pass_result = {"status": "pass", "summary": "ok", "findings": []}
+        prod_result = {"status": "fail", "summary": "production not ready", "findings": [{"status": "fail", "check": "production.default-credentials", "message": "bad"}]}
+
+        with unittest.mock.patch.object(turbovasctl, "run_git", return_value=""), \
+             unittest.mock.patch.object(turbovasctl, "command_quality_gate_state", return_value=pass_result), \
+             unittest.mock.patch.object(turbovasctl, "command_native_tooling_state", return_value=pass_result), \
+             unittest.mock.patch.object(turbovasctl, "command_native_api_client_contract", return_value=pass_result), \
+             unittest.mock.patch.object(turbovasctl, "command_native_api_migration_matrix", return_value=pass_result), \
+             unittest.mock.patch.object(turbovasctl, "command_license_report", return_value=pass_result), \
+             unittest.mock.patch.object(turbovasctl, "command_production_posture_check", return_value=prod_result):
+            result = turbovasctl.command_closeout_readiness(root, status_only=True)
+
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(result["details"]["steps"]["production-posture-check"]["status"], "warn")
+        self.assertIn("hosted-workflow", result["details"]["unknown_steps"])
+        self.assertTrue(any(item["check"] == "closeout-readiness.production-posture-check" for item in result["findings"]))
 
     def test_openapi_operation_id_generator_is_stable_and_collision_free(self):
         root = Path(__file__).resolve().parents[2]

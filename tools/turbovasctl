@@ -10304,6 +10304,218 @@ def command_native_api_migration_matrix(repo_root: Path, status_only: bool = Fal
     return result
 
 
+def bounded_percent(value: float) -> float:
+    return round(max(0.0, min(100.0, value)), 1)
+
+
+def native_api_replacement_dashboard_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact["details"] = {
+        "weighted_estimate": details.get("weighted_estimate", {}),
+        "remaining_tail_buckets": details.get("remaining_tail_buckets", {}),
+        "next_best_slices": details.get("next_best_slices", []),
+        "tooling_retirement_status": details.get("tooling_retirement_status", {}),
+        "warnings": details.get("warnings", []),
+    }
+    compact["findings"] = [item for item in result.get("findings", []) if item.get("status") != "pass"] or [
+        finding("pass", "native-api-replacement-dashboard.status-only", "Native API replacement dashboard passed; no non-pass findings.")
+    ]
+    return compact
+
+
+def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    tooling_result = command_native_tooling_state(repo_root, status_only=True)
+    matrix_result = command_native_api_migration_matrix(repo_root, status_only=True)
+    tooling_details = tooling_result.get("details") if isinstance(tooling_result.get("details"), dict) else {}
+    matrix_details = matrix_result.get("details") if isinstance(matrix_result.get("details"), dict) else {}
+    summary = matrix_details.get("summary") if isinstance(matrix_details.get("summary"), dict) else {}
+    progress = summary.get("progress_percentages") if isinstance(summary.get("progress_percentages"), dict) else {}
+    direct_counts = summary.get("by_direct_access") if isinstance(summary.get("by_direct_access"), dict) else {}
+    total_rows = int(summary.get("total_rows") or 0)
+    openapi_percent = float(progress.get("openapi_operation_rows_percent") or 0.0)
+    inventory_percent = float(progress.get("inventory_rows_percent") or 0.0)
+    metadata_percent = float(progress.get("rows_with_checked_migration_metadata_percent") or 0.0)
+    contract_percent = bounded_percent((openapi_percent + inventory_percent + metadata_percent) / 3.0)
+    browser_native_percent = bounded_percent(float(progress.get("browser_proxied_percent") or 0.0))
+    direct_count = int(direct_counts.get("scriptable_read") or 0) + int(direct_counts.get("direct_write_control") or 0)
+    direct_scriptable_percent = bounded_percent((100.0 * direct_count / total_rows) if total_rows else 0.0)
+
+    remaining_surface = matrix_details.get("remaining_inherited_surface") if isinstance(matrix_details.get("remaining_inherited_surface"), dict) else {}
+    inherited_tail_count = int(remaining_surface.get("rows_with_inherited_owner_tail") or 0)
+    inherited_tail_burndown_percent = bounded_percent((100.0 * (total_rows - inherited_tail_count) / total_rows) if total_rows else 0.0)
+    removal_review = tooling_details.get("candidate_for_removal_review") if isinstance(tooling_details.get("candidate_for_removal_review"), dict) else {}
+    safe_removal_count = int(removal_review.get("safe_removal_count") or 0)
+    removal_total = int(removal_review.get("total") or 0)
+    tooling_retirement_percent = bounded_percent(100.0 - ((100.0 * safe_removal_count / removal_total) if removal_total else 0.0))
+    tooling_retirement_status = {
+        "status": "pass" if safe_removal_count == 0 else "warn",
+        "safe_removal_count": safe_removal_count,
+        "blocked_or_review_count": int(removal_review.get("blocked_or_review_count") or 0),
+        "candidate_total": removal_total,
+        "bucket_counts": removal_review.get("bucket_counts", {}),
+    }
+
+    weights = {
+        "contract_percent": 25,
+        "browser_native_percent": 20,
+        "direct_scriptable_percent": 20,
+        "inherited_tail_burndown_percent": 25,
+        "tooling_retirement_percent": 10,
+    }
+    headline = bounded_percent(
+        contract_percent * weights["contract_percent"] / 100.0
+        + browser_native_percent * weights["browser_native_percent"] / 100.0
+        + direct_scriptable_percent * weights["direct_scriptable_percent"] / 100.0
+        + inherited_tail_burndown_percent * weights["inherited_tail_burndown_percent"] / 100.0
+        + tooling_retirement_percent * weights["tooling_retirement_percent"] / 100.0
+    )
+    remaining_tail_buckets = remaining_surface.get("bucket_counts") if isinstance(remaining_surface.get("bucket_counts"), dict) else {}
+    top_residuals = remaining_surface.get("top_residuals") if isinstance(remaining_surface.get("top_residuals"), list) else []
+    next_best_slices = [
+        {
+            "focus": item.get("residue"),
+            "example_endpoint": item.get("example_endpoint"),
+            "count": item.get("count", 0),
+        }
+        for item in top_residuals[:5]
+        if isinstance(item, dict)
+    ]
+    warnings: list[str] = []
+    if inherited_tail_count:
+        warnings.append(f"{inherited_tail_count} native API row(s) still declare inherited owner tails.")
+    if safe_removal_count:
+        warnings.append(f"{safe_removal_count} native-covered inherited tooling path(s) look safe to remove.")
+    if tooling_result.get("status") != "pass":
+        warnings.append("native-tooling-state is non-pass; dashboard estimate may be stale.")
+    if matrix_result.get("status") != "pass":
+        warnings.append("native-api-migration-matrix is non-pass; dashboard estimate may be stale.")
+
+    details = {
+        "weighted_estimate": {
+            "kind": "weighted_estimate",
+            "headline_replacement_percent": headline,
+            "weights": weights,
+            "components": {
+                "contract_percent": contract_percent,
+                "browser_native_percent": browser_native_percent,
+                "direct_scriptable_percent": direct_scriptable_percent,
+                "inherited_tail_burndown_percent": inherited_tail_burndown_percent,
+                "tooling_retirement_percent": tooling_retirement_percent,
+            },
+            "definition": "Estimate only: combines contract coverage, browser/native usage, direct access, inherited-tail burn-down, and currently actionable tooling retirement.",
+        },
+        "headline_replacement_percent": headline,
+        "contract_percent": contract_percent,
+        "browser_native_percent": browser_native_percent,
+        "direct_scriptable_percent": direct_scriptable_percent,
+        "inherited_tail_burndown_percent": inherited_tail_burndown_percent,
+        "tooling_retirement_status": tooling_retirement_status,
+        "remaining_tail_buckets": remaining_tail_buckets,
+        "next_best_slices": next_best_slices,
+        "warnings": warnings,
+        "source_status": {
+            "native_tooling_state": tooling_result.get("status"),
+            "native_api_migration_matrix": matrix_result.get("status"),
+            "total_rows": total_rows,
+        },
+    }
+    findings = [
+        finding("pass", "native-api-replacement-dashboard.estimate", f"Native API replacement weighted estimate is {headline}%.", details={"headline_replacement_percent": headline}),
+        finding("warn" if warnings else "pass", "native-api-replacement-dashboard.remaining", "Inherited owner tails or removable tooling candidates remain." if warnings else "No dashboard warnings found.", details={"warnings": warnings, "remaining_tail_buckets": remaining_tail_buckets}),
+    ]
+    result = make_result("native-api-replacement-dashboard", repo_root, f"Native API replacement weighted estimate is {headline}%.", findings)
+    result["details"] = details
+    result["weighted_estimate"] = details["weighted_estimate"]
+    result["headline_replacement_percent"] = headline
+    result["contract_percent"] = contract_percent
+    result["browser_native_percent"] = browser_native_percent
+    result["direct_scriptable_percent"] = direct_scriptable_percent
+    result["inherited_tail_burndown_percent"] = inherited_tail_burndown_percent
+    result["tooling_retirement_status"] = tooling_retirement_status
+    result["remaining_tail_buckets"] = remaining_tail_buckets
+    result["next_best_slices"] = next_best_slices
+    result["warnings"] = warnings
+    if status_only:
+        result = native_api_replacement_dashboard_status_only_result(result)
+    return result
+
+
+def closeout_readiness_step(name: str, result: dict[str, Any] | None) -> dict[str, Any]:
+    if result is None:
+        return {"status": "unknown", "summary": "Signal unavailable."}
+    return {
+        "status": result.get("status", "warn"),
+        "summary": result.get("summary", "Status unavailable."),
+        "non_pass_findings": [item for item in result.get("findings", []) if item.get("status") != "pass"][:5],
+    }
+
+
+def closeout_watch_step(name: str, result: dict[str, Any] | None) -> dict[str, Any]:
+    step = closeout_readiness_step(name, result)
+    if step.get("status") == "fail":
+        step = dict(step)
+        step["status"] = "warn"
+        step["summary"] = f"Watch only: {step.get('summary', 'Status unavailable.')}"
+    return step
+
+
+def closeout_readiness_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(result)
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact["details"] = {
+        "steps": details.get("steps", {}),
+        "unknown_steps": details.get("unknown_steps", []),
+        "artifact_paths": details.get("artifact_paths", []),
+    }
+    compact["findings"] = [item for item in result.get("findings", []) if item.get("status") != "pass"] or [
+        finding("pass", "closeout-readiness.status-only", "Closeout readiness passed; no non-pass findings.")
+    ]
+    return compact
+
+
+def command_closeout_readiness(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    git_status = run_git(repo_root, ["status", "--short"]) or ""
+    quality_state = command_quality_gate_state(repo_root, status_only=True)
+    native_tooling = command_native_tooling_state(repo_root, status_only=True)
+    native_client = command_native_api_client_contract(repo_root, status_only=True)
+    migration = command_native_api_migration_matrix(repo_root, status_only=True)
+    license_result = command_license_report(repo_root, modified_imported_only=True, diff_scope="staged", status_only=True)
+    production_posture = command_production_posture_check(repo_root, status_only=True)
+    steps = {
+        "git-worktree": {"status": "warn" if git_status.strip() else "pass", "summary": "Worktree has uncommitted changes." if git_status.strip() else "Worktree is clean.", "changed_path_count": len([line for line in git_status.splitlines() if line.strip()])},
+        "quality-gate-state": closeout_readiness_step("quality-gate-state", quality_state),
+        "native-tooling-state": closeout_readiness_step("native-tooling-state", native_tooling),
+        "native-api-client-contract": closeout_readiness_step("native-api-client-contract", native_client),
+        "native-api-migration-matrix": closeout_readiness_step("native-api-migration-matrix", migration),
+        "license-precommit": closeout_readiness_step("license-precommit", license_result),
+        "production-posture-check": closeout_watch_step("production-posture-check", production_posture),
+        "hosted-workflow": {"status": "unknown", "summary": "Hosted workflow status is checked by control-plane GitHub helpers when needed."},
+        "runtime-freshness": {"status": "unknown", "summary": "Runtime freshness depends on the current slice; run focused runtime/browser helpers when behavior changed."},
+    }
+    statuses = [str(step.get("status", "warn")) for step in steps.values() if step.get("status") != "unknown"]
+    unknown_steps = [name for name, step in steps.items() if step.get("status") == "unknown"]
+    aggregate_status_value = aggregate_status([{"status": status} for status in statuses])
+    findings = [
+        finding(str(step.get("status", "warn")) if step.get("status") != "unknown" else "warn", f"closeout-readiness.{name}", str(step.get("summary", "Status unavailable.")), details={"step": name})
+        for name, step in steps.items()
+        if step.get("status") != "pass"
+    ]
+    if not findings:
+        findings.append(finding("pass", "closeout-readiness.ready", "Closeout readiness signals are clean."))
+    details = {
+        "steps": steps,
+        "unknown_steps": unknown_steps,
+        "artifact_paths": [str(quality_gate_artifact_dir(repo_root) / "quality-gate.json")],
+    }
+    summary = "Closeout readiness signals are clean." if aggregate_status_value == "pass" and not unknown_steps else "Closeout readiness has watch/unknown signals."
+    result = make_result("closeout-readiness", repo_root, summary, findings, details["artifact_paths"])
+    result["details"] = details
+    if status_only:
+        result = closeout_readiness_status_only_result(result)
+    return result
+
+
 def native_api_client_contract_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
     compact = dict(result)
@@ -21243,6 +21455,10 @@ def build_parser() -> argparse.ArgumentParser:
     migration_matrix.add_argument("--focus", action="append", help="comma-separated terms used to keep only matching migration rows; may be repeated")
     native_api_client_contract = subparsers.add_parser("native-api-client-contract", parents=[common], help="check the generated-client native API contract surface")
     native_api_client_contract.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe generated-client checks")
+    native_api_replacement_dashboard = subparsers.add_parser("native-api-replacement-dashboard", parents=[common], help="summarize native API replacement progress as a weighted estimate")
+    native_api_replacement_dashboard.add_argument("--status-only", action="store_true", help="emit compact dashboard details and only non-pass findings")
+    closeout_readiness = subparsers.add_parser("closeout-readiness", parents=[common], help="summarize commit closeout readiness signals without running broad gates")
+    closeout_readiness.add_argument("--status-only", action="store_true", help="emit compact closeout readiness details and only non-pass findings")
     subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
     doctor = subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     doctor.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe doctor checks")
@@ -21435,6 +21651,10 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_api_migration_matrix(repo_root, status_only=args.status_only or args.compact or args.summary, focus=args.focus)
     elif args.command == "native-api-client-contract":
         result = command_native_api_client_contract(repo_root, status_only=args.status_only)
+    elif args.command == "native-api-replacement-dashboard":
+        result = command_native_api_replacement_dashboard(repo_root, status_only=args.status_only)
+    elif args.command == "closeout-readiness":
+        result = command_closeout_readiness(repo_root, status_only=args.status_only)
     elif args.command == "rust-migration-state":
         result = command_rust_migration_state(repo_root)
     elif args.command == "doctor":

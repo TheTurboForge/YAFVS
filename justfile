@@ -36,6 +36,12 @@ native-api-migration-matrix *args:
 native-api-client-contract *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-client-contract "$@"
 
+native-api-replacement-dashboard *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-replacement-dashboard "$@"
+
+closeout-readiness *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl closeout-readiness "$@"
+
 native-api-rust-test *filters:
     @set -- {{filters}}; \
       if [ "${1:-}" = "--" ]; then shift; fi; \

@@ -4297,7 +4297,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(delete_scope_report["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_scope_report["x_turbovas_exposure"], "direct-write")
         self.assertEqual(delete_scope_report["x_turbovas_replaces"], "scope-report-delete")
-        self.assertEqual(delete_scope_report["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
+        self.assertIsNone(delete_scope_report["x_turbovas_inherited_still_owns"])
 
         scope_report_results_by_id = rows[("get", "/api/v1/scope-reports/{scope_report_id}/results")]
         self.assertEqual(scope_report_results_by_id["operation_id"], "getScopeReportsByScopeReportIdResults")

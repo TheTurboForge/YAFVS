@@ -551,14 +551,6 @@ export class ScopeReportsCommand extends HttpCommand {
   }
 
   async delete({id}: {id: string}) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeScopeReport(this.http, id);
-      return;
-    }
-
-    return this.httpPostWithTransform({
-      cmd: 'delete_scope_report',
-      scope_report_id: id,
-    });
+    await deleteNativeScopeReport(this.http, id);
   }
 }

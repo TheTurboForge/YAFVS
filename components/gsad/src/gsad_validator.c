@@ -58,7 +58,6 @@ gsad_init_validator ()
                      "|(delete_scanner)"
                      "|(delete_schedule)"
                      "|(delete_scope)"
-                     "|(delete_scope_report)"
                      "|(delete_tag)"
                      "|(delete_target)"
                      "|(delete_task)"

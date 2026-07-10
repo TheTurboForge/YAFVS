@@ -119,9 +119,6 @@ char *
 delete_scope_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *
-delete_scope_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                         gsad_command_response_data_t *);
-char *
 get_scope_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
 char *

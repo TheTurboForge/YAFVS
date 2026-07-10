@@ -2903,7 +2903,6 @@ typedef union
   delete_report_data_t delete_report;                 ///< delete_report
   delete_report_format_data_t delete_report_format;   ///< delete_report_format
   scope_command_data_t delete_scope;                  ///< delete_scope
-  scope_command_data_t delete_scope_report;           ///< delete_scope_report
   delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_tag_data_t delete_tag;                       ///< delete_tag
@@ -3132,12 +3131,6 @@ static delete_report_format_data_t *delete_report_format_data
  */
 static scope_command_data_t *delete_scope_data
  = &(command_data.delete_scope);
-
-/**
- * @brief Parser callback data for DELETE_SCOPE_REPORT.
- */
-static scope_command_data_t *delete_scope_report_data
- = &(command_data.delete_scope_report);
 
 /**
  * @brief Parser callback data for DELETE_SCANNER.
@@ -3725,7 +3718,6 @@ typedef enum
   CLIENT_DELETE_REPORT_CONFIG,
   CLIENT_DELETE_REPORT_FORMAT,
   CLIENT_DELETE_SCOPE,
-  CLIENT_DELETE_SCOPE_REPORT,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TAG,
@@ -4338,12 +4330,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             scope_command_data_start (delete_scope_data, attribute_names,
                                       attribute_values, 0);
             set_client_state (CLIENT_DELETE_SCOPE);
-          }
-        else if (strcasecmp ("DELETE_SCOPE_REPORT", element_name) == 0)
-          {
-            scope_command_data_start (delete_scope_report_data, attribute_names,
-                                      attribute_values, 0);
-            set_client_state (CLIENT_DELETE_SCOPE_REPORT);
           }
         else if (strcasecmp ("DELETE_SCANNER", element_name) == 0)
           {
@@ -17435,40 +17421,6 @@ handle_delete_scope (gmp_parser_t *gmp_parser, GError **error)
 }
 
 static void
-handle_delete_scope_report (gmp_parser_t *gmp_parser, GError **error)
-{
-  if (delete_scope_report_data->scope_report_id == NULL)
-    SEND_TO_CLIENT_OR_FAIL
-      (XML_ERROR_SYNTAX ("delete_scope_report",
-                         "A scope_report_id attribute is required"));
-  else
-    switch (delete_scope_report (delete_scope_report_data->scope_report_id))
-      {
-        case 0:
-          SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_scope_report"));
-          break;
-        case 2:
-          if (send_find_error_to_client ("delete_scope_report",
-                                         "scope_report",
-                                         delete_scope_report_data
-                                           ->scope_report_id,
-                                         gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          break;
-        default:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_INTERNAL_ERROR ("delete_scope_report"));
-          break;
-      }
-
-  scope_command_data_reset (delete_scope_report_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
 handle_get_scopes_command (gmp_parser_t *gmp_parser, GError **error,
                            scope_command_data_t *data,
                            const char *response_name)
@@ -17950,10 +17902,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_DELETE_SCOPE:
         handle_delete_scope (gmp_parser, error);
-        break;
-
-      case CLIENT_DELETE_SCOPE_REPORT:
-        handle_delete_scope_report (gmp_parser, error);
         break;
 
       CASE_DELETE (SCANNER, scanner, "Scanner");

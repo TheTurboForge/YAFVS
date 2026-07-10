@@ -8032,28 +8032,6 @@ delete_scope_gmp (gvm_connection_t *connection,
   return html;
 }
 
-char *
-delete_scope_report_gmp (gvm_connection_t *connection,
-                         gsad_credentials_t *credentials, params_t *params,
-                         gsad_command_response_data_t *response_data)
-{
-  const char *scope_report_id;
-  GString *command;
-  gchar *html;
-
-  scope_report_id = params_value (params, "scope_report_id");
-  CHECK_VARIABLE_INVALID (scope_report_id, "Delete Scope Report");
-
-  command = g_string_new ("<delete_scope_report");
-  scope_command_append_attribute (command, "scope_report_id", scope_report_id);
-  g_string_append (command, "/>");
-
-  html = run_scope_command (connection, credentials, params, response_data,
-                            command->str, "Delete Scope Report");
-  g_string_free (command, TRUE);
-  return html;
-}
-
 static gmp_arguments_t *
 scope_get_arguments (params_t *params, const char *scope_id,
                      const char *scope_report_id)
@@ -16052,7 +16030,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_scanner)
   ELSE (delete_schedule)
   ELSE (delete_scope)
-  ELSE (delete_scope_report)
   ELSE (delete_tag)
   ELSE (delete_target)
   ELSE (delete_task)

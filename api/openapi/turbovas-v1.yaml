@@ -5859,7 +5859,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-report-delete
-      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1

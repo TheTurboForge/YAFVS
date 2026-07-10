@@ -52,7 +52,6 @@ const CAPABILITY_NAMES = [
   'delete_report_format',
   'delete_scanner',
   'delete_scope',
-  'delete_scope_report',
   'delete_schedule',
   'delete_tag',
   'delete_target',

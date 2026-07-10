@@ -488,7 +488,7 @@ describe('ScopesCommand tests', () => {
 
   test('should delete scope reports through native API when available', async () => {
     const response = createActionResultResponse({
-      action: 'delete_scope_report',
+      action: 'delete',
       id: 'scope-report-id',
     });
     const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});

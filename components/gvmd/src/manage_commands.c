@@ -63,7 +63,6 @@ command_t gmp_commands[]
     {"DELETE_REPORT_CONFIG", "Delete a report config."},
     {"DELETE_REPORT_FORMAT", "Delete a report format."},
     {"DELETE_SCOPE", "Delete a reporting scope."},
-    {"DELETE_SCOPE_REPORT", "Delete a scope report."},
     {"DELETE_SCANNER", "Delete a scanner."},
     {"DELETE_SCHEDULE", "Delete a schedule."},
     {"DELETE_TAG", "Delete a tag."},

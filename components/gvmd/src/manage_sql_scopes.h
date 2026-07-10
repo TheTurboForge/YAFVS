@@ -40,9 +40,6 @@ int
 delete_scope (const char *);
 
 int
-delete_scope_report (const char *);
-
-int
 buffer_scopes_xml (GString *, const char *, int);
 
 int

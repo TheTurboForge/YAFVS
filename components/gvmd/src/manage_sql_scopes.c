@@ -144,12 +144,6 @@ scope_id_by_uuid (const char *uuid)
   return resource_id_by_uuid ("scopes", uuid);
 }
 
-static resource_t
-scope_report_id_by_uuid (const char *uuid)
-{
-  return resource_id_by_uuid ("scope_reports", uuid);
-}
-
 static gboolean
 scope_is_predefined (scope_t scope)
 {
@@ -528,21 +522,6 @@ custom_host_match_clause (scope_t scope, gboolean global)
      " AND (lower (h.name) = lower (coalesce (nullif (r.host, ''), r.hostname))"
      "      OR lower (h.name) = lower (coalesce (nullif (r.hostname, ''), r.host))))",
      scope);
-}
-
-int
-delete_scope_report (const char *scope_report_uuid)
-{
-  scope_report_t scope_report;
-
-  scope_report = scope_report_id_by_uuid (scope_report_uuid);
-  if (scope_report == 0)
-    return 2;
-
-  sql ("DELETE FROM scope_report_sources WHERE scope_report = %llu;",
-       scope_report);
-  sql ("DELETE FROM scope_reports WHERE id = %llu;", scope_report);
-  return 0;
 }
 
 static void

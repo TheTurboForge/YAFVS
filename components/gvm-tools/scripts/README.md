@@ -341,24 +341,17 @@ is `Running`, `Requested`, or `Queued`, reports every CSV row, and continues
 after individual start failures. Write-control consent is required because an
 eligible row creates a report and queues scanner execution.
 
-## `stop-all-scans.gmp.py`
+## Native bulk task stop
 
-Stops scans (tasks) that are in status running, queued, or requested
+The inherited GMP stop scripts have been removed. Use the guarded native
+operator commands instead:
 
-### Example
+`$ just native-stop-all-tasks -- --allow-write-control`
 
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket stop-all-scans.gmp.py`
+`$ just native-stop-tasks-from-csv -- --csv-file *csv-file with task names* --allow-write-control`
 
-- Stops all scans
-- Returns the number of tasks stopped.
-
-## `stop-scans-from-csv.gmp.py`
-
-Stops scans (tasks) specified in csv file
-
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket stop-scans-from-csv.gmp.py *csv-file with task names*`
-
-- Stops the tasks specified in the file (example startscan.csv works for both scripts)
-- Returns the number of tasks stopped.
+Both commands snapshot all paginated task metadata before stopping anything,
+select only `Running`, `Requested`, or `Queued` tasks, de-duplicate task
+UUIDs, continue after individual failures, and return structured counts.
+CSV lookup uses the first column and refuses ambiguous names when multiple
+active tasks share one name.

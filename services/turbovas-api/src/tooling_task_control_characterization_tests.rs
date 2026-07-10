@@ -7,10 +7,6 @@ const START_NVT_SCAN: &str =
     include_str!("../../../components/gvm-tools/scripts/start-nvt-scan.gmp.py");
 const SCAN_NEW_SYSTEM: &str =
     include_str!("../../../components/gvm-tools/scripts/scan-new-system.gmp.py");
-const STOP_SCANS_FROM_CSV: &str =
-    include_str!("../../../components/gvm-tools/scripts/stop-scans-from-csv.py");
-const STOP_ALL_SCANS: &str =
-    include_str!("../../../components/gvm-tools/scripts/stop-all-scans.gmp.py");
 
 #[test]
 fn inherited_nvt_scan_creates_or_reuses_config_target_and_starts_default_scanner_task() {
@@ -84,53 +80,6 @@ fn inherited_scan_new_system_creates_target_task_and_starts_full_fast_openvas_sc
         assert!(
             SCAN_NEW_SYSTEM.contains(required),
             "scan-new-system missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_csv_stop_script_resolves_task_names_with_status_filters() {
-    for required in [
-        "csv.reader(csvFile, delimiter=\",\")",
-        "if len(row) == 0:",
-        "continue",
-        "except GvmResponseError as gvmerr:",
-        "error_and_exit(f\"Failed to read task_file: {str(e)} (exit)\")",
-    ] {
-        assert!(
-            STOP_SCANS_FROM_CSV.contains(required),
-            "stop-scans-from-csv missing shared behavior {required}"
-        );
-    }
-
-    for required in [
-        "status=Running ",
-        "or status=Requested ",
-        "or status=Queued ",
-        "and name=",
-        "status_text = gmp.stop_task(task_stop).xpath(\"@status_text\")[0]",
-        "if len(row) == 0:\n        error_and_exit(\"tasks file is empty (exit)\")",
-    ] {
-        assert!(
-            STOP_SCANS_FROM_CSV.contains(required),
-            "stop-scans-from-csv missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_stop_all_scans_stops_running_requested_and_queued_tasks_by_id() {
-    for required in [
-        "filter_string=\"rows=-1 status=Running or status=Requested or status=Queued\"",
-        "for task_id in tasks.xpath(\"task/@id\"):",
-        "print(f\"Stopping task {task_id} ... \")",
-        "status_text = gmp.stop_task(task_id).xpath(\"@status_text\")[0]",
-        "except Exception as e:",
-        "print(f\"{e=}\")",
-    ] {
-        assert!(
-            STOP_ALL_SCANS.contains(required),
-            "stop-all-scans missing {required}"
         );
     }
 }

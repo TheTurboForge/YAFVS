@@ -239,9 +239,13 @@ removed queued work, and finalized the task and active report as stopped.
 Already-terminal orphan rows keep their terminal status while missing end times
 are repaired. The private API-to-gvmd control socket is not host-exposed and
 uses a strong internal shared secret plus validated operator/task UUIDs, never
-GMP/XML.
-Bulk stop helpers remain inherited for now. Resuming a partial scan is not part
-of the product model:
+GMP/XML. `native-stop-all-tasks` stops all active tasks, while
+`native-stop-tasks-from-csv` resolves names from the first CSV column. Both
+snapshot the complete task list before mutation, require explicit write-control
+consent, de-duplicate UUIDs, continue after individual failures, and expose
+structured result counts. CSV mode refuses ambiguous active names rather than
+choosing one nondeterministically.
+Resuming a partial scan is not part of the product model:
 in-progress scan state is disposable, while completed raw reports and scope
 reports are the valuable evidence artifacts.
 

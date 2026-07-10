@@ -27,6 +27,12 @@ native-start-task *args:
 native-stop-task *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-task "$@"
 
+native-stop-tasks-from-csv *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-tasks-from-csv "$@"
+
+native-stop-all-tasks *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-all-tasks "$@"
+
 native-start-tasks-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-tasks-from-csv "$@"
 

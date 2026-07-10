@@ -7,8 +7,6 @@ const START_NVT_SCAN: &str =
     include_str!("../../../components/gvm-tools/scripts/start-nvt-scan.gmp.py");
 const SCAN_NEW_SYSTEM: &str =
     include_str!("../../../components/gvm-tools/scripts/scan-new-system.gmp.py");
-const START_SCANS_FROM_CSV: &str =
-    include_str!("../../../components/gvm-tools/scripts/start-scans-from-csv.py");
 const STOP_SCANS_FROM_CSV: &str =
     include_str!("../../../components/gvm-tools/scripts/stop-scans-from-csv.py");
 const STOP_ALL_SCANS: &str =
@@ -91,7 +89,7 @@ fn inherited_scan_new_system_creates_target_task_and_starts_full_fast_openvas_sc
 }
 
 #[test]
-fn inherited_csv_start_and_stop_scripts_resolve_task_names_with_status_filters() {
+fn inherited_csv_stop_script_resolves_task_names_with_status_filters() {
     for required in [
         "csv.reader(csvFile, delimiter=\",\")",
         "if len(row) == 0:",
@@ -100,28 +98,11 @@ fn inherited_csv_start_and_stop_scripts_resolve_task_names_with_status_filters()
         "error_and_exit(f\"Failed to read task_file: {str(e)} (exit)\")",
     ] {
         assert!(
-            START_SCANS_FROM_CSV.contains(required),
-            "start-scans-from-csv missing shared behavior {required}"
-        );
-        assert!(
             STOP_SCANS_FROM_CSV.contains(required),
             "stop-scans-from-csv missing shared behavior {required}"
         );
     }
 
-    for required in [
-        "not status=Running",
-        "not status=Requested",
-        "status=Queued ",
-        "and name=",
-        "status_text = gmp.start_task(task_start).xpath(\"@status_text\")[",
-        "is either in status Requested, Queued, Running",
-    ] {
-        assert!(
-            START_SCANS_FROM_CSV.contains(required),
-            "start-scans-from-csv missing {required}"
-        );
-    }
     for required in [
         "status=Running ",
         "or status=Requested ",

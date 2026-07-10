@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2024 Martin Boller
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Run with gvm-script --gmp-username admin-user --gmp-password password socket start-scans-from-csv.gmp.py startscans.csv
+# Run with gvm-script --gmp-username admin-user --gmp-password password socket stop-scans-from-csv.py stopscans.csv
 
 import csv
 import sys

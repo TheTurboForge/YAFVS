@@ -59,7 +59,10 @@ The first API phase is read-only and report-focused:
   systems, CVEs, TLS certificates, error messages, and metrics.
 - guarded task start through `POST /api/v1/tasks/{task_id}/start`, which
   transactionally creates the report and gvmd `scan_queue` request; scanner
-  execution and result ingestion remain gvmd-owned.
+  execution and result ingestion remain gvmd-owned. The operator-facing
+  `native-start-tasks-from-csv` helper composes paginated native task reads
+  with this endpoint and replaces the inherited CSV start script without
+  adding a bulk mutation endpoint.
 
 Task start is a guarded native direct-write/browser-proxied control and requires
 explicit operator consent. Stop, resume, and other task/scanner controls remain

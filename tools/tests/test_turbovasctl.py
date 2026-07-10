@@ -1487,7 +1487,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-start-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -5913,6 +5913,89 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(curl.call_args.args[1], f"/api/v1/tasks/{task_id}/start")
         self.assertEqual(curl.call_args.kwargs["method"], "POST")
         self.assertNotIn("a" * 64, json.dumps(result))
+
+    def test_native_start_tasks_from_csv_requires_write_control_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text("Ready\n", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_start_tasks_from_csv(root, csv_file)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["native-start-tasks-from-csv.write-control-intent"]["status"], "fail")
+
+    def test_native_start_tasks_from_csv_paginates_skips_active_rows_and_aggregates_start_failures(self):
+        ids = {
+            "Ready": "11111111-1111-4111-8111-111111111111",
+            "Running": "22222222-2222-4222-8222-222222222222",
+            "Requested": "33333333-3333-4333-8333-333333333333",
+            "Queued": "44444444-4444-4444-8444-444444444444",
+            "Failed": "55555555-5555-4555-8555-555555555555",
+        }
+        reports = {
+            "Ready": "66666666-6666-4666-8666-666666666666",
+        }
+        captured: list[tuple[str, str]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            method = kwargs.get("method", "GET")
+            captured.append((method, path))
+            pages = {
+                "/api/v1/tasks?page=1&page_size=500&sort=name": {
+                    "items": [{"id": ids["Ready"], "name": "Ready", "status": "Done"}, {"id": ids["Running"], "name": "Running", "status": "Running"}],
+                    "page": {"page": 1, "page_size": 2, "total": 5},
+                },
+                "/api/v1/tasks?page=2&page_size=500&sort=name": {
+                    "items": [{"id": ids["Requested"], "name": "Requested", "status": "Requested"}, {"id": ids["Queued"], "name": "Queued", "status": "Queued"}],
+                    "page": {"page": 2, "page_size": 2, "total": 5},
+                },
+                "/api/v1/tasks?page=3&page_size=500&sort=name": {
+                    "items": [{"id": ids["Failed"], "name": "Failed", "status": "Done"}],
+                    "page": {"page": 3, "page_size": 2, "total": 5},
+                },
+            }
+            if path in pages:
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(pages[path]) + "\n200", "")
+            if path == f"/api/v1/tasks/{ids['Ready']}/start":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"task_id": ids["Ready"], "report_id": reports["Ready"], "status": "requested"}) + "\n202", "")
+            if path == f"/api/v1/tasks/{ids['Failed']}/start":
+                return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"scanner_unavailable"}}\n503', "")
+            self.fail(f"unexpected direct native API request: {method} {path}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text("Ready\nReady\nRunning\nRequested\nQueued\nMissing\nFailed\n", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_start_tasks_from_csv(root, csv_file, allow_write_control=True)
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["details"]["row_count"], 7)
+        self.assertEqual(result["details"]["task_count"], 5)
+        self.assertEqual(result["details"]["matched_count"], 6)
+        self.assertEqual(result["details"]["skipped_count"], 5)
+        self.assertEqual(result["details"]["started_count"], 1)
+        self.assertEqual(result["details"]["failure_count"], 1)
+        row_statuses = {row["task_name"]: row["status"] for row in result["details"]["rows"]}
+        self.assertEqual(row_statuses, {"Ready": "started", "Running": "skipped", "Requested": "skipped", "Queued": "skipped", "Missing": "skipped", "Failed": "failed"})
+        ready_rows = [row for row in result["details"]["rows"] if row["task_name"] == "Ready"]
+        self.assertEqual([row["status"] for row in ready_rows], ["skipped", "started"])
+        self.assertEqual(ready_rows[0]["reason"], "duplicate task row")
+        self.assertEqual([path for method, path in captured if method == "GET"], [
+            "/api/v1/tasks?page=1&page_size=500&sort=name",
+            "/api/v1/tasks?page=2&page_size=500&sort=name",
+            "/api/v1/tasks?page=3&page_size=500&sort=name",
+        ])
+        self.assertEqual([path for method, path in captured if method == "POST"], [
+            f"/api/v1/tasks/{ids['Ready']}/start",
+            f"/api/v1/tasks/{ids['Failed']}/start",
+        ])
 
     def test_native_verify_scanners_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:

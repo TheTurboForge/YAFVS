@@ -329,15 +329,17 @@ permissions, sessions, and account writes remain inherited.
 
 ¹ The default order is "None" which equals sequential, meaning that if this field is empty scanning will be sequential as it will be if specifically set to sequential. Possible results are None, Sequential, Reverse, or Random.
 
-## `start-scans-from-csv.gmp.py`
+## Native bulk task start from CSV
 
-Starts scans (tasks) specified in csv file
+The inherited `start-scans-from-csv.py` workflow is retired. Use the guarded
+native operator command instead:
 
-### Example
+`$ just native-start-tasks-from-csv -- --csv-file *csv-file with task names* --allow-write-control`
 
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket start-scans-from-csv.gmp.py *csv-file with task names*`
-
-Returns the number of tasks started.
+The command reads task metadata through the native API, skips tasks whose status
+is `Running`, `Requested`, or `Queued`, reports every CSV row, and continues
+after individual start failures. Write-control consent is required because an
+eligible row creates a report and queues scanner execution.
 
 ## `stop-all-scans.gmp.py`
 

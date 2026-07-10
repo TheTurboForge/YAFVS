@@ -171,6 +171,7 @@ tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
 tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
+tools/turbovasctl native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
 ```
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
@@ -224,6 +225,11 @@ browser proxy or direct API access. It requires explicit operator consent via
 `tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control`.
 The request transactionally creates the report and gvmd `scan_queue` request;
 gvmd remains responsible for scanner execution and result ingestion.
+For name-based batch operation, `native-start-tasks-from-csv` reads the first
+CSV column, resolves all tasks through paginated native reads, skips
+`Running`, `Requested`, and `Queued` tasks, and reports each row while
+continuing after individual failures. It replaces the inherited
+`start-scans-from-csv.py` script without requiring GMP/XML or `gvm-tools`.
 Stopping or cancelling an active scan remains available through inherited
 control. Resuming a partial scan is not part of the product model:
 in-progress scan state is disposable, while completed raw reports and scope

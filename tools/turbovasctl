@@ -307,6 +307,8 @@ NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST = "Scan Config Default"
 NATIVE_TARGET_CSV_DEFAULT_PORT_LIST_ID = "730ef368-57e2-11e1-a90f-406186ea4fc5"
 NATIVE_TARGET_CSV_SSH_CREDENTIAL_TYPES = frozenset({"up", "usk", "cs_up", "cs_usk"})
 NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES = frozenset({"up", "cs_up"})
+NATIVE_START_TASKS_FROM_CSV_PAGE_SIZE = 500
+NATIVE_START_TASKS_FROM_CSV_ACTIVE_STATUSES = frozenset({"Running", "Requested", "Queued"})
 GVMD_IMPORT_TIMEOUT_SECONDS = 7200
 OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
 OSPD_STABLE_HOSTNAME = "turbovas-ospd-openvas"
@@ -390,7 +392,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "scan-new-system.gmp.py",
         "start-alert-scan.gmp.py",
         "start-nvt-scan.gmp.py",
-        "start-scans-from-csv.py",
         "stop-all-scans.gmp.py",
         "stop-scans-from-csv.py",
     },
@@ -439,7 +440,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
     "send-tasks.gmp.py": "Inherited XML task import is characterized; native tooling still lacks a safe task import contract for config/scanner/target resolution, schedule fields, and preferences.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
-    "start-scans-from-csv.py": "Inherited CSV task start behavior is characterized; native tooling still lacks a safe bulk task-start contract.",
     "stop-all-scans.gmp.py": "Inherited running/requested/queued stop-all behavior is characterized; native tooling still lacks a safe bulk task-stop contract.",
     "stop-scans-from-csv.py": "Inherited CSV task stop behavior is characterized; native tooling still lacks a safe bulk task-stop contract.",
     "update-task-target.gmp.py": "Inherited task-target clone/rebind/delete behavior is characterized; native tooling still lacks a task-target swap contract that preserves settings and deletes the old target when unused.",
@@ -17788,6 +17788,186 @@ def command_native_start_task(
     return result
 
 
+@dataclass(frozen=True)
+class NativeStartTasksFromCsvRow:
+    row_number: int
+    task_name: str
+
+
+def load_native_start_tasks_from_csv_rows(csv_file: Path) -> list[NativeStartTasksFromCsvRow]:
+    rows: list[NativeStartTasksFromCsvRow] = []
+    try:
+        with csv_file.open(encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle, delimiter=",")
+            for row_number, row in enumerate(reader, start=1):
+                if not row:
+                    continue
+                rows.append(NativeStartTasksFromCsvRow(row_number=row_number, task_name=row[0].strip()))
+    except OSError as exc:
+        raise ValueError(f"failed to read task CSV file: {exc}") from exc
+    return rows
+
+
+def native_start_tasks_from_csv_fetch_tasks(
+    repo_root: Path,
+    *,
+    token: str,
+    env: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    tasks: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        path = f"/api/v1/tasks?page={page}&page_size={NATIVE_START_TASKS_FROM_CSV_PAGE_SIZE}&sort=name"
+        response = direct_native_api_curl(repo_root, path, token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        items = parsed.get("items") if isinstance(parsed, dict) else None
+        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(items, list):
+            return tasks, {
+                "path": path,
+                "http_status": http_status,
+                "reason": "native task list lookup failed",
+                **summarize_native_api_response(parsed),
+            }
+        tasks.extend(item for item in items if isinstance(item, dict))
+        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
+        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(items)
+        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) and page_info.get("page") else page
+        actual_page_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else NATIVE_START_TASKS_FROM_CSV_PAGE_SIZE
+        if not items or actual_page * actual_page_size >= total:
+            return tasks, None
+        page = actual_page + 1
+        if page > 1000:
+            return tasks, {"path": path, "reason": "native task list pagination exceeded safety limit", "total": total}
+
+
+def native_start_tasks_from_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        "csv_file": details.get("csv_file"),
+        "row_count": details.get("row_count", 0),
+        "task_count": details.get("task_count", 0),
+        "matched_count": details.get("matched_count", 0),
+        "skipped_count": details.get("skipped_count", 0),
+        "started_count": details.get("started_count", 0),
+        "failure_count": details.get("failure_count", 0),
+    }
+    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding("pass", "native-start-tasks-from-csv.status-only", "Native CSV task start passed; row details summarized.")
+    ]
+    return compact
+
+
+def command_native_start_tasks_from_csv(
+    repo_root: Path,
+    csv_file: Path,
+    *,
+    allow_write_control: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "csv_file": str(csv_file),
+        "row_count": 0,
+        "task_count": 0,
+        "matched_count": 0,
+        "skipped_count": 0,
+        "started_count": 0,
+        "failure_count": 0,
+        "rows": [],
+    }
+    try:
+        rows = load_native_start_tasks_from_csv_rows(csv_file)
+    except ValueError as exc:
+        findings.append(finding("fail", "native-start-tasks-from-csv.rows", str(exc), details={"csv_file": str(csv_file)}))
+        result = make_result("native-start-tasks-from-csv", repo_root, "Native CSV task start rejected before runtime access.", findings)
+        result["details"] = details
+        return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+    details["row_count"] = len(rows)
+    findings.append(finding("pass", "native-start-tasks-from-csv.rows", f"Loaded {len(rows)} non-empty CSV row(s)."))
+
+    if not allow_write_control:
+        findings.append(finding("fail", "native-start-tasks-from-csv.write-control-intent", "Starting tasks requires --allow-write-control because it creates reports and queues scanner execution."))
+        result = make_result("native-start-tasks-from-csv", repo_root, "Native CSV task start rejected before runtime access.", findings)
+        result["details"] = details
+        return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+
+    if not rows:
+        result = make_result("native-start-tasks-from-csv", repo_root, "Native CSV task start completed; no task rows were supplied.", findings)
+        result["details"] = details
+        return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-start-tasks-from-csv.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        result = make_result("native-start-tasks-from-csv", repo_root, "Direct native API CSV task start rejected before runtime access.", findings)
+        result["details"] = details
+        return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(finding("fail", "native-start-tasks-from-csv.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        result = make_result("native-start-tasks-from-csv", repo_root, "Direct native API CSV task start rejected before runtime access.", findings)
+        result["details"] = details
+        return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+
+    tasks, task_failure = native_start_tasks_from_csv_fetch_tasks(repo_root, token=token, env=env)
+    details["task_count"] = len(tasks)
+    if task_failure:
+        findings.append(finding("fail", "native-start-tasks-from-csv.task-read", "Native task list lookup failed; no task starts were attempted.", details=task_failure))
+        result = make_result("native-start-tasks-from-csv", repo_root, "Native CSV task start failed during task lookup.", findings)
+        result["details"] = details
+        return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+    findings.append(finding("pass", "native-start-tasks-from-csv.task-read", f"Read {len(tasks)} task(s) through the native API."))
+
+    planned: list[tuple[NativeStartTasksFromCsvRow, dict[str, Any]]] = []
+    planned_task_ids: set[str] = set()
+    for row in rows:
+        matches = [task for task in tasks if task.get("name") == row.task_name]
+        eligible = [task for task in matches if task.get("status") not in NATIVE_START_TASKS_FROM_CSV_ACTIVE_STATUSES]
+        if matches:
+            details["matched_count"] += 1
+        if not eligible:
+            reason = "active task status" if matches else "task name not found"
+            details["skipped_count"] += 1
+            details["rows"].append({"row": row.row_number, "task_name": row.task_name, "status": "skipped", "reason": reason})
+            findings.append(finding("warn", f"native-start-tasks-from-csv.row.{row.row_number}", f"Skipped task {row.task_name!r}: {reason}."))
+            continue
+        task = eligible[-1]
+        task_id = task.get("id")
+        if not isinstance(task_id, str) or not UUID_VALUE_RE.fullmatch(task_id):
+            details["failure_count"] += 1
+            details["rows"].append({"row": row.row_number, "task_name": row.task_name, "status": "failed", "reason": "task list row did not contain a valid UUID"})
+            findings.append(finding("fail", f"native-start-tasks-from-csv.row.{row.row_number}", f"Task {row.task_name!r} did not contain a valid UUID; start refused."))
+            continue
+        if task_id in planned_task_ids:
+            details["skipped_count"] += 1
+            details["rows"].append({"row": row.row_number, "task_name": row.task_name, "task_id": task_id, "status": "skipped", "reason": "duplicate task row"})
+            findings.append(finding("warn", f"native-start-tasks-from-csv.row.{row.row_number}", f"Skipped duplicate task row for {row.task_name!r}."))
+            continue
+        planned_task_ids.add(task_id)
+        planned.append((row, task))
+
+    for row, task in planned:
+        task_id = task["id"]
+        path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/start"
+        response = direct_native_api_curl(repo_root, path, token=token, env=env, method="POST")
+        parsed, http_status = parse_json_output_with_http_status(response)
+        report_id = parsed.get("report_id") if isinstance(parsed, dict) else None
+        accepted = response.returncode == 0 and http_status == 202 and isinstance(parsed, dict) and parsed.get("task_id") == task_id and isinstance(report_id, str) and bool(UUID_VALUE_RE.fullmatch(report_id)) and parsed.get("status") == "requested"
+        details["rows"].append({"row": row.row_number, "task_name": row.task_name, "task_id": task_id, "status": "started" if accepted else "failed", "http_status": http_status, "report_id": report_id})
+        if accepted:
+            details["started_count"] += 1
+        else:
+            details["failure_count"] += 1
+        findings.append(native_api_probe_finding("pass" if accepted else "fail", f"native-start-tasks-from-csv.row.{row.row_number}", "Native API accepted the task start and returned the queued report id." if accepted else "Native API task start failed or returned an invalid acknowledgement.", response, direct_native_api_display_command(path, token=token, env=env, method="POST"), parsed, {"http_status": http_status, "task_id": task_id, "report_id": report_id, **summarize_native_api_response(parsed)}))
+
+    result_status = aggregate_status(findings)
+    result = make_result("native-start-tasks-from-csv", repo_root, "Native CSV task start completed." if result_status != "fail" else "Native CSV task start failed.", findings)
+    result["details"] = details
+    return native_start_tasks_from_csv_status_only_result(result) if status_only else result
+
+
 def validate_native_verify_scanner_ids(scanner_ids: Sequence[str]) -> tuple[str, ...]:
     return tuple(
         validate_native_api_operator_uuid_value(scanner_id, env_name="--scanner-id")
@@ -22060,6 +22240,10 @@ def build_parser() -> argparse.ArgumentParser:
     native_start_task.add_argument("--task-id", required=True, help="task UUID to start")
     native_start_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control")
     native_start_task.add_argument("--status-only", action="store_true", help="emit compact task-start acknowledgement")
+    native_start_tasks_csv = subparsers.add_parser("native-start-tasks-from-csv", parents=[common], help="start existing tasks from the inherited task-name CSV shape through the guarded direct native API")
+    native_start_tasks_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with one task name in the first column per row")
+    native_start_tasks_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control for every eligible row")
+    native_start_tasks_csv.add_argument("--status-only", action="store_true", help="emit compact counts and only non-pass findings")
     native_verify_scanners = subparsers.add_parser("native-verify-scanners", parents=[common], help="verify scanners through the guarded direct native API without gvm-tools")
     native_verify_scanners.add_argument("--scanner-id", action="append", default=[], help="specific scanner UUID to verify; may be repeated")
     native_verify_scanners.add_argument("--page-size", type=int, default=NATIVE_VERIFY_SCANNERS_DEFAULT_PAGE_SIZE, help="scanner list page size when no --scanner-id is supplied")
@@ -22252,6 +22436,13 @@ def main(argv: list[str] | None = None) -> int:
             method=args.method,
             request_id=args.request_id,
             body_json=args.body_json,
+            allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-start-tasks-from-csv":
+        result = command_native_start_tasks_from_csv(
+            repo_root,
+            args.csv_file,
             allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )

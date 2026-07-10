@@ -174,6 +174,8 @@ tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
 tools/turbovasctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
 tools/turbovasctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
 tools/turbovasctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
+tools/turbovasctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
+tools/turbovasctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
 tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 tools/turbovasctl native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
 tools/turbovasctl native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
@@ -210,6 +212,17 @@ cap, writes a private same-directory temporary file, and atomically replaces the
 destination only after a complete export. Existing files require `--overwrite`.
 The output is a stable result-evidence CSV rather than gvmd's configurable
 report-format rendering; PDF and nested XML export remain separate workflows.
+
+`native-delete-overrides-by-filter` replaces the inherited destructive GMP
+script with an explicit two-step native workflow. Its `--filter` is a printable
+case-insensitive substring, not GMP filter syntax. Dry-run reads a stable,
+bounded override UUID set and returns its SHA-256 snapshot. A real run requires
+`--allow-write-control` plus that exact hash; it takes a fresh snapshot and
+refuses to proceed if the set changed. Each request enforces operator ownership,
+moves one live override to trash transactionally, relocates associated tags, and
+invalidates affected report override counts without hard-deleting history.
+Default one-second pacing is configurable with `--delay-seconds`; partial
+failures are reported while later rows continue.
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
 table with direct native API calls. It verifies each scanner without starting a

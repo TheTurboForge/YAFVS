@@ -364,9 +364,14 @@ Native override rows include override identity, owner, NVT identity/name, text,
 host/port constraints, original and replacement severity values, active/end-time
 state, shallow task/result links, permissions, and timestamps. Override metadata
 is operator policy data, so these endpoints stay inside the authenticated
-operator boundary. Create, modify, clone, export, delete, trashcan mutation, and
-result-specific override expansion remain inherited until native write/control
-semantics are designed.
+operator boundary. `DELETE /api/v1/overrides/{override_id}` implements one
+owner-scoped live-to-trash move. It transactionally preserves override metadata,
+relocates associated tag-resource rows, removes the live row, and clears affected
+report override-count caches so later reads rebuild them from source evidence.
+It returns `204` only for the authenticated operator's live override and never
+hard-deletes the trash record. Create, modify, clone, export, trashcan hard
+deletion, and result-specific override expansion remain inherited until their
+native write/control semantics are designed.
 
 Native port-list rows include port-list identity, comment, port counts, concrete
 port ranges, target backlink references, predefined/deprecated flags, and

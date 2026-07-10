@@ -18,6 +18,7 @@ use crate::{
     credential_write_validation::CredentialPatchRequest,
     credential_writes::patch_credential,
     errors::ApiError,
+    override_writes::delete_override,
     report_format_payloads::ReportFormatAssetItem,
     report_format_write_validation::ReportFormatPatchRequest,
     report_format_writes::patch_report_format,
@@ -87,6 +88,16 @@ pub(crate) async fn browser_proxy_delete_alert(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     delete_alert(State(state), Path(alert_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_delete_override(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(override_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_override(State(state), Path(override_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_delete_task(

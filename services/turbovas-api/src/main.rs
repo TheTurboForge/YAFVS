@@ -81,6 +81,9 @@ mod operator_identity;
 mod override_characterization_tests;
 mod override_payloads;
 mod override_query_sql;
+mod override_write_db;
+mod override_write_sql;
+mod override_write_transactions;
 mod override_writes;
 mod overrides;
 mod path_ids;
@@ -334,8 +337,6 @@ mod tooling_alert_write_characterization_tests;
 mod tooling_cert_config_characterization_tests;
 #[cfg(test)]
 mod tooling_credential_write_characterization_tests;
-#[cfg(test)]
-mod tooling_override_write_characterization_tests;
 #[cfg(test)]
 mod tooling_schedule_write_characterization_tests;
 #[cfg(test)]

@@ -166,6 +166,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "delete",
+        path: "/api/v1/overrides/:override_id",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/credentials/:credential_id",
         safety_contract: "write-control-v1",
@@ -568,6 +573,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("let Some(auth) = auth else"));
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id"));
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id/clone"));
+    assert!(browser_routes.contains("/api/v1/overrides/:override_id"));
     assert!(browser_routes.contains("/api/v1/filters"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id"));
     assert!(browser_routes.contains("/api/v1/port-lists"));
@@ -635,6 +641,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_update_tag_resources)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_scope)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_alert)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_override)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_tag)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_tag)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_filter)"));

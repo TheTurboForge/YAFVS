@@ -32,17 +32,15 @@ This script will combine desired reports into a single report. The combined repo
 
 ---
 
-## `delete-overrides-by-filter.gmp.py`
+## TurboVAS override deletion
 
-This script deletes overrides with a specific filter value.
-
-### Arguments
-
-* `<filter>`: the parameter for the filter.
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/delete-overrides-by-filter.gmp.py <filter>`
+The inherited filter-delete script has been replaced by
+`tools/turbovasctl native-delete-overrides-by-filter`. The native helper first
+creates a bounded, deterministic UUID snapshot from a printable substring
+filter. A real trash move requires explicit write-control permission and that
+exact snapshot hash, then processes each override with configurable pacing.
+The API enforces operator ownership and moves one override to trash per request;
+it does not hard-delete override history.
 
 ---
 

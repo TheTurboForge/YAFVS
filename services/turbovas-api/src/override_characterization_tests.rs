@@ -214,7 +214,7 @@ fn inherited_override_result_detail_uses_result_expansion_semantics() {
 }
 
 #[test]
-fn native_direct_api_keeps_override_writes_closed_until_result_effects_are_designed() {
+fn native_direct_api_allows_owner_scoped_override_trash_only() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/overrides",
@@ -236,15 +236,22 @@ fn native_direct_api_keeps_override_writes_closed_until_result_effects_are_desig
             "{method} /api/v1/overrides must remain closed"
         );
     }
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
+        true,
+    ));
     for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
-        assert!(
-            !direct_api_v1_method_is_allowed(
-                &method,
-                "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
-                true,
-            ),
-            "{method} /api/v1/overrides/{{id}} must remain closed"
-        );
+        if method != Method::DELETE {
+            assert!(
+                !direct_api_v1_method_is_allowed(
+                    &method,
+                    "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
+                    true,
+                ),
+                "{method} /api/v1/overrides/{{id}} must remain closed"
+            );
+        }
         assert!(
             !direct_api_v1_method_is_allowed(
                 &method,
@@ -257,22 +264,27 @@ fn native_direct_api_keeps_override_writes_closed_until_result_effects_are_desig
 }
 
 #[test]
-fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
+fn openapi_documents_owner_scoped_override_trash_contract() {
     let list = openapi_path_block("/overrides");
     assert!(list.contains("get:"));
     assert!(!list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(!list.contains(
-        "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
+    assert!(list.contains(
+        "x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion"
     ));
 
     let detail = openapi_path_block("/overrides/{override_id}");
     assert!(detail.contains("get:"));
     assert!(!detail.contains("patch:"));
-    assert!(!detail.contains("delete:"));
+    assert!(detail.contains("delete:"));
+    assert!(detail.contains("operationId: deleteOverridesByOverrideId"));
+    assert!(detail.contains("x-turbovas-exposure: direct-write"));
+    assert!(detail.contains("x-turbovas-replaces: override-trash-move"));
+    assert!(detail.contains("x-turbovas-owner-semantics: preserve-existing-owner"));
+    assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(!detail.contains(
-        "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
+    assert!(detail.contains(
+        "x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion"
     ));
 
     let export = openapi_path_block("/overrides/{override_id}/export");
@@ -290,8 +302,8 @@ fn openapi_documents_overrides_as_read_only_until_write_contract_lands() {
             "override metadata export OpenAPI block missing {required}"
         );
     }
-    assert!(!export.contains(
-        "x-turbovas-inherited-still-owns: override-writes-exports-trash-and-result-expansion"
+    assert!(export.contains(
+        "x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion"
     ));
     for forbidden in [
         "x-turbovas-exposure: direct-write",

@@ -179,7 +179,6 @@ gsad_init_validator ()
                      "|(get_user)"
                      "|(get_users)"
                      "|(get_vulns)"
-                     "|(generate_scope_report)"
                      "|(import_config)"
                      "|(import_port_list)"
                      "|(import_report_format)"

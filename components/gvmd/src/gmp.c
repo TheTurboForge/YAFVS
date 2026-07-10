@@ -2964,7 +2964,6 @@ typedef union
   restore_data_t restore;                             ///< restore
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
-  scope_command_data_t generate_scope_report;         ///< generate_scope_report
   test_alert_data_t test_alert;                       ///< test_alert
   verify_report_format_data_t verify_report_format;   ///< verify_report_format
   verify_scanner_data_t verify_scanner;               ///< verify_scanner
@@ -3499,12 +3498,6 @@ static stop_task_data_t *stop_task_data
  = (stop_task_data_t*) &(command_data.stop_task);
 
 /**
- * @brief Parser callback data for GENERATE_SCOPE_REPORT.
- */
-static scope_command_data_t *generate_scope_report_data
- = &(command_data.generate_scope_report);
-
-/**
  * @brief Parser callback data for TEST_ALERT.
  */
 static test_alert_data_t *test_alert_data
@@ -3951,7 +3944,6 @@ typedef enum
   CLIENT_MODIFY_USER_SOURCES_SOURCE,
   CLIENT_MOVE_TASK,
   CLIENT_RESTORE,
-  CLIENT_GENERATE_SCOPE_REPORT,
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
   CLIENT_TEST_ALERT,
@@ -5312,12 +5304,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "id",
                               &restore_data->id);
             set_client_state (CLIENT_RESTORE);
-          }
-        else if (strcasecmp ("GENERATE_SCOPE_REPORT", element_name) == 0)
-          {
-            scope_command_data_start (generate_scope_report_data,
-                                      attribute_names, attribute_values, 0);
-            set_client_state (CLIENT_GENERATE_SCOPE_REPORT);
           }
         else if (strcasecmp ("START_TASK", element_name) == 0)
           {
@@ -17449,43 +17435,6 @@ handle_delete_scope (gmp_parser_t *gmp_parser, GError **error)
 }
 
 static void
-handle_generate_scope_report (gmp_parser_t *gmp_parser, GError **error)
-{
-  char *scope_report_id = NULL;
-
-  if (generate_scope_report_data->scope_id == NULL)
-    SEND_TO_CLIENT_OR_FAIL
-      (XML_ERROR_SYNTAX ("generate_scope_report",
-                         "A scope_id attribute is required"));
-  else
-    switch (generate_scope_report (generate_scope_report_data->scope_id,
-                                   &scope_report_id))
-      {
-        case 0:
-          SENDF_TO_CLIENT_OR_FAIL
-            (XML_OK_CREATED_ID ("generate_scope_report"), scope_report_id);
-          break;
-        case 2:
-          if (send_find_error_to_client ("generate_scope_report", "scope",
-                                         generate_scope_report_data->scope_id,
-                                         gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          break;
-        default:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_INTERNAL_ERROR ("generate_scope_report"));
-          break;
-      }
-
-  g_free (scope_report_id);
-  scope_command_data_reset (generate_scope_report_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
 handle_delete_scope_report (gmp_parser_t *gmp_parser, GError **error)
 {
   if (delete_scope_report_data->scope_report_id == NULL)
@@ -23595,10 +23544,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                               "An id attribute is required"));
         restore_data_reset (restore_data);
         set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      case CLIENT_GENERATE_SCOPE_REPORT:
-        handle_generate_scope_report (gmp_parser, error);
         break;
 
       case CLIENT_START_TASK:

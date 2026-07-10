@@ -17,7 +17,6 @@ from .requests.v226 import (
     Reports,
     ResourceNames,
     ResourceType,
-    Scopes,
 )
 
 
@@ -163,12 +162,6 @@ class GMPv226(GMPv225[T]):
         """Request CVSS Load and authenticated coverage metrics for a report."""
         return self._send_request_and_transform_response(
             Reports.get_report_metrics(report_id)
-        )
-
-    def generate_scope_report(self, scope_id: EntityID) -> T:
-        """Generate a persistent scope-report snapshot."""
-        return self._send_request_and_transform_response(
-            Scopes.generate_scope_report(scope_id)
         )
 
     def create_filter(

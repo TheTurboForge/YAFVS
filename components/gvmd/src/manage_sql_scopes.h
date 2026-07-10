@@ -40,9 +40,6 @@ int
 delete_scope (const char *);
 
 int
-generate_scope_report (const char *, char **);
-
-int
 delete_scope_report (const char *);
 
 int

@@ -91,7 +91,6 @@ const CAPABILITY_NAMES = [
   'get_users',
   'get_version',
   'get_vulns',
-  'generate_scope_report',
   'help',
   'modify_alert',
   'modify_asset',

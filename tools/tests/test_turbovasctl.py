@@ -639,7 +639,7 @@ class TurboVASCtlTests(unittest.TestCase):
         gvmd_scopes = (root / "components" / "gvmd" / "src" / "manage_sql_scopes.c").read_text(encoding="utf-8")
         gsad = (root / "components" / "gsad" / "src" / "gsad_gmp.c").read_text(encoding="utf-8")
         gsa_scopes = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
-        python_scopes = (root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp" / "requests" / "v226" / "_scopes.py").read_text(encoding="utf-8")
+        python_scopes = root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp" / "requests" / "v226" / "_scopes.py"
         gmp_schema = (root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         self.assertIn("data->filter = g_strdup (attribute);", gvmd_gmp)
@@ -653,8 +653,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("gmp_arguments_add (arguments, \"filter\", filter)", gsad)
         self.assertIn("parseScopeReportCounts", gsa_scopes)
         self.assertIn("response.set<ScopeReport[], EntitiesMeta>", gsa_scopes)
-        self.assertNotIn("def get_scope_reports", python_scopes)
-        self.assertNotIn('XmlCommand("get_scope_reports")', python_scopes)
+        self.assertFalse(python_scopes.exists())
         self.assertIn("def command_native_api_request", native_tooling)
         self.assertFalse((root / "components" / "gvm-tools" / "scripts" / "list-scope-reports.gmp.py").exists())
         self.assertIn("<name>get_scope_reports</name>", gmp_schema)
@@ -8984,6 +8983,13 @@ db2:keys=5,expires=0,avg_ttl=0
             rows = [("M", "components/gvmd/src/example.c"), ("M", "components/gsa/package.json")]
             missing, review = turbovasctl.modified_imported_notice_gaps(root, rows)
             self.assertEqual(missing, ["components/gvmd/src/example.c"])
+            self.assertEqual(review, ["components/gsa/package.json"])
+            missing, review = turbovasctl.modified_imported_notice_gaps(
+                root,
+                rows,
+                turbovas_added={"components/gvmd/src/example.c"},
+            )
+            self.assertEqual(missing, [])
             self.assertEqual(review, ["components/gsa/package.json"])
             source.write_text(source.read_text(encoding="utf-8").replace(" *\n", " * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.\n *\n", 1), encoding="utf-8")
             missing, review = turbovasctl.modified_imported_notice_gaps(root, rows)

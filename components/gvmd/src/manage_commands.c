@@ -149,7 +149,6 @@ command_t gmp_commands[]
     {"RESTORE", "Restore a resource."},
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
-    {"GENERATE_SCOPE_REPORT", "Generate a scope report from existing evidence."},
     {"SYNC_CONFIG", "Synchronize a config with a scanner."},
     {"TEST_ALERT", "Run an alert."},
     {"VERIFY_REPORT_FORMAT", "Verify a report format."},

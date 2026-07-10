@@ -476,13 +476,7 @@ export class ScopesCommand extends HttpCommand {
   }
 
   generateReport({id}: {id: string}) {
-    if (canUseNativeApi(this.http)) {
-      return generateNativeScopeReport(this.http, id);
-    }
-    return this.httpPostWithTransform({
-      cmd: 'generate_scope_report',
-      scope_id: id,
-    });
+    return generateNativeScopeReport(this.http, id);
   }
 }
 

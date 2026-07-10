@@ -8033,28 +8033,6 @@ delete_scope_gmp (gvm_connection_t *connection,
 }
 
 char *
-generate_scope_report_gmp (gvm_connection_t *connection,
-                           gsad_credentials_t *credentials, params_t *params,
-                           gsad_command_response_data_t *response_data)
-{
-  const char *scope_id;
-  GString *command;
-  gchar *html;
-
-  scope_id = params_value (params, "scope_id");
-  CHECK_VARIABLE_INVALID (scope_id, "Generate Scope Report");
-
-  command = g_string_new ("<generate_scope_report");
-  scope_command_append_attribute (command, "scope_id", scope_id);
-  g_string_append (command, "/>");
-
-  html = run_scope_command (connection, credentials, params, response_data,
-                            command->str, "Generate Scope Report");
-  g_string_free (command, TRUE);
-  return html;
-}
-
-char *
 delete_scope_report_gmp (gvm_connection_t *connection,
                          gsad_credentials_t *credentials, params_t *params,
                          gsad_command_response_data_t *response_data)
@@ -16088,7 +16066,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (modify_scope)
   ELSE (move_task)
   ELSE (renew_session)
-  ELSE (generate_scope_report)
   ELSE (report_alert)
   ELSE (restore)
   ELSE (save_alert)

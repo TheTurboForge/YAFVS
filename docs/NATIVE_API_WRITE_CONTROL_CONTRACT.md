@@ -55,8 +55,8 @@ Before any scope write route is implemented, the contract must state:
 - audit fields that do not include credentials, tokens, or private network
   details.
 
-`generate_scope_report` remains a separate report-generation workflow. It must
-not be folded into the first scope metadata-write slice.
+Scope-report generation is a separate native report-generation workflow. It
+was deliberately implemented after the first scope metadata-write slice.
 
 ## Second Candidate: Tag Metadata And Explicit Active-Resource Assignment
 
@@ -102,8 +102,8 @@ Inherited behavior anchors:
 - `modify_scope` updates metadata and replaces target or host membership only
   for non-global scopes; inherited GMP also blocks renaming predefined scopes.
 - `delete_scope` deletes non-predefined scope membership and the scope row.
-- `generate_scope_report` starts a transaction, creates `scope_reports` and
-  `scope_report_sources`, and recomputes counts and metrics. It is report
+- Native scope-report generation starts a transaction, creates `scope_reports`
+  and `scope_report_sources`, and recomputes counts and metrics. It is report
   generation, not a metadata write.
 
 Request shape:

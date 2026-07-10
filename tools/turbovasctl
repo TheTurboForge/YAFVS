@@ -11539,15 +11539,29 @@ def imported_added_path(relative_path: str) -> bool:
     return any(relative_path.startswith(prefix) for prefix in IMPORTED_ADDED_PREFIXES)
 
 
+def turbovas_added_paths(rows: list[tuple[str, str]] | None) -> set[str]:
+    if rows is None:
+        return set()
+    return {
+        relative_path
+        for status, relative_path in rows
+        if status.startswith("A") and not imported_added_path(relative_path)
+    }
+
+
 def modified_imported_notice_gaps(
     repo_root: Path,
     rows: list[tuple[str, str]],
     content_provider: Callable[[str], str | None] | None = None,
+    turbovas_added: set[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     missing: list[str] = []
     review: list[str] = []
+    added_paths = turbovas_added or set()
     for status, relative_path in rows:
         if status != "M":
+            continue
+        if relative_path in added_paths:
             continue
         if content_provider is None:
             path = repo_root / relative_path
@@ -11588,6 +11602,7 @@ def modified_imported_license_findings(
     *,
     diff_scope: str,
     check_manifest_stale: bool = True,
+    turbovas_added: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     if rows is None:
         return [finding("fail", "license.git-history", f"Could not collect modified imported files for diff scope {diff_scope}.")]
@@ -11595,6 +11610,7 @@ def modified_imported_license_findings(
         repo_root,
         rows,
         content_provider=modified_imported_content_provider(repo_root, diff_scope),
+        turbovas_added=turbovas_added,
     )
     notice_details: dict[str, Any] = {"diff_scope": diff_scope, "missing": missing_notices}
     if diff_scope == "baseline":
@@ -11831,12 +11847,14 @@ def command_license_report(
     findings: list[dict[str, Any]] = []
     if modified_imported_only:
         rows = git_name_status_for_diff_scope(repo_root, diff_scope, ("components",))
+        baseline_rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT, ("components",))
         findings.extend(
             modified_imported_license_findings(
                 repo_root,
                 rows,
                 diff_scope=diff_scope,
                 check_manifest_stale=diff_scope == "baseline",
+                turbovas_added=turbovas_added_paths(baseline_rows),
             )
         )
         result = make_result("license-report", repo_root, "Modified imported file license/provenance checks completed.", findings)
@@ -11867,6 +11885,7 @@ def command_license_report(
 
     all_rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT)
     rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT, ("components",))
+    native_added = turbovas_added_paths(rows)
     if rows is None:
         findings.append(finding("fail", "license.git-history", f"Could not compare against import baseline {IMPORT_BASELINE_COMMIT}."))
     else:
@@ -11879,6 +11898,7 @@ def command_license_report(
                 transient_rows,
                 diff_scope=transient_scope,
                 check_manifest_stale=False,
+                turbovas_added=native_added,
             )
         )
 

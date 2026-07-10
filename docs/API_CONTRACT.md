@@ -63,6 +63,12 @@ The first API phase is read-only and report-focused:
   `native-start-tasks-from-csv` helper composes paginated native task reads
   with this endpoint and replaces the inherited CSV start script without
   adding a bulk mutation endpoint.
+- guarded task create through `POST /api/v1/tasks` accepts required
+  target/config/scanner references plus an optional operator-owned schedule
+  and up to five operator-owned alerts. `native-tasks-from-csv` snapshots and
+  exactly resolves all referenced collections before writing, replacing the
+  inherited CSV creator without GMP/XML. Optional host ordering is stored as a
+  bounded task preference and forwarded through both scanner transports.
 - guarded task stop through `POST /api/v1/tasks/{task_id}/stop`. The HTTP
   service sends one bounded, shared-secret-authenticated operator command over
   a private Unix socket. gvmd keeps ACL, scanner stop/delete, queue,
@@ -258,7 +264,9 @@ inherited.
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,
 maximum severity, and timestamps. Task create, metadata patch, and safe
-live-to-trash moves are native. Clone, hard-delete, stop/resume, file export,
+live-to-trash moves are native. Task create validates and transactionally links
+an optional operator-owned schedule and up to five operator-owned alerts.
+Clone, hard-delete, resume, file export,
 and other scanner-control actions remain inherited. The guarded
 `POST /api/v1/tasks/{task_id}/start` is available
 through direct native access and the authenticated browser proxy; it

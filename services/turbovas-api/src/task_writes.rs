@@ -39,7 +39,7 @@ pub(crate) async fn create_task(
         .map_err(|error| map_task_write_db_error(error, "begin create task transaction"))?;
     let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
-        "LOCK TABLE tasks, task_preferences, targets, configs, scanners IN SHARE ROW EXCLUSIVE MODE;",
+        "LOCK TABLE targets, configs, scanners, schedules, alerts, task_alerts, tasks, task_preferences IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_task_write_db_error(error, "lock task create tables"))?;
@@ -47,12 +47,28 @@ pub(crate) async fn create_task(
     let target = load_assignable_task_target(&tx, &request.target_id, operator_owner_id).await?;
     let config = load_assignable_task_config(&tx, &request.config_id, operator_owner_id).await?;
     let scanner = load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?;
+    let (schedule_internal_id, schedule_next_time) = if let Some(schedule_id) =
+        request.schedule_id.as_deref()
+    {
+        let schedule = load_assignable_task_schedule(&tx, schedule_id, operator_owner_id).await?;
+        (schedule.internal_id, schedule.next_time)
+    } else {
+        (0, 0)
+    };
+    let mut alert_internal_ids = Vec::with_capacity(request.alert_ids.len());
+    for alert_id in &request.alert_ids {
+        let alert = load_assignable_task_alert(&tx, alert_id, operator_owner_id).await?;
+        alert_internal_ids.push(alert.internal_id);
+    }
     let record = execute_task_create_transaction(
         &tx,
         operator_owner_id,
         target.internal_id,
         config.internal_id,
         scanner.internal_id,
+        schedule_internal_id,
+        schedule_next_time,
+        &alert_internal_ids,
         &request,
     )
     .await?;

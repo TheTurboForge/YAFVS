@@ -594,7 +594,11 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(list.contains("x-turbovas-exposure: direct-write"));
-    assert!(list.contains("x-turbovas-replaces: task-create-with-target-config-scanner"));
+    assert!(
+        list.contains(
+            "x-turbovas-replaces: task-create-with-target-config-scanner-schedule-alerts"
+        )
+    );
     assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
     assert!(
         list.contains("x-turbovas-inherited-still-owns: task-resume-clone-file-hard-delete-and-other-scanner-control")
@@ -602,13 +606,15 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
-    assert!(list.contains("bounded task creation with explicit target/config/scanner references"));
+    assert!(list.contains(
+        "bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links"
+    ));
     assert!(
         list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
     );
-    assert!(list.contains(
-        "Resume, clone, hard-delete, file export, broad target/config/schedule/scanner mutation"
-    ));
+    assert!(
+        list.contains("Resume, clone, hard-delete, file export, broad task reference mutation")
+    );
 
     let detail = openapi_path_block("/tasks/{task_id}");
     assert!(detail.contains("get:"));

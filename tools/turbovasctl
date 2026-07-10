@@ -398,7 +398,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "cfg-gen-for-certs.gmp.py",
         "create-alerts-from-csv.gmp.py",
         "create-schedules-from-csv.gmp.py",
-        "create-tasks-from-csv.gmp.py",
         "delete-overrides-by-filter.gmp.py",
         "empty-trash.gmp.py",
         "send-schedules.gmp.py",
@@ -422,7 +421,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
-    "create-tasks-from-csv.gmp.py": "Inherited CSV bulk-task behavior is characterized; native tooling still lacks a contract that resolves target, scanner, scan-config, schedule, alert bindings, and host-ordering fields.",
     "delete-overrides-by-filter.gmp.py": "Inherited filter-based override deletion is characterized; native tooling still lacks an explicit destructive override-delete contract, authorization rule, and pacing/error semantics.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-csv-report.gmp.py": "Inherited CSV report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
@@ -659,7 +657,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "target-metadata-simple-scan-inputs-and-credential-links-modify",
         "target-restore",
         "target-trash-move",
-        "task-create-with-target-config-scanner",
+        "task-create-with-target-config-scanner-schedule-alerts",
         "task-metadata-modify",
         "task-metadata-export-read",
         "task-detail-summary-read",
@@ -1644,9 +1642,9 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
-        "x-turbovas-replaces": "task-create-with-target-config-scanner",
+        "x-turbovas-replaces": "task-create-with-target-config-scanner-schedule-alerts",
         "x-turbovas-safety-contract": "write-control-v1",
-        "x-turbovas-side-effect": "metadata-write",
+        "x-turbovas-side-effect": "scanner-control",
     },
     ("post", "/tasks/{task_id}/start"): {
         "x-turbovas-inherited-still-owns": "task-resume-and-other-scanner-control",
@@ -8630,9 +8628,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/tasks",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["same-origin browser task create with explicit target/config/scanner references", "direct native task create without scanner lifecycle start"],
+                "replacement_candidates": ["same-origin browser task create with explicit target/config/scanner references", "direct native task create with optional schedule, alerts, and host ordering without scanner lifecycle start"],
                 "residual_inherited": [
-                    "Task stop/resume, clone, hard-delete, schedules, alerts, broad target/config/scanner mutation, preference edits, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
+                    "Task resume, clone, hard-delete, broad target/config/scanner mutation, preferences beyond host ordering, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -14785,9 +14783,11 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.task-scanner-fixture",
             "native-api-direct.scanner-verify",
             "native-api-direct.task-stop-missing",
+            "native-api-direct.task-relation-fixtures",
             "native-api-direct.task-write-create",
             "native-api-direct.task-write-update",
             "native-api-direct.task-fixture-cleanup",
+            "native-api-direct.task-relation-fixture-cleanup",
             "native-api-direct.alert-tag-write-create",
             "native-api-direct.alert-tag-resource-add",
             "native-api-direct.alert-tag-resource-in-use-after-add",
@@ -14937,6 +14937,10 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     target_updated_comment = "TurboVAS direct write smoke updated target metadata"
     task_id: str | None = None
     task_name = f"turbovas-direct-write-smoke-task-{int(time.time())}-{os.getpid()}"
+    task_schedule_id: str | None = None
+    task_schedule_name = f"{task_name}-schedule"
+    task_alert_id: str | None = None
+    task_alert_name = f"{task_name}-alert"
     task_updated_comment = "TurboVAS direct write smoke updated task metadata"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
@@ -16316,6 +16320,51 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 findings.append(native_api_probe_finding("pass" if task_scanner_fixture_ok else "warn", "native-api-direct.task-scanner-fixture", "Direct write-control smoke found a scan-task-capable scanner fixture for native task creation." if task_scanner_fixture_ok else "Direct write-control smoke could not find a scan-task-capable scanner fixture for native task creation.", task_scanner_fixture, direct_native_api_display_command("/api/v1/scanners?page_size=25&sort=name", token=token, env=env), task_scanner_fixture_json, {"http_status": task_scanner_fixture_status, "scanner_id": task_scanner_id, "scan_task_scanner_types": [2, 5, 6, 8], **summarize_native_api_response(task_scanner_fixture_json)}))
 
                 if task_scanner_id:
+                    task_relation_fixture_sql = (
+                        "WITH owner_row AS (SELECT id FROM users "
+                        f"WHERE uuid = {sql_literal(admin_uuid or '')}), "
+                        "inserted_schedule AS (INSERT INTO schedules "
+                        "(uuid, owner, name, comment, first_time, period, period_months, byday, duration, timezone, icalendar, creation_time, modification_time) "
+                        "SELECT make_uuid(), id, "
+                        f"{sql_literal(task_schedule_name)}, 'TurboVAS direct write smoke task schedule', "
+                        "1893456000, 86400, 0, 0, 3600, 'UTC', "
+                        f"{sql_literal(schedule_icalendar)}, m_now(), m_now() FROM owner_row RETURNING uuid), "
+                        "inserted_alert AS (INSERT INTO alerts "
+                        "(uuid, owner, name, comment, event, condition, method, active, creation_time, modification_time) "
+                        "SELECT make_uuid(), id, "
+                        f"{sql_literal(task_alert_name)}, 'TurboVAS direct write smoke task alert', "
+                        "1, 1, 1, 1, m_now(), m_now() FROM owner_row RETURNING uuid) "
+                        "SELECT (SELECT uuid::text FROM inserted_schedule) || '|' || "
+                        "(SELECT uuid::text FROM inserted_alert);"
+                    )
+                    task_relation_fixture = psql(repo_root, task_relation_fixture_sql)
+                    task_relation_fixture_value = psql_value(task_relation_fixture)
+                    if "|" in task_relation_fixture_value:
+                        task_schedule_id, task_alert_id = task_relation_fixture_value.split("|", 1)
+                    task_relation_fixture_ok = (
+                        task_relation_fixture.returncode == 0
+                        and bool(task_schedule_id)
+                        and bool(task_alert_id)
+                    )
+                    task_relation_fixture_finding = process_step_finding(
+                        "pass" if task_relation_fixture_ok else "fail",
+                        "native-api-direct.task-relation-fixtures",
+                        "Direct write-control smoke created owned schedule and alert fixtures for native task creation."
+                        if task_relation_fixture_ok
+                        else "Direct write-control smoke failed to create owned schedule and alert fixtures for native task creation.",
+                        task_relation_fixture,
+                        ["psql", "fixed-task-relation-smoke-fixtures"],
+                    )
+                    task_relation_fixture_details = task_relation_fixture_finding.setdefault("details", {})
+                    if isinstance(task_relation_fixture_details, dict):
+                        task_relation_fixture_details.update(
+                            {
+                                "schedule_id": task_schedule_id,
+                                "alert_id": task_alert_id,
+                            }
+                        )
+                    findings.append(task_relation_fixture_finding)
+
                     scanner_verify = direct_native_api_curl(repo_root, f"/api/v1/scanners/{urllib.parse.quote(task_scanner_id)}/verify", token=token, env=env, method="POST")
                     scanner_verify_json, scanner_verify_status = parse_json_output_with_http_status(scanner_verify)
                     scanner_verify_ok = scanner_verify.returncode == 0 and scanner_verify_status == 200 and isinstance(scanner_verify_json, dict) and scanner_verify_json.get("scanner_id") == task_scanner_id and scanner_verify_json.get("verified") is True
@@ -16328,14 +16377,42 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                             "target_id": target_id,
                             "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
                             "scanner_id": task_scanner_id,
+                            "schedule_id": task_schedule_id,
+                            "alert_ids": [task_alert_id],
+                            "hosts_ordering": "reverse",
                         },
                         separators=(",", ":"),
                     )
                     task_create = direct_native_api_curl(repo_root, "/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type)
                     task_create_json, task_create_status = parse_json_output_with_http_status(task_create)
                     task_id = task_create_json.get("id") if isinstance(task_create_json, dict) and isinstance(task_create_json.get("id"), str) else None
-                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task"
-                    findings.append(native_api_probe_finding("pass" if task_create_ok else "fail", "native-api-direct.task-write-create", "Direct write-control created a temporary scan task through the native API without starting a scan." if task_create_ok else "Direct write-control failed to create a temporary scan task through the native API.", task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type), task_create_json, {"http_status": task_create_status, "task_id": task_id, "target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID, "scanner_id": task_scanner_id, **summarize_native_api_response(task_create_json)}))
+                    task_relation_state = ""
+                    if task_id:
+                        task_relation_state = psql_value(
+                            psql(
+                                repo_root,
+                                "SELECT coalesce(s.uuid::text, '') || '|' || "
+                                "coalesce(t.schedule_periods::text, '') || '|' || "
+                                "coalesce(t.schedule_next_time::text, '') || '|' || "
+                                "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'hosts_ordering'), '') || '|' || "
+                                "(SELECT count(*)::text FROM task_alerts ta JOIN alerts a ON a.id = ta.alert "
+                                f"WHERE ta.task = t.id AND a.uuid = {sql_literal(task_alert_id or '')}) "
+                                "FROM tasks t LEFT JOIN schedules s ON s.id = t.schedule "
+                                f"WHERE t.uuid = {sql_literal(task_id)};",
+                            )
+                        )
+                    task_relation_fields = task_relation_state.split("|")
+                    task_relation_ok = (
+                        len(task_relation_fields) == 5
+                        and task_relation_fields[0] == task_schedule_id
+                        and task_relation_fields[1] == "0"
+                        and task_relation_fields[2].isdigit()
+                        and int(task_relation_fields[2]) > 0
+                        and task_relation_fields[3] == "reverse"
+                        and task_relation_fields[4] == "1"
+                    )
+                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task" and task_relation_ok
+                    findings.append(native_api_probe_finding("pass" if task_create_ok else "fail", "native-api-direct.task-write-create", "Direct write-control created a scheduled, alerted, reverse-ordered temporary scan task without starting a scan." if task_create_ok else "Direct write-control failed to create or persist the scheduled, alerted, reverse-ordered temporary scan task.", task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type), task_create_json, {"http_status": task_create_status, "task_id": task_id, "target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID, "scanner_id": task_scanner_id, "schedule_id": task_schedule_id, "alert_id": task_alert_id, "relation_state": task_relation_state, **summarize_native_api_response(task_create_json)}))
                 else:
                     findings.append(finding("warn", "native-api-direct.task-write-create", "Direct write-control smoke skipped native task creation because no scanner fixture was available.", details={"target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID}))
 
@@ -16400,6 +16477,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         f"WHERE uuid = {sql_literal(task_id)} AND name = {sql_literal(task_name)}), "
                         "deleted_task_tags AS (DELETE FROM tag_resources WHERE resource_type = 'task' AND resource IN (SELECT id FROM live_task)), "
                         "deleted_task_trash_tags AS (DELETE FROM tag_resources_trash WHERE resource_type = 'task' AND resource IN (SELECT id FROM live_task)), "
+                        "deleted_task_alerts AS (DELETE FROM task_alerts WHERE task IN (SELECT id FROM live_task)), "
                         "deleted_task_preferences AS (DELETE FROM task_preferences WHERE task IN (SELECT id FROM live_task)), "
                         "deleted_task AS (DELETE FROM tasks WHERE id IN (SELECT id FROM live_task) RETURNING id) "
                         "SELECT count(*) FROM deleted_task;"
@@ -16412,6 +16490,38 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     if isinstance(task_cleanup_details, dict):
                         task_cleanup_details.update({"task_id": task_id, "task_name": task_name, "deleted_count": task_cleanup_deleted})
                     findings.append(task_cleanup_finding)
+
+                if task_schedule_id or task_alert_id:
+                    task_relation_cleanup_sql = (
+                        "WITH deleted_alert AS (DELETE FROM alerts "
+                        f"WHERE uuid = {sql_literal(task_alert_id or '')} AND name = {sql_literal(task_alert_name)} RETURNING id), "
+                        "deleted_schedule AS (DELETE FROM schedules "
+                        f"WHERE uuid = {sql_literal(task_schedule_id or '')} AND name = {sql_literal(task_schedule_name)} RETURNING id) "
+                        "SELECT (SELECT count(*) FROM deleted_alert) || '|' || "
+                        "(SELECT count(*) FROM deleted_schedule);"
+                    )
+                    task_relation_cleanup = psql(repo_root, task_relation_cleanup_sql)
+                    task_relation_cleanup_deleted = psql_value(task_relation_cleanup)
+                    task_relation_cleanup_ok = task_relation_cleanup.returncode == 0 and task_relation_cleanup_deleted == "1|1"
+                    task_relation_cleanup_finding = process_step_finding(
+                        "pass" if task_relation_cleanup_ok else "fail",
+                        "native-api-direct.task-relation-fixture-cleanup",
+                        "Direct write-control smoke removed the temporary task schedule and alert fixtures."
+                        if task_relation_cleanup_ok
+                        else "Direct write-control smoke failed to remove the temporary task schedule or alert fixture.",
+                        task_relation_cleanup,
+                        ["psql", "fixed-task-relation-smoke-cleanup"],
+                    )
+                    task_relation_cleanup_details = task_relation_cleanup_finding.setdefault("details", {})
+                    if isinstance(task_relation_cleanup_details, dict):
+                        task_relation_cleanup_details.update(
+                            {
+                                "schedule_id": task_schedule_id,
+                                "alert_id": task_alert_id,
+                                "deleted_counts": task_relation_cleanup_deleted,
+                            }
+                        )
+                    findings.append(task_relation_cleanup_finding)
 
                 target_delete = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="DELETE")
                 target_delete_json, target_delete_status = parse_json_output_with_http_status(target_delete)
@@ -18000,36 +18110,55 @@ def load_native_task_csv_rows(csv_file: Path) -> list[NativeTaskCsvRow]:
     return rows
 
 
+def native_named_collection_fetch_items(
+    repo_root: Path,
+    collection: str,
+    *,
+    token: str,
+    env: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    items_out: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        path = f"/api/v1/{collection}?page={page}&page_size={NATIVE_TASK_BATCH_PAGE_SIZE}&sort=name"
+        response = direct_native_api_curl(repo_root, path, token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        items = parsed.get("items") if isinstance(parsed, dict) else None
+        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(items, list):
+            return items_out, {
+                "path": path,
+                "http_status": http_status,
+                "reason": f"native {collection} list lookup failed",
+                **summarize_native_api_response(parsed),
+            }
+        items_out.extend(item for item in items if isinstance(item, dict))
+        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
+        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(items)
+        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) and page_info.get("page") else page
+        actual_page_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else NATIVE_TASK_BATCH_PAGE_SIZE
+        if not items or actual_page * actual_page_size >= total:
+            return items_out, None
+        page = actual_page + 1
+        if page > 1000:
+            return items_out, {
+                "path": path,
+                "reason": f"native {collection} list pagination exceeded safety limit",
+                "total": total,
+            }
+
+
 def native_task_batch_fetch_tasks(
     repo_root: Path,
     *,
     token: str,
     env: dict[str, str],
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    tasks: list[dict[str, Any]] = []
-    page = 1
-    while True:
-        path = f"/api/v1/tasks?page={page}&page_size={NATIVE_TASK_BATCH_PAGE_SIZE}&sort=name"
-        response = direct_native_api_curl(repo_root, path, token=token, env=env)
-        parsed, http_status = parse_json_output_with_http_status(response)
-        items = parsed.get("items") if isinstance(parsed, dict) else None
-        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(items, list):
-            return tasks, {
-                "path": path,
-                "http_status": http_status,
-                "reason": "native task list lookup failed",
-                **summarize_native_api_response(parsed),
-            }
-        tasks.extend(item for item in items if isinstance(item, dict))
-        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
-        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(items)
-        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) and page_info.get("page") else page
-        actual_page_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else NATIVE_TASK_BATCH_PAGE_SIZE
-        if not items or actual_page * actual_page_size >= total:
-            return tasks, None
-        page = actual_page + 1
-        if page > 1000:
-            return tasks, {"path": path, "reason": "native task list pagination exceeded safety limit", "total": total}
+    return native_named_collection_fetch_items(
+        repo_root,
+        "tasks",
+        token=token,
+        env=env,
+    )
 
 
 def native_start_tasks_from_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -18472,6 +18601,443 @@ def command_native_stop_all_tasks(
         allow_write_control=allow_write_control,
         status_only=status_only,
     )
+
+
+NATIVE_TASK_CSV_HOST_ORDERINGS = frozenset({"RANDOM", "SEQUENTIAL", "REVERSE"})
+
+
+@dataclass(frozen=True)
+class NativeTaskCreateCsvRow:
+    row_number: int
+    name: str
+    target_name: str
+    scanner_name: str
+    config_name: str
+    schedule_name: str
+    hosts_ordering: str
+    alert_names: tuple[str, ...]
+
+
+def load_native_task_create_csv_rows(csv_file: Path) -> list[NativeTaskCreateCsvRow]:
+    rows: list[NativeTaskCreateCsvRow] = []
+    try:
+        with csv_file.open(encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle, delimiter=",")
+            for row_number, raw_row in enumerate(reader, start=1):
+                if not raw_row or not any(cell.strip() for cell in raw_row):
+                    continue
+                if not 4 <= len(raw_row) <= 11:
+                    raise ValueError(
+                        f"row {row_number} must contain 4 to 11 columns: "
+                        "task, target, scanner, scan config, optional schedule, "
+                        "legacy host ordering, and up to five alerts"
+                    )
+                row = [cell.strip() for cell in raw_row] + [""] * (11 - len(raw_row))
+                if not all(row[index] for index in range(4)):
+                    raise ValueError(
+                        f"row {row_number} must include task, target, scanner, and scan config names"
+                    )
+                hosts_ordering = row[5].upper() or "RANDOM"
+                if hosts_ordering not in NATIVE_TASK_CSV_HOST_ORDERINGS:
+                    supported = ", ".join(sorted(NATIVE_TASK_CSV_HOST_ORDERINGS))
+                    raise ValueError(
+                        f"row {row_number} host ordering must be one of: {supported}"
+                    )
+                alert_names = tuple(name for name in row[6:11] if name)
+                rows.append(
+                    NativeTaskCreateCsvRow(
+                        row_number=row_number,
+                        name=row[0],
+                        target_name=row[1],
+                        scanner_name=row[2],
+                        config_name=row[3],
+                        schedule_name=row[4],
+                        hosts_ordering=hosts_ordering,
+                        alert_names=alert_names,
+                    )
+                )
+    except OSError as exc:
+        raise ValueError(f"failed to read task CSV file: {exc}") from exc
+    if not rows:
+        raise ValueError("task CSV file is empty")
+    return rows
+
+
+def native_tasks_from_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        key: details.get(key)
+        for key in (
+            "csv_file",
+            "row_count",
+            "task_count",
+            "planned_count",
+            "skipped_count",
+            "host_ordering_count",
+            "created_count",
+            "failure_count",
+        )
+        if key in details
+    }
+    compact["findings"] = [
+        compact_doctor_finding(item)
+        for item in result.get("findings", [])
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ] or [
+        finding(
+            "pass",
+            "native-tasks-from-csv.status-only",
+            "Native CSV task creation passed; row details summarized.",
+        )
+    ]
+    return compact
+
+
+def native_task_csv_exact_reference(
+    items: Sequence[dict[str, Any]],
+    value: str,
+) -> tuple[str | None, str | None]:
+    matches = [
+        item
+        for item in items
+        if item.get("name") == value or item.get("id") == value
+    ]
+    if not matches:
+        return None, "name not found"
+    if len(matches) != 1:
+        return None, f"name is ambiguous ({len(matches)} matches)"
+    resource_id = matches[0].get("id")
+    if not isinstance(resource_id, str) or not UUID_VALUE_RE.fullmatch(resource_id):
+        return None, "matching resource did not contain a valid UUID"
+    return resource_id, None
+
+
+def command_native_tasks_from_csv(
+    repo_root: Path,
+    csv_file: Path,
+    *,
+    allow_write_control: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "csv_file": str(csv_file),
+        "row_count": 0,
+        "task_count": 0,
+        "planned_count": 0,
+        "skipped_count": 0,
+        "host_ordering_count": 0,
+        "created_count": 0,
+        "failure_count": 0,
+        "rows": [],
+    }
+    try:
+        rows = load_native_task_create_csv_rows(csv_file)
+    except ValueError as exc:
+        findings.append(
+            finding(
+                "fail",
+                "native-tasks-from-csv.rows",
+                str(exc),
+                details={"csv_file": str(csv_file)},
+            )
+        )
+        result = make_result(
+            "native-tasks-from-csv",
+            repo_root,
+            "Native CSV task creation rejected before runtime access.",
+            findings,
+        )
+        result["details"] = details
+        return native_tasks_from_csv_status_only_result(result) if status_only else result
+    details["row_count"] = len(rows)
+
+    if not allow_write_control:
+        findings.append(
+            finding(
+                "fail",
+                "native-tasks-from-csv.write-control-intent",
+                "Creating tasks requires --allow-write-control.",
+            )
+        )
+        result = make_result(
+            "native-tasks-from-csv",
+            repo_root,
+            "Native CSV task creation rejected before runtime access.",
+            findings,
+        )
+        result["details"] = details
+        return native_tasks_from_csv_status_only_result(result) if status_only else result
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(
+        native_api_direct_config_shape_finding(
+            env,
+            check="native-tasks-from-csv.direct-config-shape",
+        )
+    )
+    if aggregate_status(findings) == "fail":
+        result = make_result(
+            "native-tasks-from-csv",
+            repo_root,
+            "Direct native API CSV task creation rejected before runtime access.",
+            findings,
+        )
+        result["details"] = details
+        return native_tasks_from_csv_status_only_result(result) if status_only else result
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-tasks-from-csv.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        result = make_result(
+            "native-tasks-from-csv",
+            repo_root,
+            "Direct native API CSV task creation rejected before runtime access.",
+            findings,
+        )
+        result["details"] = details
+        return native_tasks_from_csv_status_only_result(result) if status_only else result
+
+    required_collections = ["tasks", "targets", "scanners", "scan-configs"]
+    if any(row.schedule_name for row in rows):
+        required_collections.append("schedules")
+    if any(row.alert_names for row in rows):
+        required_collections.append("alerts")
+    collections: dict[str, list[dict[str, Any]]] = {}
+    for collection in required_collections:
+        items, failure = native_named_collection_fetch_items(
+            repo_root,
+            collection,
+            token=token,
+            env=env,
+        )
+        if failure:
+            findings.append(
+                finding(
+                    "fail",
+                    f"native-tasks-from-csv.snapshot.{collection}",
+                    f"Native {collection} snapshot failed; no task creates were attempted.",
+                    details=failure,
+                )
+            )
+            result = make_result(
+                "native-tasks-from-csv",
+                repo_root,
+                "Native CSV task creation failed during reference snapshot.",
+                findings,
+            )
+            result["details"] = details
+            return native_tasks_from_csv_status_only_result(result) if status_only else result
+        collections[collection] = items
+    details["task_count"] = len(collections["tasks"])
+    details["collection_counts"] = {
+        collection: len(items) for collection, items in collections.items()
+    }
+    findings.append(
+        finding(
+            "pass",
+            "native-tasks-from-csv.snapshot",
+            "Snapshotted every required native collection before task creation.",
+            details=details["collection_counts"],
+        )
+    )
+
+    planned: list[tuple[NativeTaskCreateCsvRow, dict[str, Any]]] = []
+    seen_csv_names: set[str] = set()
+    existing_task_names = {
+        item.get("name") for item in collections["tasks"] if isinstance(item.get("name"), str)
+    }
+    ordering_rows: list[int] = []
+    for row in rows:
+        row_details: dict[str, Any] = {
+            "row": row.row_number,
+            "task_name": row.name,
+        }
+        if row.name in existing_task_names:
+            details["skipped_count"] += 1
+            row_details.update({"status": "skipped", "reason": "task name already exists"})
+            details["rows"].append(row_details)
+            continue
+        if row.name in seen_csv_names:
+            details["failure_count"] += 1
+            row_details.update({"status": "failed", "reason": "duplicate task name in CSV"})
+            details["rows"].append(row_details)
+            findings.append(
+                finding(
+                    "fail",
+                    f"native-tasks-from-csv.row.{row.row_number}.preflight",
+                    f"Duplicate task name {row.name!r} in CSV; no task creates will be attempted.",
+                )
+            )
+            continue
+        seen_csv_names.add(row.name)
+
+        reference_names = {
+            "target_id": ("targets", row.target_name),
+            "scanner_id": ("scanners", row.scanner_name),
+            "config_id": ("scan-configs", row.config_name),
+        }
+        if row.schedule_name:
+            reference_names["schedule_id"] = ("schedules", row.schedule_name)
+        body: dict[str, Any] = {
+            "name": row.name,
+        }
+        row_errors: list[str] = []
+        for field_name, (collection, resource_name) in reference_names.items():
+            resource_id, error = native_task_csv_exact_reference(
+                collections[collection],
+                resource_name,
+            )
+            if error:
+                row_errors.append(f"{collection} {resource_name!r}: {error}")
+            else:
+                body[field_name] = resource_id
+
+        alert_ids: list[str] = []
+        duplicate_alert_names: list[str] = []
+        for alert_name in row.alert_names:
+            alert_id, error = native_task_csv_exact_reference(
+                collections.get("alerts", []),
+                alert_name,
+            )
+            if error:
+                row_errors.append(f"alerts {alert_name!r}: {error}")
+            elif alert_id in alert_ids:
+                duplicate_alert_names.append(alert_name)
+            else:
+                alert_ids.append(alert_id)
+        if alert_ids:
+            body["alert_ids"] = alert_ids
+        if row.hosts_ordering:
+            ordering_rows.append(row.row_number)
+            body["hosts_ordering"] = row.hosts_ordering.lower()
+        if duplicate_alert_names:
+            findings.append(
+                finding(
+                    "warn",
+                    f"native-tasks-from-csv.row.{row.row_number}.duplicate-alerts",
+                    f"Duplicate alert references were de-duplicated for task {row.name!r}.",
+                    details={"alert_names": duplicate_alert_names},
+                )
+            )
+
+        if row_errors:
+            details["failure_count"] += 1
+            row_details.update(
+                {
+                    "status": "failed",
+                    "reason": "reference preflight failed",
+                    "errors": row_errors,
+                }
+            )
+            details["rows"].append(row_details)
+            findings.append(
+                finding(
+                    "fail",
+                    f"native-tasks-from-csv.row.{row.row_number}.preflight",
+                    f"Task {row.name!r} reference preflight failed.",
+                    details={"errors": row_errors},
+                )
+            )
+            continue
+        planned.append((row, body))
+
+    details["planned_count"] = len(planned)
+    details["host_ordering_count"] = len(ordering_rows)
+
+    if details["failure_count"]:
+        findings.append(
+            finding(
+                "fail",
+                "native-tasks-from-csv.preflight",
+                "Native CSV task creation preflight failed; no task creates were attempted.",
+                details={"failure_count": details["failure_count"]},
+            )
+        )
+        result = make_result(
+            "native-tasks-from-csv",
+            repo_root,
+            "Native CSV task creation rejected before writes.",
+            findings,
+        )
+        result["details"] = details
+        return native_tasks_from_csv_status_only_result(result) if status_only else result
+
+    content_type = (("Content-Type", "application/json"),)
+    for row, body in planned:
+        body_json = json.dumps(body, separators=(",", ":"))
+        response = direct_native_api_curl(
+            repo_root,
+            "/api/v1/tasks",
+            token=token,
+            env=env,
+            method="POST",
+            body=body_json,
+            extra_headers=content_type,
+        )
+        parsed, http_status = parse_json_output_with_http_status(response)
+        task_id = parsed.get("id") if isinstance(parsed, dict) else None
+        accepted = (
+            response.returncode == 0
+            and http_status == 201
+            and isinstance(task_id, str)
+            and bool(UUID_VALUE_RE.fullmatch(task_id))
+            and parsed.get("name") == row.name
+        )
+        details["rows"].append(
+            {
+                "row": row.row_number,
+                "task_name": row.name,
+                "task_id": task_id,
+                "status": "created" if accepted else "failed",
+                "http_status": http_status,
+            }
+        )
+        if accepted:
+            details["created_count"] += 1
+        else:
+            details["failure_count"] += 1
+        findings.append(
+            native_api_probe_finding(
+                "pass" if accepted else "fail",
+                f"native-tasks-from-csv.row.{row.row_number}.create",
+                "Native API created the task with resolved references."
+                if accepted
+                else "Native API task creation failed or returned an invalid acknowledgement.",
+                response,
+                direct_native_api_display_command(
+                    "/api/v1/tasks",
+                    token=token,
+                    env=env,
+                    method="POST",
+                ),
+                parsed,
+                {
+                    "http_status": http_status,
+                    "task_id": task_id,
+                    "task_name": row.name,
+                    **summarize_native_api_response(parsed),
+                },
+            )
+        )
+
+    result = make_result(
+        "native-tasks-from-csv",
+        repo_root,
+        "Native CSV task creation completed."
+        if aggregate_status(findings) != "fail"
+        else "Native CSV task creation completed with failures.",
+        findings,
+    )
+    result["details"] = details
+    return native_tasks_from_csv_status_only_result(result) if status_only else result
 
 
 def validate_native_verify_scanner_ids(scanner_ids: Sequence[str]) -> tuple[str, ...]:
@@ -22761,6 +23327,10 @@ def build_parser() -> argparse.ArgumentParser:
     native_start_tasks_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with one task name in the first column per row")
     native_start_tasks_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control for every eligible row")
     native_start_tasks_csv.add_argument("--status-only", action="store_true", help="emit compact counts and only non-pass findings")
+    native_tasks_csv = subparsers.add_parser("native-tasks-from-csv", parents=[common], help="create tasks from resolved CSV resource names through the guarded direct native API")
+    native_tasks_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with task, target, scanner, scan config, optional schedule/order, and up to five alert columns")
+    native_tasks_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional native task creation for every preflighted row")
+    native_tasks_csv.add_argument("--status-only", action="store_true", help="emit compact counts and only non-pass findings")
     native_verify_scanners = subparsers.add_parser("native-verify-scanners", parents=[common], help="verify scanners through the guarded direct native API without gvm-tools")
     native_verify_scanners.add_argument("--scanner-id", action="append", default=[], help="specific scanner UUID to verify; may be repeated")
     native_verify_scanners.add_argument("--page-size", type=int, default=NATIVE_VERIFY_SCANNERS_DEFAULT_PAGE_SIZE, help="scanner list page size when no --scanner-id is supplied")
@@ -22967,6 +23537,13 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_start_task(
             repo_root,
             task_id=args.task_id,
+            allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-tasks-from-csv":
+        result = command_native_tasks_from_csv(
+            repo_root,
+            args.csv_file,
             allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )

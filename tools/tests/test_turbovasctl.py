@@ -1487,7 +1487,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-stop-task", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-stop-task", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -3699,7 +3699,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'target-metadata-simple-scan-inputs-and-credential-links-modify',
          'target-restore',
          'target-trash-move',
-         'task-create-with-target-config-scanner',
+         'task-create-with-target-config-scanner-schedule-alerts',
          'task-detail-summary-read',
          'task-list-read',
          'task-metadata-export-read',
@@ -6281,6 +6281,234 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["selected_count"], 0)
         self.assertEqual(result["details"]["stopped_count"], 0)
 
+    def test_native_task_create_csv_parser_accepts_optional_columns_and_validates_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text(
+                ' Minimal , Target , Scanner , Config \n'
+                '"Scheduled, quoted",Target,Scanner,Config,Daily,reverse,Mail,Mail\n',
+                encoding="utf-8",
+            )
+            rows = turbovasctl.load_native_task_create_csv_rows(csv_file)
+
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0].name, "Minimal")
+            self.assertEqual(rows[0].schedule_name, "")
+            self.assertEqual(rows[0].hosts_ordering, "RANDOM")
+            self.assertEqual(rows[1].name, "Scheduled, quoted")
+            self.assertEqual(rows[1].hosts_ordering, "REVERSE")
+            self.assertEqual(rows[1].alert_names, ("Mail", "Mail"))
+
+            csv_file.write_text("too,few,columns\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                turbovasctl.load_native_task_create_csv_rows(csv_file)
+
+    def test_native_tasks_from_csv_requires_write_control_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text("Task,Target,Scanner,Config\n", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_tasks_from_csv(root, csv_file)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(
+            next(item for item in result["findings"] if item["check"].endswith("write-control-intent"))["status"],
+            "fail",
+        )
+
+    def test_native_tasks_from_csv_snapshots_resolves_optional_links_and_creates(self):
+        ids = {
+            "task": "11111111-1111-4111-8111-111111111111",
+            "target": "22222222-2222-4222-8222-222222222222",
+            "scanner": "33333333-3333-4333-8333-333333333333",
+            "config": "44444444-4444-4444-8444-444444444444",
+            "schedule": "55555555-5555-4555-8555-555555555555",
+            "alert": "66666666-6666-4666-8666-666666666666",
+        }
+        collection_items = {
+            "tasks": [{"id": "77777777-7777-4777-8777-777777777777", "name": "Existing"}],
+            "targets": [{"id": ids["target"], "name": "Target"}],
+            "scanners": [{"id": ids["scanner"], "name": "Scanner"}],
+            "scan-configs": [{"id": ids["config"], "name": "Config"}],
+            "schedules": [{"id": ids["schedule"], "name": "Daily"}],
+            "alerts": [{"id": ids["alert"], "name": "Mail"}],
+        }
+        captured: list[tuple[str, str, str | None]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            method = kwargs.get("method", "GET")
+            captured.append((method, path, kwargs.get("body")))
+            if method == "GET":
+                collection = path.split("/api/v1/", 1)[1].split("?", 1)[0]
+                items = collection_items[collection]
+                payload = {
+                    "items": items,
+                    "page": {"page": 1, "page_size": 500, "total": len(items)},
+                }
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+            body = json.loads(kwargs["body"])
+            return subprocess.CompletedProcess(
+                ["curl"],
+                0,
+                json.dumps({"id": ids["task"], "name": body["name"]}) + "\n201",
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text(
+                "New,Target,Scanner,Config,Daily,reverse,Mail,Mail\n"
+                "Existing,Target,Scanner,Config\n",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_tasks_from_csv(
+                    root,
+                    csv_file,
+                    allow_write_control=True,
+                )
+
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(result["details"]["row_count"], 2)
+        self.assertEqual(result["details"]["planned_count"], 1)
+        self.assertEqual(result["details"]["skipped_count"], 1)
+        self.assertEqual(result["details"]["host_ordering_count"], 1)
+        self.assertEqual(result["details"]["created_count"], 1)
+        self.assertEqual(result["details"]["failure_count"], 0)
+        post_bodies = [json.loads(body) for method, _path, body in captured if method == "POST"]
+        self.assertEqual(
+            post_bodies,
+            [
+                {
+                    "name": "New",
+                    "target_id": ids["target"],
+                    "scanner_id": ids["scanner"],
+                    "config_id": ids["config"],
+                    "schedule_id": ids["schedule"],
+                    "alert_ids": [ids["alert"]],
+                    "hosts_ordering": "reverse",
+                }
+            ],
+        )
+        self.assertNotIn("a" * 64, json.dumps(result))
+
+    def test_native_tasks_from_csv_preflight_failure_attempts_no_create(self):
+        ids = {
+            "target": "11111111-1111-4111-8111-111111111111",
+            "scanner": "22222222-2222-4222-8222-222222222222",
+            "config": "33333333-3333-4333-8333-333333333333",
+        }
+        collection_items = {
+            "tasks": [],
+            "targets": [{"id": ids["target"], "name": "Target"}],
+            "scanners": [{"id": ids["scanner"], "name": "Scanner"}],
+            "scan-configs": [{"id": ids["config"], "name": "Config"}],
+        }
+        captured: list[str] = []
+
+        def fake_direct(_root, path, **kwargs):
+            captured.append(kwargs.get("method", "GET"))
+            self.assertEqual(kwargs.get("method", "GET"), "GET")
+            collection = path.split("/api/v1/", 1)[1].split("?", 1)[0]
+            items = collection_items[collection]
+            return subprocess.CompletedProcess(
+                ["curl"],
+                0,
+                json.dumps({"items": items, "page": {"page": 1, "page_size": 500, "total": len(items)}}) + "\n200",
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text(
+                "Valid,Target,Scanner,Config\n"
+                "Invalid,Missing,Scanner,Config\n"
+                "Valid,Target,Scanner,Config\n",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_tasks_from_csv(
+                    root,
+                    csv_file,
+                    allow_write_control=True,
+                )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(captured, ["GET", "GET", "GET", "GET"])
+        self.assertEqual(result["details"]["planned_count"], 1)
+        self.assertEqual(result["details"]["created_count"], 0)
+        self.assertEqual(result["details"]["failure_count"], 2)
+
+    def test_native_tasks_from_csv_continues_after_runtime_create_failure(self):
+        ids = {
+            "target": "11111111-1111-4111-8111-111111111111",
+            "scanner": "22222222-2222-4222-8222-222222222222",
+            "config": "33333333-3333-4333-8333-333333333333",
+            "created": "44444444-4444-4444-8444-444444444444",
+        }
+        collection_items = {
+            "tasks": [],
+            "targets": [{"id": ids["target"], "name": "Target"}],
+            "scanners": [{"id": ids["scanner"], "name": "Scanner"}],
+            "scan-configs": [{"id": ids["config"], "name": "Config"}],
+        }
+        post_count = 0
+
+        def fake_direct(_root, path, **kwargs):
+            nonlocal post_count
+            if kwargs.get("method", "GET") == "GET":
+                collection = path.split("/api/v1/", 1)[1].split("?", 1)[0]
+                items = collection_items[collection]
+                return subprocess.CompletedProcess(
+                    ["curl"],
+                    0,
+                    json.dumps({"items": items, "page": {"page": 1, "page_size": 500, "total": len(items)}}) + "\n200",
+                    "",
+                )
+            post_count += 1
+            body = json.loads(kwargs["body"])
+            if post_count == 1:
+                return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"conflict"}}\n409', "")
+            return subprocess.CompletedProcess(
+                ["curl"],
+                0,
+                json.dumps({"id": ids["created"], "name": body["name"]}) + "\n201",
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "tasks.csv"
+            csv_file.write_text(
+                "First,Target,Scanner,Config\nSecond,Target,Scanner,Config\n",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_tasks_from_csv(
+                    root,
+                    csv_file,
+                    allow_write_control=True,
+                )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(post_count, 2)
+        self.assertEqual(result["details"]["created_count"], 1)
+        self.assertEqual(result["details"]["failure_count"], 1)
+
     def test_native_verify_scanners_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -7068,11 +7296,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertGreater(write_bucket["count"], 0)
         self.assertIn("reason", write_bucket)
         self.assertNotIn("components/gvm-tools/scripts/create-tags-from-csv.gmp.py", write_bucket["paths"])
-        self.assertIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_bucket["paths"])
-        self.assertIn(
-            "CSV bulk-task behavior is characterized",
-            write_bucket["path_blockers"]["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"],
-        )
+        self.assertNotIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_bucket["paths"])
         self.assertNotIn("items", details)
         self.assertNotIn("implemented_native_endpoints", details)
 
@@ -7283,7 +7507,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("CVE-to-NVT", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
         self.assertIn("CSV schedule creation", write_blockers["components/gvm-tools/scripts/create-schedules-from-csv.gmp.py"])
-        self.assertIn("CSV bulk-task behavior", write_blockers["components/gvm-tools/scripts/create-tasks-from-csv.gmp.py"])
+        self.assertNotIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_blockers)
         self.assertIn("filter-based override deletion", write_blockers["components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py"])
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
@@ -8977,6 +9201,8 @@ db2:keys=5,expires=0,avg_ttl=0
             target_updated_comment = "TurboVAS direct write smoke updated target metadata"
             scanner_uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd"
             task_uuid = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+            task_schedule_uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+            task_alert_uuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
             task_updated_comment = "TurboVAS direct write smoke updated task metadata"
             original_token = turbovasctl.os.environ.get(turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
@@ -8998,6 +9224,13 @@ db2:keys=5,expires=0,avg_ttl=0
                 if isinstance(env, dict):
                     envs.append(dict(env))
                 command_text = " ".join(command)
+                if "inserted_schedule AS" in command_text and "inserted_alert AS" in command_text:
+                    return turbovasctl.subprocess.CompletedProcess(
+                        command,
+                        0,
+                        f"{task_schedule_uuid}|{task_alert_uuid}\n",
+                        "",
+                    )
                 if "INSERT INTO report_formats" in command_text:
                     return turbovasctl.subprocess.CompletedProcess(command, 0, report_format_uuid + "\n", "")
                 if "INSERT INTO filters" in command_text:
@@ -9040,6 +9273,13 @@ db2:keys=5,expires=0,avg_ttl=0
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "192.0.2.42, 192.0.2.43|192.0.2.43\n", "")
                     if "FROM tasks" in command_text and "md5" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "task-adjacent-state-checksum\n", "")
+                    if "FROM tasks t LEFT JOIN schedules s" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(
+                            command,
+                            0,
+                            f"{task_schedule_uuid}|0|1893456000|reverse|1\n",
+                            "",
+                        )
                     if "DELETE FROM credentials" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                     if "DELETE FROM targets" in command_text and "DELETE FROM targets_trash" in command_text:
@@ -9047,6 +9287,8 @@ db2:keys=5,expires=0,avg_ttl=0
                     if "DELETE FROM tasks" in command_text:
                         target_in_use["value"] = False
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
+                    if "deleted_alert AS" in command_text and "deleted_schedule AS" in command_text:
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, "1|1\n", "")
                     if "DELETE FROM alerts" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1|0\n", "")
                     if "DELETE FROM report_configs" in command_text:
@@ -9174,6 +9416,9 @@ db2:keys=5,expires=0,avg_ttl=0
                     self.assertEqual(payload["target_id"], target_uuid)
                     self.assertEqual(payload["config_id"], turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
                     self.assertEqual(payload["scanner_id"], scanner_uuid)
+                    self.assertEqual(payload["schedule_id"], task_schedule_uuid)
+                    self.assertEqual(payload["alert_ids"], [task_alert_uuid])
+                    self.assertEqual(payload["hosts_ordering"], "reverse")
                     target_in_use["value"] = True
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": task_uuid, "name": payload["name"], "comment": payload["comment"]}) + "\n201", "")
                 if method == "PATCH" and path.startswith(f"/api/v1/tasks/{task_uuid}"):
@@ -9512,7 +9757,9 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.target-write-clone"], "pass")
         self.assertEqual(checks["native-api-direct.target-fixture-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.scanner-verify"], "pass")
+        self.assertEqual(checks["native-api-direct.task-relation-fixtures"], "pass")
         self.assertEqual(checks["native-api-direct.task-write-create"], "pass")
+        self.assertEqual(checks["native-api-direct.task-relation-fixture-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.tag-write-query-denied"], "pass")
         self.assertEqual(checks["native-api-direct.tag-delete-body-denied"], "pass")

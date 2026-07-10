@@ -20,6 +20,9 @@ pub(crate) async fn execute_task_create_transaction(
     target_internal_id: i32,
     config_internal_id: i32,
     scanner_internal_id: i32,
+    schedule_internal_id: i32,
+    schedule_next_time: i32,
+    alert_internal_ids: &[i32],
     request: &ValidatedTaskCreate,
 ) -> Result<TaskWriteRecordWithInternalId, ApiError> {
     let record = query_task_write_record_with_internal_id(
@@ -32,6 +35,8 @@ pub(crate) async fn execute_task_create_transaction(
             &config_internal_id,
             &target_internal_id,
             &scanner_internal_id,
+            &schedule_internal_id,
+            &schedule_next_time,
         ],
         "create task metadata",
     )
@@ -48,6 +53,24 @@ pub(crate) async fn execute_task_create_transaction(
             task_insert_preference_sql(),
             &[&record.internal_id, &name, &value],
             "create task default preference",
+        )
+        .await?;
+    }
+    if let Some(hosts_ordering) = request.hosts_ordering.as_deref() {
+        execute_task_write_sql(
+            tx,
+            task_insert_preference_sql(),
+            &[&record.internal_id, &"hosts_ordering", &hosts_ordering],
+            "create task host ordering preference",
+        )
+        .await?;
+    }
+    for alert_internal_id in alert_internal_ids {
+        execute_task_write_sql(
+            tx,
+            task_insert_alert_sql(),
+            &[&record.internal_id, alert_internal_id],
+            "attach task alert",
         )
         .await?;
     }

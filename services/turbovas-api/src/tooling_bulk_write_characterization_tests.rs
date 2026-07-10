@@ -2,45 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-const CREATE_TASKS_CSV: &str =
-    include_str!("../../../components/gvm-tools/scripts/create-tasks-from-csv.gmp.py");
 const UPDATE_TASK_TARGET: &str =
     include_str!("../../../components/gvm-tools/scripts/update-task-target.gmp.py");
-
-#[test]
-fn inherited_create_tasks_from_csv_resolves_references_ordering_alerts_and_duplicate_names() {
-    for required in [
-        "gmp.get_scan_configs(filter_string=f'rows=-1, name=\"{config_name}\"')",
-        "gmp.get_alerts(filter_string=f'rows=-1, name=\"{alert_name}\"')",
-        "gmp.get_targets(filter_string=f'rows=-1, name=\"{target_name}\"')",
-        "gmp.get_scanners(filter_string=f'rows=-1, name=\"{scanner_name}\"')",
-        "gmp.get_schedules(filter_string=f'rows=-1, name=\"{schedule_name}\"')",
-        "gmp.get_tasks(filter_string=f'rows=-1, name=\"{taskName}\"')",
-        "content = csv.reader(csvFile, delimiter=\",\")",
-        "name = row[0]",
-        "targetId = target_id(gmp, row[1])",
-        "scannerId = scanner_id(gmp, row[2])",
-        "configId = config_id(gmp, row[3])",
-        "scheduleId = schedule_id(gmp, row[4])",
-        "newOrder = row[5].upper()",
-        "gmp.types.HostsOrdering.RANDOM",
-        "gmp.types.HostsOrdering.SEQUENTIAL",
-        "gmp.types.HostsOrdering.REVERSE",
-        "if len(row[10]) > 1:",
-        "if task_id(gmp, name):",
-        "gmp.create_task(",
-        "hosts_ordering=scanOrder",
-        "schedule_id=scheduleId",
-        "alert_ids=alerts",
-        "except GvmResponseError as gvmerr:",
-        "error_and_exit(f\"Failed to read task_csv_file: {str(e)} (exit)\")",
-    ] {
-        assert!(
-            CREATE_TASKS_CSV.contains(required),
-            "create-tasks-from-csv missing {required}"
-        );
-    }
-}
 
 #[test]
 fn inherited_update_task_target_clones_old_target_rebinds_task_and_deletes_unused_old_target() {

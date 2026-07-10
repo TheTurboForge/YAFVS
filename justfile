@@ -36,6 +36,9 @@ native-stop-all-tasks *args:
 native-start-tasks-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-tasks-from-csv "$@"
 
+native-tasks-from-csv *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tasks-from-csv "$@"
+
 native-targets-from-host-list *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-targets-from-host-list "$@"
 

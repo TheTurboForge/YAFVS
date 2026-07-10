@@ -30,6 +30,12 @@ pub(crate) struct AssignableTaskResource {
     pub(crate) internal_id: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AssignableTaskSchedule {
+    pub(crate) internal_id: i32,
+    pub(crate) next_time: i32,
+}
+
 pub(crate) fn require_task_write_operator(
     operator: Option<Extension<DirectApiOperator>>,
 ) -> Result<DirectApiOperator, ApiError> {
@@ -40,6 +46,57 @@ pub(crate) fn require_task_write_operator(
     Ok(operator)
 }
 
+pub(crate) async fn load_assignable_task_schedule(
+    tx: &Transaction<'_>,
+    schedule_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTaskSchedule, ApiError> {
+    let row = load_task_resource_row(
+        tx,
+        task_assignable_schedule_state_sql(),
+        schedule_id,
+        "schedule",
+    )
+    .await?;
+    let internal_id: i32 = row.get(0);
+    let owner_id: Option<i32> = row.get(1);
+    let next_time: i32 = row.get(2);
+    if owner_id == Some(operator_owner_id) {
+        Ok(AssignableTaskSchedule {
+            internal_id,
+            next_time,
+        })
+    } else {
+        tracing::warn!(
+            schedule_owner_id = owner_id,
+            operator_owner_id,
+            "direct API task create operator cannot assign schedule"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
+pub(crate) async fn load_assignable_task_alert(
+    tx: &Transaction<'_>,
+    alert_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTaskResource, ApiError> {
+    let row =
+        load_task_resource_row(tx, task_assignable_alert_state_sql(), alert_id, "alert").await?;
+    let internal_id: i32 = row.get(0);
+    let owner_id: Option<i32> = row.get(1);
+    if owner_id == Some(operator_owner_id) {
+        Ok(AssignableTaskResource { internal_id })
+    } else {
+        tracing::warn!(
+            alert_owner_id = owner_id,
+            operator_owner_id,
+            "direct API task create operator cannot assign alert"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
 pub(crate) async fn load_assignable_task_target(
     tx: &Transaction<'_>,
     target_id: &str,
@@ -48,8 +105,8 @@ pub(crate) async fn load_assignable_task_target(
     let row =
         load_task_resource_row(tx, task_assignable_target_state_sql(), target_id, "target").await?;
     let internal_id: i32 = row.get(0);
-    let owner_id: i32 = row.get(1);
-    if owner_id == operator_owner_id {
+    let owner_id: Option<i32> = row.get(1);
+    if owner_id == Some(operator_owner_id) {
         Ok(AssignableTaskResource { internal_id })
     } else {
         tracing::warn!(
@@ -69,9 +126,9 @@ pub(crate) async fn load_assignable_task_config(
     let row =
         load_task_resource_row(tx, task_assignable_config_state_sql(), config_id, "config").await?;
     let internal_id: i32 = row.get(0);
-    let owner_id: i32 = row.get(1);
+    let owner_id: Option<i32> = row.get(1);
     let predefined: i32 = row.get(2);
-    if predefined != 0 || owner_id == operator_owner_id {
+    if predefined != 0 || owner_id == Some(operator_owner_id) {
         Ok(AssignableTaskResource { internal_id })
     } else {
         tracing::warn!(

@@ -5319,7 +5319,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-list-read
       summary: List scan tasks
-      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references, metadata-only task updates, metadata export, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, file export, broad target/config/schedule/scanner mutation, preferences, alerts, and other scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
+      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links, metadata-only task updates, metadata export, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, file export, broad task reference mutation, preferences, and other scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -5354,14 +5354,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: task-create-with-target-config-scanner
+      x-turbovas-replaces: task-create-with-target-config-scanner-schedule-alerts
       x-turbovas-inherited-still-owns: task-resume-clone-file-hard-delete-and-other-scanner-control
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
+      x-turbovas-side-effect: scanner-control
       summary: Create a scan task
-      description: Direct write-control endpoint for creating a new operator-owned scan task from explicit target, scan config, and scanner references. The endpoint writes task metadata and inherited default task preferences only; it does not start scans, attach alerts or schedules, mutate preferences beyond inherited defaults, import files, or perform scanner lifecycle control.
+      description: Direct write-control endpoint for creating a new operator-owned scan task from explicit target, scan config, and scanner references, with optional host ordering, an operator-owned schedule, and up to five distinct operator-owned alerts. All references are validated before the task, computed schedule time, inherited default preferences, optional host-order preference, and alert links are written atomically. The endpoint does not immediately start scans, but an attached schedule authorizes future automatic scanner execution.
       requestBody:
         required: true
         content:
@@ -5401,7 +5401,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-detail-summary-read
       summary: Read one scan task summary
-      description: Native direct API exposes task summary reads, bounded task creation, metadata-only task updates, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, inherited file-export formats, broad target/config/schedule/scanner mutation, alerts, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
+      description: Native direct API exposes task summary reads, bounded task creation with optional schedule and alert links, metadata-only task updates, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, inherited file-export formats, broad task reference mutation, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -6797,6 +6797,23 @@ components:
           type: string
           format: uuid
           description: Operator-owned or built-in scanner capable of running scan tasks.
+        schedule_id:
+          type: string
+          format: uuid
+          description: Optional schedule owned by the direct API operator. Its next run time is computed when the task is created.
+        alert_ids:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          default: []
+          description: Optional distinct alerts owned by the direct API operator.
+          items:
+            type: string
+            format: uuid
+        hosts_ordering:
+          type: string
+          enum: [random, sequential, reverse]
+          description: Optional scanner host ordering persisted as a task preference and forwarded to OSP/OpenVASD.
     TaskPatchRequest:
       type: object
       additionalProperties: false

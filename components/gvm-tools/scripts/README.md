@@ -275,19 +275,21 @@ CSV. It supports Alert, Config, Credential, Report, Scanner, Schedule, Target,
 and Task tags resolved by exact resource name/ID, and it rejects inherited
 implicit report-filter rows that lacked explicit resources.
 
-## `create-tasks-from-csv.gmp.py`
+## Native CSV task creation
 
-Creates tasks as specified in a csv-file. See tasks.csv for file format/contents
+The inherited GMP task creator has been removed. Use the guarded native
+operator command:
 
-### Example
+`$ just native-tasks-from-csv -- --csv-file *task.csv* --allow-write-control`
 
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket create-tasks-from-csv.gmp.py ./task.csv`
-
-- Change Hosts Scan Ordering by changing #5 within CSV to Random, Sequential or Reverse in script.
-- Specify up to 5 alerts in CSV, blanks will be discarded.
-
-**Note**: Make sure that all other configurations that the tasks may rely on are already created, including alerts, schedules, credentials, and targets,
-in other words if it is referenced in tasks.csv it must already exist.
+The headerless CSV accepts 4 to 11 columns: task, target, scanner, scan config,
+optional schedule, host ordering, and up to five optional alerts.
+The command snapshots every required native collection and resolves exact names
+or UUIDs before the first write. Missing or ambiguous references and duplicate
+source task names abort preflight; existing task names are idempotent skips.
+A blank host-ordering column defaults to `RANDOM`; invalid values are rejected.
+Host ordering is persisted as a task preference and forwarded to both OSP/OpenVAS
+and OpenVASD scanner transports.
 
 ## `empty-trash.gmp.py`
 

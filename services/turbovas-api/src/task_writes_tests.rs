@@ -7,14 +7,19 @@ use crate::{
     task_write_db::{ensure_task_not_in_use_for_native_trash, ensure_task_owner_matches_operator},
     task_write_sql::*,
     task_write_validation::{
-        MAX_TASK_TEXT_BYTES, TaskCreateRequest, TaskPatchRequest, validate_task_create_request,
-        validate_task_patch_request,
+        MAX_TASK_ALERTS, MAX_TASK_TEXT_BYTES, TaskCreateRequest, TaskHostsOrdering,
+        TaskPatchRequest, validate_task_create_request, validate_task_patch_request,
     },
 };
 
+const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
+const GVMD_OSP: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
+const GVMD_OPENVASD: &str = include_str!("../../../components/gvmd/src/manage_openvasd.c");
 const VALID_TARGET_ID: &str = "11111111-1111-4111-8111-111111111111";
 const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
 const VALID_SCANNER_ID: &str = "33333333-3333-4333-8333-333333333333";
+const VALID_SCHEDULE_ID: &str = "44444444-4444-4444-8444-444444444444";
+const VALID_ALERT_ID: &str = "55555555-5555-4555-8555-555555555555";
 
 fn create_request(name: &str) -> TaskCreateRequest {
     TaskCreateRequest {
@@ -23,6 +28,9 @@ fn create_request(name: &str) -> TaskCreateRequest {
         target_id: VALID_TARGET_ID.to_string(),
         config_id: VALID_CONFIG_ID.to_string(),
         scanner_id: VALID_SCANNER_ID.to_string(),
+        schedule_id: None,
+        alert_ids: Vec::new(),
+        hosts_ordering: None,
     }
 }
 
@@ -45,6 +53,9 @@ fn task_create_request_trims_metadata_and_normalizes_references() {
     assert_eq!(validated.target_id, VALID_TARGET_ID);
     assert_eq!(validated.config_id, VALID_CONFIG_ID);
     assert_eq!(validated.scanner_id, VALID_SCANNER_ID);
+    assert_eq!(validated.schedule_id, None);
+    assert!(validated.alert_ids.is_empty());
+    assert_eq!(validated.hosts_ordering, None);
 }
 
 #[test]
@@ -63,14 +74,141 @@ fn task_create_request_rejects_blank_name_invalid_ids_and_unknown_fields() {
         }),
         Err(ApiError::BadRequest(_))
     ));
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            schedule_id: Some("not-a-uuid".to_string()),
+            ..create_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            alert_ids: vec!["not-a-uuid".to_string()],
+            ..create_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
     let request = serde_json::json!({
         "name": "Task",
         "target_id": VALID_TARGET_ID,
         "config_id": VALID_CONFIG_ID,
         "scanner_id": VALID_SCANNER_ID,
-        "schedule_id": VALID_SCANNER_ID,
+        "unexpected": true,
     });
     assert!(serde_json::from_value::<TaskCreateRequest>(request).is_err());
+}
+
+#[test]
+fn task_create_request_accepts_optional_schedule_and_alerts() {
+    let validated = validate_task_create_request(TaskCreateRequest {
+        schedule_id: Some(format!("  {VALID_SCHEDULE_ID}  ")),
+        alert_ids: vec![format!("  {VALID_ALERT_ID}  ")],
+        hosts_ordering: Some(TaskHostsOrdering::Reverse),
+        ..create_request("task")
+    })
+    .expect("valid schedule and alerts");
+
+    assert_eq!(validated.schedule_id.as_deref(), Some(VALID_SCHEDULE_ID));
+    assert_eq!(validated.alert_ids, [VALID_ALERT_ID]);
+    assert_eq!(validated.hosts_ordering.as_deref(), Some("reverse"));
+}
+
+#[test]
+fn task_create_request_defaults_optional_references_to_empty() {
+    let request = serde_json::json!({
+        "name": "Task",
+        "target_id": VALID_TARGET_ID,
+        "config_id": VALID_CONFIG_ID,
+        "scanner_id": VALID_SCANNER_ID,
+    });
+    let request =
+        serde_json::from_value::<TaskCreateRequest>(request).expect("legacy request body");
+    assert!(request.schedule_id.is_none());
+    assert!(request.alert_ids.is_empty());
+    assert!(request.hosts_ordering.is_none());
+}
+
+#[test]
+fn task_create_request_accepts_only_typed_host_ordering_values() {
+    for (input, expected) in [
+        ("random", "random"),
+        ("sequential", "sequential"),
+        ("reverse", "reverse"),
+    ] {
+        let request = serde_json::json!({
+            "name": "Task",
+            "target_id": VALID_TARGET_ID,
+            "config_id": VALID_CONFIG_ID,
+            "scanner_id": VALID_SCANNER_ID,
+            "hosts_ordering": input,
+        });
+        let request =
+            serde_json::from_value::<TaskCreateRequest>(request).expect("typed host ordering");
+        let validated = validate_task_create_request(request).expect("valid host ordering");
+        assert_eq!(validated.hosts_ordering.as_deref(), Some(expected));
+    }
+
+    for invalid in ["RANDOM", "randomized", ""] {
+        let request = serde_json::json!({
+            "name": "Task",
+            "target_id": VALID_TARGET_ID,
+            "config_id": VALID_CONFIG_ID,
+            "scanner_id": VALID_SCANNER_ID,
+            "hosts_ordering": invalid,
+        });
+        assert!(serde_json::from_value::<TaskCreateRequest>(request).is_err());
+    }
+}
+
+#[test]
+fn task_create_request_rejects_duplicate_or_excess_alerts() {
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            alert_ids: vec![VALID_ALERT_ID.to_string(), VALID_ALERT_ID.to_string()],
+            ..create_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let alert_ids = (0..=MAX_TASK_ALERTS)
+        .map(|index| format!("00000000-0000-4000-8000-{index:012}"))
+        .collect();
+    assert!(matches!(
+        validate_task_create_request(TaskCreateRequest {
+            alert_ids,
+            ..create_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn task_create_openapi_contract_covers_optional_schedule_alerts_and_ordering() {
+    let schema = OPENAPI
+        .split_once("    TaskCreateRequest:")
+        .expect("task create schema")
+        .1
+        .split_once("    TaskPatchRequest:")
+        .expect("task patch schema boundary")
+        .0;
+
+    for required in [
+        "schedule_id:",
+        "description: Optional schedule owned by the direct API operator.",
+        "alert_ids:",
+        "maxItems: 5",
+        "uniqueItems: true",
+        "default: []",
+        "description: Optional distinct alerts owned by the direct API operator.",
+        "hosts_ordering:",
+        "enum: [random, sequential, reverse]",
+        "forwarded to OSP/OpenVASD",
+    ] {
+        assert!(
+            schema.contains(required),
+            "task create OpenAPI schema missing {required}"
+        );
+    }
 }
 
 #[test]
@@ -103,11 +241,13 @@ fn task_create_handler_requires_operator_references_and_uniqueness_before_insert
         "let operator = require_task_write_operator(operator)?;",
         "validate_task_create_request(request)?",
         "resolve_task_write_operator_owner(&tx, &operator).await?",
-        "LOCK TABLE tasks, task_preferences, targets, configs, scanners",
+        "LOCK TABLE targets, configs, scanners, schedules, alerts, task_alerts, tasks, task_preferences",
         "ensure_unique_task_name(&tx, &request.name, -1, operator_owner_id).await?;",
         "load_assignable_task_target(&tx, &request.target_id, operator_owner_id).await?;",
         "load_assignable_task_config(&tx, &request.config_id, operator_owner_id).await?;",
         "load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?;",
+        "load_assignable_task_schedule(&tx, schedule_id, operator_owner_id).await?;",
+        "load_assignable_task_alert(&tx, alert_id, operator_owner_id).await?;",
         "execute_task_create_transaction",
         "StatusCode::CREATED",
         "task_write_location_headers(&record.uuid)?",
@@ -118,14 +258,35 @@ fn task_create_handler_requires_operator_references_and_uniqueness_before_insert
         );
     }
     assert!(
-        handler.find("load_assignable_task_scanner").unwrap()
+        handler.find("load_assignable_task_alert").unwrap()
             < handler.find("execute_task_create_transaction").unwrap(),
-        "task create must validate assignable scanner before insert"
+        "task create must validate every assignable reference before insert"
     );
 }
 
 #[test]
-fn task_create_sql_writes_scan_task_metadata_and_inherited_defaults_only() {
+fn task_create_schedule_and_alert_loaders_require_operator_ownership() {
+    let source = include_str!("task_write_db.rs");
+
+    for required in [
+        "pub(crate) async fn load_assignable_task_schedule",
+        "task_assignable_schedule_state_sql()",
+        "if owner_id == Some(operator_owner_id)",
+        "direct API task create operator cannot assign schedule",
+        "pub(crate) async fn load_assignable_task_alert",
+        "task_assignable_alert_state_sql()",
+        "direct API task create operator cannot assign alert",
+        "Err(ApiError::Forbidden)",
+    ] {
+        assert!(
+            source.contains(required),
+            "task reference ownership guard missing {required}"
+        );
+    }
+}
+
+#[test]
+fn task_create_sql_writes_schedule_alerts_and_inherited_defaults() {
     let target = task_assignable_target_state_sql();
     assert!(target.contains("FROM targets"));
     assert!(target.contains("WHERE uuid = $1"));
@@ -139,11 +300,23 @@ fn task_create_sql_writes_scan_task_metadata_and_inherited_defaults_only() {
     assert!(scanner.contains("FROM scanners"));
     assert!(scanner.contains("coalesce(type, 0)::integer"));
 
+    let schedule = task_assignable_schedule_state_sql();
+    assert!(schedule.contains("FROM schedules"));
+    assert!(schedule.contains("owner::integer"));
+    assert!(schedule.contains("next_time_ical(icalendar, m_now()::bigint"));
+    assert!(schedule.contains("timezone), 0)::integer"));
+
+    let alert = task_assignable_alert_state_sql();
+    assert!(alert.contains("FROM alerts"));
+    assert!(alert.contains("owner::integer"));
+
     let create = task_create_metadata_sql();
     assert!(create.contains("INSERT INTO tasks"));
     assert!(create.contains("run_status"));
     assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5"));
-    assert!(create.contains("0, 0, $6, 0, 0, 0, 0, 1"));
+    assert!(create.contains("$7, $8, 0, $6, 0, 0, 0, 0, 1"));
+    assert!(create.contains("schedule_periods"));
+    assert!(create.contains("schedule_location"));
     assert!(create.contains("alterable"));
     assert!(create.contains("RETURNING id::integer, uuid::text"));
     for forbidden in [
@@ -154,7 +327,6 @@ fn task_create_sql_writes_scan_task_metadata_and_inherited_defaults_only() {
         "results",
         "start_time",
         "end_time",
-        "schedule_periods",
         "upload_result_count",
     ] {
         assert!(
@@ -166,6 +338,44 @@ fn task_create_sql_writes_scan_task_metadata_and_inherited_defaults_only() {
     let prefs = task_insert_preference_sql();
     assert!(prefs.contains("INSERT INTO task_preferences"));
     assert!(prefs.contains("VALUES ($1, $2, $3)"));
+
+    let alerts = task_insert_alert_sql();
+    assert!(alerts.contains("INSERT INTO task_alerts"));
+    assert!(alerts.contains("(task, alert, alert_location)"));
+    assert!(alerts.contains("VALUES ($1, $2, 0)"));
+}
+
+#[test]
+fn task_create_transaction_attaches_alerts_after_task_insert() {
+    let source = include_str!("task_write_transactions.rs");
+    let transaction = source
+        .split_once("pub(crate) async fn execute_task_create_transaction")
+        .expect("create transaction must exist")
+        .1;
+
+    assert!(transaction.contains("alert_internal_ids: &[i32]"));
+    assert!(transaction.contains("for alert_internal_id in alert_internal_ids"));
+    assert!(transaction.contains("request.hosts_ordering.as_deref()"));
+    assert!(transaction.contains(r#"&"hosts_ordering""#));
+    assert!(
+        transaction.find("task_create_metadata_sql()").unwrap()
+            < transaction.find("task_insert_alert_sql()").unwrap()
+    );
+}
+
+#[test]
+fn task_host_ordering_preference_is_forwarded_to_both_scanner_transports() {
+    for (name, source) in [("OSP", GVMD_OSP), ("OpenVASD", GVMD_OPENVASD)] {
+        assert!(
+            source.contains(r#"hosts_ordering = task_preference_value (task, "hosts_ordering");"#),
+            "{name} launch path must load task host ordering"
+        );
+        assert!(
+            source
+                .contains(r#"g_hash_table_insert (scanner_options, g_strdup ("hosts_ordering"),"#),
+            "{name} launch path must forward host ordering to scanner options"
+        );
+    }
 }
 
 #[test]

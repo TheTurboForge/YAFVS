@@ -220,6 +220,16 @@ retention count. The default retention count is `10`. Pruning skips raw reports
 that are referenced by scope reports so generated scope-report provenance remains
 intact.
 
+For bulk creation, `native-tasks-from-csv` accepts a headerless CSV with task,
+target, scanner, scan-config, optional schedule, host ordering, and up
+to five alert columns. It snapshots all required native collections and
+resolves exact names or UUIDs before the first write. Missing or ambiguous
+references and duplicate source names reject the full preflight; existing task
+names are idempotent skips. The optional schedule and alert links are created
+transactionally with each task. A blank host-ordering column defaults to
+`RANDOM`, while invalid values are rejected. Host ordering is forwarded to
+both OSP/OpenVAS and OpenVASD scanner transports.
+
 Starting a task is available through the guarded native
 `POST /api/v1/tasks/{task_id}/start` route, either through the authenticated
 browser proxy or direct API access. It requires explicit operator consent via

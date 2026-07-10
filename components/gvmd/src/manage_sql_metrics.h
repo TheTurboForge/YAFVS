@@ -21,7 +21,4 @@ rebuild_scope_report_metrics (resource_t, resource_t, int);
 int
 buffer_report_metrics_xml (GString *, const char *);
 
-int
-buffer_scope_report_metrics_xml (GString *, const char *);
-
 #endif /* not _GVMD_MANAGE_SQL_METRICS_H */

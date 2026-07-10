@@ -8033,8 +8033,7 @@ delete_scope_gmp (gvm_connection_t *connection,
 }
 
 static gmp_arguments_t *
-scope_get_arguments (params_t *params, const char *scope_id,
-                     const char *scope_report_id)
+scope_get_arguments (params_t *params, const char *scope_id)
 {
   gmp_arguments_t *arguments;
   const gchar *details, *filter;
@@ -8048,9 +8047,6 @@ scope_get_arguments (params_t *params, const char *scope_id,
     gmp_arguments_add (arguments, "filter", filter);
   if (scope_id && !str_equal (scope_id, ""))
     gmp_arguments_add (arguments, "scope_id", scope_id);
-  if (scope_report_id && !str_equal (scope_report_id, ""))
-    gmp_arguments_add (arguments, "scope_report_id", scope_report_id);
-
   return arguments;
 }
 
@@ -8064,7 +8060,7 @@ get_scope_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (scope_id, "Get Scope");
 
   return get_entities (connection, "scope", credentials, params,
-                       scope_get_arguments (params, scope_id, NULL),
+                       scope_get_arguments (params, scope_id),
                        response_data);
 }
 
@@ -8074,53 +8070,7 @@ get_scopes_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 {
   return get_entities (connection, "scopes", credentials, params,
                        scope_get_arguments (params,
-                                            params_value (params, "scope_id"),
-                                            NULL),
-                       response_data);
-}
-
-char *
-get_scope_report_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  const char *scope_report_id;
-
-  scope_report_id = params_value (params, "scope_report_id");
-  CHECK_VARIABLE_INVALID (scope_report_id, "Get Scope Report");
-
-  return get_entities (connection, "scope_report", credentials, params,
-                       scope_get_arguments (params, NULL, scope_report_id),
-                       response_data);
-}
-
-char *
-get_scope_report_metrics_gmp (gvm_connection_t *connection,
-                              gsad_credentials_t *credentials,
-                              params_t *params,
-                              gsad_command_response_data_t *response_data)
-{
-  const char *scope_report_id;
-  gmp_arguments_t *arguments;
-
-  scope_report_id = params_value (params, "scope_report_id");
-  CHECK_VARIABLE_INVALID (scope_report_id, "Get Scope Report Metrics");
-
-  arguments = gmp_arguments_new ();
-  gmp_arguments_add (arguments, "scope_report_id", scope_report_id);
-  return get_entities (connection, "scope_report_metrics", credentials,
-                       params, arguments, response_data);
-}
-
-char *
-get_scope_reports_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  return get_entities (connection, "scope_reports", credentials, params,
-                       scope_get_arguments (
-                         params, params_value (params, "scope_id"),
-                         params_value (params, "scope_report_id")),
+                                            params_value (params, "scope_id")),
                        response_data);
 }
 
@@ -15748,9 +15698,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_schedules)
   ELSE (get_scope)
   ELSE (get_scopes)
-  ELSE (get_scope_report)
-  ELSE (get_scope_report_metrics)
-  ELSE (get_scope_reports)
   ELSE (get_setting)
   ELSE (get_settings)
   ELSE (get_system_reports)

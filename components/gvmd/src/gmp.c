@@ -2929,9 +2929,6 @@ typedef union
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
   get_results_data_t get_results;                     ///< get_results
   scope_command_data_t get_scope;                     ///< get_scope
-  scope_command_data_t get_scope_report;              ///< get_scope_report
-  scope_command_data_t get_scope_report_metrics;      ///< get_scope_report_metrics
-  scope_command_data_t get_scope_reports;             ///< get_scope_reports
   scope_command_data_t get_scopes;                    ///< get_scopes
   get_schedules_data_t get_schedules;                 ///< get_schedules
   get_scanners_data_t get_scanners;                   ///< get_scanners
@@ -3287,24 +3284,6 @@ static get_results_data_t *get_results_data
  */
 static scope_command_data_t *get_scope_data
  = &(command_data.get_scope);
-
-/**
- * @brief Parser callback data for GET_SCOPE_REPORT.
- */
-static scope_command_data_t *get_scope_report_data
- = &(command_data.get_scope_report);
-
-/**
- * @brief Parser callback data for GET_SCOPE_REPORT_METRICS.
- */
-static scope_command_data_t *get_scope_report_metrics_data
- = &(command_data.get_scope_report_metrics);
-
-/**
- * @brief Parser callback data for GET_SCOPE_REPORTS.
- */
-static scope_command_data_t *get_scope_reports_data
- = &(command_data.get_scope_reports);
 
 /**
  * @brief Parser callback data for GET_SCOPES.
@@ -3764,9 +3743,6 @@ typedef enum
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_RESULTS,
   CLIENT_GET_SCOPE,
-  CLIENT_GET_SCOPE_REPORT,
-  CLIENT_GET_SCOPE_REPORT_METRICS,
-  CLIENT_GET_SCOPE_REPORTS,
   CLIENT_GET_SCOPES,
   CLIENT_GET_SCANNERS,
   CLIENT_GET_SCHEDULES,
@@ -4918,24 +4894,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             scope_command_data_start (get_scope_data, attribute_names,
                                       attribute_values, 1);
             set_client_state (CLIENT_GET_SCOPE);
-          }
-        else if (strcasecmp ("GET_SCOPE_REPORT", element_name) == 0)
-          {
-            scope_command_data_start (get_scope_report_data, attribute_names,
-                                      attribute_values, 1);
-            set_client_state (CLIENT_GET_SCOPE_REPORT);
-          }
-        else if (strcasecmp ("GET_SCOPE_REPORT_METRICS", element_name) == 0)
-          {
-            scope_command_data_start (get_scope_report_metrics_data,
-                                      attribute_names, attribute_values, 1);
-            set_client_state (CLIENT_GET_SCOPE_REPORT_METRICS);
-          }
-        else if (strcasecmp ("GET_SCOPE_REPORTS", element_name) == 0)
-          {
-            scope_command_data_start (get_scope_reports_data, attribute_names,
-                                      attribute_values, 0);
-            set_client_state (CLIENT_GET_SCOPE_REPORTS);
           }
         else if (strcasecmp ("GET_SCOPES", element_name) == 0)
           {
@@ -17448,45 +17406,6 @@ handle_get_scopes_command (gmp_parser_t *gmp_parser, GError **error,
 }
 
 static void
-handle_get_scope_reports_command (gmp_parser_t *gmp_parser, GError **error,
-                                  scope_command_data_t *data,
-                                  const char *response_name)
-{
-  GString *xml, *rows_xml;
-  gchar *filter_xml;
-  int count, filtered, first, max, page_count;
-
-  count = scope_report_count (data->scope_report_id, data->scope_id);
-  filtered = scope_report_count_filtered (data->scope_report_id,
-                                          data->scope_id, data->filter);
-  rows_xml = g_string_new ("");
-  buffer_scope_reports_xml (rows_xml, data->scope_report_id, data->scope_id,
-                            data->details, data->filter, &first, &max,
-                            &page_count);
-  filter_xml = g_markup_escape_text (data->filter ? data->filter : "", -1);
-  xml = g_string_new ("");
-  g_string_append_printf (xml,
-                          "<%s_response status=\"" STATUS_OK "\""
-                          " status_text=\"" STATUS_OK_TEXT "\">"
-                          "<scope_reports start=\"%i\" max=\"%i\">%s"
-                          "</scope_reports>"
-                          "<filters><term>%s</term></filters>"
-                          "<scope_report_count>"
-                          "<filtered>%i</filtered><page>%i</page>%i"
-                          "</scope_report_count></%s_response>",
-                          response_name, first, max, rows_xml->str,
-                          filter_xml, filtered, page_count, count,
-                          response_name);
-  g_free (filter_xml);
-  g_string_free (rows_xml, TRUE);
-
-  SEND_TO_CLIENT_OR_FAIL (xml->str);
-  g_string_free (xml, TRUE);
-  scope_command_data_reset (data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
 handle_get_report_metrics_command (gmp_parser_t *gmp_parser, GError **error,
                                    scope_command_data_t *data)
 {
@@ -17519,47 +17438,6 @@ handle_get_report_metrics_command (gmp_parser_t *gmp_parser, GError **error,
     }
 
   g_string_append (xml, "</get_report_metrics_response>");
-  SEND_TO_CLIENT_OR_FAIL (xml->str);
-  g_string_free (xml, TRUE);
-  scope_command_data_reset (data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
-handle_get_scope_report_metrics_command (gmp_parser_t *gmp_parser,
-                                         GError **error,
-                                         scope_command_data_t *data)
-{
-  GString *xml;
-  int ret;
-
-  if (data->scope_report_id == NULL)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("get_scope_report_metrics",
-                           "A scope_report_id attribute is required"));
-      scope_command_data_reset (data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  xml = g_string_new ("<get_scope_report_metrics_response status=\""
-                      STATUS_OK "\" status_text=\"" STATUS_OK_TEXT
-                      "\">");
-  ret = buffer_scope_report_metrics_xml (xml, data->scope_report_id);
-  if (ret == 2)
-    {
-      g_string_free (xml, TRUE);
-      if (send_find_error_to_client ("get_scope_report_metrics",
-                                     "scope_report", data->scope_report_id,
-                                     gmp_parser))
-        error_send_to_client (error);
-      scope_command_data_reset (data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  g_string_append (xml, "</get_scope_report_metrics_response>");
   SEND_TO_CLIENT_OR_FAIL (xml->str);
   g_string_free (xml, TRUE);
   scope_command_data_reset (data);
@@ -18366,23 +18244,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_GET_SCOPE:
         handle_get_scopes_command (gmp_parser, error, get_scope_data,
                                    "get_scope");
-        break;
-
-      case CLIENT_GET_SCOPE_REPORT:
-        handle_get_scope_reports_command (gmp_parser, error,
-                                          get_scope_report_data,
-                                          "get_scope_report");
-        break;
-
-      case CLIENT_GET_SCOPE_REPORT_METRICS:
-        handle_get_scope_report_metrics_command (gmp_parser, error,
-                                                 get_scope_report_metrics_data);
-        break;
-
-      case CLIENT_GET_SCOPE_REPORTS:
-        handle_get_scope_reports_command (gmp_parser, error,
-                                          get_scope_reports_data,
-                                          "get_scope_reports");
         break;
 
       case CLIENT_GET_SCOPES:

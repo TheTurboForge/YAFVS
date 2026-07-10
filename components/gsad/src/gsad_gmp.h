@@ -125,16 +125,6 @@ char *
 get_scopes_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);
 char *
-get_scope_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-get_scope_report_metrics_gmp (gvm_connection_t *, gsad_credentials_t *,
-                              params_t *, gsad_command_response_data_t *);
-char *
-get_scope_reports_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-
-char *
 report_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 

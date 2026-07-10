@@ -501,7 +501,6 @@ rebuild_scope_report_metrics (resource_t scope_report, resource_t scope,
 
   return 0;
 }
-
 int
 buffer_report_metrics_xml (GString *buffer, const char *report_uuid)
 {
@@ -532,125 +531,6 @@ buffer_report_metrics_xml (GString *buffer, const char *report_uuid)
   g_free (vuln_query);
   g_free (system_query);
   g_free (source_cte);
-
-  return 0;
-}
-
-int
-buffer_scope_report_metrics_xml (GString *buffer, const char *scope_report_uuid)
-{
-  resource_t scope_report;
-  iterator_t systems, vulns;
-  long long alive_count, authenticated_count, auth_failed_count;
-  long long no_credential_path_count, unknown_count, vulnerability_count;
-  double total_load, average_load, coverage;
-
-  scope_report = resource_id_by_uuid ("scope_reports", scope_report_uuid);
-  if (scope_report == 0)
-    return 2;
-
-  alive_count = sql_int64_0
-    ("SELECT metric_alive_system_count FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  total_load = sql_double
-    ("SELECT metric_total_system_cvss_load FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  average_load = sql_double
-    ("SELECT metric_average_system_cvss_load FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  authenticated_count = sql_int64_0
-    ("SELECT metric_authenticated_system_count FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  auth_failed_count = sql_int64_0
-    ("SELECT metric_auth_failed_system_count FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  no_credential_path_count = sql_int64_0
-    ("SELECT metric_no_credential_path_system_count"
-     " FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  unknown_count = sql_int64_0
-    ("SELECT metric_unknown_authentication_system_count"
-     " FROM scope_reports WHERE id = %llu;",
-     scope_report);
-  coverage = sql_double
-    ("SELECT metric_authenticated_scan_coverage FROM scope_reports"
-     " WHERE id = %llu;",
-     scope_report);
-  vulnerability_count = sql_int64_0
-    ("SELECT count (*)"
-     " FROM scope_report_vulnerability_metrics WHERE scope_report = %llu;",
-     scope_report);
-
-  g_string_append_printf (buffer, "<scope_report_metrics id=\"%s\">",
-                          scope_report_uuid);
-  g_string_append (buffer, "<summary>");
-  append_xml_int64 (buffer, "alive_system_count", alive_count);
-  append_xml_double (buffer, "total_system_cvss_load", total_load);
-  append_xml_double (buffer, "average_system_cvss_load", average_load);
-  append_xml_int64 (buffer, "vulnerability_count", vulnerability_count);
-  append_xml_int64 (buffer, "authenticated_system_count",
-                    authenticated_count);
-  append_xml_int64 (buffer, "authentication_failed_system_count",
-                    auth_failed_count);
-  append_xml_int64 (buffer, "no_credential_path_system_count",
-                    no_credential_path_count);
-  append_xml_int64 (buffer, "unknown_authentication_system_count",
-                    unknown_count);
-  append_xml_percent (buffer, "authenticated_scan_coverage_percent",
-                      coverage);
-  g_string_append (buffer, "</summary>");
-
-  g_string_append (buffer, "<systems>");
-  init_iterator (&systems,
-                 "SELECT host, cvss_load, max_cvss, vulnerability_count,"
-                 "       authentication_state, source_report_count"
-                 " FROM scope_report_system_metrics"
-                 " WHERE scope_report = %llu"
-                 " ORDER BY cvss_load DESC, host ASC;",
-                 scope_report);
-  while (next (&systems))
-    {
-      g_string_append (buffer, "<system>");
-      append_xml_text (buffer, "host", iterator_string (&systems, 0));
-      append_xml_double (buffer, "cvss_load", iterator_double (&systems, 1));
-      append_xml_double (buffer, "max_cvss", iterator_double (&systems, 2));
-      append_xml_int64 (buffer, "vulnerability_count",
-                        iterator_int64 (&systems, 3));
-      append_xml_text (buffer, "authentication_state",
-                       iterator_string (&systems, 4));
-      append_xml_int64 (buffer, "source_report_count",
-                        iterator_int64 (&systems, 5));
-      g_string_append (buffer, "</system>");
-    }
-  cleanup_iterator (&systems);
-  g_string_append (buffer, "</systems>");
-
-  g_string_append (buffer, "<vulnerabilities>");
-  init_iterator (&vulns,
-                 "SELECT nvt_oid, nvt_name, cvss_score, affected_system_count,"
-                 "       cvss_load, average_contribution, source_report_count"
-                 " FROM scope_report_vulnerability_metrics"
-                 " WHERE scope_report = %llu"
-                 " ORDER BY cvss_load DESC, cvss_score DESC, nvt_name ASC;",
-                 scope_report);
-  while (next (&vulns))
-    {
-      g_string_append (buffer, "<vulnerability>");
-      append_xml_text (buffer, "nvt_oid", iterator_string (&vulns, 0));
-      append_xml_text (buffer, "name", iterator_string (&vulns, 1));
-      append_xml_double (buffer, "cvss_score", iterator_double (&vulns, 2));
-      append_xml_int64 (buffer, "affected_system_count",
-                        iterator_int64 (&vulns, 3));
-      append_xml_double (buffer, "cvss_load", iterator_double (&vulns, 4));
-      append_xml_double (buffer, "average_contribution",
-                         iterator_double (&vulns, 5));
-      append_xml_int64 (buffer, "source_report_count",
-                        iterator_int64 (&vulns, 6));
-      g_string_append (buffer, "</vulnerability>");
-    }
-  cleanup_iterator (&vulns);
-  g_string_append (buffer, "</vulnerabilities>");
-  g_string_append (buffer, "</scope_report_metrics>");
 
   return 0;
 }

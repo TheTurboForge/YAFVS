@@ -50,7 +50,7 @@ fn retained_scope_report_metric_rebuild_uses_metric_tables() {
 }
 
 #[test]
-fn legacy_scope_report_mutation_commands_are_removed_end_to_end() {
+fn legacy_scope_report_gmp_commands_are_removed_end_to_end() {
     for (source, label) in [
         (GSA_SCOPE_DETAILS_TSX, "scope details page"),
         (GSA_SCOPE_LIST_TSX, "scope list page"),
@@ -64,23 +64,37 @@ fn legacy_scope_report_mutation_commands_are_removed_end_to_end() {
 
     assert!(GSA_SCOPES_TS.contains("generateNativeScopeReport(this.http, id)"));
     assert!(GSA_SCOPES_TS.contains("deleteNativeScopeReport(this.http, id)"));
+    assert!(GSA_SCOPES_TS.contains("fetchNativeScopeReports"));
+    assert!(GSA_SCOPES_TS.contains("fetchNativeScopeReport"));
     assert!(!GSA_SCOPES_TS.contains("cmd: 'generate_scope_report'"));
     assert!(!GSA_SCOPES_TS.contains("cmd: 'delete_scope_report'"));
     for (source, legacy_marker) in [
         (MANAGE_SQL_SCOPES_C, "\ngenerate_scope_report ("),
         (MANAGE_SQL_SCOPES_C, "\ndelete_scope_report ("),
+        (MANAGE_SQL_SCOPES_C, "\nbuffer_scope_reports_xml ("),
+        (MANAGE_SQL_SCOPES_C, "\nscope_report_count ("),
+        (MANAGE_SQL_METRICS_C, "\nbuffer_scope_report_metrics_xml ("),
         (GMP_C, "handle_generate_scope_report"),
         (GMP_C, "CLIENT_GENERATE_SCOPE_REPORT"),
         (GMP_C, "handle_delete_scope_report"),
         (GMP_C, "CLIENT_DELETE_SCOPE_REPORT"),
+        (GMP_C, "handle_get_scope_reports_command"),
+        (GMP_C, "handle_get_scope_report_metrics_command"),
+        (GMP_C, "CLIENT_GET_SCOPE_REPORT"),
         (GSAD_GMP_C, "generate_scope_report_gmp"),
         (GSAD_GMP_C, "delete_scope_report_gmp"),
+        (GSAD_GMP_C, "get_scope_report_gmp"),
+        (GSAD_GMP_C, "get_scope_report_metrics_gmp"),
+        (GSAD_GMP_C, "get_scope_reports_gmp"),
         (GSAD_VALIDATOR_C, "|(generate_scope_report)"),
         (GSAD_VALIDATOR_C, "|(delete_scope_report)"),
+        (GSAD_VALIDATOR_C, "|(get_scope_report)"),
+        (GSAD_VALIDATOR_C, "|(get_scope_report_metrics)"),
+        (GSAD_VALIDATOR_C, "|(get_scope_reports)"),
     ] {
         assert!(
             !source.contains(legacy_marker),
-            "legacy scope-report generation marker remains: {legacy_marker}"
+            "legacy scope-report GMP marker remains: {legacy_marker}"
         );
     }
 }

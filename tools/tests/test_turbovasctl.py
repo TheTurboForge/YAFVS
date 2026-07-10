@@ -593,18 +593,15 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('compose_command(repo_root, "restart", "gsad")', source)
         self.assertIn("findings.append(restart_gsad_after_static_stage(repo_root))", source)
 
-    def test_scope_report_finding_counts_exclude_scanner_errors(self):
-        source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "manage_sql_scopes.c").read_text(encoding="utf-8")
-        self.assertIn("#include \"manage_utils.h\"", source)
-        self.assertIn("SCOPE_REPORT_FINDING_CLAUSE", source)
-        self.assertIn("SEVERITY_ERROR", source)
-        self.assertIn("SEVERITY_FP", source)
-        self.assertIn("WHERE s.scope_report = %llu AND \" SCOPE_REPORT_FINDING_CLAUSE \" AND", source)
-        self.assertNotIn("append_xml_int64 (buffer, \"false_positive\", 0);", source)
+    def test_native_scope_report_finding_counts_exclude_scanner_errors(self):
+        source = (Path(__file__).resolve().parents[2] / "services" / "turbovas-api" / "src" / "scope_reports.rs").read_text(encoding="utf-8")
+        self.assertIn("WHERE coalesce(r.severity, 0) != -3.0", source)
+        self.assertIn("count(*) FILTER (WHERE severity = -1.0)", source)
 
-    def test_gsa_scope_report_parser_accepts_top_level_severity(self):
-        source = (Path(__file__).resolve().parents[2] / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
-        self.assertIn("counts.severity ?? data.severity", source)
+    def test_gsa_native_scope_report_parser_maps_severity(self):
+        source = (Path(__file__).resolve().parents[2] / "components" / "gsa" / "src" / "gmp" / "native-api" / "scope-reports.ts").read_text(encoding="utf-8")
+        self.assertIn("const severity = item.severity ?? {}", source)
+        self.assertIn("severityFalsePositive: integerValue(severity.false_positive)", source)
 
     def test_gsa_scope_report_list_is_routed_and_linked(self):
         root = Path(__file__).resolve().parents[2]
@@ -633,7 +630,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("ScopeReportResultsTab", details_page)
         self.assertFalse((root / "components" / "gsa" / "src" / "web" / "pages" / "scope-reports" / "ScopeReportResultsTab.tsx").exists())
 
-    def test_scope_report_collection_filtering_is_wired_across_layers(self):
+    def test_scope_report_legacy_read_bridges_are_removed(self):
         root = Path(__file__).resolve().parents[2]
         gvmd_gmp = (root / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
         gvmd_scopes = (root / "components" / "gvmd" / "src" / "manage_sql_scopes.c").read_text(encoding="utf-8")
@@ -642,22 +639,27 @@ class TurboVASCtlTests(unittest.TestCase):
         python_scopes = root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp" / "requests" / "v226" / "_scopes.py"
         gmp_schema = (root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
-        self.assertIn("data->filter = g_strdup (attribute);", gvmd_gmp)
-        self.assertIn("scope_report_count_filtered", gvmd_gmp)
-        self.assertIn('<scope_reports start=\\"%i\\" max=\\"%i\\">%s', gvmd_gmp)
-        self.assertIn("manage_filter_controls", gvmd_scopes)
-        self.assertIn("filter_term_value (filter, \"search\")", gvmd_scopes)
-        self.assertIn("scope_report_sort_column", gvmd_scopes)
-        self.assertIn("ORDER BY %s %s, sr.id DESC%s", gvmd_scopes)
-        self.assertIn("params_value (params, \"filter\")", gsad)
-        self.assertIn("gmp_arguments_add (arguments, \"filter\", filter)", gsad)
-        self.assertIn("parseScopeReportCounts", gsa_scopes)
-        self.assertIn("response.set<ScopeReport[], EntitiesMeta>", gsa_scopes)
+        for marker in (
+            "GET_SCOPE_REPORT",
+            "handle_get_scope_reports_command",
+            "scope_report_count_filtered",
+            "buffer_scope_reports_xml",
+        ):
+            self.assertNotIn(marker, gvmd_gmp + gvmd_scopes)
+        for marker in (
+            "get_scope_report_gmp",
+            "get_scope_report_metrics_gmp",
+            "get_scope_reports_gmp",
+        ):
+            self.assertNotIn(marker, gsad)
+        self.assertIn("fetchNativeScopeReports", gsa_scopes)
+        self.assertIn("nativeScopeReportQueryFromFilter", gsa_scopes)
+        self.assertNotIn("parseScopeReportCounts", gsa_scopes)
         self.assertFalse(python_scopes.exists())
         self.assertIn("def command_native_api_request", native_tooling)
         self.assertFalse((root / "components" / "gvm-tools" / "scripts" / "list-scope-reports.gmp.py").exists())
-        self.assertIn("<name>get_scope_reports</name>", gmp_schema)
-        self.assertIn("Filter term to use for paging, sorting, and searching scope reports", gmp_schema)
+        self.assertNotIn("<name>get_scope_reports</name>", gmp_schema)
+        self.assertNotIn("<name>get_scope_report_metrics</name>", gmp_schema)
 
     def test_report_metrics_commands_are_registered_across_layers(self):
         root = Path(__file__).resolve().parents[2]
@@ -668,16 +670,17 @@ class TurboVASCtlTests(unittest.TestCase):
         gsa_report = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "report.ts").read_text(encoding="utf-8")
         gsa_scopes = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
         schema = (root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
-        for command in ("get_report_metrics", "get_scope_report_metrics"):
-            with self.subTest(command=command):
-                self.assertIn(command.upper(), gvmd_commands)
-                self.assertIn(command, gvmd_gmp)
-                self.assertIn(command, gsad)
-                self.assertIn(command, schema)
+        command = "get_report_metrics"
+        self.assertIn(command.upper(), gvmd_commands)
+        self.assertIn(command, gvmd_gmp)
+        self.assertIn(command, gsad)
+        self.assertIn(command, schema)
+        for source in (gvmd_commands, gvmd_gmp, gsad, schema, gsa_scopes):
+            self.assertNotIn("get_scope_report_metrics", source.lower())
         self.assertIn("get_report_metrics", python_gmp)
         self.assertNotIn("get_scope_report_metrics", python_gmp)
         self.assertIn("getMetrics", gsa_report)
-        self.assertIn("getMetrics", gsa_scopes)
+        self.assertNotIn("getMetrics", gsa_scopes)
 
     def test_report_metrics_sql_deduplicates_and_filters_findings(self):
         source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "manage_sql_metrics.c").read_text(encoding="utf-8")
@@ -3765,7 +3768,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',
          'schedule-create-calendar-edit',
-         'scope-report-retention-and-mutations',
          'tag-filter-actions-and-resource-type-change-semantics',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
@@ -4282,14 +4284,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(scope_reports["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_reports["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_reports["x_turbovas_replaces"], "scope-report-list-read")
-        self.assertEqual(scope_reports["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
+        self.assertIsNone(scope_reports["x_turbovas_inherited_still_owns"])
 
         scope_report_detail = rows[("get", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(scope_report_detail["operation_id"], "getScopeReportsByScopeReportId")
         self.assertEqual(scope_report_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_report_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_report_detail["x_turbovas_replaces"], "scope-report-detail-summary-read")
-        self.assertEqual(scope_report_detail["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
+        self.assertIsNone(scope_report_detail["x_turbovas_inherited_still_owns"])
 
         delete_scope_report = rows[("delete", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(delete_scope_report["status"], "implemented_internal_and_browser_proxied")
@@ -4304,7 +4306,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(scope_report_results_by_id["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_report_results_by_id["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_report_results_by_id["x_turbovas_replaces"], "scope-report-result-evidence-read")
-        self.assertEqual(scope_report_results_by_id["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
+        self.assertIsNone(scope_report_results_by_id["x_turbovas_inherited_still_owns"])
 
         feeds = rows[("get", "/api/v1/feeds")]
         self.assertEqual(feeds["operation_id"], "getFeeds")
@@ -4400,7 +4402,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
             self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertEqual(row["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
+            self.assertIsNone(row["x_turbovas_inherited_still_owns"])
 
         tags = rows[("get", "/api/v1/tags")]
         self.assertEqual(tags["operation_id"], "getTags")

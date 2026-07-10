@@ -78,7 +78,6 @@ const CAPABILITY_NAMES = [
   'get_report_formats',
   'get_results',
   'get_scanners',
-  'get_scope_reports',
   'get_scopes',
   'get_schedules',
   'get_settings',

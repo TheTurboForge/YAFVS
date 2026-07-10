@@ -683,7 +683,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "saved-filter-alert-linkage",
         "scan-config-preference-selector-mutation-import-export-blank-create",
         "schedule-create-calendar-edit",
-        "scope-report-retention-and-mutations",
         "remote-scanner-tls-relay-verification",
         "tag-filter-actions-and-resource-type-change-semantics",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -1533,12 +1532,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "raw-report-metrics-read",
     },
     ("get", "/scope-reports"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-list-read",
     },
     ("get", "/scope-reports/{scope_report_id}"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-detail-summary-read",
     },
@@ -1547,7 +1544,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scope-report-delete",
     },
     ("get", "/scope-reports/{scope_report_id}/results"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-result-evidence-read",
     },
@@ -1710,47 +1706,38 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/results"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-result-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/hosts"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-host-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/ports"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-port-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/applications"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-application-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/operating-systems"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-operating-system-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/cves"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-cve-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/tls-certificates"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-tls-certificate-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/errors"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-error-message-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/metrics"): {
-        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-metrics-read",
     },

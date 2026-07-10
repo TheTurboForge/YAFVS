@@ -4850,7 +4850,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-list-read
-      x-turbovas-inherited-still-owns: scope-report-generation
       summary: List scopes
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -4882,7 +4881,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-metadata-membership-write
-      x-turbovas-inherited-still-owns: scope-report-generation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -4927,7 +4925,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-detail-membership-read
-      x-turbovas-inherited-still-owns: scope-report-generation
       summary: Read one scope
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -4958,7 +4955,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-metadata-membership-write
-      x-turbovas-inherited-still-owns: scope-report-generation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5001,7 +4997,6 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-metadata-membership-write
-      x-turbovas-inherited-still-owns: scope-report-generation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5016,6 +5011,51 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scopes/{scope_id}/reports:
+    post:
+      operationId: postScopesByScopeIdReports
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scope-report-generation
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: report-generation
+      summary: Generate a scope report snapshot
+      description: Creates one persisted scope-report provenance and metric snapshot for the exact operator-owned scope. The transaction selects the latest completed scan report per selected target, records source provenance, rebuilds counts and persisted metrics, and never starts scans or mutates raw report evidence. Evidence collections continue to read the retained raw source reports rather than copying archival evidence. Global Organization scopes remain generatable.
+      parameters:
+        - $ref: '#/components/parameters/ScopeId'
+      responses:
+        '201':
+          description: Scope report snapshot created
+          headers:
+            Location:
+              description: Path of the created scope report resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '405':
@@ -5748,7 +5788,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-list-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List generated scope reports
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -5788,7 +5828,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-detail-summary-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: Read one generated scope report
       parameters:
         - $ref: '#/components/parameters/ScopeReportId'
@@ -5819,7 +5859,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: scope-report-delete
-      x-turbovas-inherited-still-owns: scope-report-generation
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5854,7 +5894,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-result-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List deduplicated scope report results by scope report id
       parameters:
         - $ref: '#/components/parameters/ScopeReportId'
@@ -5890,7 +5930,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-result-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List deduplicated scope report results
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -5927,7 +5967,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-host-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report hosts
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -5964,7 +6004,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-port-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report ports
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -6001,7 +6041,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-application-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report applications
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -6038,7 +6078,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-operating-system-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report operating systems
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -6075,7 +6115,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-cve-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report CVEs
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -6112,7 +6152,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-tls-certificate-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report TLS certificates
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -6149,7 +6189,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-error-message-evidence-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: List scope report Error Messages
       parameters:
         - $ref: '#/components/parameters/ScopeId'
@@ -6186,7 +6226,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scope-report-metrics-read
-      x-turbovas-inherited-still-owns: scope-report-generation-retention-and-mutations
+      x-turbovas-inherited-still-owns: scope-report-retention-and-mutations
       summary: Read scope report metrics
       parameters:
         - $ref: '#/components/parameters/ScopeId'

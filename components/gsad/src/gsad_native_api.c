@@ -425,6 +425,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *tags_path = "/api/v1/tags";
   const gchar *targets_path = "/api/v1/targets";
   const gchar *tasks_path = "/api/v1/tasks";
+  const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *report_config_prefix = "/api/v1/report-configs/";
@@ -441,6 +442,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *start_suffix = "/start";
   const gchar *stop_suffix = "/stop";
   const gchar *verify_suffix = "/verify";
+  const gchar *reports_suffix = "/reports";
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
@@ -479,6 +481,12 @@ native_api_post_path_is_allowed (const gchar *path)
     {
       const gchar *id = path + strlen (alert_prefix);
       return is_uuid_segment_with_suffix (id, clone_suffix);
+    }
+
+  if (g_str_has_prefix (path, scope_prefix))
+    {
+      const gchar *id = path + strlen (scope_prefix);
+      return is_uuid_segment_with_suffix (id, reports_suffix);
     }
 
   if (g_str_has_prefix (path, filter_prefix))

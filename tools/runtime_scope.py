@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Exercise TurboVAS scope writes over native JSON and raw XML report generation."""
+"""Exercise TurboVAS scope and scope-report writes over native JSON."""
 
 from __future__ import annotations
 
@@ -10,13 +10,10 @@ import json
 import os
 import secrets
 import subprocess
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 import urllib.parse
-
-import runtime_full_test_scan
 
 SMOKE_SCOPE_PREFIX = "TurboVAS scope smoke"
 
@@ -29,44 +26,6 @@ def result(status: str, summary: str, **details: Any) -> dict[str, Any]:
     return {"status": status, "summary": summary, "generated_at": now_iso(), "details": details}
 
 
-def response_root(response: Any) -> Any | None:
-    if isinstance(response, bytes):
-        response = response.decode("utf-8", errors="replace")
-    if isinstance(response, str):
-        try:
-            return ET.fromstring(response)
-        except ET.ParseError:
-            return None
-    return response
-
-
-def local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
-
-
-def child_element(element: Any, child_name: str) -> Any | None:
-    for child in list(element):
-        if local_name(str(child.tag)) == child_name:
-            return child
-    return None
-
-
-def child_text(element: Any, child_name: str) -> str | None:
-    child = child_element(element, child_name)
-    if child is None or child.text is None:
-        return None
-    return child.text.strip()
-
-
-def child_path_text(element: Any, child_names: tuple[str, ...]) -> str | None:
-    current = element
-    for child_name in child_names:
-        current = child_element(current, child_name)
-        if current is None:
-            return None
-    return current.text.strip() if current.text else None
-
-
 def text_int(value: str | None) -> int:
     if value in (None, ""):
         return 0
@@ -74,20 +33,6 @@ def text_int(value: str | None) -> int:
         return int(value)
     except ValueError:
         return 0
-
-
-def iter_elements(response: Any, element_name: str) -> list[Any]:
-    root = response_root(response)
-    if root is None or not hasattr(root, "iter"):
-        return []
-    return [element for element in root.iter() if local_name(str(element.tag)) == element_name]
-
-
-def response_id(response: Any) -> str | None:
-    root = response_root(response)
-    if root is None:
-        return None
-    return root.get("id")
 
 
 def native_scope_row(item: dict[str, Any]) -> dict[str, Any]:
@@ -99,33 +44,6 @@ def native_scope_row(item: dict[str, Any]) -> dict[str, Any]:
         "target_count": text_int(str(item.get("target_count") or "0")),
         "host_count": text_int(str(item.get("host_count") or "0")),
         "scope_report_count": text_int(str(item.get("scope_report_count") or "0")),
-    }
-
-
-def scope_report_row(element: Any) -> dict[str, Any]:
-    counts = child_element(element, "counts")
-    severity = child_element(element, "severity")
-    return {
-        "id": element.get("id"),
-        "name": child_text(element, "name"),
-        "scope_id": child_path_text(element, ("scope", "id")),
-        "scope_name": child_path_text(element, ("scope", "name")),
-        "created": child_text(element, "created") or child_text(element, "creation_time"),
-        "latest_evidence_time": child_text(element, "latest_evidence_time"),
-        "source_report_count": text_int(child_text(counts, "source_reports") if counts is not None else child_text(element, "source_report_count")),
-        "hosts_total": text_int(child_text(counts, "hosts_total") if counts is not None else child_text(element, "member_host_count")),
-        "hosts_with_evidence": text_int(child_text(counts, "hosts_with_evidence") if counts is not None else child_text(element, "evidence_host_count")),
-        "hosts_missing_evidence": text_int(child_text(counts, "hosts_missing_evidence") if counts is not None else child_text(element, "missing_host_count")),
-        "results_total": text_int(child_text(counts, "results_total") if counts is not None else child_text(element, "result_count")),
-        "vulnerabilities_total": text_int(child_text(counts, "vulnerabilities_total") if counts is not None else child_text(element, "vulnerability_count")),
-        "excluded_candidate_hosts": text_int(child_text(counts, "excluded_candidate_hosts") if counts is not None else child_text(element, "excluded_candidate_host_count")),
-        "severity": {
-            "high": text_int(child_text(severity, "high") if severity is not None else None),
-            "medium": text_int(child_text(severity, "medium") if severity is not None else None),
-            "low": text_int(child_text(severity, "low") if severity is not None else None),
-            "log": text_int(child_text(severity, "log") if severity is not None else None),
-            "false_positive": text_int(child_text(severity, "false_positive") if severity is not None else None),
-        },
     }
 
 
@@ -336,6 +254,18 @@ def native_scope_reports(repo_root: Path, scope_id: str | None = None) -> list[d
     return [native_scope_report_row(item) for item in items if isinstance(item, dict)]
 
 
+def native_generate_scope_report(repo_root: Path, scope_id: str, *, operator_name: str) -> dict[str, Any]:
+    path = f"/api/v1/scopes/{urllib.parse.quote(scope_id)}/reports"
+    return native_api_browser_proxy_json(
+        repo_root,
+        path,
+        method="POST",
+        payload={},
+        operator_name=operator_name,
+        expected_statuses={"201"},
+    )
+
+
 def organization_scope(repo_root: Path) -> dict[str, Any] | None:
     for scope in native_scopes(repo_root, "Organization"):
         if scope.get("global") or scope.get("name") == "Organization":
@@ -350,7 +280,7 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     return str(path)
 
 
-def command_smoke(client: Any, artifact_dir: Path, repo_root: Path, username: str) -> dict[str, Any]:
+def command_smoke(artifact_dir: Path, repo_root: Path, username: str) -> dict[str, Any]:
     targets = native_named_rows(repo_root, "targets")
     hosts = native_named_rows(repo_root, "hosts")
     target = targets[0] if targets else None
@@ -367,11 +297,12 @@ def command_smoke(client: Any, artifact_dir: Path, repo_root: Path, username: st
     smoke_name = f"{SMOKE_SCOPE_PREFIX} {secrets.token_hex(4)}"
     created_scope_id = None
     created_report_id = None
+    organization_report_id = None
     organization_report: dict[str, Any] | None = None
     cleanup: dict[str, Any] = {}
     try:
-        organization_response = getattr(client, "generate_scope_report")(org["id"])
-        organization_report_id = response_id(organization_response)
+        organization_response = native_generate_scope_report(repo_root, org["id"], operator_name=username)
+        organization_report_id = organization_response.get("id")
         if organization_report_id:
             organization_report = native_scope_report(repo_root, organization_report_id)
         created_scope = native_api_browser_proxy_json(
@@ -420,8 +351,8 @@ def command_smoke(client: Any, artifact_dir: Path, repo_root: Path, username: st
             expected_statuses={"200"},
         )
         scope_after_remove = native_scope_details(repo_root, created_scope_id)
-        report_response = getattr(client, "generate_scope_report")(created_scope_id)
-        created_report_id = response_id(report_response)
+        report_response = native_generate_scope_report(repo_root, created_scope_id, operator_name=username)
+        created_report_id = report_response.get("id")
         if not created_report_id:
             raise RuntimeError("Scope report generation response did not include an id")
         report = native_scope_reports(repo_root, created_scope_id)[0]
@@ -452,6 +383,13 @@ def command_smoke(client: Any, artifact_dir: Path, repo_root: Path, username: st
     except Exception as error:  # pylint: disable=broad-except
         payload = result("fail", "Scope smoke failed.", error_type=type(error).__name__, error=str(error), scope_id=created_scope_id, report_id=created_report_id, target=target, host=host)
     finally:
+        if organization_report_id:
+            try:
+                path = f"/api/v1/scope-reports/{urllib.parse.quote(organization_report_id)}"
+                native_api_browser_proxy_delete(repo_root, path, operator_name=username)
+                cleanup["organization_scope_report"] = "deleted"
+            except Exception as error:  # pylint: disable=broad-except
+                cleanup["organization_scope_report"] = f"delete failed: {error}"
         if created_report_id:
             try:
                 path = f"/api/v1/scope-reports/{urllib.parse.quote(created_report_id)}"
@@ -472,35 +410,20 @@ def command_smoke(client: Any, artifact_dir: Path, repo_root: Path, username: st
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Exercise TurboVAS scope writes over native JSON and report generation over GMP")
+    parser = argparse.ArgumentParser(description="Exercise TurboVAS scope and scope-report writes over native JSON")
     parser.add_argument("command", choices=("smoke",))
-    parser.add_argument("--socket", required=True, help="gvmd Unix socket path")
-    parser.add_argument("--username", required=True, help="GMP username")
-    parser.add_argument("--password-file", required=True, help="file containing the GMP password")
+    parser.add_argument("--username", required=True, help="native API operator name")
     parser.add_argument("--artifact-dir", required=True, help="directory for scope-report artifacts")
     parser.add_argument("--repo-root", required=True, help="repository root for native API container access")
-    parser.add_argument("--timeout", type=int, default=60, help="socket timeout in seconds")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    password = ""
-    client = None
     try:
-        client, password = runtime_full_test_scan.connect_raw_gmp_client(Path(args.socket), args.username, Path(args.password_file), args.timeout)
-        payload = command_smoke(client, Path(args.artifact_dir), Path(args.repo_root), args.username)
+        payload = command_smoke(Path(args.artifact_dir), Path(args.repo_root), args.username)
     except Exception as error:  # pylint: disable=broad-except
-        error_text = str(error)
-        if password:
-            error_text = error_text.replace(password, "[redacted]")
-        payload = result("fail", "Runtime scope helper failed.", error_type=type(error).__name__, error=error_text)
-    finally:
-        if client is not None:
-            try:
-                client.disconnect()
-            except Exception:
-                pass
+        payload = result("fail", "Runtime scope helper failed.", error_type=type(error).__name__, error=str(error))
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 1 if payload["status"] == "fail" else 0
 

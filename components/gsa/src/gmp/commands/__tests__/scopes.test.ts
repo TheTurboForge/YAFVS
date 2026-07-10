@@ -313,12 +313,31 @@ describe('ScopesCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should keep scope report generation on GMP when native API is available', async () => {
-    const response = createActionResultResponse({
-      action: 'generate_scope_report',
-      id: 'scope-report-id',
+  test('should generate scope reports through native API when available', async () => {
+    const response = createActionResultResponse({id: 'unused'});
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: testing.fn().mockResolvedValue({
+        id: 'scope-report-id',
+        name: 'Generated scope report',
+        status: 'Done',
+        scope: {id: 'scope-id', name: 'Scope'},
+        protection_requirement: 'normal',
+        source_report_count: 0,
+        source_target_count: 0,
+        member_host_count: 0,
+        evidence_host_count: 0,
+        missing_host_count: 0,
+        result_count: 0,
+        vulnerability_count: 0,
+        severity: {},
+        max_severity: 0,
+        excluded_candidate_host_count: 0,
+        metrics_summary: {},
+        sources: [],
+      }),
     });
-    const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
@@ -334,13 +353,40 @@ describe('ScopesCommand tests', () => {
     const cmd = new ScopesCommand(fakeHttp);
     await cmd.generateReport({id: 'scope-id'});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'generate_scope_report',
-        scope_id: 'scope-id',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scopes/scope-id/reports',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should not fall back to GMP when native scope report generation fails', async () => {
+    const response = createActionResultResponse({id: 'unused'});
+    const fetchMock = testing.fn().mockResolvedValue({ok: false, status: 409});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new ScopesCommand(fakeHttp);
+    await expect(cmd.generateReport({id: 'scope-id'})).rejects.toThrow(
+      'Native API request failed with status 409',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should fetch scope reports through native API when available', async () => {

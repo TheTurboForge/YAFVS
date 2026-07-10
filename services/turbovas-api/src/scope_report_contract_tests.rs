@@ -257,7 +257,9 @@ fn scope_report_native_read_routes_remain_get_only_read_paths() {
 #[test]
 fn scope_report_delete_route_is_write_control_only() {
     let source = include_str!("direct_api_routes.rs");
-    assert!(source.contains("scope_report_mutations::delete_scope_report"));
+    assert!(
+        source.contains("scope_report_mutations::{delete_scope_report, generate_scope_report}")
+    );
     assert!(source.contains("/api/v1/scope-reports/:scope_report_id"));
     assert!(source.contains("delete(delete_scope_report)"));
 

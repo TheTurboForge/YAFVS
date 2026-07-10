@@ -14,7 +14,8 @@ pub(crate) fn scope_write_mutability_sql() -> &'static str {
             coalesce(predefined, 0)::integer,
             coalesce(is_global, 0)::integer
        FROM scopes
-      WHERE uuid = $1;"
+      WHERE uuid = $1
+      FOR UPDATE;"
 }
 
 pub(crate) fn scope_write_report_history_sql() -> &'static str {

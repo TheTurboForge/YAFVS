@@ -765,6 +765,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("native_scope_reports", runtime_scope_source)
         self.assertIn("native_api_browser_proxy_delete", runtime_scope_source)
         self.assertIn("native_api_browser_proxy_json", runtime_scope_source)
+        self.assertIn("native_generate_scope_report", runtime_scope_source)
+        self.assertNotIn("runtime_full_test_scan", runtime_scope_source)
+        self.assertNotIn("xml.etree.ElementTree", runtime_scope_source)
         self.assertNotIn("gmp.create_scope(", runtime_scope_source)
         self.assertNotIn("gmp.modify_scope(", runtime_scope_source)
         self.assertNotIn("gmp.delete_scope(", runtime_scope_source)
@@ -904,7 +907,11 @@ class TurboVASCtlTests(unittest.TestCase):
                     "organization_scope_report": {"source_report_count": 4},
                     "scope_after_add": {"target_count": 2, "host_count": 2},
                     "scope_after_remove": {"target_count": 1, "host_count": 1},
-                    "cleanup": {"scope": "deleted", "scope_report": "deleted"},
+                    "cleanup": {
+                        "scope": "deleted",
+                        "scope_report": "deleted",
+                        "organization_scope_report": "deleted",
+                    },
                 },
             }
         )
@@ -919,6 +926,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(proof["details"]["scope_after_add_target_count"], 2)
         self.assertEqual(proof["details"]["scope_after_remove_host_count"], 1)
         self.assertEqual(proof["details"]["cleanup_scope"], "deleted")
+        self.assertEqual(proof["details"]["cleanup_organization_scope_report"], "deleted")
 
     def test_report_metrics_ui_is_exposed_on_raw_and_scope_report_details(self):
         root = Path(__file__).resolve().parents[2]
@@ -2172,7 +2180,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("components/gvm-tools/scripts/list-scopes.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-scope-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-scope-report-results.gmp.py", details["by_category"]["product_workflow"]["paths"])
-        self.assertIn("components/gvm-tools/scripts/generate-scope-report.gmp.py", details["by_category"]["product_workflow"]["paths"])
+        self.assertNotIn("components/gvm-tools/scripts/generate-scope-report.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertIn("components/python-gvm/gvm/protocols/gmp/requests/v226/_reports.py", details["by_category"]["compatibility_bridge"]["paths"])
         all_paths = {path for category in details["by_category"].values() for path in category["paths"]}
         self.assertNotIn("tools/runtime_metrics.py", all_paths)
@@ -2250,7 +2258,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertGreater(product_residue["compatibility-parser-model-or-test"]["count"], 0)
         self.assertGreater(product_residue["alert-delivery-and-credentials"]["count"], 0)
         self.assertGreater(product_residue["task-target-scan-control-or-credential"]["count"], 0)
-        self.assertGreater(product_residue["scope-report-generation"]["count"], 0)
+        self.assertNotIn("scope-report-generation", product_residue)
         endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/cert-bund-advisories", endpoints)
         self.assertIn("/api/v1/cert-bund-advisories/{advisory_id}", endpoints)
@@ -2438,10 +2446,10 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 173)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 174)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 105)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 68)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 68)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 69)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 69)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
@@ -2475,8 +2483,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 68)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 68)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 69)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 69)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
@@ -2556,8 +2564,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 68)
-        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 68)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 69)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 69)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_path_parameter_count"], 0)
@@ -2595,7 +2603,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
         self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 105)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 68)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 69)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
@@ -2656,6 +2664,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/schedules/{schedule_id}/clone",
                 "POST /api/v1/schedules/{schedule_id}/restore",
                 "POST /api/v1/scopes",
+                "POST /api/v1/scopes/{scope_id}/reports",
                 "POST /api/v1/tags",
                 "POST /api/v1/tags/{tag_id}/clone",
                 "POST /api/v1/tags/{tag_id}/resources",
@@ -2669,7 +2678,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/tasks/{task_id}/stop",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 68)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 69)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
@@ -2730,6 +2739,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/schedules/{schedule_id}/clone",
                 "POST /api/v1/schedules/{schedule_id}/restore",
                 "POST /api/v1/scopes",
+                "POST /api/v1/scopes/{scope_id}/reports",
                 "POST /api/v1/tags",
                 "POST /api/v1/tags/{tag_id}/clone",
                 "POST /api/v1/tags/{tag_id}/resources",
@@ -2902,8 +2912,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 68)
-        self.assertEqual(contract["direct_write_control_count"], 68)
+        self.assertEqual(contract["browser_write_proxy_count"], 69)
+        self.assertEqual(contract["direct_write_control_count"], 69)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
@@ -3531,7 +3541,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 173)
+        self.assertEqual(contract["operation_count"], 174)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -3694,6 +3704,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'scope-report-delete',
          'scope-report-detail-summary-read',
          'scope-report-error-message-evidence-read',
+         'scope-report-generation',
          'scope-report-host-evidence-read',
          'scope-report-list-read',
          'scope-report-metrics-read',
@@ -3755,8 +3766,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',
          'schedule-create-calendar-edit',
-         'scope-report-generation',
-         'scope-report-generation-retention-and-mutations',
+         'scope-report-retention-and-mutations',
          'tag-filter-actions-and-resource-type-change-semantics',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
@@ -3839,8 +3849,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 173)
-        self.assertEqual(details["direct_operation_count"], 173)
+        self.assertEqual(details["operation_count"], 174)
+        self.assertEqual(details["direct_operation_count"], 174)
         self.assertEqual(details["direct_read_operation_count"], 105)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
@@ -3852,7 +3862,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 for operation in details["non_get_direct_operations"]
                 if operation != "POST /tasks/{task_id}/replace-target"
             ],
-            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "POST /scanners/{scanner_id}/verify", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "DELETE /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "DELETE /overrides/{override_id}", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "POST /tasks", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "POST /tasks/{task_id}/start", "POST /tasks/{task_id}/stop", "DELETE /scope-reports/{scope_report_id}"],
+            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "POST /scanners/{scanner_id}/verify", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "DELETE /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "DELETE /overrides/{override_id}", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /scopes/{scope_id}/reports", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "POST /tasks", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "POST /tasks/{task_id}/start", "POST /tasks/{task_id}/stop", "DELETE /scope-reports/{scope_report_id}"],
         )
         self.assertIn("/api/v1", details["servers"])
         self.assertIn("http://127.0.0.1:19080/api/v1", details["servers"])
@@ -3879,9 +3889,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 68)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 68)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 68)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 69)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 69)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 69)
         self.assertEqual(status_only["details"]["operation_request_body_count"], 34)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
@@ -4062,11 +4072,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 173)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 173)
-        self.assertEqual(details["summary"]["inventory_rows"], 173)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 173)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 173)
+        self.assertEqual(details["summary"]["total_rows"], 174)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 174)
+        self.assertEqual(details["summary"]["inventory_rows"], 174)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 174)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 174)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -4273,14 +4283,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(scope_reports["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_reports["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_reports["x_turbovas_replaces"], "scope-report-list-read")
-        self.assertEqual(scope_reports["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
+        self.assertEqual(scope_reports["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
 
         scope_report_detail = rows[("get", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(scope_report_detail["operation_id"], "getScopeReportsByScopeReportId")
         self.assertEqual(scope_report_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_report_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_report_detail["x_turbovas_replaces"], "scope-report-detail-summary-read")
-        self.assertEqual(scope_report_detail["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
+        self.assertEqual(scope_report_detail["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
 
         delete_scope_report = rows[("delete", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(delete_scope_report["status"], "implemented_internal_and_browser_proxied")
@@ -4288,14 +4298,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(delete_scope_report["x_turbovas_maturity"], "live-write")
         self.assertEqual(delete_scope_report["x_turbovas_exposure"], "direct-write")
         self.assertEqual(delete_scope_report["x_turbovas_replaces"], "scope-report-delete")
-        self.assertEqual(delete_scope_report["x_turbovas_inherited_still_owns"], "scope-report-generation")
+        self.assertEqual(delete_scope_report["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
 
         scope_report_results_by_id = rows[("get", "/api/v1/scope-reports/{scope_report_id}/results")]
         self.assertEqual(scope_report_results_by_id["operation_id"], "getScopeReportsByScopeReportIdResults")
         self.assertEqual(scope_report_results_by_id["x_turbovas_exposure"], "direct-read")
         self.assertEqual(scope_report_results_by_id["x_turbovas_maturity"], "live-read")
         self.assertEqual(scope_report_results_by_id["x_turbovas_replaces"], "scope-report-result-evidence-read")
-        self.assertEqual(scope_report_results_by_id["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
+        self.assertEqual(scope_report_results_by_id["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
 
         feeds = rows[("get", "/api/v1/feeds")]
         self.assertEqual(feeds["operation_id"], "getFeeds")
@@ -4391,7 +4401,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(row["x_turbovas_exposure"], "direct-read")
             self.assertEqual(row["x_turbovas_maturity"], "live-read")
             self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertEqual(row["x_turbovas_inherited_still_owns"], "scope-report-generation-retention-and-mutations")
+            self.assertEqual(row["x_turbovas_inherited_still_owns"], "scope-report-retention-and-mutations")
 
         tags = rows[("get", "/api/v1/tags")]
         self.assertEqual(tags["operation_id"], "getTags")
@@ -4927,7 +4937,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 173)
+        self.assertEqual(len(operation_ids), 174)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -5124,6 +5134,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /scopes/{scope_id}/reports/{scope_report_id}/errors",
                 "GET /scopes/{scope_id}/reports/{scope_report_id}/metrics",
                 "GET /scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
+                "POST /scopes/{scope_id}/reports",
                 "POST /targets",
                 "PATCH /targets/{target_id}",
                 "DELETE /targets/{target_id}",
@@ -8055,25 +8066,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("buckets", status_details)
         self.assertNotIn("path_blockers", status_details)
 
-        focused = turbovasctl.command_native_tooling_removal_review(
-            root,
-            paths=["components/gvm-tools/scripts/generate-scope-report.gmp.py"],
-        )
-        focused_details = focused["details"]
-        self.assertEqual(focused_details["total"], 1)
-        self.assertEqual(focused_details["blocked_or_review_count"], 1)
-        self.assertEqual(
-            focused_details["path_filter"],
-            ["components/gvm-tools/scripts/generate-scope-report.gmp.py"],
-        )
-        self.assertEqual(focused_details["bucket_counts"], {"export_or_report_generation": 1})
-        self.assertIn(
-            "scope-report generation contract",
-            focused_details["buckets"][0]["path_blockers"][
-                "components/gvm-tools/scripts/generate-scope-report.gmp.py"
-            ],
-        )
-
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
@@ -8193,7 +8185,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIsNone(turbovasctl.native_tooling_category("components/gsa/src/gmp/native-api/tags.ts"))
         self.assertFalse(turbovasctl.native_tooling_scan_candidate("components/gsa/src/gmp/native-api/tags.ts"))
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "candidate_for_removal")
-        self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/generate-scope-report.gmp.py")[0], "product_workflow")
+        self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/generate-scope-report.gmp.py").exists())
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
 
@@ -8213,11 +8205,26 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(buckets["write_or_mutation"]["count"], 1)
         self.assertEqual(buckets["needs_review"]["count"], 1)
 
+    def test_native_tooling_removal_review_counts_product_scripts_toward_full_removal(self):
+        summary = turbovasctl.summarize_native_tooling(
+            [
+                {
+                    "category": "product_workflow",
+                    "path": "components/gvm-tools/scripts/retained-side-effect.gmp.py",
+                    "markers": ["gmp."],
+                }
+            ]
+        )
+
+        review = summary["candidate_for_removal_review"]
+        self.assertEqual(review["total"], 1)
+        self.assertEqual(review["tracked_removed_count"], 25)
+        self.assertEqual(review["buckets"]["needs_review"]["count"], 1)
+
     def test_native_tooling_removal_review_documents_known_blocker_paths(self):
         review = turbovasctl.native_tooling_removal_review(
             [
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
-                "components/gvm-tools/scripts/generate-scope-report.gmp.py",
                 "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/start-alert-scan.gmp.py",
@@ -8235,7 +8242,6 @@ class TurboVASCtlTests(unittest.TestCase):
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
         self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
-        self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
         self.assertIn("CSV credential creation", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
         self.assertIn("secret-safe", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
@@ -8273,7 +8279,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/task.ts", "product_workflow")[0], "task-target-scan-control-or-credential")
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/collection/parser.ts", "product_workflow")[0], "compatibility-parser-model-or-test")
-        self.assertEqual(turbovasctl.native_tooling_residue("components/gvm-tools/scripts/generate-scope-report.gmp.py", "product_workflow")[0], "scope-report-generation")
         self.assertIsNone(turbovasctl.native_tooling_residue("components/python-gvm/gvm/__init__.py", "compatibility_bridge"))
 
     def test_trashcan_contract_exposes_redacted_items_only(self):
@@ -11616,22 +11621,6 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(len(commands), 1)
         self.assertEqual(ET.fromstring(commands[0]).get("task_id"), 'task"&<>')
 
-    def test_raw_gmp_client_quotes_scope_report_scope_id_attribute(self):
-        client = runtime_full_test_scan.RawGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
-        client.connection = object()
-        commands = []
-
-        def fake_send(_connection, command):
-            commands.append(command)
-            return b"<generate_scope_report_response status='201' id='report-1'/>"
-
-        with unittest.mock.patch.object(runtime_full_test_scan, "send_gmp_xml_command", side_effect=fake_send):
-            response = client.generate_scope_report('scope"&<>')
-
-        self.assertEqual(response, b"<generate_scope_report_response status='201' id='report-1'/>")
-        self.assertEqual(len(commands), 1)
-        self.assertEqual(ET.fromstring(commands[0]).get("scope_id"), 'scope"&<>')
-
     def test_full_test_scan_main_handles_preflight_failure_without_empty_password_redaction(self):
         with tempfile.TemporaryDirectory() as tmp:
             stdout = io.StringIO()
@@ -11657,15 +11646,19 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(exit_code, 1)
         self.assertEqual(payload["details"]["error"], "native API boom")
 
-    def test_runtime_scope_uses_raw_bridge_not_python_gvm_connection_helper(self):
+    def test_runtime_scope_uses_only_native_api(self):
         source = RUNTIME_SCOPE_PATH.read_text(encoding="utf-8")
         wrapper_source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         scope_wrapper = wrapper_source.split("def command_runtime_scope", 1)[1].split("def runtime_scope_organization_proof_finding", 1)[0]
         self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
         self.assertNotIn("gmp.", source)
-        self.assertIn("connect_raw_gmp_client", source)
+        self.assertNotIn("connect_raw_gmp_client", source)
+        self.assertNotIn("runtime_full_test_scan", source)
+        self.assertIn("native_generate_scope_report", source)
         self.assertNotIn("venv_python(repo_root, \"python-gvm\")", scope_wrapper)
         self.assertNotIn("python-gvm.venv", scope_wrapper)
+        self.assertNotIn("gvmd_socket_path(repo_root)", scope_wrapper)
+        self.assertNotIn("runtime_secret_path(repo_root", scope_wrapper)
         self.assertIn("sys.executable", scope_wrapper)
 
     def test_runtime_rbac_smoke_uses_raw_bridge_not_python_gvm_connection(self):

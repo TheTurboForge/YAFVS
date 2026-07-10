@@ -39,7 +39,7 @@ use crate::{
     schedule_writes::{
         clone_schedule, delete_schedule, hard_delete_schedule, patch_schedule, restore_schedule,
     },
-    scope_report_mutations::delete_scope_report,
+    scope_report_mutations::{delete_scope_report, generate_scope_report},
     scope_writes::{create_scope, delete_scope, patch_scope},
     tag_writes::{
         clone_tag, create_tag, delete_tag, hard_delete_tag, patch_tag, restore_tag,
@@ -68,6 +68,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/scope-reports/:scope_report_id",
                 delete(delete_scope_report),
+            )
+            .route(
+                "/api/v1/scopes/:scope_id/reports",
+                post(generate_scope_report),
             )
             .route("/api/v1/report-configs", post(create_report_config))
             .route(

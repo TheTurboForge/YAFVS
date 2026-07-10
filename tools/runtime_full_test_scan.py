@@ -518,9 +518,6 @@ class RawGmpClient:
     def start_task(self, task_id: str) -> bytes:
         return self.send_xml(f"<start_task task_id={quoteattr(task_id)}/>")
 
-    def generate_scope_report(self, scope_id: str) -> bytes:
-        return self.send_xml(f"<generate_scope_report scope_id={quoteattr(scope_id)}/>")
-
     def disconnect(self) -> None:
         if self.connection is not None:
             self.connection.close()

@@ -181,6 +181,7 @@ mod scope_payloads;
 mod scope_report_applications;
 mod scope_report_cves;
 mod scope_report_errors;
+mod scope_report_generation_sql;
 mod scope_report_hosts;
 mod scope_report_lookup;
 #[cfg(test)]

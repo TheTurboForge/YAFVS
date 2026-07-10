@@ -361,7 +361,6 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "saved-filter-gsa-filter-actions-or-alert-linkage",
     "scan-config-preference-write-or-export",
     "scanner-control-or-credential",
-    "scope-report-generation",
     "schedule-create-or-calendar-edit",
     "tag-write-or-resource-actions",
     "task-target-scan-control-or-credential",
@@ -379,11 +378,7 @@ NATIVE_TOOLING_MARKERS = (
     "gmp.",
     "gvm-cli",
 )
-NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset(
-    {
-        "generate-scope-report.gmp.py",
-    }
-)
+NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset()
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     "compatibility_probe": set(),
     "credential_or_account": {
@@ -391,7 +386,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     },
     "export_or_report_generation": {
         "export-pdf-report.gmp.py",
-        "generate-scope-report.gmp.py",
     },
     "scanner_or_task_control": {
         "nvt-scan.gmp.py",
@@ -424,7 +418,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
-    "generate-scope-report.gmp.py": "Native tooling still lacks a direct scope-report generation contract with explicit authorization, provenance, snapshot, and metric rebuild semantics.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
     "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
     "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
@@ -626,6 +619,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scope-report-delete",
         "scope-report-detail-summary-read",
         "scope-report-error-message-evidence-read",
+        "scope-report-generation",
         "scope-report-host-evidence-read",
         "scope-report-list-read",
         "scope-report-metrics-read",
@@ -689,8 +683,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "saved-filter-alert-linkage",
         "scan-config-preference-selector-mutation-import-export-blank-create",
         "schedule-create-calendar-edit",
-        "scope-report-generation",
-        "scope-report-generation-retention-and-mutations",
+        "scope-report-retention-and-mutations",
         "remote-scanner-tls-relay-verification",
         "tag-filter-actions-and-resource-type-change-semantics",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -822,6 +815,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/scopes"): "direct-write",
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
+    ("post", "/scopes/{scope_id}/reports"): "direct-write",
     ("post", "/report-configs"): "direct-write",
     ("patch", "/report-configs/{report_config_id}"): "direct-write",
     ("delete", "/report-configs/{report_config_id}"): "direct-write",
@@ -1539,49 +1533,52 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "raw-report-metrics-read",
     },
     ("get", "/scope-reports"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-list-read",
     },
     ("get", "/scope-reports/{scope_report_id}"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-detail-summary-read",
     },
     ("delete", "/scope-reports/{scope_report_id}"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scope-report-delete",
     },
     ("get", "/scope-reports/{scope_report_id}/results"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-result-evidence-read",
     },
     ("get", "/scopes"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-list-read",
     },
     ("get", "/scopes/{scope_id}"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-detail-membership-read",
     },
     ("post", "/scopes"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scope-metadata-membership-write",
     },
     ("patch", "/scopes/{scope_id}"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scope-metadata-membership-write",
     },
     ("delete", "/scopes/{scope_id}"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scope-metadata-membership-write",
+    },
+    ("post", "/scopes/{scope_id}/reports"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "scope-report-generation",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "report-generation",
     },
     ("get", "/targets"): {
         "x-turbovas-maturity": "live-read",
@@ -1714,47 +1711,47 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/results"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-result-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/hosts"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-host-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/ports"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-port-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/applications"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-application-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/operating-systems"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-operating-system-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/cves"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-cve-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/tls-certificates"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-tls-certificate-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/errors"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-error-message-evidence-read",
     },
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/metrics"): {
-        "x-turbovas-inherited-still-owns": "scope-report-generation-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "scope-report-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scope-report-metrics-read",
     },
@@ -3285,8 +3282,6 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if category != "product_workflow":
         return None
     name = Path(relative_path).name
-    if relative_path == "components/gvm-tools/scripts/generate-scope-report.gmp.py":
-        return "scope-report-generation", "Retained GMP helper generates scope reports; native read APIs do not replace report generation."
     if "/__tests__/" in relative_path or relative_path.startswith("components/gsa/src/gmp/__tests__/"):
         return "compatibility-parser-model-or-test", "Inherited GSA/GMP tests characterize retained compatibility behavior."
     if relative_path.startswith(("components/gsa/src/gmp/collection/", "components/gsa/src/gmp/http/transform/", "components/gsa/src/gmp/locale/", "components/gsa/src/gmp/models/")):
@@ -7283,6 +7278,15 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
                     templates.add(f"{task_prefix.rstrip('/')}/{{}}{suffix}")
+        scope_prefix = post_constants.get("scope_prefix")
+        reports_suffix = post_constants.get("reports_suffix")
+        if (
+            scope_prefix
+            and reports_suffix
+            and "g_str_has_prefix (path, scope_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, reports_suffix)" in post_function_body
+        ):
+            templates.add(f"{scope_prefix.rstrip('/')}/{{}}{reports_suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -7391,6 +7395,15 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
                     operations.add(f"POST {task_prefix.rstrip('/')}/{{}}{suffix}")
+        scope_prefix = post_constants.get("scope_prefix")
+        reports_suffix = post_constants.get("reports_suffix")
+        if (
+            scope_prefix
+            and reports_suffix
+            and "g_str_has_prefix (path, scope_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, reports_suffix)" in post_function_body
+        ):
+            operations.add(f"POST {scope_prefix.rstrip('/')}/{{}}{reports_suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -7684,7 +7697,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "paths": [item["path"] for item in residue_items],
                 "reason": residue_items[0].get("residue_reason"),
             }
-    removal_candidate_paths = by_category["candidate_for_removal"]["paths"]
+    removal_candidate_paths = sorted(
+        {
+            *by_category["candidate_for_removal"]["paths"],
+            *(
+                item["path"]
+                for item in items
+                if item["category"] == "product_workflow"
+                and item["path"].startswith("components/gvm-tools/scripts/")
+            ),
+        }
+    )
     return {
         "total_items": len(items),
         "by_category": by_category,
@@ -8561,6 +8584,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["direct native mutable scope delete automation"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/scopes/{scope_id}/reports",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": [
+                    "direct native scope-report generation",
+                    "GSA/browser scope-report generation through write-control proxy",
+                    "runtime scope-report generation helper",
+                ],
             },
             {
                 "method": "post",
@@ -13997,10 +14031,8 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
         return command_runtime_scope_report_summary_native(repo_root)
 
     findings: list[dict[str, Any]] = []
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     probe = runtime_scope_probe_path(repo_root)
     artifact_dir = scope_report_artifact_dir(repo_root)
-    findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
     findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading scope reports through the native API."))
     browser_proxy_secret = running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BROWSER_PROXY_SECRET_ENV)
     findings.append(
@@ -14012,7 +14044,6 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
             else "turbovas-api is running without the browser-proxy secret; refresh the app profile before runtime scope cleanup.",
         )
     )
-    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
     findings.append(finding("pass" if probe.is_file() else "fail", "runtime-scope.probe", "Runtime scope helper exists." if probe.is_file() else "Runtime scope helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
     try:
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -14028,12 +14059,8 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
         sys.executable,
         str(probe),
         action,
-        "--socket",
-        str(gvmd_socket_path(repo_root)),
         "--username",
         DEV_ADMIN_USER,
-        "--password-file",
-        str(secret_path),
         "--artifact-dir",
         str(artifact_dir),
         "--repo-root",
@@ -14046,13 +14073,12 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
         parsed = None
     helper_status = parsed.get("status") if parsed else None
     finding_status = helper_status if result.returncode == 0 and helper_status in {"pass", "warn"} else "fail"
-    password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
     findings.append(
         finding(
             finding_status,
             f"runtime-scope.{action}",
             parsed.get("summary", f"Runtime scope helper exit code {result.returncode}.") if parsed else f"Runtime scope helper exit code {result.returncode}.",
-            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120, [password])},
+            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120)},
         )
     )
     if action == "smoke":
@@ -14092,6 +14118,7 @@ def runtime_scope_organization_proof_finding(parsed: dict[str, Any] | None) -> d
         "scope_after_remove_host_count": scope_after_remove.get("host_count"),
         "cleanup_scope": cleanup.get("scope"),
         "cleanup_scope_report": cleanup.get("scope_report"),
+        "cleanup_organization_scope_report": cleanup.get("organization_scope_report"),
     }
     expected = {
         "organization_target_count": lambda value: isinstance(value, int) and value > 0,
@@ -14103,6 +14130,7 @@ def runtime_scope_organization_proof_finding(parsed: dict[str, Any] | None) -> d
         "scope_after_remove_host_count": lambda value: value == 1,
         "cleanup_scope": lambda value: value == "deleted",
         "cleanup_scope_report": lambda value: value == "deleted",
+        "cleanup_organization_scope_report": lambda value: value == "deleted",
     }
     status = "pass" if all(check(proof.get(key)) for key, check in expected.items()) else "warn"
     return finding(

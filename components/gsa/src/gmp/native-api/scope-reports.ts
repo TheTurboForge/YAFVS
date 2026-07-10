@@ -128,6 +128,34 @@ const SCOPE_REPORT_SORT_FIELDS: Record<string, string> = {
   vulnerability_count: 'vulnerability_count',
 };
 
+export const generateNativeScopeReport = async (
+  gmp: NativeApiGmp,
+  scopeId: string,
+): Promise<ScopeReport> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/scopes/${encodeURIComponent(scopeId)}/reports`),
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(gmp.session.token === undefined
+          ? {}
+          : {'X-TurboVAS-Token': gmp.session.token}),
+        ...(gmp.session.jwt === undefined
+          ? {}
+          : {Authorization: `Bearer ${gmp.session.jwt}`}),
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+  return nativeScopeReportToModel(
+    (await response.json()) as NativeScopeReportItem,
+  );
+};
+
 const integerValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;

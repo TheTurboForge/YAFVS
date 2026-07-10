@@ -247,16 +247,17 @@ fn scope_write_scaffold_sql_is_read_only_and_targets_expected_tables() {
         scope_write_visible_targets_sql(),
         scope_write_visible_hosts_sql(),
     ] {
-        let upper_sql = sql.to_ascii_uppercase();
-        assert!(upper_sql.contains("SELECT"));
-        for forbidden in ["INSERT", "UPDATE", "DELETE", "TRUNCATE"] {
-            assert!(!upper_sql.contains(forbidden), "{forbidden} in {sql}");
-        }
+        let upper_sql = sql.trim_start().to_ascii_uppercase();
+        assert!(
+            upper_sql.starts_with("SELECT"),
+            "non-SELECT scope read SQL: {sql}"
+        );
     }
     assert!(scope_write_operator_owner_sql().contains("FROM users"));
     assert!(scope_write_mutability_sql().contains("FROM scopes"));
     assert!(scope_write_mutability_sql().contains("owner::integer"));
     assert!(scope_write_report_history_sql().contains("FROM scope_reports"));
+    assert!(scope_write_mutability_sql().contains("FOR UPDATE"));
     assert!(scope_write_visible_targets_sql().contains("FROM targets"));
     assert!(scope_write_visible_hosts_sql().contains("FROM hosts"));
 }
@@ -422,6 +423,15 @@ fn scope_write_handlers_require_operator_transactions_and_payload_reload() {
     assert!(patch_body.contains("verify_scope_write_references_visible"));
     assert!(delete_body.contains("ensure_scope_owner_matches_operator"));
     assert!(delete_body.contains("ensure_scope_has_no_report_history"));
+    assert!(
+        delete_body
+            .find("load_mutable_scope_write_state")
+            .expect("scope delete must lock and load the scope")
+            < delete_body
+                .find("ensure_scope_has_no_report_history")
+                .expect("scope delete must check report history after locking"),
+        "scope delete must lock the scope before checking report history"
+    );
     for body in [create_body, patch_body] {
         assert!(body.contains("load_scope_detail(&client"));
     }

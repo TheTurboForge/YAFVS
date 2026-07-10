@@ -174,7 +174,7 @@ fn inherited_gsa_gsad_gvmd_surface_keeps_scope_report_mutations_on_gmp() {
 }
 
 #[test]
-fn native_direct_api_keeps_scope_report_generation_closed_and_delete_write_control_gated() {
+fn native_direct_api_gates_scope_report_generation_and_delete_on_write_control() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/scope-reports",
@@ -192,7 +192,7 @@ fn native_direct_api_keeps_scope_report_generation_closed_and_delete_write_contr
         generation_path,
         false
     ));
-    assert!(!direct_api_v1_method_is_allowed(
+    assert!(direct_api_v1_method_is_allowed(
         &Method::POST,
         generation_path,
         true

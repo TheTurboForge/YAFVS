@@ -147,6 +147,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
     let parts = path.split('/').collect::<Vec<_>>();
     match (method, parts.as_slice()) {
         (&Method::POST, ["", "api", "v1", "scopes"]) => true,
+        (&Method::POST, ["", "api", "v1", "scopes", scope_id, "reports"]) => {
+            direct_api_write_id_segment_is_allowed(scope_id)
+        }
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scopes", scope_id]) => {
             direct_api_write_id_segment_is_allowed(scope_id)
         }

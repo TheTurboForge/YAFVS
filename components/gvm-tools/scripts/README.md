@@ -272,15 +272,17 @@ inputs.
 - Use it when you're testing like crazy and have a trashcan with ~ a gazillion objects
 - You can also just use `gvm-cli --gmp-username *admin-user* --gmp-password *password* socket --pretty --xml "<empty_trashcan/>"`
 
-## `export-csv-report.gmp.py`
+## Native CSV report evidence export
 
-Requests the report specified and exports it as a csv formatted report locally.
+The inherited `export-csv-report.gmp.py` script has been removed. Export a
+report's complete retained result evidence through the direct native API:
 
-### Example
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket export-csv-report.gmp.py *report_uuid* ./output.csv`
+`$ just native-export-report-csv -- --report-id *report_uuid* --output ./output.csv --status-only`
 
-- Get the *report_uuid* from the UI or a native read such as `tools/turbovasctl native-api-request --json --path '/api/v1/reports?page_size=25'`. If the output is not specified it will be named *report_uuid.csv*
-- Note the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
+The native helper paginates deterministic result reads, writes atomically, and
+refuses to overwrite an existing file unless `--overwrite` is explicit. Its
+stable TurboVAS evidence schema is intentionally independent of gvmd report
+format rendering; PDF and nested XML export remain separate workflows.
 
 ## `export-pdf-report.gmp.py`
 

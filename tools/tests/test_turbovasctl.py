@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import importlib.util
+import csv
+import hashlib
 import inspect
 import io
 import json
@@ -6174,6 +6176,172 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("scan-new-system.gmp.py", candidates)
         self.assertNotIn("scan-new-system.gmp.py", turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
 
+    @staticmethod
+    def _native_export_report_row(report_id, row_id, *, name="Finding", severity=7.5):
+        return {
+            "id": row_id,
+            "source_report_id": report_id,
+            "report": {"id": report_id, "name": "Full and fast report"},
+            "task": {"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "name": "Daily scan"},
+            "host": "192.0.2.10",
+            "host_asset_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "hostname": "example.test",
+            "port": "443/tcp",
+            "severity": severity,
+            "qod": 95,
+            "nvt_oid": "1.3.6.1.4.1.25623.1.0.100001",
+            "name": name,
+            "nvt_family": "General",
+            "cves": ["CVE-2026-0001"],
+            "cert_refs": [],
+            "xrefs": ["URL:https://example.test"],
+            "max_epss": {"score": 0.9, "percentile": 0.99},
+            "max_severity": None,
+            "created_at": "2026-07-10T12:00:00Z",
+            "scan_nvt_version": "20260710T000000Z",
+            "description": "Full evidence",
+            "description_excerpt": "Full evidence",
+            "summary": "Summary",
+            "insight": "Insight",
+            "affected": "Affected",
+            "impact": "Impact",
+            "detection": "Detection",
+            "solution_type": "VendorFix",
+            "solution": "Upgrade",
+            "raw_evidence_href": f"/result/{row_id}",
+            "user_tags": [{"id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "name": "Reviewed"}],
+            "overrides": [],
+        }
+
+    def test_native_export_report_csv_parser_and_pre_runtime_guards(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        args = turbovasctl.build_parser().parse_args(["native-export-report-csv", "--report-id", report_id])
+        self.assertEqual(args.command, "native-export-report-csv")
+        self.assertEqual(args.max_results, turbovasctl.NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS)
+        self.assertIsNone(args.output)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            existing = root / "existing.csv"
+            existing.write_text("keep", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                invalid = turbovasctl.command_native_export_report_csv(root, report_id="not-a-uuid")
+                exists = turbovasctl.command_native_export_report_csv(root, report_id=report_id, output=existing)
+                capped = turbovasctl.command_native_export_report_csv(root, report_id=report_id, max_results=0)
+                curl.assert_not_called()
+            self.assertEqual(existing.read_text(encoding="utf-8"), "keep")
+        self.assertEqual(invalid["status"], "fail")
+        self.assertEqual(exists["status"], "fail")
+        self.assertEqual(capped["status"], "fail")
+
+    def test_native_export_report_csv_paginates_writes_atomically_and_redacts_status(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        rows = [
+            self._native_export_report_row(report_id, "22222222-2222-4222-8222-222222222222", name="=cmd|' /C calc'!A0"),
+            self._native_export_report_row(report_id, "33333333-3333-4333-8333-333333333333", name="Second", severity=-1.0),
+        ]
+        calls = []
+
+        def fake_direct(_root, path, **kwargs):
+            calls.append(path)
+            if path == f"/api/v1/reports/{report_id}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Full and fast report"}) + "\n200", "")
+            if path.endswith("page=1&page_size=500&sort=-severity"):
+                payload = {"items": rows[:1], "page": {"page": 1, "page_size": 500, "total": 2}}
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+            if path.endswith("page=2&page_size=500&sort=-severity"):
+                payload = {"items": rows[1:], "page": {"page": 2, "page_size": 500, "total": 2}}
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+            self.fail(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.csv"
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="s" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_export_report_csv(root, report_id=report_id, output=output, status_only=True)
+            content = output.read_bytes()
+            with output.open(newline="", encoding="utf-8") as handle:
+                exported = list(csv.DictReader(handle))
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(result["details"]["row_count"], 2)
+            self.assertEqual(result["details"]["total"], 2)
+            self.assertEqual(result["details"]["page_count"], 2)
+            self.assertEqual(result["details"]["sha256"], hashlib.sha256(content).hexdigest())
+            self.assertEqual(result["details"]["byte_count"], len(content))
+            self.assertEqual(exported[0]["name"], "'=cmd|' /C calc'!A0")
+            self.assertEqual(exported[0]["severity"], "7.5")
+            self.assertEqual(exported[0]["cves"], '["CVE-2026-0001"]')
+            self.assertEqual(exported[1]["severity"], "-1.0")
+            self.assertEqual(list(exported[0]), list(turbovasctl.NATIVE_REPORT_CSV_FIELDS))
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn("s" * 64, json.dumps(result))
+            self.assertFalse(list(root.glob(".report.csv.tmp-*")))
+        self.assertEqual(calls, [f"/api/v1/reports/{report_id}", f"/api/v1/reports/{report_id}/results?page=1&page_size=500&sort=-severity", f"/api/v1/reports/{report_id}/results?page=2&page_size=500&sort=-severity"])
+
+    def test_native_export_report_csv_cap_and_page_failure_do_not_replace_output(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        row = self._native_export_report_row(report_id, "22222222-2222-4222-8222-222222222222")
+
+        def run_export(root, output, second_page, *, max_results=10):
+            def fake_direct(_root, path, **_kwargs):
+                if path == f"/api/v1/reports/{report_id}":
+                    return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Report"}) + "\n200", "")
+                if "page=1&" in path:
+                    return subprocess.CompletedProcess(["curl"], 0, json.dumps({"items": [row], "page": {"page": 1, "page_size": 500, "total": 2}}) + "\n200", "")
+                return second_page
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="s" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                return turbovasctl.command_native_export_report_csv(root, report_id=report_id, output=output, max_results=max_results, overwrite=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.csv"
+            output.write_text("preserve", encoding="utf-8")
+            unused = subprocess.CompletedProcess(["curl"], 0, "{}\n200", "")
+            capped = run_export(root, output, unused, max_results=1)
+            self.assertEqual(capped["status"], "fail")
+            self.assertEqual(output.read_text(encoding="utf-8"), "preserve")
+
+            drift = subprocess.CompletedProcess(["curl"], 0, json.dumps({"items": [], "page": {"page": 2, "page_size": 500, "total": 3}}) + "\n200", "")
+            failed = run_export(root, output, drift)
+            self.assertEqual(failed["status"], "fail")
+            self.assertEqual(output.read_text(encoding="utf-8"), "preserve")
+            self.assertFalse(list(root.glob(".report.csv.tmp-*")))
+
+    def test_native_export_report_csv_replace_failure_preserves_old_output_and_cleans_temp(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        row = self._native_export_report_row(report_id, "22222222-2222-4222-8222-222222222222")
+
+        def fake_direct(_root, path, **_kwargs):
+            if path == f"/api/v1/reports/{report_id}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Report"}) + "\n200", "")
+            payload = {"items": [row], "page": {"page": 1, "page_size": 500, "total": 1}}
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.csv"
+            output.write_text("preserve", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="s" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct), \
+                unittest.mock.patch.object(turbovasctl.os, "replace", side_effect=PermissionError("denied")):
+                result = turbovasctl.command_native_export_report_csv(root, report_id=report_id, output=output, overwrite=True)
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(output.read_text(encoding="utf-8"), "preserve")
+            self.assertFalse(list(root.glob(".report.csv.tmp-*")))
+
+    def test_native_export_report_csv_is_not_a_remaining_gvm_tools_candidate(self):
+        candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
+        self.assertNotIn("export-csv-report.gmp.py", candidates)
+        self.assertNotIn("export-csv-report.gmp.py", turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
+
     def test_native_start_tasks_from_csv_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -7778,7 +7946,6 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_native_tooling_removal_review_documents_known_blocker_paths(self):
         review = turbovasctl.native_tooling_removal_review(
             [
-                "components/gvm-tools/scripts/export-csv-report.gmp.py",
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/export-xml-report.gmp.py",
                 "components/gvm-tools/scripts/generate-scope-report.gmp.py",
@@ -7789,7 +7956,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
                 "components/gvm-tools/scripts/create-schedules-from-csv.gmp.py",
-                "components/gvm-tools/scripts/create-tasks-from-csv.gmp.py",
                 "components/gvm-tools/scripts/delete-overrides-by-filter.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
@@ -7802,7 +7968,6 @@ class TurboVASCtlTests(unittest.TestCase):
         monthly_blockers = review["buckets"]["monthly_report_semantics"]["path_blockers"]
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
-        self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-csv-report.gmp.py"])
         self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
         self.assertIn("nested report serialization", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
         self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])

@@ -10,64 +10,38 @@ const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 const ROUTES_RS: &str = include_str!("read_api_routes.rs");
 const EXPORT_PDF: &str =
     include_str!("../../../components/gvm-tools/scripts/export-pdf-report.gmp.py");
-const EXPORT_CSV: &str =
-    include_str!("../../../components/gvm-tools/scripts/export-csv-report.gmp.py");
 const EXPORT_XML: &str =
     include_str!("../../../components/gvm-tools/scripts/export-xml-report.gmp.py");
 
 #[test]
-fn inherited_pdf_and_csv_exports_fetch_report_format_payloads_and_decode_base64() {
-    for (source, label, format_id, extension, done_message) in [
-        (
-            EXPORT_PDF,
-            "pdf",
-            "c402cc3e-b531-11e1-9163-406186ea4fc5",
-            ".pdf",
-            "Done. PDF created: ",
-        ),
-        (
-            EXPORT_CSV,
-            "csv",
-            "c1645568-627a-11e3-a660-406186ea4fc5",
-            ".csv",
-            "Done. CSV created: ",
-        ),
+fn inherited_pdf_export_fetches_report_format_payload_and_decodes_base64() {
+    for required in [
+        "report_id = args.argv[1]",
+        "if len(args.argv) == 3:",
+        ".pdf",
+        "c402cc3e-b531-11e1-9163-406186ea4fc5",
+        "gmp.get_report(",
+        "report_id=report_id",
+        "report_format_id=pdf_report_format_id",
+        "ignore_pagination=True",
+        "details=True",
+        "report_element = response.find(\"report\")",
+        "content = report_element.find(\"report_format\").tail",
+        "content.encode(\"ascii\")",
+        "b64decode(binary_base64_encoded_pdf)",
+        "Path(",
+        ".expanduser()",
+        ".write_bytes(",
+        "Done. PDF created: ",
+        "if not content:",
+        "Requested report is empty.",
+        "file=sys.stderr",
+        "sys.exit(1)",
     ] {
-        for required in [
-            "report_id = args.argv[1]",
-            "if len(args.argv) == 3:",
-            extension,
-            format_id,
-            "gmp.get_report(",
-            "report_id=report_id",
-            "report_format_id=",
-            "ignore_pagination=True",
-            "details=True",
-            "report_element = response.find(\"report\")",
-            "content = report_element.find(\"report_format\").tail",
-            "content.encode(\"ascii\")",
-            "b64decode(binary_base64_encoded_",
-            "Path(",
-            ".expanduser()",
-            ".write_bytes(",
-            done_message,
-        ] {
-            assert!(
-                source.contains(required),
-                "{label} export missing {required}"
-            );
-        }
-        for required in [
-            "if not content:",
-            "Requested report is empty.",
-            "file=sys.stderr",
-            "sys.exit(1)",
-        ] {
-            assert!(
-                source.contains(required),
-                "{label} export must keep inherited empty-report failure behavior: {required}"
-            );
-        }
+        assert!(
+            EXPORT_PDF.contains(required),
+            "pdf export missing {required}"
+        );
     }
 }
 
@@ -104,7 +78,7 @@ fn inherited_xml_export_serializes_nested_report_xml_without_base64_decoding() {
 }
 
 #[test]
-fn native_api_has_no_explicit_report_file_export_route_yet() {
+fn native_api_has_no_gvmd_report_format_file_export_route() {
     for path in [
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc/export",
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc/pdf",

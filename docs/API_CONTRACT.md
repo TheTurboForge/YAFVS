@@ -471,6 +471,12 @@ JSON/table views. The
 artifact is an export of PostgreSQL-owned report data, not a separate source of
 truth.
 
+Operator CSV export composes the direct report-detail and paginated result
+contracts through `native-export-report-csv`. The helper writes a deterministic
+TurboVAS evidence schema atomically and is not a hidden GMP/report-format
+bridge. PDF and nested XML rendering remain gvmd-owned until separately
+replaced or explicitly retired.
+
 Native raw report host rows include host, optional hostname, best OS details,
 port/application counts, authenticated-scan state, scan timestamps, result and
 vulnerability counts, severity buckets, maximum severity, and source report ID.

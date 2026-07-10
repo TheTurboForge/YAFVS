@@ -173,6 +173,7 @@ tools/turbovasctl native-verify-scanners --json --allow-write-control --status-o
 tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
 tools/turbovasctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
 tools/turbovasctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
+tools/turbovasctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
 tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 tools/turbovasctl native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
 tools/turbovasctl native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
@@ -201,6 +202,14 @@ the helper attempts to remove its newly created target. If task start is not
 accepted, it retains the prepared task and target, reads task detail to avoid
 claiming a failed scan that may already be active, and reports the observed
 state for diagnosis or retry.
+
+`native-export-report-csv` replaces the inherited GMP CSV report-format script
+with a deterministic TurboVAS evidence export over direct native JSON. It
+preflights the exact report, paginates all result rows up to the explicit safety
+cap, writes a private same-directory temporary file, and atomically replaces the
+destination only after a complete export. Existing files require `--overwrite`.
+The output is a stable result-evidence CSV rather than gvmd's configurable
+report-format rendering; PDF and nested XML export remain separate workflows.
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
 table with direct native API calls. It verifies each scanner without starting a

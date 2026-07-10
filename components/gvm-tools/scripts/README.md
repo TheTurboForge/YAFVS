@@ -65,34 +65,12 @@ This script generates randomized report data.
 
 ---
 
-## `monthly-report.gmp.py`
+## TurboVAS reporting
 
-This script will display all vulnerabilities from the hosts of the reports in a given month!
-
-### Arguments
-
-* `<month>`: month of the monthly report
-* `<year>`: year of the monthly report
-* `'with-tables'`: (optional), parameter to activate a verbose output of hosts.
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/monthly-report.gmp.py 05 2019 with-tables`
-
----
-
-## `monthly-report2.gmp.py`
-
-This script will display all vulnerabilities from the hosts of the reports in a given month!
-
-### Arguments
-
-* `<month>`: month of the monthly report
-* `<year>`: year of the monthly report
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/monthly-report2.gmp.py 05 2019`
+The three GOS-version-specific monthly-report scripts have been removed. They
+implemented incompatible report-created, host-modified, and unique-NVT summary
+rules for old appliance releases rather than a retained TurboVAS reporting
+contract. Use native raw-report evidence or scope reports instead.
 
 ---
 

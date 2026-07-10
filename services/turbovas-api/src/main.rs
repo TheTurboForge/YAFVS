@@ -70,8 +70,6 @@ mod host_writes;
 mod host_writes_tests;
 mod metrics;
 mod metrics_payloads;
-#[cfg(test)]
-mod monthly_report_characterization_tests;
 mod nvt_catalog;
 mod nvt_catalog_payloads;
 mod nvt_payloads;

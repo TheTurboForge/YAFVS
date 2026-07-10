@@ -7950,7 +7950,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/export-xml-report.gmp.py",
                 "components/gvm-tools/scripts/generate-scope-report.gmp.py",
                 "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
-                "components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/start-alert-scan.gmp.py",
                 "components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py",
@@ -7965,7 +7964,6 @@ class TurboVASCtlTests(unittest.TestCase):
 
         export_blockers = review["buckets"]["export_or_report_generation"]["path_blockers"]
         credential_blockers = review["buckets"]["credential_or_account"]["path_blockers"]
-        monthly_blockers = review["buckets"]["monthly_report_semantics"]["path_blockers"]
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
         self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
@@ -7973,7 +7971,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
         self.assertIn("CSV credential creation", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
         self.assertIn("secret-safe", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
-        self.assertIn("unique-NVT", monthly_blockers["components/gvm-tools/scripts/monthly-report-gos24.10.gmp.py"])
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
         self.assertIn("start-alert-scan behavior", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
         self.assertIn("email alert payloads", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
@@ -7986,6 +7983,16 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
         self.assertIn("XML schedule send", write_blockers["components/gvm-tools/scripts/send-schedules.gmp.py"])
+
+    def test_gos_monthly_report_scripts_are_not_remaining_replacement_candidates(self):
+        candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
+        for name in (
+            "monthly-report-gos3.gmp.py",
+            "monthly-report-gos4.gmp.py",
+            "monthly-report-gos24.10.gmp.py",
+        ):
+            self.assertNotIn(name, candidates)
+            self.assertNotIn(name, turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")

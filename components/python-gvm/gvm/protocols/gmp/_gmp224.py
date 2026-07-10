@@ -47,7 +47,6 @@ from .requests.v224 import (
     ReportFormats,
     ReportFormatType,
     Reports,
-    Results,
     ScanConfigs,
     Scanners,
     ScannerType,
@@ -1970,39 +1969,6 @@ class GMPv224(GvmProtocol[T]):
                     filter_id=filter_id,
                     override_details=override_details,
                     ignore_pagination=ignore_pagination,
-                    details=details,
-            )
-        )
-
-    def get_results(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: str | None = None,
-        task_id: str | None = None,
-        note_details: bool | None = None,
-        override_details: bool | None = None,
-        details: bool | None = None,
-    ) -> T:
-        """Request a list of results
-
-        Args:
-            filter_string: Filter term to use for the query
-            filter_id: UUID of an existing filter to use for the query
-            task_id: UUID of task for override handling
-            note_details: If notes are included, whether to include note
-                details
-            override_details: If overrides are included, whether to include
-                override details
-            details: Whether to include additional details of the results
-        """
-        return self._send_request_and_transform_response(
-            Results.get_results(
-                    filter_string=filter_string,
-                    filter_id=filter_id,
-                    task_id=task_id,
-                    note_details=note_details,
-                    override_details=override_details,
                     details=details,
             )
         )

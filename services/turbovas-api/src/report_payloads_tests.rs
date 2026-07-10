@@ -103,52 +103,77 @@ fn native_raw_report_routes_are_get_only_and_exclude_xml_export_generation() {
 
 #[test]
 fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
-    for (path, replacement) in [
-        ("/reports", "raw-report-list-read"),
-        ("/reports/{report_id}", "raw-report-detail-summary-read"),
+    for (path, replacement, keeps_generic_legacy_owner) in [
+        ("/reports", "raw-report-list-read", true),
+        (
+            "/reports/{report_id}",
+            "raw-report-detail-summary-read",
+            true,
+        ),
         (
             "/reports/{report_id}/results",
             "raw-report-result-evidence-read",
+            false,
         ),
         (
             "/reports/{report_id}/raw-results",
             "raw-report-lossless-result-evidence-read",
+            false,
         ),
         (
             "/reports/{report_id}/hosts",
             "raw-report-host-evidence-read",
+            false,
         ),
         (
             "/reports/{report_id}/ports",
             "raw-report-port-evidence-read",
+            false,
         ),
         (
             "/reports/{report_id}/applications",
             "raw-report-application-evidence-read",
+            false,
         ),
         (
             "/reports/{report_id}/operating-systems",
             "raw-report-operating-system-evidence-read",
+            false,
         ),
-        ("/reports/{report_id}/cves", "raw-report-cve-evidence-read"),
+        (
+            "/reports/{report_id}/cves",
+            "raw-report-cve-evidence-read",
+            false,
+        ),
         (
             "/reports/{report_id}/tls-certificates",
             "raw-report-tls-certificate-evidence-read",
+            false,
         ),
         (
             "/reports/{report_id}/errors",
             "raw-report-error-message-evidence-read",
+            false,
         ),
-        ("/reports/{report_id}/metrics", "raw-report-metrics-read"),
+        (
+            "/reports/{report_id}/metrics",
+            "raw-report-metrics-read",
+            false,
+        ),
     ] {
         let block = openapi_path_block(path);
+        let legacy_owner = "x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations";
+        assert_eq!(
+            block.contains(legacy_owner),
+            keeps_generic_legacy_owner,
+            "{path} legacy owner marker must match the retained generic rendered-report boundary"
+        );
         for required in [
             "get:",
             "x-turbovas-direct: true",
             "x-turbovas-exposure: direct-read",
             "x-turbovas-maturity: live-read",
             replacement,
-            "x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations",
         ] {
             assert!(
                 block.contains(required),

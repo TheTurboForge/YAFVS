@@ -41,14 +41,6 @@ class ReportsTestCase(unittest.TestCase):
             b'<get_reports report_id="report_id" usage_type="scan" details="1"/>',
         )
 
-    def test_get_report_metrics(self):
-        request = Reports.get_report_metrics("report_id")
-        self.assertEqual(bytes(request), b'<get_report_metrics report_id="report_id"/>')
-
-    def test_get_report_metrics_missing_report_id(self):
-        with self.assertRaises(RequiredArgument):
-            Reports.get_report_metrics("")
-
     def test_get_report_with_filter_string(self):
         request = Reports.get_report("report_id", filter_string="filter_string")
         self.assertEqual(

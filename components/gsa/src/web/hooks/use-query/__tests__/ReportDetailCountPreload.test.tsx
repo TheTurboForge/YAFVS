@@ -5,7 +5,6 @@
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
 import {rendererWith, waitFor} from 'web/testing';
-import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 import useGetReportCves from 'web/hooks/use-query/report-cves';
@@ -35,39 +34,6 @@ const createNativeGmp = () => ({
     reloadInterval: 15000,
     reloadIntervalActive: 3000,
     reloadIntervalInactive: 60000,
-  },
-  reportcves: {
-    get: testing.fn(),
-  },
-  reporttlscertificates: {
-    get: testing.fn(),
-  },
-});
-
-const createLegacyGmp = () => ({
-  session: createSession({token: 'test-token'}),
-  settings: {
-    reloadInterval: 15000,
-    reloadIntervalActive: 3000,
-    reloadIntervalInactive: 60000,
-  },
-  reportcves: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter,
-        counts: new CollectionCounts({all: 3, filtered: 3}),
-      },
-    }),
-  },
-  reporttlscertificates: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter,
-        counts: new CollectionCounts({all: 4, filtered: 4}),
-      },
-    }),
   },
 });
 
@@ -111,7 +77,6 @@ describe('report detail count preload hooks', () => {
         filter: 'openssl',
       }),
     );
-    expect(gmp.reportcves.get).not.toHaveBeenCalled();
   });
 
   test('should preload report TLS Certificate counts through native page totals', async () => {
@@ -151,44 +116,5 @@ describe('report detail count preload hooks', () => {
         filter: 'openssl',
       }),
     );
-    expect(gmp.reporttlscertificates.get).not.toHaveBeenCalled();
-  });
-
-  test('should fall back to inherited report CVE hook without native URL builder', async () => {
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
-    const gmp = createLegacyGmp();
-    const {renderHook} = rendererWith({gmp, router: true});
-
-    const {result} = renderHook(() => useGetReportCves({reportId, filter}));
-
-    await waitFor(() => {
-      expect(result.current.data?.entitiesCounts.filtered).toBe(3);
-    });
-    expect(gmp.reportcves.get).toHaveBeenCalledWith({
-      report_id: reportId,
-      filter,
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test('should fall back to inherited report TLS Certificate hook without native URL builder', async () => {
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
-    const gmp = createLegacyGmp();
-    const {renderHook} = rendererWith({gmp, router: true});
-
-    const {result} = renderHook(() =>
-      useGetReportTlsCertificates({reportId, filter}),
-    );
-
-    await waitFor(() => {
-      expect(result.current.data?.entitiesCounts.filtered).toBe(4);
-    });
-    expect(gmp.reporttlscertificates.get).toHaveBeenCalledWith({
-      report_id: reportId,
-      filter,
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

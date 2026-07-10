@@ -9,10 +9,10 @@ import {type EntitiesMeta} from 'gmp/commands/entities';
 import Response from 'gmp/http/response';
 import Filter from 'gmp/models/filter';
 import {isFilter} from 'gmp/models/filter/utils';
-import {type ReportActiveCve} from 'gmp/models/report/parser';
 import {
   fetchNativeReportCves,
   nativeReportCvesQueryFromFilter,
+  type NativeReportCveItem,
 } from 'gmp/native-api/reports';
 import useGmp from 'web/hooks/useGmp';
 import useGetEntities from 'web/queries/useGetEntities';
@@ -23,14 +23,11 @@ interface UseGetReportCvesParams {
   refetchInterval?: number | false;
 }
 
-const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
-  typeof gmp?.buildUrl === 'function';
-
 const nativeCountResponse = (
   total: number,
   filter?: Filter,
-): Response<ReportActiveCve[], EntitiesMeta> => {
-  return new Response<ReportActiveCve[], EntitiesMeta>([], {
+): Response<NativeReportCveItem[], EntitiesMeta> => {
+  return new Response<NativeReportCveItem[], EntitiesMeta>([], {
     filter: filter ?? new Filter(),
     counts: new CollectionCounts({
       all: total,
@@ -51,13 +48,6 @@ export const useGetReportCves = ({
 
   return useGetEntities({
     gmpMethod: async ({filter: reportFilter}) => {
-      if (!canUseNativeApi(gmp)) {
-        return gmp.reportcves.get({
-          report_id: reportId,
-          filter: reportFilter,
-        });
-      }
-
       const nativeFilter = isFilter(reportFilter) ? reportFilter : filter;
       const nativeQuery = nativeReportCvesQueryFromFilter(nativeFilter);
       const response = await fetchNativeReportCves(gmp, reportId, {
@@ -68,7 +58,7 @@ export const useGetReportCves = ({
       });
       return nativeCountResponse(response.page.total, nativeFilter);
     },
-    queryId: `get_report_cves_${reportId}`,
+    queryId: `native_report_cves_${reportId}`,
     filter,
     refetchInterval,
     enabled: Boolean(reportId),

@@ -34,7 +34,6 @@ from ._overrides import Overrides
 from ._port_lists import PortLists, PortRangeType
 from ._report_formats import ReportFormats, ReportFormatType
 from ._reports import Reports
-from ._results import Results
 from ._scan_configs import ScanConfigs
 from ._scanners import Scanners, ScannerType
 from ._schedules import Schedules
@@ -84,7 +83,6 @@ __all__ = (
     "ReportFormatType",
     "ReportFormats",
     "Reports",
-    "Results",
     "ScanConfigs",
     "ScannerType",
     "Scanners",

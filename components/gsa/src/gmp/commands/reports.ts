@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntitiesCommand from 'gmp/commands/entities';
-import type {HttpCommandInputParams} from 'gmp/commands/http';
+import HttpCommand, {type HttpCommandInputParams} from 'gmp/commands/http';
 import {
   filterFromCommandParams,
   nativeCollectionMeta,
@@ -13,26 +12,18 @@ import {
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import Report from 'gmp/models/report';
+import type Report from 'gmp/models/report';
 import {
   fetchNativeReports,
   nativeReportQueryFromFilter,
 } from 'gmp/native-api/reports';
 
-class ReportsCommand extends EntitiesCommand<Report> {
+class ReportsCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'report', Report);
+    super(http);
   }
 
-  getEntitiesResponse(root: XmlResponseData): XmlResponseData {
-    // @ts-expect-error
-    return root.get_reports.get_reports_response;
-  }
-
-  async get(
-    params: HttpCommandInputParams = {},
-  ) {
+  async get(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeReports(
       this.http,
@@ -64,11 +55,7 @@ class ReportsCommand extends EntitiesCommand<Report> {
 
     return new Response(
       reports,
-      nativeCollectionMeta(
-        filter,
-        reports,
-        Number.isFinite(total) ? total : 0,
-      ),
+      nativeCollectionMeta(filter, reports, Number.isFinite(total) ? total : 0),
     );
   }
 }

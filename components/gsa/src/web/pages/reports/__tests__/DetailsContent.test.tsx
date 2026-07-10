@@ -13,8 +13,6 @@ import {createSession} from 'gmp/testing';
 import {getMockReport} from 'web/pages/reports/__fixtures__/MockReport';
 import DetailsContent from 'web/pages/reports/DetailsContent';
 
-const mockReport = getMockReport();
-
 const filter = Filter.fromString(
   'apply_overrides=0 levels=hml rows=2 min_qod=70 first=1 sort-reverse=severity',
 );
@@ -44,35 +42,6 @@ const createGmp = ({reportResultsThreshold = 10} = {}) => ({
   settings: {
     manualUrl,
     reportResultsThreshold,
-  },
-  reporterrors: {
-    get: testing.fn().mockResolvedValue({
-      data: mockReport.errors?.entities ?? [],
-      meta: {
-        filter: Filter.fromString('rows=10'),
-        counts:
-          mockReport.errors?.counts ??
-          new CollectionCounts({filtered: 0, all: 0}),
-      },
-    }),
-  },
-  reportports: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter: Filter.fromString(''),
-        counts: new CollectionCounts({filtered: 0, all: 0}),
-      },
-    }),
-  },
-  reporttlscertificates: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter: Filter.fromString(''),
-        counts: new CollectionCounts({filtered: 0, all: 0}),
-      },
-    }),
   },
   session: createSession({
     token: 'test-token',

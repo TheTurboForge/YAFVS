@@ -76,35 +76,8 @@ char *
 get_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);
 
-char *
-get_report_applications_gmp (gvm_connection_t *, gsad_credentials_t *,
-                             params_t *, gsad_command_response_data_t *);
 
-char *
-get_report_cves_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                     gsad_command_response_data_t *);
 
-char *
-get_report_errors_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-char *
-get_report_hosts_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-get_report_operating_systems_gmp (gvm_connection_t *, gsad_credentials_t *,
-                                  params_t *, gsad_command_response_data_t *);
-char *
-get_report_ports_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-get_report_tls_certificates_gmp (gvm_connection_t *, gsad_credentials_t *,
-                                 params_t *, gsad_command_response_data_t *);
-char *
-get_report_vulns_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-get_report_metrics_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
 char *
 get_reports_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
@@ -144,12 +117,6 @@ export_result_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 export_results_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                     gsad_command_response_data_t *);
-char *
-get_result_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
-char *
-get_results_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
 
 char *
 new_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

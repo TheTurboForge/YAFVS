@@ -258,39 +258,6 @@ const createGmp = () => ({
     removeAssets: testing.fn().mockResolvedValue({}),
     download: testing.fn().mockResolvedValue({data: 'report-blob-data'}),
   },
-  reporterrors: {
-    get: testing.fn().mockResolvedValue({
-      data: entity.report?.errors?.entities ?? [],
-      meta: {
-        filter: Filter.fromString(''),
-        counts: entity.report?.errors?.counts ?? new CollectionCounts(),
-      },
-    }),
-  },
-  reportcves: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter: Filter.fromString(''),
-        counts: new CollectionCounts({
-          first: 1,
-          all: 1,
-          filtered: 1,
-          length: 1,
-          rows: 1,
-        }),
-      },
-    }),
-  },
-  reporttlscertificates: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter: Filter.fromString(''),
-        counts: new CollectionCounts(),
-      },
-    }),
-  },
   target: {
     get: testing.fn().mockResolvedValue({data: {}}),
   },
@@ -549,8 +516,6 @@ describe('DetailsPage', () => {
           }),
         );
       });
-      expect(gmp.reportcves.get).not.toHaveBeenCalled();
-      expect(gmp.reporttlscertificates.get).not.toHaveBeenCalled();
     });
 
     test('should load report dropdown choices through the native API', async () => {

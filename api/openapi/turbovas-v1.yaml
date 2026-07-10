@@ -4430,6 +4430,7 @@ paths:
       x-turbovas-replaces: raw-report-list-read
       x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan reports
+      description: Native JSON is the sole product list path. The inherited generic report command remains only for rendered report-format downloads and report lifecycle behavior that has not yet moved to a separate native contract.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4463,6 +4464,7 @@ paths:
       x-turbovas-replaces: raw-report-detail-summary-read
       x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: Read one raw scan report summary
+      description: Native JSON is the sole product detail-summary path. The inherited generic report command remains only for rendered report-format downloads and report lifecycle behavior that has not yet moved to a separate native contract.
       parameters:
         - $ref: '#/components/parameters/ReportId'
       responses:
@@ -4493,7 +4495,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-result-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report results
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4529,7 +4530,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-lossless-result-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List every raw result row retained for one scan report
       description: Preserves nullable raw result evidence without excluding scanner error rows or hostless rows. Analytical result and error-message projections remain available on their dedicated routes.
       parameters:
@@ -4566,7 +4566,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-host-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report hosts
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4602,7 +4601,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-port-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report ports
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4638,7 +4636,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-application-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report applications
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4674,7 +4671,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-operating-system-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report operating systems
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4710,7 +4706,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-cve-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report CVEs
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4746,7 +4741,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-tls-certificate-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report TLS certificates
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4782,7 +4776,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-error-message-evidence-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: List raw scan report Error Messages
       parameters:
         - $ref: '#/components/parameters/ReportId'
@@ -4818,7 +4811,6 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-metrics-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
       summary: Read raw report metrics
       parameters:
         - $ref: '#/components/parameters/ReportId'

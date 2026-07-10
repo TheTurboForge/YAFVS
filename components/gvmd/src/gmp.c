@@ -83,16 +83,8 @@
 #include "gmp_license.h"
 #include "gmp_logout.h"
 #include "gmp_port_lists.h"
-#include "gmp_report_applications.h"
 #include "gmp_report_configs.h"
-#include "gmp_report_cves.h"
-#include "gmp_report_errors.h"
 #include "gmp_report_formats.h"
-#include "gmp_report_hosts.h"
-#include "gmp_report_operating_systems.h"
-#include "gmp_report_ports.h"
-#include "gmp_report_tls_certificates.h"
-#include "gmp_report_vulns.h"
 #include "gmp_tls_certificates.h"
 #include "manage.h"
 #include "manage_acl.h"
@@ -1745,31 +1737,6 @@ get_resource_names_data_reset (get_resource_names_data_t *data)
 }
 
 /**
- * @brief Command data for the get_results command.
- */
-typedef struct
-{
-  get_data_t get;        ///< Get args.
-  char *task_id;         ///< Task associated with results.
-  int overrides_details; ///< Boolean.  Whether to include details of above.
-  int get_counts;        ///< Boolean.  Whether to include result counts.
-} get_results_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_results_data_reset (get_results_data_t *data)
-{
-  get_data_reset (&data->get);
-  free (data->task_id);
-
-  memset (data, 0, sizeof (get_results_data_t));
-}
-
-/**
  * @brief Command data for the get_schedules command.
  */
 typedef struct
@@ -2923,11 +2890,9 @@ typedef union
   get_port_lists_data_t get_port_lists;               ///< get_port_lists
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
-  scope_command_data_t get_report_metrics;            ///< get_report_metrics
   get_report_configs_data_t get_report_configs;       ///< get_report_configs
   get_report_formats_data_t get_report_formats;       ///< get_report_formats
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
-  get_results_data_t get_results;                     ///< get_results
   scope_command_data_t get_scope;                     ///< get_scope
   scope_command_data_t get_scopes;                    ///< get_scopes
   get_schedules_data_t get_schedules;                 ///< get_schedules
@@ -3250,12 +3215,6 @@ static get_reports_data_t *get_reports_data
  = &(command_data.get_reports);
 
 /**
- * @brief Parser callback data for GET_REPORT_METRICS.
- */
-static scope_command_data_t *get_report_metrics_data
- = &(command_data.get_report_metrics);
-
-/**
  * @brief Parser callback data for GET_REPORT_CONFIGS.
  */
 static get_report_configs_data_t *get_report_configs_data
@@ -3272,12 +3231,6 @@ static get_report_formats_data_t *get_report_formats_data
  */
 static get_resource_names_data_t *get_resource_names_data
  = &(command_data.get_resource_names);
-
-/**
- * @brief Parser callback data for GET_RESULTS.
- */
-static get_results_data_t *get_results_data
- = &(command_data.get_results);
 
 /**
  * @brief Parser callback data for GET_SCOPE.
@@ -3729,19 +3682,9 @@ typedef enum
   CLIENT_GET_PORT_LISTS,
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
-  CLIENT_GET_REPORT_METRICS,
-  CLIENT_GET_REPORT_APPLICATIONS,
   CLIENT_GET_REPORT_CONFIGS,
-  CLIENT_GET_REPORT_CVES,
-  CLIENT_GET_REPORT_ERRORS,
   CLIENT_GET_REPORT_FORMATS,
-  CLIENT_GET_REPORT_HOSTS,
-  CLIENT_GET_REPORT_OPERATING_SYSTEMS,
-  CLIENT_GET_REPORT_PORTS,
-  CLIENT_GET_REPORT_TLS_CERTIFICATES,
-  CLIENT_GET_REPORT_VULNS,
   CLIENT_GET_RESOURCE_NAMES,
-  CLIENT_GET_RESULTS,
   CLIENT_GET_SCOPE,
   CLIENT_GET_SCOPES,
   CLIENT_GET_SCANNERS,
@@ -4791,15 +4734,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_GET_REPORTS);
           }
 
-        else if (strcasecmp ("GET_REPORT_METRICS", element_name) == 0)
-          {
-            scope_command_data_start (get_report_metrics_data,
-                                      attribute_names, attribute_values, 1);
-            set_client_state (CLIENT_GET_REPORT_METRICS);
-          }
-
-        ELSE_GET_START (report_applications, REPORT_APPLICATIONS)
-
         else if (strcasecmp ("GET_REPORT_CONFIGS", element_name) == 0)
           {
             get_data_parse_attributes (&get_report_configs_data->get,
@@ -4809,10 +4743,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
 
             set_client_state (CLIENT_GET_REPORT_CONFIGS);
           }
-
-        ELSE_GET_START (report_cves, REPORT_CVES)
-
-        ELSE_GET_START (report_errors, REPORT_ERRORS)
 
         else if (strcasecmp ("GET_REPORT_FORMATS", element_name) == 0)
           {
@@ -4843,16 +4773,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_GET_REPORT_FORMATS);
           }
 
-        ELSE_GET_START (report_hosts, REPORT_HOSTS)
-
-        ELSE_GET_START (report_operating_systems, REPORT_OPERATING_SYSTEMS)
-
-        ELSE_GET_START (report_ports, REPORT_PORTS)
-
-        ELSE_GET_START (report_tls_certificates, REPORT_TLS_CERTIFICATES)
-
-        ELSE_GET_START (report_vulns, REPORT_VULNS)
-
         else if (strcasecmp ("GET_RESOURCE_NAMES", element_name) == 0)
           {
             const gchar* typebuf;
@@ -4863,31 +4783,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                 "type", &typebuf))
               get_resource_names_data->type = g_ascii_strdown (typebuf, -1);
             set_client_state (CLIENT_GET_RESOURCE_NAMES);
-          }
-        else if (strcasecmp ("GET_RESULTS", element_name) == 0)
-          {
-            const gchar* attribute;
-            get_data_parse_attributes (&get_results_data->get,
-                                       "result",
-                                       attribute_names,
-                                       attribute_values);
-
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &get_results_data->task_id);
-
-            if (find_attribute (attribute_names, attribute_values,
-                                "overrides_details", &attribute))
-              get_results_data->overrides_details = strcmp (attribute, "0");
-            else
-              get_results_data->overrides_details = 0;
-
-            if (find_attribute (attribute_names, attribute_values,
-                                "get_counts", &attribute))
-              get_results_data->get_counts = strcmp (attribute, "0");
-            else
-              get_results_data->get_counts = 1;
-
-            set_client_state (CLIENT_GET_RESULTS);
           }
         else if (strcasecmp ("GET_SCOPE", element_name) == 0)
           {
@@ -13771,7 +13666,7 @@ handle_get_resource_names (gmp_parser_t *gmp_parser, GError **error)
           ||(g_strcmp0 ("os", get_resource_names_data->type) == 0))
        && (acl_user_may ("get_assets") == 0))
       || ((g_strcmp0 ("result", get_resource_names_data->type) == 0)
-          && (acl_user_may ("get_results") == 0))
+          && (acl_user_may ("get_reports") == 0))
       || ((g_strcmp0 ("report", get_resource_names_data->type) == 0)
           && (acl_user_may ("get_reports") == 0))
       || (((g_strcmp0 ("cpe", get_resource_names_data->type) == 0)
@@ -13916,220 +13811,6 @@ handle_get_resource_names (gmp_parser_t *gmp_parser, GError **error)
   SEND_TO_CLIENT_OR_FAIL ("</get_resource_names_response>");
   cleanup_iterator (&resource);
   get_resource_names_data_reset (get_resource_names_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of GET_RESULTS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_results (gmp_parser_t *gmp_parser, GError **error)
-{
-  result_t result = 0;
-  task_t task = 0;
-
-  if (acl_user_may ("get_results") == 0)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("get_results",
-                          "Permission denied"));
-      get_results_data_reset (get_results_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  if (current_credentials.username == NULL)
-    {
-      get_results_data_reset (get_results_data);
-      SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_results"));
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  if (get_results_data->get.trash)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("get_results",
-                          "Getting results from the trashcan is not"
-                          " supported"));
-      get_results_data_reset (get_results_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  if (get_results_data->get.id
-      && find_result_with_permission (get_results_data->get.id,
-                                      &result,
-                                      NULL))
-    SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_results"));
-  else if (get_results_data->get.id && result == 0)
-    {
-      if (send_find_error_to_client ("get_results", "result",
-                                      get_results_data->get.id,
-                                      gmp_parser))
-        {
-          error_send_to_client (error);
-          return;
-        }
-    }
-  else if (get_results_data->task_id
-            && find_task_with_permission (get_results_data->task_id,
-                                          &task,
-                                          NULL))
-    SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_results"));
-  else if (get_results_data->task_id && task == 0)
-    {
-      if (send_find_error_to_client ("get_results", "task",
-                                      get_results_data->task_id,
-                                      gmp_parser))
-        {
-          error_send_to_client (error);
-          return;
-        }
-    }
-  else
-    {
-      const char* filter;
-      iterator_t results;
-      int overrides;
-      int count, ret, first;
-      gchar *report_id;
-      report_t report;
-
-      if (get_results_data->get.filt_id
-          && strcmp (get_results_data->get.filt_id, FILT_ID_NONE))
-        {
-          filter = filter_term (get_results_data->get.filt_id);
-        }
-      else
-        filter = get_results_data->get.filter;
-
-      SEND_TO_CLIENT_OR_FAIL ("<get_results_response"
-                              " status=\"" STATUS_OK "\""
-                              " status_text=\"" STATUS_OK_TEXT "\">");
-      INIT_GET (result, Result);
-
-      // Do not allow ignore_pagination here
-      get_results_data->get.ignore_pagination = 0;
-
-      /* Note: This keyword may be removed or renamed at any time once there
-       * is a better solution like an operator for conditions that must always
-       * apply or support for parentheses in filters. */
-      report_id = filter_term_value (filter,
-                                     "_and_report_id");
-      report = 0;
-
-      if (report_id)
-        {
-          if (find_report_with_permission (report_id,
-                                           &report,
-                                           NULL))
-            {
-              g_free (report_id);
-              g_warning ("Failed to get report");
-              SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_results"));
-              return;
-            }
-
-          if (report == 0)
-            report = -1;
-        }
-      g_free (report_id);
-
-      init_result_get_iterator (&results, &get_results_data->get,
-                                report,  /* report restriction */
-                                NULL, /* No host restriction */
-                                NULL);  /* No extra order SQL. */
-
-      manage_report_filter_controls (filter,
-                                      NULL, /* first */
-                                      NULL, /* max */
-                                      NULL, /* sort_field */
-                                      NULL, /* sort_order */
-                                      NULL, /* result_hosts_only */
-                                      NULL, /* min_qod */
-                                      NULL, /* levels */
-                                      NULL, /* compliance_levels */
-                                      NULL, /* search_phrase */
-                                      NULL, /* search_phrase_exact */
-                                      &overrides,
-                                      NULL, /* apply_overrides */
-                                      NULL);/* zone */
-
-      if (next (&results))
-        {
-          if (get_results_data->get.id && (task == 0))
-            {
-              char *task_id;
-              task_uuid (result_iterator_task (&results), &task_id);
-              if (find_task_with_permission (task_id, &task, NULL))
-                {
-                  free (task_id);
-                  internal_error_send_to_client (error);
-                  cleanup_iterator (&results);
-                  return;
-                }
-              free (task_id);
-            }
-
-          count = 0;
-          do
-            {
-              GString *buffer = g_string_new ("");
-              buffer_results_xml (buffer,
-                                  &results,
-                                  task,
-                                  overrides,
-                                  get_results_data->overrides_details,
-                                  1,
-                                  /* show tag details if selected by ID */
-                                  get_results_data->get.id != NULL,
-                                  get_results_data->get.details,
-                                  -1,
-                                  0); /* Lean. */
-              SEND_TO_CLIENT_OR_FAIL (buffer->str);
-              g_string_free (buffer, TRUE);
-              count ++;
-            }
-          while (next (&results));
-        }
-      cleanup_iterator (&results);
-
-      manage_filter_controls (get_results_data->get.filter,
-                              &first, NULL, NULL, NULL);
-
-      if (get_results_data->get_counts)
-        {
-          int filtered;
-
-          filtered = get_results_data->get.id
-                      ? 1 : result_count (&get_results_data->get,
-                                          report /* No report */,
-                                          NULL /* No host */);
-
-          if (send_get_end ("result", &get_results_data->get, count, filtered,
-                            resource_count ("result", &get_results_data->get),
-                            gmp_parser->client_writer,
-                            gmp_parser->client_writer_data))
-            {
-              error_send_to_client (error);
-              return;
-            }
-        }
-      else if (send_get_end_no_counts ("result",
-                                       &get_results_data->get,
-                                       gmp_parser->client_writer,
-                                       gmp_parser->client_writer_data))
-        {
-          error_send_to_client (error);
-          return;
-        }
-    }
-
-  get_results_data_reset (get_results_data);
   set_client_state (CLIENT_AUTHENTIC);
 }
 
@@ -17406,45 +17087,6 @@ handle_get_scopes_command (gmp_parser_t *gmp_parser, GError **error,
 }
 
 static void
-handle_get_report_metrics_command (gmp_parser_t *gmp_parser, GError **error,
-                                   scope_command_data_t *data)
-{
-  GString *xml;
-  int ret;
-
-  if (data->report_id == NULL)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("get_report_metrics",
-                           "A report_id attribute is required"));
-      scope_command_data_reset (data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  xml = g_string_new ("<get_report_metrics_response status=\""
-                      STATUS_OK "\" status_text=\"" STATUS_OK_TEXT
-                      "\">");
-  ret = buffer_report_metrics_xml (xml, data->report_id);
-  if (ret == 2)
-    {
-      g_string_free (xml, TRUE);
-      if (send_find_error_to_client ("get_report_metrics", "report",
-                                     data->report_id, gmp_parser))
-        error_send_to_client (error);
-      scope_command_data_reset (data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  g_string_append (xml, "</get_report_metrics_response>");
-  SEND_TO_CLIENT_OR_FAIL (xml->str);
-  g_string_free (xml, TRUE);
-  scope_command_data_reset (data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
 gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                             const gchar *element_name,
                             gpointer user_data,
@@ -18204,41 +17846,16 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_reports (gmp_parser, error);
         break;
 
-      case CLIENT_GET_REPORT_METRICS:
-        handle_get_report_metrics_command (gmp_parser, error,
-                                           get_report_metrics_data);
-        break;
-
-      CASE_GET_END (REPORT_APPLICATIONS, report_applications);
-
       case CLIENT_GET_REPORT_CONFIGS:
         handle_get_report_configs (gmp_parser, error);
         break;
-
-      CASE_GET_END (REPORT_CVES, report_cves);
-
-      CASE_GET_END (REPORT_ERRORS, report_errors);
 
       case CLIENT_GET_REPORT_FORMATS:
         handle_get_report_formats (gmp_parser, error);
         break;
 
-      CASE_GET_END (REPORT_HOSTS, report_hosts);
-
-      CASE_GET_END (REPORT_OPERATING_SYSTEMS, report_operating_systems);
-
-      CASE_GET_END (REPORT_PORTS, report_ports);
-
-      CASE_GET_END (REPORT_TLS_CERTIFICATES, report_tls_certificates);
-
-      CASE_GET_END (REPORT_VULNS, report_vulns);
-
       case CLIENT_GET_RESOURCE_NAMES:
         handle_get_resource_names (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_RESULTS:
-        handle_get_results (gmp_parser, error);
         break;
 
       case CLIENT_GET_SCOPE:

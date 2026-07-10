@@ -4,10 +4,10 @@
  */
 
 import {useCallback, useEffect, useState} from 'react';
-import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import {
   fetchNativeReportMetrics,
   fetchNativeScopeReportMetrics,
+  type ReportMetrics,
 } from 'gmp/native-api/report-metrics';
 import ErrorPanel from 'web/components/error/ErrorPanel';
 import Loading from 'web/components/loading/Loading';
@@ -30,7 +30,10 @@ interface MetricsTabProps {
 
 const formatNumber = (value: number, digits = 2) => value.toFixed(digits);
 
-const authStateLabel = (state: string, translate: (value: string) => string) => {
+const authStateLabel = (
+  state: string,
+  translate: (value: string) => string,
+) => {
   switch (state) {
     case 'authenticated':
       return translate('Authenticated');
@@ -75,7 +78,9 @@ const MetricsTab = ({id, scopeId, source}: MetricsTabProps) => {
   }, [loadMetrics]);
 
   if (error) {
-    return <ErrorPanel error={error} message={_('Error while loading metrics')} />;
+    return (
+      <ErrorPanel error={error} message={_('Error while loading metrics')} />
+    );
   }
 
   if (isLoading && !metrics) {
@@ -99,7 +104,9 @@ const MetricsTab = ({id, scopeId, source}: MetricsTabProps) => {
           <TableBody>
             <TableRow>
               <TableData>{_('Average System CVSS Load')}</TableData>
-              <TableData>{formatNumber(summary.averageSystemCvssLoad)}</TableData>
+              <TableData>
+                {formatNumber(summary.averageSystemCvssLoad)}
+              </TableData>
             </TableRow>
             <TableRow>
               <TableData>{_('Total CVSS Load')}</TableData>
@@ -140,7 +147,9 @@ const MetricsTab = ({id, scopeId, source}: MetricsTabProps) => {
                 <TableData>{formatNumber(system.cvssLoad)}</TableData>
                 <TableData>{formatNumber(system.maxCvss)}</TableData>
                 <TableData>{system.vulnerabilityCount}</TableData>
-                <TableData>{authStateLabel(system.authenticationState, _)}</TableData>
+                <TableData>
+                  {authStateLabel(system.authenticationState, _)}
+                </TableData>
                 <TableData>{system.sourceReportCount}</TableData>
               </TableRow>
             ))}

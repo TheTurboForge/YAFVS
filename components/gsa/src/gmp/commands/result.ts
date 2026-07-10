@@ -4,31 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand from 'gmp/commands/entity';
-import type {EntityCommandParams} from 'gmp/commands/entity';
-import Response from 'gmp/http/response';
+import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
-import {type Element} from 'gmp/models/model';
-import Result from 'gmp/models/result';
-import {exportNativeResultMetadata} from 'gmp/native-api/results';
+import Response from 'gmp/http/response';
 import {fetchNativeResult} from 'gmp/native-api/reports';
+import {exportNativeResultMetadata} from 'gmp/native-api/results';
 
-export class ResultCommand extends EntityCommand<Result> {
+interface ResultCommandParams {
+  id: string;
+}
+
+export class ResultCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'result', Result);
+    super(http);
   }
 
-  async get({id}: EntityCommandParams) {
+  async get({id}: ResultCommandParams) {
     const nativeResponse = await fetchNativeResult(this.http, id);
     return new Response(nativeResponse.result);
   }
 
-  async export({id}: EntityCommandParams) {
+  async export({id}: ResultCommandParams) {
     return await exportNativeResultMetadata(this.http, id);
-  }
-
-  getElementFromRoot(root: Element): Element {
-    // @ts-expect-error
-    return root.get_result.get_results_response.result;
   }
 }

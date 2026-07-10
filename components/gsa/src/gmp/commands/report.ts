@@ -4,18 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand from 'gmp/commands/entity';
-import type {ReportMetrics} from 'gmp/commands/report-metrics';
+import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import logger from 'gmp/log';
 import {type default as Filter, ALL_FILTER} from 'gmp/models/filter';
 import {filterString} from 'gmp/models/filter/utils';
-import Report, {type ReportElement} from 'gmp/models/report';
-import {isDefined} from 'gmp/utils/identity';
 import {fetchNativeReport} from 'gmp/native-api/reports';
-import {fetchNativeReportMetrics} from 'gmp/native-api/report-metrics';
+import {isDefined} from 'gmp/utils/identity';
 
 interface ReportCommandAddAssetsParams {
   id: string;
@@ -52,15 +47,9 @@ interface ReportCommandDownloadOptions {
   filter?: Filter;
 }
 
-interface ReportCommandMetricsParams {
-  id: string;
-}
-
-const log = logger.getLogger('gmp.commands.reports');
-
-class ReportCommand extends EntityCommand<Report, ReportElement> {
+class ReportCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'report', Report);
+    super(http);
   }
 
   download(
@@ -109,26 +98,13 @@ class ReportCommand extends EntityCommand<Report, ReportElement> {
 
   async get(
     {id}: ReportCommandGetParams,
-    {
-      filter,
-    }: ReportCommandGetParams = {},
+    {filter}: ReportCommandGetParams = {},
   ) {
     if (id === undefined) {
       throw new Error('Report id is required for native report detail reads.');
     }
     const nativeResponse = await fetchNativeReport(this.http, id, filter);
     return new Response(nativeResponse.report);
-  }
-
-  async getMetrics({id}: ReportCommandMetricsParams) {
-    return new Response<ReportMetrics>(
-      await fetchNativeReportMetrics(this.http, id),
-    );
-  }
-
-  getElementFromRoot(root: XmlResponseData): ReportElement {
-    // @ts-expect-error
-    return root.get_report.get_reports_response.report;
   }
 }
 

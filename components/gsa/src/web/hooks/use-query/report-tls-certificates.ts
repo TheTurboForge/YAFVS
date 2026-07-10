@@ -9,10 +9,10 @@ import {type EntitiesMeta} from 'gmp/commands/entities';
 import Response from 'gmp/http/response';
 import Filter from 'gmp/models/filter';
 import {isFilter} from 'gmp/models/filter/utils';
-import type ReportTLSCertificate from 'gmp/models/report/tls-certificate';
 import {
   fetchNativeReportTlsCertificates,
   nativeReportTlsCertificatesQueryFromFilter,
+  type NativeReportTlsCertificateItem,
 } from 'gmp/native-api/reports';
 import useGmp from 'web/hooks/useGmp';
 import useGetEntities from 'web/queries/useGetEntities';
@@ -23,14 +23,11 @@ interface UseGetReportTlsCertificatesParams {
   refetchInterval?: number | false;
 }
 
-const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
-  typeof gmp?.buildUrl === 'function';
-
 const nativeCountResponse = (
   total: number,
   filter?: Filter,
-): Response<ReportTLSCertificate[], EntitiesMeta> => {
-  return new Response<ReportTLSCertificate[], EntitiesMeta>([], {
+): Response<NativeReportTlsCertificateItem[], EntitiesMeta> => {
+  return new Response<NativeReportTlsCertificateItem[], EntitiesMeta>([], {
     filter: filter ?? new Filter(),
     counts: new CollectionCounts({
       all: total,
@@ -49,17 +46,11 @@ export const useGetReportTlsCertificates = ({
 }: UseGetReportTlsCertificatesParams) => {
   const gmp = useGmp();
 
-  return useGetEntities<ReportTLSCertificate>({
+  return useGetEntities<NativeReportTlsCertificateItem>({
     gmpMethod: async ({filter: reportFilter}) => {
-      if (!canUseNativeApi(gmp)) {
-        return gmp.reporttlscertificates.get({
-          report_id: reportId,
-          filter: reportFilter,
-        });
-      }
-
       const nativeFilter = isFilter(reportFilter) ? reportFilter : filter;
-      const nativeQuery = nativeReportTlsCertificatesQueryFromFilter(nativeFilter);
+      const nativeQuery =
+        nativeReportTlsCertificatesQueryFromFilter(nativeFilter);
       const response = await fetchNativeReportTlsCertificates(gmp, reportId, {
         ...nativeQuery,
         page: 1,
@@ -68,7 +59,7 @@ export const useGetReportTlsCertificates = ({
       });
       return nativeCountResponse(response.page.total, nativeFilter);
     },
-    queryId: `get_report_tls_certificates_${reportId}`,
+    queryId: `native_report_tls_certificates_${reportId}`,
     filter,
     enabled: Boolean(reportId),
     keepPreviousData: true,

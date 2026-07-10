@@ -11,30 +11,6 @@ from gvm.protocols.gmp.requests.next._credentials import (
 from gvm.protocols.gmp.requests.next._integration_configs import (
     IntegrationConfigs,
 )
-from gvm.protocols.gmp.requests.next._report_applications import (
-    ReportApplications,
-)
-from gvm.protocols.gmp.requests.next._report_cves import (
-    ReportCVEs,
-)
-from gvm.protocols.gmp.requests.next._report_errors import (
-    ReportErrors,
-)
-from gvm.protocols.gmp.requests.next._report_hosts import (
-    ReportHosts,
-)
-from gvm.protocols.gmp.requests.next._report_operating_systems import (
-    ReportOperatingSystems,
-)
-from gvm.protocols.gmp.requests.next._report_ports import (
-    ReportPorts,
-)
-from gvm.protocols.gmp.requests.next._report_tls_certificates import (
-    ReportTlsCertificates,
-)
-from gvm.protocols.gmp.requests.next._report_vulnerabilities import (
-    ReportVulnerabilities,
-)
 from gvm.protocols.gmp.requests.next._tasks import Tasks
 
 from .._entity_id import EntityID
@@ -74,7 +50,6 @@ from ..v227 import (
     Reports,
     ResourceNames,
     ResourceType,
-    Results,
     ScanConfigs,
     Scanners,
     ScannerType,
@@ -129,20 +104,11 @@ __all__ = (
     "Overrides",
     "PortLists",
     "PortRangeType",
-    "ReportApplications",
-    "ReportCVEs",
-    "ReportErrors",
     "ReportFormatType",
     "ReportFormats",
-    "ReportHosts",
-    "ReportOperatingSystems",
-    "ReportPorts",
-    "ReportTlsCertificates",
-    "ReportVulnerabilities",
     "Reports",
     "ResourceNames",
     "ResourceType",
-    "Results",
     "ScanConfigs",
     "ScannerType",
     "Scanners",

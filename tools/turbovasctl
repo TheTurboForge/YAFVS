@@ -1482,52 +1482,42 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "raw-report-detail-summary-read",
     },
     ("get", "/reports/{report_id}/results"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-result-evidence-read",
     },
     ("get", "/reports/{report_id}/raw-results"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-lossless-result-evidence-read",
     },
     ("get", "/reports/{report_id}/hosts"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-host-evidence-read",
     },
     ("get", "/reports/{report_id}/ports"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-port-evidence-read",
     },
     ("get", "/reports/{report_id}/applications"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-application-evidence-read",
     },
     ("get", "/reports/{report_id}/operating-systems"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-operating-system-evidence-read",
     },
     ("get", "/reports/{report_id}/cves"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-cve-evidence-read",
     },
     ("get", "/reports/{report_id}/tls-certificates"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-tls-certificate-evidence-read",
     },
     ("get", "/reports/{report_id}/errors"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-error-message-evidence-read",
     },
     ("get", "/reports/{report_id}/metrics"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-metrics-read",
     },

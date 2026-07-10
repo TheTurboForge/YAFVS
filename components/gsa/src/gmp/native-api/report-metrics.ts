@@ -3,8 +3,45 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import type {ReportMetrics} from 'gmp/commands/report-metrics';
 import type {UrlParams} from 'gmp/http/utils';
+
+export interface ReportMetricsSummary {
+  aliveSystemCount: number;
+  totalSystemCvssLoad: number;
+  averageSystemCvssLoad: number;
+  vulnerabilityCount: number;
+  authenticatedSystemCount: number;
+  authenticationFailedSystemCount: number;
+  noCredentialPathSystemCount: number;
+  unknownAuthenticationSystemCount: number;
+  authenticatedScanCoveragePercent: number;
+}
+
+export interface ReportMetricSystem {
+  host: string;
+  cvssLoad: number;
+  maxCvss: number;
+  vulnerabilityCount: number;
+  authenticationState: string;
+  sourceReportCount: number;
+}
+
+export interface ReportMetricVulnerability {
+  nvtOid: string;
+  name: string;
+  cvssScore: number;
+  affectedSystemCount: number;
+  cvssLoad: number;
+  averageContribution: number;
+  sourceReportCount: number;
+}
+
+export interface ReportMetrics {
+  id: string;
+  summary: ReportMetricsSummary;
+  systems: ReportMetricSystem[];
+  vulnerabilities: ReportMetricVulnerability[];
+}
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -58,7 +95,9 @@ export const mapNativeMetrics = (payload: NativeMetrics): ReportMetrics => {
       totalSystemCvssLoad: numberValue(summary.total_system_cvss_load),
       averageSystemCvssLoad: numberValue(summary.average_system_cvss_load),
       vulnerabilityCount: integerValue(summary.vulnerability_count),
-      authenticatedSystemCount: integerValue(summary.authenticated_system_count),
+      authenticatedSystemCount: integerValue(
+        summary.authenticated_system_count,
+      ),
       authenticationFailedSystemCount: integerValue(
         summary.authentication_failed_system_count,
       ),

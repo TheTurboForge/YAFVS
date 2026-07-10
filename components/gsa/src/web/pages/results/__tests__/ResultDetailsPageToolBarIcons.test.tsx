@@ -140,7 +140,7 @@ describe('ResultDetailsPageToolBarIcons tests', () => {
   });
 
   test('should not show icons without permission', () => {
-    const wrongCapabilities = new Capabilities(['get_results']);
+    const wrongCapabilities = new Capabilities(['get_version']);
 
     const handleOverrideCreateClick = testing.fn();
     const handleResultDownloadClick = testing.fn();

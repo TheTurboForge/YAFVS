@@ -30,9 +30,10 @@ export class ResultsCommand extends EntitiesCommand<Result> {
     super(http, 'result', Result);
   }
 
-  getEntitiesResponse(root: Element): Element {
-    // @ts-expect-error
-    return root.get_results.get_results_response;
+  protected getEntitiesResponse(root: Element): Element {
+    // Result reads use the native API; the inherited XML base remains for
+    // result aggregate calls only.
+    return root;
   }
 
   async get(params: HttpCommandInputParams = {}) {
@@ -78,9 +79,7 @@ export class ResultsCommand extends EntitiesCommand<Result> {
 
   export(entities: Result[]) {
     return this.exportByIds(
-      entities.flatMap(entity =>
-        entity.id === undefined ? [] : [entity.id],
-      ),
+      entities.flatMap(entity => (entity.id === undefined ? [] : [entity.id])),
     );
   }
 
@@ -110,10 +109,7 @@ export class ResultsCommand extends EntitiesCommand<Result> {
 
     return exportNativeResultsMetadata(
       this.http,
-      results.flatMap(result =>
-        result.id === undefined ? [] : [result.id],
-      ),
+      results.flatMap(result => (result.id === undefined ? [] : [result.id])),
     );
   }
-
 }

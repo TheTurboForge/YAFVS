@@ -158,12 +158,6 @@ class GMPv226(GMPv225[T]):
             )
         )
 
-    def get_report_metrics(self, report_id: EntityID) -> T:
-        """Request CVSS Load and authenticated coverage metrics for a report."""
-        return self._send_request_and_transform_response(
-            Reports.get_report_metrics(report_id)
-        )
-
     def create_filter(
         self,
         name: str,

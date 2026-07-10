@@ -401,7 +401,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "delete-overrides-by-filter.gmp.py",
         "empty-trash.gmp.py",
         "send-schedules.gmp.py",
-        "send-tasks.gmp.py",
     },
 }
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
@@ -433,7 +432,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "scan-new-system.gmp.py": "Inherited ad-hoc scan-new-system target/task creation is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
     "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
     "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
-    "send-tasks.gmp.py": "Inherited XML task import is characterized; native tooling still lacks a safe task import contract for config/scanner/target resolution, schedule fields, and preferences.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
 }
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]*\}")

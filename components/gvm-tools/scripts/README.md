@@ -153,20 +153,6 @@ This script pulls schedule data from an xml document and feeds it to a desired G
 
 ---
 
-## `send-tasks.gmp.py`
-
-This script pulls tasks data from an xml document and feeds it to a desired GSM.
-
-### Arguments
-
-* `<xml_doc>`:   .xml file containing schedules
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/send-tasks.gmp.py example_file.xml`
-
----
-
 ## `start-alert-scan.gmp.py`
 
 This script makes an alert scan and sends the report via email.
@@ -264,8 +250,10 @@ implicit report-filter rows that lacked explicit resources.
 
 ## Native CSV task creation
 
-The inherited GMP task creator has been removed. Use the guarded native
-operator command:
+The inherited GMP CSV creator and interactive XML task sender have been
+removed. TurboVAS retains explicit task import through the guarded native
+operator command rather than raw XML, interactive fallback selection,
+arbitrary scanner preferences, or legacy partial-write behavior:
 
 `$ just native-tasks-from-csv -- --csv-file *task.csv* --allow-write-control`
 

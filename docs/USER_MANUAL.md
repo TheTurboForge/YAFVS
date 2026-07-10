@@ -143,8 +143,8 @@ reviewed clone/
 restore/trash operations. UUID-backed
 resources use UUIDs; catalog-backed security information resources use exact
 public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. Alert
-delivery/control, filter/bulk actions, file import/export, target
-bulk CSV import, target credential-secret import,
+delivery/control, filter/bulk actions, generic file import/export, and target
+credential-secret import,
 credential secrets/control paths, users, reports, and results remain on
 inherited compatibility paths. Direct mode otherwise accepts
 only classified read-only `GET` requests.
@@ -241,6 +241,8 @@ names are idempotent skips. The optional schedule and alert links are created
 transactionally with each task. A blank host-ordering column defaults to
 `RANDOM`, while invalid values are rejected. Host ordering is forwarded to
 both OSP/OpenVAS and OpenVASD scanner transports.
+Raw task XML import, interactive fallback selection, arbitrary scanner
+preferences, and legacy partial-write behavior are deliberately not retained.
 
 Starting a task is available through the guarded native
 `POST /api/v1/tasks/{task_id}/start` route, either through the authenticated

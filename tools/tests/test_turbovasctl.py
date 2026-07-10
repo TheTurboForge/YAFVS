@@ -7630,7 +7630,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
                 "components/gvm-tools/scripts/send-schedules.gmp.py",
-                "components/gvm-tools/scripts/send-tasks.gmp.py",
             ]
         )
 
@@ -7658,7 +7657,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
         self.assertIn("XML schedule send", write_blockers["components/gvm-tools/scripts/send-schedules.gmp.py"])
-        self.assertIn("XML task import", write_blockers["components/gvm-tools/scripts/send-tasks.gmp.py"])
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")

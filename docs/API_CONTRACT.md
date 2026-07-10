@@ -459,7 +459,7 @@ description blocks, DFN advisory links, or additional feed links; the retained
 GSA detail/export paths continue to use inherited feed XML where those fields
 matter.
 
-Native raw and scope-report result rows include host, optional hostname,
+Native raw and scope-report result projections include host, optional hostname,
 port, NVT OID/name/family, severity, QoD, creation time, source report ID,
 raw evidence link, and a bounded description excerpt. These fields are enough
 for summary views and report-export artifacts without asking GSA or runtime
@@ -477,10 +477,18 @@ artifact is an export of PostgreSQL-owned report data, not a separate source of
 truth.
 
 Operator CSV export composes the direct report-detail and paginated result
-contracts through `native-export-report-csv`. The helper writes a deterministic
-TurboVAS evidence schema atomically and is not a hidden GMP/report-format
-bridge. PDF and nested XML rendering remain gvmd-owned until separately
-replaced or explicitly retired.
+projection through `native-export-report-csv`. The helper writes a deterministic
+TurboVAS result-view schema atomically and is not a hidden GMP/report-format
+bridge.
+
+`GET /api/v1/reports/{report_id}/raw-results` is the lossless retained-result
+evidence contract. It returns every `results` row for the exact report, including
+severity `-3` scanner errors and rows without host identity, while preserving
+nullable source values. `native-export-report-bundle` composes that canonical
+collection with report detail, metrics, and the existing typed projections into
+a versioned private atomic ZIP. Its manifest records per-member hashes, counts,
+roles, and the explicit rule that legacy XML byte/schema parity is not claimed.
+JSON is canonical machine evidence; CSV files are human spreadsheet views.
 
 Native raw report host rows include host, optional hostname, best OS details,
 port/application counts, authenticated-scan state, scan timestamps, result and
@@ -495,8 +503,8 @@ authenticated browser proxy.
 
 Native raw report CVE rows include CVE ID, affected system count, result count,
 maximum severity, and source report provenance. Native raw report Error Message
-rows include creation time, host, port, NVT OID, description, source report ID,
-and raw result evidence links. The raw report CVEs and Error Messages tabs use
+rows include creation time, host when known, port, NVT OID, description, and
+source report ID. Hostless scanner error messages are retained. The raw report CVEs and Error Messages tabs use
 these endpoints through the same authenticated browser proxy.
 
 Raw report `vulnerability_count` mirrors inherited raw-report summary semantics:

@@ -24,6 +24,19 @@ pub(crate) const REPORT_HOST_SORT_FIELDS: &[(&str, &str)] = &[
     ("max_severity", "max_severity"),
 ];
 
+pub(crate) const REPORT_RAW_RESULT_DEFAULT_SORT: &str = "id";
+pub(crate) const REPORT_RAW_RESULT_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
+    ("host", "host"),
+    ("hostname", "hostname"),
+    ("port", "port"),
+    ("nvt_oid", "nvt_oid"),
+    ("type", "result_type"),
+    ("severity", "severity"),
+    ("qod", "qod"),
+    ("created_at", "created_at_unix"),
+];
+
 pub(crate) const REPORT_PORT_DEFAULT_SORT: &str = "port";
 pub(crate) const REPORT_PORT_SORT_FIELDS: &[(&str, &str)] = &[
     ("port", "port"),

@@ -30,6 +30,9 @@ native-scan-new-system *args:
 native-export-report-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-export-report-csv "$@"
 
+native-export-report-bundle *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-export-report-bundle "$@"
+
 native-delete-overrides-by-filter *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-delete-overrides-by-filter "$@"
 

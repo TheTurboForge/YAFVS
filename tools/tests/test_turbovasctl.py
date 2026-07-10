@@ -15,6 +15,7 @@ import tempfile
 import unittest
 import unittest.mock
 import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timezone
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -1495,7 +1496,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
-        for command in ("native-export-report-csv", "native-delete-overrides-by-filter"):
+        for command in ("native-export-report-csv", "native-export-report-bundle", "native-delete-overrides-by-filter"):
             self.assertIn(command, source)
             self.assertIn(f"{command} *args:", justfile)
             self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
@@ -2437,8 +2438,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 172)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 104)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 173)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 105)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 68)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 68)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2593,7 +2594,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 104)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 105)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 68)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -3530,7 +3531,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 172)
+        self.assertEqual(contract["operation_count"], 173)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -3631,6 +3632,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'raw-report-error-message-evidence-read',
          'raw-report-host-evidence-read',
          'raw-report-list-read',
+         'raw-report-lossless-result-evidence-read',
          'raw-report-metrics-read',
          'raw-report-operating-system-evidence-read',
          'raw-report-port-evidence-read',
@@ -3810,15 +3812,15 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(collection_contract["collection_limit_mismatches"], [])
         self.assertEqual(collection_contract["incomplete_collection_parameters"], [])
-        self.assertEqual(collection_contract["rust_collection_contract_count"], 47)
-        self.assertEqual(collection_contract["openapi_collection_operation_count"], 47)
+        self.assertEqual(collection_contract["rust_collection_contract_count"], 48)
+        self.assertEqual(collection_contract["openapi_collection_operation_count"], 48)
         self.assertEqual(collection_contract["missing_openapi_collection_parameters"], [])
         self.assertEqual(collection_contract["missing_rust_collection_contracts"], [])
         compact = turbovasctl.compact_native_tooling_summary(details)
         self.assertEqual(compact["openapi_contract"]["missing_operation_summary_count"], 0)
         self.assertEqual(compact["openapi_contract"]["collection_query_alignment_status"], "pass")
-        self.assertEqual(compact["openapi_contract"]["rust_collection_contract_count"], 47)
-        self.assertEqual(compact["openapi_contract"]["openapi_collection_operation_count"], 47)
+        self.assertEqual(compact["openapi_contract"]["rust_collection_contract_count"], 48)
+        self.assertEqual(compact["openapi_contract"]["openapi_collection_operation_count"], 48)
         self.assertEqual(compact["openapi_contract"]["collection_limit_mismatch_count"], 0)
         self.assertEqual(compact["openapi_contract"]["incomplete_collection_parameter_count"], 0)
         self.assertEqual(compact["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
@@ -3837,9 +3839,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 172)
-        self.assertEqual(details["direct_operation_count"], 172)
-        self.assertEqual(details["direct_read_operation_count"], 104)
+        self.assertEqual(details["operation_count"], 173)
+        self.assertEqual(details["direct_operation_count"], 173)
+        self.assertEqual(details["direct_read_operation_count"], 105)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
             details["non_get_direct_operations"],
@@ -4060,11 +4062,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 172)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 172)
-        self.assertEqual(details["summary"]["inventory_rows"], 172)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 172)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 172)
+        self.assertEqual(details["summary"]["total_rows"], 173)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 173)
+        self.assertEqual(details["summary"]["inventory_rows"], 173)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 173)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 173)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -4925,7 +4927,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 172)
+        self.assertEqual(len(operation_ids), 173)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -5096,6 +5098,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /users",
                 "GET /users/{user_id}",
                 "GET /reports/{report_id}",
+                "GET /reports/{report_id}/raw-results",
                 "GET /reports/{report_id}/results",
                 "GET /reports/{report_id}/hosts",
                 "GET /reports/{report_id}/ports",
@@ -6290,6 +6293,139 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertNotIn("s" * 64, json.dumps(result))
             self.assertFalse(list(root.glob(".report.csv.tmp-*")))
         self.assertEqual(calls, [f"/api/v1/reports/{report_id}", f"/api/v1/reports/{report_id}/results?page=1&page_size=500&sort=-severity", f"/api/v1/reports/{report_id}/results?page=2&page_size=500&sort=-severity"])
+
+    def test_native_export_report_bundle_parser_and_pre_runtime_guards(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        args = turbovasctl.build_parser().parse_args(["native-export-report-bundle", "--report-id", report_id])
+        self.assertEqual(args.command, "native-export-report-bundle")
+        self.assertEqual(args.max_items, turbovasctl.NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS)
+        self.assertEqual(args.max_bytes, turbovasctl.NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES)
+        self.assertIsNone(args.output)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            existing = root / "existing.zip"
+            existing.write_bytes(b"keep")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                invalid = turbovasctl.command_native_export_report_bundle(root, report_id="not-a-uuid")
+                exists = turbovasctl.command_native_export_report_bundle(root, report_id=report_id, output=existing)
+                capped = turbovasctl.command_native_export_report_bundle(root, report_id=report_id, max_items=0)
+                curl.assert_not_called()
+            self.assertEqual(existing.read_bytes(), b"keep")
+        self.assertEqual(invalid["status"], "fail")
+        self.assertEqual(exists["status"], "fail")
+        self.assertEqual(capped["status"], "fail")
+
+    def test_native_export_report_bundle_is_complete_atomic_and_redacted(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        result_id = "22222222-2222-4222-8222-222222222222"
+        error_id = "33333333-3333-4333-8333-333333333333"
+        result_row = self._native_export_report_row(report_id, result_id)
+        raw_row = {
+            "id": result_id,
+            "source_report_id": report_id,
+            "task_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "owner_id": None,
+            "host": "192.0.2.10",
+            "hostname": None,
+            "port": "443/tcp",
+            "nvt_oid": "1.3.6.1.4.1.25623.1.0.100001",
+            "result_type": "Alarm",
+            "description": "Full evidence",
+            "scan_nvt_version": "20260710T000000Z",
+            "severity": 7.5,
+            "qod": 95,
+            "qod_type": "remote_vul",
+            "created_at": "2026-07-10T12:00:00Z",
+            "path": None,
+            "hash_value": "sha256:example",
+        }
+        error_row = {
+            "id": error_id,
+            "source_report_id": report_id,
+            "host": "",
+            "port": "",
+            "nvt_oid": "",
+            "created_at": "2026-07-10T12:01:00Z",
+            "description": "=hostless scanner error",
+        }
+        collection_rows = {
+            "raw-results": [raw_row],
+            "results": [result_row],
+            "errors": [error_row],
+            "hosts": [{"host": "192.0.2.10", "source_report_id": report_id}],
+            "ports": [{"port": "443/tcp", "source_report_ids": [report_id]}],
+            "applications": [{"name": "Service", "version": "1", "cpe": "cpe:/a:test", "source_report_ids": [report_id]}],
+            "operating-systems": [{"name": "Linux", "cpe": "cpe:/o:linux", "source_report_ids": [report_id]}],
+            "cves": [{"id": "CVE-2026-0001", "source_report_ids": [report_id]}],
+            "tls-certificates": [{"id": "44444444-4444-4444-8444-444444444444", "source_report_ids": [report_id]}],
+        }
+
+        def fake_direct(_root, path, **_kwargs):
+            if path == f"/api/v1/reports/{report_id}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Report", "result_count": 1}) + "\n200", "")
+            if path == f"/api/v1/reports/{report_id}/metrics":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "summary": {}, "systems": [], "vulnerabilities": []}) + "\n200", "")
+            for collection, rows in collection_rows.items():
+                if path.startswith(f"/api/v1/reports/{report_id}/{collection}?"):
+                    payload = {"items": rows, "page": {"page": 1, "page_size": 500, "total": len(rows)}}
+                    return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+            self.fail(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.zip"
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="s" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_export_report_bundle(root, report_id=report_id, output=output, status_only=True)
+            content = output.read_bytes()
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                manifest = json.loads(archive.read("manifest.json"))
+                raw = json.loads(archive.read("collections/raw-results.json"))
+                errors_csv = list(csv.DictReader(io.StringIO(archive.read("views/errors.csv").decode("utf-8"))))
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(result["details"]["sha256"], hashlib.sha256(content).hexdigest())
+            self.assertEqual(result["details"]["byte_count"], len(content))
+            self.assertEqual(result["details"]["collection_counts"]["raw-results"], 1)
+            self.assertEqual(manifest["format"], "turbovas-native-report-bundle")
+            self.assertTrue(manifest["evidence_contract"]["complete"])
+            self.assertFalse(manifest["evidence_contract"]["legacy_xml_byte_or_schema_parity"])
+            self.assertEqual(raw["items"], [raw_row])
+            self.assertEqual(errors_csv[0]["host"], "")
+            self.assertEqual(errors_csv[0]["description"], "'=hostless scanner error")
+            self.assertIn("collections/errors.json", names)
+            self.assertIn("views/results.csv", names)
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn("s" * 64, json.dumps(result))
+            self.assertNotIn("Full evidence", json.dumps(result))
+            self.assertFalse(list(root.glob(".report.zip.tmp-*")))
+
+    def test_native_export_report_bundle_cap_preserves_existing_output(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+
+        def fake_direct(_root, path, **_kwargs):
+            if path == f"/api/v1/reports/{report_id}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Report", "result_count": 2}) + "\n200", "")
+            if path == f"/api/v1/reports/{report_id}/metrics":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id}) + "\n200", "")
+            payload = {"items": [], "page": {"page": 1, "page_size": 500, "total": 2}}
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.zip"
+            output.write_bytes(b"preserve")
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="s" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_export_report_bundle(root, report_id=report_id, output=output, max_items=1, overwrite=True)
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(output.read_bytes(), b"preserve")
+            self.assertFalse(list(root.glob(".report.zip.tmp-*")))
 
     def test_native_export_report_csv_cap_and_page_failure_do_not_replace_output(self):
         report_id = "11111111-1111-4111-8111-111111111111"
@@ -8081,7 +8217,6 @@ class TurboVASCtlTests(unittest.TestCase):
         review = turbovasctl.native_tooling_removal_review(
             [
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
-                "components/gvm-tools/scripts/export-xml-report.gmp.py",
                 "components/gvm-tools/scripts/generate-scope-report.gmp.py",
                 "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
@@ -8100,7 +8235,6 @@ class TurboVASCtlTests(unittest.TestCase):
         control_blockers = review["buckets"]["scanner_or_task_control"]["path_blockers"]
         write_blockers = review["buckets"]["write_or_mutation"]["path_blockers"]
         self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
-        self.assertIn("nested report serialization", export_blockers["components/gvm-tools/scripts/export-xml-report.gmp.py"])
         self.assertIn("scope-report generation contract", export_blockers["components/gvm-tools/scripts/generate-scope-report.gmp.py"])
         self.assertIn("CSV credential creation", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])
         self.assertIn("secret-safe", credential_blockers["components/gvm-tools/scripts/create-credentials-from-csv.gmp.py"])

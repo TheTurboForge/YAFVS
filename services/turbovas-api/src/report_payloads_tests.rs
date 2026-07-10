@@ -12,6 +12,7 @@ use crate::{
     report_operating_system_query_sql::report_operating_systems_sql,
     report_payloads::raw_report_sql,
     report_port_query_sql::report_ports_sql,
+    report_raw_result_query_sql::report_raw_results_sql,
     report_tls_certificate_query_sql::report_tls_certificates_sql,
 };
 
@@ -60,6 +61,7 @@ fn native_raw_report_routes_are_get_only_and_exclude_xml_export_generation() {
         "/api/v1/reports",
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc",
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc/results",
+        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/raw-results",
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc/hosts",
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc/ports",
         "/api/v1/reports/12345678-1234-1234-1234-123456789abc/applications",
@@ -107,6 +109,10 @@ fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
         (
             "/reports/{report_id}/results",
             "raw-report-result-evidence-read",
+        ),
+        (
+            "/reports/{report_id}/raw-results",
+            "raw-report-lossless-result-evidence-read",
         ),
         (
             "/reports/{report_id}/hosts",
@@ -203,7 +209,6 @@ fn raw_report_error_sql_is_report_scoped_error_message_read_only() {
         "SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)",
         "JOIN results r ON r.report = sr.id",
         "WHERE (r.type = 'Error Message' OR coalesce(r.severity, 0) = -3)",
-        "AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''",
         "count(*) OVER()::bigint AS total",
         "ORDER BY created_at_unix DESC, id ASC LIMIT $3 OFFSET $4",
     ] {
@@ -216,6 +221,47 @@ fn raw_report_error_sql_is_report_scoped_error_message_read_only() {
         assert!(
             !upper_sql.contains(forbidden),
             "raw report error SQL must not include control/mutation path: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn raw_report_lossless_result_sql_preserves_all_report_rows() {
+    let sql = report_raw_results_sql("id ASC");
+    let upper_sql = sql.to_ascii_uppercase();
+
+    for required in [
+        "SELECT id, uuid FROM reports WHERE lower(uuid) = lower($1)",
+        "JOIN results r ON r.report = sr.id",
+        "r.host",
+        "r.hostname",
+        "r.port",
+        "r.nvt AS nvt_oid",
+        "r.type AS result_type",
+        "r.description",
+        "r.nvt_version AS scan_nvt_version",
+        "r.severity::double precision AS severity",
+        "r.qod::bigint AS qod",
+        "r.qod_type",
+        "r.path",
+        "r.hash_value",
+        "count(*) OVER()::bigint AS total",
+        "ORDER BY id ASC, id ASC LIMIT $3 OFFSET $4",
+    ] {
+        assert!(sql.contains(required), "raw result SQL missing {required}");
+    }
+    for forbidden in [
+        "severity, 0) != -3",
+        "host, ''), r.hostname, '') <> ''",
+        "INSERT ",
+        "UPDATE ",
+        "DELETE ",
+        "START_TASK",
+        "STOP_TASK",
+    ] {
+        assert!(
+            !upper_sql.contains(&forbidden.to_ascii_uppercase()),
+            "lossless raw result SQL must not filter or mutate evidence: {forbidden}"
         );
     }
 }

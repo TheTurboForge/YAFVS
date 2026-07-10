@@ -23,6 +23,7 @@ import sys
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -314,6 +315,10 @@ NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES = frozenset({"up", "cs_up"})
 NATIVE_TASK_BATCH_PAGE_SIZE = 500
 NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS = 100_000
 NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT = 1_000_000
+NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS = 100_000
+NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT = 1_000_000
+NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES = 512 * 1024 * 1024
+NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT = 4 * 1024 * 1024 * 1024
 NATIVE_OVERRIDE_DELETE_DEFAULT_MAX = 100
 NATIVE_OVERRIDE_DELETE_MAX_LIMIT = 500
 NATIVE_TASK_ACTIVE_STATUSES = frozenset({"Running", "Requested", "Queued"})
@@ -386,7 +391,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     },
     "export_or_report_generation": {
         "export-pdf-report.gmp.py",
-        "export-xml-report.gmp.py",
         "generate-scope-report.gmp.py",
     },
     "scanner_or_task_control": {
@@ -420,7 +424,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
-    "export-xml-report.gmp.py": "Inherited XML nested report serialization is characterized; native tooling still lacks a direct report-export contract that fetches a report by id and writes the chosen file name locally.",
     "generate-scope-report.gmp.py": "Native tooling still lacks a direct scope-report generation contract with explicit authorization, provenance, snapshot, and metric rebuild semantics.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
     "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
@@ -560,6 +563,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "raw-report-error-message-evidence-read",
         "raw-report-host-evidence-read",
         "raw-report-list-read",
+        "raw-report-lossless-result-evidence-read",
         "raw-report-metrics-read",
         "raw-report-operating-system-evidence-read",
         "raw-report-port-evidence-read",
@@ -791,6 +795,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/reports/{report_id}"): "direct-read",
     ("get", "/results/{result_id}/export"): "direct-read",
     ("get", "/reports/{report_id}/results"): "direct-read",
+    ("get", "/reports/{report_id}/raw-results"): "direct-read",
     ("get", "/reports/{report_id}/hosts"): "direct-read",
     ("get", "/reports/{report_id}/ports"): "direct-read",
     ("get", "/reports/{report_id}/applications"): "direct-read",
@@ -1488,6 +1493,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-result-evidence-read",
     },
+    ("get", "/reports/{report_id}/raw-results"): {
+        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "raw-report-lossless-result-evidence-read",
+    },
     ("get", "/reports/{report_id}/hosts"): {
         "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
@@ -1866,6 +1876,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/reports",
         "/api/v1/reports/{}",
         "/api/v1/reports/{}/results",
+        "/api/v1/reports/{}/raw-results",
         "/api/v1/reports/{}/hosts",
         "/api/v1/reports/{}/ports",
         "/api/v1/reports/{}/applications",
@@ -7199,6 +7210,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         for suffix_variable in (
             "metrics_suffix",
             "results_suffix",
+            "raw_results_suffix",
             "hosts_suffix",
             "ports_suffix",
             "applications_suffix",
@@ -8478,6 +8490,11 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/reports/{report_id}/results",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["runtime-report-summary helper (migrated)", "runtime-report-export helper (migrated)", "GSA raw report Results tab (migrated through gsad same-origin proxy)"],
+            },
+            {
+                "endpoint": "/api/v1/reports/{report_id}/raw-results",
+                "status": "implemented_internal_and_browser_proxied",
+                "replacement_candidates": ["native complete report bundle canonical evidence", "lossless retained result-row export without GMP/XML"],
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}/hosts",
@@ -20566,6 +20583,339 @@ def command_native_export_report_csv(
     return native_export_report_csv_result(repo_root, "Native report evidence CSV export completed.", findings, details, status_only=status_only, artifacts=[str(output_path)])
 
 
+NATIVE_REPORT_BUNDLE_ERROR_FIELDS = (
+    "id",
+    "source_report_id",
+    "host",
+    "port",
+    "nvt_oid",
+    "created_at",
+    "description",
+)
+NATIVE_REPORT_BUNDLE_COLLECTIONS = (
+    ("raw-results", "id", "canonical_raw_evidence"),
+    ("results", "id", "analytical_projection"),
+    ("errors", "id", "analytical_projection"),
+    ("hosts", "host", "analytical_projection"),
+    ("ports", "port", "analytical_projection"),
+    ("applications", "name", "analytical_projection"),
+    ("operating-systems", "name", "analytical_projection"),
+    ("cves", "id", "analytical_projection"),
+    ("tls-certificates", "id", "analytical_projection"),
+)
+
+
+def native_report_bundle_json_bytes(value: Any) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def native_report_bundle_csv_bytes(fields: Sequence[str], rows: Sequence[dict[str, Any]], row_mapper: Callable[[dict[str, Any]], dict[str, Any]]) -> bytes:
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(row_mapper(row) for row in rows)
+    return output.getvalue().encode("utf-8")
+
+
+def native_report_bundle_error_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: native_report_csv_cell(row.get(field), spreadsheet_safe=True)
+        for field in NATIVE_REPORT_BUNDLE_ERROR_FIELDS
+    }
+
+
+def native_report_bundle_item_key(collection: str, item: dict[str, Any]) -> str | None:
+    if collection in {"raw-results", "results", "errors", "cves", "tls-certificates"}:
+        value = item.get("id")
+        return value if isinstance(value, str) and value else None
+    if collection == "hosts":
+        value = item.get("host")
+        return value if isinstance(value, str) else None
+    if collection == "ports":
+        value = item.get("port")
+        return value if isinstance(value, str) else None
+    if collection == "applications":
+        values = (item.get("name"), item.get("version"), item.get("cpe"))
+    else:
+        values = (item.get("name"), item.get("cpe"))
+    return json.dumps(values, ensure_ascii=False, separators=(",", ":")) if all(value is not None for value in values) else None
+
+
+def native_report_bundle_item_is_scoped(collection: str, item: Any, report_id: str) -> bool:
+    if not isinstance(item, dict) or native_report_bundle_item_key(collection, item) is None:
+        return False
+    if collection in {"raw-results", "results", "errors", "hosts"}:
+        return item.get("source_report_id") == report_id
+    source_ids = item.get("source_report_ids")
+    return isinstance(source_ids, list) and report_id in source_ids and all(isinstance(value, str) for value in source_ids)
+
+
+def native_report_bundle_fetch_collection(
+    repo_root: Path,
+    *,
+    report_id: str,
+    collection: str,
+    sort: str,
+    max_items: int,
+    token: str,
+    env: dict[str, str],
+) -> tuple[list[dict[str, Any]], int | None, int, dict[str, Any] | None]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    expected_total: int | None = None
+    page = 1
+    while expected_total is None or len(rows) < expected_total:
+        path = (
+            f"/api/v1/reports/{urllib.parse.quote(report_id)}/{collection}"
+            f"?page={page}&page_size={NATIVE_TASK_BATCH_PAGE_SIZE}&sort={urllib.parse.quote(sort, safe='-')}"
+        )
+        response = direct_native_api_curl(repo_root, path, token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        items = parsed.get("items") if isinstance(parsed, dict) else None
+        page_info = parsed.get("page") if isinstance(parsed, dict) else None
+        total = page_info.get("total") if isinstance(page_info, dict) else None
+        actual_page = page_info.get("page") if isinstance(page_info, dict) else None
+        page_ok = (
+            response.returncode == 0
+            and http_status == 200
+            and isinstance(items, list)
+            and type(total) is int
+            and total >= 0
+            and actual_page == page
+            and all(native_report_bundle_item_is_scoped(collection, item, report_id) for item in items)
+        )
+        if expected_total is not None and total != expected_total:
+            page_ok = False
+        if page_ok and expected_total is None:
+            expected_total = total
+            if total > max_items:
+                return [], total, page, {"reason": "collection exceeds safety cap", "collection": collection, "total": total, "max_items": max_items}
+        keys = [native_report_bundle_item_key(collection, item) for item in items] if isinstance(items, list) else []
+        if page_ok and (len(keys) != len(set(keys)) or any(key in seen for key in keys)):
+            page_ok = False
+        if not page_ok:
+            return [], expected_total, page, {
+                "reason": "collection page was invalid, duplicated, unscoped, or changed during pagination",
+                "collection": collection,
+                "page": page,
+                "http_status": http_status,
+                "expected_total": expected_total,
+                "observed_total": total,
+            }
+        if not items and len(rows) != expected_total:
+            return [], expected_total, page, {"reason": "collection ended before declared total", "collection": collection, "page": page, "total": expected_total}
+        seen.update(key for key in keys if key is not None)
+        rows.extend(items)
+        if len(rows) == expected_total:
+            break
+        if expected_total is not None and len(rows) > expected_total:
+            return [], expected_total, page, {"reason": "collection exceeded declared total", "collection": collection, "page": page, "total": expected_total}
+        page += 1
+        if page > 10_000:
+            return [], expected_total, page, {"reason": "collection pagination exceeded safety limit", "collection": collection, "total": expected_total}
+    return rows, expected_total, page, None
+
+
+def native_report_bundle_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        key: details.get(key)
+        for key in ("report_id", "output", "collection_counts", "member_count", "byte_count", "sha256")
+    }
+    compact["findings"] = [
+        compact_doctor_finding(item)
+        for item in result.get("findings", [])
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ] or [finding("pass", "native-export-report-bundle.status-only", "Native report bundle completed; evidence content omitted.")]
+    return compact
+
+
+def native_report_bundle_result(
+    repo_root: Path,
+    summary: str,
+    findings: list[dict[str, Any]],
+    details: dict[str, Any],
+    *,
+    status_only: bool,
+    artifacts: list[str] | None = None,
+) -> dict[str, Any]:
+    result = make_result("native-export-report-bundle", repo_root, summary, findings, artifacts or [])
+    result["details"] = details
+    return native_report_bundle_status_only_result(result) if status_only else result
+
+
+def command_native_export_report_bundle(
+    repo_root: Path,
+    *,
+    report_id: str,
+    output: Path | None = None,
+    max_items: int = NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS,
+    max_bytes: int = NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES,
+    overwrite: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {"report_id": report_id, "collection_counts": {}, "member_count": 0}
+    try:
+        report_id = validate_native_api_operator_uuid_value(report_id, env_name="--report-id")
+        if type(max_items) is not int or not 1 <= max_items <= NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT:
+            raise ValueError(f"--max-items must be between 1 and {NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT}")
+        if type(max_bytes) is not int or not 1 <= max_bytes <= NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT:
+            raise ValueError(f"--max-bytes must be between 1 and {NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT}")
+        output_path = (output or Path(f"{report_id}.turbovas-report.zip")).expanduser()
+        if output_path.exists() and output_path.is_dir():
+            raise ValueError("--output must name a file, not a directory")
+        if output_path.exists() and not overwrite:
+            raise ValueError("--output already exists; use --overwrite to replace it")
+        if not output_path.parent.is_dir() or not os.access(output_path.parent, os.W_OK):
+            raise ValueError("--output parent directory must exist and be writable")
+    except (OSError, ValueError) as exc:
+        findings.append(finding("fail", "native-export-report-bundle.arguments", str(exc)))
+        return native_report_bundle_result(repo_root, "Native report bundle rejected before runtime access.", findings, details, status_only=status_only)
+
+    details.update({"report_id": report_id, "output": str(output_path), "max_items": max_items, "max_bytes": max_bytes})
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-export-report-bundle.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return native_report_bundle_result(repo_root, "Direct native API report bundle rejected before runtime access.", findings, details, status_only=status_only)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(finding("fail", "native-export-report-bundle.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        return native_report_bundle_result(repo_root, "Direct native API report bundle rejected before runtime access.", findings, details, status_only=status_only)
+
+    encoded_report_id = urllib.parse.quote(report_id)
+    detail_path = f"/api/v1/reports/{encoded_report_id}"
+    detail_response = direct_native_api_curl(repo_root, detail_path, token=token, env=env)
+    report, detail_status = parse_json_output_with_http_status(detail_response)
+    if not (detail_response.returncode == 0 and detail_status == 200 and isinstance(report, dict) and report.get("id") == report_id):
+        findings.append(finding("fail", "native-export-report-bundle.report-preflight", "Direct native API report preflight failed or returned the wrong report.", details={"http_status": detail_status, **summarize_native_api_response(report)}))
+        return native_report_bundle_result(repo_root, "Native report bundle stopped at report preflight.", findings, details, status_only=status_only)
+    metrics_path = f"/api/v1/reports/{encoded_report_id}/metrics"
+    metrics_response = direct_native_api_curl(repo_root, metrics_path, token=token, env=env)
+    metrics, metrics_status = parse_json_output_with_http_status(metrics_response)
+    if not (metrics_response.returncode == 0 and metrics_status == 200 and isinstance(metrics, dict) and metrics.get("id") == report_id):
+        findings.append(finding("fail", "native-export-report-bundle.metrics", "Direct native API returned invalid or mismatched report metrics.", details={"http_status": metrics_status, **summarize_native_api_response(metrics)}))
+        return native_report_bundle_result(repo_root, "Native report bundle stopped at report metrics.", findings, details, status_only=status_only)
+
+    collections: dict[str, list[dict[str, Any]]] = {}
+    collection_meta: dict[str, dict[str, Any]] = {}
+    for collection, sort, role in NATIVE_REPORT_BUNDLE_COLLECTIONS:
+        rows, total, page_count, error = native_report_bundle_fetch_collection(
+            repo_root,
+            report_id=report_id,
+            collection=collection,
+            sort=sort,
+            max_items=max_items,
+            token=token,
+            env=env,
+        )
+        if error is not None:
+            findings.append(finding("fail", f"native-export-report-bundle.{collection}", "Native report collection was incomplete or invalid; no output was replaced.", details=error))
+            return native_report_bundle_result(repo_root, f"Native report bundle failed while reading {collection}.", findings, details, status_only=status_only)
+        collections[collection] = rows
+        collection_meta[collection] = {"role": role, "total": total, "page_count": page_count}
+        details["collection_counts"][collection] = total
+
+    expected_result_count = report.get("result_count")
+    if type(expected_result_count) is int and expected_result_count != len(collections["results"]):
+        findings.append(finding("fail", "native-export-report-bundle.result-count", "Report metadata and analytical result totals disagree; no output was replaced.", details={"report_result_count": expected_result_count, "collection_total": len(collections["results"])}))
+        return native_report_bundle_result(repo_root, "Native report bundle stopped at result-count consistency validation.", findings, details, status_only=status_only)
+
+    temp_path = output_path.parent / f".{output_path.name}.tmp-{os.getpid()}-{secrets.token_hex(8)}"
+    members: list[dict[str, Any]] = []
+    uncompressed_bytes = 0
+
+    def add_member(archive: zipfile.ZipFile, path: str, media_type: str, content: bytes, *, item_count: int | None = None, role: str | None = None) -> None:
+        nonlocal uncompressed_bytes
+        uncompressed_bytes += len(content)
+        if uncompressed_bytes > max_bytes:
+            raise ValueError(f"bundle content exceeds --max-bytes {max_bytes}")
+        info = zipfile.ZipInfo(path, date_time=(1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o600 << 16
+        archive.writestr(info, content)
+        member = {"path": path, "media_type": media_type, "bytes": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+        if item_count is not None:
+            member["item_count"] = item_count
+        if role is not None:
+            member["role"] = role
+        members.append(member)
+
+    try:
+        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(fd)
+        with zipfile.ZipFile(temp_path, "w", allowZip64=True) as archive:
+            add_member(archive, "report.json", "application/json", native_report_bundle_json_bytes(report))
+            add_member(archive, "metrics.json", "application/json", native_report_bundle_json_bytes(metrics))
+            for collection, _sort, role in NATIVE_REPORT_BUNDLE_COLLECTIONS:
+                payload = {
+                    "schema_version": 1,
+                    "source_endpoint": f"/api/v1/reports/{report_id}/{collection}",
+                    "total": collection_meta[collection]["total"],
+                    "items": collections[collection],
+                }
+                add_member(
+                    archive,
+                    f"collections/{collection}.json",
+                    "application/json",
+                    native_report_bundle_json_bytes(payload),
+                    item_count=len(collections[collection]),
+                    role=role,
+                )
+            add_member(
+                archive,
+                "views/results.csv",
+                "text/csv; charset=utf-8",
+                native_report_bundle_csv_bytes(NATIVE_REPORT_CSV_FIELDS, collections["results"], native_report_csv_row),
+                item_count=len(collections["results"]),
+                role="human_spreadsheet_view",
+            )
+            add_member(
+                archive,
+                "views/errors.csv",
+                "text/csv; charset=utf-8",
+                native_report_bundle_csv_bytes(NATIVE_REPORT_BUNDLE_ERROR_FIELDS, collections["errors"], native_report_bundle_error_row),
+                item_count=len(collections["errors"]),
+                role="human_spreadsheet_view",
+            )
+            manifest = {
+                "format": "turbovas-native-report-bundle",
+                "schema_version": 1,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "report_id": report_id,
+                "source": {"contract": "TurboVAS native API v1", "base_path": "/api/v1"},
+                "evidence_contract": {
+                    "canonical": "collections/raw-results.json",
+                    "complete": True,
+                    "meaning": "Every retained gvmd result row for the exact report, including scanner error and hostless rows, with nullable source values preserved.",
+                    "legacy_xml_byte_or_schema_parity": False,
+                    "projections": "Other collections and CSV files are typed analytical or human views derived from native API contracts.",
+                },
+                "members": members,
+            }
+            add_member(archive, "manifest.json", "application/json", native_report_bundle_json_bytes(manifest))
+        with temp_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        byte_count = temp_path.stat().st_size
+        digest = hashlib.sha256()
+        with temp_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        os.replace(temp_path, output_path)
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        findings.append(finding("fail", "native-export-report-bundle.output", f"Atomic report bundle output failed: {exc}", details={"output": str(output_path)}))
+        return native_report_bundle_result(repo_root, "Native report bundle could not write the output; any existing file was preserved.", findings, details, status_only=status_only)
+
+    details.update({"member_count": len(members), "byte_count": byte_count, "sha256": digest.hexdigest()})
+    findings.append(finding("pass", "native-export-report-bundle.output", "Complete native report bundle was written atomically.", details={"output": str(output_path), "member_count": details["member_count"], "byte_count": byte_count, "sha256": digest.hexdigest()}))
+    return native_report_bundle_result(repo_root, "Complete native report bundle export completed.", findings, details, status_only=status_only, artifacts=[str(output_path)])
+
+
 def native_override_delete_filter_value(value: str) -> str:
     value = value.strip()
     if not value:
@@ -23352,6 +23702,28 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     raw_report_results_json,
                 )
             )
+            raw_report_lossless_results = native_api_curl(repo_root, f"/api/v1/reports/{urllib.parse.quote(raw_report_detail_id)}/raw-results?page_size=5&sort=id")
+            raw_report_lossless_results_json = parse_json_output(raw_report_lossless_results)
+            details["raw_report_lossless_results"] = summarize_native_api_response(raw_report_lossless_results_json)
+            raw_report_lossless_result_items = raw_report_lossless_results_json.get("items", []) if isinstance(raw_report_lossless_results_json, dict) else []
+            raw_report_lossless_results_ok = (
+                raw_report_lossless_results.returncode == 0
+                and isinstance(raw_report_lossless_result_items, list)
+                and all(
+                    isinstance(item, dict) and item.get("source_report_id") == raw_report_detail_id
+                    for item in raw_report_lossless_result_items
+                )
+            )
+            findings.append(
+                native_api_probe_finding(
+                    "pass" if raw_report_lossless_results_ok else "fail",
+                    "native-api.raw-report-lossless-results",
+                    f"Native API raw-report lossless Results probe exit code {raw_report_lossless_results.returncode}.",
+                    raw_report_lossless_results,
+                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../raw-results?page_size=5"),
+                    raw_report_lossless_results_json,
+                )
+            )
             if raw_report_result_items:
                 first_raw_report_result = raw_report_result_items[0]
                 raw_result_detail_id = first_raw_report_result.get("id") if isinstance(first_raw_report_result, dict) else None
@@ -24847,6 +25219,13 @@ def build_parser() -> argparse.ArgumentParser:
     native_export_report_csv.add_argument("--max-results", type=int, default=NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS, help=f"safety cap from 1 to {NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT}")
     native_export_report_csv.add_argument("--overwrite", action="store_true", help="replace an existing output atomically")
     native_export_report_csv.add_argument("--status-only", action="store_true", help="emit compact export metadata without evidence rows")
+    native_export_report_bundle = subparsers.add_parser("native-export-report-bundle", parents=[common], help="export a complete versioned native report evidence bundle")
+    native_export_report_bundle.add_argument("--report-id", required=True, help="raw report UUID")
+    native_export_report_bundle.add_argument("--output", type=Path, help="ZIP output path; defaults to REPORT_ID.turbovas-report.zip")
+    native_export_report_bundle.add_argument("--max-items", type=int, default=NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS, help=f"per-collection safety cap from 1 to {NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT}")
+    native_export_report_bundle.add_argument("--max-bytes", type=int, default=NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES, help=f"uncompressed bundle safety cap from 1 to {NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT}")
+    native_export_report_bundle.add_argument("--overwrite", action="store_true", help="replace an existing output atomically")
+    native_export_report_bundle.add_argument("--status-only", action="store_true", help="emit compact bundle metadata without evidence rows")
     native_delete_overrides = subparsers.add_parser("native-delete-overrides-by-filter", parents=[common], help="snapshot and trash a bounded native override filter result")
     native_delete_overrides.add_argument("--filter", dest="filter_value", required=True, help="non-empty native override text filter; broad unfiltered deletion is refused")
     native_delete_overrides.add_argument("--max-overrides", type=int, default=NATIVE_OVERRIDE_DELETE_DEFAULT_MAX, help=f"maximum matched overrides, from 1 to {NATIVE_OVERRIDE_DELETE_MAX_LIMIT}")
@@ -25075,6 +25454,16 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-export-report-bundle":
+        result = command_native_export_report_bundle(
+            repo_root,
+            report_id=args.report_id,
+            output=args.output,
+            max_items=args.max_items,
+            max_bytes=args.max_bytes,
+            overwrite=args.overwrite,
             status_only=args.status_only,
         )
     elif args.command == "native-update-task-target":

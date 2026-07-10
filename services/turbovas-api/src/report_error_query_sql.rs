@@ -18,7 +18,6 @@ pub(crate) fn report_errors_sql(sort_sql: &str) -> String {
                FROM selected_report sr\n\
                JOIN results r ON r.report = sr.id\n\
               WHERE (r.type = 'Error Message' OR coalesce(r.severity, 0) = -3)\n\
-                AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''\n\
          ),\n\
          filtered AS (\n\
              SELECT * FROM error_rows\n\

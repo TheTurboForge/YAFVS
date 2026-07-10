@@ -51,6 +51,21 @@ const PRIORITY_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         tie_breakers: &["created_at_unix", "id"],
     },
     CollectionContract {
+        path: "/api/v1/reports/{report_id}/raw-results",
+        default_sort: REPORT_RAW_RESULT_DEFAULT_SORT,
+        allowed_sort_fields: REPORT_RAW_RESULT_SORT_FIELDS,
+        filter_fields: &[
+            "id",
+            "host",
+            "hostname",
+            "port",
+            "nvt_oid",
+            "result_type",
+            "description",
+        ],
+        tie_breakers: &["id"],
+    },
+    CollectionContract {
         path: "/api/v1/scope-reports/{scope_report_id}/results",
         default_sort: REPORT_RESULT_DEFAULT_SORT,
         allowed_sort_fields: REPORT_RESULT_SORT_FIELDS,
@@ -459,6 +474,7 @@ fn priority_collection_contracts_define_sort_filter_and_tie_breakers() {
             "/api/v1/results",
             "/api/v1/reports",
             "/api/v1/reports/{report_id}/results",
+            "/api/v1/reports/{report_id}/raw-results",
             "/api/v1/scope-reports/{scope_report_id}/results",
             "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/results",
         ]

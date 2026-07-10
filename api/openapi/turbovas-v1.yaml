@@ -4522,6 +4522,43 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /reports/{report_id}/raw-results:
+    get:
+      operationId: getReportsByReportIdRawResults
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: raw-report-lossless-result-evidence-read
+      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
+      summary: List every raw result row retained for one scan report
+      description: Preserves nullable raw result evidence without excluding scanner error rows or hostless rows. Analytical result and error-message projections remain available on their dedicated routes.
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Lossless raw result evidence collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawResultEvidenceCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /reports/{report_id}/hosts:
     get:
       operationId: getReportsByReportIdHosts
@@ -6994,6 +7031,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Result'
+    RawResultEvidenceCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RawResultEvidence'
     VulnerabilityCollection:
       type: object
       required: [page, items]
@@ -8634,6 +8681,65 @@ components:
           description: Effective active override metadata for this result, resolved through gvmd's result_overrides view. Override mutation and create/export workflows remain inherited.
           items:
             $ref: '#/components/schemas/ResultOverride'
+    RawResultEvidence:
+      type: object
+      required: [id, source_report_id]
+      description: Lossless retained result-row evidence. Nullable source values remain null instead of being presentation-normalized.
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_report_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+          nullable: true
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+        host:
+          type: string
+          nullable: true
+        hostname:
+          type: string
+          nullable: true
+        port:
+          type: string
+          nullable: true
+        nvt_oid:
+          type: string
+          nullable: true
+        result_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        scan_nvt_version:
+          type: string
+          nullable: true
+        severity:
+          type: number
+          nullable: true
+        qod:
+          type: integer
+          nullable: true
+        qod_type:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        path:
+          type: string
+          nullable: true
+        hash_value:
+          type: string
+          nullable: true
     ResultOverride:
       type: object
       required: [id, nvt, text, text_excerpt, hosts, port, active]

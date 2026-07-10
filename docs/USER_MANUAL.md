@@ -174,6 +174,7 @@ tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
 tools/turbovasctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
 tools/turbovasctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
 tools/turbovasctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
+tools/turbovasctl native-export-report-bundle --report-id REPORT_UUID --output ./report.turbovas-report.zip --status-only
 tools/turbovasctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
 tools/turbovasctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
 tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
@@ -206,12 +207,21 @@ claiming a failed scan that may already be active, and reports the observed
 state for diagnosis or retry.
 
 `native-export-report-csv` replaces the inherited GMP CSV report-format script
-with a deterministic TurboVAS evidence export over direct native JSON. It
+with a deterministic TurboVAS result-table export over direct native JSON. It
 preflights the exact report, paginates all result rows up to the explicit safety
 cap, writes a private same-directory temporary file, and atomically replaces the
 destination only after a complete export. Existing files require `--overwrite`.
-The output is a stable result-evidence CSV rather than gvmd's configurable
-report-format rendering; PDF and nested XML export remain separate workflows.
+The output is a stable result-view CSV rather than gvmd's configurable
+report-format rendering.
+
+`native-export-report-bundle` is the complete native evidence artifact. It
+preflights the exact report and metrics, paginates every retained raw result row
+without excluding scanner errors or hostless rows, and verifies every typed
+projection remains report-scoped and stable while paging. The private atomic
+ZIP contains a versioned manifest with per-member hashes and counts, canonical
+JSON evidence and analytical collections, and spreadsheet-safe Results and
+Error Messages CSV views. The bundle intentionally does not reproduce legacy
+XML bytes or schema ornamentation; JSON is canonical for machine processing.
 
 `native-delete-overrides-by-filter` replaces the inherited destructive GMP
 script with an explicit two-step native workflow. Its `--filter` is a printable

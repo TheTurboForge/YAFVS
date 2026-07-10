@@ -255,6 +255,9 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
     assert!(direct_api_v1_path_is_allowed(
         "/api/v1/reports/report-id/results"
     ));
+    assert!(direct_api_v1_path_is_allowed(
+        "/api/v1/reports/report-id/raw-results"
+    ));
     assert!(direct_api_v1_path_is_allowed("/api/v1/feeds"));
     assert!(direct_api_v1_path_is_allowed(
         "/api/v1/tags/resource-names/alert"

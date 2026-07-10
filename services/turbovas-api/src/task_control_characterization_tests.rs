@@ -460,7 +460,7 @@ fn inherited_gsad_and_gmp_client_layers_proxy_start_stop_verbs() {
 }
 
 #[test]
-fn native_direct_api_allows_guarded_start_stop_and_keeps_other_task_lifecycle_methods_closed() {
+fn native_direct_api_allows_guarded_task_controls_and_keeps_unmigrated_lifecycle_methods_closed() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/tasks",
@@ -562,6 +562,17 @@ fn native_direct_api_allows_guarded_start_stop_and_keeps_other_task_lifecycle_me
         stop_path,
         true
     ));
+    let replace_target_path = "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/replace-target";
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        replace_target_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        replace_target_path,
+        true
+    ));
     for action in ["resume", "delete"] {
         let path = format!("/api/v1/tasks/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
@@ -588,7 +599,7 @@ fn native_direct_api_allows_guarded_start_stop_and_keeps_other_task_lifecycle_me
 }
 
 #[test]
-fn openapi_documents_task_metadata_and_guarded_start_contracts() {
+fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     let list = openapi_path_block("/tasks");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
@@ -612,9 +623,7 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
     assert!(
         list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
     );
-    assert!(
-        list.contains("Resume, clone, hard-delete, file export, broad task reference mutation")
-    );
+    assert!(list.contains("Resume, clone, hard-delete, file export, config/scanner mutation"));
 
     let detail = openapi_path_block("/tasks/{task_id}");
     assert!(detail.contains("get:"));
@@ -649,6 +658,27 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
         assert!(
             start.contains(required),
             "task start OpenAPI block missing {required}"
+        );
+    }
+
+    let replace_target = openapi_path_block("/tasks/{task_id}/replace-target");
+    for required in [
+        "post:",
+        "operationId: postTasksByTaskIdReplaceTarget",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-maturity: live-write",
+        "x-turbovas-replaces: task-target-clone-rebind-delete",
+        "x-turbovas-safety-contract: write-control-v1",
+        "x-turbovas-side-effect: scanner-control",
+        "$ref: '#/components/schemas/TaskTargetReplaceRequest'",
+        "$ref: '#/components/schemas/TaskTargetReplaceResult'",
+        "atomically cloning the complete retained configuration",
+        "never starts a scan",
+    ] {
+        assert!(
+            replace_target.contains(required),
+            "task target replacement OpenAPI block missing {required}"
         );
     }
 

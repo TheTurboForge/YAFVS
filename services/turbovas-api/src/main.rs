@@ -231,6 +231,11 @@ mod task_handlers;
 mod task_query_sql;
 mod task_stop;
 mod task_target_payloads;
+mod task_target_replace;
+mod task_target_replace_db;
+mod task_target_replace_sql;
+mod task_target_replace_transactions;
+mod task_target_replace_validation;
 mod task_targets;
 mod task_write_db;
 mod task_write_sql;
@@ -320,13 +325,13 @@ mod task_control_tests;
 #[cfg(test)]
 mod task_stop_tests;
 #[cfg(test)]
+mod task_target_replace_tests;
+#[cfg(test)]
 mod tooling_account_characterization_tests;
 #[cfg(test)]
 mod tooling_alert_scan_characterization_tests;
 #[cfg(test)]
 mod tooling_alert_write_characterization_tests;
-#[cfg(test)]
-mod tooling_bulk_write_characterization_tests;
 #[cfg(test)]
 mod tooling_cert_config_characterization_tests;
 #[cfg(test)]

@@ -217,6 +217,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     },
     NativeWriteRouteContract {
         method: "post",
+        path: "/api/v1/tasks/:task_id/replace-target",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
         path: "/api/v1/tasks/:task_id/start",
         safety_contract: "write-control-v1",
     },
@@ -608,6 +613,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("patch(browser_proxy_patch_task)"));
     assert!(browser_routes.contains("post(browser_proxy_start_task)"));
     assert!(browser_routes.contains("post(browser_proxy_stop_task)"));
+    assert!(browser_routes.contains("post(browser_proxy_replace_task_target)"));
     assert!(browser_routes.contains("post(browser_proxy_create_scope)"));
     assert!(browser_routes.contains("post(browser_proxy_create_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_create_report_config)"));

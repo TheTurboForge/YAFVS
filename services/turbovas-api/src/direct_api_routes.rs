@@ -50,6 +50,7 @@ use crate::{
     },
     task_control::start_task,
     task_stop::stop_task,
+    task_target_replace::replace_task_target,
     task_writes::{create_task, delete_task, patch_task},
     tls_certificate_writes::delete_tls_certificate,
 };
@@ -152,6 +153,10 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_target),
             )
             .route("/api/v1/tasks", post(create_task))
+            .route(
+                "/api/v1/tasks/:task_id/replace-target",
+                post(replace_task_target),
+            )
             .route("/api/v1/tasks/:task_id/start", post(start_task))
             .route("/api/v1/tasks/:task_id/stop", post(stop_task))
             .route("/api/v1/tasks/:task_id", patch(patch_task))

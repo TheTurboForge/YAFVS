@@ -172,8 +172,20 @@ tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-writ
 tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
 tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
 tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
+tools/turbovasctl native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
+tools/turbovasctl native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
 tools/turbovasctl native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
 ```
+
+`native-update-task-target` replaces the retired GMP script with one guarded
+direct request. It accepts exactly one explicit host input source: repeatable
+`--host` values or a CSV whose first nonempty column supplies hosts; repeatable
+`--exclude-host` values are optional. The current native contract is strict:
+the task must be New with no report, and the operation atomically clones and
+rebinds its target without starting a scan. The replacement preserves target
+settings, credential links, and tags; the old target is moved to trash only
+when no other live task or scope still references it. It does not accept target files, host filters,
+or implicit host selection.
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
 table with direct native API calls. It verifies each scanner without starting a

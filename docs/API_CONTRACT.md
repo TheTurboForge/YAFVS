@@ -77,8 +77,15 @@ The first API phase is read-only and report-focused:
   absence is verified. A scanner-verification failure is `502`; an
   asynchronous-only inherited stop is `409`, never false success. No GMP/XML
   or DB fallback exists.
+- strict New-task target replacement through
+  `POST /api/v1/tasks/{task_id}/replace-target`. The endpoint requires an
+  operator-owned live scan task with no reports, atomically clones the retained
+  target configuration with the requested host/exclusion lists, rebinds only
+  that task, and trashes the source target only when no other live task or
+  scope references it. It never starts a scan.
 
-Task start and stop are guarded native direct-write/browser-proxied controls and
+Task start, stop, and strict target replacement are guarded native
+direct-write/browser-proxied controls and
 operator tooling requires explicit write-control consent. Resume and other
 task/scanner controls remain inherited. Credential secret management, feed
 import, account
@@ -118,8 +125,8 @@ host-binding posture tracked outside this development API.
   restore/trash, report-config metadata/clone/restore/trash, scan-config
   metadata/clone/restore/trash, schedule metadata/clone/restore/trash, target
   metadata/create/clone/restore/trash, selected alert metadata, credential
-  name/comment metadata, scanner metadata, task metadata, and guarded task
-  start. Other valid-token
+  name/comment metadata, scanner metadata, task metadata, guarded task start
+  and stop, and strict New-task target replacement. Other valid-token
   non-GET requests return JSON `405 method_not_allowed`. The enforced route set
   is the `APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS` list in
   `services/turbovas-api/src/direct_api_contract_tests.rs` plus OpenAPI
@@ -129,8 +136,9 @@ host-binding posture tracked outside this development API.
   through the authenticated same-origin `gsad` proxy. That proxy uses exact
   allowlists and now includes the existing browser-safe `POST`, `PATCH`, and
   no-body `DELETE` write routes for scopes, tags, filters, port lists, report
-  configs, scan configs, schedules, and targets; task start and stop are
-  browser-proxied through exact UUID action allowlists. Resume and other task
+  configs, scan configs, schedules, and targets; task start, stop, and strict
+  target replacement are browser-proxied through exact UUID action allowlists.
+  Resume and other task
   control writes remain inherited until separately designed.
 - Direct v1 request-shape boundary: bearer-authenticated direct `GET` and
   `DELETE` requests reject request bodies, direct write-control `POST`/`PATCH`
@@ -263,11 +271,13 @@ inherited.
 
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,
-maximum severity, and timestamps. Task create, metadata patch, and safe
-live-to-trash moves are native. Task create validates and transactionally links
+maximum severity, and timestamps. Task create, metadata patch, strict New-task
+target replacement, and safe live-to-trash moves are native. Task create validates and transactionally links
 an optional operator-owned schedule and up to five operator-owned alerts.
-Clone, hard-delete, resume, file export,
-and other scanner-control actions remain inherited. The guarded
+Target replacement preserves retained target settings, credential links, and
+tags, refuses tasks with reports, and never starts a scan. Clone, hard-delete,
+resume, file export, config/scanner mutation, and other scanner-control actions
+remain inherited. The guarded
 `POST /api/v1/tasks/{task_id}/start` is available
 through direct native access and the authenticated browser proxy; it
 transactionally creates the report and gvmd `scan_queue` request, while gvmd

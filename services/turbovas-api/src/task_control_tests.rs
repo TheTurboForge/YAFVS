@@ -186,6 +186,27 @@ fn task_start_handler_locks_validates_and_queues_in_one_transaction() {
 }
 
 #[test]
+fn task_target_replace_browser_proxy_forwards_authenticated_operator_and_request() {
+    let source = include_str!("browser_proxy_metadata_patch.rs");
+    let handler = source
+        .split_once("pub(crate) async fn browser_proxy_replace_task_target")
+        .expect("browser task target replacement proxy must exist")
+        .1;
+    assert!(
+        handler.contains("browser_proxy_operator_from_headers(&state, &auth, &headers).await?")
+    );
+    assert!(handler.contains(
+        "replace_task_target(
+        State(state),
+        Path(task_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await"
+    ));
+}
+
+#[test]
 fn task_start_browser_proxy_forwards_authenticated_operator_context() {
     let source = include_str!("browser_proxy_metadata_patch.rs");
     let handler = source

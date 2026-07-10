@@ -5319,7 +5319,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-list-read
       summary: List scan tasks
-      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links, metadata-only task updates, metadata export, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, file export, broad task reference mutation, preferences, and other scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
+      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links, metadata-only task updates, strict New-task target replacement, metadata export, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, file export, config/scanner mutation, preferences, and other scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -5401,7 +5401,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-detail-summary-read
       summary: Read one scan task summary
-      description: Native direct API exposes task summary reads, bounded task creation with optional schedule and alert links, metadata-only task updates, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, inherited file-export formats, broad task reference mutation, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
+      description: Native direct API exposes task summary reads, bounded task creation with optional schedule and alert links, metadata-only task updates, strict New-task target replacement, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, inherited file-export formats, config/scanner mutation, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -5485,6 +5485,53 @@ paths:
       responses:
         '204':
           description: Task moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /tasks/{task_id}/replace-target:
+    post:
+      operationId: postTasksByTaskIdReplaceTarget
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: task-target-clone-rebind-delete
+      x-turbovas-inherited-still-owns: task-config-scanner-schedule-alert-preference-mutation
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scanner-control
+      summary: Replace the target hosts of a New scan task
+      description: Guarded direct write-control endpoint for atomically cloning the complete retained configuration of an operator-owned task target, replacing its host and exclusion lists, and rebinding exactly one operator-owned New scan task that has no reports. The source target is moved to trash only when no other live task or scope still references it; otherwise it is retained. The route never starts a scan and refuses historical, running, container, trash-side, ownerless, cross-owner, or otherwise non-live task/target state.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskTargetReplaceRequest'
+      responses:
+        '200':
+          description: Task rebound to the replacement target
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTargetReplaceResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -6827,6 +6874,45 @@ components:
           type: string
           maxLength: 4096
           description: New task comment. Blank comments clear the comment after trimming.
+    TaskTargetReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [hosts]
+      properties:
+        hosts:
+          type: array
+          minItems: 1
+          maxItems: 4095
+          description: New target hosts. Entries are trimmed, validated, deduplicated, and persisted in request order.
+          items:
+            type: string
+        exclude_hosts:
+          type: array
+          maxItems: 4095
+          default: []
+          description: Optional hosts excluded from the replacement target. Entries are trimmed, validated, and deduplicated.
+          items:
+            type: string
+    TaskTargetReplaceResult:
+      type: object
+      additionalProperties: false
+      required: [task_id, old_target_id, new_target_id, status, old_target_disposition]
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        old_target_id:
+          type: string
+          format: uuid
+        new_target_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [replaced]
+        old_target_disposition:
+          type: string
+          enum: [trashed, retained]
     TaskStartResult:
       type: object
       additionalProperties: false

@@ -55,8 +55,9 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   `gsad` browser proxy exposes the browser-relevant subset of those routes,
   including no-body DELETE for current trash/delete operations, through exact C
   path allowlists and the internal browser-proxy secret/operator headers.
-  Guarded task start and stop are browser-proxied through exact UUID action
-  allowlists. Stop delegates over a private `0660` Unix socket using a strong
+  Guarded task start, stop, and strict New-task target replacement are
+  browser-proxied through exact UUID action allowlists. Stop delegates over a
+  private `0660` Unix socket using a strong
   internal shared secret. gvmd binds the authenticated operator UUID to its own
   ACL/session before applying
   scanner and report state changes; the socket is not a host API and does not

@@ -402,7 +402,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "empty-trash.gmp.py",
         "send-schedules.gmp.py",
         "send-tasks.gmp.py",
-        "update-task-target.gmp.py",
     },
 }
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
@@ -436,7 +435,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
     "send-tasks.gmp.py": "Inherited XML task import is characterized; native tooling still lacks a safe task import contract for config/scanner/target resolution, schedule fields, and preferences.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
-    "update-task-target.gmp.py": "Inherited task-target clone/rebind/delete behavior is characterized; native tooling still lacks a task-target swap contract that preserves settings and deletes the old target when unused.",
 }
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]*\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
@@ -662,6 +660,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "task-metadata-export-read",
         "task-detail-summary-read",
         "task-list-read",
+        "task-target-clone-rebind-delete",
         "task-trash-move",
         "task-start",
         "task-stop",
@@ -699,6 +698,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-file-input-task-control-and-credential-secret-workflows",
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
+        "task-config-scanner-schedule-alert-preference-mutation",
         "task-scan-control-writes-and-deletes",
         "task-resume-and-other-scanner-control",
         "task-resume-clone-file-hard-delete-and-other-scanner-control",
@@ -770,6 +770,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/targets/{target_id}/restore"): "direct-write",
     ("delete", "/targets/{target_id}/trash"): "direct-write",
     ("post", "/tasks"): "direct-write",
+    ("post", "/tasks/{task_id}/replace-target"): "direct-write",
     ("post", "/tasks/{task_id}/start"): "direct-write",
     ("post", "/tasks/{task_id}/stop"): "direct-write",
     ("patch", "/tasks/{task_id}"): "direct-write",
@@ -1643,6 +1644,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
         "x-turbovas-replaces": "task-create-with-target-config-scanner-schedule-alerts",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scanner-control",
+    },
+    ("post", "/tasks/{task_id}/replace-target"): {
+        "x-turbovas-inherited-still-owns": "task-config-scanner-schedule-alert-preference-mutation",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "task-target-clone-rebind-delete",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "scanner-control",
     },
@@ -3268,7 +3278,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name in {"credential-store.ts", "scanner.ts"}:
         return "scanner-control-or-credential", "Scanner and credential surfaces remain inherited until control/secret handling is designed."
     if name == "task.ts":
-        return "task-target-scan-control-or-credential", "Task start/stop/write and credential-linked behavior remains inherited."
+        return "task-target-scan-control-or-credential", "Task clone, resume, import, broad reference/preference mutation, and remaining scanner-control or credential-linked behavior remains inherited."
     if name == "hosts.js":
         return "asset-action-or-rich-context", "Host actions and richer inherited context remain outside the current native read contract."
     if name == "overrides.js":
@@ -7218,6 +7228,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         verify_suffix = post_constants.get("verify_suffix")
         start_suffix = post_constants.get("start_suffix")
         stop_suffix = post_constants.get("stop_suffix")
+        replace_target_suffix = post_constants.get("replace_target_suffix")
         for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
@@ -7245,6 +7256,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             for suffix_variable, suffix in (
                 ("start_suffix", start_suffix),
                 ("stop_suffix", stop_suffix),
+                ("replace_target_suffix", replace_target_suffix),
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
                     templates.add(f"{task_prefix.rstrip('/')}/{{}}{suffix}")
@@ -7346,10 +7358,12 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         task_prefix = post_constants.get("task_prefix")
         start_suffix = post_constants.get("start_suffix")
         stop_suffix = post_constants.get("stop_suffix")
+        replace_target_suffix = post_constants.get("replace_target_suffix")
         if task_prefix and "g_str_has_prefix (path, task_prefix)" in post_function_body:
             for suffix_variable, suffix in (
                 ("start_suffix", start_suffix),
                 ("stop_suffix", stop_suffix),
+                ("replace_target_suffix", replace_target_suffix),
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
                     operations.add(f"POST {task_prefix.rstrip('/')}/{{}}{suffix}")
@@ -8641,6 +8655,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser task start through the gvmd scan queue", "guarded direct native task start"],
                 "residual_inherited": [
                     "Task resume and other scanner-control workflows remain inherited until separately migrated."
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/tasks/{task_id}/replace-target",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin and direct native strict New-task target replacement", "native-update-task-target helper"],
+                "residual_inherited": [
+                    "Task config/scanner/schedule/alert/preference mutation remains inherited until separately migrated."
                 ],
             },
             {
@@ -14788,6 +14812,15 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.task-write-update",
             "native-api-direct.task-fixture-cleanup",
             "native-api-direct.task-relation-fixture-cleanup",
+            "native-api-direct.task-target-replace-fixtures",
+            "native-api-direct.task-target-replace-source-create",
+            "native-api-direct.task-target-replace-task-create",
+            "native-api-direct.task-target-replace-preconditions",
+            "native-api-direct.task-target-replace-acknowledgement",
+            "native-api-direct.task-target-replace-rebind",
+            "native-api-direct.task-target-replace-target-preservation",
+            "native-api-direct.task-target-replace-old-target-disposition",
+            "native-api-direct.task-target-replace-fixture-cleanup",
             "native-api-direct.alert-tag-write-create",
             "native-api-direct.alert-tag-resource-add",
             "native-api-direct.alert-tag-resource-in-use-after-add",
@@ -14823,6 +14856,464 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
         finding("pass", f"{command_name}.status-only", f"{command_name} passed; no non-pass findings.")
     ]
     return compact
+
+
+def direct_task_target_replace_runtime_findings(
+    repo_root: Path,
+    *,
+    token: str,
+    env: dict[str, str],
+    admin_uuid: str,
+) -> list[dict[str, Any]]:
+    """Exercise task target replacement with an isolated, no-scan fixture."""
+    findings: list[dict[str, Any]] = []
+    content_type = (("Content-Type", "application/json"),)
+    fixture_suffix = f"{int(time.time())}-{os.getpid()}"
+    source_target_name = f"turbovas-direct-write-smoke-replace-source-{fixture_suffix}"
+    task_name = f"turbovas-direct-write-smoke-replace-task-{fixture_suffix}"
+    source_target_id: str | None = None
+    task_id: str | None = None
+    new_target_id: str | None = None
+
+    port_lists = direct_native_api_curl(
+        repo_root, "/api/v1/port-lists?page_size=25&sort=name", token=token, env=env
+    )
+    port_lists_json, port_lists_status = parse_json_output_with_http_status(port_lists)
+    port_list_id = next(
+        (
+            item.get("id")
+            for item in port_lists_json.get("items", [])
+            if isinstance(item, dict)
+            and item.get("predefined") is True
+            and isinstance(item.get("id"), str)
+        ),
+        None,
+    ) if isinstance(port_lists_json, dict) else None
+    scanners = direct_native_api_curl(
+        repo_root, "/api/v1/scanners?page_size=25&sort=name", token=token, env=env
+    )
+    scanners_json, scanners_status = parse_json_output_with_http_status(scanners)
+    scanner_id = next(
+        (
+            item.get("id")
+            for item in scanners_json.get("items", [])
+            if isinstance(item, dict)
+            and item.get("scanner_type") in {2, 5, 6, 8}
+            and isinstance(item.get("id"), str)
+        ),
+        None,
+    ) if isinstance(scanners_json, dict) else None
+    fixtures_ready = (
+        port_lists.returncode == 0
+        and port_lists_status == 200
+        and isinstance(port_list_id, str)
+        and scanners.returncode == 0
+        and scanners_status == 200
+        and isinstance(scanner_id, str)
+    )
+    findings.append(
+        native_api_probe_finding(
+            "pass" if fixtures_ready else "fail",
+            "native-api-direct.task-target-replace-fixtures",
+            "Direct write-control found owned fixture inputs for task-target replacement."
+            if fixtures_ready
+            else "Direct write-control could not find the predefined port-list or task-capable scanner needed for task-target replacement.",
+            scanners,
+            direct_native_api_display_command(
+                "/api/v1/scanners?page_size=25&sort=name", token=token, env=env
+            ),
+            scanners_json,
+            {
+                "port_lists_http_status": port_lists_status,
+                "scanners_http_status": scanners_status,
+                "port_list_id": port_list_id,
+                "scanner_id": scanner_id,
+                **summarize_native_api_response(scanners_json),
+            },
+        )
+    )
+    if not fixtures_ready:
+        return findings
+
+    try:
+        source_body = json.dumps(
+            {
+                "name": source_target_name,
+                "comment": "TurboVAS direct write smoke task-target replacement source",
+                "port_list_id": port_list_id,
+                "hosts": ["192.0.2.60"],
+                "exclude_hosts": [],
+                "alive_tests": ["TCP-ACK Service Ping"],
+                "allow_simultaneous_ips": False,
+                "reverse_lookup_only": True,
+                "reverse_lookup_unify": True,
+            },
+            separators=(",", ":"),
+        )
+        source_create = direct_native_api_curl(
+            repo_root,
+            "/api/v1/targets",
+            token=token,
+            env=env,
+            method="POST",
+            body=source_body,
+            extra_headers=content_type,
+        )
+        source_create_json, source_create_status = parse_json_output_with_http_status(source_create)
+        source_target_id = (
+            source_create_json.get("id")
+            if isinstance(source_create_json, dict)
+            and isinstance(source_create_json.get("id"), str)
+            else None
+        )
+        source_create_ok = (
+            source_create.returncode == 0
+            and source_create_status == 201
+            and bool(source_target_id)
+            and isinstance(source_create_json, dict)
+            and source_create_json.get("name") == source_target_name
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if source_create_ok else "fail",
+                "native-api-direct.task-target-replace-source-create",
+                "Direct write-control created the isolated task-target replacement source target."
+                if source_create_ok
+                else "Direct write-control failed to create the isolated task-target replacement source target.",
+                source_create,
+                direct_native_api_display_command(
+                    "/api/v1/targets",
+                    token=token,
+                    env=env,
+                    method="POST",
+                    body=source_body,
+                    extra_headers=content_type,
+                ),
+                source_create_json,
+                {
+                    "http_status": source_create_status,
+                    "source_target_id": source_target_id,
+                    **summarize_native_api_response(source_create_json),
+                },
+            )
+        )
+        if not source_create_ok or not source_target_id:
+            return findings
+
+        task_body = json.dumps(
+            {
+                "name": task_name,
+                "comment": "TurboVAS direct write smoke task-target replacement task",
+                "target_id": source_target_id,
+                "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
+                "scanner_id": scanner_id,
+            },
+            separators=(",", ":"),
+        )
+        task_create = direct_native_api_curl(
+            repo_root,
+            "/api/v1/tasks",
+            token=token,
+            env=env,
+            method="POST",
+            body=task_body,
+            extra_headers=content_type,
+        )
+        task_create_json, task_create_status = parse_json_output_with_http_status(task_create)
+        task_id = (
+            task_create_json.get("id")
+            if isinstance(task_create_json, dict) and isinstance(task_create_json.get("id"), str)
+            else None
+        )
+        task_create_ok = (
+            task_create.returncode == 0
+            and task_create_status == 201
+            and bool(task_id)
+            and isinstance(task_create_json, dict)
+            and task_create_json.get("name") == task_name
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if task_create_ok else "fail",
+                "native-api-direct.task-target-replace-task-create",
+                "Direct write-control created the isolated task-target replacement task without starting it."
+                if task_create_ok
+                else "Direct write-control failed to create the isolated task-target replacement task.",
+                task_create,
+                direct_native_api_display_command(
+                    "/api/v1/tasks",
+                    token=token,
+                    env=env,
+                    method="POST",
+                    body=task_body,
+                    extra_headers=content_type,
+                ),
+                task_create_json,
+                {
+                    "http_status": task_create_status,
+                    "task_id": task_id,
+                    "source_target_id": source_target_id,
+                    "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
+                    "scanner_id": scanner_id,
+                    **summarize_native_api_response(task_create_json),
+                },
+            )
+        )
+        if not task_create_ok or not task_id:
+            return findings
+
+        task_precondition_sql = (
+            "SELECT coalesce(t.run_status, 1)::text || '|' || "
+            "(SELECT count(*)::text FROM reports WHERE task = t.id) || '|' || "
+            "coalesce(source.uuid::text, '') "
+            "FROM tasks t LEFT JOIN targets source ON source.id = t.target "
+            f"WHERE t.uuid = {sql_literal(task_id)};"
+        )
+        task_precondition = psql_value(psql(repo_root, task_precondition_sql))
+        task_precondition_ok = task_precondition == f"1|0|{source_target_id}"
+        findings.append(
+            finding(
+                "pass" if task_precondition_ok else "fail",
+                "native-api-direct.task-target-replace-preconditions",
+                "Replacement fixture task is exactly New, has zero reports, and is bound to its owned source target."
+                if task_precondition_ok
+                else "Replacement fixture task was not exactly New with zero reports and its owned source target.",
+                details={"task_id": task_id, "state": task_precondition},
+            )
+        )
+        if not task_precondition_ok:
+            return findings
+
+        target_config_sql = lambda target_uuid: (
+            "SELECT md5(coalesce(owner::text, '') || '|' || coalesce(port_list::text, '') || '|' || "
+            "coalesce(alive_test::text, '') || '|' || coalesce(reverse_lookup_only::text, '') || '|' || "
+            "coalesce(reverse_lookup_unify::text, '') || '|' || coalesce(allow_simultaneous_ips::text, '') || '|' || "
+            "coalesce(comment, '') || '|' || (SELECT count(*)::text FROM targets_login_data WHERE target = targets.id)) "
+            "FROM targets "
+            f"WHERE uuid = {sql_literal(target_uuid)};"
+        )
+        source_config_before = psql_value(psql(repo_root, target_config_sql(source_target_id)))
+        replacement_hosts = ["192.0.2.61", "192.0.2.62"]
+        replacement_exclusions = ["192.0.2.62"]
+        replace_body = json.dumps(
+            {"hosts": replacement_hosts, "exclude_hosts": replacement_exclusions},
+            separators=(",", ":"),
+        )
+        replace_path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/replace-target"
+        replacement = direct_native_api_curl(
+            repo_root,
+            replace_path,
+            token=token,
+            env=env,
+            method="POST",
+            body=replace_body,
+            extra_headers=content_type,
+        )
+        replacement_json, replacement_status = parse_json_output_with_http_status(replacement)
+        old_target_id = replacement_json.get("old_target_id") if isinstance(replacement_json, dict) else None
+        new_target_id = replacement_json.get("new_target_id") if isinstance(replacement_json, dict) else None
+        old_target_disposition = replacement_json.get("old_target_disposition") if isinstance(replacement_json, dict) else None
+        replacement_ack_ok = (
+            replacement.returncode == 0
+            and replacement_status == 200
+            and isinstance(replacement_json, dict)
+            and replacement_json.get("task_id") == task_id
+            and old_target_id == source_target_id
+            and isinstance(new_target_id, str)
+            and bool(UUID_VALUE_RE.fullmatch(new_target_id))
+            and replacement_json.get("status") == "replaced"
+            and old_target_disposition in {"trashed", "retained"}
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if replacement_ack_ok else "fail",
+                "native-api-direct.task-target-replace-acknowledgement",
+                "Direct native API returned the typed task-target replacement acknowledgement."
+                if replacement_ack_ok
+                else "Direct native API task-target replacement did not return the typed acknowledgement.",
+                replacement,
+                direct_native_api_display_command(
+                    replace_path,
+                    token=token,
+                    env=env,
+                    method="POST",
+                    body=replace_body,
+                    extra_headers=content_type,
+                ),
+                replacement_json,
+                {
+                    "http_status": replacement_status,
+                    "task_id": task_id,
+                    "old_target_id": old_target_id,
+                    "new_target_id": new_target_id,
+                    "old_target_disposition": old_target_disposition,
+                    **summarize_native_api_response(replacement_json),
+                },
+            )
+        )
+        if not replacement_ack_ok or not isinstance(new_target_id, str):
+            return findings
+
+        task_rebind_sql = (
+            "SELECT coalesce(target.uuid::text, '') || '|' || coalesce(config.uuid::text, '') || '|' || "
+            "coalesce(scanner.uuid::text, '') || '|' || coalesce(t.run_status, 1)::text || '|' || "
+            "(SELECT count(*)::text FROM reports WHERE task = t.id) "
+            "FROM tasks t "
+            "LEFT JOIN targets target ON target.id = t.target "
+            "LEFT JOIN configs config ON config.id = t.config "
+            "LEFT JOIN scanners scanner ON scanner.id = t.scanner "
+            f"WHERE t.uuid = {sql_literal(task_id)};"
+        )
+        task_rebind_state = psql_value(psql(repo_root, task_rebind_sql))
+        task_rebind_ok = task_rebind_state == f"{new_target_id}|{FULL_AND_FAST_SCAN_CONFIG_ID}|{scanner_id}|1|0"
+        findings.append(
+            finding(
+                "pass" if task_rebind_ok else "fail",
+                "native-api-direct.task-target-replace-rebind",
+                "PostgreSQL confirms the New zero-report task rebound to the replacement target without changing scan config or scanner."
+                if task_rebind_ok
+                else "PostgreSQL did not confirm the expected task rebind and preserved New zero-report state.",
+                details={"task_id": task_id, "state": task_rebind_state},
+            )
+        )
+
+        new_target_config = psql_value(psql(repo_root, target_config_sql(new_target_id)))
+        new_target_inputs = psql_value(
+            psql(
+                repo_root,
+                "SELECT coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') "
+                "FROM targets "
+                f"WHERE uuid = {sql_literal(new_target_id)};",
+            )
+        )
+        target_preservation_ok = (
+            bool(source_config_before)
+            and source_config_before == new_target_config
+            and new_target_inputs == "192.0.2.61, 192.0.2.62|192.0.2.62"
+        )
+        findings.append(
+            finding(
+                "pass" if target_preservation_ok else "fail",
+                "native-api-direct.task-target-replace-target-preservation",
+                "PostgreSQL confirms replacement hosts/exclusions and preservation of source target scan-input configuration."
+                if target_preservation_ok
+                else "PostgreSQL did not confirm replacement hosts/exclusions and preserved source target scan-input configuration.",
+                details={
+                    "new_target_id": new_target_id,
+                    "source_config_checksum": source_config_before,
+                    "new_target_config_checksum": new_target_config,
+                    "new_target_inputs": new_target_inputs,
+                },
+            )
+        )
+
+        source_reference_state = psql_value(
+            psql(
+                repo_root,
+                "SELECT (SELECT count(*)::text FROM tasks WHERE target = "
+                f"(SELECT id FROM targets WHERE uuid = {sql_literal(source_target_id)}) "
+                "AND coalesce(target_location, 0) = 0 AND coalesce(hidden, 0) = 0) || '|' || "
+                "(SELECT count(*)::text FROM scope_targets WHERE target = "
+                f"(SELECT id FROM targets WHERE uuid = {sql_literal(source_target_id)}));",
+            )
+        )
+        source_disposition_state = psql_value(
+            psql(
+                repo_root,
+                "SELECT (SELECT count(*)::text FROM targets "
+                f"WHERE uuid = {sql_literal(source_target_id)}) || '|' || "
+                "(SELECT count(*)::text FROM targets_trash "
+                f"WHERE uuid = {sql_literal(source_target_id)});",
+            )
+        )
+        source_disposition_ok = (
+            old_target_disposition == "trashed"
+            and source_reference_state == "0|0"
+            and source_disposition_state == "0|1"
+        )
+        findings.append(
+            finding(
+                "pass" if source_disposition_ok else "fail",
+                "native-api-direct.task-target-replace-old-target-disposition",
+                "PostgreSQL confirms the unreferenced old target was trashed after the task rebind."
+                if source_disposition_ok
+                else "Old-target acknowledgement disposition was inconsistent with PostgreSQL task/scope references.",
+                details={
+                    "old_target_id": source_target_id,
+                    "acknowledged_disposition": old_target_disposition,
+                    "reference_state": source_reference_state,
+                    "live_trash_state": source_disposition_state,
+                },
+            )
+        )
+    finally:
+        target_name_pattern = f"{source_target_name}%"
+        owner_sql = f"(SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid)})"
+        task_selector = (
+            f"SELECT id FROM tasks WHERE (uuid = {sql_literal(task_id or '')} "
+            f"OR name = {sql_literal(task_name)}) AND owner = {owner_sql}"
+        )
+        live_target_selector = (
+            "SELECT id FROM targets WHERE "
+            f"(uuid IN ({sql_literal(source_target_id or '')}, {sql_literal(new_target_id or '')}) "
+            f"OR name LIKE {sql_literal(target_name_pattern)}) AND owner = {owner_sql}"
+        )
+        trash_target_selector = (
+            "SELECT id FROM targets_trash WHERE "
+            f"(uuid IN ({sql_literal(source_target_id or '')}, {sql_literal(new_target_id or '')}) "
+            f"OR name LIKE {sql_literal(target_name_pattern)}) AND owner = {owner_sql}"
+        )
+        cleanup_sql = (
+            "BEGIN; "
+            f"DELETE FROM task_alerts WHERE task IN ({task_selector}); "
+            f"DELETE FROM task_preferences WHERE task IN ({task_selector}); "
+            f"DELETE FROM tag_resources WHERE resource_type = 'task' AND resource IN ({task_selector}); "
+            f"DELETE FROM tag_resources_trash WHERE resource_type = 'task' AND resource IN ({task_selector}); "
+            f"DELETE FROM tasks WHERE id IN ({task_selector}); "
+            f"DELETE FROM scope_targets WHERE target IN ({live_target_selector}); "
+            f"DELETE FROM targets_login_data WHERE target IN ({live_target_selector}); "
+            f"DELETE FROM tag_resources WHERE resource_type = 'target' AND resource IN ({live_target_selector}); "
+            f"DELETE FROM tag_resources_trash WHERE resource_type = 'target' AND resource IN ({live_target_selector}); "
+            f"DELETE FROM targets WHERE id IN ({live_target_selector}); "
+            f"DELETE FROM targets_trash_login_data WHERE target IN ({trash_target_selector}); "
+            f"DELETE FROM tag_resources WHERE resource_type = 'target' AND resource IN ({trash_target_selector}); "
+            f"DELETE FROM tag_resources_trash WHERE resource_type = 'target' AND resource IN ({trash_target_selector}); "
+            f"DELETE FROM targets_trash WHERE id IN ({trash_target_selector}); "
+            "COMMIT;"
+        )
+        cleanup = psql(repo_root, cleanup_sql)
+        cleanup_residue_sql = (
+            "SELECT (SELECT count(*)::text FROM tasks WHERE name = "
+            f"{sql_literal(task_name)} AND owner = (SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid)})) || '|' || "
+            "(SELECT count(*)::text FROM targets WHERE name LIKE "
+            f"{sql_literal(target_name_pattern)} AND owner = {owner_sql}) || '|' || "
+            "(SELECT count(*)::text FROM targets_trash WHERE name LIKE "
+            f"{sql_literal(target_name_pattern)} AND owner = {owner_sql});"
+        )
+        cleanup_residue = psql(repo_root, cleanup_residue_sql)
+        cleanup_state = psql_value(cleanup_residue)
+        cleanup_ok = cleanup.returncode == 0 and cleanup_residue.returncode == 0 and cleanup_state == "0|0|0"
+        cleanup_finding = process_step_finding(
+            "pass" if cleanup_ok else "fail",
+            "native-api-direct.task-target-replace-fixture-cleanup",
+            "Direct write-control smoke removed all isolated task-target replacement fixture residue."
+            if cleanup_ok
+            else "Direct write-control smoke failed to remove isolated task-target replacement fixture residue.",
+            cleanup,
+            ["psql", "fixed-task-target-replace-smoke-cleanup"],
+        )
+        cleanup_details = cleanup_finding.setdefault("details", {})
+        if isinstance(cleanup_details, dict):
+            cleanup_details.update(
+                {
+                    "task_id": task_id,
+                    "source_target_id": source_target_id,
+                    "new_target_id": new_target_id,
+                    "residue_state": cleanup_state,
+                }
+            )
+        findings.append(cleanup_finding)
+    return findings
 
 
 def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
@@ -16649,6 +17140,16 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             hard_delete_ok = hard_delete.returncode == 0 and hard_delete_status == 204
             findings.append(native_api_probe_finding("pass" if hard_delete_ok else "fail", "native-api-direct.tag-write-hard-delete", "Direct write-control hard-deleted the temporary trashed tag." if hard_delete_ok else "Direct write-control failed to hard-delete the temporary trashed tag.", hard_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/trash", token=token, env=env, method="DELETE"), hard_delete_json, {"http_status": hard_delete_status, "tag_id": tag_id, **summarize_native_api_response(hard_delete_json)}))
 
+    if started_write_control and aggregate_status(findings) != "fail" and admin_uuid:
+        findings.extend(
+            direct_task_target_replace_runtime_findings(
+                repo_root,
+                token=token,
+                env=env,
+                admin_uuid=admin_uuid,
+            )
+        )
+
     if started_write_control and aggregate_status(findings) == "fail":
         log_tail = service_log_tail(repo_root, "turbovas-api", lines=160)
         interesting_log_tail = [
@@ -18083,6 +18584,155 @@ def command_native_stop_task(
             for item in findings
             if isinstance(item, dict) and item.get("status") != "pass"
         ] or [finding("pass", "native-stop-task.status-only", "Native task stop accepted; acknowledgement summarized.")]
+        result = compact
+    return result
+
+
+def load_native_task_target_hosts_csv(hosts_file: Path) -> list[str]:
+    hosts: list[str] = []
+    try:
+        with hosts_file.open(encoding="utf-8", newline="") as handle:
+            for row in csv.reader(handle):
+                if not row:
+                    continue
+                host = row[0].strip()
+                if host:
+                    hosts.append(host)
+    except OSError as exc:
+        raise ValueError(f"failed to read hosts CSV file: {exc}") from exc
+    if not hosts:
+        raise ValueError("hosts CSV file must contain a nonempty first-column host value")
+    return hosts
+
+
+def command_native_update_task_target(
+    repo_root: Path,
+    *,
+    task_id: str,
+    hosts: Sequence[str] | None = None,
+    hosts_file: Path | None = None,
+    exclude_hosts: Sequence[str] | None = None,
+    allow_write_control: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    try:
+        task_id = validate_native_api_operator_uuid_value(task_id, env_name="--task-id")
+        supplied_hosts = [host.strip() for host in hosts or [] if host.strip()]
+        if bool(supplied_hosts) == bool(hosts_file):
+            raise ValueError("provide exactly one of --host or --hosts-file")
+        resolved_hosts = load_native_task_target_hosts_csv(hosts_file) if hosts_file else supplied_hosts
+        if not resolved_hosts:
+            raise ValueError("provide at least one nonempty --host value")
+        resolved_exclude_hosts = [host.strip() for host in exclude_hosts or [] if host.strip()]
+    except ValueError as exc:
+        findings.append(finding("fail", "native-update-task-target.arguments", str(exc)))
+        return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
+
+    if not allow_write_control:
+        findings.append(
+            finding(
+                "fail",
+                "native-update-task-target.write-control-intent",
+                "Replacing a task target requires --allow-write-control because it creates a target and rebinds a task.",
+            )
+        )
+        return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-update-task-target.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return make_result("native-update-task-target", repo_root, "Direct native API task-target replacement rejected before runtime access.", findings)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-update-task-target.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
+
+    body_object: dict[str, Any] = {"hosts": resolved_hosts}
+    if resolved_exclude_hosts:
+        body_object["exclude_hosts"] = resolved_exclude_hosts
+    path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/replace-target"
+    response = direct_native_api_curl(
+        repo_root,
+        path,
+        token=token,
+        env=env,
+        method="POST",
+        body=json.dumps(body_object),
+        extra_headers=[("Content-Type", "application/json")],
+    )
+    parsed, http_status = parse_json_output_with_http_status(response)
+    old_target_id = parsed.get("old_target_id") if isinstance(parsed, dict) else None
+    new_target_id = parsed.get("new_target_id") if isinstance(parsed, dict) else None
+    old_target_disposition = parsed.get("old_target_disposition") if isinstance(parsed, dict) else None
+    accepted = (
+        response.returncode == 0
+        and http_status == 200
+        and isinstance(parsed, dict)
+        and parsed.get("task_id") == task_id
+        and isinstance(old_target_id, str)
+        and bool(UUID_VALUE_RE.fullmatch(old_target_id))
+        and isinstance(new_target_id, str)
+        and bool(UUID_VALUE_RE.fullmatch(new_target_id))
+        and parsed.get("status") == "replaced"
+        and old_target_disposition in {"trashed", "retained"}
+    )
+    findings.append(
+        native_api_probe_finding(
+            "pass" if accepted else "fail",
+            "native-update-task-target.request",
+            "Native API atomically cloned and rebound the task target without starting a scan."
+            if accepted
+            else "Native API task-target replacement failed or returned an invalid acknowledgement.",
+            response,
+            direct_native_api_display_command(
+                path,
+                token=token,
+                env=env,
+                method="POST",
+                body=json.dumps(body_object),
+                extra_headers=[("Content-Type", "application/json")],
+            ),
+            parsed,
+            {
+                "http_status": http_status,
+                "task_id": task_id,
+                "old_target_id": old_target_id,
+                "new_target_id": new_target_id,
+                "task_status": parsed.get("status") if isinstance(parsed, dict) else None,
+                "old_target_disposition": old_target_disposition,
+                **summarize_native_api_response(parsed),
+            },
+        )
+    )
+    result = make_result(
+        "native-update-task-target",
+        repo_root,
+        "Native task-target replacement completed." if accepted else "Native task-target replacement failed.",
+        findings,
+    )
+    result["details"] = {
+        "task_id": task_id,
+        "old_target_id": old_target_id,
+        "new_target_id": new_target_id,
+        "task_status": parsed.get("status") if isinstance(parsed, dict) else None,
+        "old_target_disposition": old_target_disposition,
+        "http_status": http_status,
+    }
+    if status_only:
+        compact = dict(result)
+        compact["findings"] = [
+            compact_doctor_finding(item)
+            for item in findings
+            if isinstance(item, dict) and item.get("status") != "pass"
+        ] or [finding("pass", "native-update-task-target.status-only", "Native task-target replacement acknowledgement summarized.")]
         result = compact
     return result
 
@@ -23316,6 +23966,14 @@ def build_parser() -> argparse.ArgumentParser:
     native_stop_task.add_argument("--task-id", required=True, help="task UUID to stop")
     native_stop_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional scanner task control")
     native_stop_task.add_argument("--status-only", action="store_true", help="emit compact task-stop acknowledgement")
+    native_update_task_target = subparsers.add_parser("native-update-task-target", parents=[common], help="replace one task target through the guarded direct native API")
+    native_update_task_target.add_argument("--task-id", required=True, help="task UUID whose target will be replaced")
+    target_hosts = native_update_task_target.add_mutually_exclusive_group(required=True)
+    target_hosts.add_argument("--host", action="append", default=[], help="explicit host/IP value for the replacement target; may be repeated")
+    target_hosts.add_argument("--hosts-file", type=Path, help="CSV file whose first nonempty column supplies replacement target hosts")
+    native_update_task_target.add_argument("--exclude-host", action="append", default=[], help="explicit excluded host/IP value; may be repeated")
+    native_update_task_target.add_argument("--allow-write-control", action="store_true", help="confirm intentional target clone and task rebind")
+    native_update_task_target.add_argument("--status-only", action="store_true", help="emit compact task-target replacement acknowledgement")
     native_stop_tasks_csv = subparsers.add_parser("native-stop-tasks-from-csv", parents=[common], help="stop active tasks named in the inherited first-column CSV shape through the guarded direct native API")
     native_stop_tasks_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with one task name in the first column per row")
     native_stop_tasks_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional scanner task control for every selected row")
@@ -23523,6 +24181,16 @@ def main(argv: list[str] | None = None) -> int:
             method=args.method,
             request_id=args.request_id,
             body_json=args.body_json,
+            allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-update-task-target":
+        result = command_native_update_task_target(
+            repo_root,
+            task_id=args.task_id,
+            hosts=args.host,
+            hosts_file=args.hosts_file,
+            exclude_hosts=args.exclude_host,
             allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )

@@ -36,7 +36,7 @@ pub(crate) async fn create_target(
         .map_err(|error| map_target_write_db_error(error, "begin create target transaction"))?;
     let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
-        "LOCK TABLE targets, targets_login_data, port_lists, credentials IN SHARE ROW EXCLUSIVE MODE;",
+        "LOCK TABLE port_lists, credentials, targets, targets_login_data IN SHARE ROW EXCLUSIVE MODE;",
     )
         .await
         .map_err(|error| map_target_write_db_error(error, "lock targets for create"))?;
@@ -81,7 +81,7 @@ pub(crate) async fn clone_target(
         .map_err(|error| map_target_write_db_error(error, "begin clone target transaction"))?;
     let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
-        "LOCK TABLE targets, targets_login_data, port_lists, credentials, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
+        "LOCK TABLE port_lists, credentials, targets, targets_login_data, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_target_write_db_error(error, "lock target tables for clone"))?;
@@ -206,7 +206,7 @@ pub(crate) async fn patch_target(
         .map_err(|error| map_target_write_db_error(error, "begin patch target transaction"))?;
     let operator_owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
-        "LOCK TABLE targets, targets_login_data, port_lists, credentials IN SHARE ROW EXCLUSIVE MODE;",
+        "LOCK TABLE port_lists, credentials, targets, targets_login_data IN SHARE ROW EXCLUSIVE MODE;",
     )
         .await
         .map_err(|error| map_target_write_db_error(error, "lock targets for patch"))?;

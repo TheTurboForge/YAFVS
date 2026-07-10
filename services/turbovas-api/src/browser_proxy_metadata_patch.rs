@@ -28,6 +28,8 @@ use crate::{
     task_control::{TaskStartResult, start_task},
     task_stop::{TaskStopResult, stop_task},
     task_target_payloads::TaskItem,
+    task_target_replace::{TaskTargetReplaceResponse, replace_task_target},
+    task_target_replace_validation::TaskTargetReplaceRequest,
     task_write_validation::{TaskCreateRequest, TaskPatchRequest},
     task_writes::{create_task, delete_task, patch_task},
     tls_certificate_writes::delete_tls_certificate,
@@ -125,6 +127,23 @@ pub(crate) async fn browser_proxy_stop_task(
 ) -> Result<(StatusCode, Json<TaskStopResult>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     stop_task(Path(task_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_replace_task_target(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<TaskTargetReplaceRequest>,
+) -> Result<Json<TaskTargetReplaceResponse>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    replace_task_target(
+        State(state),
+        Path(task_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_delete_tls_certificate(

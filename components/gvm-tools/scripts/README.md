@@ -196,19 +196,6 @@ This script creates a new task (if the target is not existing) with specific hos
 
 ---
 
-## `update-task-target.gmp.py`
-
-This script will update target hosts information for a desired task.
-
-### Arguments
-
-* `<hosts_file>`:   .csv file containing desired target hosts separated by ','
-* `<task_uuid>`:    uuid of task to be modified
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/update-task-target.gmp.py hosts_file.csv "303fa0a6-aa9b-43c4-bac0-66ae0b2d1698"`
-
 ## `create-alerts-from-csv.gmp.py`
 
 Creates alerts as specified in a csv-file. See alerts.csv for file format/contents.

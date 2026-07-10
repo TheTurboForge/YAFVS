@@ -5,8 +5,6 @@
 const NVT_SCAN: &str = include_str!("../../../components/gvm-tools/scripts/nvt-scan.gmp.py");
 const START_NVT_SCAN: &str =
     include_str!("../../../components/gvm-tools/scripts/start-nvt-scan.gmp.py");
-const SCAN_NEW_SYSTEM: &str =
-    include_str!("../../../components/gvm-tools/scripts/scan-new-system.gmp.py");
 
 #[test]
 fn inherited_nvt_scan_creates_or_reuses_config_target_and_starts_default_scanner_task() {
@@ -56,30 +54,6 @@ fn inherited_start_nvt_scan_is_interactive_and_can_clone_config_target_and_choos
         assert!(
             START_NVT_SCAN.contains(required),
             "start-nvt-scan missing {required}"
-        );
-    }
-}
-#[test]
-fn inherited_scan_new_system_creates_target_task_and_starts_full_fast_openvas_scan() {
-    for required in [
-        "if len_args != 2:",
-        "name = f\"Suspect Host {ipaddress} {str(datetime.datetime.now())}\"",
-        "gmp.create_target(",
-        "hosts=[ipaddress]",
-        "port_list_id=port_list_id",
-        "name = f\"Scan Suspect Host {ipaddress}\"",
-        "gmp.create_task(",
-        "config_id=scan_config_id",
-        "target_id=target_id",
-        "scanner_id=scanner_id",
-        "response = gmp.start_task(task_id)",
-        "return response[0].text",
-        "full_and_fast_scan_config_id = \"daba56c8-73ec-11df-a475-002264764cea\"",
-        "openvas_scanner_id = \"08b69003-5fc2-4037-a479-93b440211c73\"",
-    ] {
-        assert!(
-            SCAN_NEW_SYSTEM.contains(required),
-            "scan-new-system missing {required}"
         );
     }
 }

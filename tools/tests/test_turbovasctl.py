@@ -1488,7 +1488,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -4831,10 +4831,12 @@ class TurboVASCtlTests(unittest.TestCase):
                     "product_workflow": 7,
                 },
                 "candidate_for_removal_review": {
-                    "total": 4,
+                    "total": 3,
+                    "tracked_baseline_count": 4,
+                    "tracked_removed_count": 1,
                     "safe_removal_count": 1,
-                    "blocked_or_review_count": 3,
-                    "bucket_counts": {"write_or_mutation": 3},
+                    "blocked_or_review_count": 2,
+                    "bucket_counts": {"write_or_mutation": 2},
                 }
             },
             "findings": [],
@@ -4867,7 +4869,7 @@ class TurboVASCtlTests(unittest.TestCase):
             result = turbovasctl.command_native_api_replacement_dashboard(root, status_only=True)
 
         weighted = result["weighted_estimate"]
-        self.assertEqual(result["headline_replacement_percent"], 73.0)
+        self.assertEqual(result["headline_replacement_percent"], 72.2)
         self.assertEqual(weighted["kind"], "weighted_estimate")
         self.assertEqual(weighted["components"]["contract_percent"], 90.0)
         self.assertEqual(weighted["components"]["direct_scriptable_percent"], 70.0)
@@ -4876,10 +4878,12 @@ class TurboVASCtlTests(unittest.TestCase):
         legacy = result["legacy_helper_removal_readiness"]
         self.assertEqual(result["legacy_helper_removal_readiness_percent"], 66.0)
         self.assertEqual(legacy["kind"], "weighted_estimate")
-        self.assertEqual(legacy["components"]["direct_legacy_dependency_burndown_percent"], 87.0)
+        self.assertEqual(legacy["components"]["direct_legacy_dependency_burndown_percent"], 88.0)
         self.assertEqual(legacy["components"]["gvm_tools_script_removal_percent"], 25.0)
-        self.assertEqual(legacy["blockers"]["direct_legacy_blocker_count"], 13)
-        self.assertEqual(legacy["blockers"]["gvm_tools_blocked_or_review_count"], 3)
+        self.assertEqual(legacy["blockers"]["direct_legacy_blocker_count"], 12)
+        self.assertEqual(legacy["blockers"]["gvm_tools_blocked_or_review_count"], 2)
+        self.assertEqual(legacy["blockers"]["gvm_tools_tracked_baseline_count"], 4)
+        self.assertEqual(legacy["blockers"]["gvm_tools_tracked_removed_count"], 1)
         self.assertEqual(result["next_best_slices"][0]["focus"], "target-writes")
 
     def test_closeout_readiness_downgrades_optional_production_posture_to_watch(self):
@@ -6009,6 +6013,166 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(curl.call_args.args[1], f"/api/v1/tasks/{task_id}/start")
         self.assertEqual(curl.call_args.kwargs["method"], "POST")
         self.assertNotIn("a" * 64, json.dumps(result))
+
+    def _native_scan_new_system_result(
+        self,
+        *,
+        start_response: subprocess.CompletedProcess[str] | None = None,
+        follow_up_response: subprocess.CompletedProcess[str] | None = None,
+        task_response: subprocess.CompletedProcess[str] | None = None,
+    ) -> tuple[dict[str, object], list[tuple[str, str]], dict[str, str]]:
+        ids = {
+            "target": "11111111-1111-4111-8111-111111111111",
+            "task": "22222222-2222-4222-8222-222222222222",
+            "report": "33333333-3333-4333-8333-333333333333",
+        }
+        calls: list[tuple[str, str]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            method = kwargs.get("method", "GET")
+            calls.append((method, path))
+            if method == "GET" and path == f"/api/v1/port-lists/{turbovasctl.IANA_TCP_UDP_PORT_LIST_ID}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": turbovasctl.IANA_TCP_UDP_PORT_LIST_ID, "name": "IANA"}) + "\n200", "")
+            if method == "GET" and path == f"/api/v1/scan-configs/{turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}) + "\n200", "")
+            if method == "GET" and path == f"/api/v1/scanners/{turbovasctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID}":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": turbovasctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID, "name": "OpenVAS", "scanner_type": 2}) + "\n200", "")
+            if method == "POST" and path == "/api/v1/targets":
+                body = json.loads(kwargs["body"])
+                self.assertEqual(body["hosts"], ["192.0.2.10"])
+                self.assertEqual(body["alive_tests"], ["Scan Config Default"])
+                self.assertFalse(body["allow_simultaneous_ips"])
+                self.assertFalse(body["reverse_lookup_only"])
+                self.assertFalse(body["reverse_lookup_unify"])
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": ids["target"], "name": body["name"]}) + "\n201", "")
+            if method == "POST" and path == "/api/v1/tasks":
+                if task_response is not None:
+                    return task_response
+                body = json.loads(kwargs["body"])
+                self.assertEqual(body["target_id"], ids["target"])
+                self.assertEqual(body["config_id"], turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
+                self.assertEqual(body["scanner_id"], turbovasctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID)
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": ids["task"], "name": body["name"]}) + "\n201", "")
+            if method == "POST" and path == f"/api/v1/tasks/{ids['task']}/start":
+                return start_response or subprocess.CompletedProcess(["curl"], 0, json.dumps({"task_id": ids["task"], "report_id": ids["report"], "status": "requested"}) + "\n202", "")
+            if method == "GET" and path == f"/api/v1/tasks/{ids['task']}":
+                if follow_up_response is None:
+                    raise AssertionError("unexpected task follow-up")
+                return follow_up_response
+            if method == "DELETE" and path == f"/api/v1/targets/{ids['target']}":
+                return subprocess.CompletedProcess(["curl"], 0, "{}\n204", "")
+            if method == "DELETE" and path == f"/api/v1/targets/{ids['target']}/trash":
+                return subprocess.CompletedProcess(["curl"], 0, "{}\n204", "")
+            raise AssertionError((method, path))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_scan_new_system(Path(tmp), host="192.0.2.10", allow_scan_control=True)
+        return result, calls, ids
+
+    def test_native_scan_new_system_rejects_invalid_arguments_and_preflight_before_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                invalid = turbovasctl.command_native_scan_new_system(Path(tmp), host="192.0.2.0/24", allow_scan_control=True)
+                curl.assert_not_called()
+        self.assertEqual(invalid["status"], "fail")
+        self.assertEqual(invalid["findings"][0]["check"], "native-scan-new-system.arguments")
+
+        calls: list[tuple[str, str]] = []
+        def fake_direct(_root, path, **kwargs):
+            calls.append((kwargs.get("method", "GET"), path))
+            if path.endswith("/port-lists/" + turbovasctl.IANA_TCP_UDP_PORT_LIST_ID):
+                payload = {"id": turbovasctl.IANA_TCP_UDP_PORT_LIST_ID, "name": "IANA"}
+            elif path.endswith("/scan-configs/" + turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID):
+                payload = {"id": turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}
+            else:
+                payload = {"id": turbovasctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID, "name": "Not a task scanner", "scanner_type": 3}
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_scan_new_system(Path(tmp), host="192.0.2.10", allow_scan_control=True)
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual([method for method, _path in calls], ["GET", "GET", "GET"])
+        self.assertEqual(next(item for item in result["findings"] if item["check"].endswith("preflight.scanner"))["status"], "fail")
+
+    def test_native_scan_new_system_dry_run_plans_without_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_scan_new_system(Path(tmp), host="2001:db8::10", dry_run=True)
+                curl.assert_not_called()
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["status"], "dry_run")
+        self.assertEqual(result["details"]["operation_status"], "dry_run")
+        self.assertEqual(result["details"]["planned_target"]["hosts"], ["2001:db8::10"])
+        self.assertEqual(result["details"]["planned_task"]["target_id"], "<created-target-id>")
+
+    def test_native_scan_new_system_preflights_then_creates_and_starts_in_order(self):
+        result, calls, ids = self._native_scan_new_system_result()
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["status"], "requested")
+        self.assertEqual(result["details"]["operation_status"], "requested")
+        self.assertEqual(result["details"]["target_id"], ids["target"])
+        self.assertEqual(result["details"]["task_id"], ids["task"])
+        self.assertEqual(result["details"]["report_id"], ids["report"])
+        self.assertEqual(calls, [("GET", f"/api/v1/port-lists/{turbovasctl.IANA_TCP_UDP_PORT_LIST_ID}"), ("GET", f"/api/v1/scan-configs/{turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID}"), ("GET", f"/api/v1/scanners/{turbovasctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID}"), ("POST", "/api/v1/targets"), ("POST", "/api/v1/tasks"), ("POST", f"/api/v1/tasks/{ids['task']}/start")])
+
+    def test_native_scan_new_system_cleans_up_target_after_task_create_failure(self):
+        result, calls, ids = self._native_scan_new_system_result(task_response=subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"conflict"}}\n409', ""))
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["details"]["target_id"], ids["target"])
+        self.assertIsNone(result["details"]["task_id"])
+        self.assertEqual(result["details"]["cleanup"]["live_delete"], "deleted")
+        self.assertEqual(result["details"]["cleanup"]["trash_hard_delete"], "deleted")
+        self.assertEqual(calls[-2:], [("DELETE", f"/api/v1/targets/{ids['target']}"), ("DELETE", f"/api/v1/targets/{ids['target']}/trash")])
+
+    def test_native_scan_new_system_retains_ids_after_proven_inactive_start_failure(self):
+        start = subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"conflict"}}\n409', "")
+        inactive = subprocess.CompletedProcess(["curl"], 0, '{"id":"22222222-2222-4222-8222-222222222222","status":"New","current_report":null}\n200', "")
+        result, calls, ids = self._native_scan_new_system_result(start_response=start, follow_up_response=inactive)
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["details"]["status"], "prepared_not_started")
+        self.assertEqual(result["details"]["operation_status"], "prepared_not_started")
+        self.assertEqual(result["details"]["target_id"], ids["target"])
+        self.assertEqual(result["details"]["task_id"], ids["task"])
+        self.assertNotIn(("DELETE", f"/api/v1/targets/{ids['target']}"), calls)
+        self.assertEqual(calls[-1], ("GET", f"/api/v1/tasks/{ids['task']}"))
+
+    def test_native_scan_new_system_reports_unconfirmed_active_start_follow_up(self):
+        start = subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"gateway_timeout"}}\n504', "")
+        active = subprocess.CompletedProcess(["curl"], 0, '{"id":"22222222-2222-4222-8222-222222222222","status":"Running","current_report":{"id":"33333333-3333-4333-8333-333333333333"}}\n200', "")
+        result, calls, ids = self._native_scan_new_system_result(start_response=start, follow_up_response=active)
+        self.assertEqual(result["details"]["operation_status"], "start_outcome_unconfirmed")
+        self.assertEqual(result["details"]["status"], "start_outcome_unconfirmed")
+        self.assertEqual(result["details"]["observed_task_status"], "Running")
+        self.assertEqual(result["details"]["report_id"], ids["report"])
+        self.assertNotIn(("DELETE", f"/api/v1/targets/{ids['target']}"), calls)
+
+    def test_native_scan_new_system_reports_unconfirmed_ambiguous_start_follow_up(self):
+        start = subprocess.CompletedProcess(["curl"], 1, "", "timeout")
+        unavailable = subprocess.CompletedProcess(["curl"], 22, "", "unavailable")
+        result, calls, ids = self._native_scan_new_system_result(start_response=start, follow_up_response=unavailable)
+        self.assertEqual(result["details"]["operation_status"], "start_outcome_unconfirmed")
+        self.assertIsNone(result["details"]["observed_task_status"])
+        self.assertIsNone(result["details"]["report_id"])
+        self.assertNotIn(("DELETE", f"/api/v1/targets/{ids['target']}"), calls)
+
+    def test_native_scan_new_system_parser_is_registered(self):
+        args = turbovasctl.build_parser().parse_args(["native-scan-new-system", "--host", "192.0.2.10", "--dry-run"])
+        self.assertEqual(args.command, "native-scan-new-system")
+        self.assertEqual(args.port_list_id, turbovasctl.IANA_TCP_UDP_PORT_LIST_ID)
+        self.assertEqual(args.scan_config_id, turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
+        self.assertEqual(args.scanner_id, turbovasctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID)
+
+    def test_native_scan_new_system_is_not_a_remaining_gvm_tools_replacement_candidate(self):
+        candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
+        self.assertNotIn("scan-new-system.gmp.py", candidates)
+        self.assertNotIn("scan-new-system.gmp.py", turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
 
     def test_native_start_tasks_from_csv_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:

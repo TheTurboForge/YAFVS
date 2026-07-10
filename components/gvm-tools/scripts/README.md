@@ -125,20 +125,6 @@ This script requests the given report and saves it as a pdf file locally.
 
 ---
 
-## `scan-new-system.gmp.py`
-
-This script starts a new scan on the given host.
-
-### Arguments
-
-* `<host_ip>`  IP Address of the host system
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/scan-new-system.gmp.py <host_ip>`
-
----
-
 ## `send-schedules.gmp.py`
 
 This script pulls schedule data from an xml document and feeds it to a desired GSM.
@@ -265,6 +251,20 @@ source task names abort preflight; existing task names are idempotent skips.
 A blank host-ordering column defaults to `RANDOM`; invalid values are rejected.
 Host ordering is persisted as a task preference and forwarded to both OSP/OpenVAS
 and OpenVASD scanner transports.
+
+## Native explicit-host scan start
+
+The inherited `scan-new-system.gmp.py` script has been removed. Plan or start
+the retained workflow through explicit native contracts:
+
+`$ just native-scan-new-system -- --host 192.0.2.10 --dry-run --status-only`
+
+`$ just native-scan-new-system -- --host 192.0.2.10 --allow-scan-control --status-only`
+
+The command preflights its exact port list, scan config, and scanner before
+creating a unique target/task and invoking guarded native task start. It does
+not accept hostnames, CIDRs, ranges, interactive selection, or implicit scan
+inputs.
 
 ## `empty-trash.gmp.py`
 

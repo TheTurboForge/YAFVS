@@ -171,6 +171,8 @@ tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
 tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
+tools/turbovasctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
+tools/turbovasctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
 tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 tools/turbovasctl native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
 tools/turbovasctl native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
@@ -186,6 +188,19 @@ rebinds its target without starting a scan. The replacement preserves target
 settings, credential links, and tags; the old target is moved to trash only
 when no other live task or scope still references it. It does not accept target files, host filters,
 or implicit host selection.
+
+`native-scan-new-system` replaces the retired ad-hoc GMP scanner script with an
+explicit native workflow. It accepts exactly one IPv4 or IPv6 address,
+preflights the selected port list, scan config, and scan-capable scanner before
+the first write, then creates a uniquely named target and task and submits the
+guarded task-start request. Defaults retain the inherited IANA TCP/UDP port
+list, Full and Fast config, and built-in OpenVAS scanner; each UUID can be
+overridden explicitly. Use `--dry-run` to inspect the plan without runtime
+writes. A real request requires `--allow-scan-control`. If task creation fails,
+the helper attempts to remove its newly created target. If task start is not
+accepted, it retains the prepared task and target, reads task detail to avoid
+claiming a failed scan that may already be active, and reports the observed
+state for diagnosis or retry.
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
 table with direct native API calls. It verifies each scanner without starting a

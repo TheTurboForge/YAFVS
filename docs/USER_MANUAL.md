@@ -138,7 +138,8 @@ listener. The direct write-control flag is
 `TURBOVAS_API_OPERATOR_UUID`, and currently enables only explicit contract-listed
 native write/control routes for scopes, tags, filters, port lists, report
 configs, scan configs, schedules, targets, selected alert metadata, credential
-name/comment metadata, scanner metadata, task metadata, and reviewed clone/
+name/comment metadata, scanner metadata, task metadata, guarded task start, and
+reviewed clone/
 restore/trash operations. UUID-backed
 resources use UUIDs; catalog-backed security information resources use exact
 public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. Alert
@@ -169,6 +170,7 @@ tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --allo
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
+tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
 ```
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
@@ -216,9 +218,16 @@ retention count. The default retention count is `10`. Pruning skips raw reports
 that are referenced by scope reports so generated scope-report provenance remains
 intact.
 
-Stopping or cancelling an active scan remains available. Resuming a partial scan
-is not part of the product model: in-progress scan state is disposable, while
-completed raw reports and scope reports are the valuable evidence artifacts.
+Starting a task is available through the guarded native
+`POST /api/v1/tasks/{task_id}/start` route, either through the authenticated
+browser proxy or direct API access. It requires explicit operator consent via
+`tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control`.
+The request transactionally creates the report and gvmd `scan_queue` request;
+gvmd remains responsible for scanner execution and result ingestion.
+Stopping or cancelling an active scan remains available through inherited
+control. Resuming a partial scan is not part of the product model:
+in-progress scan state is disposable, while completed raw reports and scope
+reports are the valuable evidence artifacts.
 
 For `Full and fast` scan fidelity, the development runtime keeps OpenVAS and
 OSPD non-root and grants only the scanner/Nmap capabilities needed for raw

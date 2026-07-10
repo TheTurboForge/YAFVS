@@ -225,6 +225,8 @@ mod target_write_validation;
 mod target_writes;
 #[cfg(test)]
 mod target_writes_tests;
+mod task_control;
+mod task_control_sql;
 mod task_handlers;
 mod task_query_sql;
 mod task_target_payloads;
@@ -312,6 +314,8 @@ mod scope_report_contract_tests;
 mod scope_report_mutation_characterization_tests;
 #[cfg(test)]
 mod task_control_characterization_tests;
+#[cfg(test)]
+mod task_control_tests;
 #[cfg(test)]
 mod tooling_account_characterization_tests;
 #[cfg(test)]

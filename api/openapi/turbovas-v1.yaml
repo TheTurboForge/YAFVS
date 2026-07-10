@@ -1332,7 +1332,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: scanner-control
       summary: Verify a scanner through a bounded native control probe
-      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, scanner create/delete, scanner host mutation, credential-secret, scan start/stop, and live status streaming remain inherited while their safety contracts are designed.
+      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, scanner create/delete, scanner host mutation, credential-secret, scan stop, and live status streaming remain inherited while their safety contracts are designed. Task start is provided separately through the gvmd scan queue.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -5319,7 +5319,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-list-read
       summary: List scan tasks
-      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references, metadata-only task updates, metadata export, and safe non-running live-task trash moves. Start, stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation, preferences, alerts, and scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
+      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references, metadata-only task updates, metadata export, safe non-running live-task trash moves, and guarded task start through the gvmd scan queue. Stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation, preferences, alerts, and non-queue scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -5355,7 +5355,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: task-create-with-target-config-scanner
-      x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes
+      x-turbovas-inherited-still-owns: task-stop-resume-clone-file-and-hard-delete
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5401,7 +5401,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-detail-summary-read
       summary: Read one scan task summary
-      description: Native direct API exposes task summary reads, bounded task creation, metadata-only task updates, and safe non-running live-task trash moves. Start/stop lifecycle control, clone, hard-delete, inherited file-export formats, broad target/config/schedule/scanner mutation, alerts, and preferences remain inherited until native scanner-control and full task-mutation contracts define report creation, scanner side effects, task/report status transitions, audit behavior, and failure mapping.
+      description: Native direct API exposes task summary reads, bounded task creation, metadata-only task updates, safe non-running live-task trash moves, and guarded task start through the gvmd scan queue. Stop lifecycle control, clone, hard-delete, inherited file-export formats, broad target/config/schedule/scanner mutation, alerts, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -5436,7 +5436,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update task metadata
-      description: Direct write-control endpoint for updating task name and comment only. Start, stop, resume, clone, file export, hard-delete, target/config/schedule/scanner changes, alert links, preferences, report creation, scanner side effects, and task/report status transitions remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating task name and comment only. Task start has a separate guarded scan-queue route. Stop, resume, clone, file export, hard-delete, target/config/schedule/scanner changes, alert links, preferences, and non-queue scanner side effects remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -5479,12 +5479,53 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Move a non-running scan task to trash
-      description: Direct write-control endpoint for moving an operator-owned, live, non-running scan task to the trashcan by setting the inherited task trash marker and moving task/report/result tag/result evidence locations consistently. Running, queued, requested, stop/delete-waiting, processing, hard-delete, start/stop, clone, file export, target/config/schedule/scanner mutation, alert links, preferences, report creation, scanner side effects, and task/report status transitions remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving an operator-owned, live, non-running scan task to the trashcan by setting the inherited task trash marker and moving task/report/result tag/result evidence locations consistently. Running, queued, requested, stop/delete-waiting, processing, hard-delete, stop, clone, file export, target/config/schedule/scanner mutation, alert links, preferences, and non-queue scanner side effects remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
         '204':
           description: Task moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /tasks/{task_id}/start:
+    post:
+      operationId: postTasksByTaskIdStart
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-inherited-still-owns: task-stop-resume-and-nonqueue-scanner-control
+      x-turbovas-maturity: live-control
+      x-turbovas-replaces: task-start
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scanner-control
+      summary: Start an existing scan task through the gvmd scan queue
+      description: Guarded direct write-control endpoint for starting an operator-owned, inactive scan task whose target and scanner references are valid. The endpoint creates the requested report and scan-queue rows transactionally and returns the report id; gvmd remains responsible for scanner protocol execution, result ingestion, and later task/report state transitions. The deployed gvmd must run with scan-queue processing enabled. Stop, resume, CVE-only tasks, remote scanner transport changes, alerts, schedules, and task mutation are outside this route.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '202':
+          description: Task start accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStartResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -5511,7 +5552,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-metadata-export-read
       summary: Export scan task metadata
-      description: Scriptable metadata export for one task, backed by the same task summary payload. Scanner lifecycle control, report creation, task/report status transitions, target/config/schedule/scanner mutation, alerts, preferences, and inherited file-export formats remain outside this endpoint.
+      description: Scriptable metadata export for one task, backed by the same task summary payload. Task start is available through a separate guarded scan-queue route. Stop/resume lifecycle control, target/config/schedule/scanner mutation, alerts, preferences, and inherited file-export formats remain outside this endpoint.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -6712,6 +6753,20 @@ components:
           type: string
           maxLength: 4096
           description: New task comment. Blank comments clear the comment after trimming.
+    TaskStartResult:
+      type: object
+      additionalProperties: false
+      required: [task_id, report_id, status]
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        report_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [requested]
     TaskCollection:
       type: object
       required: [page, items]

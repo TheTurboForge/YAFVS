@@ -348,7 +348,7 @@ fn inherited_gsad_and_gmp_client_layers_proxy_start_stop_verbs() {
 }
 
 #[test]
-fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_lands() {
+fn native_direct_api_allows_guarded_start_and_keeps_other_task_lifecycle_methods_closed() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/tasks",
@@ -426,7 +426,19 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
         !direct_api_v1_method_is_allowed(&Method::PATCH, "/api/v1/tasks", true),
         "PATCH /api/v1/tasks collection must remain closed"
     );
-    for action in ["start", "stop", "resume", "delete"] {
+    let start_path = "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/start";
+    assert!(!direct_api_v1_path_is_allowed(start_path));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        start_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        start_path,
+        true
+    ));
+    for action in ["stop", "resume", "delete"] {
         let path = format!("/api/v1/tasks/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
             !direct_api_v1_path_is_allowed(&path),
@@ -452,7 +464,7 @@ fn native_direct_api_keeps_task_lifecycle_methods_closed_until_scanner_contract_
 }
 
 #[test]
-fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
+fn openapi_documents_task_metadata_and_guarded_start_contracts() {
     let list = openapi_path_block("/tasks");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
@@ -460,7 +472,11 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     assert!(list.contains("x-turbovas-exposure: direct-write"));
     assert!(list.contains("x-turbovas-replaces: task-create-with-target-config-scanner"));
     assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
-    assert!(list.contains("x-turbovas-inherited-still-owns: task-scan-control-writes-and-deletes"));
+    assert!(
+        list.contains(
+            "x-turbovas-inherited-still-owns: task-stop-resume-clone-file-and-hard-delete"
+        )
+    );
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
@@ -469,7 +485,7 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
         list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
     );
     assert!(list.contains(
-        "Start, stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation"
+        "Stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation"
     ));
 
     let detail = openapi_path_block("/tasks/{task_id}");
@@ -484,13 +500,29 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
     assert!(
         detail.contains("Direct write-control endpoint for updating task name and comment only")
     );
-    assert!(
-        detail.contains("task/report status transitions remain on inherited compatibility paths")
-    );
+    assert!(detail.contains("Task start has a separate guarded scan-queue route"));
     assert!(detail.contains("operationId: deleteTasksByTaskId"));
     assert!(detail.contains("x-turbovas-replaces: task-trash-move"));
     assert!(detail.contains("safe non-running live-task trash moves"));
     assert!(detail.contains("Running, queued, requested, stop/delete-waiting, processing"));
+
+    let start = openapi_path_block("/tasks/{task_id}/start");
+    for required in [
+        "post:",
+        "operationId: postTasksByTaskIdStart",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-maturity: live-control",
+        "x-turbovas-replaces: task-start",
+        "x-turbovas-side-effect: scanner-control",
+        "$ref: '#/components/schemas/TaskStartResult'",
+        "gvmd remains responsible for scanner protocol execution",
+    ] {
+        assert!(
+            start.contains(required),
+            "task start OpenAPI block missing {required}"
+        );
+    }
 
     let export = openapi_path_block("/tasks/{task_id}/export");
     for required in [
@@ -501,7 +533,7 @@ fn openapi_documents_task_metadata_patch_without_lifecycle_contract() {
         "x-turbovas-maturity: live-read",
         "x-turbovas-replaces: task-metadata-export-read",
         "$ref: '#/components/schemas/Task'",
-        "Scanner lifecycle control, report creation",
+        "Task start is available through a separate guarded scan-queue route",
         "inherited file-export formats remain outside this endpoint",
     ] {
         assert!(

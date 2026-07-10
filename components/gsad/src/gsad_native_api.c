@@ -426,9 +426,11 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *tag_prefix = "/api/v1/tags/";
   const gchar *target_prefix = "/api/v1/targets/";
+  const gchar *task_prefix = "/api/v1/tasks/";
   const gchar *clone_suffix = "/clone";
   const gchar *restore_suffix = "/restore";
   const gchar *resources_suffix = "/resources";
+  const gchar *start_suffix = "/start";
   const gchar *verify_suffix = "/verify";
 
   if (path == NULL || strchr (path, '?') != NULL)
@@ -532,6 +534,12 @@ native_api_post_path_is_allowed (const gchar *path)
       const gchar *id = path + strlen (target_prefix);
       return is_uuid_segment_with_suffix (id, clone_suffix)
              || is_uuid_segment_with_suffix (id, restore_suffix);
+    }
+
+  if (g_str_has_prefix (path, task_prefix))
+    {
+      const gchar *id = path + strlen (task_prefix);
+      return is_uuid_segment_with_suffix (id, start_suffix);
     }
 
   return FALSE;

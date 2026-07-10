@@ -24,6 +24,7 @@ import {
   deleteNativeTask,
   exportNativeTaskMetadata,
   patchNativeTask,
+  startNativeTask,
 } from 'gmp/native-api/tasks';
 import {NO_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
@@ -138,10 +139,14 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
         throw new Error('Feed is currently syncing. Please try again later.');
       }
 
-      await this.httpPostWithTransform({
-        cmd: 'start_task',
-        id,
-      });
+      if (canUseNativeApi(this.http)) {
+        await startNativeTask(this.http, id);
+      } else {
+        await this.httpPostWithTransform({
+          cmd: 'start_task',
+          id,
+        });
+      }
 
       log.debug('Started task');
     } catch (error) {

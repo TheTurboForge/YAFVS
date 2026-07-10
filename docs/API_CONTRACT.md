@@ -57,13 +57,16 @@ The first API phase is read-only and report-focused:
   inside authenticated operator access only.
 - scope-report list, detail, results, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics.
+- guarded task start through `POST /api/v1/tasks/{task_id}/start`, which
+  transactionally creates the report and gvmd `scan_queue` request; scanner
+  execution and result ingestion remain gvmd-owned.
 
-Scanner control, task writes, target host/credential/control writes, credential
-secret management, feed import, account management, and other high-consequence
-operations stay on the inherited path until separate native replacements are
-designed and proven. Direct credential and target write-control currently covers
-name/comment metadata only. Native target and scanner reads intentionally do not
-expose credential secret material.
+Task start is a guarded native direct-write/browser-proxied control and requires
+explicit operator consent. Stop, resume, and other task/scanner controls remain
+on the inherited path. Credential secret management, feed import, account
+management, and other not-yet-contracted high-consequence operations remain
+inherited until separately designed and proven. Native target and scanner
+reads intentionally do not expose credential secret material.
 
 The browser integration remains same-origin and proxied through `gsad` while GSA
 reads migrate. Direct scriptable access is now a first-class development path:
@@ -97,7 +100,8 @@ host-binding posture tracked outside this development API.
   restore/trash, report-config metadata/clone/restore/trash, scan-config
   metadata/clone/restore/trash, schedule metadata/clone/restore/trash, target
   metadata/create/clone/restore/trash, selected alert metadata, credential
-  name/comment metadata, scanner metadata, and task metadata. Other valid-token
+  name/comment metadata, scanner metadata, task metadata, and guarded task
+  start. Other valid-token
   non-GET requests return JSON `405 method_not_allowed`. The enforced route set
   is the `APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS` list in
   `services/turbovas-api/src/direct_api_contract_tests.rs` plus OpenAPI
@@ -107,8 +111,9 @@ host-binding posture tracked outside this development API.
   through the authenticated same-origin `gsad` proxy. That proxy uses exact
   allowlists and now includes the existing browser-safe `POST`, `PATCH`, and
   no-body `DELETE` write routes for scopes, tags, filters, port lists, report
-  configs, scan configs, schedules, and targets; credential, scanner, and task
-  control writes remain direct-only or inherited until separately designed.
+  configs, scan configs, schedules, and targets; task start is browser-proxied;
+  stop, resume, and other task control writes remain inherited until separately
+  designed.
 - Direct v1 request-shape boundary: bearer-authenticated direct `GET` and
   `DELETE` requests reject request bodies, direct write-control `POST`/`PATCH`
   bodies are size-bounded, direct non-GET requests reject query strings, and
@@ -240,9 +245,14 @@ inherited.
 
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,
-maximum severity, and timestamps. Task creation, modification, deletion,
-start/stop, file export, and other scanner-control actions remain on the
-inherited path. Direct scriptable `GET /api/v1/tasks/{task_id}/export` returns
+maximum severity, and timestamps. Task create, metadata patch, and safe
+live-to-trash moves are native. Clone, hard-delete, stop/resume, file export,
+and other scanner-control actions remain inherited. The guarded
+`POST /api/v1/tasks/{task_id}/start` is available
+through direct native access and the authenticated browser proxy; it
+transactionally creates the report and gvmd `scan_queue` request, while gvmd
+remains the scanner execution and result-ingestion owner. Direct scriptable
+`GET /api/v1/tasks/{task_id}/export` returns
 the same read-only task detail JSON for metadata export; it does not replace
 legacy task file export or lifecycle control.
 

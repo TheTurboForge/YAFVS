@@ -188,7 +188,7 @@ def native_api_browser_proxy_json(
     path: str,
     *,
     method: str,
-    payload: dict[str, Any],
+    payload: dict[str, Any] | None,
     operator_name: str,
     expected_statuses: set[str],
 ) -> dict[str, Any]:
@@ -211,16 +211,20 @@ def native_api_browser_proxy_json(
         "TURBOVAS_FULL_TEST_PATH",
         "-e",
         "TURBOVAS_FULL_TEST_JSON",
+        "-e",
+        "TURBOVAS_FULL_TEST_HAS_JSON",
         "turbovas-api",
         "sh",
         "-ceu",
         (
             "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "if [ \"${TURBOVAS_FULL_TEST_HAS_JSON}\" = 1 ]; then "
+            "set -- -H \"content-type: application/json\" --data \"${TURBOVAS_FULL_TEST_JSON}\"; "
+            "else set --; fi; "
             "curl -sS --max-time 10 -X \"${TURBOVAS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
-            "-H \"content-type: application/json\" "
             "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
             "-H \"x-turbovas-operator-name: ${TURBOVAS_FULL_TEST_OPERATOR_NAME}\" "
-            "--data \"${TURBOVAS_FULL_TEST_JSON}\" "
+            "\"$@\" "
             "\"http://127.0.0.1:9080${TURBOVAS_FULL_TEST_PATH}\""
         ),
     ]
@@ -228,7 +232,8 @@ def native_api_browser_proxy_json(
     env["TURBOVAS_FULL_TEST_OPERATOR_NAME"] = operator_name
     env["TURBOVAS_FULL_TEST_METHOD"] = method
     env["TURBOVAS_FULL_TEST_PATH"] = path
-    env["TURBOVAS_FULL_TEST_JSON"] = json.dumps(payload)
+    env["TURBOVAS_FULL_TEST_JSON"] = json.dumps(payload) if payload is not None else ""
+    env["TURBOVAS_FULL_TEST_HAS_JSON"] = "1" if payload is not None else "0"
     completed = subprocess.run(
         command,
         cwd=repo_root,
@@ -729,8 +734,20 @@ def command_start(
     start_error: str | None = None
     report_id: str | None = None
     try:
-        start_response = getattr(client, "start_task")(task_id)
-        report_id = response_id(start_response)
+        if repo_root is not None:
+            start_response = native_api_browser_proxy_json(
+                repo_root,
+                f"/api/v1/tasks/{task_id}/start",
+                method="POST",
+                payload=None,
+                operator_name=operator_name,
+                expected_statuses={"202"},
+            )
+            report_id_value = start_response.get("report_id")
+            report_id = report_id_value if isinstance(report_id_value, str) else None
+        else:
+            start_response = getattr(client, "start_task")(task_id)
+            report_id = response_id(start_response)
     except Exception as error:  # pylint: disable=broad-except
         start_error = f"{type(error).__name__}: {error}"
         if reconnect_client is not None:
@@ -872,7 +889,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "preflight":
             payload = command_preflight(None, Path(args.artifact_dir), repo_root=repo_root)
         elif args.command == "start":
-            client = open_connection()
+            client = None if repo_root is not None else open_connection()
             payload = command_start(
                 client,
                 Path(args.artifact_dir),
@@ -882,7 +899,7 @@ def main(argv: list[str] | None = None) -> int:
                 poll_seconds=args.poll_seconds,
                 poll_interval=args.poll_interval,
                 ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None,
-                reconnect_client=open_connection,
+                reconnect_client=None if repo_root is not None else open_connection,
             )
         else:
             payload = command_status(None, Path(args.artifact_dir), ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None, repo_root=repo_root)

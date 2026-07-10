@@ -413,6 +413,17 @@ export const patchNativeTask = async (
   );
 };
 
+export const startNativeTask = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => {
+  await writeNativeJson(
+    gmp,
+    `api/v1/tasks/${encodeURIComponent(id)}/start`,
+    {},
+  );
+};
+
 export const deleteNativeTask = async (
   gmp: NativeApiGmp,
   id: string,

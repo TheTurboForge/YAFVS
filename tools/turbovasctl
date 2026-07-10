@@ -668,6 +668,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "task-detail-summary-read",
         "task-list-read",
         "task-trash-move",
+        "task-start",
         "tls-certificate-asset-detail-info-read",
         "tls-certificate-asset-list-read",
         "tls-certificate-asset-metadata-export-read",
@@ -703,6 +704,8 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
+        "task-stop-resume-and-nonqueue-scanner-control",
+        "task-stop-resume-clone-file-and-hard-delete",
         "trashcan-deep-row-data-and-mutations",
         "trashcan-row-data-and-mutations",
     }
@@ -1637,13 +1640,22 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "task-list-read",
     },
     ("post", "/tasks"): {
-        "x-turbovas-inherited-still-owns": "task-scan-control-writes-and-deletes",
+        "x-turbovas-inherited-still-owns": "task-stop-resume-clone-file-and-hard-delete",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
         "x-turbovas-replaces": "task-create-with-target-config-scanner",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
+    },
+    ("post", "/tasks/{task_id}/start"): {
+        "x-turbovas-inherited-still-owns": "task-stop-resume-and-nonqueue-scanner-control",
+        "x-turbovas-maturity": "live-control",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "task-start",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scanner-control",
     },
     ("get", "/tasks/{task_id}"): {
         "x-turbovas-maturity": "live-read",
@@ -7314,6 +7326,15 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             and "is_uuid_segment_with_suffix (id, verify_suffix)" in post_function_body
         ):
             operations.add(f"POST {scanner_prefix.rstrip('/')}/{{}}{verify_suffix}")
+        task_prefix = post_constants.get("task_prefix")
+        start_suffix = post_constants.get("start_suffix")
+        if (
+            task_prefix
+            and start_suffix
+            and "g_str_has_prefix (path, task_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, start_suffix)" in post_function_body
+        ):
+            operations.add(f"POST {task_prefix.rstrip('/')}/{{}}{start_suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -7457,6 +7478,10 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
     internal_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in openapi_internal_only}
     internal_by_normalized.update({normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in internal_only})
     gsad_by_normalized = {normalize_native_api_endpoint_template(endpoint): endpoint for endpoint in gsad_allowed}
+    for operation in gsad_write_allowed:
+        _method, separator, endpoint = operation.partition(" ")
+        if separator and endpoint:
+            gsad_by_normalized.setdefault(normalize_native_api_endpoint_template(endpoint), endpoint)
     browser_write_by_normalized = {normalize_native_api_operation_template(operation): operation for operation in browser_write_proxied}
     gsad_write_by_normalized = {normalize_native_api_operation_template(operation): operation for operation in gsad_write_allowed}
 
@@ -8587,7 +8612,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser task create with explicit target/config/scanner references", "direct native task create without scanner lifecycle start"],
                 "residual_inherited": [
-                    "Task start/stop/resume, clone, hard-delete, schedules, alerts, broad target/config/scanner mutation, preference edits, report creation, scanner side effects, and inherited file export remain inherited until separately migrated."
+                    "Task stop/resume, clone, hard-delete, schedules, alerts, broad target/config/scanner mutation, preference edits, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/tasks/{task_id}/start",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser task start through the gvmd scan queue", "guarded direct native task start"],
+                "residual_inherited": [
+                    "Task stop/resume and non-queue scanner-control workflows remain inherited until separately migrated."
                 ],
             },
             {
@@ -12643,7 +12678,9 @@ def wait_for_runtime_native_api_smoke(repo_root: Path, *, attempts: int = 2, int
     last_result: dict[str, Any] | None = None
     for attempt in range(1, attempts + 1):
         last_result = command_runtime_native_api_smoke(repo_root, status_only=True)
-        if last_result.get("status") == "pass":
+        if last_result.get("status") in {"pass", "warn"} and not any(
+            item.get("status") == "fail" for item in last_result.get("findings", [])
+        ):
             return last_result, attempt
         if attempt < attempts:
             time.sleep(interval_seconds)
@@ -12652,7 +12689,9 @@ def wait_for_runtime_native_api_smoke(repo_root: Path, *, attempts: int = 2, int
 
 def browser_native_api_readiness_finding(repo_root: Path, *, check: str) -> dict[str, Any]:
     native_result, attempts = wait_for_runtime_native_api_smoke(repo_root)
-    status = "pass" if native_result.get("status") == "pass" else "fail"
+    failed_checks = [item for item in native_result.get("findings", []) if item.get("status") == "fail"]
+    ready = native_result.get("status") in {"pass", "warn"} and not failed_checks
+    status = "pass" if ready else "fail"
     return finding(
         status,
         check,
@@ -12661,7 +12700,7 @@ def browser_native_api_readiness_finding(repo_root: Path, *, check: str) -> dict
             "attempts": attempts,
             "status": native_result.get("status"),
             "summary": native_result.get("summary"),
-            "failed_checks": [item for item in native_result.get("findings", []) if item.get("status") == "fail"],
+            "failed_checks": failed_checks,
         },
     )
 
@@ -17655,6 +17694,100 @@ def validate_native_verify_scanners_page_size(page_size: int) -> int:
     return page_size
 
 
+def command_native_start_task(
+    repo_root: Path,
+    *,
+    task_id: str,
+    allow_write_control: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    try:
+        task_id = validate_native_api_operator_uuid_value(task_id, env_name="--task-id")
+    except ValueError as exc:
+        findings.append(finding("fail", "native-start-task.arguments", str(exc)))
+        return make_result("native-start-task", repo_root, "Native task start rejected before runtime access.", findings)
+
+    if not allow_write_control:
+        findings.append(
+            finding(
+                "fail",
+                "native-start-task.write-control-intent",
+                "Starting a task requires --allow-write-control because it creates a report and queues scanner execution.",
+            )
+        )
+        return make_result("native-start-task", repo_root, "Native task start rejected before runtime access.", findings)
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-start-task.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return make_result("native-start-task", repo_root, "Direct native API task start rejected before runtime access.", findings)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-start-task.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        return make_result("native-start-task", repo_root, "Direct native API task start rejected before runtime access.", findings)
+
+    path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/start"
+    response = direct_native_api_curl(repo_root, path, token=token, env=env, method="POST")
+    parsed, http_status = parse_json_output_with_http_status(response)
+    report_id = parsed.get("report_id") if isinstance(parsed, dict) else None
+    accepted = (
+        response.returncode == 0
+        and http_status == 202
+        and isinstance(parsed, dict)
+        and parsed.get("task_id") == task_id
+        and isinstance(report_id, str)
+        and bool(UUID_VALUE_RE.fullmatch(report_id))
+        and parsed.get("status") == "requested"
+    )
+    findings.append(
+        native_api_probe_finding(
+            "pass" if accepted else "fail",
+            "native-start-task.request",
+            "Native API accepted the task start and returned the queued report id."
+            if accepted
+            else "Native API task start failed or returned an invalid acknowledgement.",
+            response,
+            direct_native_api_display_command(path, token=token, env=env, method="POST"),
+            parsed,
+            {
+                "http_status": http_status,
+                "task_id": task_id,
+                "report_id": report_id,
+                **summarize_native_api_response(parsed),
+            },
+        )
+    )
+    result = make_result(
+        "native-start-task",
+        repo_root,
+        "Native task start accepted." if accepted else "Native task start failed.",
+        findings,
+    )
+    result["details"] = {
+        "task_id": task_id,
+        "report_id": report_id,
+        "task_status": parsed.get("status") if isinstance(parsed, dict) else None,
+        "http_status": http_status,
+    }
+    if status_only:
+        compact = dict(result)
+        compact["findings"] = [
+            compact_doctor_finding(item)
+            for item in findings
+            if isinstance(item, dict) and item.get("status") != "pass"
+        ] or [finding("pass", "native-start-task.status-only", "Native task start accepted; acknowledgement summarized.")]
+        result = compact
+    return result
+
+
 def validate_native_verify_scanner_ids(scanner_ids: Sequence[str]) -> tuple[str, ...]:
     return tuple(
         validate_native_api_operator_uuid_value(scanner_id, env_name="--scanner-id")
@@ -21923,6 +22056,10 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_request.add_argument("--body-json", help="validated JSON request body; redacted in rendered commands")
     native_api_request.add_argument("--allow-write-control", action="store_true", help="allow intentional non-GET/write-control-shaped request probes")
     native_api_request.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_start_task = subparsers.add_parser("native-start-task", parents=[common], help="start one existing task through the guarded direct native API")
+    native_start_task.add_argument("--task-id", required=True, help="task UUID to start")
+    native_start_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control")
+    native_start_task.add_argument("--status-only", action="store_true", help="emit compact task-start acknowledgement")
     native_verify_scanners = subparsers.add_parser("native-verify-scanners", parents=[common], help="verify scanners through the guarded direct native API without gvm-tools")
     native_verify_scanners.add_argument("--scanner-id", action="append", default=[], help="specific scanner UUID to verify; may be repeated")
     native_verify_scanners.add_argument("--page-size", type=int, default=NATIVE_VERIFY_SCANNERS_DEFAULT_PAGE_SIZE, help="scanner list page size when no --scanner-id is supplied")
@@ -22115,6 +22252,13 @@ def main(argv: list[str] | None = None) -> int:
             method=args.method,
             request_id=args.request_id,
             body_json=args.body_json,
+            allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-start-task":
+        result = command_native_start_task(
+            repo_root,
+            task_id=args.task_id,
             allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )

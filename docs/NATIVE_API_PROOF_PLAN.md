@@ -8,9 +8,10 @@ before implementing broader endpoint coverage. The first proof started with
 scope-report Hosts and now also covers all scope-report evidence tabs,
 persisted scope-report Metrics, raw report Metrics, raw report list/detail,
 raw report evidence rows, scope list/detail, target list reads, task list reads,
-target/task read-summary reads, and scanner metadata list/detail Information
-reads. Scanner control, feed state, credential secrets, writes, and account
-management remain out of scope for this proof.
+target/task read-summary reads, scanner metadata list/detail Information reads,
+and the guarded task-start control slice. Scanner execution/result ingestion,
+feed state, credential secrets, stop/resume, other task control, and account
+management remain inherited or out of scope for this proof.
 
 ## First Proof Candidate
 
@@ -145,9 +146,12 @@ reports whether those markers align with the implementation inventory.
 
 ## Not In The First Proof
 
-Do not implement writes, scan start/stop, credential handling, feed operations,
-or account administration through `/api/v1` in this proof. Those paths remain
-high-consequence inherited control paths until separately designed and reviewed.
+Do not broaden writes, scan stop/resume, credential handling, feed operations,
+or account administration through `/api/v1` in this proof. The reviewed
+task start exception is `POST /api/v1/tasks/{task_id}/start`, available through
+the direct API and browser proxy only with explicit operator consent. It
+creates the report and gvmd `scan_queue` request transactionally; gvmd owns
+scanner execution and result ingestion.
 
 ## Next Proofs
 
@@ -218,9 +222,9 @@ also browser-proxied through the authenticated `gsad` same-origin boundary,
 including credential metadata that the inherited UI already displayed. Task
 list/detail reads are also browser-proxied with the read-only metadata required
 by the current operator view. Direct task metadata export reuses the task detail
-JSON for scriptable operator reads. Target writes, task writes/start/stop,
-task file export, credential material, and scanner-control semantics remain
-inherited. Scanner metadata list
+JSON for scriptable operator reads. Task clone/hard-delete, stop/resume, task
+file export, credential secret material, and remaining scanner-control
+semantics remain inherited. Scanner metadata list
 and safe socket/builtin detail page-load reads are browser-proxied, including
 active User Tags and non-hidden task backlinks. Direct scanner metadata export
 reuses the same redacted detail JSON for scriptable operator reads. Remote

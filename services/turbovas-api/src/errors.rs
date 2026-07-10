@@ -42,6 +42,14 @@ pub(crate) enum ApiError {
     Database,
     #[error("configuration error")]
     Config,
+    #[error("task stop requested but scanner absence is unverified")]
+    TaskStopRequested,
+    #[error("scanner control failed and scanner absence is unverified")]
+    ScannerUnverified,
+    #[error("control service failure")]
+    ControlFailure,
+    #[error("control service unavailable")]
+    ControlUnavailable,
 }
 
 impl ApiError {
@@ -56,6 +64,10 @@ impl ApiError {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Database | Self::Config => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::TaskStopRequested => StatusCode::CONFLICT,
+            Self::ScannerUnverified => StatusCode::BAD_GATEWAY,
+            Self::ControlFailure => StatusCode::BAD_GATEWAY,
+            Self::ControlUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -71,6 +83,10 @@ impl ApiError {
             Self::Conflict(_) => "conflict",
             Self::Database => "database_error",
             Self::Config => "configuration_error",
+            Self::TaskStopRequested => "stop_requested",
+            Self::ScannerUnverified => "scanner_unverified",
+            Self::ControlFailure => "control_failure",
+            Self::ControlUnavailable => "control_unavailable",
         }
     }
 
@@ -95,6 +111,15 @@ impl ApiError {
             Self::Conflict(message) => message.clone(),
             Self::Database => "The database query failed.".to_string(),
             Self::Config => "The API service is not configured correctly.".to_string(),
+            Self::TaskStopRequested => {
+                "The stop was requested, but scanner absence is not yet verified.".to_string()
+            }
+            Self::ScannerUnverified => {
+                "The scanner control operation failed, so scanner absence is not verified."
+                    .to_string()
+            }
+            Self::ControlFailure => "The control service failed.".to_string(),
+            Self::ControlUnavailable => "The control service is temporarily unavailable.".to_string(),
         }
     }
 }
@@ -194,6 +219,48 @@ mod tests {
                 "configuration_error",
                 "not configured correctly",
                 &["secret", "token", "password", "credential", "environment"][..],
+            ),
+            (
+                ApiError::TaskStopRequested,
+                StatusCode::CONFLICT,
+                "stop_requested",
+                "not yet verified",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::ScannerUnverified,
+                StatusCode::BAD_GATEWAY,
+                "scanner_unverified",
+                "absence is not verified",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::ControlFailure,
+                StatusCode::BAD_GATEWAY,
+                "control_failure",
+                "control service failed",
+                &[
+                    "socket",
+                    "path",
+                    "secret",
+                    "token",
+                    "password",
+                    "credential",
+                ][..],
+            ),
+            (
+                ApiError::ControlUnavailable,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "control_unavailable",
+                "temporarily unavailable",
+                &[
+                    "socket",
+                    "path",
+                    "secret",
+                    "token",
+                    "password",
+                    "credential",
+                ][..],
             ),
         ];
 

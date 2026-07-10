@@ -289,6 +289,7 @@ set(
   ipc.c
   lsc_user.c
   lsc_crypt.c
+  turbovas_control.c
   utils.c
 )
 
@@ -493,6 +494,15 @@ add_unit_test(utils "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
 set(
   ALL_OBJECTS
   $<TARGET_OBJECTS:all-gmp-obj>
+  $<TARGET_OBJECTS:all-manage-obj>
+  $<TARGET_OBJECTS:all-manage-sql-obj>
+  $<TARGET_OBJECTS:all-sql-obj>
+)
+add_unit_test(turbovas-control "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
+
+set(
+  ALL_OBJECTS
+  $<TARGET_OBJECTS:all-gmp-obj>
   $<TARGET_OBJECTS:all-manage-sql-obj>
   $<TARGET_OBJECTS:all-misc-obj>
   $<TARGET_OBJECTS:all-sql-obj>
@@ -519,6 +529,20 @@ set(
 )
 set(EXTRA_SRC ${ALL_MANAGE_SRC})
 add_unit_test(manage-preferences "${ALL_OBJECTS}" "${EXTRA_SRC}")
+
+set_target_properties(
+  manage-test
+  PROPERTIES
+    LINK_FLAGS
+      "-Wl,-wrap,lockfile_lock,-wrap,lockfile_unlock,-wrap,task_unfinished_report,-wrap,task_run_status,-wrap,task_scanner,-wrap,report_uuid,-wrap,osp_scanner_connect,-wrap,osp_get_scan_status_ext,-wrap,osp_stop_scan,-wrap,osp_delete_scan,-wrap,osp_connection_close,-wrap,set_task_run_status,-wrap,report_scan_run_status,-wrap,set_report_scan_run_status,-wrap,set_task_end_time_epoch,-wrap,set_scan_end_time_epoch,-wrap,scan_queue_remove"
+)
+
+set_target_properties(
+  turbovas-control-test
+  PROPERTIES
+    LINK_FLAGS
+      "-Wl,-wrap,user_name,-wrap,reinit_manage_process,-wrap,manage_session_init,-wrap,stop_task,-wrap,cleanup_manage_process"
+)
 
 add_custom_target(tests DEPENDS ${TEST_DEPENDENCIES})
 

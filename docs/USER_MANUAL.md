@@ -171,6 +171,7 @@ tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
 tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
+tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 tools/turbovasctl native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
 ```
 
@@ -230,8 +231,17 @@ CSV column, resolves all tasks through paginated native reads, skips
 `Running`, `Requested`, and `Queued` tasks, and reports each row while
 continuing after individual failures. It replaces the inherited
 `start-scans-from-csv.py` script without requiring GMP/XML or `gvm-tools`.
-Stopping or cancelling an active scan remains available through inherited
-control. Resuming a partial scan is not part of the product model:
+Stopping or cancelling a task uses guarded native
+`POST /api/v1/tasks/{task_id}/stop`, available through the browser or
+`native-stop-task`. The command returns success only after gvmd has serialized
+the task against concurrent start/finalization work, verified scanner absence,
+removed queued work, and finalized the task and active report as stopped.
+Already-terminal orphan rows keep their terminal status while missing end times
+are repaired. The private API-to-gvmd control socket is not host-exposed and
+uses a strong internal shared secret plus validated operator/task UUIDs, never
+GMP/XML.
+Bulk stop helpers remain inherited for now. Resuming a partial scan is not part
+of the product model:
 in-progress scan state is disposable, while completed raw reports and scope
 reports are the valuable evidence artifacts.
 

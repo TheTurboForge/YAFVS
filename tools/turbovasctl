@@ -474,6 +474,7 @@ OPENAPI_ALLOWED_OPERATOR_IDENTITY_VALUES = frozenset(
 OPENAPI_ALLOWED_OWNER_SEMANTICS_VALUES = frozenset(
     {
         "no-owner-state",
+        "gvmd-acl-user-and-task-permission",
         "not-applicable-preview",
         "preserve-existing-owner",
         "request-operator-owner",
@@ -669,6 +670,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "task-list-read",
         "task-trash-move",
         "task-start",
+        "task-stop",
         "tls-certificate-asset-detail-info-read",
         "tls-certificate-asset-list-read",
         "tls-certificate-asset-metadata-export-read",
@@ -704,8 +706,8 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
-        "task-stop-resume-and-nonqueue-scanner-control",
-        "task-stop-resume-clone-file-and-hard-delete",
+        "task-resume-and-other-scanner-control",
+        "task-resume-clone-file-hard-delete-and-other-scanner-control",
         "trashcan-deep-row-data-and-mutations",
         "trashcan-row-data-and-mutations",
     }
@@ -774,6 +776,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/targets/{target_id}/restore"): "direct-write",
     ("delete", "/targets/{target_id}/trash"): "direct-write",
     ("post", "/tasks"): "direct-write",
+    ("post", "/tasks/{task_id}/start"): "direct-write",
+    ("post", "/tasks/{task_id}/stop"): "direct-write",
     ("patch", "/tasks/{task_id}"): "direct-write",
     ("delete", "/tasks/{task_id}"): "direct-write",
     ("get", "/tasks/{task_id}/export"): "direct-read",
@@ -1640,7 +1644,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "task-list-read",
     },
     ("post", "/tasks"): {
-        "x-turbovas-inherited-still-owns": "task-stop-resume-clone-file-and-hard-delete",
+        "x-turbovas-inherited-still-owns": "task-resume-clone-file-hard-delete-and-other-scanner-control",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1649,11 +1653,20 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/tasks/{task_id}/start"): {
-        "x-turbovas-inherited-still-owns": "task-stop-resume-and-nonqueue-scanner-control",
+        "x-turbovas-inherited-still-owns": "task-resume-and-other-scanner-control",
         "x-turbovas-maturity": "live-control",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
         "x-turbovas-replaces": "task-start",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scanner-control",
+    },
+    ("post", "/tasks/{task_id}/stop"): {
+        "x-turbovas-inherited-still-owns": "task-resume-and-other-scanner-control",
+        "x-turbovas-maturity": "live-control",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-acl-user-and-task-permission",
+        "x-turbovas-replaces": "task-stop",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "scanner-control",
     },
@@ -3106,7 +3119,7 @@ def ensure_native_api_direct_runtime_env_defaults(repo_root: Path, env: dict[str
 
 
 def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
-    return ensure_native_api_direct_runtime_env_defaults(repo_root, runtime_env(repo_root))
+    return ensure_native_api_direct_runtime_env_defaults(repo_root, runtime_app_env(repo_root))
 
 
 def native_api_direct_bearer_token(repo_root: Path, env: dict[str, str]) -> str:
@@ -7209,6 +7222,8 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
         verify_suffix = post_constants.get("verify_suffix")
+        start_suffix = post_constants.get("start_suffix")
+        stop_suffix = post_constants.get("stop_suffix")
         for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
@@ -7231,6 +7246,14 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             and "is_uuid_segment_with_suffix (id, verify_suffix)" in post_function_body
         ):
             templates.add(f"{scanner_prefix.rstrip('/')}/{{}}{verify_suffix}")
+        task_prefix = post_constants.get("task_prefix")
+        if task_prefix and "g_str_has_prefix (path, task_prefix)" in post_function_body:
+            for suffix_variable, suffix in (
+                ("start_suffix", start_suffix),
+                ("stop_suffix", stop_suffix),
+            ):
+                if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
+                    templates.add(f"{task_prefix.rstrip('/')}/{{}}{suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -7328,13 +7351,14 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             operations.add(f"POST {scanner_prefix.rstrip('/')}/{{}}{verify_suffix}")
         task_prefix = post_constants.get("task_prefix")
         start_suffix = post_constants.get("start_suffix")
-        if (
-            task_prefix
-            and start_suffix
-            and "g_str_has_prefix (path, task_prefix)" in post_function_body
-            and "is_uuid_segment_with_suffix (id, start_suffix)" in post_function_body
-        ):
-            operations.add(f"POST {task_prefix.rstrip('/')}/{{}}{start_suffix}")
+        stop_suffix = post_constants.get("stop_suffix")
+        if task_prefix and "g_str_has_prefix (path, task_prefix)" in post_function_body:
+            for suffix_variable, suffix in (
+                ("start_suffix", start_suffix),
+                ("stop_suffix", stop_suffix),
+            ):
+                if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
+                    operations.add(f"POST {task_prefix.rstrip('/')}/{{}}{suffix}")
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
@@ -8622,7 +8646,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser task start through the gvmd scan queue", "guarded direct native task start"],
                 "residual_inherited": [
-                    "Task stop/resume and non-queue scanner-control workflows remain inherited until separately migrated."
+                    "Task resume and other scanner-control workflows remain inherited until separately migrated."
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/tasks/{task_id}/stop",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser task stop through private gvmd control", "guarded direct native task stop"],
+                "residual_inherited": [
+                    "Task resume and other scanner-control workflows remain inherited until separately migrated."
                 ],
             },
             {
@@ -14303,6 +14337,7 @@ def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "gsa.static-stage",
             "gsa.config-js",
             "compose.app-up",
+            "runtime.gvmd-control-socket",
         )
         if check in checks
     }
@@ -14346,6 +14381,16 @@ def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[s
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
+    control_socket = runtime_dir(repo_root) / "run" / "gvmd" / "turbovas-control.sock"
+    wait_for_socket(control_socket, timeout_seconds=20)
+    findings.append(
+        socket_readiness_finding(
+            "runtime.gvmd-control-socket",
+            "gvmd native control",
+            control_socket,
+            missing_status="fail",
+        )
+    )
     result = make_result("runtime-app-up", repo_root, "Application runtime startup attempted.", findings, [str(runtime_dir(repo_root))])
     return runtime_app_up_status_only_result(result) if status_only else result
 
@@ -14743,6 +14788,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.target-fixture-cleanup",
             "native-api-direct.task-scanner-fixture",
             "native-api-direct.scanner-verify",
+            "native-api-direct.task-stop-missing",
             "native-api-direct.task-write-create",
             "native-api-direct.task-write-update",
             "native-api-direct.task-fixture-cleanup",
@@ -14917,6 +14963,46 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 check="native-api-direct.write-control-healthz",
                 ready_message="Direct write-control native API health endpoint is reachable after restart.",
                 failed_message="Direct write-control native API health endpoint did not become reachable after restart.",
+            )
+        )
+
+    if aggregate_status(findings) != "fail":
+        missing_task_id = "00000000-0000-0000-0000-000000000000"
+        task_stop_missing = direct_native_api_curl(
+            repo_root,
+            f"/api/v1/tasks/{missing_task_id}/stop",
+            token=token,
+            env=env,
+            method="POST",
+        )
+        task_stop_missing_json, task_stop_missing_status = parse_json_output_with_http_status(
+            task_stop_missing
+        )
+        task_stop_missing_ok = (
+            task_stop_missing.returncode == 0
+            and task_stop_missing_status == 404
+            and isinstance(task_stop_missing_json, dict)
+            and task_stop_missing_json.get("error", {}).get("code") == "not_found"
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if task_stop_missing_ok else "fail",
+                "native-api-direct.task-stop-missing",
+                "Direct write-control reached gvmd-native task stop and returned not_found for a missing task."
+                if task_stop_missing_ok
+                else "Direct write-control did not reach gvmd-native task stop for a missing task.",
+                task_stop_missing,
+                direct_native_api_display_command(
+                    f"/api/v1/tasks/{missing_task_id}/stop",
+                    token=token,
+                    env=env,
+                    method="POST",
+                ),
+                task_stop_missing_json,
+                {
+                    "http_status": task_stop_missing_status,
+                    **summarize_native_api_response(task_stop_missing_json),
+                },
             )
         )
 
@@ -17784,6 +17870,97 @@ def command_native_start_task(
             for item in findings
             if isinstance(item, dict) and item.get("status") != "pass"
         ] or [finding("pass", "native-start-task.status-only", "Native task start accepted; acknowledgement summarized.")]
+        result = compact
+    return result
+
+
+def command_native_stop_task(
+    repo_root: Path,
+    *,
+    task_id: str,
+    allow_write_control: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    try:
+        task_id = validate_native_api_operator_uuid_value(task_id, env_name="--task-id")
+    except ValueError as exc:
+        findings.append(finding("fail", "native-stop-task.arguments", str(exc)))
+        return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
+
+    if not allow_write_control:
+        findings.append(
+            finding(
+                "fail",
+                "native-stop-task.write-control-intent",
+                "Stopping a task requires --allow-write-control because it controls scanner task execution.",
+            )
+        )
+        return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-stop-task.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return make_result("native-stop-task", repo_root, "Direct native API task stop rejected before runtime access.", findings)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-stop-task.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
+
+    path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/stop"
+    response = direct_native_api_curl(repo_root, path, token=token, env=env, method="POST")
+    parsed, http_status = parse_json_output_with_http_status(response)
+    task_status = parsed.get("status") if isinstance(parsed, dict) else None
+    accepted = (
+        response.returncode == 0
+        and http_status == 200
+        and isinstance(parsed, dict)
+        and parsed.get("task_id") == task_id
+        and task_status == "stopped"
+    )
+    findings.append(
+        native_api_probe_finding(
+            "pass" if accepted else "fail",
+            "native-stop-task.request",
+            "Native API verified that scanner work is absent and stopped the task."
+            if accepted
+            else "Native API task stop failed or returned an invalid acknowledgement.",
+            response,
+            direct_native_api_display_command(path, token=token, env=env, method="POST"),
+            parsed,
+            {
+                "http_status": http_status,
+                "task_id": task_id,
+                "task_status": task_status,
+                **summarize_native_api_response(parsed),
+            },
+        )
+    )
+    result = make_result(
+        "native-stop-task",
+        repo_root,
+        "Native task stop completed." if accepted else "Native task stop failed.",
+        findings,
+    )
+    result["details"] = {
+        "task_id": task_id,
+        "task_status": task_status,
+        "http_status": http_status,
+    }
+    if status_only:
+        compact = dict(result)
+        compact["findings"] = [
+            compact_doctor_finding(item)
+            for item in findings
+            if isinstance(item, dict) and item.get("status") != "pass"
+        ] or [finding("pass", "native-stop-task.status-only", "Native task stop accepted; acknowledgement summarized.")]
         result = compact
     return result
 
@@ -22240,6 +22417,10 @@ def build_parser() -> argparse.ArgumentParser:
     native_start_task.add_argument("--task-id", required=True, help="task UUID to start")
     native_start_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control")
     native_start_task.add_argument("--status-only", action="store_true", help="emit compact task-start acknowledgement")
+    native_stop_task = subparsers.add_parser("native-stop-task", parents=[common], help="stop one existing task through the guarded direct native API")
+    native_stop_task.add_argument("--task-id", required=True, help="task UUID to stop")
+    native_stop_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional scanner task control")
+    native_stop_task.add_argument("--status-only", action="store_true", help="emit compact task-stop acknowledgement")
     native_start_tasks_csv = subparsers.add_parser("native-start-tasks-from-csv", parents=[common], help="start existing tasks from the inherited task-name CSV shape through the guarded direct native API")
     native_start_tasks_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with one task name in the first column per row")
     native_start_tasks_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control for every eligible row")
@@ -22448,6 +22629,13 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "native-start-task":
         result = command_native_start_task(
+            repo_root,
+            task_id=args.task_id,
+            allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-stop-task":
+        result = command_native_stop_task(
             repo_root,
             task_id=args.task_id,
             allow_write_control=args.allow_write_control,

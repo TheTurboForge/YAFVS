@@ -424,6 +424,17 @@ export const startNativeTask = async (
   );
 };
 
+export const stopNativeTask = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => {
+  await writeNativeJson(
+    gmp,
+    `api/v1/tasks/${encodeURIComponent(id)}/stop`,
+    {},
+  );
+};
+
 export const deleteNativeTask = async (
   gmp: NativeApiGmp,
   id: string,

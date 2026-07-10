@@ -2691,6 +2691,136 @@ start_task (const char *task_id, char **report_id)
   return run_task (task_id, report_id, 0);
 }
 
+int
+turbovas_task_control_lock (task_t task, lockfile_t *lockfile)
+{
+  gchar *name;
+  int ret;
+
+  name = g_strdup_printf ("turbovas-task-control-%llu.lock", task);
+  ret = lockfile_lock (lockfile, name);
+  g_free (name);
+  return ret;
+}
+
+int
+turbovas_task_control_unlock (lockfile_t *lockfile)
+{
+  return lockfile_unlock (lockfile);
+}
+
+static int
+osp_scan_status_for_stop (task_t task, const char *scan_id,
+                          osp_scan_status_t *status, gboolean *absent)
+{
+  osp_connection_t *connection;
+  osp_get_scan_status_opts_t options;
+  char *error = NULL;
+
+  *absent = FALSE;
+  options.scan_id = scan_id;
+  connection = osp_scanner_connect (task_scanner (task));
+  if (!connection)
+    return -1;
+
+  *status = osp_get_scan_status_ext (connection, options, &error);
+  osp_connection_close (connection);
+  if (*status != OSP_SCAN_STATUS_ERROR)
+    return 0;
+  if (error && g_str_has_prefix (error, "Failed to find scan"))
+    {
+      *absent = TRUE;
+      g_free (error);
+      return 0;
+    }
+
+  g_warning ("%s: failed to read scanner state for %s: %s", __func__,
+             scan_id, error ? error : "unknown error");
+  g_free (error);
+  return -1;
+}
+
+static int
+ensure_osp_scan_absent (task_t task, const char *scan_id)
+{
+  osp_connection_t *connection;
+  osp_scan_status_t status;
+  gboolean absent;
+  char *error = NULL;
+  int retries;
+
+  if (osp_scan_status_for_stop (task, scan_id, &status, &absent))
+    return -2;
+  if (absent)
+    return 0;
+
+  if (status == OSP_SCAN_STATUS_RUNNING)
+    {
+      connection = osp_scanner_connect (task_scanner (task));
+      if (!connection)
+        return -3;
+      if (osp_stop_scan (connection, scan_id, &error))
+        {
+          osp_connection_close (connection);
+          g_warning ("%s: failed to stop scanner work %s: %s", __func__,
+                     scan_id, error ? error : "unknown error");
+          g_free (error);
+          if (osp_scan_status_for_stop (task, scan_id, &status, &absent))
+            return -3;
+          return absent ? 0 : -3;
+        }
+      osp_connection_close (connection);
+      g_free (error);
+
+      for (retries = 0; retries < 20; retries++)
+        {
+          if (osp_scan_status_for_stop (task, scan_id, &status, &absent))
+            return -3;
+          if (absent)
+            return 0;
+          if (status != OSP_SCAN_STATUS_INIT
+              && status != OSP_SCAN_STATUS_RUNNING
+              && status != OSP_SCAN_STATUS_QUEUED)
+            break;
+          g_usleep (500000);
+        }
+      if (status == OSP_SCAN_STATUS_INIT
+          || status == OSP_SCAN_STATUS_RUNNING
+          || status == OSP_SCAN_STATUS_QUEUED)
+        return -3;
+    }
+
+  for (retries = 0; retries < 10; retries++)
+    {
+      connection = osp_scanner_connect (task_scanner (task));
+      if (!connection)
+        return -4;
+      if (osp_delete_scan (connection, scan_id) == 0)
+        {
+          osp_connection_close (connection);
+          break;
+        }
+      osp_connection_close (connection);
+      if (osp_scan_status_for_stop (task, scan_id, &status, &absent))
+        return -4;
+      if (absent)
+        return 0;
+      g_usleep (200000);
+    }
+  if (retries == 10)
+    return -4;
+
+  for (retries = 0; retries < 10; retries++)
+    {
+      if (osp_scan_status_for_stop (task, scan_id, &status, &absent))
+        return -5;
+      if (absent)
+        return 0;
+      g_usleep (200000);
+    }
+  return -5;
+}
+
 /**
  * @brief Stop an OSP task.
  *
@@ -2701,58 +2831,97 @@ start_task (const char *task_id, char **report_id)
 static int
 stop_osp_task (task_t task)
 {
-  osp_connection_t *connection;
   int ret = -1;
-  report_t scan_report;
-  char *scan_id;
+  report_t scan_report = 0;
+  char *scan_id = NULL;
   task_t previous_task;
   report_t previous_report;
+  lockfile_t control_lock = { 0 };
+  gboolean finalized_report = FALSE;
 
-  scan_report = task_running_report (task);
-  if (!scan_report)
-    return 0;
+  if (turbovas_task_control_lock (task, &control_lock))
+    return -1;
 
   previous_task = current_scanner_task;
   previous_report = global_current_report;
 
-  scan_id = report_uuid (scan_report);
-  if (!scan_id)
-    goto end_stop_osp;
-  connection = osp_scanner_connect (task_scanner (task));
-  if (!connection)
-    goto end_stop_osp;
-
-  current_scanner_task = task;
-  global_current_report = task_running_report (task);
-  set_task_run_status (task, TASK_STATUS_STOP_REQUESTED);
-  ret = osp_stop_scan (connection, scan_id, NULL);
-  osp_connection_close (connection);
-  if (ret)
+  if (task_unfinished_report (task, &scan_report))
     {
-      g_free (scan_id);
+      ret = -1;
+      goto end_stop_osp;
+    }
+  if (!scan_report)
+    {
+      task_status_t status = task_run_status (task);
+      ret = (status == TASK_STATUS_REQUESTED
+             || status == TASK_STATUS_RUNNING
+             || status == TASK_STATUS_QUEUED
+             || status == TASK_STATUS_STOP_REQUESTED)
+              ? -1
+              : 2;
       goto end_stop_osp;
     }
 
-  connection = osp_scanner_connect (task_scanner (task));
-  if (!connection)
-    goto end_stop_osp;
-  ret = osp_delete_scan (connection, scan_id);
-  osp_connection_close (connection);
-  g_free (scan_id);
+  while (scan_report)
+    {
+      task_status_t report_status;
+      gboolean report_was_terminal;
 
-end_stop_osp:
+      scan_id = report_uuid (scan_report);
+      if (!scan_id)
+        {
+          ret = -1;
+          goto end_stop_osp;
+        }
+      if (report_scan_run_status (scan_report, &report_status))
+        {
+          ret = -1;
+          goto end_stop_osp;
+        }
+      report_was_terminal = report_status == TASK_STATUS_INTERRUPTED
+                            || report_status == TASK_STATUS_STOPPED;
+
+      ret = ensure_osp_scan_absent (task, scan_id);
+      if (ret)
+        goto end_stop_osp;
+
+      current_scanner_task = task;
+      global_current_report = scan_report;
+      if (!report_was_terminal)
+        set_report_scan_run_status (scan_report, TASK_STATUS_STOP_REQUESTED);
+      scan_queue_remove (scan_report);
+      set_scan_end_time_epoch (scan_report, time (NULL));
+      if (!report_was_terminal)
+        set_report_scan_run_status (scan_report, TASK_STATUS_STOPPED);
+      finalized_report = TRUE;
+      g_free (scan_id);
+      scan_id = NULL;
+
+      scan_report = 0;
+      if (task_unfinished_report (task, &scan_report))
+        {
+          ret = -1;
+          goto end_stop_osp;
+        }
+    }
+
+  if (!finalized_report)
+    {
+      ret = -1;
+      goto end_stop_osp;
+    }
   set_task_end_time_epoch (task, time (NULL));
   set_task_run_status (task, TASK_STATUS_STOPPED);
-  if (scan_report)
-    {
-      set_scan_end_time_epoch (scan_report, time (NULL));
-      set_report_scan_run_status (scan_report, TASK_STATUS_STOPPED);
-    }
+  ret = 0;
+
+end_stop_osp:
+  g_free (scan_id);
   current_scanner_task = previous_task;
   global_current_report = previous_report;
-  if (ret)
+
+  if (turbovas_task_control_unlock (&control_lock))
     return -1;
-  return 0;
+  return ret;
 }
 
 /**

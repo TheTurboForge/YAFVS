@@ -247,7 +247,12 @@ def native_api_browser_proxy_json(
     status = lines[-1].strip() if lines else ""
     body = "\n".join(lines[:-1]).strip()
     if completed.returncode != 0 or status not in expected_statuses:
-        reason = completed.stderr.strip() or body or completed.stdout.strip()
+        reason = (
+            completed.stderr.strip()
+            or body
+            or completed.stdout.strip()
+            or f"container command exited {completed.returncode} without output"
+        )
         raise RuntimeError(f"native API {method} failed with HTTP {status or 'unknown'}: {reason}")
     parsed = json.loads(body)
     if not isinstance(parsed, dict):
@@ -759,6 +764,7 @@ def command_start(
     deadline = time.monotonic() + poll_seconds
     observed: dict[str, Any] | None = None
     observed_report: dict[str, str | None] | None = None
+    observed_new_report = False
     poll_errors: list[str] = []
     while time.monotonic() <= deadline:
         try:
@@ -785,20 +791,39 @@ def command_start(
         if report_id:
             observed_report = next((report for report in reports if report.get("id") == report_id), None)
         else:
-            observed_report = new_reports[0] if new_reports else (reports[0] if start_error is None and reports else None)
-        evidence = observed.get("ospd_handoff_evidence", {})
+            observed_report = new_reports[0] if new_reports else None
+        observed_new_report = bool(
+            observed_report
+            and observed_report.get("id")
+            and observed_report["id"] not in pre_start_report_ids
+        )
+        evidence = ospd_handoff_evidence(
+            ospd_log_file,
+            observed_report.get("id") if observed_report else report_id,
+            None,
+        )
+        observed["start_ospd_handoff_evidence"] = evidence
+        start_evidence = bool(report_id or observed_new_report)
         if interrupted_before_scanner_handoff(observed_report):
             break
-        if task.get("status") in HANDOFF_TASK_STATUSES or report_handoff_observed(observed_report) or evidence.get("matched"):
+        if start_error and not start_evidence:
+            break
+        if start_evidence and (
+            task.get("status") in HANDOFF_TASK_STATUSES
+            or report_handoff_observed(observed_report)
+            or evidence.get("matched")
+        ):
             break
         if task.get("status") in HANDOFF_TASK_STATUSES and report_id and observed_report and observed_report.get("scan_run_status") != INTERRUPTED_REPORT_STATUS:
             break
         time.sleep(poll_interval)
 
     interrupted_before_handoff = interrupted_before_scanner_handoff(observed_report)
-    handoff_evidence = observed.get("ospd_handoff_evidence", {}) if observed else {}
+    handoff_evidence = observed.get("start_ospd_handoff_evidence", {}) if observed else {}
+    start_evidence = bool(report_id or observed_new_report)
     handoff_observed = bool(
         observed
+        and start_evidence
         and (
             observed.get("task", {}).get("status") in HANDOFF_TASK_STATUSES
             or report_handoff_observed(observed_report)
@@ -809,9 +834,9 @@ def command_start(
         status = "fail"
         summary = "Full test scan start failed: the new report interrupted before scanner handoff."
         artifact_name = "start-failed.json"
-    elif start_error and not handoff_observed:
+    elif not start_evidence:
         status = "fail"
-        summary = "Full test scan start failed before scanner handoff could be verified."
+        summary = "Full test scan start failed because no accepted start or new report could be verified."
         artifact_name = "start-failed.json"
     elif handoff_observed:
         status = "pass"
@@ -833,6 +858,8 @@ def command_start(
         observed_state=observed,
         poll_errors=poll_errors,
         pre_start_report_ids=sorted(pre_start_report_ids),
+        start_evidence=start_evidence,
+        observed_new_report=observed_new_report,
         start_error=start_error,
         poll_seconds=poll_seconds,
         poll_interval=poll_interval,

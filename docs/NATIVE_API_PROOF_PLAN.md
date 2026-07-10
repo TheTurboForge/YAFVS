@@ -9,8 +9,8 @@ scope-report Hosts and now also covers all scope-report evidence tabs,
 persisted scope-report Metrics, raw report Metrics, raw report list/detail,
 raw report evidence rows, scope list/detail, target list reads, task list reads,
 target/task read-summary reads, scanner metadata list/detail Information reads,
-and the guarded task-start control slice. Scanner execution/result ingestion,
-feed state, credential secrets, stop/resume, other task control, and account
+and the guarded task-start/task-stop control slices. Scanner execution/result
+ingestion, feed state, credential secrets, resume, other task control, and account
 management remain inherited or out of scope for this proof.
 
 ## First Proof Candidate
@@ -144,14 +144,17 @@ The OpenAPI contract marks direct scriptable reads with the
 `x-turbovas-direct: true` operation extension, and `native-tooling-state`
 reports whether those markers align with the implementation inventory.
 
-## Not In The First Proof
+## Guarded Control Exceptions
 
-Do not broaden writes, scan stop/resume, credential handling, feed operations,
-or account administration through `/api/v1` in this proof. The reviewed
-task start exception is `POST /api/v1/tasks/{task_id}/start`, available through
-the direct API and browser proxy only with explicit operator consent. It
-creates the report and gvmd `scan_queue` request transactionally; gvmd owns
-scanner execution and result ingestion.
+Task start and stop are reviewed native scanner-control slices. Start creates
+the report and gvmd `scan_queue` request transactionally. Stop sends one strict,
+bounded shared-secret/operator/task command over a private gvmd Unix socket,
+keeps status and queue state unchanged when scanner absence cannot be verified,
+rejects stale report handlers, and serializes task finalization with stop. This
+keeps ACL, scanner protocol, queue, report, and state ownership in gvmd. Both are
+available through direct write-control and the authenticated browser proxy;
+operator tooling requires explicit write-control consent. Resume, credential
+handling, feed operations, and account administration remain separate proofs.
 
 ## Next Proofs
 
@@ -222,7 +225,7 @@ also browser-proxied through the authenticated `gsad` same-origin boundary,
 including credential metadata that the inherited UI already displayed. Task
 list/detail reads are also browser-proxied with the read-only metadata required
 by the current operator view. Direct task metadata export reuses the task detail
-JSON for scriptable operator reads. Task clone/hard-delete, stop/resume, task
+JSON for scriptable operator reads. Task clone/hard-delete, resume, task
 file export, credential secret material, and remaining scanner-control
 semantics remain inherited. Scanner metadata list
 and safe socket/builtin detail page-load reads are browser-proxied, including

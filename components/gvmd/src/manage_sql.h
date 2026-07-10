@@ -269,6 +269,9 @@ int
 set_report_scan_run_status (report_t, task_status_t);
 
 int
+report_scan_run_status (report_t, task_status_t *);
+
+int
 update_report_modification_time (report_t);
 
 int
@@ -395,6 +398,9 @@ task_report_previous (task_t, report_t, report_t *);
 
 int
 task_last_report_any_status (task_t, report_t *);
+
+int
+task_unfinished_report (task_t, report_t *);
 
 int
 task_second_last_report (task_t, report_t *);

@@ -25,6 +25,7 @@ import {
   exportNativeTaskMetadata,
   patchNativeTask,
   startNativeTask,
+  stopNativeTask,
 } from 'gmp/native-api/tasks';
 import {NO_VALUE, parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
@@ -160,10 +161,14 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     log.debug('Stopping task');
 
     try {
-      await this.httpPostWithTransform({
-        cmd: 'stop_task',
-        id,
-      });
+      if (canUseNativeApi(this.http)) {
+        await stopNativeTask(this.http, id);
+      } else {
+        await this.httpPostWithTransform({
+          cmd: 'stop_task',
+          id,
+        });
+      }
       log.debug('Stopped task');
       return await this.get({id});
     } catch (err) {

@@ -5605,19 +5605,50 @@ task_running_report (task_t task)
   task_status_t run_status = task_run_status (task);
   if (run_status == TASK_STATUS_REQUESTED
       || run_status == TASK_STATUS_RUNNING
-      || run_status == TASK_STATUS_QUEUED)
+      || run_status == TASK_STATUS_QUEUED
+      || run_status == TASK_STATUS_STOP_REQUESTED)
     {
       return (unsigned int) sql_int ("SELECT max(id) FROM reports"
                                      " WHERE task = %llu AND end_time IS NULL"
                                      " AND (scan_run_status = %u "
                                      " OR scan_run_status = %u "
+                                     " OR scan_run_status = %u "
                                      " OR scan_run_status = %u);",
                                      task,
                                      TASK_STATUS_REQUESTED,
                                      TASK_STATUS_RUNNING,
-                                     TASK_STATUS_QUEUED);
+                                     TASK_STATUS_QUEUED,
+                                     TASK_STATUS_STOP_REQUESTED);
     }
   return (report_t) 0;
+}
+
+int
+task_unfinished_report (task_t task, report_t *report)
+{
+  switch (sql_int64 (
+    report,
+    "SELECT max(id) FROM reports"
+    " WHERE task = %llu AND end_time IS NULL"
+    " AND scan_run_status IN (%u, %u, %u, %u, %u, %u);",
+    task,
+    TASK_STATUS_REQUESTED,
+    TASK_STATUS_RUNNING,
+    TASK_STATUS_QUEUED,
+    TASK_STATUS_STOP_REQUESTED,
+    TASK_STATUS_INTERRUPTED,
+    TASK_STATUS_STOPPED))
+    {
+      case 0:
+        return 0;
+      case 1:
+        *report = 0;
+        return 0;
+      default:
+        assert (0);
+      case -1:
+        return -1;
+    }
 }
 
 /**
@@ -11570,7 +11601,7 @@ report_end_time (report_t report)
  *
  * @return 0 on success, -1 on error.
  */
-static int
+int
 report_scan_run_status (report_t report, task_status_t* status)
 {
   *status = sql_int ("SELECT scan_run_status FROM reports"

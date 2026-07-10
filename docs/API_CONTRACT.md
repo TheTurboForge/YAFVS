@@ -63,10 +63,19 @@ The first API phase is read-only and report-focused:
   `native-start-tasks-from-csv` helper composes paginated native task reads
   with this endpoint and replaces the inherited CSV start script without
   adding a bulk mutation endpoint.
+- guarded task stop through `POST /api/v1/tasks/{task_id}/stop`. The HTTP
+  service sends one bounded, shared-secret-authenticated operator command over
+  a private Unix socket. gvmd keeps ACL, scanner stop/delete, queue,
+  task/report state, timestamps, and partial-result ownership. It rejects
+  stale report handlers and changes queue/status state only after scanner
+  absence is verified. A scanner-verification failure is `502`; an
+  asynchronous-only inherited stop is `409`, never false success. No GMP/XML
+  or DB fallback exists.
 
-Task start is a guarded native direct-write/browser-proxied control and requires
-explicit operator consent. Stop, resume, and other task/scanner controls remain
-on the inherited path. Credential secret management, feed import, account
+Task start and stop are guarded native direct-write/browser-proxied controls and
+operator tooling requires explicit write-control consent. Resume and other
+task/scanner controls remain inherited. Credential secret management, feed
+import, account
 management, and other not-yet-contracted high-consequence operations remain
 inherited until separately designed and proven. Native target and scanner
 reads intentionally do not expose credential secret material.
@@ -114,9 +123,9 @@ host-binding posture tracked outside this development API.
   through the authenticated same-origin `gsad` proxy. That proxy uses exact
   allowlists and now includes the existing browser-safe `POST`, `PATCH`, and
   no-body `DELETE` write routes for scopes, tags, filters, port lists, report
-  configs, scan configs, schedules, and targets; task start is browser-proxied;
-  stop, resume, and other task control writes remain inherited until separately
-  designed.
+  configs, scan configs, schedules, and targets; task start and stop are
+  browser-proxied through exact UUID action allowlists. Resume and other task
+  control writes remain inherited until separately designed.
 - Direct v1 request-shape boundary: bearer-authenticated direct `GET` and
   `DELETE` requests reject request bodies, direct write-control `POST`/`PATCH`
   bodies are size-bounded, direct non-GET requests reject query strings, and

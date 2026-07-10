@@ -817,6 +817,36 @@ run_osp_scan_get_report (task_t task, int from, char **report_id)
  *         -3 if the scan was interrupted, -4 already stopped.
  */
 static int
+set_osp_active_status (task_t task, report_t report, task_status_t status)
+{
+  lockfile_t control_lock = { 0 };
+  task_status_t current, report_status;
+  int ret = 0;
+
+  if (turbovas_task_control_lock (task, &control_lock))
+    return -1;
+  current = task_run_status (task);
+  if (report_scan_run_status (report, &report_status))
+    ret = -1;
+  else if (current != TASK_STATUS_REQUESTED
+      && current != TASK_STATUS_QUEUED
+      && current != TASK_STATUS_RUNNING)
+    ret = 1;
+  else if (report_status != TASK_STATUS_REQUESTED
+           && report_status != TASK_STATUS_QUEUED
+           && report_status != TASK_STATUS_RUNNING)
+    ret = 1;
+  else
+    {
+      set_task_run_status (task, status);
+      set_report_scan_run_status (report, status);
+    }
+  if (turbovas_task_control_unlock (&control_lock))
+    return -1;
+  return ret;
+}
+
+static int
 update_osp_scan (task_t task, report_t report, const char *scan_id,
                  osp_connect_data_t *conn_data, int *retry_ptr,
                  int *queued_status_updated, int *started)
@@ -906,9 +936,10 @@ update_osp_scan (task_t task, report_t report, const char *scan_id,
             {
               if (*queued_status_updated == FALSE)
                 {
-                  set_task_run_status (task, TASK_STATUS_QUEUED);
-                  set_report_scan_run_status (global_current_report,
-                                              TASK_STATUS_QUEUED);
+                  int status_ret = set_osp_active_status (
+                    task, report, TASK_STATUS_QUEUED);
+                  if (status_ret)
+                    return status_ret < 0 ? -1 : -2;
                   *queued_status_updated = TRUE;
                   return 2;
                 }
@@ -959,18 +990,20 @@ update_osp_scan (task_t task, report_t report, const char *scan_id,
               scan_semaphore_update_end (FALSE, task, report);
               if (*started == FALSE)
                 {
-                  set_task_run_status (task, TASK_STATUS_RUNNING);
-                  set_report_scan_run_status (global_current_report,
-                                              TASK_STATUS_RUNNING);
+                  int status_ret = set_osp_active_status (
+                    task, report, TASK_STATUS_RUNNING);
+                  if (status_ret)
+                    return status_ret < 0 ? -1 : -2;
                 }
               return 0;
             }
           else if (osp_scan_status == OSP_SCAN_STATUS_RUNNING
                     && *started == FALSE)
             {
-              set_task_run_status (task, TASK_STATUS_RUNNING);
-              set_report_scan_run_status (global_current_report,
-                                          TASK_STATUS_RUNNING);
+              int status_ret = set_osp_active_status (
+                task, report, TASK_STATUS_RUNNING);
+              if (status_ret)
+                return status_ret < 0 ? -1 : -2;
               *started = TRUE;
               return 2;
             }
@@ -1000,9 +1033,29 @@ handle_osp_scan_start (task_t task, target_t target, const char *scan_id,
 {
   char *error = NULL;
   int rc;
+  lockfile_t control_lock = { 0 };
+  task_status_t report_status;
 
+  if (turbovas_task_control_lock (task, &control_lock))
+    return -1;
+  if (report_scan_run_status (global_current_report, &report_status))
+    {
+      turbovas_task_control_unlock (&control_lock);
+      return -1;
+    }
+  if (task_run_status (task) != TASK_STATUS_REQUESTED
+      || report_status != TASK_STATUS_REQUESTED)
+    {
+      turbovas_task_control_unlock (&control_lock);
+      return -2;
+    }
   rc = launch_osp_openvas_task (task, target, scan_id, start_from, &error,
                                 discovery_out);
+  if (turbovas_task_control_unlock (&control_lock))
+    {
+      g_free (error);
+      return -1;
+    }
   if (rc)
     {
       result_t result;
@@ -1192,7 +1245,23 @@ handle_osp_scan (task_t task, report_t report, const char *scan_id,
 int
 handle_osp_scan_end (task_t task, int handle_progress_rc, gboolean discovery)
 {
-  if (handle_progress_rc == 0)
+  lockfile_t control_lock = { 0 };
+  task_status_t task_status, report_status;
+  gboolean already_finalized;
+
+  if (turbovas_task_control_lock (task, &control_lock))
+    return -1;
+  task_status = task_run_status (task);
+  if (report_scan_run_status (global_current_report, &report_status))
+    {
+      turbovas_task_control_unlock (&control_lock);
+      return -1;
+    }
+  already_finalized =
+    task_status == TASK_STATUS_STOPPED
+    || report_status == TASK_STATUS_STOPPED;
+
+  if (already_finalized == FALSE && handle_progress_rc == 0)
     {
       int max_concurrent_scan_updates = get_max_concurrent_scan_updates ();
       set_task_run_status (task, TASK_STATUS_PROCESSING);
@@ -1225,21 +1294,27 @@ handle_osp_scan_end (task_t task, int handle_progress_rc, gboolean discovery)
           queue_report_for_export (global_current_report);
         }
     }
-  else if (handle_progress_rc == -1 || handle_progress_rc == -2)
+  else if (already_finalized == FALSE
+           && (handle_progress_rc == -1 || handle_progress_rc == -2))
     {
       set_task_run_status (task, TASK_STATUS_STOPPED);
       set_report_scan_run_status (global_current_report, TASK_STATUS_STOPPED);
     }
-  else if (handle_progress_rc == -3)
+  else if (already_finalized == FALSE && handle_progress_rc == -3)
     {
       set_task_run_status (task, TASK_STATUS_INTERRUPTED);
       set_report_scan_run_status (global_current_report, TASK_STATUS_INTERRUPTED);
     }
 
-  set_task_end_time_epoch (task, time (NULL));
-  set_scan_end_time_epoch (global_current_report, time (NULL));
+  if (already_finalized == FALSE)
+    {
+      set_task_end_time_epoch (task, time (NULL));
+      set_scan_end_time_epoch (global_current_report, time (NULL));
+    }
   global_current_report = 0;
   current_scanner_task = (task_t) 0;
 
+  if (turbovas_task_control_unlock (&control_lock))
+    return -1;
   return handle_progress_rc;
 }

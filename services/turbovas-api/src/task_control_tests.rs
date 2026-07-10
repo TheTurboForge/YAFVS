@@ -22,6 +22,19 @@ fn startable_task(run_status: i32) -> TaskStartState {
 }
 
 #[test]
+fn task_stop_browser_proxy_forwards_authenticated_operator_context() {
+    let source = include_str!("browser_proxy_metadata_patch.rs");
+    let handler = source
+        .split_once("pub(crate) async fn browser_proxy_stop_task")
+        .expect("browser task stop proxy must exist")
+        .1;
+    assert!(
+        handler.contains("browser_proxy_operator_from_headers(&state, &auth, &headers).await?")
+    );
+    assert!(handler.contains("stop_task(Path(task_id), Some(Extension(operator))).await"));
+}
+
+#[test]
 fn task_start_state_validation_accepts_inactive_supported_scan_tasks() {
     for status in [1, 2, 12, 13] {
         assert!(

@@ -24,6 +24,9 @@ native-verify-scanners *args:
 native-start-task *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-task "$@"
 
+native-stop-task *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-task "$@"
+
 native-start-tasks-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-tasks-from-csv "$@"
 

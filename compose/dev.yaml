@@ -138,6 +138,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-turbovas}
       POSTGRES_DB: ${POSTGRES_DB:-turbovas}
       TURBOVAS_RUNTIME_DIR: /runtime
+      TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}
     volumes:
       - type: bind
         source: ..
@@ -156,7 +157,7 @@ services:
       - -lc
       - >
         mkdir -p /runtime/run/gvmd /runtime/logs/gvmd &&
-        rm -f /runtime/run/gvmd/gvmd.sock &&
+        rm -f /runtime/run/gvmd/gvmd.sock /runtime/run/gvmd/turbovas-control.sock &&
         exec gvmd --foreground
         --database="$${POSTGRES_DB:-turbovas}"
         --db-host=postgres
@@ -168,6 +169,7 @@ services:
         --scan-queue
         --max-active-scan-handlers=1
         --unix-socket=/runtime/run/gvmd/gvmd.sock
+        --turbovas-control-socket=/runtime/run/gvmd/turbovas-control.sock
         --listen-mode=0660
 
   ospd-openvas:
@@ -338,6 +340,8 @@ services:
       dockerfile: docker/turbovas-api/Dockerfile
     restart: unless-stopped
     depends_on:
+      gvmd:
+        condition: service_started
       postgres:
         condition: service_healthy
     environment:
@@ -351,6 +355,8 @@ services:
       TURBOVAS_API_OPERATOR_NAME: ${TURBOVAS_API_OPERATOR_NAME:-}
       TURBOVAS_API_DIRECT_WRITE_CONTROL: ${TURBOVAS_API_DIRECT_WRITE_CONTROL:-}
       TURBOVAS_API_BROWSER_PROXY_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}
+      TURBOVAS_API_GVMD_CONTROL_SOCKET: /runtime/run/gvmd/turbovas-control.sock
+      TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}
       TURBOVAS_FEED_METADATA_DIR: /runtime/feeds
       TURBOVAS_FEED_LOCK_DIR: /runtime/run
     volumes:
@@ -365,6 +371,10 @@ services:
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
         target: /runtime/run/ospd
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd
+        target: /runtime/run/gvmd
         read_only: true
     # No host port by default. Direct API exposure is added only by the
     # generated opt-in direct-API override used by turbovasctl.

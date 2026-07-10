@@ -8,6 +8,7 @@ use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_a
 
 const MANAGE_C: &str = include_str!("../../../components/gvmd/src/manage.c");
 const MANAGE_OSP_C: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
+const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
@@ -277,14 +278,12 @@ fn inherited_stop_task_is_permission_gated_finds_task_and_dispatches_by_scanner_
 fn inherited_stop_osp_task_mutates_scanner_task_and_report_state() {
     let stop_osp_task = inherited_function(MANAGE_C, "stop_osp_task");
     for required in [
-        "task_running_report (task)",
+        "task_unfinished_report (task, &scan_report)",
         "report_uuid (scan_report)",
-        "osp_scanner_connect (task_scanner (task))",
+        "report_scan_run_status (scan_report, &report_status)",
         "current_scanner_task = task",
-        "global_current_report = task_running_report (task)",
-        "set_task_run_status (task, TASK_STATUS_STOP_REQUESTED)",
-        "osp_stop_scan (connection, scan_id, NULL)",
-        "osp_delete_scan (connection, scan_id)",
+        "global_current_report = scan_report",
+        "ensure_osp_scan_absent (task, scan_id)",
         "set_task_end_time_epoch (task, time (NULL))",
         "set_task_run_status (task, TASK_STATUS_STOPPED)",
         "set_scan_end_time_epoch (scan_report, time (NULL))",
@@ -321,6 +320,119 @@ fn inherited_stop_internal_only_requests_stop_for_active_task_statuses() {
 }
 
 #[test]
+fn osp_start_stop_is_serialized_and_only_verified_absence_is_success() {
+    let stop = inherited_function(MANAGE_C, "stop_osp_task");
+    for required in [
+        "turbovas_task_control_lock (task, &control_lock)",
+        "set_report_scan_run_status (scan_report, TASK_STATUS_STOP_REQUESTED)",
+        "report_scan_run_status (scan_report, &report_status)",
+        "scan_queue_remove (scan_report)",
+        "ensure_osp_scan_absent (task, scan_id)",
+        "set_task_run_status (task, TASK_STATUS_STOPPED)",
+        "set_report_scan_run_status (scan_report, TASK_STATUS_STOPPED)",
+        "turbovas_task_control_unlock (&control_lock)",
+    ] {
+        assert!(stop.contains(required), "stop_osp_task missing {required}");
+    }
+    assert!(stop.contains("task_unfinished_report (task, &scan_report)"));
+    assert!(!stop.contains("task_last_report_any_status"));
+    assert!(!stop.contains("task_running_report (task)"));
+    assert!(
+        stop.find("ensure_osp_scan_absent (task, scan_id)")
+            < stop.find("scan_queue_remove (scan_report)")
+    );
+
+    let ensure_absent = inherited_function(MANAGE_C, "ensure_osp_scan_absent");
+    for required in [
+        "osp_scan_status_for_stop (task, scan_id, &status, &absent)",
+        "osp_stop_scan (connection, scan_id, &error)",
+        "osp_delete_scan (connection, scan_id)",
+        "if (absent)",
+        "return -5",
+    ] {
+        assert!(
+            ensure_absent.contains(required),
+            "ensure_osp_scan_absent missing {required}"
+        );
+    }
+
+    let start = inherited_function(MANAGE_OSP_C, "handle_osp_scan_start");
+    let lock_offset = start.find("turbovas_task_control_lock").unwrap();
+    let launch_offset = start.find("launch_osp_openvas_task").unwrap();
+    let unlock_offset = launch_offset
+        + start[launch_offset..]
+            .find("turbovas_task_control_unlock")
+            .unwrap();
+    assert!(lock_offset < launch_offset);
+    assert!(launch_offset < unlock_offset);
+    assert!(start.contains("task_run_status (task) != TASK_STATUS_REQUESTED"));
+
+    let status_update = inherited_function(MANAGE_OSP_C, "set_osp_active_status");
+    assert!(status_update.contains("turbovas_task_control_lock"));
+    assert!(status_update.contains("current != TASK_STATUS_REQUESTED"));
+    assert!(status_update.contains("current != TASK_STATUS_QUEUED"));
+    assert!(status_update.contains("current != TASK_STATUS_RUNNING"));
+
+    let running_report = inherited_function(MANAGE_SQL_C, "task_running_report");
+    assert!(running_report.contains("run_status == TASK_STATUS_STOP_REQUESTED"));
+    assert!(running_report.contains("TASK_STATUS_STOP_REQUESTED"));
+    assert!(running_report.contains("end_time IS NULL"));
+
+    let unfinished_report = inherited_function(MANAGE_SQL_C, "task_unfinished_report");
+    assert!(unfinished_report.contains("end_time IS NULL"));
+    assert!(unfinished_report.contains("TASK_STATUS_INTERRUPTED"));
+    assert!(!unfinished_report.contains("ORDER BY creation_time"));
+}
+
+#[test]
+fn osp_handlers_reject_stale_reports_and_serialize_finalization_with_stop() {
+    let start = inherited_function(MANAGE_OSP_C, "handle_osp_scan_start");
+    for required in [
+        "turbovas_task_control_lock (task, &control_lock)",
+        "report_scan_run_status (global_current_report, &report_status)",
+        "task_run_status (task) != TASK_STATUS_REQUESTED",
+        "report_status != TASK_STATUS_REQUESTED",
+        "launch_osp_openvas_task",
+        "turbovas_task_control_unlock (&control_lock)",
+    ] {
+        assert!(
+            start.contains(required),
+            "handle_osp_scan_start missing {required}"
+        );
+    }
+    assert!(
+        start.find("report_status != TASK_STATUS_REQUESTED")
+            < start.find("launch_osp_openvas_task")
+    );
+
+    let active = inherited_function(MANAGE_OSP_C, "set_osp_active_status");
+    for required in [
+        "report_scan_run_status (report, &report_status)",
+        "report_status != TASK_STATUS_REQUESTED",
+        "report_status != TASK_STATUS_QUEUED",
+        "report_status != TASK_STATUS_RUNNING",
+    ] {
+        assert!(
+            active.contains(required),
+            "set_osp_active_status missing {required}"
+        );
+    }
+
+    let end = inherited_function(MANAGE_OSP_C, "handle_osp_scan_end");
+    for required in [
+        "turbovas_task_control_lock (task, &control_lock)",
+        "report_scan_run_status (global_current_report, &report_status)",
+        "already_finalized",
+        "turbovas_task_control_unlock (&control_lock)",
+    ] {
+        assert!(
+            end.contains(required),
+            "handle_osp_scan_end missing {required}"
+        );
+    }
+}
+
+#[test]
 fn inherited_gsad_and_gmp_client_layers_proxy_start_stop_verbs() {
     let gsad_delete = inherited_function(GSAD_GMP_C, "delete_task_gmp");
     let gsad_start = inherited_function(GSAD_GMP_C, "start_task_gmp");
@@ -348,7 +460,7 @@ fn inherited_gsad_and_gmp_client_layers_proxy_start_stop_verbs() {
 }
 
 #[test]
-fn native_direct_api_allows_guarded_start_and_keeps_other_task_lifecycle_methods_closed() {
+fn native_direct_api_allows_guarded_start_stop_and_keeps_other_task_lifecycle_methods_closed() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/tasks",
@@ -438,7 +550,19 @@ fn native_direct_api_allows_guarded_start_and_keeps_other_task_lifecycle_methods
         start_path,
         true
     ));
-    for action in ["stop", "resume", "delete"] {
+    let stop_path = "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/stop";
+    assert!(!direct_api_v1_path_is_allowed(stop_path));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        stop_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        stop_path,
+        true
+    ));
+    for action in ["resume", "delete"] {
         let path = format!("/api/v1/tasks/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
             !direct_api_v1_path_is_allowed(&path),
@@ -473,9 +597,7 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
     assert!(list.contains("x-turbovas-replaces: task-create-with-target-config-scanner"));
     assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
     assert!(
-        list.contains(
-            "x-turbovas-inherited-still-owns: task-stop-resume-clone-file-and-hard-delete"
-        )
+        list.contains("x-turbovas-inherited-still-owns: task-resume-clone-file-hard-delete-and-other-scanner-control")
     );
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
@@ -485,7 +607,7 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
         list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
     );
     assert!(list.contains(
-        "Stop, clone, hard-delete, file export, resume, broad target/config/schedule/scanner mutation"
+        "Resume, clone, hard-delete, file export, broad target/config/schedule/scanner mutation"
     ));
 
     let detail = openapi_path_block("/tasks/{task_id}");
@@ -500,7 +622,7 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
     assert!(
         detail.contains("Direct write-control endpoint for updating task name and comment only")
     );
-    assert!(detail.contains("Task start has a separate guarded scan-queue route"));
+    assert!(detail.contains("Task start and stop have separate guarded control routes"));
     assert!(detail.contains("operationId: deleteTasksByTaskId"));
     assert!(detail.contains("x-turbovas-replaces: task-trash-move"));
     assert!(detail.contains("safe non-running live-task trash moves"));
@@ -521,6 +643,30 @@ fn openapi_documents_task_metadata_and_guarded_start_contracts() {
         assert!(
             start.contains(required),
             "task start OpenAPI block missing {required}"
+        );
+    }
+
+    let stop = openapi_path_block("/tasks/{task_id}/stop");
+    for required in [
+        "post:",
+        "operationId: postTasksByTaskIdStop",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-maturity: live-control",
+        "x-turbovas-replaces: task-stop",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-owner-semantics: gvmd-acl-user-and-task-permission",
+        "x-turbovas-side-effect: scanner-control",
+        "$ref: '#/components/schemas/TaskStopResult'",
+        "TURBOVAS_API_GVMD_CONTROL_SOCKET",
+        "shared-secret-authenticated",
+        "$ref: '#/components/responses/Conflict'",
+        "$ref: '#/components/responses/BadGateway'",
+        "$ref: '#/components/responses/ServiceUnavailable'",
+    ] {
+        assert!(
+            stop.contains(required),
+            "task stop OpenAPI block missing {required}"
         );
     }
 

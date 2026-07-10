@@ -26,6 +26,7 @@ use crate::{
     scanner_write_validation::ScannerPatchRequest,
     scanner_writes::patch_scanner,
     task_control::{TaskStartResult, start_task},
+    task_stop::{TaskStopResult, stop_task},
     task_target_payloads::TaskItem,
     task_write_validation::{TaskCreateRequest, TaskPatchRequest},
     task_writes::{create_task, delete_task, patch_task},
@@ -114,6 +115,16 @@ pub(crate) async fn browser_proxy_start_task(
 ) -> Result<(StatusCode, Json<TaskStartResult>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     start_task(State(state), Path(task_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_stop_task(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<TaskStopResult>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    stop_task(Path(task_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_delete_tls_certificate(

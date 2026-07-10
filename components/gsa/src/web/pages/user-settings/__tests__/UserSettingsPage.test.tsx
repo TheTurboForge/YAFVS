@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {screen, within, rendererWith, wait} from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
 import Features from 'gmp/capabilities/features';
@@ -46,23 +46,50 @@ const createGmp = ({
   getScanners = mockGet,
   getSchedules = mockGet,
   getTargets = mockGet,
-} = {}) => ({
-  settings: {
-    manualUrl,
-  },
-  session: createSession(),
-  user: {
-    getSetting,
-    currentSettings,
-  },
-  alerts: {get: getAlerts},
-  credentials: {get: getCredentials},
-  filters: {get: getFilters},
-  portlists: {get: getPortlists},
-  scanconfigs: {get: getScanConfigs},
-  scanners: {get: getScanners},
-  schedules: {get: getSchedules},
-  targets: {get: getTargets},
+  nativeResponses = {} as Record<string, unknown>,
+} = {}) => {
+  const buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  testing.stubGlobal(
+    'fetch',
+    testing.fn(url => {
+      const payload = Object.entries(nativeResponses).find(([path]) =>
+        String(url).includes(path),
+      )?.[1] ?? {
+        page: {page: 1, page_size: 500, total: 0, sort: 'name', filter: ''},
+        items: [],
+      };
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      });
+    }),
+  );
+  return {
+    buildUrl,
+    settings: {
+      manualUrl,
+    },
+    session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
+    user: {
+      getSetting,
+      currentSettings,
+    },
+    alerts: {get: getAlerts},
+    credentials: {get: getCredentials},
+    filters: {get: getFilters},
+    portlists: {get: getPortlists},
+    scanconfigs: {get: getScanConfigs},
+    scanners: {get: getScanners},
+    schedules: {get: getSchedules},
+    targets: {get: getTargets},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('UserSettingsPage', () => {
@@ -353,16 +380,13 @@ describe('UserSettingsPage', () => {
   describe('Defaults tab', () => {
     test('displays default settings headers and links in the Defaults tab', async () => {
       const createMockEntitiesResponse = (id, name) => ({
-        data: [
+        page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
+        items: [
           {
             id,
             name,
           },
         ],
-        meta: {
-          filter: {},
-          counts: {},
-        },
       });
 
       const mockTargetEntitiesResponse = createMockEntitiesResponse(
@@ -390,45 +414,33 @@ describe('UserSettingsPage', () => {
         'scanner-123',
         'Test Scanner',
       );
-      const mockScheduleEntitiesResponse = createMockEntitiesResponse(
-        'schedule-123',
-        'Test Schedule',
-      );
-
-      const mockGetTarget = testing
-        .fn()
-        .mockResolvedValue(mockTargetEntitiesResponse);
-
-      const mockAlertGet = testing
-        .fn()
-        .mockResolvedValue(mockAlertEntitiesResponse);
-
-      const mockCredentialsGet = testing
-        .fn()
-        .mockResolvedValue(mockCredentialsOneEntitiesResponse);
-
-      const mockPortlistsGet = testing
-        .fn()
-        .mockResolvedValue(mockPortlistEntitiesResponse);
-      const mockScanconfigsGet = testing
-        .fn()
-        .mockResolvedValue(mockScanconfigEntitiesResponse);
-      const mockScannersGet = testing
-        .fn()
-        .mockResolvedValue(mockScannerEntitiesResponse);
-      const mockSchedulesGet = testing
-        .fn()
-        .mockResolvedValue(mockScheduleEntitiesResponse);
+      const mockScheduleEntitiesResponse = {
+        ...createMockEntitiesResponse('schedule-123', 'Test Schedule'),
+        items: [
+          {
+            id: 'schedule-123',
+            name: 'Test Schedule',
+            icalendar:
+              'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20210104T115400Z\nDURATION:PT0S\nUID:test-schedule\nDTSTAMP:20210111T134141Z\nEND:VEVENT\nEND:VCALENDAR',
+            timezone: 'UTC',
+          },
+        ],
+      };
 
       const gmp = createGmp({
-        getAlerts: mockAlertGet,
-        getCredentials: mockCredentialsGet,
-        getFilters: mockGetTarget,
-        getPortlists: mockPortlistsGet,
-        getScanConfigs: mockScanconfigsGet,
-        getScanners: mockScannersGet,
-        getSchedules: mockSchedulesGet,
-        getTargets: mockGetTarget,
+        nativeResponses: {
+          'api/v1/alerts': mockAlertEntitiesResponse,
+          'api/v1/credentials': mockCredentialsOneEntitiesResponse,
+          'api/v1/filters': {
+            page: {page: 1, page_size: 500, total: 0, sort: 'name', filter: ''},
+            items: [],
+          },
+          'api/v1/port-lists': mockPortlistEntitiesResponse,
+          'api/v1/scan-configs': mockScanconfigEntitiesResponse,
+          'api/v1/scanners': mockScannerEntitiesResponse,
+          'api/v1/schedules': mockScheduleEntitiesResponse,
+          'api/v1/targets': mockTargetEntitiesResponse,
+        },
       });
 
       const {render, store} = rendererWith({
@@ -679,6 +691,5 @@ describe('UserSettingsPage', () => {
       render(<UserSettingsPage />);
       expect(screen.queryByText('Filters')).not.toBeInTheDocument();
     });
-
   });
 });

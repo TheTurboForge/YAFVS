@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   screen,
   testBulkTrashcanDialog,
@@ -20,7 +21,7 @@ import {currentSettingsDefaultResponse} from 'web/pages/__fixtures__/current-set
 import ReportConfigsPage, {
   ToolBarIcons,
 } from 'web/pages/reportconfigs/ListPage';
-import {entitiesLoadingActions} from 'web/store/entities/scanconfigs';
+import {entitiesLoadingActions} from 'web/store/entities/reportconfigs';
 import {defaultFilterLoadingActions} from 'web/store/usersettings/defaultfilters/actions';
 import {loadingActions} from 'web/store/usersettings/defaults/actions';
 
@@ -39,6 +40,18 @@ const config = ReportConfig.fromElement({
   },
 });
 
+const nativeReportConfigItem = {
+  id: '12345',
+  name: 'foo',
+  comment: 'bar',
+  owner: {name: 'admin'},
+  report_format: {id: '54321', name: 'baz'},
+  writable: true,
+  in_use: false,
+  created_at: '2019-07-16T06:31:29Z',
+  modified_at: '2019-07-16T06:44:55Z',
+};
+
 const wrongCaps = new Capabilities(['get_config']);
 
 const reloadInterval = 1;
@@ -52,6 +65,7 @@ const createGmp = ({
   deleteByFilter = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
+  nativeReportConfigItems = [nativeReportConfigItem],
   addTagByFilter = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
@@ -70,24 +84,59 @@ const createGmp = ({
       counts: new CollectionCounts(),
     },
   }),
-} = {}) => ({
-  reportconfigs: {
-    get: getReportConfigs,
-    deleteByFilter,
-    addTagByFilter,
-  },
-  filters: {
-    get: getFilters,
-  },
-  reloadInterval,
-  settings: {
-    manualUrl,
-  },
-  session: createSession(),
-  user: {
-    currentSettings,
-    getSetting,
-  },
+} = {}) => {
+  const buildUrl = testing.fn(
+    (path, _params) => `https://turbovas.example/${path}`,
+  );
+  testing.stubGlobal(
+    'fetch',
+    testing.fn(url => {
+      const payload = String(url).includes('/api/v1/report-configs')
+        ? {
+            page: {
+              page: 1,
+              page_size: 10,
+              total: nativeReportConfigItems.length,
+              sort: 'name',
+              filter: '',
+            },
+            items: nativeReportConfigItems,
+          }
+        : {
+            page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+            items: [],
+          };
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      });
+    }),
+  );
+  return {
+    buildUrl,
+    reportconfigs: {
+      get: getReportConfigs,
+      deleteByFilter,
+      addTagByFilter,
+    },
+    filters: {
+      get: getFilters,
+    },
+    reloadInterval,
+    settings: {
+      manualUrl,
+    },
+    session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
+    user: {
+      currentSettings,
+      getSetting,
+    },
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('ReportConfigsPage tests', () => {

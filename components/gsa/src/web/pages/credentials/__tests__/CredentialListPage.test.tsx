@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   getSelectItemElementsForSelect,
   screen,
@@ -42,6 +43,18 @@ const credential = Credential.fromElement({
   },
 });
 
+const nativeCredentialItem = {
+  id: '6575',
+  name: 'credential 1',
+  comment: 'something',
+  owner: 'admin',
+  credential_type: 'usk',
+  target_count: 0,
+  scanner_count: 0,
+  created_at: '2020-12-16T15:23:59Z',
+  modified_at: '2021-03-02T10:28:15Z',
+};
+
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
@@ -54,6 +67,7 @@ const createGmp = ({
     data: [credential],
     meta: {filter: new Filter(), counts: new CollectionCounts()},
   },
+  nativeCredentialItems = [nativeCredentialItem],
   getFiltersResponse = {
     data: [],
     meta: {filter: new Filter(), counts: new CollectionCounts()},
@@ -79,43 +93,78 @@ const createGmp = ({
   exportByModels = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  credential: {
-    clone: cloneCredential,
-    delete: deleteCredential,
-    download: downloadCredential,
-    export: exportCredential,
-    get: getCredential,
-  },
-  credentials: {
-    get: getCredentials,
-    deleteByFilter,
-    exportByFilter,
-    export: exportByModels,
-    delete: deleteByModels,
-  },
-  filters: {
-    get: getFilters,
-  },
-  settings: {
-    manualUrl,
-    reloadInterval,
-  },
-  session: createSession(),
-  user: {
-    currentSettings: testing
-      .fn()
-      .mockResolvedValue(currentSettingsDefaultResponse),
-  },
-  permissions: {
-    get: testing.fn().mockResolvedValue({
-      data: [],
-      meta: {
-        filter: Filter.fromString(),
-        counts: new CollectionCounts(),
-      },
+} = {}) => {
+  const buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  testing.stubGlobal(
+    'fetch',
+    testing.fn(url => {
+      const payload = String(url).includes('/api/v1/credentials')
+        ? {
+            page: {
+              page: 1,
+              page_size: 10,
+              total: nativeCredentialItems.length,
+              sort: 'name',
+              filter: '',
+            },
+            items: nativeCredentialItems,
+          }
+        : {
+            page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+            items: [],
+          };
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      });
     }),
-  },
+  );
+  return {
+    buildUrl,
+    credential: {
+      clone: cloneCredential,
+      delete: deleteCredential,
+      download: downloadCredential,
+      export: exportCredential,
+      get: getCredential,
+    },
+    credentials: {
+      get: getCredentials,
+      deleteByFilter,
+      exportByFilter,
+      export: exportByModels,
+      delete: deleteByModels,
+    },
+    filters: {
+      get: getFilters,
+    },
+    settings: {
+      manualUrl,
+      reloadInterval,
+    },
+    session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
+    user: {
+      currentSettings: testing
+        .fn()
+        .mockResolvedValue(currentSettingsDefaultResponse),
+    },
+    permissions: {
+      get: testing.fn().mockResolvedValue({
+        data: [],
+        meta: {
+          filter: Filter.fromString(),
+          counts: new CollectionCounts(),
+        },
+      }),
+    },
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('CredentialListPage tests', () => {
@@ -179,7 +228,9 @@ describe('CredentialListPage tests', () => {
     expect(
       screen.getByRole('cell', {name: /username \+ ssh key/i}),
     ).toBeInTheDocument();
-    expect(screen.getByRole('cell', {name: /admin/i})).toBeInTheDocument();
+    expect(
+      screen.queryByRole('cell', {name: /admin/i}),
+    ).not.toBeInTheDocument();
 
     // table row actions
     expect(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, test, expect, testing} from '@gsa/testing';
+import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
   screen,
   testBulkTrashcanDialog,
@@ -44,6 +44,22 @@ const task = Task.fromElement({
   target: {_id: 'id1', name: 'target1'},
 });
 
+const nativeTaskItem = {
+  id: '1234',
+  name: 'foo',
+  comment: 'bar',
+  status: 'Done',
+  progress: 100,
+  trend: '',
+  target: {id: 'id1', name: 'target1'},
+  report_count: {total: 1, finished: 1},
+  last_report: {
+    id: '1234',
+    timestamp: '2019-08-10T12:51:27Z',
+    severity: 5.0,
+  },
+};
+
 const reloadInterval = 1;
 const manualUrl = 'test/';
 
@@ -59,6 +75,7 @@ const createGmp = ({
       counts: new CollectionCounts(),
     },
   }),
+  nativeTaskItems = [nativeTaskItem],
   getUserSetting = testing.fn().mockResolvedValue({
     filter: null,
   }),
@@ -89,30 +106,69 @@ const createGmp = ({
   exportByFilter = testing.fn().mockResolvedValue({
     foo: 'bar',
   }),
-} = {}) => ({
-  task: {
-    export: exportTask,
-  },
-  tasks: {
-    get: getTasks,
-    getSeverityAggregates: getAggregates,
-    getHighResultsAggregates: getAggregates,
-    getStatusAggregates: getAggregates,
-    deleteByFilter,
-    exportByFilter,
-  },
-  filters: {
-    get: getFilters,
-  },
-  reportformats: {
-    get: getReportFormats,
-  },
-  reloadInterval,
-  settings: {
-    manualUrl,
-  },
-  session: createSession({timezone: 'CET'}),
-  user: {currentSettings, getSetting: getUserSetting},
+} = {}) => {
+  const buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  testing.stubGlobal(
+    'fetch',
+    testing.fn(url => {
+      const payload = String(url).includes('/api/v1/tasks')
+        ? {
+            page: {
+              page: 1,
+              page_size: 10,
+              total: nativeTaskItems.length,
+              sort: 'name',
+              filter: '',
+            },
+            items: nativeTaskItems,
+          }
+        : {
+            page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+            items: [],
+          };
+      return Promise.resolve({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      });
+    }),
+  );
+  return {
+    buildUrl,
+    task: {
+      export: exportTask,
+    },
+    tasks: {
+      get: getTasks,
+      getSeverityAggregates: getAggregates,
+      getHighResultsAggregates: getAggregates,
+      getStatusAggregates: getAggregates,
+      deleteByFilter,
+      exportByFilter,
+    },
+    filters: {
+      get: getFilters,
+    },
+    reportformats: {
+      get: getReportFormats,
+    },
+    reloadInterval,
+    settings: {
+      manualUrl,
+    },
+    session: {
+      ...createSession({timezone: 'CET'}),
+      token: 'test-token',
+      jwt: 'jwt-token',
+    },
+    user: {currentSettings, getSetting: getUserSetting},
+  };
+};
+
+afterEach(() => {
+  testing.unstubAllGlobals();
 });
 
 describe('TaskListPage tests', () => {
@@ -185,7 +241,9 @@ describe('TaskListPage tests', () => {
     expect(select).toHaveValue('--');
 
     // Dashboard
-    expect(screen.queryByTestId('add-dashboard-display')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('add-dashboard-display'),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId('reset-dashboard')).not.toBeInTheDocument();
     expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
 

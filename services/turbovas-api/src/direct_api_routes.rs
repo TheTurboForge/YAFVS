@@ -21,8 +21,9 @@ use crate::{
     },
     override_writes::delete_override,
     port_list_writes::{
-        clone_port_list, create_port_list, delete_port_list, delete_port_list_range,
-        hard_delete_port_list, import_port_list, patch_port_list, restore_port_list,
+        clone_port_list, create_port_list, create_port_list_range, delete_port_list,
+        delete_port_list_range, hard_delete_port_list, import_port_list, patch_port_list,
+        restore_port_list,
     },
     report_config_writes::{
         clone_report_config, create_report_config, delete_report_config, hard_delete_report_config,
@@ -181,6 +182,10 @@ pub(crate) fn direct_native_api_router(
             )
             .route("/api/v1/port-lists/:port_list_id", patch(patch_port_list))
             .route("/api/v1/port-lists/:port_list_id", delete(delete_port_list))
+            .route(
+                "/api/v1/port-lists/:port_list_id/ranges",
+                post(create_port_list_range),
+            )
             .route(
                 "/api/v1/port-lists/:port_list_id/ranges/:port_range_id",
                 delete(delete_port_list_range),

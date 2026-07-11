@@ -9,8 +9,8 @@ use crate::port_list_write_validation::{
     MAX_PORT_LIST_CREATE_RANGES, MAX_PORT_LIST_TEXT_BYTES, OPENVAS_DEFAULT_TCP_RANGES,
     PortListCloneRequest, PortListCreateRangeRequest, PortListCreateRequest, PortListImportRequest,
     PortListPatchRequest, ValidatedPortListPatch, validate_port_list_clone_request,
-    validate_port_list_create_request, validate_port_list_import_request,
-    validate_port_list_patch_request,
+    validate_port_list_create_range_request, validate_port_list_create_request,
+    validate_port_list_import_request, validate_port_list_patch_request,
 };
 
 const MANAGE_SQL_PORT_LISTS: &str =
@@ -45,12 +45,74 @@ fn inherited_openvas_default_tcp_ranges() -> Vec<(i32, i32)> {
         .collect()
 }
 
+#[test]
+fn port_list_range_create_sql_is_bounded_and_overlap_checked() {
+    assert_eq!(
+        port_list_range_count_sql(),
+        "SELECT count(*)::bigint FROM port_ranges WHERE port_list = $1;"
+    );
+    let overlap = port_list_range_overlap_count_sql();
+    assert!(overlap.contains("port_list = $1"));
+    assert!(overlap.contains("type = $2"));
+    assert!(overlap.contains("start <= $4"));
+    assert!(overlap.contains("\"end\" >= $3"));
+
+    let range = validate_port_list_create_range_request(create_range("tcp", 80, 443))
+        .expect("single range request should validate");
+    assert_eq!(range.protocol_id, 0);
+    assert_eq!(range.start, 80);
+    assert_eq!(range.end, 443);
+}
+
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> PortListPatchRequest {
     PortListPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
         port_ranges: None,
     }
+}
+
+#[test]
+fn port_list_range_create_handler_checks_parent_and_overlap_before_insert() {
+    let source = include_str!("port_list_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn create_port_list_range")
+        .expect("create_port_list_range handler must exist")
+        .1
+        .split_once("pub(crate) async fn delete_port_list_range")
+        .expect("delete_port_list_range should follow create handler")
+        .0;
+    let owner = handler
+        .find("ensure_port_list_owner_matches_operator")
+        .expect("handler must check owner");
+    let predefined = handler
+        .find("state.predefined")
+        .expect("handler must block predefined parent lists");
+    let live_targets = handler
+        .find("ensure_port_list_not_in_use_by_live_targets")
+        .expect("handler must reject live target references");
+    let trash_targets = handler
+        .find("ensure_port_list_not_in_use_by_live_location_trash_targets")
+        .expect("handler must reject trash target references to live list");
+    let overlap = handler
+        .find("ensure_port_list_range_can_be_created")
+        .expect("handler must check range capacity and overlap");
+    let insert = handler
+        .find("execute_port_list_range_create_transaction")
+        .expect("handler must insert only after safety checks");
+    let detail = handler
+        .find("load_port_list_asset_detail")
+        .expect("handler must assemble response detail inside the transaction");
+    let commit = handler
+        .find("tx.commit")
+        .expect("handler must commit after assembling the response");
+    assert!(owner < predefined);
+    assert!(predefined < live_targets);
+    assert!(live_targets < trash_targets);
+    assert!(trash_targets < overlap);
+    assert!(overlap < insert);
+    assert!(insert < detail);
+    assert!(detail < commit);
 }
 
 #[test]

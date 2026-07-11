@@ -367,6 +367,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     },
     NativeWriteRouteContract {
         method: "post",
+        path: "/api/v1/port-lists/:port_list_id/ranges",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
         path: "/api/v1/port-lists/:port_list_id/clone",
         safety_contract: "write-control-v1",
     },
@@ -687,6 +692,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_filter)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_port_list)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_port_list_range)"));
+    assert!(browser_routes.contains("post(browser_proxy_create_port_list_range)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_port_list)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_report_config)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_report_config)"));

@@ -1,16 +1,25 @@
-/* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+/* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
+import {
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
+import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
-import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import ActionResult from 'gmp/models/action-result';
+import type Filter from 'gmp/models/filter';
+import {filterString} from 'gmp/models/filter/utils';
 import PortList from 'gmp/models/port-list';
-import type QueryFilter from 'gmp/models/filter';
+import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -97,6 +106,7 @@ export interface NativePortListRangeCommandRequest {
   portRangeStart: number;
   portRangeEnd: number;
   portType: string;
+  comment?: string;
 }
 
 export interface NativePortListsQuery {
@@ -112,6 +122,51 @@ export interface NativePortListsResponse {
   counts: CollectionCounts;
   page: NativePage;
 }
+
+export type FromFile = typeof FROM_FILE | typeof NOT_FROM_FILE;
+
+export interface PortListCommandCreateParams {
+  name: string;
+  comment?: string;
+  fromFile?: FromFile;
+  portRange?: string;
+  file?: File;
+}
+
+export interface PortListCommandSaveParams {
+  id: string;
+  name: string;
+  comment?: string;
+}
+
+interface PortListCommandCreatePortRangeParams {
+  portListId: string;
+  portRangeStart: number;
+  portRangeEnd: number;
+  portType: string;
+  comment?: string;
+}
+
+interface PortListCommandDeletePortRangeParams {
+  id: string;
+  portListId: string;
+}
+
+interface PortListCommandImportParams {
+  xmlFile?: File;
+}
+
+interface PortListCommandParams {
+  id: string;
+  filter?: Filter | string;
+}
+
+interface PortListCommandOptions {
+  filter?: Filter | string;
+}
+
+export const FROM_FILE = YES_VALUE;
+export const NOT_FROM_FILE = NO_VALUE;
 
 const PORT_LIST_SORT_FIELDS: Record<string, string> = {
   name: 'name',
@@ -142,7 +197,7 @@ const integerValue = (value: unknown, fallback = 0): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const nativeSortFromFilter = (filter?: QueryFilter): string => {
+const nativeSortFromFilter = (filter?: Filter): string => {
   const reverse = filter?.get('sort-reverse');
   const ascending = filter?.get('sort');
   const rawField = stringValue(reverse ?? ascending) || 'name';
@@ -150,7 +205,7 @@ const nativeSortFromFilter = (filter?: QueryFilter): string => {
   return reverse !== undefined ? `-${nativeField}` : nativeField;
 };
 
-const nativeSearchFromFilter = (filter?: QueryFilter): string => {
+const nativeSearchFromFilter = (filter?: Filter): string => {
   const search = filter?.get('search');
   if (search !== undefined) {
     return String(search);
@@ -160,7 +215,7 @@ const nativeSearchFromFilter = (filter?: QueryFilter): string => {
 };
 
 export const nativePortListsQueryFromFilter = (
-  filter?: QueryFilter,
+  filter?: Filter,
 ): NativePortListsQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
@@ -173,6 +228,64 @@ export const nativePortListsQueryFromFilter = (
       filter?.get('predefined') === undefined
         ? undefined
         : String(filter.get('predefined')),
+  };
+};
+
+const shouldApplyToAllFilteredPortLists = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
+const nativePortListDetailSupportsFilter = (
+  filter?: Filter | string,
+): boolean => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'targets=1';
+};
+
+const nativePortListCreateRequestFromCommand = ({
+  name,
+  comment = '',
+  fromFile,
+  portRange,
+}: PortListCommandCreateParams): NativePortListCreateRequest | undefined => {
+  if (fromFile === FROM_FILE || portRange === undefined) {
+    return undefined;
+  }
+  let currentProtocol: 'tcp' | 'udp' | undefined;
+  const port_ranges = portRange
+    .split(/[\n,]+/)
+    .map(range => range.trim())
+    .filter(range => range.length > 0)
+    .map(range => {
+      const prefixed = /^(tcp|udp|t|u):(\d+(?:-\d+)?)$/i.exec(range);
+      const unprefixed = /^(\d+(?:-\d+)?)$/.exec(range);
+      if (prefixed !== null) {
+        const protocol = prefixed[1].toLowerCase();
+        currentProtocol =
+          protocol === 'udp' || protocol === 'u' ? 'udp' : 'tcp';
+      }
+      const rangeText = prefixed?.[2] ?? unprefixed?.[1];
+      if (rangeText === undefined || currentProtocol === undefined) {
+        return undefined;
+      }
+      const [startText, endText] = rangeText.split('-', 2);
+      const start = Number.parseInt(startText, 10);
+      const end = Number.parseInt(endText ?? startText, 10);
+      if (!Number.isInteger(start) || !Number.isInteger(end)) {
+        return undefined;
+      }
+      return {protocol: currentProtocol, start, end};
+    });
+
+  if (port_ranges.some(range => range === undefined)) {
+    return undefined;
+  }
+
+  return {
+    name,
+    comment,
+    port_ranges: port_ranges.filter(range => range !== undefined),
   };
 };
 
@@ -342,17 +455,6 @@ const fetchNativePortListPayload = async (
     {token: gmp.session.token},
   );
 
-const nativePortRangePatchRequest = (
-  range: NativePortRangePayload,
-): NativePortListCreateRangePayload => ({
-  protocol: range.protocol === 'udp' ? 'udp' : 'tcp',
-  start: integerValue(range.start),
-  end: integerValue(range.end),
-  ...(stringValue(range.comment).length > 0
-    ? {comment: stringValue(range.comment)}
-    : {}),
-});
-
 const patchNativePortListPayload = async (
   gmp: NativeApiGmp,
   id: string,
@@ -434,22 +536,27 @@ export const patchNativePortList = async (
 
 export const createNativePortRange = async (
   gmp: NativeApiGmp,
-  {portListId, portRangeStart, portRangeEnd, portType}: NativePortListRangeCommandRequest,
+  {
+    portListId,
+    portRangeStart,
+    portRangeEnd,
+    portType,
+    comment,
+  }: NativePortListRangeCommandRequest,
 ): Promise<Response<ActionResult>> => {
-  const current = await fetchNativePortListPayload(gmp, portListId);
   const start = Math.min(portRangeStart, portRangeEnd);
   const end = Math.max(portRangeStart, portRangeEnd);
   const newRange = {
     protocol: portType.toLowerCase(),
     start,
     end,
+    ...(comment !== undefined ? {comment} : {}),
   };
-  const payload = await patchNativePortListPayload(gmp, portListId, {
-    port_ranges: [
-      ...(current.port_ranges ?? []).map(nativePortRangePatchRequest),
-      newRange,
-    ],
-  });
+  const payload = await writeNativeJson<NativePortListPayload>(
+    gmp,
+    `api/v1/port-lists/${encodeURIComponent(portListId)}/ranges`,
+    newRange,
+  );
   const createdRange = (payload.port_ranges ?? []).find(
     range =>
       range.protocol === newRange.protocol &&
@@ -470,28 +577,36 @@ export const createNativePortRange = async (
   );
 };
 
+export class NativePortRangeDeleteError extends Error {
+  readonly portListId: string;
+  readonly portRangeId: string;
+
+  constructor(portListId: string, portRangeId: string, cause?: unknown) {
+    const detail = cause instanceof Error ? `: ${cause.message}` : '';
+    super(
+      `Native port range deletion failed for ${portRangeId} in ${portListId}${detail}`,
+      {cause},
+    );
+    this.name = 'NativePortRangeDeleteError';
+    this.portListId = portListId;
+    this.portRangeId = portRangeId;
+  }
+}
+
 export const deleteNativePortRange = async (
   gmp: NativeApiGmp,
   id: string,
   portListId: string,
-): Promise<Response<PortList> | undefined> => {
-  const current = await fetchNativePortListPayload(gmp, portListId);
-  const currentRanges = current.port_ranges ?? [];
-  const remainingRanges = currentRanges.filter(range => range.id !== id);
-  if (remainingRanges.length === currentRanges.length) {
-    return undefined;
-  }
-  if (remainingRanges.length === 0) {
+): Promise<Response<PortList>> => {
+  try {
     await deleteNative(
       gmp,
       `api/v1/port-lists/${encodeURIComponent(portListId)}/ranges/${encodeURIComponent(id)}`,
     );
-    const payload = await fetchNativePortListPayload(gmp, portListId);
-    return new Response(nativePortListToModel(payload, {detail: true}));
+  } catch (cause) {
+    throw new NativePortRangeDeleteError(portListId, id, cause);
   }
-  const payload = await patchNativePortListPayload(gmp, portListId, {
-    port_ranges: remainingRanges.map(nativePortRangePatchRequest),
-  });
+  const payload = await fetchNativePortListPayload(gmp, portListId);
   return new Response(nativePortListToModel(payload, {detail: true}));
 };
 
@@ -506,3 +621,241 @@ export const cloneNativePortList = async (
   );
   return new Response({id: stringValue(payload.id)});
 };
+
+export class NativePortListBulkDeleteError extends Error {
+  readonly deletedIds: string[];
+  readonly failedId: string;
+  readonly pendingIds: string[];
+
+  constructor(
+    deletedIds: string[],
+    failedId: string,
+    pendingIds: string[],
+    cause: unknown,
+  ) {
+    super(
+      `Native port list bulk delete stopped at ${failedId} after deleting ${deletedIds.length} port list(s).`,
+      {cause},
+    );
+    this.name = 'NativePortListBulkDeleteError';
+    this.deletedIds = deletedIds;
+    this.failedId = failedId;
+    this.pendingIds = pendingIds;
+  }
+}
+
+const portListIds = (portLists: PortList[]) =>
+  portLists.flatMap(portList =>
+    portList.id === undefined ? [] : [portList.id],
+  );
+
+export class PortListCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get(
+    {id}: PortListCommandParams,
+    {filter}: PortListCommandOptions = {},
+  ) {
+    if (!nativePortListDetailSupportsFilter(filter)) {
+      throw new Error('Native port list detail filter is not supported');
+    }
+    return new Response(await fetchNativePortList(this.http, id));
+  }
+
+  export({id}: PortListCommandParams) {
+    return exportNativePortListMetadata(this.http, id);
+  }
+
+  async create(args: PortListCommandCreateParams) {
+    const {fromFile, file} = args;
+    if (fromFile === FROM_FILE && file !== undefined) {
+      return importNativePortList(this.http, {xml_file: await file.text()});
+    }
+    const nativeRequest = nativePortListCreateRequestFromCommand(args);
+    if (nativeRequest === undefined) {
+      throw new Error(
+        'Native port list create received unsupported payload shape',
+      );
+    }
+    return createNativePortList(this.http, nativeRequest);
+  }
+
+  save({id, name, comment = ''}: PortListCommandSaveParams) {
+    return patchNativePortList(this.http, id, {comment, name});
+  }
+
+  clone({id}: PortListCommandParams) {
+    return cloneNativePortList(this.http, id);
+  }
+
+  async delete({id}: PortListCommandParams) {
+    await deleteNativePortList(this.http, id);
+  }
+
+  createPortRange({
+    portListId,
+    portRangeStart,
+    portRangeEnd,
+    portType,
+    comment,
+  }: PortListCommandCreatePortRangeParams) {
+    return createNativePortRange(this.http, {
+      portListId,
+      portRangeStart,
+      portRangeEnd,
+      portType,
+      comment,
+    });
+  }
+
+  deletePortRange({id, portListId}: PortListCommandDeletePortRangeParams) {
+    return deleteNativePortRange(this.http, id, portListId);
+  }
+
+  async import({xmlFile}: PortListCommandImportParams) {
+    if (xmlFile === undefined) {
+      throw new Error(
+        'Native port list import received unsupported payload shape',
+      );
+    }
+    return importNativePortList(this.http, {xml_file: await xmlFile.text()});
+  }
+}
+
+export class PortListsCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get(params: HttpCommandInputParams = {}) {
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativePortLists(
+      this.http,
+      nativePortListsQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.portLists, {
+      filter,
+      counts: nativeResponse.counts,
+    });
+  }
+
+  async getAll(params: HttpCommandInputParams = {}) {
+    const filter = filterFromCommandParams(params).all();
+    const portLists: PortList[] = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; portLists.length < total; page += 1) {
+      const nativeResponse = await fetchNativePortLists(this.http, {
+        ...nativePortListsQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      portLists.push(...nativeResponse.portLists);
+      total = nativeResponse.page.total;
+      if (nativeResponse.portLists.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      portLists,
+      nativeCollectionMeta(
+        filter,
+        portLists,
+        Number.isFinite(total) ? total : 0,
+      ),
+    );
+  }
+
+  export(portLists: PortList[]) {
+    return this.exportByIds(portListIds(portLists));
+  }
+
+  exportByIds(ids: string[]) {
+    return exportNativePortListsMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    const portLists: PortList[] = [];
+    if (shouldApplyToAllFilteredPortLists(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; portLists.length < total; page += 1) {
+        const nativeResponse = await fetchNativePortLists(this.http, {
+          ...nativePortListsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        portLists.push(...nativeResponse.portLists);
+        total = nativeResponse.page.total;
+        if (nativeResponse.portLists.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativePortLists(
+        this.http,
+        nativePortListsQueryFromFilter(filter),
+      );
+      portLists.push(...nativeResponse.portLists);
+    }
+
+    return this.exportByIds(portListIds(portLists));
+  }
+
+  async delete(portLists: PortList[]) {
+    const response = await this.deleteByIds(portListIds(portLists));
+    return response.setData(portLists);
+  }
+
+  async deleteByIds(ids: string[]) {
+    const deletedIds: string[] = [];
+    await this.deleteIds(ids, deletedIds);
+    return new Response(deletedIds);
+  }
+
+  async deleteByFilter(filter: Filter) {
+    const deletedPortLists: PortList[] = [];
+    const deletedIds: string[] = [];
+    const query = nativePortListsQueryFromFilter(filter);
+    const deleteAll = shouldApplyToAllFilteredPortLists(filter);
+    let hasMore = true;
+
+    while (hasMore) {
+      const nativeResponse = await fetchNativePortLists(this.http, {
+        ...query,
+        ...(deleteAll ? {page: 1, pageSize: NATIVE_COMMAND_PAGE_SIZE} : {}),
+      });
+      const portLists = nativeResponse.portLists;
+      hasMore = deleteAll && portLists.length > 0;
+      if (portLists.length === 0) {
+        break;
+      }
+      await this.deleteIds(portListIds(portLists), deletedIds);
+      deletedPortLists.push(...portLists);
+    }
+
+    return new Response(deletedPortLists);
+  }
+
+  private async deleteIds(ids: string[], deletedIds: string[]) {
+    for (const [index, id] of ids.entries()) {
+      try {
+        await deleteNativePortList(this.http, id);
+      } catch (cause) {
+        throw new NativePortListBulkDeleteError(
+          [...deletedIds],
+          id,
+          ids.slice(index),
+          cause,
+        );
+      }
+      deletedIds.push(id);
+    }
+  }
+}

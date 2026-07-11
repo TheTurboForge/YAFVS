@@ -479,6 +479,11 @@ fn openapi_documents_port_list_write_control_boundary() {
     let export = openapi_path_block("/port-lists/{port_list_id}/export");
     assert!(export.contains("get:"));
     assert!(export.contains("x-turbovas-exposure: direct-read"));
+
+    let create_range = openapi_path_block("/port-lists/{port_list_id}/ranges");
+    assert!(create_range.contains("post:"));
+    assert!(create_range.contains("x-turbovas-replaces: port-list-range-create"));
+    assert!(create_range.contains("PortListCreateRangeRequest"));
     assert!(export.contains("x-turbovas-replaces: port-list-metadata-export-read"));
     assert!(!export.contains("x-turbovas-inherited-still-owns:"));
     assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));

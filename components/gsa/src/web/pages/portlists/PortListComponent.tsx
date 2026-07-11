@@ -9,10 +9,6 @@ import {
   type EntityActionResponse,
   type EntityCommandParams,
 } from 'gmp/commands/entity';
-import {
-  type PortListCommandCreateParams,
-  type PortListCommandSaveParams,
-} from 'gmp/commands/port-lists';
 import type Rejection from 'gmp/http/rejection';
 import {
   type default as PortList,
@@ -21,6 +17,8 @@ import {
 import {
   exportNativePortListMetadata,
   fetchNativePortList,
+  type PortListCommandCreateParams,
+  type PortListCommandSaveParams,
 } from 'gmp/native-api/port-lists';
 import {isDefined} from 'gmp/utils/identity';
 import {shorten} from 'gmp/utils/string';
@@ -384,8 +382,7 @@ const PortListComponent = ({
     <>
       {children({
         clone: handleClone,
-        download: entity =>
-          handleDownload(entity, {extension: 'json'}),
+        download: entity => handleDownload(entity, {extension: 'json'}),
         delete: handleDelete,
         create: openPortListDialog,
         edit: openPortListDialog,

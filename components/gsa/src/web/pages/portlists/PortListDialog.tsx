@@ -1,10 +1,15 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {FROM_FILE, type FromFile, NOT_FROM_FILE} from 'gmp/commands/port-lists';
 import type PortList from 'gmp/models/port-list';
+import {
+  FROM_FILE,
+  type FromFile,
+  NOT_FROM_FILE,
+} from 'gmp/native-api/port-lists';
 import {parseYesNo, type YesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 import SaveDialog from 'web/components/dialog/SaveDialog';

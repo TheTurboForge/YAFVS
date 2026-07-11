@@ -16,8 +16,9 @@ use crate::{
     port_list_write_db::*,
     port_list_write_transactions::*,
     port_list_write_validation::{
-        PortListCloneRequest, PortListCreateRequest, PortListImportRequest, PortListPatchRequest,
-        validate_port_list_clone_request, validate_port_list_create_request,
+        PortListCloneRequest, PortListCreateRangeRequest, PortListCreateRequest,
+        PortListImportRequest, PortListPatchRequest, validate_port_list_clone_request,
+        validate_port_list_create_range_request, validate_port_list_create_request,
         validate_port_list_import_request, validate_port_list_patch_request,
     },
     port_lists::load_port_list_asset_detail,
@@ -163,6 +164,42 @@ pub(crate) async fn patch_port_list(
     Ok(Json(
         load_port_list_asset_detail(&client, &record.uuid).await?,
     ))
+}
+
+pub(crate) async fn create_port_list_range(
+    State(state): State<AppState>,
+    Path(port_list_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<PortListCreateRangeRequest>,
+) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
+    let operator = require_port_list_write_operator(operator)?;
+    let range = validate_port_list_create_range_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_port_list_write_db_error(error, "begin create port list range transaction")
+    })?;
+    let operator_owner_id = resolve_port_list_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE port_lists, port_ranges, targets, targets_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_port_list_write_db_error(error, "lock port list range create tables"))?;
+    let state = load_port_list_write_state(&tx, &port_list_id).await?;
+    ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    if state.predefined {
+        return Err(ApiError::Conflict(
+            "predefined port list ranges cannot be created".to_string(),
+        ));
+    }
+    ensure_port_list_not_in_use_by_live_targets(&tx, state.internal_id).await?;
+    ensure_port_list_not_in_use_by_live_location_trash_targets(&tx, state.internal_id).await?;
+    ensure_port_list_range_can_be_created(&tx, state.internal_id, &range).await?;
+    execute_port_list_range_create_transaction(&tx, state.internal_id, &range).await?;
+    let detail = load_port_list_asset_detail(&tx, &port_list_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_port_list_write_db_error(error, "commit create port list range transaction")
+    })?;
+    Ok((StatusCode::CREATED, Json(detail)))
 }
 
 pub(crate) async fn delete_port_list_range(

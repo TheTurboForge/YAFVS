@@ -6,6 +6,7 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {useDispatch} from 'react-redux';
+import {canUseNativeApi} from 'gmp/commands/native';
 import {
   type default as Filter,
   PORTLISTS_FILTER_FILTER,
@@ -31,7 +32,6 @@ import useReload from 'web/hooks/useReload';
 import useSelection from 'web/hooks/useSelection';
 import useShallowEqualSelector from 'web/hooks/useShallowEqualSelector';
 import useTranslation from 'web/hooks/useTranslation';
-import {canUseNativeApi} from 'gmp/commands/native';
 import PortListComponent from 'web/pages/portlists/PortListComponent';
 import PortListsFilterDialog from 'web/pages/portlists/PortListFilterDialog';
 import PortListListPageToolBarIcons from 'web/pages/portlists/PortListListPageToolBarIcons';
@@ -52,6 +52,20 @@ const getData = (filter: Filter, eSelector: EntitiesSelector) => {
     isLoading: eSelector.isLoadingEntities(filter),
     loadedFilter: eSelector.getLoadedFilter(filter),
   };
+};
+
+export const settlePortListBulkDelete = async (
+  operation: Promise<unknown>,
+  refetch: () => void,
+  showError: (error: Error) => void,
+) => {
+  try {
+    await operation;
+  } catch (error) {
+    showError(error as Error);
+  } finally {
+    refetch();
+  }
 };
 
 const PortListsPage = () => {
@@ -174,12 +188,7 @@ const PortListsPage = () => {
       promise = entitiesCommand.deleteByFilter(filter.all());
     }
 
-    try {
-      await promise;
-      refetch();
-    } catch (error) {
-      showError(error as Error);
-    }
+    await settlePortListBulkDelete(promise, refetch, showError);
   }, [
     selectionType,
     filter,
@@ -215,7 +224,7 @@ const PortListsPage = () => {
   }, [
     handleDownload,
     showError,
-    gmp.portlists,
+    gmp,
     filter,
     selectedEntities,
     selectionType,

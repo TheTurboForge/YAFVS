@@ -6,6 +6,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use deadpool_postgres::GenericClient;
 
 use crate::{
     app_state::AppState,
@@ -101,10 +102,13 @@ pub(crate) async fn export_port_list_metadata(
     ))
 }
 
-pub(crate) async fn load_port_list_asset_detail(
-    client: &tokio_postgres::Client,
+pub(crate) async fn load_port_list_asset_detail<C>(
+    client: &C,
     port_list_id: &str,
-) -> Result<PortListAssetDetail, ApiError> {
+) -> Result<PortListAssetDetail, ApiError>
+where
+    C: GenericClient + Sync,
+{
     parse_uuid(&port_list_id)?;
     let row = client
         .query_opt(port_list_asset_detail_sql(), &[&port_list_id])
@@ -135,17 +139,20 @@ pub(crate) async fn load_port_list_asset_detail(
         .iter()
         .map(port_list_target_from_row)
         .collect();
-    let user_tags = port_list_user_tags(&client, &port_list_id).await?;
+    let user_tags = port_list_user_tags(client, &port_list_id).await?;
     Ok(port_list_asset_detail_payload(
         port_list_asset_from_row(&row, ranges, targets),
         user_tags,
     ))
 }
 
-async fn port_list_user_tags(
-    client: &tokio_postgres::Client,
+async fn port_list_user_tags<C>(
+    client: &C,
     port_list_id: &str,
-) -> Result<Vec<ReportUserTag>, ApiError> {
+) -> Result<Vec<ReportUserTag>, ApiError>
+where
+    C: GenericClient + Sync,
+{
     let rows = client
         .query(port_list_user_tags_sql(), &[&port_list_id])
         .await

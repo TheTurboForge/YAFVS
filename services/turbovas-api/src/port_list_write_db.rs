@@ -6,13 +6,54 @@ use axum::extract::Extension;
 use tokio_postgres::{Transaction, types::ToSql};
 
 use crate::{
-    auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, port_list_write_sql::*,
+    auth::DirectApiOperator,
+    errors::ApiError,
+    path_ids::parse_uuid,
+    port_list_write_sql::*,
+    port_list_write_validation::{MAX_PORT_LIST_CREATE_RANGES, ValidatedPortListCreateRange},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PortListWriteRecord {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
+}
+
+pub(crate) async fn ensure_port_list_range_can_be_created(
+    tx: &Transaction<'_>,
+    port_list_internal_id: i32,
+    range: &ValidatedPortListCreateRange,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(port_list_range_count_sql(), &[&port_list_internal_id])
+        .await
+        .map_err(|error| map_port_list_write_db_error(error, "count port list ranges"))?
+        .get(0);
+    if count >= MAX_PORT_LIST_CREATE_RANGES as i64 {
+        return Err(ApiError::Conflict(format!(
+            "port list may include at most {MAX_PORT_LIST_CREATE_RANGES} ranges"
+        )));
+    }
+
+    let overlap_count: i64 = tx
+        .query_one(
+            port_list_range_overlap_count_sql(),
+            &[
+                &port_list_internal_id,
+                &range.protocol_id,
+                &range.start,
+                &range.end,
+            ],
+        )
+        .await
+        .map_err(|error| map_port_list_write_db_error(error, "check port list range overlap"))?
+        .get(0);
+    if overlap_count != 0 {
+        return Err(ApiError::Conflict(
+            "port range overlaps an existing range".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) async fn unique_port_list_name_with_suffix(

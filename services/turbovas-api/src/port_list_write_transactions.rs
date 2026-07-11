@@ -12,7 +12,8 @@ use crate::{
     },
     port_list_write_sql::*,
     port_list_write_validation::{
-        ValidatedPortListClone, ValidatedPortListCreate, ValidatedPortListPatch,
+        ValidatedPortListClone, ValidatedPortListCreate, ValidatedPortListCreateRange,
+        ValidatedPortListPatch,
     },
 };
 
@@ -49,6 +50,27 @@ pub(crate) async fn execute_port_list_create_transaction(
         .await?;
     }
     Ok(record)
+}
+
+pub(crate) async fn execute_port_list_range_create_transaction(
+    tx: &Transaction<'_>,
+    port_list_internal_id: i32,
+    range: &ValidatedPortListCreateRange,
+) -> Result<(), ApiError> {
+    execute_port_list_write_sql(
+        tx,
+        port_list_create_range_sql(),
+        &[
+            &port_list_internal_id,
+            &range.protocol_id,
+            &range.start,
+            &range.end,
+            &range.comment,
+        ],
+        "insert port list range",
+    )
+    .await?;
+    Ok(())
 }
 
 pub(crate) async fn execute_port_list_range_delete_transaction(

@@ -14,13 +14,32 @@ use crate::{
     errors::ApiError,
     port_list_payloads::PortListAssetDetail,
     port_list_write_validation::{
-        PortListCloneRequest, PortListCreateRequest, PortListImportRequest, PortListPatchRequest,
+        PortListCloneRequest, PortListCreateRangeRequest, PortListCreateRequest,
+        PortListImportRequest, PortListPatchRequest,
     },
     port_list_writes::{
-        clone_port_list, create_port_list, delete_port_list, delete_port_list_range,
-        hard_delete_port_list, import_port_list, patch_port_list, restore_port_list,
+        clone_port_list, create_port_list, create_port_list_range, delete_port_list,
+        delete_port_list_range, hard_delete_port_list, import_port_list, patch_port_list,
+        restore_port_list,
     },
 };
+
+pub(crate) async fn browser_proxy_create_port_list_range(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(port_list_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<PortListCreateRangeRequest>,
+) -> Result<(StatusCode, Json<PortListAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_port_list_range(
+        State(state),
+        Path(port_list_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
 
 pub(crate) async fn browser_proxy_restore_port_list(
     State(state): State<AppState>,

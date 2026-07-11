@@ -557,6 +557,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "port-list-clone",
         "port-list-create",
         "port-list-import",
+        "port-list-range-create",
         "port-list-range-delete",
         "port-list-metadata-detail-read",
         "port-list-metadata-export-read",
@@ -860,6 +861,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/port-lists/{port_list_id}"): "direct-write",
     ("get", "/port-lists/{port_list_id}/export"): "direct-read",
     ("delete", "/port-lists/{port_list_id}"): "direct-write",
+    ("post", "/port-lists/{port_list_id}/ranges"): "direct-write",
     ("delete", "/port-lists/{port_list_id}/ranges/{port_range_id}"): "direct-write",
     ("delete", "/port-lists/{port_list_id}/trash"): "direct-write",
     ("post", "/port-lists/{port_list_id}/clone"): "direct-write",
@@ -1130,6 +1132,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "port-list-trash-move",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-delete",
+    },
+    ("post", "/port-lists/{port_list_id}/ranges"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "port-list-range-create",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("delete", "/port-lists/{port_list_id}/ranges/{port_range_id}"): {
         "x-turbovas-maturity": "live-write",
@@ -7617,6 +7627,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         clone_suffix = post_constants.get("clone_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
+        ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
         start_suffix = post_constants.get("start_suffix")
         stop_suffix = post_constants.get("stop_suffix")
@@ -7635,6 +7646,14 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             and "g_str_has_suffix (id, resources_suffix)" in post_function_body
         ):
             templates.add(f"{tag_prefix.rstrip('/')}/{{}}{resources_suffix}")
+        port_list_prefix = post_constants.get("port_list_prefix")
+        if (
+            port_list_prefix
+            and ranges_suffix
+            and "g_str_has_prefix (path, port_list_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, ranges_suffix)" in post_function_body
+        ):
+            templates.add(f"{port_list_prefix.rstrip('/')}/{{}}{ranges_suffix}")
         scanner_prefix = post_constants.get("scanner_prefix")
         if (
             scanner_prefix
@@ -7734,6 +7753,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         clone_suffix = post_constants.get("clone_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
+        ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
         for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
@@ -7749,6 +7769,14 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             and "g_str_has_suffix (id, resources_suffix)" in post_function_body
         ):
             operations.add(f"POST {tag_prefix.rstrip('/')}/{{}}{resources_suffix}")
+        port_list_prefix = post_constants.get("port_list_prefix")
+        if (
+            port_list_prefix
+            and ranges_suffix
+            and "g_str_has_prefix (path, port_list_prefix)" in post_function_body
+            and "is_uuid_segment_with_suffix (id, ranges_suffix)" in post_function_body
+        ):
+            operations.add(f"POST {port_list_prefix.rstrip('/')}/{{}}{ranges_suffix}")
         scanner_prefix = post_constants.get("scanner_prefix")
         if (
             scanner_prefix
@@ -8713,6 +8741,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["GSA Port List range add and non-empty range replacement actions", "direct native port-list name/comment/range-set modification"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/port-lists/{port_list_id}/ranges",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA Port List single port-range create action", "direct native atomic port-list range creation"],
             },
             {
                 "method": "delete",
@@ -15319,7 +15354,8 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.port-list-predefined-patch-denied",
             "native-api-direct.port-list-predefined-delete-denied",
             "native-api-direct.port-list-write-create",
-            "native-api-direct.port-list-write-range-replace",
+            "native-api-direct.port-list-write-range-create",
+            "native-api-direct.port-list-write-range-overlap-denied",
             "native-api-direct.port-list-write-range-delete",
             "native-api-direct.port-list-write-clone",
             "native-api-direct.port-list-write-hard-delete-clone",
@@ -15923,7 +15959,11 @@ def direct_trash_empty_runtime_findings(
         return findings
     if preview_payload["total"] != 0:
         mismatch_body = json.dumps(
-            {"acknowledge_permanent_deletion": True, "expected_total": 0},
+            {
+                "acknowledge_permanent_deletion": True,
+                "expected_total": 0,
+                "expected_snapshot_digest": preview_payload["snapshot_digest"],
+            },
             separators=(",", ":"),
         )
         mismatch = direct_native_api_curl(
@@ -16091,7 +16131,11 @@ def direct_trash_empty_runtime_findings(
             return findings
 
         mismatch_body = json.dumps(
-            {"acknowledge_permanent_deletion": True, "expected_total": 0},
+            {
+                "acknowledge_permanent_deletion": True,
+                "expected_total": 0,
+                "expected_snapshot_digest": fixture_payload["snapshot_digest"],
+            },
             separators=(",", ":"),
         )
         mismatch = direct_native_api_curl(
@@ -16148,7 +16192,11 @@ def direct_trash_empty_runtime_findings(
             return findings
 
         confirmed_body = json.dumps(
-            {"acknowledge_permanent_deletion": True, "expected_total": 1},
+            {
+                "acknowledge_permanent_deletion": True,
+                "expected_total": 1,
+                "expected_snapshot_digest": post_mismatch_payload["snapshot_digest"],
+            },
             separators=(",", ":"),
         )
         confirmed = direct_native_api_curl(
@@ -17430,36 +17478,49 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         findings.append(native_api_probe_finding("pass" if port_list_fixture_ok else "fail", "native-api-direct.port-list-write-create", "Direct write-control created a temporary non-predefined port list through the native API." if port_list_fixture_ok else "Direct write-control failed to create a temporary non-predefined port list through the native API.", created_port_list, direct_native_api_display_command("/api/v1/port-lists", token=token, env=env, method="POST", body=port_list_create_body, extra_headers=content_type), created_port_list_json, {"http_status": created_port_list_status, "port_list_id": port_list_id, "port_list_name": port_list_name, **summarize_native_api_response(created_port_list_json)}))
 
         if port_list_id:
-            port_list_range_patch_body = json.dumps(
+            port_list_range_create_body = json.dumps(
                 {
-                    "port_ranges": [
-                        {
-                            "protocol": "udp",
-                            "start": 65002,
-                            "end": 65002,
-                            "comment": "TurboVAS direct write smoke replacement range",
-                        }
-                    ],
+                    "protocol": "udp",
+                    "start": 65002,
+                    "end": 65002,
+                    "comment": "TurboVAS direct write smoke added range",
                 },
                 separators=(",", ":"),
             )
-            port_list_range_patch = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type)
-            port_list_range_patch_json, port_list_range_patch_status = parse_json_output_with_http_status(port_list_range_patch)
-            port_list_range_patch_ranges = port_list_range_patch_json.get("port_ranges") if isinstance(port_list_range_patch_json, dict) else None
-            port_list_range_patch_ok = port_list_range_patch.returncode == 0 and port_list_range_patch_status == 200 and isinstance(port_list_range_patch_json, dict) and port_list_range_patch_json.get("id") == port_list_id and isinstance(port_list_range_patch_ranges, list) and len(port_list_range_patch_ranges) == 1 and port_list_range_patch_ranges[0].get("protocol") == "udp" and port_list_range_patch_ranges[0].get("start") == 65002 and port_list_range_patch_ranges[0].get("end") == 65002
-            findings.append(native_api_probe_finding("pass" if port_list_range_patch_ok else "fail", "native-api-direct.port-list-write-range-replace", "Direct write-control replaced the temporary port list range set." if port_list_range_patch_ok else "Direct write-control failed to replace the temporary port list range set.", port_list_range_patch, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type), port_list_range_patch_json, {"http_status": port_list_range_patch_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_patch_json)}))
+            port_list_range_create_path = f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/ranges"
+            port_list_range_create = direct_native_api_curl(repo_root, port_list_range_create_path, token=token, env=env, method="POST", body=port_list_range_create_body, extra_headers=content_type)
+            port_list_range_create_json, port_list_range_create_status = parse_json_output_with_http_status(port_list_range_create)
+            port_list_range_create_ranges = port_list_range_create_json.get("port_ranges") if isinstance(port_list_range_create_json, dict) else None
+            created_ranges = [
+                range_item
+                for range_item in port_list_range_create_ranges or []
+                if isinstance(range_item, dict)
+                and range_item.get("protocol") == "udp"
+                and range_item.get("start") == 65002
+                and range_item.get("end") == 65002
+            ]
+            port_list_range_create_ok = port_list_range_create.returncode == 0 and port_list_range_create_status == 201 and isinstance(port_list_range_create_json, dict) and port_list_range_create_json.get("id") == port_list_id and isinstance(port_list_range_create_ranges, list) and len(port_list_range_create_ranges) == 2 and len(created_ranges) == 1
+            findings.append(native_api_probe_finding("pass" if port_list_range_create_ok else "fail", "native-api-direct.port-list-write-range-create", "Direct write-control atomically added one range to the temporary port list." if port_list_range_create_ok else "Direct write-control failed to add one range atomically to the temporary port list.", port_list_range_create, direct_native_api_display_command(port_list_range_create_path, token=token, env=env, method="POST", body=port_list_range_create_body, extra_headers=content_type), port_list_range_create_json, {"http_status": port_list_range_create_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_create_json)}))
 
-            port_range_id = port_list_range_patch_ranges[0].get("id") if isinstance(port_list_range_patch_ranges, list) and len(port_list_range_patch_ranges) == 1 and isinstance(port_list_range_patch_ranges[0], dict) else None
+            port_list_range_overlap = direct_native_api_curl(repo_root, port_list_range_create_path, token=token, env=env, method="POST", body=port_list_range_create_body, extra_headers=content_type)
+            port_list_range_overlap_json, port_list_range_overlap_status = parse_json_output_with_http_status(port_list_range_overlap)
+            port_list_after_overlap = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env)
+            port_list_after_overlap_json, port_list_after_overlap_status = parse_json_output_with_http_status(port_list_after_overlap)
+            port_list_after_overlap_ranges = port_list_after_overlap_json.get("port_ranges") if isinstance(port_list_after_overlap_json, dict) else None
+            port_list_range_overlap_ok = port_list_range_overlap.returncode == 0 and port_list_range_overlap_status == 409 and isinstance(port_list_range_overlap_json, dict) and port_list_range_overlap_json.get("error", {}).get("code") == "conflict" and port_list_after_overlap.returncode == 0 and port_list_after_overlap_status == 200 and isinstance(port_list_after_overlap_ranges, list) and len(port_list_after_overlap_ranges) == 2
+            findings.append(native_api_probe_finding("pass" if port_list_range_overlap_ok else "fail", "native-api-direct.port-list-write-range-overlap-denied", "Direct write-control rejected an overlapping range and preserved the two existing ranges." if port_list_range_overlap_ok else "Direct write-control did not reject an overlapping range without mutation.", port_list_range_overlap, direct_native_api_display_command(port_list_range_create_path, token=token, env=env, method="POST", body=port_list_range_create_body, extra_headers=content_type), port_list_range_overlap_json, {"http_status": port_list_range_overlap_status, "detail_http_status": port_list_after_overlap_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_after_overlap_json)}))
+
+            port_range_id = created_ranges[0].get("id") if len(created_ranges) == 1 else None
             if isinstance(port_range_id, str):
                 port_list_range_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/ranges/{urllib.parse.quote(port_range_id)}", token=token, env=env, method="DELETE")
                 port_list_range_delete_json, port_list_range_delete_status = parse_json_output_with_http_status(port_list_range_delete)
                 port_list_after_range_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env)
                 port_list_after_range_delete_json, port_list_after_range_delete_status = parse_json_output_with_http_status(port_list_after_range_delete)
                 port_list_after_range_delete_ranges = port_list_after_range_delete_json.get("port_ranges") if isinstance(port_list_after_range_delete_json, dict) else None
-                port_list_range_delete_ok = port_list_range_delete.returncode == 0 and port_list_range_delete_status == 204 and port_list_after_range_delete.returncode == 0 and port_list_after_range_delete_status == 200 and isinstance(port_list_after_range_delete_ranges, list) and len(port_list_after_range_delete_ranges) == 0
-                findings.append(native_api_probe_finding("pass" if port_list_range_delete_ok else "fail", "native-api-direct.port-list-write-range-delete", "Direct write-control deleted the temporary port list's last range without deleting the list." if port_list_range_delete_ok else "Direct write-control failed to delete the temporary port list range cleanly.", port_list_range_delete, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/ranges/{urllib.parse.quote(port_range_id)}", token=token, env=env, method="DELETE"), port_list_range_delete_json, {"http_status": port_list_range_delete_status, "port_list_id": port_list_id, "port_range_id": port_range_id, "detail_http_status": port_list_after_range_delete_status, **summarize_native_api_response(port_list_after_range_delete_json)}))
+                port_list_range_delete_ok = port_list_range_delete.returncode == 0 and port_list_range_delete_status == 204 and port_list_after_range_delete.returncode == 0 and port_list_after_range_delete_status == 200 and isinstance(port_list_after_range_delete_ranges, list) and len(port_list_after_range_delete_ranges) == 1 and port_list_after_range_delete_ranges[0].get("protocol") == "tcp"
+                findings.append(native_api_probe_finding("pass" if port_list_range_delete_ok else "fail", "native-api-direct.port-list-write-range-delete", "Direct write-control deleted only the newly added range and retained the original range." if port_list_range_delete_ok else "Direct write-control failed to delete the newly added range cleanly.", port_list_range_delete, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/ranges/{urllib.parse.quote(port_range_id)}", token=token, env=env, method="DELETE"), port_list_range_delete_json, {"http_status": port_list_range_delete_status, "port_list_id": port_list_id, "port_range_id": port_range_id, "detail_http_status": port_list_after_range_delete_status, **summarize_native_api_response(port_list_after_range_delete_json)}))
             else:
-                findings.append(native_api_probe_finding("fail", "native-api-direct.port-list-write-range-delete", "Direct write-control smoke could not find the replacement port range ID needed for range deletion.", port_list_range_patch, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}", token=token, env=env, method="PATCH", body=port_list_range_patch_body, extra_headers=content_type), port_list_range_patch_json, {"http_status": port_list_range_patch_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_patch_json)}))
+                findings.append(native_api_probe_finding("fail", "native-api-direct.port-list-write-range-delete", "Direct write-control smoke could not find the newly created port range ID needed for range deletion.", port_list_range_create, direct_native_api_display_command(port_list_range_create_path, token=token, env=env, method="POST", body=port_list_range_create_body, extra_headers=content_type), port_list_range_create_json, {"http_status": port_list_range_create_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_create_json)}))
 
             port_list_clone_body = json.dumps(
                 {"name": port_list_clone_name, "comment": "TurboVAS direct write smoke cloned temporary port list"},
@@ -17469,8 +17530,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             port_list_clone_json, port_list_clone_status = parse_json_output_with_http_status(port_list_clone)
             port_list_clone_id = port_list_clone_json.get("id") if isinstance(port_list_clone_json, dict) else None
             port_list_clone_ranges = port_list_clone_json.get("port_ranges") if isinstance(port_list_clone_json, dict) else None
-            port_list_clone_ok = port_list_clone.returncode == 0 and port_list_clone_status == 201 and isinstance(port_list_clone_id, str) and port_list_clone_id != port_list_id and port_list_clone_json.get("name") == port_list_clone_name and port_list_clone_json.get("predefined") is False and isinstance(port_list_clone_ranges, list) and len(port_list_clone_ranges) == 0
-            findings.append(native_api_probe_finding("pass" if port_list_clone_ok else "fail", "native-api-direct.port-list-write-clone", "Direct write-control cloned the temporary port list after its range set was emptied." if port_list_clone_ok else "Direct write-control failed to clone the temporary port list after range deletion.", port_list_clone, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/clone", token=token, env=env, method="POST", body=port_list_clone_body, extra_headers=content_type), port_list_clone_json, {"http_status": port_list_clone_status, "port_list_id": port_list_id, "port_list_clone_id": port_list_clone_id, **summarize_native_api_response(port_list_clone_json)}))
+            port_list_clone_ok = port_list_clone.returncode == 0 and port_list_clone_status == 201 and isinstance(port_list_clone_id, str) and port_list_clone_id != port_list_id and port_list_clone_json.get("name") == port_list_clone_name and port_list_clone_json.get("predefined") is False and isinstance(port_list_clone_ranges, list) and len(port_list_clone_ranges) == 1
+            findings.append(native_api_probe_finding("pass" if port_list_clone_ok else "fail", "native-api-direct.port-list-write-clone", "Direct write-control cloned the temporary port list with its retained original range." if port_list_clone_ok else "Direct write-control failed to clone the temporary port list after range deletion.", port_list_clone, direct_native_api_display_command(f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/clone", token=token, env=env, method="POST", body=port_list_clone_body, extra_headers=content_type), port_list_clone_json, {"http_status": port_list_clone_status, "port_list_id": port_list_id, "port_list_clone_id": port_list_clone_id, **summarize_native_api_response(port_list_clone_json)}))
 
             if port_list_clone_id:
                 port_list_clone_delete = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_clone_id)}", token=token, env=env, method="DELETE")
@@ -23365,12 +23426,20 @@ NATIVE_EMPTY_TRASH_RESOURCE_TYPES = frozenset(
 
 
 def native_empty_trash_preview_payload(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict) or set(value) != {"scope", "items", "total"}:
+    if not isinstance(value, dict) or set(value) != {"scope", "items", "total", "snapshot_digest"}:
         return None
     scope = value.get("scope")
     items = value.get("items")
     total = value.get("total")
-    if scope != NATIVE_EMPTY_TRASH_SCOPE or type(total) is not int or total < 0 or not isinstance(items, list):
+    snapshot_digest = value.get("snapshot_digest")
+    if (
+        scope != NATIVE_EMPTY_TRASH_SCOPE
+        or type(total) is not int
+        or total < 0
+        or not isinstance(items, list)
+        or not isinstance(snapshot_digest, str)
+        or re.fullmatch(r"[0-9a-f]{64}", snapshot_digest) is None
+    ):
         return None
     normalized_items: list[dict[str, Any]] = []
     resource_types: set[str] = set()
@@ -23389,7 +23458,12 @@ def native_empty_trash_preview_payload(value: Any) -> dict[str, Any] | None:
         return None
     if sum(item["count"] for item in normalized_items) != total:
         return None
-    return {"scope": scope, "items": normalized_items, "total": total}
+    return {
+        "scope": scope,
+        "items": normalized_items,
+        "total": total,
+        "snapshot_digest": snapshot_digest,
+    }
 
 
 def native_empty_trash_fetch_preview(
@@ -23588,6 +23662,7 @@ def command_native_empty_trash(
         {
             "acknowledge_permanent_deletion": True,
             "expected_total": expected_total,
+            "expected_snapshot_digest": preview_payload["snapshot_digest"],
         },
         separators=(",", ":"),
     )

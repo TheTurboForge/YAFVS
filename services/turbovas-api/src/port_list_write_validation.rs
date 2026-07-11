@@ -945,6 +945,12 @@ fn validate_port_list_create_range(
     })
 }
 
+pub(crate) fn validate_port_list_create_range_request(
+    request: PortListCreateRangeRequest,
+) -> Result<ValidatedPortListCreateRange, ApiError> {
+    validate_port_list_create_range(request)
+}
+
 pub(crate) fn validate_port_list_patch_request(
     request: PortListPatchRequest,
 ) -> Result<ValidatedPortListPatch, ApiError> {

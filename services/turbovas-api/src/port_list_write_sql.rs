@@ -6,6 +6,19 @@ pub(crate) fn port_list_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn port_list_range_count_sql() -> &'static str {
+    "SELECT count(*)::bigint FROM port_ranges WHERE port_list = $1;"
+}
+
+pub(crate) fn port_list_range_overlap_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM port_ranges
+      WHERE port_list = $1
+        AND type = $2
+        AND start <= $4
+        AND \"end\" >= $3;"
+}
+
 pub(crate) fn port_list_create_metadata_sql() -> &'static str {
     "INSERT INTO port_lists
         (uuid, owner, name, comment, predefined, creation_time, modification_time)

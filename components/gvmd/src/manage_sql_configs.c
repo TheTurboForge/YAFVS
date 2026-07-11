@@ -2924,6 +2924,7 @@ delete_config (const char *config_id, int ultimate)
   config_t config = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_config") == 0)
     {

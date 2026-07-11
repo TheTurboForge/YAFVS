@@ -3580,7 +3580,6 @@ typedef enum
   CLIENT_DELETE_TLS_CERTIFICATE,
   CLIENT_DELETE_USER,
   CLIENT_DESCRIBE_AUTH,
-  CLIENT_EMPTY_TRASHCAN,
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
@@ -4247,9 +4246,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("DESCRIBE_AUTH", element_name) == 0)
           set_client_state (CLIENT_DESCRIBE_AUTH);
-        else if (strcasecmp ("EMPTY_TRASHCAN", element_name) == 0)
-          set_client_state (CLIENT_EMPTY_TRASHCAN);
-
 
         else if (strcasecmp ("GET_AGGREGATES", element_name) == 0)
           {
@@ -20054,26 +20050,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
 
 
-      case CLIENT_EMPTY_TRASHCAN:
-        switch (manage_empty_trashcan ())
-          {
-            case 0:
-              SEND_TO_CLIENT_OR_FAIL (XML_OK ("empty_trashcan"));
-              log_event ("trashcan", "Trashcan", NULL, "emptied");
-              break;
-            case 99:
-              SEND_TO_CLIENT_OR_FAIL
-               (XML_ERROR_SYNTAX ("empty_trashcan",
-                                  "Permission denied"));
-              break;
-            default:  /* Programming error. */
-              assert (0);
-            case -1:
-              SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("empty_trashcan"));
-              break;
-          }
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
       case CLIENT_LOGOUT:
         {
           if (logout_element_end (gmp_parser, error, element_name))

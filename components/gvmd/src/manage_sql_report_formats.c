@@ -1724,6 +1724,7 @@ delete_report_format (const char *report_format_id, int ultimate)
    *     in a special trashcan directory. */
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_report_format") == 0)
     {

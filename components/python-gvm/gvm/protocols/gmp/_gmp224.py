@@ -342,16 +342,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def empty_trashcan(self) -> T:
-        """Empty the trashcan
-
-        Remove all entities from the trashcan. **Attention:** this command can
-        not be reverted
-        """
-        return self._send_request_and_transform_response(
-            TrashCan.empty_trashcan()
-        )
-
     def restore_from_trashcan(self, entity_id: EntityID) -> T:
         """Restore an entity from the trashcan
 

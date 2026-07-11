@@ -247,11 +247,22 @@ creating a unique target/task and invoking guarded native task start. It does
 not accept hostnames, CIDRs, ranges, interactive selection, or implicit scan
 inputs.
 
-## `empty-trash.gmp.py`
+## Native Trashcan empty
 
-- Does what is says on the tin, empties the trashcan in Greenbone.
-- Use it when you're testing like crazy and have a trashcan with ~ a gazillion objects
-- You can also just use `gvm-cli --gmp-username *admin-user* --gmp-password *password* socket --pretty --xml "<empty_trashcan/>"`
+TurboVAS retired the inherited `empty-trash.gmp.py` GMP script. Start with the
+counts-only operator preview:
+
+`$ just native-empty-trash -- --status-only`
+
+Permanent deletion is deliberately a second command. It requires all three
+explicit acknowledgements, fetches a new preview immediately before the POST,
+and refuses to send the POST when `--expected-total` differs from that preview:
+
+`$ just native-empty-trash -- --allow-write-control --acknowledge-permanent-deletion --expected-total N --status-only`
+
+The helper sends the permanent-delete request once only. A mismatch, API
+rejection, and ambiguous result remain distinct in its compact output; an
+ambiguous result must be checked with a new preview before another attempt.
 
 ## Native report evidence exports
 

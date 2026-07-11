@@ -2422,6 +2422,7 @@ delete_filter (const char *filter_id, int ultimate)
   filter_t filter = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_filter") == 0)
     {

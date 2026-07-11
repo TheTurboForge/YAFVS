@@ -22,15 +22,18 @@ import Schedule from 'gmp/models/schedule';
 import Tag from 'gmp/models/tag';
 import Target from 'gmp/models/target';
 import Task from 'gmp/models/task';
-import {YES_VALUE} from 'gmp/parser';
 import {
   deleteNativeTrashcanEntity,
+  emptyNativeTrashcan,
+  fetchNativeTrashcanEmptyPreview,
   fetchNativeTrashcanItems,
+  type NativeTrashcanEmptyPreview,
   type NativeTrashcanItem,
   supportsNativeTrashcanDelete,
   restoreNativeTrashcanEntity,
   supportsNativeTrashcanRestore,
 } from 'gmp/native-api/trashcan';
+import {YES_VALUE} from 'gmp/parser';
 import {map} from 'gmp/utils/array';
 import {apiType, type EntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
@@ -50,6 +53,10 @@ export interface TrashCanGetData {
   targets: Target[];
   tasks: Task[];
   failedRequests?: string[];
+}
+
+export interface TrashCanEmptyParams {
+  expectedTotal: number;
 }
 
 interface UsageTypeElement extends ModelElement {
@@ -143,7 +150,9 @@ const pushNativeTrashcanItem = (
       data.alerts.push(Alert.fromElement(element));
       break;
     case 'scanconfig':
-      data.scanConfigs.push(ScanConfig.fromElement(element as UsageTypeElement));
+      data.scanConfigs.push(
+        ScanConfig.fromElement(element as UsageTypeElement),
+      );
       break;
     case 'credential':
       data.credentials.push(Credential.fromElement(element));
@@ -234,8 +243,18 @@ class TrashCanCommand extends HttpCommand {
     });
   }
 
-  async empty() {
-    await this.httpPostWithTransform({cmd: 'empty_trashcan'});
+  async emptyPreview(): Promise<NativeTrashcanEmptyPreview> {
+    if (!canUseNativeApi(this.http)) {
+      throw new Error('Native Trashcan empty preview is unavailable');
+    }
+    return fetchNativeTrashcanEmptyPreview(this.http);
+  }
+
+  async empty({expectedTotal}: TrashCanEmptyParams) {
+    if (!canUseNativeApi(this.http)) {
+      throw new Error('Native Trashcan empty is unavailable');
+    }
+    return emptyNativeTrashcan(this.http, expectedTotal);
   }
 
   async get(): Promise<Response<TrashCanGetData, XmlMeta>> {

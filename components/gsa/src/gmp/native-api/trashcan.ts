@@ -28,6 +28,42 @@ export interface NativeTrashcanSummary {
   total: number;
 }
 
+export interface NativeTrashcanEmptyPreviewItem {
+  resource_type: string;
+  count: number;
+}
+
+export interface NativeTrashcanEmptyPreview {
+  scope: 'operator';
+  items: NativeTrashcanEmptyPreviewItem[];
+  total: number;
+}
+
+export interface NativeTrashcanEmptyResult {
+  scope: 'operator';
+  deleted_total: number;
+}
+
+const CANONICAL_EMPTY_PREVIEW_RESOURCE_TYPES = [
+  'configs',
+  'alerts',
+  'credentials',
+  'filters',
+  'overrides',
+  'port_lists',
+  'report_configs',
+  'scanners',
+  'schedules',
+  'tags',
+  'targets',
+  'tasks',
+  'report_formats',
+] as const;
+
+const canonicalEmptyPreviewResourceTypes = new Set<string>(
+  CANONICAL_EMPTY_PREVIEW_RESOURCE_TYPES,
+);
+
 export interface NativeTrashcanItem {
   id: string;
   resource_type: string;
@@ -53,6 +89,24 @@ interface NativeTrashcanItemsPayload {
 export interface NativeTrashcanRestoreArgs {
   id: string;
   entityType: EntityType;
+}
+
+export class NativeTrashcanEmptyPreviewChangedError extends Error {
+  constructor() {
+    super(
+      'Trashcan contents changed after preview; request a new empty preview before retrying.',
+    );
+    this.name = 'NativeTrashcanEmptyPreviewChangedError';
+  }
+}
+
+export class NativeTrashcanEmptyIndeterminateError extends Error {
+  constructor() {
+    super(
+      'The Trashcan empty result could not be confirmed. Refresh the Trashcan and obtain a new preview before retrying.',
+    );
+    this.name = 'NativeTrashcanEmptyIndeterminateError';
+  }
 }
 
 const fetchNativeJson = async <T>(
@@ -141,6 +195,132 @@ export const fetchNativeTrashcanSummary = async (
   fetchNativeJson<NativeTrashcanSummary>(gmp, 'api/v1/trashcan/summary', {
     token: gmp.session.token,
   });
+
+const isNonNegativeSafeInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+const isNativeTrashcanEmptyPreview = (
+  value: unknown,
+): value is NativeTrashcanEmptyPreview => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const preview = value as Partial<NativeTrashcanEmptyPreview>;
+  if (
+    preview.scope !== 'operator' ||
+    !isNonNegativeSafeInteger(preview.total) ||
+    !Array.isArray(preview.items) ||
+    preview.items.length !== CANONICAL_EMPTY_PREVIEW_RESOURCE_TYPES.length
+  ) {
+    return false;
+  }
+
+  let countTotal = 0;
+  const resourceTypes = new Set<string>();
+  for (const item of preview.items) {
+    if (typeof item !== 'object' || item === null) {
+      return false;
+    }
+    const previewItem = item as Partial<NativeTrashcanEmptyPreviewItem>;
+    if (
+      typeof previewItem.resource_type !== 'string' ||
+      !canonicalEmptyPreviewResourceTypes.has(previewItem.resource_type) ||
+      resourceTypes.has(previewItem.resource_type) ||
+      !isNonNegativeSafeInteger(previewItem.count) ||
+      countTotal > Number.MAX_SAFE_INTEGER - previewItem.count
+    ) {
+      return false;
+    }
+    resourceTypes.add(previewItem.resource_type);
+    countTotal += previewItem.count;
+  }
+
+  return (
+    resourceTypes.size === CANONICAL_EMPTY_PREVIEW_RESOURCE_TYPES.length &&
+    countTotal === preview.total
+  );
+};
+
+const isNativeTrashcanEmptyResult = (
+  value: unknown,
+): value is NativeTrashcanEmptyResult => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const result = value as Partial<NativeTrashcanEmptyResult>;
+  return (
+    result.scope === 'operator' &&
+    isNonNegativeSafeInteger(result.deleted_total)
+  );
+};
+
+export const fetchNativeTrashcanEmptyPreview = async (
+  gmp: NativeTrashcanApiGmp,
+): Promise<NativeTrashcanEmptyPreview> => {
+  const preview = await fetchNativeJson<unknown>(
+    gmp,
+    'api/v1/trashcan/empty-preview',
+    {token: gmp.session.token},
+  );
+  if (!isNativeTrashcanEmptyPreview(preview)) {
+    throw new Error('Native Trashcan empty preview response is invalid');
+  }
+  return preview;
+};
+
+export const emptyNativeTrashcan = async (
+  gmp: NativeTrashcanApiGmp,
+  expectedTotal: number,
+): Promise<NativeTrashcanEmptyResult> => {
+  if (!isNonNegativeSafeInteger(expectedTotal)) {
+    throw new Error('Native Trashcan empty expected total is invalid');
+  }
+
+  let response: globalThis.Response;
+  try {
+    response = await fetch(gmp.buildUrl('api/v1/trashcan/empty'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+        ...(gmp.session.jwt
+          ? {Authorization: `Bearer ${gmp.session.jwt}`}
+          : {}),
+      },
+      body: JSON.stringify({
+        acknowledge_permanent_deletion: true,
+        expected_total: expectedTotal,
+      }),
+    });
+  } catch {
+    throw new NativeTrashcanEmptyIndeterminateError();
+  }
+
+  if (response.status === 409) {
+    throw new NativeTrashcanEmptyPreviewChangedError();
+  }
+  if (!response.ok) {
+    if (response.status >= 500) {
+      throw new NativeTrashcanEmptyIndeterminateError();
+    }
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  try {
+    const result = (await response.json()) as unknown;
+    if (
+      !isNativeTrashcanEmptyResult(result) ||
+      result.deleted_total !== expectedTotal
+    ) {
+      throw new Error('Native Trashcan empty response is invalid');
+    }
+    return result;
+  } catch {
+    throw new NativeTrashcanEmptyIndeterminateError();
+  }
+};
 
 export const fetchNativeTrashcanItems = async (
   gmp: NativeTrashcanApiGmp,

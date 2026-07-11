@@ -88,3 +88,110 @@ fn global_scope_membership_queries_include_targets_and_hosts() {
     );
     assert!(hosts_body.contains("SELECT host_uuid, coalesce(host_name, host_uuid) FROM scope_hosts WHERE scope = $1 ORDER BY host_name, host_uuid;"));
 }
+
+#[test]
+fn native_write_owner_resolvers_lock_operator_rows_for_key_share() {
+    let resolvers = [
+        (
+            "alert_write_db.rs",
+            include_str!("alert_write_db.rs"),
+            "resolve_alert_write_operator_owner",
+        ),
+        (
+            "credential_write_db.rs",
+            include_str!("credential_write_db.rs"),
+            "resolve_credential_write_operator_owner",
+        ),
+        (
+            "filter_write_db.rs",
+            include_str!("filter_write_db.rs"),
+            "resolve_filter_write_operator_owner",
+        ),
+        (
+            "host_write_db.rs",
+            include_str!("host_write_db.rs"),
+            "resolve_host_write_operator_owner",
+        ),
+        (
+            "override_write_db.rs",
+            include_str!("override_write_db.rs"),
+            "resolve_override_write_operator_owner",
+        ),
+        (
+            "port_list_write_db.rs",
+            include_str!("port_list_write_db.rs"),
+            "resolve_port_list_write_operator_owner",
+        ),
+        (
+            "report_config_write_checks.rs",
+            include_str!("report_config_write_checks.rs"),
+            "resolve_report_config_write_operator_owner",
+        ),
+        (
+            "report_format_write_db.rs",
+            include_str!("report_format_write_db.rs"),
+            "resolve_report_format_write_operator_owner",
+        ),
+        (
+            "scan_config_write_db.rs",
+            include_str!("scan_config_write_db.rs"),
+            "resolve_scan_config_write_operator_owner",
+        ),
+        (
+            "scanner_write_db.rs",
+            include_str!("scanner_write_db.rs"),
+            "resolve_scanner_write_operator_owner",
+        ),
+        (
+            "schedule_write_db.rs",
+            include_str!("schedule_write_db.rs"),
+            "resolve_schedule_write_operator_owner",
+        ),
+        (
+            "scope_write_db.rs",
+            include_str!("scope_write_db.rs"),
+            "resolve_scope_write_operator_owner",
+        ),
+        (
+            "tag_write_db.rs",
+            include_str!("tag_write_db.rs"),
+            "resolve_tag_write_operator_owner",
+        ),
+        (
+            "target_write_db.rs",
+            include_str!("target_write_db.rs"),
+            "resolve_target_write_operator_owner",
+        ),
+        (
+            "task_write_db.rs",
+            include_str!("task_write_db.rs"),
+            "resolve_task_write_operator_owner",
+        ),
+        (
+            "tls_certificate_write_db.rs",
+            include_str!("tls_certificate_write_db.rs"),
+            "resolve_tls_certificate_write_operator_owner",
+        ),
+    ];
+
+    assert_eq!(resolvers.len(), 16);
+    for (file, source, resolver) in resolvers {
+        let marker = format!("pub(crate) async fn {resolver}");
+        let resolver_tail = source
+            .split_once(&marker)
+            .unwrap_or_else(|| panic!("{file} must define {resolver}"))
+            .1;
+        let body = resolver_tail
+            .split_once("\npub(crate)")
+            .map_or(resolver_tail, |(body, _)| body);
+
+        assert!(
+            body.contains("FOR KEY SHARE"),
+            "{resolver} in {file} must lock the operator user row FOR KEY SHARE"
+        );
+        assert!(
+            body.contains("trim_end_matches(';')"),
+            "{resolver} in {file} must append the lock clause to its owner query"
+        );
+    }
+}

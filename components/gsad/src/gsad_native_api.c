@@ -465,6 +465,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *tags_path = "/api/v1/tags";
   const gchar *targets_path = "/api/v1/targets";
   const gchar *tasks_path = "/api/v1/tasks";
+  const gchar *trashcan_empty_path = "/api/v1/trashcan/empty";
   const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
@@ -524,6 +525,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, tasks_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, trashcan_empty_path) == 0)
     return TRUE;
 
   if (g_str_has_prefix (path, alert_prefix))
@@ -850,6 +854,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *report_format_export_suffix = "/export";
   const gchar *trashcan_summary_path = "/api/v1/trashcan/summary";
   const gchar *trashcan_items_path = "/api/v1/trashcan/items";
+  const gchar *trashcan_empty_preview_path = "/api/v1/trashcan/empty-preview";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *targets_path = "/api/v1/targets";
   const gchar *target_prefix = "/api/v1/targets/";
@@ -1200,6 +1205,9 @@ native_api_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, trashcan_items_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, trashcan_empty_preview_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, scopes_path) == 0)

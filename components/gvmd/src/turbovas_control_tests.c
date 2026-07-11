@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#define g_log_structured turbovas_control_test_log_structured
 #include "turbovas_control.c"
+#undef g_log_structured
 
 #include <cgreen/cgreen.h>
+#include <stdarg.h>
 #include <string.h>
 
 #define TEST_CONTROL_SECRET "0123456789abcdef0123456789abcdef"
@@ -26,6 +29,13 @@ static int modify_schedule_result;
 static int reinit_calls;
 static int session_init_calls;
 static int stop_task_calls;
+static int trash_empty_calls;
+static int trash_empty_result;
+static gint64 trash_empty_actual;
+static gint64 trash_empty_expected;
+static int trash_empty_audit_fail_calls;
+static int trash_empty_audit_success_calls;
+static int trash_empty_structured_audit_calls;
 static int audit_fail_calls;
 static int audit_success_calls;
 static const char *mock_operator_name;
@@ -55,6 +65,101 @@ static gchar *received_name;
 static gchar *received_secret;
 static gchar *received_schedule_uuid;
 static gchar *received_timezone;
+static gchar *trash_empty_audit_actual_total;
+static gchar *trash_empty_audit_expected_total;
+static gchar *trash_empty_audit_message;
+static gchar *trash_empty_audit_operator_uuid;
+static gchar *trash_empty_audit_outcome;
+
+static void
+assert_trash_empty_audit_operator_session (void)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  assert_that (cleanup_calls, is_equal_to (0));
+}
+
+void
+turbovas_control_test_log_structured (const gchar *log_domain,
+                                      GLogLevelFlags log_level, ...)
+{
+  const gchar *format;
+  const gchar *field_name;
+  const gchar *message;
+  const gchar *operator_uuid;
+  const gchar *outcome;
+  const gchar *next_field;
+  const gchar *terminator;
+  gint64 actual_total;
+  gint64 expected_total;
+  va_list args;
+
+  assert_trash_empty_audit_operator_session ();
+  assert_that (log_domain, is_equal_to_string (G_LOG_DOMAIN));
+  assert_that (log_level, is_equal_to (G_LOG_LEVEL_MESSAGE));
+  va_start (args, log_level);
+  field_name = va_arg (args, const gchar *);
+  assert_that (field_name, is_equal_to_string ("MESSAGE"));
+  format = va_arg (args, const gchar *);
+  assert_that (format, is_equal_to_string ("%s"));
+  message = va_arg (args, const gchar *);
+  next_field = va_arg (args, const gchar *);
+  assert_that (next_field, is_equal_to_string ("TURBOVAS_AUDIT_ACTION"));
+  format = va_arg (args, const gchar *);
+  assert_that (format, is_equal_to_string ("%s"));
+  assert_that (va_arg (args, const gchar *), is_equal_to_string ("trash-empty"));
+  next_field = va_arg (args, const gchar *);
+  assert_that (next_field, is_equal_to_string ("TURBOVAS_OPERATOR_UUID"));
+  format = va_arg (args, const gchar *);
+  assert_that (format, is_equal_to_string ("%s"));
+  operator_uuid = va_arg (args, const gchar *);
+  next_field = va_arg (args, const gchar *);
+  assert_that (next_field, is_equal_to_string ("TURBOVAS_OUTCOME"));
+  format = va_arg (args, const gchar *);
+  assert_that (format, is_equal_to_string ("%s"));
+  outcome = va_arg (args, const gchar *);
+  next_field = va_arg (args, const gchar *);
+  assert_that (next_field, is_equal_to_string ("TURBOVAS_EXPECTED_TOTAL"));
+  format = va_arg (args, const gchar *);
+  assert_that (format, is_equal_to_string ("%" G_GINT64_FORMAT));
+  expected_total = va_arg (args, gint64);
+  next_field = va_arg (args, const gchar *);
+  assert_that (next_field, is_equal_to_string ("TURBOVAS_ACTUAL_TOTAL"));
+  format = va_arg (args, const gchar *);
+  assert_that (format, is_equal_to_string ("%" G_GINT64_FORMAT));
+  actual_total = va_arg (args, gint64);
+  terminator = va_arg (args, const gchar *);
+  va_end (args);
+  assert_that (terminator, is_null);
+
+  trash_empty_structured_audit_calls++;
+  g_free (trash_empty_audit_message);
+  g_free (trash_empty_audit_operator_uuid);
+  g_free (trash_empty_audit_outcome);
+  g_free (trash_empty_audit_expected_total);
+  g_free (trash_empty_audit_actual_total);
+  trash_empty_audit_message = g_strdup (message);
+  trash_empty_audit_operator_uuid = g_strdup (operator_uuid);
+  trash_empty_audit_outcome = g_strdup (outcome);
+  trash_empty_audit_expected_total =
+    g_strdup_printf ("%" G_GINT64_FORMAT, expected_total);
+  trash_empty_audit_actual_total =
+    g_strdup_printf ("%" G_GINT64_FORMAT, actual_total);
+}
+
+static void
+reset_trash_empty_audit (void)
+{
+  trash_empty_audit_fail_calls = 0;
+  trash_empty_audit_success_calls = 0;
+  trash_empty_structured_audit_calls = 0;
+  g_clear_pointer (&trash_empty_audit_message, g_free);
+  g_clear_pointer (&trash_empty_audit_operator_uuid, g_free);
+  g_clear_pointer (&trash_empty_audit_outcome, g_free);
+  g_clear_pointer (&trash_empty_audit_expected_total, g_free);
+  g_clear_pointer (&trash_empty_audit_actual_total, g_free);
+}
 
 gchar *
 __wrap_user_name (const char *uuid)
@@ -148,23 +253,45 @@ void
 __wrap_log_event (const char *resource, const char *resource_name,
                   const char *uuid, const char *action)
 {
-  assert_that (resource, is_equal_to_string ("alert"));
-  assert_that (resource_name, is_equal_to_string ("Alert"));
-  assert_that (action, is_equal_to_string ("created"));
-  audit_success_calls++;
-  g_free (received_audit_uuid);
-  received_audit_uuid = g_strdup (uuid);
+  if (strcmp (resource, "alert") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Alert"));
+      assert_that (action, is_equal_to_string ("created"));
+      audit_success_calls++;
+      g_free (received_audit_uuid);
+      received_audit_uuid = g_strdup (uuid);
+    }
+  else
+    {
+      assert_trash_empty_audit_operator_session ();
+      assert_that (resource, is_equal_to_string ("trashcan"));
+      assert_that (resource_name, is_equal_to_string ("Trashcan"));
+      assert_that (uuid, is_null);
+      assert_that (action, is_equal_to_string ("emptied"));
+      trash_empty_audit_success_calls++;
+    }
 }
 
 void
 __wrap_log_event_fail (const char *resource, const char *resource_name,
                        const char *uuid, const char *action)
 {
-  assert_that (resource, is_equal_to_string ("alert"));
-  assert_that (resource_name, is_equal_to_string ("Alert"));
-  assert_that (uuid, is_null);
-  assert_that (action, is_equal_to_string ("created"));
-  audit_fail_calls++;
+  if (strcmp (resource, "alert") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Alert"));
+      assert_that (uuid, is_null);
+      assert_that (action, is_equal_to_string ("created"));
+      audit_fail_calls++;
+    }
+  else
+    {
+      assert_trash_empty_audit_operator_session ();
+      assert_that (resource, is_equal_to_string ("trashcan"));
+      assert_that (resource_name, is_equal_to_string ("Trashcan"));
+      assert_that (uuid, is_null);
+      assert_that (action, is_equal_to_string ("emptied"));
+      trash_empty_audit_fail_calls++;
+    }
 }
 
 void
@@ -274,6 +401,429 @@ __wrap_manage_session_init (const char *uuid)
 {
   (void) uuid;
   session_init_calls++;
+}
+
+int
+__wrap_manage_empty_trashcan_confirmed (long long int expected_total,
+                                        long long int *actual_total)
+{
+  trash_empty_calls++;
+  trash_empty_expected = (gint64) expected_total;
+  *actual_total = (long long int) trash_empty_actual;
+  return trash_empty_result;
+}
+
+enum trash_empty_db_event
+{
+  TRASH_EMPTY_DB_BEGIN,
+  TRASH_EMPTY_DB_USERS_LOCK,
+  TRASH_EMPTY_DB_USER_LOCK,
+  TRASH_EMPTY_DB_ACL,
+  TRASH_EMPTY_DB_COUNT,
+  TRASH_EMPTY_DB_DELETE,
+  TRASH_EMPTY_DB_ROLLBACK,
+  TRASH_EMPTY_DB_COMMIT,
+};
+
+static enum trash_empty_db_event trash_empty_db_events[16];
+static size_t trash_empty_db_event_count;
+static long long int trash_empty_db_count;
+static int trash_empty_db_acl;
+static const char *trash_empty_count_sql;
+
+static void
+trash_empty_record_db_event (enum trash_empty_db_event event)
+{
+  assert_that (
+    trash_empty_db_event_count < G_N_ELEMENTS (trash_empty_db_events),
+    is_true);
+  trash_empty_db_events[trash_empty_db_event_count++] = event;
+}
+
+void
+__wrap_sql_begin_immediate (void)
+{
+  trash_empty_record_db_event (TRASH_EMPTY_DB_BEGIN);
+}
+
+int
+__wrap_sql_int64 (long long int *value, const char *statement, ...)
+{
+  if (strstr (statement, "SELECT id FROM users") != NULL)
+    {
+      trash_empty_record_db_event (TRASH_EMPTY_DB_USER_LOCK);
+      *value = 42;
+      return 0;
+    }
+  if (strstr (statement, "SELECT ((SELECT count(*)") != NULL)
+    {
+      trash_empty_record_db_event (TRASH_EMPTY_DB_COUNT);
+      trash_empty_count_sql = statement;
+      *value = trash_empty_db_count;
+      return 0;
+    }
+
+  return -1;
+}
+
+void
+__wrap_sql (const char *statement, ...)
+{
+  if (strcmp (statement, "LOCK TABLE users IN EXCLUSIVE MODE;") == 0)
+    trash_empty_record_db_event (TRASH_EMPTY_DB_USERS_LOCK);
+  else if (g_str_has_prefix (statement, "DELETE FROM")
+           || g_str_has_prefix (statement, "UPDATE "))
+    trash_empty_record_db_event (TRASH_EMPTY_DB_DELETE);
+}
+
+void
+__wrap_sql_rollback (void)
+{
+  trash_empty_record_db_event (TRASH_EMPTY_DB_ROLLBACK);
+}
+
+void
+__wrap_sql_commit (void)
+{
+  trash_empty_record_db_event (TRASH_EMPTY_DB_COMMIT);
+}
+
+int
+__wrap_acl_user_may (const char *operation)
+{
+  assert_that (operation, is_equal_to_string ("empty_trashcan"));
+  trash_empty_record_db_event (TRASH_EMPTY_DB_ACL);
+  return trash_empty_db_acl;
+}
+
+int
+__real_manage_empty_trashcan_confirmed (long long int, long long int *);
+
+static ssize_t
+dispatch_trash_empty_request (const char *request,
+                              char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  int sockets[2];
+  ssize_t response_len;
+
+  assert_that (socketpair (AF_UNIX, SOCK_STREAM, 0, sockets), is_equal_to (0));
+  assert_that (write (sockets[0], request, strlen (request)),
+               is_equal_to ((ssize_t) strlen (request)));
+  assert_that (shutdown (sockets[0], SHUT_WR), is_equal_to (0));
+  turbovas_control_serve_client (sockets[1]);
+  response_len = read (sockets[0], response,
+                       TURBOVAS_CONTROL_MAX_RESPONSE_BYTES - 1);
+  close (sockets[0]);
+  close (sockets[1]);
+
+  return response_len;
+}
+
+static void
+assert_trash_empty_structured_audit (const char *message, const char *outcome,
+                                     const char *expected_total,
+                                     const char *actual_total)
+{
+  assert_that (trash_empty_structured_audit_calls, is_equal_to (1));
+  assert_that (trash_empty_audit_message, is_equal_to_string (message));
+  assert_that (trash_empty_audit_operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (trash_empty_audit_outcome, is_equal_to_string (outcome));
+  assert_that (trash_empty_audit_expected_total,
+               is_equal_to_string (expected_total));
+  assert_that (trash_empty_audit_actual_total,
+               is_equal_to_string (actual_total));
+  assert_that (strstr (trash_empty_audit_message, TEST_CONTROL_SECRET),
+               is_null);
+}
+
+Ensure (turbovas_control, accepts_strict_bounded_trash_empty_request)
+{
+  const char *request =
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 9223372036854775807\n";
+  char operator_uuid[37];
+  gint64 expected_total = -1;
+
+  assert_that (turbovas_control_parse_trash_empty_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 &expected_total),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (expected_total, is_equal_to (G_MAXINT64));
+}
+
+Ensure (turbovas_control, rejects_malformed_trash_empty_requests)
+{
+  const char *invalid[] = {
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 -1\n",
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 +1\n",
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 9223372036854775808\n",
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 extra\n",
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000  1\n",
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-42661417400z 1\n",
+  };
+  char operator_uuid[37];
+  gint64 expected_total;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (invalid); index++)
+    assert_that (turbovas_control_parse_trash_empty_request (
+                   invalid[index], strlen (invalid[index]),
+                   TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                   operator_uuid, &expected_total),
+                 is_false);
+}
+
+Ensure (turbovas_control, maps_trash_empty_contract_responses)
+{
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+
+  assert_that (turbovas_control_trash_empty_response (0, 7, response),
+               is_equal_to_string ("0 emptied 7\n"));
+  assert_that (turbovas_control_trash_empty_response (1, 8, response),
+               is_equal_to_string ("1 expected-total-mismatch 8\n"));
+  assert_that (turbovas_control_trash_empty_response (2, 0, response),
+               is_equal_to_string ("2 forbidden\n"));
+  assert_that (turbovas_control_trash_empty_response (3, 0, response),
+               is_equal_to_string ("3 operator-not-found\n"));
+  assert_that (turbovas_control_trash_empty_response (-1, 0, response),
+               is_equal_to_string ("-1 error\n"));
+}
+
+Ensure (turbovas_control, dispatches_trash_count_mismatch)
+{
+  const char *request =
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 4\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  trash_empty_calls = 0;
+  trash_empty_result = 1;
+  trash_empty_actual = 5;
+  trash_empty_expected = -1;
+  mock_operator_name = "operator";
+  reset_trash_empty_audit ();
+
+  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+                         TRUE),
+               is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+
+  assert_that (response_len,
+               is_equal_to (
+                 (ssize_t) strlen ("1 expected-total-mismatch 5\n")));
+  assert_that (response,
+               is_equal_to_string ("1 expected-total-mismatch 5\n"));
+  assert_that (trash_empty_calls, is_equal_to (1));
+  assert_that (trash_empty_expected, is_equal_to (4));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  assert_that (trash_empty_audit_success_calls, is_equal_to (0));
+  assert_that (trash_empty_audit_fail_calls, is_equal_to (0));
+  assert_trash_empty_structured_audit ("Trashcan empty request rejected",
+                                       "expected-total-mismatch", "4", "5");
+
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  reset_trash_empty_audit ();
+}
+
+Ensure (turbovas_control, audits_successful_trash_empty)
+{
+  const char *request =
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 5\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  trash_empty_calls = 0;
+  trash_empty_result = 0;
+  trash_empty_actual = 5;
+  trash_empty_expected = -1;
+  mock_operator_name = "operator";
+  reset_trash_empty_audit ();
+
+  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+                         TRUE),
+               is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+
+  assert_that (response_len,
+               is_equal_to ((ssize_t) strlen ("0 emptied 5\n")));
+  assert_that (response, is_equal_to_string ("0 emptied 5\n"));
+  assert_that (trash_empty_calls, is_equal_to (1));
+  assert_that (trash_empty_expected, is_equal_to (5));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  assert_that (trash_empty_audit_success_calls, is_equal_to (1));
+  assert_that (trash_empty_audit_fail_calls, is_equal_to (0));
+  assert_trash_empty_structured_audit ("Trashcan emptied", "emptied", "5",
+                                       "5");
+
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  reset_trash_empty_audit ();
+}
+
+Ensure (turbovas_control, audits_trash_empty_failures)
+{
+  static const struct
+  {
+    int result;
+    const char *response;
+    const char *outcome;
+  } cases[] = {
+    {2, "2 forbidden\n", "forbidden"},
+    {-1, "-1 error\n", "error"},
+  };
+  const char *request =
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 5\n";
+  size_t index;
+
+  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+                         TRUE),
+               is_true);
+
+  for (index = 0; index < G_N_ELEMENTS (cases); index++)
+    {
+      char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+      ssize_t response_len;
+
+      cleanup_calls = 0;
+      reinit_calls = 0;
+      session_init_calls = 0;
+      trash_empty_calls = 0;
+      trash_empty_result = cases[index].result;
+      trash_empty_actual = 0;
+      trash_empty_expected = -1;
+      mock_operator_name = "operator";
+      reset_trash_empty_audit ();
+
+      response_len = dispatch_trash_empty_request (request, response);
+
+      assert_that (response_len,
+                   is_equal_to ((ssize_t) strlen (cases[index].response)));
+      assert_that (response, is_equal_to_string (cases[index].response));
+      assert_that (trash_empty_calls, is_equal_to (1));
+      assert_that (trash_empty_expected, is_equal_to (5));
+      assert_that (reinit_calls, is_equal_to (1));
+      assert_that (session_init_calls, is_equal_to (1));
+      assert_that (cleanup_calls, is_equal_to (1));
+      assert_that (current_credentials.uuid, is_null);
+      assert_that (current_credentials.username, is_null);
+      assert_that (trash_empty_audit_success_calls, is_equal_to (0));
+      assert_that (trash_empty_audit_fail_calls, is_equal_to (1));
+      assert_trash_empty_structured_audit ("Trashcan empty request failed",
+                                           cases[index].outcome, "5", "0");
+      reset_trash_empty_audit ();
+    }
+
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+}
+
+Ensure (turbovas_control, does_not_audit_missing_trash_operator)
+{
+  const char *request =
+    "trash-empty " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 5\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  trash_empty_calls = 0;
+  mock_operator_name = NULL;
+  reset_trash_empty_audit ();
+
+  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+                         TRUE),
+               is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+
+  assert_that (response_len,
+               is_equal_to ((ssize_t) strlen ("3 operator-not-found\n")));
+  assert_that (response, is_equal_to_string ("3 operator-not-found\n"));
+  assert_that (trash_empty_calls, is_equal_to (0));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  assert_that (trash_empty_audit_success_calls, is_equal_to (0));
+  assert_that (trash_empty_audit_fail_calls, is_equal_to (0));
+  assert_that (trash_empty_structured_audit_calls, is_equal_to (0));
+
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  reset_trash_empty_audit ();
+}
+
+Ensure (turbovas_control, locks_before_count_and_skips_delete_on_mismatch)
+{
+  static const char *base_tables[] = {
+    "alerts_trash", "configs_trash", "credentials_trash", "filters_trash",
+    "overrides_trash", "port_lists_trash", "report_configs_trash",
+    "report_formats_trash", "scanners_trash", "schedules_trash",
+    "tags_trash", "targets_trash", "tasks",
+  };
+  long long int actual_total = -1;
+  size_t index;
+
+  trash_empty_db_event_count = 0;
+  trash_empty_db_count = 6;
+  trash_empty_db_acl = 1;
+  trash_empty_count_sql = NULL;
+  current_credentials.uuid =
+    (gchar *) "123e4567-e89b-12d3-a456-426614174000";
+
+  assert_that (__real_manage_empty_trashcan_confirmed (5, &actual_total),
+               is_equal_to (1));
+  assert_that (actual_total, is_equal_to (6));
+  assert_that (trash_empty_db_event_count, is_equal_to (6));
+  assert_that (trash_empty_db_events[0], is_equal_to (TRASH_EMPTY_DB_BEGIN));
+  assert_that (trash_empty_db_events[1],
+               is_equal_to (TRASH_EMPTY_DB_USERS_LOCK));
+  assert_that (trash_empty_db_events[2],
+               is_equal_to (TRASH_EMPTY_DB_USER_LOCK));
+  assert_that (trash_empty_db_events[3],
+               is_equal_to (TRASH_EMPTY_DB_ACL));
+  assert_that (trash_empty_db_events[4], is_equal_to (TRASH_EMPTY_DB_COUNT));
+  assert_that (trash_empty_db_events[5],
+               is_equal_to (TRASH_EMPTY_DB_ROLLBACK));
+
+  for (index = 0; index < G_N_ELEMENTS (base_tables); index++)
+    {
+      gchar *count_fragment;
+
+      count_fragment = g_strdup_printf ("FROM %s ", base_tables[index]);
+      assert_that (strstr (trash_empty_count_sql, count_fragment),
+                   is_not_null);
+      g_free (count_fragment);
+    }
+  assert_that (strstr (trash_empty_count_sql, "hidden = 2"), is_not_null);
+
+  current_credentials.uuid = NULL;
 }
 
 Ensure (turbovas_control, accepts_canonical_schedule_create_request)
@@ -1732,6 +2282,22 @@ main (int argc, char **argv)
                          rejects_missing_weak_or_incorrect_secrets);
   add_test_with_context (suite, turbovas_control,
                          maps_only_protocol_responses);
+  add_test_with_context (suite, turbovas_control,
+                         accepts_strict_bounded_trash_empty_request);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_trash_empty_requests);
+  add_test_with_context (suite, turbovas_control,
+                         maps_trash_empty_contract_responses);
+  add_test_with_context (suite, turbovas_control,
+                         dispatches_trash_count_mismatch);
+  add_test_with_context (suite, turbovas_control,
+                         audits_successful_trash_empty);
+  add_test_with_context (suite, turbovas_control,
+                         audits_trash_empty_failures);
+  add_test_with_context (suite, turbovas_control,
+                         does_not_audit_missing_trash_operator);
+  add_test_with_context (suite, turbovas_control,
+                         locks_before_count_and_skips_delete_on_mismatch);
   add_test_with_context (suite, turbovas_control,
                          accepts_canonical_schedule_create_request);
   add_test_with_context (suite, turbovas_control,

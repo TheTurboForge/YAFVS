@@ -2246,11 +2246,6 @@ manage_schema (gchar *, gchar **, gsize *, gchar **, gchar **);
 int
 manage_restore (const char *);
 
-int
-manage_empty_trashcan ();
-
-
-
 /* SecInfo */
 
 int

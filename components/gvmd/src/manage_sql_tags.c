@@ -150,6 +150,7 @@ delete_tag (const char *tag_id, int ultimate)
   tag_t tag = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_tag") == 0)
     {

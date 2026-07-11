@@ -6437,41 +6437,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     </example>
   </command>
   <command>
-    <name>empty_trashcan</name>
-    <summary>Empty the trashcan</summary>
-    <description>
-      <p>
-        The client uses the empty_trashcan command to empty the trashcan.
-      </p>
-    </description>
-    <pattern>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Empty the trashcan</summary>
-      <request>
-        <empty_trashcan>
-        </empty_trashcan>
-      </request>
-      <response>
-        <empty_trashcan_response status="200" status_text="OK"/>
-      </response>
-    </example>
-  </command>
-  <command>
     <name>get_aggregates</name>
     <summary>Get aggregates of various resources</summary>
     <description>

@@ -563,6 +563,7 @@ delete_user (const char *user_id_arg, const char *name_arg,
     }
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_user") == 0)
     {

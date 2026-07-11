@@ -1680,6 +1680,7 @@ delete_alert (const char *alert_id, int ultimate)
   alert_t alert = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_alert") == 0)
     {

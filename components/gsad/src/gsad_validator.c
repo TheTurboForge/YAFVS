@@ -70,7 +70,6 @@ gsad_init_validator ()
                      "|(edit_config_family)"
                      "|(edit_config_family_all)"
                      "|(auth_settings)"
-                     "|(empty_trashcan)"
                      "|(export_alert)"
                      "|(export_alerts)"
                      "|(export_asset)"

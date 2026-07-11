@@ -18,6 +18,9 @@ native-tooling-state *args:
 native-api-request *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-request "$@"
 
+native-empty-trash *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-empty-trash "$@"
+
 native-verify-scanners *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-verify-scanners "$@"
 

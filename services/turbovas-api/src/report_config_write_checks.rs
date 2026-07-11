@@ -51,21 +51,22 @@ pub(crate) async fn resolve_report_config_write_operator_owner(
     tx: &Transaction<'_>,
     operator: &DirectApiOperator,
 ) -> Result<i32, ApiError> {
-    tx.query_opt(
-        report_config_write_operator_owner_sql(),
-        &[&operator.user_uuid()],
-    )
-    .await
-    .map_err(|error| {
-        map_report_config_write_db_error(error, "resolve report config write operator")
-    })?
-    .map(|row| row.get(0))
-    .ok_or_else(|| {
-        tracing::warn!(
-            "direct API report config write operator does not resolve to a database user"
-        );
-        ApiError::Forbidden
-    })
+    let sql = format!(
+        "{} FOR KEY SHARE;",
+        report_config_write_operator_owner_sql().trim_end_matches(';')
+    );
+    tx.query_opt(&sql, &[&operator.user_uuid()])
+        .await
+        .map_err(|error| {
+            map_report_config_write_db_error(error, "resolve report config write operator")
+        })?
+        .map(|row| row.get(0))
+        .ok_or_else(|| {
+            tracing::warn!(
+                "direct API report config write operator does not resolve to a database user"
+            );
+            ApiError::Forbidden
+        })
 }
 
 pub(crate) async fn ensure_unique_live_report_config_name(

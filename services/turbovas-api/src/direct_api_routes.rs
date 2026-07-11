@@ -5,7 +5,7 @@
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    routing::{delete, patch, post},
+    routing::{delete, get, patch, post},
 };
 
 use crate::{
@@ -55,6 +55,7 @@ use crate::{
     task_target_replace::replace_task_target,
     task_writes::{create_task, delete_task, patch_task},
     tls_certificate_writes::delete_tls_certificate,
+    trash_empty::{MAX_TRASH_EMPTY_BODY_BYTES, empty_trashcan, trash_empty_preview},
 };
 
 pub(crate) fn direct_native_api_router(
@@ -213,6 +214,11 @@ pub(crate) fn direct_native_api_router(
             .route("/api/v1/tags/:tag_id/restore", post(restore_tag))
             .route("/api/v1/tags/:tag_id/trash", delete(hard_delete_tag))
             .route("/api/v1/tags/:tag_id/resources", post(update_tag_resources))
+            .route("/api/v1/trashcan/empty-preview", get(trash_empty_preview))
+            .route(
+                "/api/v1/trashcan/empty",
+                post(empty_trashcan).layer(DefaultBodyLimit::max(MAX_TRASH_EMPTY_BODY_BYTES)),
+            )
     } else {
         router
     };

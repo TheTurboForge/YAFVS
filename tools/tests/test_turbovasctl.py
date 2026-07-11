@@ -2481,10 +2481,10 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 177)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 105)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 72)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 72)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 179)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 106)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 73)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 73)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
@@ -2518,8 +2518,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 72)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 72)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 73)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 73)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
@@ -2573,7 +2573,7 @@ class TurboVASCtlTests(unittest.TestCase):
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 37)
+        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 38)
         self.assertEqual(status_only["details"]["openapi_contract"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
@@ -2582,7 +2582,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["operations_missing_error_response_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_error_schema_field_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_error_schema_field_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["request_body_schema_ref_count"], 37)
+        self.assertEqual(status_only["details"]["openapi_contract"]["request_body_schema_ref_count"], 38)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_request_body_schema_ref_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_request_body_schema_ref_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["auth_contract_alignment_status"], "pass")
@@ -2599,8 +2599,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 72)
-        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 72)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 73)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 73)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_path_parameter_count"], 0)
@@ -2637,8 +2637,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 105)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 72)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 106)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 73)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
@@ -2714,9 +2714,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/tasks/{task_id}/replace-target",
                 "POST /api/v1/tasks/{task_id}/start",
                 "POST /api/v1/tasks/{task_id}/stop",
+                "POST /api/v1/trashcan/empty",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 72)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 73)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
@@ -2792,6 +2793,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/tasks/{task_id}/replace-target",
                 "POST /api/v1/tasks/{task_id}/start",
                 "POST /api/v1/tasks/{task_id}/stop",
+                "POST /api/v1/trashcan/empty",
             ],
         )
         self.assertEqual(contract["segment_guard"]["alignment_status"], "pass")
@@ -2953,8 +2955,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 72)
-        self.assertEqual(contract["direct_write_control_count"], 72)
+        self.assertEqual(contract["browser_write_proxy_count"], 73)
+        self.assertEqual(contract["direct_write_control_count"], 73)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
@@ -3583,7 +3585,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 177)
+        self.assertEqual(contract["operation_count"], 179)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -3596,7 +3598,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 for operation in contract["operations_with_request_bodies"]
                 if operation != "POST /tasks/{task_id}/replace-target"
             ],
-            ["POST /hosts", "PATCH /hosts/{host_id}", "PATCH /scanners/{scanner_id}", "POST /credentials", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /alerts", "PATCH /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /schedules", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /tasks", "PATCH /tasks/{task_id}"],
+            ["POST /hosts", "PATCH /hosts/{host_id}", "PATCH /scanners/{scanner_id}", "POST /credentials", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /alerts", "PATCH /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /schedules", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "PATCH /report-formats/{report_format_id}", "POST /trashcan/empty", "POST /scopes", "PATCH /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /tasks", "PATCH /tasks/{task_id}"],
         )
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
@@ -3793,6 +3795,8 @@ class TurboVASCtlTests(unittest.TestCase):
          'tls-certificate-delete',
          'tls-certificate-pem-download-read',
          'trashcan-count-summary-read',
+         'trashcan-empty',
+         'trashcan-owner-empty-preview',
          'trashcan-redacted-row-metadata-read',
          'user-redacted-detail-read',
          'user-redacted-list-read',
@@ -3823,6 +3827,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'task-scan-control-writes-and-deletes',
          'trashcan-deep-row-data-and-mutations',
          'trashcan-row-data-and-mutations',
+         'trashcan-row-detail-restore-and-individual-hard-delete',
         ]
         self.assertEqual(contract["allowed_replaces_values"], expected_replaces_values)
         actual_replaces_values = sorted(
@@ -3895,9 +3900,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 177)
-        self.assertEqual(details["direct_operation_count"], 177)
-        self.assertEqual(details["direct_read_operation_count"], 105)
+        self.assertEqual(details["operation_count"], 179)
+        self.assertEqual(details["direct_operation_count"], 179)
+        self.assertEqual(details["direct_read_operation_count"], 106)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
             details["non_get_direct_operations"],
@@ -3908,7 +3913,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 for operation in details["non_get_direct_operations"]
                 if operation != "POST /tasks/{task_id}/replace-target"
             ],
-            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "POST /scanners/{scanner_id}/verify", "POST /credentials", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "POST /alerts", "PATCH /alerts/{alert_id}", "DELETE /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "DELETE /overrides/{override_id}", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "POST /schedules", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /scopes/{scope_id}/reports", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "POST /tasks", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "POST /tasks/{task_id}/start", "POST /tasks/{task_id}/stop", "DELETE /scope-reports/{scope_report_id}"],
+            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "POST /scanners/{scanner_id}/verify", "POST /credentials", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "POST /alerts", "PATCH /alerts/{alert_id}", "DELETE /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "DELETE /overrides/{override_id}", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "POST /schedules", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /trashcan/empty", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /scopes/{scope_id}/reports", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "POST /tasks", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "POST /tasks/{task_id}/start", "POST /tasks/{task_id}/stop", "DELETE /scope-reports/{scope_report_id}"],
         )
         self.assertIn("/api/v1", details["servers"])
         self.assertIn("http://127.0.0.1:19080/api/v1", details["servers"])
@@ -3935,10 +3940,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 72)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 72)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 72)
-        self.assertEqual(status_only["details"]["operation_request_body_count"], 37)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 73)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 73)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 73)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 38)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
@@ -4118,11 +4123,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 177)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 177)
-        self.assertEqual(details["summary"]["inventory_rows"], 177)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 177)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 177)
+        self.assertEqual(details["summary"]["total_rows"], 179)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 179)
+        self.assertEqual(details["summary"]["inventory_rows"], 179)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 179)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 179)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -4983,7 +4988,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 177)
+        self.assertEqual(len(operation_ids), 179)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -5151,8 +5156,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /tags/resource-names/{resource_type}",
                 "GET /tags/{tag_id}",
                 "GET /tags/{tag_id}/resources",
+                "GET /trashcan/empty-preview",
                 "GET /trashcan/items",
                 "GET /trashcan/summary",
+                "POST /trashcan/empty",
                 "GET /users",
                 "GET /users/{user_id}",
                 "GET /reports/{report_id}",
@@ -6618,6 +6625,288 @@ class TurboVASCtlTests(unittest.TestCase):
         for result in (blank, unconfirmed, capped, delayed):
             self.assertEqual(result["status"], "fail")
             self.assertEqual(result["findings"][0]["check"], "native-delete-overrides-by-filter.arguments")
+
+    def test_native_empty_trash_parser_preview_and_local_write_guards(self):
+        parser = turbovasctl.build_parser()
+        preview_args = parser.parse_args(["native-empty-trash"])
+        self.assertEqual(preview_args.command, "native-empty-trash")
+        self.assertFalse(preview_args.allow_write_control)
+        self.assertFalse(preview_args.acknowledge_permanent_deletion)
+        self.assertIsNone(preview_args.expected_total)
+        write_args = parser.parse_args(
+            [
+                "native-empty-trash",
+                "--allow-write-control",
+                "--acknowledge-permanent-deletion",
+                "--expected-total",
+                "3",
+                "--status-only",
+            ]
+        )
+        self.assertTrue(write_args.allow_write_control)
+        self.assertTrue(write_args.acknowledge_permanent_deletion)
+        self.assertEqual(write_args.expected_total, 3)
+        self.assertTrue(write_args.status_only)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                incomplete = turbovasctl.command_native_empty_trash(
+                    root,
+                    allow_write_control=True,
+                    expected_total=0,
+                )
+                negative = turbovasctl.command_native_empty_trash(root, expected_total=-1)
+        self.assertEqual(incomplete["status"], "fail")
+        self.assertEqual(incomplete["details"]["outcome"], "rejected")
+        self.assertEqual(negative["status"], "fail")
+        curl.assert_not_called()
+
+    def test_native_empty_trash_preview_payload_is_complete_counts_only_contract(self):
+        items = [
+            {"resource_type": resource_type, "count": 0}
+            for resource_type in sorted(turbovasctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
+        ]
+        items[0]["count"] = 3
+        payload = {"scope": "operator", "items": items, "total": 3}
+        self.assertEqual(turbovasctl.native_empty_trash_preview_payload(payload), payload)
+
+        incomplete = dict(payload)
+        incomplete["items"] = items[:-1]
+        self.assertIsNone(turbovasctl.native_empty_trash_preview_payload(incomplete))
+        unsafe = dict(payload)
+        unsafe["items"] = [dict(item) for item in items]
+        unsafe["items"][0]["name"] = "must-not-be-accepted"
+        self.assertIsNone(turbovasctl.native_empty_trash_preview_payload(unsafe))
+
+    def test_native_empty_trash_preview_only_uses_one_get_and_compact_output_stays_counts_only(self):
+        items = [
+            {"resource_type": resource_type, "count": 0}
+            for resource_type in sorted(turbovasctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
+        ]
+        items[0]["count"] = 2
+        payload = {"scope": "operator", "items": items, "total": 2}
+        calls = []
+
+        def fake_direct(_root, path, **kwargs):
+            calls.append((path, kwargs.get("method", "GET")))
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_empty_trash(Path(tmp), status_only=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["outcome"], "preview")
+        self.assertEqual(result["details"]["preview_total"], 2)
+        self.assertEqual(calls, [(turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET")])
+        rendered = json.dumps(result)
+        self.assertNotIn("name", rendered)
+        self.assertNotIn("t" * 64, rendered)
+
+    def test_native_empty_trash_requires_fresh_total_match_before_one_post(self):
+        items = [
+            {"resource_type": resource_type, "count": 0}
+            for resource_type in sorted(turbovasctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
+        ]
+        items[0]["count"] = 2
+        preview = {"scope": "operator", "items": items, "total": 2}
+        mismatch_calls = []
+
+        def mismatch_direct(_root, path, **kwargs):
+            mismatch_calls.append((path, kwargs.get("method", "GET")))
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(preview) + "\n200", "")
+
+        confirmed_calls = []
+
+        def confirmed_direct(_root, path, **kwargs):
+            confirmed_calls.append((path, kwargs.get("method", "GET"), kwargs.get("body")))
+            if path == turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH:
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(preview) + "\n200", "")
+            self.assertEqual(path, turbovasctl.NATIVE_EMPTY_TRASH_PATH)
+            self.assertEqual(kwargs.get("method"), "POST")
+            self.assertEqual(
+                json.loads(kwargs.get("body")),
+                {"acknowledge_permanent_deletion": True, "expected_total": 2},
+            )
+            return subprocess.CompletedProcess(["curl"], 0, '{"scope":"operator","deleted_total":2}\n200', "")
+
+        common = [
+            unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}),
+            unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")),
+            unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with common[0], common[1], common[2], unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=mismatch_direct):
+                mismatch = turbovasctl.command_native_empty_trash(
+                    root,
+                    allow_write_control=True,
+                    acknowledge_permanent_deletion=True,
+                    expected_total=1,
+                )
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=confirmed_direct):
+                confirmed = turbovasctl.command_native_empty_trash(
+                    root,
+                    allow_write_control=True,
+                    acknowledge_permanent_deletion=True,
+                    expected_total=2,
+                )
+
+        self.assertEqual(mismatch["status"], "fail")
+        self.assertEqual(mismatch["details"]["outcome"], "mismatch")
+        self.assertEqual(mismatch_calls, [(turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET")])
+        self.assertEqual(confirmed["status"], "pass")
+        self.assertEqual(confirmed["details"]["outcome"], "confirmed")
+        self.assertEqual(confirmed["details"]["deleted_total"], 2)
+        self.assertEqual(
+            [(path, method) for path, method, _body in confirmed_calls],
+            [
+                (turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"),
+                (turbovasctl.NATIVE_EMPTY_TRASH_PATH, "POST"),
+            ],
+        )
+
+    def test_native_empty_trash_distinguishes_rejected_and_indeterminate_post_outcomes(self):
+        items = [
+            {"resource_type": resource_type, "count": 0}
+            for resource_type in sorted(turbovasctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
+        ]
+        preview = {"scope": "operator", "items": items, "total": 0}
+
+        def response_with_post(post_status, payload):
+            calls = []
+
+            def fake_direct(_root, path, **kwargs):
+                calls.append((path, kwargs.get("method", "GET")))
+                response_payload = preview if path == turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH else payload
+                status = 200 if path == turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH else post_status
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(response_payload) + f"\n{status}", "")
+
+            return fake_direct, calls
+
+        rejected_direct, rejected_calls = response_with_post(409, {"error": {"code": "conflict"}})
+        indeterminate_direct, indeterminate_calls = response_with_post(502, {"error": {"code": "mutation_outcome_indeterminate"}})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=rejected_direct):
+                rejected = turbovasctl.command_native_empty_trash(root, allow_write_control=True, acknowledge_permanent_deletion=True, expected_total=0)
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=indeterminate_direct):
+                indeterminate = turbovasctl.command_native_empty_trash(root, allow_write_control=True, acknowledge_permanent_deletion=True, expected_total=0)
+
+        self.assertEqual(rejected["details"]["outcome"], "rejected")
+        self.assertEqual(indeterminate["details"]["outcome"], "indeterminate")
+        self.assertEqual(rejected_calls, [(turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"), (turbovasctl.NATIVE_EMPTY_TRASH_PATH, "POST")])
+        self.assertEqual(indeterminate_calls, [(turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"), (turbovasctl.NATIVE_EMPTY_TRASH_PATH, "POST")])
+
+    def test_direct_trash_empty_smoke_uses_isolated_fixture_and_never_empties_preexisting_trash(self):
+        operator_uuid = "11111111-1111-4111-8111-111111111111"
+
+        def preview(total):
+            items = [
+                {"resource_type": resource_type, "count": 0}
+                for resource_type in sorted(turbovasctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
+            ]
+            items[0]["count"] = total
+            return {"scope": "operator", "items": items, "total": total}
+
+        calls = []
+        previews = iter((preview(0), preview(1), preview(1), preview(0)))
+
+        def fake_direct(_root, path, **kwargs):
+            method = kwargs.get("method", "GET")
+            calls.append((path, method, kwargs.get("body")))
+            if path == turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH:
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(next(previews)) + "\n200", "")
+            if path == "/api/v1/tags":
+                return subprocess.CompletedProcess(["curl"], 0, '{"id":"fixture-tag"}\n201', "")
+            if path == "/api/v1/tags/fixture-tag":
+                return subprocess.CompletedProcess(["curl"], 0, "\n204", "")
+            if path == turbovasctl.NATIVE_EMPTY_TRASH_PATH:
+                body = json.loads(kwargs["body"])
+                if body["expected_total"] == 0:
+                    return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"conflict"}}\n409', "")
+                return subprocess.CompletedProcess(["curl"], 0, '{"scope":"operator","deleted_total":1}\n200', "")
+            self.fail(f"unexpected direct call {method} {path}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct), \
+                unittest.mock.patch.object(
+                    turbovasctl,
+                    "psql",
+                    side_effect=[
+                        subprocess.CompletedProcess(["psql"], 0, "", ""),
+                        subprocess.CompletedProcess(["psql"], 0, "0|0\n", ""),
+                    ],
+                ), \
+                unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
+                findings = turbovasctl.direct_trash_empty_runtime_findings(
+                    Path(tmp),
+                    token="t" * 64,
+                    env={},
+                    operator_uuid=operator_uuid,
+                )
+
+        self.assertTrue(all(item["status"] == "pass" for item in findings), findings)
+        self.assertEqual(
+            [(path, method) for path, method, _body in calls if path == turbovasctl.NATIVE_EMPTY_TRASH_PATH],
+            [
+                (turbovasctl.NATIVE_EMPTY_TRASH_PATH, "POST"),
+                (turbovasctl.NATIVE_EMPTY_TRASH_PATH, "POST"),
+            ],
+        )
+        self.assertEqual(
+            [json.loads(body)["expected_total"] for path, _method, body in calls if path == turbovasctl.NATIVE_EMPTY_TRASH_PATH],
+            [0, 1],
+        )
+
+        preexisting_calls = []
+
+        def preexisting_direct(_root, path, **kwargs):
+            preexisting_calls.append((path, kwargs.get("method", "GET")))
+            if path == turbovasctl.NATIVE_EMPTY_TRASH_PATH:
+                self.assertEqual(json.loads(kwargs["body"])["expected_total"], 0)
+                return subprocess.CompletedProcess(
+                    ["curl"], 0, '{"error":{"code":"conflict"}}\n409', ""
+                )
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(preview(2)) + "\n200", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=preexisting_direct), \
+                unittest.mock.patch.object(turbovasctl, "psql") as psql:
+                skipped = turbovasctl.direct_trash_empty_runtime_findings(
+                    Path(tmp),
+                    token="t" * 64,
+                    env={},
+                    operator_uuid=operator_uuid,
+                )
+        self.assertEqual(
+            preexisting_calls,
+            [
+                (turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"),
+                (turbovasctl.NATIVE_EMPTY_TRASH_PATH, "POST"),
+                (turbovasctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"),
+            ],
+        )
+        psql.assert_not_called()
+        self.assertEqual(
+            [item["status"] for item in skipped[:-1]],
+            ["pass", "pass", "pass"],
+        )
+        self.assertEqual(skipped[-1]["check"], "native-api-direct.trash-empty-preflight-skipped")
+        self.assertEqual(skipped[-1]["status"], "warn")
 
     def test_native_delete_overrides_by_filter_dry_run_snapshots_stable_ids_without_writes(self):
         ids = [
@@ -9094,7 +9383,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertFalse(turbovasctl.native_tooling_scan_candidate("components/gsa/src/gmp/native-api/tags.ts"))
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "candidate_for_removal")
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/generate-scope-report.gmp.py").exists())
-        self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
+        self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/empty-trash.gmp.py").exists())
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
 
     def test_native_schedule_csv_script_is_absent_after_native_retirement(self):
@@ -9105,17 +9394,16 @@ class TurboVASCtlTests(unittest.TestCase):
         review = turbovasctl.native_tooling_removal_review(
             [
                 "components/gvm-tools/scripts/export-pdf-report.gmp.py",
-                "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/unclassified.gmp.py",
             ]
         )
 
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], 3)
+        self.assertEqual(review["blocked_or_review_count"], 2)
         buckets = review["buckets"]
         self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
-        self.assertEqual(buckets["write_or_mutation"]["count"], 1)
         self.assertEqual(buckets["needs_review"]["count"], 1)
+        self.assertNotIn("write_or_mutation", buckets)
 
     def test_native_tooling_removal_review_counts_product_scripts_toward_full_removal(self):
         summary = turbovasctl.summarize_native_tooling(
@@ -9140,7 +9428,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/start-alert-scan.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
-                "components/gvm-tools/scripts/empty-trash.gmp.py",
             ]
         )
 
@@ -9153,7 +9440,15 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("email alert payloads", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
         self.assertNotIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_blockers)
-        self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
+
+    def test_native_empty_trash_script_is_not_remaining_replacement_candidate(self):
+        candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
+        name = "empty-trash.gmp.py"
+        self.assertNotIn(name, candidates)
+        self.assertNotIn(name, turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
+        self.assertFalse(
+            (Path(__file__).resolve().parents[2] / "components" / "gvm-tools" / "scripts" / name).exists()
+        )
 
     def test_native_override_delete_script_is_not_remaining_replacement_candidate(self):
         candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
@@ -10972,7 +11267,9 @@ db2:keys=5,expires=0,avg_ttl=0
                     if "DELETE FROM alerts" in command_text and "-concurrent" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                     if "DELETE FROM alerts" in command_text:
-                        return turbovasctl.subprocess.CompletedProcess(command, 0, "1|0\n", "")
+                        self.assertIn("DELETE FROM tags_trash", command_text)
+                        self.assertIn("LOCK TABLE users IN ROW SHARE MODE", command_text)
+                        return turbovasctl.subprocess.CompletedProcess(command, 0, "1|1\n", "")
                     if "DELETE FROM report_configs" in command_text:
                         return turbovasctl.subprocess.CompletedProcess(command, 0, "1\n", "")
                     if "DELETE FROM report_formats" in command_text:
@@ -11356,7 +11653,7 @@ db2:keys=5,expires=0,avg_ttl=0
 
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "native_api_direct_admin_operator_uuid", return_value=(turbovasctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(turbovasctl, "direct_task_target_replace_runtime_findings", return_value=[turbovasctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), turbovasctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "native_api_direct_admin_operator_uuid", return_value=(turbovasctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(turbovasctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(turbovasctl, "direct_task_target_replace_runtime_findings", return_value=[turbovasctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), turbovasctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
                     result = turbovasctl.command_runtime_native_api_direct_write_smoke(root, status_only=True)
             finally:
                 if original_token is None:
@@ -11476,8 +11773,12 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.alert-write-cleanup"], "pass")
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text()
         self.assertIn("alert_create_outcome_uncertain", source)
-        self.assertIn("owner = (SELECT id FROM users WHERE uuid", source)
+        self.assertIn("owner = (SELECT id FROM operator_owner)", source)
         self.assertIn("expected_alert_counts = {\"1\"} if alert_resource_id else {\"0\", \"1\"}", source)
+        self.assertIn("LOCK TABLE users IN ROW SHARE MODE", source)
+        self.assertIn("trash_tag AS (SELECT id FROM tags_trash", source)
+        self.assertIn("deleted_trash_tag AS (DELETE FROM tags_trash", source)
+        self.assertIn("expected_tag_counts = {\"1\"} if alert_tag_id else {\"0\", \"1\"}", source)
         self.assertEqual(checks["native-api-direct.credential-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.credential-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.credential-fixture-cleanup"], "pass")

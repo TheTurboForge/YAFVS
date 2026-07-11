@@ -80,17 +80,20 @@ pub(crate) async fn resolve_port_list_write_operator_owner(
     tx: &Transaction<'_>,
     operator: &DirectApiOperator,
 ) -> Result<i32, ApiError> {
-    tx.query_opt(
-        port_list_write_operator_owner_sql(),
-        &[&operator.user_uuid()],
-    )
-    .await
-    .map_err(|error| map_port_list_write_db_error(error, "resolve port list write operator"))?
-    .map(|row| row.get(0))
-    .ok_or_else(|| {
-        tracing::warn!("direct API port list write operator does not resolve to a database user");
-        ApiError::Forbidden
-    })
+    let sql = format!(
+        "{} FOR KEY SHARE;",
+        port_list_write_operator_owner_sql().trim_end_matches(';')
+    );
+    tx.query_opt(&sql, &[&operator.user_uuid()])
+        .await
+        .map_err(|error| map_port_list_write_db_error(error, "resolve port list write operator"))?
+        .map(|row| row.get(0))
+        .ok_or_else(|| {
+            tracing::warn!(
+                "direct API port list write operator does not resolve to a database user"
+            );
+            ApiError::Forbidden
+        })
 }
 
 pub(crate) async fn load_port_list_write_state(

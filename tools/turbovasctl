@@ -399,7 +399,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     },
     "write_or_mutation": {
         "create-alerts-from-csv.gmp.py",
-        "empty-trash.gmp.py",
     },
 }
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
@@ -413,7 +412,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
 }
 NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
-    "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
     "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
@@ -445,6 +443,7 @@ OPENAPI_ALLOWED_OPERATOR_IDENTITY_VALUES = frozenset(
         "direct-token-operator",
         "not-applicable-preview",
         "proxied-session-operator",
+        "resolved-request-operator",
         "service-admin-dev-only",
     }
 )
@@ -470,6 +469,7 @@ OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
         "metadata-and-resource-assignment-write",
         "metadata-write",
         "metadata-delete",
+        "permanent-deletion",
         "resource-assignment-write",
         "report-generation",
         "schedule-and-task-timing-write",
@@ -663,6 +663,8 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tls-certificate-delete",
         "tls-certificate-pem-download-read",
         "trashcan-count-summary-read",
+        "trashcan-empty",
+        "trashcan-owner-empty-preview",
         "trashcan-redacted-row-metadata-read",
         "user-redacted-detail-read",
         "user-redacted-list-read",
@@ -696,6 +698,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "task-resume-and-other-scanner-control",
         "task-resume-clone-file-hard-delete-and-other-scanner-control",
         "trashcan-deep-row-data-and-mutations",
+        "trashcan-row-detail-restore-and-individual-hard-delete",
         "trashcan-row-data-and-mutations",
     }
 )
@@ -788,6 +791,8 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/tags/{tag_id}/export"): "direct-read",
     ("get", "/trashcan/summary"): "direct-read",
     ("get", "/trashcan/items"): "direct-read",
+    ("get", "/trashcan/empty-preview"): "direct-read",
+    ("post", "/trashcan/empty"): "direct-write",
     ("get", "/reports"): "direct-read",
     ("get", "/reports/{report_id}"): "direct-read",
     ("get", "/results/{result_id}/export"): "direct-read",
@@ -1379,6 +1384,20 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "trashcan-redacted-row-metadata-read",
     },
+    ("get", "/trashcan/empty-preview"): {
+        "x-turbovas-inherited-still-owns": "trashcan-row-detail-restore-and-individual-hard-delete",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "trashcan-owner-empty-preview",
+    },
+    ("post", "/trashcan/empty"): {
+        "x-turbovas-inherited-still-owns": "trashcan-row-detail-restore-and-individual-hard-delete",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "resolved-request-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "trashcan-empty",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "permanent-deletion",
+    },
     ("get", "/schedules"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-list-read",
@@ -1872,6 +1891,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/report-formats/{}/export",
         "/api/v1/trashcan/summary",
         "/api/v1/trashcan/items",
+        "/api/v1/trashcan/empty-preview",
         "/api/v1/reports",
         "/api/v1/reports/{}",
         "/api/v1/reports/{}/results",
@@ -7808,6 +7828,14 @@ def trashcan_items_endpoint_status(repo_root: Path | None) -> str:
     return native_browser_proxy_endpoint_status(repo_root, "/api/v1/trashcan/items")
 
 
+def trashcan_empty_preview_endpoint_status(repo_root: Path | None) -> str:
+    return native_browser_proxy_endpoint_status(repo_root, NATIVE_EMPTY_TRASH_PREVIEW_PATH)
+
+
+def trashcan_empty_endpoint_status(repo_root: Path | None) -> str:
+    return native_browser_proxy_operation_status(repo_root, "post", NATIVE_EMPTY_TRASH_PATH)
+
+
 def alerts_endpoint_status(repo_root: Path | None) -> str:
     return native_browser_proxy_endpoint_status(repo_root, "/api/v1/alerts")
 
@@ -8661,7 +8689,26 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 ],
                 "notes": [
                     "Redacted metadata only; no credential secret values, target hosts, scanner host/port/certificate/credential fields, scan-config preferences/selectors, alert method/condition/event data, override host text, child trash tables, or mutations.",
-                    "Deep row payloads, restore, hard-delete, and empty-trash workflows remain inherited until separately designed.",
+                    "Deep row payloads, restore, and individual hard-delete workflows remain inherited until separately designed.",
+                ],
+            },
+            {
+                "endpoint": NATIVE_EMPTY_TRASH_PREVIEW_PATH,
+                "status": trashcan_empty_preview_endpoint_status(repo_root),
+                "direct_access": "scriptable_read",
+                "replacement_candidates": [
+                    "operator-owned Trashcan permanent-delete preview",
+                    "counts-only Trashcan empty automation preflight",
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": NATIVE_EMPTY_TRASH_PATH,
+                "status": trashcan_empty_endpoint_status(repo_root),
+                "direct_access": "direct_write_control",
+                "replacement_candidates": [
+                    "confirmed operator-owned Trashcan permanent deletion",
+                    "guarded native-empty-trash automation",
                 ],
             },
             {
@@ -9019,7 +9066,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
         ],
         "next_replacement_candidates": [
             {"workflow": "remaining gvm-tools write/control scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "native write/control API after separate safety design"},
-            {"workflow": "deep Trashcan row reads and mutations", "current_dependency": "GSA/GMP get_trash_* plus restore/delete/empty_trashcan", "native_target": "deferred; redacted row metadata is native, while full row payloads and mutations are secret-adjacent and require separate design"},
+            {"workflow": "deep Trashcan row reads and per-row mutations", "current_dependency": "GSA/GMP get_trash_* plus restore/delete variants", "native_target": "deferred; redacted row metadata and guarded global emptying are native, while full row payloads and per-row mutations are secret-adjacent and require separate design"},
         ],
     }
 
@@ -14952,6 +14999,18 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scope-write-post-delete",
             "native-api-direct.scope-report-delete-missing",
             "native-api-direct.tag-write-create",
+            "native-api-direct.trash-empty-preflight",
+            "native-api-direct.trash-empty-preexisting-mismatch",
+            "native-api-direct.trash-empty-preexisting-unchanged",
+            "native-api-direct.trash-empty-preflight-skipped",
+            "native-api-direct.trash-empty-fixture-create",
+            "native-api-direct.trash-empty-fixture-trash",
+            "native-api-direct.trash-empty-fixture-preview",
+            "native-api-direct.trash-empty-expected-total-mismatch",
+            "native-api-direct.trash-empty-mismatch-zero-deletion",
+            "native-api-direct.trash-empty-confirmed",
+            "native-api-direct.trash-empty-confirmed-zero-residue",
+            "native-api-direct.trash-empty-fixture-cleanup",
             "native-api-direct.report-config-fixture",
             "native-api-direct.report-config-missing-format-denied",
             "native-api-direct.report-config-write-create",
@@ -15531,6 +15590,7 @@ def direct_task_target_replace_runtime_findings(
         )
         cleanup_sql = (
             "BEGIN; "
+            "LOCK TABLE users IN ROW SHARE MODE; "
             f"DELETE FROM task_alerts WHERE task IN ({task_selector}); "
             f"DELETE FROM task_preferences WHERE task IN ({task_selector}); "
             f"DELETE FROM tag_resources WHERE resource_type = 'task' AND resource IN ({task_selector}); "
@@ -15579,6 +15639,355 @@ def direct_task_target_replace_runtime_findings(
                 }
             )
         findings.append(cleanup_finding)
+    return findings
+
+
+def direct_trash_empty_runtime_findings(
+    repo_root: Path,
+    *,
+    token: str,
+    env: dict[str, str],
+    operator_uuid: str,
+) -> list[dict[str, Any]]:
+    """Exercise the global empty contract without ever touching pre-existing operator trash."""
+    findings: list[dict[str, Any]] = []
+    preview, preview_payload, preview_status = native_empty_trash_fetch_preview(
+        repo_root,
+        token=token,
+        env=env,
+    )
+    preflight_ok = preview.returncode == 0 and preview_status == 200 and preview_payload is not None
+    findings.append(
+        finding(
+            "pass" if preflight_ok else "fail",
+            "native-api-direct.trash-empty-preflight",
+            "Direct write-control smoke obtained a typed operator Trashcan preview."
+            if preflight_ok
+            else "Direct write-control smoke could not obtain a typed operator Trashcan preview.",
+            details={
+                "http_status": preview_status,
+                "scope": preview_payload.get("scope") if preview_payload else None,
+                "total": preview_payload.get("total") if preview_payload else None,
+                "item_count": len(preview_payload.get("items", [])) if preview_payload else 0,
+            },
+        )
+    )
+    if not preflight_ok or preview_payload is None:
+        return findings
+    if preview_payload["total"] != 0:
+        mismatch_body = json.dumps(
+            {"acknowledge_permanent_deletion": True, "expected_total": 0},
+            separators=(",", ":"),
+        )
+        mismatch = direct_native_api_curl(
+            repo_root,
+            NATIVE_EMPTY_TRASH_PATH,
+            token=token,
+            env=env,
+            method="POST",
+            body=mismatch_body,
+            extra_headers=(("Content-Type", "application/json"),),
+        )
+        mismatch_json, mismatch_status = parse_json_output_with_http_status(mismatch)
+        mismatch_ok = (
+            mismatch.returncode == 0
+            and mismatch_status == 409
+            and isinstance(mismatch_json, dict)
+            and isinstance(mismatch_json.get("error"), dict)
+        )
+        findings.append(
+            finding(
+                "pass" if mismatch_ok else "fail",
+                "native-api-direct.trash-empty-preexisting-mismatch",
+                "Direct write-control rejected a deliberately wrong total without touching pre-existing Trashcan data."
+                if mismatch_ok
+                else "Direct write-control did not reject the deliberately wrong total for pre-existing Trashcan data.",
+                details={"http_status": mismatch_status, "operator_total": preview_payload["total"]},
+            )
+        )
+        if not mismatch_ok:
+            return findings
+        after_mismatch, after_payload, after_status = native_empty_trash_fetch_preview(
+            repo_root,
+            token=token,
+            env=env,
+        )
+        unchanged = (
+            after_mismatch.returncode == 0
+            and after_status == 200
+            and after_payload is not None
+            and after_payload["total"] == preview_payload["total"]
+        )
+        findings.append(
+            finding(
+                "pass" if unchanged else "fail",
+                "native-api-direct.trash-empty-preexisting-unchanged",
+                "Direct write-control confirmed the operator Trashcan total stayed unchanged after mismatch rejection."
+                if unchanged
+                else "Direct write-control could not confirm pre-existing Trashcan data remained unchanged after mismatch rejection.",
+                details={
+                    "http_status": after_status,
+                    "expected_total": preview_payload["total"],
+                    "observed_total": after_payload.get("total") if after_payload else None,
+                },
+            )
+        )
+        if not unchanged:
+            return findings
+        findings.append(
+            finding(
+                "warn",
+                "native-api-direct.trash-empty-preflight-skipped",
+                "Direct write-control smoke did not create or empty a Trashcan fixture because this operator already has Trashcan items.",
+                details={"operator_total": preview_payload["total"]},
+            )
+        )
+        return findings
+
+    content_type = (("Content-Type", "application/json"),)
+    fixture_name = f"turbovas-direct-write-smoke-trash-empty-{int(time.time())}-{os.getpid()}"
+    owner_sql = f"(SELECT id FROM users WHERE uuid = {sql_literal(operator_uuid)})"
+    live_fixture_selector = (
+        "SELECT id FROM tags WHERE "
+        f"name = {sql_literal(fixture_name)} AND owner = {owner_sql}"
+    )
+    trash_fixture_selector = (
+        "SELECT id FROM tags_trash WHERE "
+        f"name = {sql_literal(fixture_name)} AND owner = {owner_sql}"
+    )
+    fixture_started = False
+    try:
+        fixture_started = True
+        create_body = json.dumps(
+            {
+                "name": fixture_name,
+                "resource_type": "cpe",
+                "comment": "TurboVAS direct write smoke isolated Trashcan fixture",
+                "value": "trash-empty-fixture",
+                "active": True,
+            },
+            separators=(",", ":"),
+        )
+        created = direct_native_api_curl(
+            repo_root,
+            "/api/v1/tags",
+            token=token,
+            env=env,
+            method="POST",
+            body=create_body,
+            extra_headers=content_type,
+        )
+        created_json, created_status = parse_json_output_with_http_status(created)
+        fixture_tag_id = created_json.get("id") if isinstance(created_json, dict) and isinstance(created_json.get("id"), str) else None
+        create_ok = created.returncode == 0 and created_status == 201 and fixture_tag_id is not None
+        findings.append(
+            finding(
+                "pass" if create_ok else "fail",
+                "native-api-direct.trash-empty-fixture-create",
+                "Direct write-control smoke created an isolated operator-owned tag fixture."
+                if create_ok
+                else "Direct write-control smoke failed to create its isolated operator-owned tag fixture.",
+                details={"http_status": created_status, "fixture_tag_id": fixture_tag_id},
+            )
+        )
+        if not create_ok or fixture_tag_id is None:
+            return findings
+
+        trashed = direct_native_api_curl(
+            repo_root,
+            f"/api/v1/tags/{urllib.parse.quote(fixture_tag_id)}",
+            token=token,
+            env=env,
+            method="DELETE",
+        )
+        _trashed_json, trashed_status = parse_json_output_with_http_status(trashed)
+        trashed_ok = trashed.returncode == 0 and trashed_status == 204
+        findings.append(
+            finding(
+                "pass" if trashed_ok else "fail",
+                "native-api-direct.trash-empty-fixture-trash",
+                "Direct write-control smoke moved its isolated tag fixture into the operator Trashcan."
+                if trashed_ok
+                else "Direct write-control smoke failed to move its isolated tag fixture into the operator Trashcan.",
+                details={"http_status": trashed_status, "fixture_tag_id": fixture_tag_id},
+            )
+        )
+        if not trashed_ok:
+            return findings
+
+        fixture_preview, fixture_payload, fixture_preview_status = native_empty_trash_fetch_preview(
+            repo_root,
+            token=token,
+            env=env,
+        )
+        fixture_preview_ok = (
+            fixture_preview.returncode == 0
+            and fixture_preview_status == 200
+            and fixture_payload is not None
+            and fixture_payload["total"] == 1
+        )
+        findings.append(
+            finding(
+                "pass" if fixture_preview_ok else "fail",
+                "native-api-direct.trash-empty-fixture-preview",
+                "Direct write-control smoke previewed exactly its isolated Trashcan fixture."
+                if fixture_preview_ok
+                else "Direct write-control smoke did not observe exactly one isolated Trashcan fixture before emptying.",
+                details={
+                    "http_status": fixture_preview_status,
+                    "preview_total": fixture_payload.get("total") if fixture_payload else None,
+                    "preview_item_count": len(fixture_payload.get("items", [])) if fixture_payload else 0,
+                },
+            )
+        )
+        if not fixture_preview_ok or fixture_payload is None:
+            return findings
+
+        mismatch_body = json.dumps(
+            {"acknowledge_permanent_deletion": True, "expected_total": 0},
+            separators=(",", ":"),
+        )
+        mismatch = direct_native_api_curl(
+            repo_root,
+            NATIVE_EMPTY_TRASH_PATH,
+            token=token,
+            env=env,
+            method="POST",
+            body=mismatch_body,
+            extra_headers=content_type,
+        )
+        mismatch_json, mismatch_status = parse_json_output_with_http_status(mismatch)
+        mismatch_ok = (
+            mismatch.returncode == 0
+            and mismatch_status == 409
+            and isinstance(mismatch_json, dict)
+            and isinstance(mismatch_json.get("error"), dict)
+        )
+        findings.append(
+            finding(
+                "pass" if mismatch_ok else "fail",
+                "native-api-direct.trash-empty-expected-total-mismatch",
+                "Direct write-control smoke confirmed that an incorrect expected total is rejected before deletion."
+                if mismatch_ok
+                else "Direct write-control smoke did not receive the required expected-total mismatch rejection.",
+                details={"http_status": mismatch_status},
+            )
+        )
+        if not mismatch_ok:
+            return findings
+
+        post_mismatch_preview, post_mismatch_payload, post_mismatch_status = native_empty_trash_fetch_preview(
+            repo_root,
+            token=token,
+            env=env,
+        )
+        zero_deletion_ok = (
+            post_mismatch_preview.returncode == 0
+            and post_mismatch_status == 200
+            and post_mismatch_payload is not None
+            and post_mismatch_payload["total"] == 1
+        )
+        findings.append(
+            finding(
+                "pass" if zero_deletion_ok else "fail",
+                "native-api-direct.trash-empty-mismatch-zero-deletion",
+                "Direct write-control smoke confirmed the mismatch left its isolated Trashcan fixture untouched."
+                if zero_deletion_ok
+                else "Direct write-control smoke could not confirm zero deletion after the expected-total mismatch.",
+                details={"http_status": post_mismatch_status, "preview_total": post_mismatch_payload.get("total") if post_mismatch_payload else None},
+            )
+        )
+        if not zero_deletion_ok:
+            return findings
+
+        confirmed_body = json.dumps(
+            {"acknowledge_permanent_deletion": True, "expected_total": 1},
+            separators=(",", ":"),
+        )
+        confirmed = direct_native_api_curl(
+            repo_root,
+            NATIVE_EMPTY_TRASH_PATH,
+            token=token,
+            env=env,
+            method="POST",
+            body=confirmed_body,
+            extra_headers=content_type,
+        )
+        confirmed_json, confirmed_status = parse_json_output_with_http_status(confirmed)
+        confirmed_ok = (
+            confirmed.returncode == 0
+            and confirmed_status == 200
+            and isinstance(confirmed_json, dict)
+            and set(confirmed_json) == {"scope", "deleted_total"}
+            and confirmed_json.get("scope") == NATIVE_EMPTY_TRASH_SCOPE
+            and confirmed_json.get("deleted_total") == 1
+        )
+        findings.append(
+            finding(
+                "pass" if confirmed_ok else "fail",
+                "native-api-direct.trash-empty-confirmed",
+                "Direct write-control smoke confirmed permanent deletion of its isolated Trashcan fixture."
+                if confirmed_ok
+                else "Direct write-control smoke did not receive a confirmed isolated Trashcan deletion acknowledgement.",
+                details={"http_status": confirmed_status, "deleted_total": confirmed_json.get("deleted_total") if isinstance(confirmed_json, dict) else None},
+            )
+        )
+        if not confirmed_ok:
+            return findings
+
+        final_preview, final_payload, final_status = native_empty_trash_fetch_preview(
+            repo_root,
+            token=token,
+            env=env,
+        )
+        final_preview_ok = (
+            final_preview.returncode == 0
+            and final_status == 200
+            and final_payload is not None
+            and final_payload["total"] == 0
+        )
+        findings.append(
+            finding(
+                "pass" if final_preview_ok else "fail",
+                "native-api-direct.trash-empty-confirmed-zero-residue",
+                "Direct write-control smoke confirmed a zero-residue operator Trashcan after the one permanent-delete POST."
+                if final_preview_ok
+                else "Direct write-control smoke could not confirm zero operator Trashcan residue after permanent deletion.",
+                details={"http_status": final_status, "preview_total": final_payload.get("total") if final_payload else None},
+            )
+        )
+    finally:
+        if fixture_started:
+            cleanup_sql = (
+                "BEGIN; "
+                "LOCK TABLE users IN ROW SHARE MODE; "
+                f"DELETE FROM tag_resources WHERE tag IN ({live_fixture_selector}); "
+                f"DELETE FROM tag_resources_trash WHERE tag IN ({trash_fixture_selector}); "
+                f"DELETE FROM tags WHERE id IN ({live_fixture_selector}); "
+                f"DELETE FROM tags_trash WHERE id IN ({trash_fixture_selector}); "
+                "COMMIT;"
+            )
+            cleanup = psql(repo_root, cleanup_sql)
+            residue_sql = (
+                "SELECT (SELECT count(*)::text FROM tags WHERE "
+                f"name = {sql_literal(fixture_name)} AND owner = {owner_sql}) || '|' || "
+                "(SELECT count(*)::text FROM tags_trash WHERE "
+                f"name = {sql_literal(fixture_name)} AND owner = {owner_sql});"
+            )
+            residue = psql(repo_root, residue_sql)
+            residue_state = psql_value(residue)
+            cleanup_ok = cleanup.returncode == 0 and residue.returncode == 0 and residue_state == "0|0"
+            cleanup_finding = process_step_finding(
+                "pass" if cleanup_ok else "fail",
+                "native-api-direct.trash-empty-fixture-cleanup",
+                "Direct write-control smoke removed all isolated Trashcan fixture residue."
+                if cleanup_ok
+                else "Direct write-control smoke failed to remove isolated Trashcan fixture residue.",
+                cleanup,
+                ["psql", "isolated-trash-empty-fixture-cleanup"],
+            )
+            cleanup_finding.setdefault("details", {}).update({"residue_state": residue_state})
+            findings.append(cleanup_finding)
     return findings
 
 
@@ -15722,6 +16131,16 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 check="native-api-direct.write-control-healthz",
                 ready_message="Direct write-control native API health endpoint is reachable after restart.",
                 failed_message="Direct write-control native API health endpoint did not become reachable after restart.",
+            )
+        )
+
+    if aggregate_status(findings) != "fail" and admin_uuid:
+        findings.extend(
+            direct_trash_empty_runtime_findings(
+                repo_root,
+                token=token,
+                env=env,
+                operator_uuid=admin_uuid,
             )
         )
 
@@ -16999,26 +17418,42 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     else f"name = {sql_literal(alert_name)}"
                 )
                 alert_cleanup_sql = (
-                    "WITH live_alert AS (SELECT id FROM alerts "
-                    f"WHERE {alert_identity_predicate} AND owner = (SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid)})), "
+                    "LOCK TABLE users IN ROW SHARE MODE; "
+                    "WITH operator_owner AS (SELECT id FROM users "
+                    f"WHERE uuid = {sql_literal(admin_uuid)}), "
+                    "live_alert AS (SELECT id FROM alerts "
+                    f"WHERE {alert_identity_predicate} AND owner = (SELECT id FROM operator_owner)), "
                     "live_tag AS (SELECT id FROM tags "
-                    f"WHERE (uuid = {sql_literal(alert_tag_id or '')} OR name = {sql_literal(alert_tag_name)}) AND resource_type = 'alert'), "
+                    f"WHERE (uuid = {sql_literal(alert_tag_id or '')} OR name = {sql_literal(alert_tag_name)}) "
+                    "AND resource_type = 'alert' AND owner = (SELECT id FROM operator_owner)), "
+                    "trash_tag AS (SELECT id FROM tags_trash "
+                    f"WHERE (uuid = {sql_literal(alert_tag_id or '')} OR name = {sql_literal(alert_tag_name)}) "
+                    "AND resource_type = 'alert' AND owner = (SELECT id FROM operator_owner)), "
                     "deleted_live_tag_resources AS (DELETE FROM tag_resources WHERE resource_type = 'alert' "
-                    "AND (resource IN (SELECT id FROM live_alert) OR tag IN (SELECT id FROM live_tag))), "
+                    "AND (resource IN (SELECT id FROM live_alert) OR tag IN (SELECT id FROM live_tag) OR tag IN (SELECT id FROM trash_tag))), "
                     "deleted_trash_tag_resources AS (DELETE FROM tag_resources_trash WHERE resource_type = 'alert' "
-                    "AND (resource IN (SELECT id FROM live_alert) OR tag IN (SELECT id FROM live_tag))), "
+                    "AND (resource IN (SELECT id FROM live_alert) OR tag IN (SELECT id FROM live_tag) OR tag IN (SELECT id FROM trash_tag))), "
                     "deleted_method_data AS (DELETE FROM alert_method_data WHERE alert IN (SELECT id FROM live_alert)), "
                     "deleted_event_data AS (DELETE FROM alert_event_data WHERE alert IN (SELECT id FROM live_alert)), "
                     "deleted_condition_data AS (DELETE FROM alert_condition_data WHERE alert IN (SELECT id FROM live_alert)), "
                     "deleted_tag AS (DELETE FROM tags WHERE id IN (SELECT id FROM live_tag) RETURNING id), "
+                    "deleted_trash_tag AS (DELETE FROM tags_trash WHERE id IN (SELECT id FROM trash_tag) RETURNING id), "
                     "deleted_alert AS (DELETE FROM alerts WHERE id IN (SELECT id FROM live_alert) RETURNING id) "
-                    "SELECT (SELECT count(*) FROM deleted_alert) || '|' || (SELECT count(*) FROM deleted_tag);"
+                    "SELECT (SELECT count(*) FROM deleted_alert) || '|' || "
+                    "((SELECT count(*) FROM deleted_tag) + (SELECT count(*) FROM deleted_trash_tag));"
                 )
                 alert_cleanup = psql(repo_root, alert_cleanup_sql)
                 alert_cleanup_deleted = psql_value(alert_cleanup)
                 expected_alert_counts = {"1"} if alert_resource_id else {"0", "1"}
-                deleted_alert_count = alert_cleanup_deleted.split("|", 1)[0] if alert_cleanup_deleted and "|" in alert_cleanup_deleted else None
-                alert_cleanup_ok = alert_cleanup.returncode == 0 and deleted_alert_count in expected_alert_counts
+                expected_tag_counts = {"1"} if alert_tag_id else {"0", "1"}
+                deleted_counts = alert_cleanup_deleted.split("|", 1) if alert_cleanup_deleted and "|" in alert_cleanup_deleted else []
+                deleted_alert_count = deleted_counts[0] if len(deleted_counts) == 2 else None
+                deleted_tag_count = deleted_counts[1] if len(deleted_counts) == 2 else None
+                alert_cleanup_ok = (
+                    alert_cleanup.returncode == 0
+                    and deleted_alert_count in expected_alert_counts
+                    and deleted_tag_count in expected_tag_counts
+                )
                 alert_cleanup_finding = process_step_finding("pass" if alert_cleanup_ok else "fail", "native-api-direct.alert-write-cleanup", "Direct write-control smoke proved no temporary alert or alert-tag residue remains, including owner/name fallback after an uncertain response." if alert_cleanup_ok else "Direct write-control smoke failed to prove cleanup of the temporary alert or alert-tag residue.", alert_cleanup, ["psql", "fixed-alert-smoke-cleanup"])
                 alert_cleanup_details = alert_cleanup_finding.setdefault("details", {})
                 if isinstance(alert_cleanup_details, dict):
@@ -21494,6 +21929,327 @@ def command_native_export_report_bundle(
     details.update({"member_count": len(members), "byte_count": byte_count, "sha256": digest.hexdigest()})
     findings.append(finding("pass", "native-export-report-bundle.output", "Complete native report bundle was written atomically.", details={"output": str(output_path), "member_count": details["member_count"], "byte_count": byte_count, "sha256": digest.hexdigest()}))
     return native_report_bundle_result(repo_root, "Complete native report bundle export completed.", findings, details, status_only=status_only, artifacts=[str(output_path)])
+
+
+NATIVE_EMPTY_TRASH_PREVIEW_PATH = "/api/v1/trashcan/empty-preview"
+NATIVE_EMPTY_TRASH_PATH = "/api/v1/trashcan/empty"
+NATIVE_EMPTY_TRASH_SCOPE = "operator"
+NATIVE_EMPTY_TRASH_RESOURCE_TYPES = frozenset(
+    {
+        "alerts",
+        "configs",
+        "credentials",
+        "filters",
+        "overrides",
+        "port_lists",
+        "report_configs",
+        "report_formats",
+        "scanners",
+        "schedules",
+        "tags",
+        "targets",
+        "tasks",
+    }
+)
+
+
+def native_empty_trash_preview_payload(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or set(value) != {"scope", "items", "total"}:
+        return None
+    scope = value.get("scope")
+    items = value.get("items")
+    total = value.get("total")
+    if scope != NATIVE_EMPTY_TRASH_SCOPE or type(total) is not int or total < 0 or not isinstance(items, list):
+        return None
+    normalized_items: list[dict[str, Any]] = []
+    resource_types: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"resource_type", "count"}:
+            return None
+        resource_type = item.get("resource_type")
+        count = item.get("count")
+        if not isinstance(resource_type, str) or not resource_type or type(count) is not int or count < 0:
+            return None
+        if resource_type in resource_types:
+            return None
+        resource_types.add(resource_type)
+        normalized_items.append({"resource_type": resource_type, "count": count})
+    if resource_types != NATIVE_EMPTY_TRASH_RESOURCE_TYPES:
+        return None
+    if sum(item["count"] for item in normalized_items) != total:
+        return None
+    return {"scope": scope, "items": normalized_items, "total": total}
+
+
+def native_empty_trash_fetch_preview(
+    repo_root: Path,
+    *,
+    token: str,
+    env: dict[str, str],
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None, int | None]:
+    response = direct_native_api_curl(repo_root, NATIVE_EMPTY_TRASH_PREVIEW_PATH, token=token, env=env)
+    parsed, http_status = parse_json_output_with_http_status(response)
+    return response, native_empty_trash_preview_payload(parsed), http_status
+
+
+def native_empty_trash_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        key: details.get(key)
+        for key in (
+            "outcome",
+            "scope",
+            "preview_total",
+            "preview_item_count",
+            "expected_total",
+            "deleted_total",
+            "http_status",
+        )
+    }
+    compact["findings"] = [
+        compact_doctor_finding(item)
+        for item in result.get("findings", [])
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ] or [
+        finding("pass", "native-empty-trash.status-only", "Native Trashcan empty outcome summarized.")
+    ]
+    return compact
+
+
+def native_empty_trash_result(
+    repo_root: Path,
+    summary: str,
+    findings: list[dict[str, Any]],
+    details: dict[str, Any],
+    *,
+    status_only: bool,
+) -> dict[str, Any]:
+    result = make_result("native-empty-trash", repo_root, summary, findings)
+    result["details"] = details
+    return native_empty_trash_status_only_result(result) if status_only else result
+
+
+def command_native_empty_trash(
+    repo_root: Path,
+    *,
+    allow_write_control: bool = False,
+    acknowledge_permanent_deletion: bool = False,
+    expected_total: int | None = None,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    """Preview operator-owned trash, then perform one explicitly confirmed empty request."""
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "outcome": "preview",
+        "scope": NATIVE_EMPTY_TRASH_SCOPE,
+        "preview_total": None,
+        "preview_item_count": 0,
+        "expected_total": expected_total,
+        "deleted_total": None,
+        "http_status": None,
+    }
+    mutation_intent = allow_write_control or acknowledge_permanent_deletion or expected_total is not None
+    try:
+        if expected_total is not None and (type(expected_total) is not int or expected_total < 0):
+            raise ValueError("--expected-total must be a non-negative integer")
+        if mutation_intent and not (
+            allow_write_control and acknowledge_permanent_deletion and expected_total is not None
+        ):
+            raise ValueError(
+                "permanent Trashcan deletion requires --allow-write-control, "
+                "--acknowledge-permanent-deletion, and --expected-total N"
+            )
+    except ValueError as exc:
+        findings.append(finding("fail", "native-empty-trash.arguments", str(exc)))
+        details["outcome"] = "rejected"
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan empty request was rejected before runtime access.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-empty-trash.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        details["outcome"] = "rejected"
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan empty request was rejected before runtime access.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-empty-trash.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        details["outcome"] = "rejected"
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan empty request was rejected before runtime access.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+
+    preview, preview_payload, preview_status = native_empty_trash_fetch_preview(
+        repo_root,
+        token=token,
+        env=env,
+    )
+    details["http_status"] = preview_status
+    if preview_payload is None or preview.returncode != 0 or preview_status != 200:
+        findings.append(
+            native_api_probe_finding(
+                "fail",
+                "native-empty-trash.preview",
+                "Native API Trashcan preview failed or returned an unsafe payload; no deletion was attempted.",
+                preview,
+                direct_native_api_display_command(NATIVE_EMPTY_TRASH_PREVIEW_PATH, token=token, env=env),
+                None,
+                {"http_status": preview_status},
+            )
+        )
+        details["outcome"] = "rejected"
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan empty request stopped because the fresh preview was not trustworthy.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+
+    preview_total = preview_payload["total"]
+    preview_items = preview_payload["items"]
+    details.update(
+        {
+            "scope": preview_payload["scope"],
+            "preview_total": preview_total,
+            "preview_item_count": len(preview_items),
+            "preview_items": preview_items,
+        }
+    )
+    findings.append(
+        finding(
+            "pass",
+            "native-empty-trash.preview",
+            f"Native API preview confirmed {preview_total} operator-owned Trashcan item(s).",
+            details={"scope": preview_payload["scope"], "items": preview_items, "total": preview_total},
+        )
+    )
+    if not mutation_intent:
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan preview completed; no deletion was requested.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+
+    if expected_total != preview_total:
+        details["outcome"] = "mismatch"
+        findings.append(
+            finding(
+                "fail",
+                "native-empty-trash.expected-total-mismatch",
+                "Expected Trashcan total does not match the fresh operator preview; no deletion was attempted.",
+                details={"expected_total": expected_total, "preview_total": preview_total},
+            )
+        )
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan empty request rejected because the preview total changed.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+
+    request_body = json.dumps(
+        {
+            "acknowledge_permanent_deletion": True,
+            "expected_total": expected_total,
+        },
+        separators=(",", ":"),
+    )
+    deletion = direct_native_api_curl(
+        repo_root,
+        NATIVE_EMPTY_TRASH_PATH,
+        token=token,
+        env=env,
+        method="POST",
+        body=request_body,
+        extra_headers=(("Content-Type", "application/json"),),
+    )
+    deletion_payload, deletion_status = parse_json_output_with_http_status(deletion)
+    details["http_status"] = deletion_status
+    deleted_total = deletion_payload.get("deleted_total") if isinstance(deletion_payload, dict) else None
+    deletion_confirmed = (
+        deletion.returncode == 0
+        and isinstance(deletion_status, int)
+        and 200 <= deletion_status < 300
+        and isinstance(deletion_payload, dict)
+        and set(deletion_payload) == {"scope", "deleted_total"}
+        and deletion_payload.get("scope") == NATIVE_EMPTY_TRASH_SCOPE
+        and type(deleted_total) is int
+        and deleted_total == expected_total
+    )
+    if deletion_confirmed:
+        details.update({"outcome": "confirmed", "deleted_total": deleted_total})
+        findings.append(
+            finding(
+                "pass",
+                "native-empty-trash.delete-confirmed",
+                f"Native API permanently deleted the confirmed {deleted_total} operator-owned Trashcan item(s).",
+                details={"scope": NATIVE_EMPTY_TRASH_SCOPE, "deleted_total": deleted_total},
+            )
+        )
+        return native_empty_trash_result(
+            repo_root,
+            "Native Trashcan empty request was confirmed.",
+            findings,
+            details,
+            status_only=status_only,
+        )
+
+    rejection_confirmed = (
+        deletion.returncode == 0
+        and isinstance(deletion_status, int)
+        and 400 <= deletion_status < 500
+        and isinstance(deletion_payload, dict)
+        and isinstance(deletion_payload.get("error"), dict)
+    )
+    if rejection_confirmed:
+        details["outcome"] = "rejected"
+        findings.append(
+            finding(
+                "fail",
+                "native-empty-trash.delete-rejected",
+                "Native API rejected the permanent Trashcan deletion; it was not retried.",
+                details={"http_status": deletion_status},
+            )
+        )
+        summary = "Native Trashcan empty request was rejected by the API."
+    else:
+        details["outcome"] = "indeterminate"
+        findings.append(
+            finding(
+                "fail",
+                "native-empty-trash.delete-indeterminate",
+                "Native Trashcan deletion outcome is indeterminate; the mutation was not retried.",
+                details={"http_status": deletion_status, "exit_code": deletion.returncode},
+            )
+        )
+        summary = "Native Trashcan empty request has an indeterminate outcome."
+    return native_empty_trash_result(repo_root, summary, findings, details, status_only=status_only)
 
 
 def native_override_delete_filter_value(value: str) -> str:
@@ -26942,6 +27698,11 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_request.add_argument("--body-json", help="validated JSON request body; redacted in rendered commands")
     native_api_request.add_argument("--allow-write-control", action="store_true", help="allow intentional non-GET/write-control-shaped request probes")
     native_api_request.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_empty_trash = subparsers.add_parser("native-empty-trash", parents=[common], help="preview or permanently empty the exact operator-owned Trashcan total")
+    native_empty_trash.add_argument("--allow-write-control", action="store_true", help="confirm intentional permanent Trashcan deletion")
+    native_empty_trash.add_argument("--acknowledge-permanent-deletion", action="store_true", help="acknowledge that the confirmed Trashcan items cannot be restored")
+    native_empty_trash.add_argument("--expected-total", type=int, help="exact total from the fresh operator Trashcan preview")
+    native_empty_trash.add_argument("--status-only", action="store_true", help="emit a compact counts-only outcome without item names or secrets")
     native_start_task = subparsers.add_parser("native-start-task", parents=[common], help="start one existing task through the guarded direct native API")
     native_start_task.add_argument("--task-id", required=True, help="task UUID to start")
     native_start_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control")
@@ -27334,6 +28095,14 @@ def main(argv: list[str] | None = None) -> int:
             repo_root,
             task_id=args.task_id,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-empty-trash":
+        result = command_native_empty_trash(
+            repo_root,
+            allow_write_control=args.allow_write_control,
+            acknowledge_permanent_deletion=args.acknowledge_permanent_deletion,
+            expected_total=args.expected_total,
             status_only=args.status_only,
         )
     elif args.command == "native-stop-tasks-from-csv":

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,11 +10,6 @@ from gvm.protocols.gmp.requests.v224 import TrashCan
 
 
 class TrashCanTestCase(unittest.TestCase):
-    def test_empty_trashcan(self):
-        request = TrashCan.empty_trashcan()
-
-        self.assertEqual(bytes(request), b"<empty_trashcan/>")
-
     def test_restore_from_trashcan(self):
         request = TrashCan.restore_from_trashcan("1")
 

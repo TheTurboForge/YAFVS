@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   showSuccessNotification,
   showErrorNotification,
@@ -15,7 +15,10 @@ import type Rejection from 'gmp/http/rejection';
 import type Model from 'gmp/models/model';
 import {
   fetchNativeTrashcanSummary,
+  NativeTrashcanEmptyIndeterminateError,
+  NativeTrashcanEmptyPreviewChangedError,
   type NativeTrashcanApiGmp,
+  type NativeTrashcanEmptyPreview,
   type NativeTrashcanSummary,
 } from 'gmp/native-api/trashcan';
 import {isDefined} from 'gmp/utils/identity';
@@ -62,6 +65,12 @@ interface TrashCanTableProps {
   footer?: false | React.ComponentType;
 }
 
+type EmptyTrashDialogError =
+  | 'empty-failed'
+  | 'preview-failed'
+  | 'preview-changed'
+  | 'outcome-indeterminate';
+
 const Col = styled.col`
   width: 50%;
 `;
@@ -74,8 +83,7 @@ const hasNativeTrashcanApi = (
   candidate: unknown,
 ): candidate is NativeTrashcanApiGmp => {
   return (
-    typeof (candidate as Partial<NativeTrashcanApiGmp>).buildUrl ===
-    'function'
+    typeof (candidate as Partial<NativeTrashcanApiGmp>).buildUrl === 'function'
   );
 };
 
@@ -84,8 +92,16 @@ const TrashCan = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEmptyTrashDialogVisible, setIsEmptyTrashDialogVisible] =
     useState(false);
-  const [isErrorEmptyingTrash, setIsErrorEmptyingTrash] = useState(false);
   const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
+  const [isLoadingEmptyTrashPreview, setIsLoadingEmptyTrashPreview] =
+    useState(false);
+  const [emptyTrashPreview, setEmptyTrashPreview] = useState<
+    NativeTrashcanEmptyPreview | undefined
+  >();
+  const [emptyTrashDialogError, setEmptyTrashDialogError] = useState<
+    EmptyTrashDialogError | undefined
+  >();
+  const emptyTrashRequestInFlight = useRef(false);
   let [trash, setTrash] = useState<TrashCanGetData | undefined>();
   const [trashSummary, setTrashSummary] = useState<
     NativeTrashcanSummary | undefined
@@ -97,40 +113,36 @@ const TrashCan = () => {
     showError,
   } = useDialogNotification();
 
-  const loadTrash = useCallback(() => {
+  const loadTrash = useCallback(async () => {
     setIsLoading(true);
     const summaryRequest = hasNativeTrashcanApi(gmp)
       ? fetchNativeTrashcanSummary(gmp).catch(() => undefined)
       : Promise.resolve(undefined);
 
-    gmp.trashcan
-      .get()
-      .then(
-        async response => {
-          const summary = await summaryRequest;
-          setTrash(response.data);
-          setTrashSummary(summary);
-          setIsLoading(false);
+    try {
+      const response = await gmp.trashcan.get();
+      const summary = await summaryRequest;
+      setTrash(response.data);
+      setTrashSummary(summary);
 
-          if (
-            response.data.failedRequests &&
-            response.data.failedRequests.length > 0
-          ) {
-            response.data.failedRequests.forEach(requestType => {
-              showErrorNotification(
-                '',
-                _('Failed to load {{type}} from trashcan', {type: requestType}),
-              );
-            });
-          }
-        },
-        error => {
-          showError(error);
-          setTrashSummary(undefined);
-          setIsLoading(false);
-        },
-      );
-  }, [gmp.trashcan, _, showError]);
+      if (
+        response.data.failedRequests &&
+        response.data.failedRequests.length > 0
+      ) {
+        response.data.failedRequests.forEach(requestType => {
+          showErrorNotification(
+            '',
+            _('Failed to load {{type}} from trashcan', {type: requestType}),
+          );
+        });
+      }
+    } catch (error) {
+      showError(error as Rejection);
+      setTrashSummary(undefined);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [gmp, _, showError]);
 
   const handleRestore = async (entity: Model) => {
     try {
@@ -138,7 +150,7 @@ const TrashCan = () => {
         id: entity.id as string,
         entityType: entity.entityType,
       });
-      loadTrash();
+      void loadTrash();
       showSuccessNotification(
         _('{{- name}} restored successfully.', {name: entity.name as string}),
       );
@@ -153,7 +165,7 @@ const TrashCan = () => {
         id: entity.id as string,
         entityType: entity.entityType,
       });
-      loadTrash();
+      void loadTrash();
       showSuccessNotification(
         _('{{- name}} deleted successfully.', {name: entity.name as string}),
       );
@@ -162,41 +174,113 @@ const TrashCan = () => {
     }
   };
 
+  const loadEmptyTrashPreview = useCallback(async () => {
+    if (!hasNativeTrashcanApi(gmp)) {
+      setEmptyTrashPreview(undefined);
+      setEmptyTrashDialogError('preview-failed');
+      return;
+    }
+
+    setIsLoadingEmptyTrashPreview(true);
+    setEmptyTrashPreview(undefined);
+    try {
+      const preview = await gmp.trashcan.emptyPreview();
+      setEmptyTrashPreview(preview);
+    } catch {
+      setEmptyTrashDialogError('preview-failed');
+    } finally {
+      setIsLoadingEmptyTrashPreview(false);
+    }
+  }, [gmp]);
+
   const handleEmpty = async () => {
+    if (emptyTrashPreview === undefined) {
+      setEmptyTrashDialogError(undefined);
+      await Promise.all([loadTrash(), loadEmptyTrashPreview()]);
+      return;
+    }
+    if (emptyTrashRequestInFlight.current) {
+      return;
+    }
+
+    emptyTrashRequestInFlight.current = true;
     setIsEmptyingTrash(true);
-    let localIsErrorEmptyingTrash = false;
 
     try {
-      await gmp.trashcan.empty();
-      loadTrash();
-    } catch {
-      setIsErrorEmptyingTrash(true);
-      localIsErrorEmptyingTrash = true;
-    } finally {
-      setIsEmptyingTrash(false);
-
-      if (!localIsErrorEmptyingTrash) {
-        setTimeout(() => {
-          if (!isLoading && !isErrorEmptyingTrash) {
-            closeEmptyTrashDialog();
-          }
-        }, 1000);
+      await gmp.trashcan.empty({expectedTotal: emptyTrashPreview.total});
+      await loadTrash();
+      closeEmptyTrashDialog();
+    } catch (error) {
+      if (error instanceof NativeTrashcanEmptyPreviewChangedError) {
+        setEmptyTrashDialogError('preview-changed');
+        await loadEmptyTrashPreview();
+      } else if (error instanceof NativeTrashcanEmptyIndeterminateError) {
+        setEmptyTrashPreview(undefined);
+        setEmptyTrashDialogError('outcome-indeterminate');
+        await loadTrash();
+      } else {
+        setEmptyTrashDialogError('empty-failed');
       }
+    } finally {
+      emptyTrashRequestInFlight.current = false;
+      setIsEmptyingTrash(false);
     }
   };
 
   const closeEmptyTrashDialog = () => {
     setIsEmptyTrashDialogVisible(false);
-    setIsErrorEmptyingTrash(false);
+    setEmptyTrashPreview(undefined);
+    setEmptyTrashDialogError(undefined);
   };
 
   const openEmptyTrashDialog = () => {
     setIsEmptyTrashDialogVisible(true);
+    setEmptyTrashPreview(undefined);
+    setEmptyTrashDialogError(undefined);
+    void loadEmptyTrashPreview();
+  };
+
+  const emptyTrashDialogContent = () => {
+    if (emptyTrashDialogError === 'outcome-indeterminate') {
+      return _(
+        'The result could not be confirmed. Refresh the trashcan and obtain a new preview before trying again.',
+      );
+    }
+    if (emptyTrashPreview === undefined) {
+      return emptyTrashDialogError === 'preview-failed'
+        ? _(
+            'Unable to load a current trashcan preview. Refresh before trying again.',
+          )
+        : _('Loading the current trashcan preview.');
+    }
+    return (
+      <>
+        {emptyTrashDialogError === 'preview-changed' && (
+          <p>
+            {_(
+              'Trashcan contents changed. Review the updated preview and confirm again.',
+            )}
+          </p>
+        )}
+        {emptyTrashDialogError === 'empty-failed' && (
+          <p>
+            {_('An error occurred while emptying the trash, please try again.')}
+          </p>
+        )}
+        <p>{_('Are you sure you want to empty the trash?')}</p>
+        <p>
+          {_('Scope')}: {emptyTrashPreview.scope}
+        </p>
+        <p>
+          {_('Items')}: {emptyTrashPreview.total}
+        </p>
+      </>
+    );
   };
 
   // load the data on initial render
   useEffect(() => {
-    loadTrash();
+    void loadTrash();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tableProps: TrashCanTableProps = {
@@ -228,16 +312,12 @@ const TrashCan = () => {
         <EmptyTrashButton onClick={openEmptyTrashDialog} />
         {isEmptyTrashDialogVisible && (
           <ConfirmationDialog
-            content={
-              !isErrorEmptyingTrash
-                ? _('Are you sure you want to empty the trash?')
-                : _(
-                    'An error occurred while emptying the trash, please try again.',
-                  )
-            }
-            loading={isEmptyingTrash || isLoading}
+            content={emptyTrashDialogContent()}
+            loading={isEmptyingTrash || isLoading || isLoadingEmptyTrashPreview}
             rightButtonAction={DELETE_ACTION}
-            rightButtonTitle={_('Confirm')}
+            rightButtonTitle={
+              emptyTrashPreview === undefined ? _('Refresh') : _('Confirm')
+            }
             title={_('Empty Trash')}
             width="500px"
             onClose={closeEmptyTrashDialog}

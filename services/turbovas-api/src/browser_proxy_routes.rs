@@ -5,7 +5,7 @@
 use axum::{
     Extension, Router,
     extract::DefaultBodyLimit,
-    routing::{delete, patch, post},
+    routing::{delete, get, patch, post},
 };
 
 use crate::{
@@ -65,6 +65,9 @@ use crate::{
         browser_proxy_hard_delete_target, browser_proxy_patch_target, browser_proxy_restore_target,
     },
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
+    trash_empty::{
+        MAX_TRASH_EMPTY_BODY_BYTES, browser_proxy_empty_trashcan, browser_proxy_trash_empty_preview,
+    },
 };
 
 pub(crate) fn browser_proxy_native_api_router(
@@ -302,6 +305,15 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/targets/:target_id/trash",
             delete(browser_proxy_hard_delete_target),
+        )
+        .route(
+            "/api/v1/trashcan/empty-preview",
+            get(browser_proxy_trash_empty_preview),
+        )
+        .route(
+            "/api/v1/trashcan/empty",
+            post(browser_proxy_empty_trashcan)
+                .layer(DefaultBodyLimit::max(MAX_TRASH_EMPTY_BODY_BYTES)),
         )
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,

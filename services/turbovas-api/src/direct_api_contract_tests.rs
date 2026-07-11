@@ -31,6 +31,16 @@ struct NativeWriteRouteContract {
 
 const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     NativeWriteRouteContract {
+        method: "get",
+        path: "/api/v1/trashcan/empty-preview",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/trashcan/empty",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "post",
         path: "/api/v1/alerts",
         safety_contract: "write-control-v1",
@@ -458,13 +468,10 @@ fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
     let internal_routes = registered_routes(app_route_registration_block(routes_source));
     let direct_routes =
         registered_routes(direct_api_route_registration_block(direct_routes_source));
-    let direct_writes = direct_routes
-        .iter()
-        .filter(|route| route.method != "get")
-        .collect::<Vec<_>>();
+    let direct_control_routes = direct_routes.iter().collect::<Vec<_>>();
 
     assert_eq!(
-        direct_writes.len(),
+        direct_control_routes.len(),
         APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS.len(),
         "direct write/control route count must match explicit safety contracts"
     );
@@ -483,7 +490,7 @@ fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
             contract.path
         );
         assert!(
-            direct_writes
+            direct_control_routes
                 .iter()
                 .any(|route| route.method == contract.method && route.path == contract.path),
             "{} {} must be registered on the direct router when write-control is enabled",

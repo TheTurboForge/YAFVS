@@ -22,6 +22,7 @@
 
 #include "manage.h"
 #include "manage_alerts.h"
+#include "manage_sql.h"
 #include "manage_schedules.h"
 #include "manage_users.h"
 #include "gmp_base.h"
@@ -36,6 +37,9 @@
 #define TURBOVAS_CONTROL_MAX_REQUEST_BYTES 65536
 #define TURBOVAS_CONTROL_MAX_RESPONSE_BYTES 64
 #define TURBOVAS_CONTROL_TIMEOUT_SECONDS 5
+#define TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND "trash-empty "
+#define TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND) - 1)
 #define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND "schedule-create "
 #define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND) - 1)
@@ -303,6 +307,81 @@ turbovas_control_parse_request (const char *request, size_t request_len,
          && turbovas_control_uuid_is_valid (task_uuid);
 }
 
+static gboolean
+turbovas_control_parse_nonnegative_int64 (const char *value, size_t value_len,
+                                          gint64 *parsed)
+{
+  guint64 total = 0;
+  size_t index;
+
+  if (value == NULL || value_len == 0 || parsed == NULL)
+    return FALSE;
+
+  for (index = 0; index < value_len; index++)
+    {
+      guint64 digit;
+
+      if (!g_ascii_isdigit (value[index]))
+        return FALSE;
+      digit = (guint64) (value[index] - '0');
+      if (total > ((guint64) G_MAXINT64 - digit) / 10)
+        return FALSE;
+      total = total * 10 + digit;
+    }
+
+  *parsed = (gint64) total;
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_trash_empty_request
+  (const char *request, size_t request_len, const char *expected_secret,
+   size_t expected_secret_len, char operator_uuid[37], gint64 *expected_total)
+{
+  const char *end;
+  const char *operator_start;
+  const char *secret;
+  const char *secret_end;
+  const char *total_start;
+  size_t secret_len;
+
+  if (request == NULL || expected_total == NULL
+      || request_len > TURBOVAS_CONTROL_STOP_MAX_REQUEST_BYTES
+      || request_len
+           < TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
+               + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 1 + 1
+      || memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
+                 TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len,
+                                           expected_secret,
+                                           expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if (operator_start + 37 >= end || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  total_start = operator_start + 37;
+  return turbovas_control_parse_nonnegative_int64 (
+    total_start, (size_t) (end - total_start), expected_total);
+}
+
 static void
 turbovas_control_schedule_create_request_clear
   (turbovas_control_schedule_create_request_t *request)
@@ -312,6 +391,81 @@ turbovas_control_schedule_create_request_clear
   g_free (request->timezone);
   g_free (request->icalendar);
   memset (request, 0, sizeof (*request));
+}
+
+static const char *
+turbovas_control_trash_empty_response
+  (int result, gint64 actual,
+   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  if (result == 0)
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 emptied %" G_GINT64_FORMAT "\n", actual);
+      return response;
+    }
+  if (result == 1)
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "1 expected-total-mismatch %" G_GINT64_FORMAT "\n",
+                  actual);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 2:
+        status = "2 forbidden\n";
+        break;
+      case 3:
+        status = "3 operator-not-found\n";
+        break;
+      default:
+        status = "-1 error\n";
+        break;
+    }
+
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
+static void
+turbovas_control_log_trash_empty_audit (const char *operator_uuid,
+                                         gint64 expected_total,
+                                         gint64 actual_total, int result)
+{
+  const char *message;
+  const char *outcome;
+
+  if (result == 0)
+    {
+      log_event ("trashcan", "Trashcan", NULL, "emptied");
+      message = "Trashcan emptied";
+      outcome = "emptied";
+    }
+  else if (result == 1)
+    {
+      message = "Trashcan empty request rejected";
+      outcome = "expected-total-mismatch";
+    }
+  else if (result != 3)
+    {
+      log_event_fail ("trashcan", "Trashcan", NULL, "emptied");
+      message = "Trashcan empty request failed";
+      outcome = result == 2 ? "forbidden" : "error";
+    }
+  else
+    return;
+
+  g_log_structured (G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "MESSAGE", "%s",
+                    message, "TURBOVAS_AUDIT_ACTION", "%s", "trash-empty",
+                    "TURBOVAS_OPERATOR_UUID", "%s", operator_uuid,
+                    "TURBOVAS_OUTCOME", "%s", outcome,
+                    "TURBOVAS_EXPECTED_TOTAL", "%" G_GINT64_FORMAT,
+                    expected_total, "TURBOVAS_ACTUAL_TOTAL", "%" G_GINT64_FORMAT,
+                    actual_total, NULL);
 }
 
 static void
@@ -1207,6 +1361,25 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
   return result;
 }
 
+static int
+turbovas_control_empty_trash (const char *operator_uuid, gint64 expected_total,
+                              gint64 *actual_total)
+{
+  long long int actual = 0;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 3;
+
+  result = manage_empty_trashcan_confirmed ((long long int) expected_total,
+                                            &actual);
+  *actual_total = (gint64) actual;
+  turbovas_control_log_trash_empty_audit (operator_uuid, expected_total,
+                                           *actual_total, result);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
 static void
 turbovas_control_array_add_data (array_t *array, const char *name,
                                  const char *value)
@@ -1438,6 +1611,8 @@ turbovas_control_serve_client (int client_socket)
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
   const char *expected_secret;
   const char *result_response;
+  gint64 actual_total = 0;
+  gint64 expected_total = 0;
   size_t expected_secret_len;
   size_t request_len = 0;
   int result = -1;
@@ -1452,7 +1627,22 @@ turbovas_control_serve_client (int client_socket)
                                           &expected_secret_len)
       && turbovas_control_read_request (client_socket, request, &request_len))
     {
-      if (turbovas_control_parse_request (request, request_len,
+      if (turbovas_control_parse_trash_empty_request
+            (request, request_len, expected_secret, expected_secret_len,
+             operator_uuid, &expected_total))
+        {
+          result = turbovas_control_empty_trash (operator_uuid,
+                                                  expected_total,
+                                                  &actual_total);
+          result_response = turbovas_control_trash_empty_response
+                              (result, actual_total, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
+                          TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_trash_empty_response (-1, 0,
+                                                                  response);
+      else if (turbovas_control_parse_request (request, request_len,
                                           expected_secret,
                                           expected_secret_len,
                                           operator_uuid, task_uuid))
@@ -1524,6 +1714,10 @@ turbovas_control_serve_client (int client_socket)
       else
         result_response = turbovas_control_response (result);
     }
+  else if (request_len >= TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
+                      TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_trash_empty_response (-1, 0, response);
   else if (request_len >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
            && memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
                       TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)

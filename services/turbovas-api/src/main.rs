@@ -259,6 +259,7 @@ mod tls_certificate_writes;
 #[cfg(test)]
 mod tls_certificate_writes_tests;
 mod tls_certificates;
+mod trash_empty;
 mod trashcan;
 mod user_account_payloads;
 mod user_account_query_sql;
@@ -345,7 +346,5 @@ mod tooling_schedule_write_characterization_tests;
 mod tooling_tag_write_characterization_tests;
 #[cfg(test)]
 mod tooling_task_control_characterization_tests;
-#[cfg(test)]
-mod tooling_trash_write_characterization_tests;
 #[cfg(test)]
 mod user_account_contract_tests;

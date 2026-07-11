@@ -533,7 +533,7 @@ set_target_properties(
   turbovas-control-test
   PROPERTIES
     LINK_FLAGS
-      "-Wl,-wrap,user_name,-wrap,reinit_manage_process,-wrap,manage_session_init,-wrap,stop_task,-wrap,create_schedule,-wrap,modify_schedule,-wrap,schedule_uuid,-wrap,create_credential,-wrap,credential_uuid,-wrap,create_alert_email_with_report_refs,-wrap,alert_uuid,-wrap,log_event,-wrap,log_event_fail,-wrap,cleanup_manage_process"
+      "-Wl,-wrap,user_name,-wrap,reinit_manage_process,-wrap,manage_session_init,-wrap,stop_task,-wrap,create_schedule,-wrap,modify_schedule,-wrap,schedule_uuid,-wrap,create_credential,-wrap,credential_uuid,-wrap,create_alert_email_with_report_refs,-wrap,alert_uuid,-wrap,log_event,-wrap,log_event_fail,-wrap,cleanup_manage_process,-wrap,manage_empty_trashcan_confirmed,-wrap,sql_begin_immediate,-wrap,sql_int64,-wrap,sql,-wrap,sql_rollback,-wrap,sql_commit,-wrap,acl_user_may"
 )
 target_compile_options(
   turbovas-control-test

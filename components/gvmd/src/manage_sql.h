@@ -426,6 +426,9 @@ vuln_iterator_opts_from_filter (const gchar *);
 gboolean
 find_trash (const char *, const char *, resource_t *);
 
+int
+manage_empty_trashcan_confirmed (long long int, long long int *);
+
 void
 init_user_task_iterator (iterator_t *, int, int);
 

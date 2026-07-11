@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -10,15 +11,6 @@ from .._entity_id import EntityID
 
 
 class TrashCan:
-    @staticmethod
-    def empty_trashcan() -> Request:
-        """Empty the trashcan
-
-        Remove all entities from the trashcan. **Attention:** this command can
-        not be reverted
-        """
-        return XmlCommand("empty_trashcan")
-
     @classmethod
     def restore_from_trashcan(cls, entity_id: EntityID) -> Request:
         """Restore an entity from the trashcan

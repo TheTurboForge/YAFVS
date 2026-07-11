@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -419,6 +420,7 @@ delete_target (const char *target_id, int ultimate)
   target_t trash_target;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_target") == 0)
     {

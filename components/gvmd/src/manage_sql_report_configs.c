@@ -396,6 +396,7 @@ delete_report_config (const char *report_config_id, int ultimate)
   report_config_t report_config, trash_report_config, locked_report_config;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_report_config") == 0)
     {

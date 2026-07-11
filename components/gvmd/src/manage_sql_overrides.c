@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -256,6 +257,7 @@ delete_override (const char *override_id, int ultimate)
   int auto_cache_rebuild;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_override") == 0)
     {

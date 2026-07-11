@@ -7,11 +7,53 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {createResponse, createHttp} from 'gmp/commands/testing';
 import TrashCanCommand from 'gmp/commands/trashcan';
+import {
+  NativeTrashcanEmptyIndeterminateError,
+  NativeTrashcanEmptyPreviewChangedError,
+} from 'gmp/native-api/trashcan';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
   testing.unstubAllGlobals();
 });
+
+const EMPTY_PREVIEW_RESOURCE_TYPES = [
+  'configs',
+  'alerts',
+  'credentials',
+  'filters',
+  'overrides',
+  'port_lists',
+  'report_configs',
+  'scanners',
+  'schedules',
+  'tags',
+  'targets',
+  'tasks',
+  'report_formats',
+];
+
+const emptyPreview = (total: number) => ({
+  scope: 'operator' as const,
+  items: EMPTY_PREVIEW_RESOURCE_TYPES.map(resource_type => ({
+    resource_type,
+    count: resource_type === 'targets' ? total : 0,
+  })),
+  total,
+});
+
+const createNativeTrashcanCommand = () => {
+  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  fakeHttp.buildUrl = testing.fn(
+    (path: string) => `https://turbovas.example/${path}`,
+  );
+  fakeHttp.session = createSession();
+  fakeHttp.session.token = 'test-token';
+  return {cmd: new TrashCanCommand(fakeHttp), fakeHttp};
+};
 
 describe('TrashCanCommand tests', () => {
   test('should allow to restore an entity', async () => {
@@ -119,14 +161,164 @@ describe('TrashCanCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should allow to empty the trashcan', async () => {
-    const response = createResponse({});
-    const fakeHttp = createHttp(response);
-    const cmd = new TrashCanCommand(fakeHttp);
-    await cmd.empty();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {cmd: 'empty_trashcan'},
+  test('should preview and empty the trashcan through the native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(emptyPreview(3)),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          scope: 'operator',
+          deleted_total: 3,
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const {cmd, fakeHttp} = createNativeTrashcanCommand();
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const preview = await cmd.emptyPreview();
+    await cmd.empty({expectedTotal: preview.total});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/trashcan/empty-preview',
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/trashcan/empty',
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://turbovas.example/api/v1/trashcan/empty-preview',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/trashcan/empty',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          acknowledge_permanent_deletion: true,
+          expected_total: 3,
+        }),
+      },
+    );
+  });
+
+  test.each([
+    [
+      'missing a canonical resource type',
+      () => {
+        const preview = emptyPreview(3);
+        preview.items.pop();
+        return preview;
+      },
+    ],
+    [
+      'a duplicate canonical resource type',
+      () => {
+        const preview = emptyPreview(3);
+        preview.items[1] = {...preview.items[0]};
+        return preview;
+      },
+    ],
+    [
+      'an extra resource type',
+      () => {
+        const preview = emptyPreview(3);
+        preview.items[1] = {resource_type: 'unexpected', count: 0};
+        return preview;
+      },
+    ],
+    [
+      'a total that does not equal the resource count sum',
+      () => ({...emptyPreview(3), total: 4}),
+    ],
+  ])(
+    'rejects a native empty preview with %s',
+    async (_description, preview) => {
+      const fetchMock = testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue(preview()),
+        ok: true,
+        status: 200,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const {cmd, fakeHttp} = createNativeTrashcanCommand();
+
+      await expect(cmd.emptyPreview()).rejects.toThrow(
+        'Native Trashcan empty preview response is invalid',
+      );
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test('should require a new confirmation when native empty preview changed', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
     });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(cmd.empty({expectedTotal: 3})).rejects.toBeInstanceOf(
+      NativeTrashcanEmptyPreviewChangedError,
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('should not report native empty success for an indeterminate outcome', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(cmd.empty({expectedTotal: 3})).rejects.toBeInstanceOf(
+      NativeTrashcanEmptyIndeterminateError,
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test('should allow to delete an entity from the trashcan', async () => {

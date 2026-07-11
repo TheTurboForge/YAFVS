@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -1615,6 +1616,7 @@ delete_port_list (const char *port_list_id, int ultimate)
   port_list_t port_list = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_port_list") == 0)
     {

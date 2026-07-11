@@ -14848,6 +14848,7 @@ delete_task_lock (task_t task, int ultimate)
   g_debug ("   delete task %llu", task);
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   /* This prevents other processes (for example a START_TASK) from getting
    * a reference to a report ID or the task ID, and then using that
@@ -14964,6 +14965,7 @@ request_delete_task_uuid (const char *task_id, int ultimate)
   g_debug ("   request delete task %s", task_id);
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_task") == 0)
     {
@@ -17214,6 +17216,7 @@ delete_credential (const char *credential_id, int ultimate)
   credential_t locked_credential;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_credential") == 0)
     {
@@ -20107,6 +20110,7 @@ delete_scanner (const char *scanner_id, int ultimate)
   scanner_t scanner = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_scanner") == 0)
     {
@@ -20116,7 +20120,10 @@ delete_scanner (const char *scanner_id, int ultimate)
 
   if (strcmp (scanner_id, SCANNER_UUID_CVE) == 0
       || strcmp (scanner_id, SCANNER_UUID_DEFAULT) == 0)
-    return 3;
+    {
+      sql_rollback ();
+      return 3;
+    }
 
   if (find_scanner_with_permission (scanner_id, &scanner, "delete_scanner"))
     {
@@ -21342,6 +21349,7 @@ manage_restore (const char *id)
   assert (current_credentials.uuid);
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("restore") == 0)
     {
@@ -22263,21 +22271,13 @@ manage_restore (const char *id)
  current_credentials.uuid
 
 /**
- * @brief Empty the trashcan.
+ * @brief Delete the current user's trash resources in an open transaction.
  *
- * @return 0 success, 99 permission denied, -1 error.
+ * @return 0 success, -1 error.
  */
-int
-manage_empty_trashcan ()
+static int
+manage_empty_trashcan_locked ()
 {
-  sql_begin_immediate ();
-
-  if (acl_user_may ("empty_trashcan") == 0)
-    {
-      sql_rollback ();
-      return 99;
-    }
-
   sql ("DELETE FROM nvt_selectors"
        " WHERE name != '" MANAGE_NVT_SELECTOR_UUID_ALL "'"
        " AND name IN (SELECT nvt_selector FROM configs_trash"
@@ -22290,19 +22290,6 @@ manage_empty_trashcan ()
        "                                 WHERE uuid = '%s'));",
        current_credentials.uuid);
   sql ("DELETE FROM configs_trash" WHERE_OWNER);
-  sql ("DELETE FROM permissions"
-       " WHERE subject_type = 'group'"
-       " AND subject IN (SELECT id from groups_trash"
-       "                 WHERE owner = (SELECT id FROM users"
-       "                                WHERE uuid = '%s'))"
-       " AND subject_location = " G_STRINGIFY (LOCATION_TRASH) ";",
-       current_credentials.uuid);
-  sql ("DELETE FROM group_users_trash"
-       " WHERE \"group\" IN (SELECT id from groups_trash"
-       "                     WHERE owner = (SELECT id FROM users"
-       "                                    WHERE uuid = '%s'));",
-       current_credentials.uuid);
-  sql ("DELETE FROM groups_trash" WHERE_OWNER);
   sql ("DELETE FROM alert_condition_data_trash"
        " WHERE alert IN (SELECT id from alerts_trash"
        "                 WHERE owner = (SELECT id FROM users"
@@ -22327,27 +22314,13 @@ manage_empty_trashcan ()
   sql ("DELETE FROM credentials_trash" WHERE_OWNER);
   sql ("DELETE FROM filters_trash" WHERE_OWNER);
   sql ("DELETE FROM overrides_trash" WHERE_OWNER);
-  sql ("DELETE FROM permissions_trash" WHERE_OWNER);
   empty_trashcan_port_lists ();
-  sql ("DELETE FROM permissions"
-       " WHERE subject_type = 'role'"
-       " AND subject IN (SELECT id from roles_trash"
-       "                 WHERE owner = (SELECT id FROM users"
-       "                                WHERE uuid = '%s'))"
-       " AND subject_location = " G_STRINGIFY (LOCATION_TRASH) ";",
-       current_credentials.uuid);
   sql ("DELETE FROM report_config_params_trash"
        " WHERE report_config IN (SELECT id FROM report_configs_trash"
        "                         WHERE owner = (SELECT id FROM users"
        "                                        WHERE uuid = '%s'));",
        current_credentials.uuid);
   sql ("DELETE FROM report_configs_trash" WHERE_OWNER);
-  sql ("DELETE FROM role_users_trash"
-       " WHERE role IN (SELECT id from roles_trash"
-       "                WHERE owner = (SELECT id FROM users"
-       "                               WHERE uuid = '%s'));",
-       current_credentials.uuid);
-  sql ("DELETE FROM roles_trash" WHERE_OWNER);
   sql ("DELETE FROM scanners_trash" WHERE_OWNER);
   sql ("DELETE FROM schedules_trash" WHERE_OWNER);
   // Remove resource data of all trash tags of the current user.
@@ -22364,10 +22337,7 @@ manage_empty_trashcan ()
        current_credentials.uuid);
   sql ("DELETE FROM targets_trash" WHERE_OWNER);
   if (delete_trash_tasks ())
-    {
-      sql_rollback ();
-      return -1;
-    }
+    return -1;
 
   sql ("UPDATE permissions"
        " SET resource = -1"
@@ -22385,6 +22355,91 @@ manage_empty_trashcan ()
 
   /* Remove report formats last, because dir deletion can't be rolled back. */
   if (empty_trashcan_report_formats ())
+    return -1;
+
+  return 0;
+}
+
+/**
+ * @brief Empty trash only if the locked owner-scoped total is expected.
+ *
+ * The users table is locked before the user row so concurrent user deletion
+ * cannot hold resource-table locks while waiting for this transaction.
+ * Count-changing writers take a conflicting users-table gate before resource
+ * access, keeping the total stable through the authoritative deletion
+ * sequence.
+ *
+ * @param[in]  expected_total  Required owner-scoped base resource total.
+ * @param[out] actual_total    Total observed while all locks are held.
+ *
+ * @return 0 success, 1 total mismatch, 2 permission denied,
+ *         3 operator not found, -1 error.
+ */
+int
+manage_empty_trashcan_confirmed (long long int expected_total,
+                                  long long int *actual_total)
+{
+  long long int operator_id;
+  long long int total;
+  int ret;
+
+  if (current_credentials.uuid == NULL || expected_total < 0
+      || actual_total == NULL)
+    return -1;
+
+  *actual_total = 0;
+  sql_begin_immediate ();
+
+  sql ("LOCK TABLE users IN EXCLUSIVE MODE;");
+  ret = sql_int64 (&operator_id,
+                   "SELECT id FROM users WHERE uuid = '%s' FOR UPDATE;",
+                   current_credentials.uuid);
+  if (ret)
+    {
+      sql_rollback ();
+      return ret == 1 ? 3 : -1;
+    }
+
+  if (acl_user_may ("empty_trashcan") == 0)
+    {
+      sql_rollback ();
+      return 2;
+    }
+
+  ret = sql_int64 (
+    &total,
+    "SELECT ((SELECT count(*) FROM configs_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM alerts_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM credentials_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM filters_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM overrides_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM port_lists_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM report_configs_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM scanners_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM schedules_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM tags_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM targets_trash WHERE owner = %lld)"
+    " + (SELECT count(*) FROM tasks WHERE owner = %lld AND hidden = 2)"
+    " + (SELECT count(*) FROM report_formats_trash WHERE owner = %lld))"
+    "::bigint;",
+    operator_id, operator_id, operator_id, operator_id,
+    operator_id, operator_id, operator_id, operator_id,
+    operator_id, operator_id, operator_id, operator_id,
+    operator_id);
+  if (ret)
+    {
+      sql_rollback ();
+      return -1;
+    }
+
+  *actual_total = total;
+  if (total != expected_total)
+    {
+      sql_rollback ();
+      return 1;
+    }
+
+  if (manage_empty_trashcan_locked ())
     {
       sql_rollback ();
       return -1;

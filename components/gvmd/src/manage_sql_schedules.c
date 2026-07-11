@@ -174,6 +174,7 @@ delete_schedule (const char *schedule_id, int ultimate)
   schedule_t schedule = 0;
 
   sql_begin_immediate ();
+  sql ("LOCK TABLE users IN ROW SHARE MODE;");
 
   if (acl_user_may ("delete_schedule") == 0)
     {

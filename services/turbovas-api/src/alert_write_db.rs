@@ -33,7 +33,11 @@ pub(crate) async fn resolve_alert_write_operator_owner(
     tx: &Transaction<'_>,
     operator: &DirectApiOperator,
 ) -> Result<i32, ApiError> {
-    tx.query_opt(alert_write_operator_owner_sql(), &[&operator.user_uuid()])
+    let sql = format!(
+        "{} FOR KEY SHARE;",
+        alert_write_operator_owner_sql().trim_end_matches(';')
+    );
+    tx.query_opt(&sql, &[&operator.user_uuid()])
         .await
         .map_err(|error| map_alert_write_db_error(error, "resolve alert write operator"))?
         .map(|row| row.get(0))

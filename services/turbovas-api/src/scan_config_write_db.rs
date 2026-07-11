@@ -45,17 +45,22 @@ pub(crate) async fn resolve_scan_config_write_operator_owner(
     tx: &Transaction<'_>,
     operator: &DirectApiOperator,
 ) -> Result<i32, ApiError> {
-    tx.query_opt(
-        scan_config_write_operator_owner_sql(),
-        &[&operator.user_uuid()],
-    )
-    .await
-    .map_err(|error| map_scan_config_write_db_error(error, "resolve scan-config write operator"))?
-    .map(|row| row.get(0))
-    .ok_or_else(|| {
-        tracing::warn!("direct API scan-config write operator does not resolve to a database user");
-        ApiError::Forbidden
-    })
+    let sql = format!(
+        "{} FOR KEY SHARE;",
+        scan_config_write_operator_owner_sql().trim_end_matches(';')
+    );
+    tx.query_opt(&sql, &[&operator.user_uuid()])
+        .await
+        .map_err(|error| {
+            map_scan_config_write_db_error(error, "resolve scan-config write operator")
+        })?
+        .map(|row| row.get(0))
+        .ok_or_else(|| {
+            tracing::warn!(
+                "direct API scan-config write operator does not resolve to a database user"
+            );
+            ApiError::Forbidden
+        })
 }
 
 pub(crate) async fn load_scan_config_write_state(

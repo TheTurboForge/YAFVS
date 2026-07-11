@@ -5787,56 +5787,6 @@ restore_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 /**
- * @brief Empty the trashcan, get all trash, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-empty_trashcan_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  gchar *ret;
-  entity_t entity;
-
-  /* Empty the trash. */
-
-  if (gvm_connection_sendf (connection, "<empty_trashcan/>") == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while emptying the trashcan. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  if (read_entity_and_string_c (connection, &entity, NULL))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while emptying the trashcan. "
-        "Diagnostics: Failure to read response from manager daemon.",
-        response_data);
-    }
-
-  /* Cleanup, and return trash page. */
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Empty Trashcan", response_data);
-  free_entity (entity);
-  return ret;
-}
-
-/**
  * @brief Create a tag, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -14979,7 +14929,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_task)
   ELSE (delete_tls_certificate)
   ELSE (delete_user)
-  ELSE (empty_trashcan)
   ELSE (import_config)
   ELSE (import_port_list)
   ELSE (import_report_format)

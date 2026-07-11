@@ -89,21 +89,6 @@ writes and starts retain their identifiers for operator follow-up.
 
 ---
 
-## `pdf-report.gmp.py`
-
-This script requests the given report and saves it as a pdf file locally.
-
-### Arguments
-
-* `<report_id>`: ID of the report
-* `<pdf_filename>`: (optional), pdf file name
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/pdf-report.gmp.py <report_id> <pdf_file>`
-
----
-
 ## Native scan with delivery
 
 The inherited alert-scan script has been retired. Use
@@ -272,17 +257,19 @@ collections, report metrics and provenance, plus human-friendly Results and
 Error Messages CSV views. It replaces the removed standalone nested-XML export
 script; exact legacy XML bytes and schema ornamentation are not retained.
 
-## `export-pdf-report.gmp.py`
+## Native PDF report export
 
-Requests the report specified and exports it as a pdf formatted report locally.
+The inherited PDF scripts have been retired. Download the bounded native
+evidence PDF through the direct native API instead:
 
-### Example
+`$ just native-export-report-pdf -- --report-id *report_uuid* --output ./output.pdf --status-only`
 
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket export-pdf-report.gmp.py *report_uuid* ./output.pdf`
-
-- Get the *report_uuid* from the UI or a native read such as `tools/turbovasctl native-api-request --json --path '/api/v1/reports?page_size=25'`. If the output is not specified it will be named *report_uuid.pdf*
-
-**Note**: the only changes to this script is an added ignore_pagination=True, details=True to get the full report.
+The output defaults to *report_uuid.pdf*. It contains typed report identity,
+summary counts, raw result evidence, and scanner error rows. It intentionally
+does not reproduce inherited Greenbone PDF layout or custom report-format
+scripts. It will not replace an existing file unless `--overwrite` is explicit,
+validates the returned PDF media type and magic bytes, applies a bounded byte
+cap, and writes the accepted file atomically.
 
 ## User listing
 

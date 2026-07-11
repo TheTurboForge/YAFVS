@@ -2278,10 +2278,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("candidate_for_removal_review", details)
         review = details["candidate_for_removal_review"]
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], review["total"])
+        self.assertEqual(review["total"], 0)
+        self.assertEqual(review["blocked_or_review_count"], 0)
+        self.assertEqual(review["tracked_baseline_count"], 26)
+        self.assertEqual(review["tracked_removed_count"], 26)
         self.assertNotIn("write_or_mutation", review["bucket_counts"])
         self.assertNotIn("scanner_or_task_control", review["bucket_counts"])
-        self.assertGreater(review["bucket_counts"]["export_or_report_generation"], 0)
+        self.assertNotIn("export_or_report_generation", review["bucket_counts"])
         self.assertNotIn("credential_or_account", review["bucket_counts"])
         self.assertEqual(
             compact["findings"],
@@ -2503,8 +2506,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 180)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 106)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 181)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 107)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 74)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 74)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -2659,7 +2662,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 106)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 107)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 74)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -3615,7 +3618,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 180)
+        self.assertEqual(contract["operation_count"], 181)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -3690,6 +3693,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'host-identifier-delete',
          'host-manual-create',
          'host-operating-system-delete',
+         'native-evidence-pdf-report-download',
          'none',
          'nvt-catalog-detail-read',
          'nvt-catalog-list-read',
@@ -3839,9 +3843,10 @@ class TurboVASCtlTests(unittest.TestCase):
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
          'host-os-catalog-target-creation-tags-export-and-rich-history',
+         'non-pdf-custom-report-format-config-filter-and-script-rendering',
          'operating-system-writes-deletes-and-rich-history',
          'override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion',
-         'raw-report-generation-xml-export-retention-and-mutations',
+         'raw-report-generation-non-pdf-export-retention-and-mutations',
          'remote-scanner-tls-relay-verification',
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'retention-mutations',
@@ -3931,9 +3936,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 180)
-        self.assertEqual(details["direct_operation_count"], 180)
-        self.assertEqual(details["direct_read_operation_count"], 106)
+        self.assertEqual(details["operation_count"], 181)
+        self.assertEqual(details["direct_operation_count"], 181)
+        self.assertEqual(details["direct_read_operation_count"], 107)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
             details["non_get_direct_operations"],
@@ -4154,11 +4159,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 180)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 180)
-        self.assertEqual(details["summary"]["inventory_rows"], 180)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 180)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 180)
+        self.assertEqual(details["summary"]["total_rows"], 181)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 181)
+        self.assertEqual(details["summary"]["inventory_rows"], 181)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 181)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 181)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -4178,7 +4183,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(reports["x_turbovas_exposure"], "direct-read")
         self.assertEqual(reports["x_turbovas_maturity"], "live-read")
         self.assertEqual(reports["x_turbovas_replaces"], "raw-report-list-read")
-        self.assertEqual(reports["x_turbovas_inherited_still_owns"], "raw-report-generation-xml-export-retention-and-mutations")
+        self.assertEqual(reports["x_turbovas_inherited_still_owns"], "raw-report-generation-non-pdf-export-retention-and-mutations")
         self.assertIn("GSA raw report list (migrated through gsad same-origin proxy)", reports["replacement_candidates"])
 
         create_scope = rows[("post", "/api/v1/scopes")]
@@ -4358,7 +4363,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(report_detail["x_turbovas_exposure"], "direct-read")
         self.assertEqual(report_detail["x_turbovas_maturity"], "live-read")
         self.assertEqual(report_detail["x_turbovas_replaces"], "raw-report-detail-summary-read")
-        self.assertEqual(report_detail["x_turbovas_inherited_still_owns"], "raw-report-generation-xml-export-retention-and-mutations")
+        self.assertEqual(report_detail["x_turbovas_inherited_still_owns"], "raw-report-generation-non-pdf-export-retention-and-mutations")
 
         scope_reports = rows[("get", "/api/v1/scope-reports")]
         self.assertEqual(scope_reports["operation_id"], "getScopeReports")
@@ -4561,7 +4566,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "internal-only",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
@@ -4625,7 +4630,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "items": [
                     {
                         "endpoint": "/api/v1/reports",
-                        "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                        "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                     }
                 ],
             },
@@ -4675,7 +4680,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 "replacement_candidates": ["runtime-report-summary helper"],
             },
         ]
@@ -4772,7 +4777,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 "replacement_candidates": ["runtime-report-summary helper"],
             },
         ]
@@ -4847,7 +4852,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-xml-export-retention-and-mutations",
+                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 "replacement_candidates": ["runtime-report-summary helper"],
             }
         ]
@@ -4982,11 +4987,12 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(weighted["components"]["inherited_tail_burndown_percent"], 60.0)
         self.assertEqual(result["tooling_retirement_status"]["safe_removal_count"], 1)
         legacy = result["legacy_helper_removal_readiness"]
-        self.assertEqual(result["legacy_helper_removal_readiness_percent"], 66.0)
+        self.assertEqual(result["legacy_helper_removal_readiness_percent"], 63.9)
         self.assertEqual(legacy["kind"], "weighted_estimate")
-        self.assertEqual(legacy["components"]["direct_legacy_dependency_burndown_percent"], 88.0)
+        self.assertEqual(legacy["components"]["direct_legacy_dependency_burndown_percent"], 79.7)
         self.assertEqual(legacy["components"]["gvm_tools_script_removal_percent"], 25.0)
         self.assertEqual(legacy["blockers"]["direct_legacy_blocker_count"], 12)
+        self.assertEqual(legacy["blockers"]["direct_legacy_blocker_baseline_count"], 59)
         self.assertEqual(legacy["blockers"]["gvm_tools_blocked_or_review_count"], 2)
         self.assertEqual(legacy["blockers"]["gvm_tools_tracked_baseline_count"], 4)
         self.assertEqual(legacy["blockers"]["gvm_tools_tracked_removed_count"], 1)
@@ -5019,7 +5025,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 180)
+        self.assertEqual(len(operation_ids), 181)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -5194,6 +5200,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "GET /users",
                 "GET /users/{user_id}",
                 "GET /reports/{report_id}",
+                "GET /reports/{report_id}/download",
                 "GET /reports/{report_id}/raw-results",
                 "GET /reports/{report_id}/results",
                 "GET /reports/{report_id}/hosts",
@@ -5306,7 +5313,7 @@ class TurboVASCtlTests(unittest.TestCase):
                     "operation": "GET /reports",
                     "field": "x-turbovas-inherited-still-owns",
                     "actual": "all-the-things",
-                    "expected": "raw-report-generation-xml-export-retention-and-mutations",
+                    "expected": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 },
                 {
                     "operation": "GET /reports",
@@ -6785,6 +6792,156 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(invalid["status"], "fail")
         self.assertEqual(exists["status"], "fail")
         self.assertEqual(capped["status"], "fail")
+
+    def test_native_export_report_pdf_parser_success_and_token_redaction(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        token = "t" * 64
+        args = turbovasctl.build_parser().parse_args(["native-export-report-pdf", "--report-id", report_id])
+        self.assertEqual(args.command, "native-export-report-pdf")
+        self.assertEqual(args.max_bytes, turbovasctl.NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES)
+        self.assertIsNone(args.output)
+
+        pdf = b"%PDF-1.7\nminimal test PDF\n"
+
+        def fake_download(_root, path, **kwargs):
+            self.assertEqual(path, f"/api/v1/reports/{report_id}/download?report_format_id=c402cc3e-b531-11e1-9163-406186ea4fc5")
+            self.assertEqual(kwargs["token"], token)
+            kwargs["output"].write(pdf)
+            return {
+                "returncode": 0,
+                "http_status": 200,
+                "headers": {"content-type": "application/pdf", "content-disposition": "attachment; filename=report.pdf"},
+                "byte_count": len(pdf),
+                "prefix": b"%PDF-",
+                "error_body": b"",
+                "cap_exceeded": False,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.pdf"
+            output.write_bytes(b"old output")
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value=token), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_binary_download", side_effect=fake_download):
+                result = turbovasctl.command_native_export_report_pdf(root, report_id=report_id, output=output, overwrite=True, status_only=True)
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(output.read_bytes(), pdf)
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(result["details"]["sha256"], hashlib.sha256(pdf).hexdigest())
+            self.assertNotIn(token, json.dumps(result))
+            self.assertFalse(list(root.glob(".report.pdf.tmp-*")))
+
+    def test_native_export_report_pdf_never_overwrites_raced_destination_without_permission(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        pdf = b"%PDF-1.7\nnew"
+
+        def raced_download(_root, _path, **kwargs):
+            kwargs["output"].write(pdf)
+            output.write_bytes(b"raced output")
+            return {
+                "returncode": 0,
+                "http_status": 200,
+                "headers": {"content-type": "application/pdf"},
+                "byte_count": len(pdf),
+                "prefix": b"%PDF-",
+                "error_body": b"",
+                "cap_exceeded": False,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.pdf"
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="w" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_binary_download", side_effect=raced_download):
+                result = turbovasctl.command_native_export_report_pdf(root, report_id=report_id, output=output)
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(output.read_bytes(), b"raced output")
+            self.assertFalse(list(root.glob(".report.pdf.tmp-*")))
+
+    def test_native_export_report_pdf_preserves_old_output_on_cap_error_and_replace_failure(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+        token = "u" * 64
+        pdf = b"%PDF-1.7\npartial"
+
+        def fake_download(_root, _path, **kwargs):
+            kwargs["output"].write(pdf)
+            return {
+                "returncode": 0,
+                "http_status": 200,
+                "headers": {"content-type": "application/pdf"},
+                "byte_count": len(pdf) + 1,
+                "prefix": b"%PDF-",
+                "error_body": b"",
+                "cap_exceeded": True,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.pdf"
+            output.write_bytes(b"old output")
+            common_patches = (
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value=token),
+            )
+            with common_patches[0], common_patches[1], common_patches[2], \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_binary_download", side_effect=fake_download):
+                capped = turbovasctl.command_native_export_report_pdf(root, report_id=report_id, output=output, max_bytes=len(pdf), overwrite=True)
+            self.assertEqual(capped["status"], "fail")
+            self.assertEqual(output.read_bytes(), b"old output")
+
+            def valid_download(_root, _path, **kwargs):
+                kwargs["output"].write(pdf)
+                return {
+                    "returncode": 0,
+                    "http_status": 200,
+                    "headers": {"content-type": "application/pdf"},
+                    "byte_count": len(pdf),
+                    "prefix": b"%PDF-",
+                    "error_body": b"",
+                    "cap_exceeded": False,
+                }
+
+            with common_patches[0], common_patches[1], common_patches[2], \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_binary_download", side_effect=valid_download), \
+                unittest.mock.patch.object(turbovasctl.os, "replace", side_effect=OSError("replace denied")):
+                replacement = turbovasctl.command_native_export_report_pdf(root, report_id=report_id, output=output, overwrite=True)
+            self.assertEqual(replacement["status"], "fail")
+            self.assertEqual(output.read_bytes(), b"old output")
+            self.assertFalse(list(root.glob(".report.pdf.tmp-*")))
+
+    def test_native_export_report_pdf_rejects_json_error_without_runtime_text_decoding(self):
+        report_id = "11111111-1111-4111-8111-111111111111"
+
+        def fake_download(_root, _path, **kwargs):
+            kwargs["output"].write(b'{"error":"missing"}')
+            return {
+                "returncode": 0,
+                "http_status": 404,
+                "headers": {"content-type": "application/json; charset=utf-8"},
+                "byte_count": len(b'{"error":"missing"}'),
+                "prefix": b'{"err',
+                "error_body": b'{"error":"missing"}',
+                "cap_exceeded": False,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "report.pdf"
+            output.write_bytes(b"old output")
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="v" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_binary_download", side_effect=fake_download):
+                result = turbovasctl.command_native_export_report_pdf(root, report_id=report_id, output=output, overwrite=True, status_only=True)
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(output.read_bytes(), b"old output")
+            self.assertEqual(result["details"]["content_type"], "application/json")
+            self.assertFalse(list(root.glob(".report.pdf.tmp-*")))
 
     def test_native_export_report_csv_paginates_writes_atomically_and_redacts_status(self):
         report_id = "11111111-1111-4111-8111-111111111111"
@@ -9940,7 +10097,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
         details = result["details"]
         self.assertEqual(details["safe_removal_count"], 0)
-        self.assertGreater(details["blocked_or_review_count"], 0)
+        self.assertEqual(details["total"], 0)
+        self.assertEqual(details["blocked_or_review_count"], 0)
         self.assertNotIn("write_or_mutation", details["bucket_counts"])
         self.assertNotIn("items", details)
         self.assertNotIn("implemented_native_endpoints", details)
@@ -10071,6 +10229,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "candidate_for_removal")
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/generate-scope-report.gmp.py").exists())
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/empty-trash.gmp.py").exists())
+        self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/export-pdf-report.gmp.py").exists())
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
 
     def test_native_schedule_csv_script_is_absent_after_native_retirement(self):
@@ -10080,15 +10239,13 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_native_tooling_candidate_removal_review_splits_safety_buckets(self):
         review = turbovasctl.native_tooling_removal_review(
             [
-                "components/gvm-tools/scripts/export-pdf-report.gmp.py",
                 "components/gvm-tools/scripts/unclassified.gmp.py",
             ]
         )
 
         self.assertEqual(review["safe_removal_count"], 0)
-        self.assertEqual(review["blocked_or_review_count"], 2)
+        self.assertEqual(review["blocked_or_review_count"], 1)
         buckets = review["buckets"]
-        self.assertEqual(buckets["export_or_report_generation"]["count"], 1)
         self.assertEqual(buckets["needs_review"]["count"], 1)
         self.assertNotIn("write_or_mutation", buckets)
 
@@ -10108,17 +10265,17 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(review["tracked_removed_count"], 25)
         self.assertEqual(review["buckets"]["needs_review"]["count"], 1)
 
-    def test_native_tooling_removal_review_documents_known_blocker_paths(self):
-        review = turbovasctl.native_tooling_removal_review(
-            [
-                "components/gvm-tools/scripts/export-pdf-report.gmp.py",
-            ]
-        )
-
-        export_blockers = review["buckets"]["export_or_report_generation"]["path_blockers"]
-        self.assertIn("base64-decoded", export_blockers["components/gvm-tools/scripts/export-pdf-report.gmp.py"])
-        self.assertNotIn("scanner_or_task_control", review["buckets"])
-        self.assertNotIn("write_or_mutation", review["buckets"])
+    def test_native_pdf_export_script_leaves_no_candidate_accounting(self):
+        root = Path(__file__).resolve().parents[2]
+        candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
+        self.assertNotIn("export-pdf-report.gmp.py", candidates)
+        self.assertNotIn("export-pdf-report.gmp.py", turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
+        self.assertFalse((root / "components/gvm-tools/scripts/export-pdf-report.gmp.py").exists())
+        result = turbovasctl.command_native_tooling_state(root, status_only=True)
+        review = result["details"]["candidate_for_removal_review"]
+        self.assertEqual(review["total"], 0)
+        self.assertEqual(review["tracked_baseline_count"], 26)
+        self.assertEqual(review["tracked_removed_count"], 26)
 
     def test_native_empty_trash_script_is_not_remaining_replacement_candidate(self):
         candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())

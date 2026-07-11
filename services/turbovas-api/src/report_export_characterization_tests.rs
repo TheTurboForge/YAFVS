@@ -2,79 +2,48 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::path::Path;
+
 use axum::http::Method;
 
-use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
+use crate::direct_api_contract::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
+const REPORT_ID: &str = "12345678-1234-1234-1234-123456789abc";
+const CANONICAL_PDF_REPORT_FORMAT_ID: &str = "c402cc3e-b531-11e1-9163-406186ea4fc5";
+const LEGACY_PDF_EXPORT_SCRIPT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../components/gvm-tools/scripts/export-pdf-report.gmp.py"
+);
+const ROUTES: &str = include_str!("read_api_routes.rs");
+const PDF_SOURCE: &str = include_str!("report_pdf.rs");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
-const ROUTES_RS: &str = include_str!("read_api_routes.rs");
-const EXPORT_PDF: &str =
-    include_str!("../../../components/gvm-tools/scripts/export-pdf-report.gmp.py");
 
 #[test]
-fn inherited_pdf_export_fetches_report_format_payload_and_decodes_base64() {
-    for required in [
-        "report_id = args.argv[1]",
-        "if len(args.argv) == 3:",
-        ".pdf",
-        "c402cc3e-b531-11e1-9163-406186ea4fc5",
-        "gmp.get_report(",
-        "report_id=report_id",
-        "report_format_id=pdf_report_format_id",
-        "ignore_pagination=True",
-        "details=True",
-        "report_element = response.find(\"report\")",
-        "content = report_element.find(\"report_format\").tail",
-        "content.encode(\"ascii\")",
-        "b64decode(binary_base64_encoded_pdf)",
-        "Path(",
-        ".expanduser()",
-        ".write_bytes(",
-        "Done. PDF created: ",
-        "if not content:",
-        "Requested report is empty.",
-        "file=sys.stderr",
-        "sys.exit(1)",
-    ] {
-        assert!(
-            EXPORT_PDF.contains(required),
-            "pdf export missing {required}"
-        );
-    }
+fn native_pdf_contract_replaces_the_inherited_script_characterization() {
+    let path = format!("/api/v1/reports/{REPORT_ID}/download");
+    assert!(ROUTES.contains("/api/v1/reports/:report_id/download"));
+    assert!(direct_api_v1_path_is_allowed(&path));
+    assert!(direct_api_v1_method_is_allowed(&Method::GET, &path, false));
+    assert!(PDF_SOURCE.contains("CANONICAL_PDF_REPORT_FORMAT_ID"));
+    assert!(PDF_SOURCE.contains("PDF_REPORT_SQL"));
+    assert!(PDF_SOURCE.contains("PDF_EVIDENCE_SQL"));
+    assert!(PDF_SOURCE.contains("pdf_writer"));
+    assert!(!PDF_SOURCE.contains("include_str!(\"../../../components/gvm-tools"));
+    assert!(!Path::new(LEGACY_PDF_EXPORT_SCRIPT).exists());
 }
 
 #[test]
-fn native_api_does_not_expose_legacy_rendered_report_format_routes() {
-    for path in [
-        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/export",
-        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/pdf",
-        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/csv",
-        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/xml",
-        "/api/v1/reports/12345678-1234-1234-1234-123456789abc/raw-xml",
-    ] {
-        assert!(
-            !direct_api_v1_path_is_allowed(path),
-            "legacy rendered report-format path must remain outside the native API: {path}"
-        );
-        assert!(
-            !direct_api_v1_method_is_allowed(&Method::GET, path, false),
-            "legacy rendered report-format GET must remain outside the native API: {path}"
-        );
-    }
-    for forbidden in [
-        "/reports/{report_id}/export",
-        "/reports/{report_id}/pdf",
-        "/reports/{report_id}/csv",
-        "/reports/{report_id}/xml",
-        "report-file-export",
-    ] {
-        assert!(
-            !OPENAPI.contains(forbidden),
-            "OpenAPI must not document legacy rendered report-format export: {forbidden}"
-        );
-        assert!(
-            !ROUTES_RS.contains(forbidden),
-            "Rust routes must not expose legacy rendered report-format export: {forbidden}"
-        );
-    }
+fn native_pdf_contract_keeps_only_the_canonical_format_and_no_legacy_rendering_inputs() {
+    let path = OPENAPI
+        .split_once("  /reports/{report_id}/download:\n")
+        .and_then(|(_, after)| after.split_once("  /reports/{report_id}/results:"))
+        .map(|(path, _)| path)
+        .expect("OpenAPI native PDF path must be present");
+    assert!(OPENAPI.contains(CANONICAL_PDF_REPORT_FORMAT_ID));
+    assert!(path.contains("custom report configs, filters, and scripts"));
+    assert!(!path.contains("report_config_id"));
+    assert!(!path.contains("filter_id"));
+    assert!(!PDF_SOURCE.contains("quick_xml"));
+    assert!(!PDF_SOURCE.contains("gvmd_control"));
+    assert!(!PDF_SOURCE.contains("python-gvm"));
 }

@@ -133,6 +133,7 @@ mod report_operating_systems;
 mod report_payloads;
 #[cfg(test)]
 mod report_payloads_tests;
+mod report_pdf;
 mod report_port_query_sql;
 mod report_ports;
 mod report_raw_result_query_sql;

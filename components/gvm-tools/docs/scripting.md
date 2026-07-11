@@ -1,3 +1,5 @@
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 (scripting)=
 
 # Scripting
@@ -88,32 +90,11 @@ displayed.
 
 See {command}`get_reports` command for all [details](https://docs.greenbone.net/API/GMP/gmp-22.04.html#command_get_reports).
 
-6. Additionally, the report can be downloaded in a specific report format instead
-   of plain XML.
-
-   List all report formats:
-
-```shell
-> gvm-cli socket --xml "<get_report_formats/>"
-<get_report_formats_response status="200" status_text="OK"><report_format id="5057e5cc-b825-11e4-9d0e-28d24461215b">
-...
-</get_report_formats_response>
-```
-
-See {command}`get_report_formats` command for all [details](https://docs.greenbone.net/API/GMP/gmp-22.04.html#command_get_report_formats).
-
-7. Download the report in the desired format.
-
-   Example: download the report as a PDF file:
-
-```shell
-> gvm-cli socket --xml "<get_reports report_id=\"0f9ea6ca-abf5-4139-a772-cb68937cdfbb\" format_id=\"c402cc3e-b531-11e1-9163-406186ea4fc5\"/>"
-```
-
-```{note}
-Please be aware that the PDF is returned as [base64 encoded](https://en.wikipedia.org/wiki/Base64) content of the
-*\<get_report_response>\<report>* element in the XML response.
-```
+6. TurboVAS report data and retained PDF export are available without GMP/XML.
+   Use the typed native report endpoints for machine processing and
+   `just native-export-report-pdf -- --report-id REPORT_UUID --output report.pdf`
+   for the bounded native evidence PDF. The native PDF intentionally does not
+   reproduce inherited Greenbone layout or custom report-format scripts.
 
 (gvm-scripting)=
 
@@ -235,48 +216,10 @@ def start_task(gmp, task_id):
     return response[0].text
 ```
 
-For getting a PDF document of the report, a second script {file}`pdf-report.gmp.py`
-can be used:
-
-```python3
-from base64 import b64decode
-from pathlib import Path
-
-
-def main(gmp: Gmp, args: Namespace) -> None:
-    # check if report id and PDF filename are provided to the script
-    # argv[0] contains the script name
-    if len(args.argv) <= 2:
-        print('Please provide report ID and PDF file name as script arguments')
-        return 1
-
-    report_id = args.argv[1]
-    pdf_filename = args.argv[2]
-
-    pdf_report_format_id = "c402cc3e-b531-11e1-9163-406186ea4fc5"
-    response = gmp.get_report(
-        report_id=report_id, report_format_id=pdf_report_format_id
-    )
-
-    report_element = response[0]
-    # get the full content of the report element
-    content = "".join(report_element.itertext())
-
-    # convert content to 8-bit ASCII bytes
-    binary_base64_encoded_pdf = content.encode('ascii')
-    # decode base64
-    binary_pdf = b64decode(binary_base64_encoded_pdf)
-
-    # write to file and support ~ in filename path
-    pdf_path = Path(pdf_filename).expanduser()
-    pdf_path.write_bytes(binary_pdf)
-
-    print('Done.')
-
-
-if __name__ == '__gmp__':
-    main(gmp, args)
-```
+TurboVAS replaces the inherited PDF script with
+`just native-export-report-pdf -- --report-id REPORT_UUID --output report.pdf`.
+The command validates media type and PDF magic, enforces a byte cap, and writes
+the accepted output atomically without exposing GMP credentials or XML.
 
 ## Example Scripts
 

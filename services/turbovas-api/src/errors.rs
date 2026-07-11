@@ -30,6 +30,8 @@ pub(crate) enum ApiError {
     MethodNotAllowed,
     #[error("request too large")]
     RequestTooLarge,
+    #[error("report PDF is too large")]
+    ReportPdfTooLarge,
     #[error("too many requests")]
     TooManyRequests,
     #[error("{0}")]
@@ -63,6 +65,7 @@ impl ApiError {
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::ReportPdfTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
@@ -83,6 +86,7 @@ impl ApiError {
             Self::Forbidden => "forbidden",
             Self::MethodNotAllowed => "method_not_allowed",
             Self::RequestTooLarge => "request_too_large",
+            Self::ReportPdfTooLarge => "report_pdf_too_large",
             Self::TooManyRequests => "too_many_requests",
             Self::BadRequest(_) => "bad_request",
             Self::NotFound => "not_found",
@@ -109,6 +113,9 @@ impl ApiError {
             }
             Self::RequestTooLarge => {
                 "Direct native API requests must fit the bounded request shape.".to_string()
+            }
+            Self::ReportPdfTooLarge => {
+                "The report exceeds the bounded native PDF download limit. Use the typed report evidence endpoints for the complete report data.".to_string()
             }
             Self::TooManyRequests => {
                 "The direct native API listener is already handling the maximum number of in-flight requests."

@@ -162,11 +162,11 @@ fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
         ),
     ] {
         let block = openapi_path_block(path);
-        let legacy_owner = "x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations";
+        let inherited_owner = "x-turbovas-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations";
         assert_eq!(
-            block.contains(legacy_owner),
+            block.contains(inherited_owner),
             keeps_generic_legacy_owner,
-            "{path} legacy owner marker must match the retained generic rendered-report boundary"
+            "{path} inherited owner marker must match the retained non-PDF report boundary"
         );
         for required in [
             "get:",

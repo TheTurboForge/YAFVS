@@ -4706,9 +4706,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-list-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
+      x-turbovas-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations
       summary: List raw scan reports
-      description: Native JSON is the sole product list path. The inherited generic report command remains only for rendered report-format downloads and report lifecycle behavior that has not yet moved to a separate native contract.
+      description: Native JSON is the sole product list path. A bounded native evidence PDF is available through the dedicated download contract; non-PDF report formats and report lifecycle behavior remain outside this endpoint family.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4740,9 +4740,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: raw-report-detail-summary-read
-      x-turbovas-inherited-still-owns: raw-report-generation-xml-export-retention-and-mutations
+      x-turbovas-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations
       summary: Read one raw scan report summary
-      description: Native JSON is the sole product detail-summary path. The inherited generic report command remains only for rendered report-format downloads and report lifecycle behavior that has not yet moved to a separate native contract.
+      description: Native JSON is the sole product detail-summary path. A bounded native evidence PDF is available through the dedicated download contract; non-PDF report formats and report lifecycle behavior remain outside this endpoint family.
       parameters:
         - $ref: '#/components/parameters/ReportId'
       responses:
@@ -4752,6 +4752,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Report'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /reports/{report_id}/download:
+    get:
+      operationId: getReportsByReportIdDownload
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: native-evidence-pdf-report-download
+      x-turbovas-inherited-still-owns: non-pdf-custom-report-format-config-filter-and-script-rendering
+      summary: Download a native evidence PDF report
+      description: Generates an application/pdf directly from a repeatable-read snapshot of typed PostgreSQL report metadata and every retained raw evidence row, including hostless scanner error rows. This is a TurboVAS evidence export, not byte, layout, or template parity with the inherited Greenbone PDF renderer. The canonical PDF format UUID selects this retained PDF outcome; custom report configs, filters, and scripts are not retained compatibility goals. The renderer uses core PDF fonts and represents non-ASCII evidence as visible ASCII \u{CODEPOINT} escapes so arbitrary scanner text cannot panic or disappear silently.
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/CanonicalPdfReportFormatId'
+      responses:
+        '200':
+          description: Native PDF report download with a UUID-derived attachment filename and no-store cache policy.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Safe attachment filename derived only from the validated report UUID.
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -6598,7 +6642,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     RequestTooLarge:
-      description: The direct native API request exceeded the accepted size limits.
+      description: The direct native API request or generated export exceeded the endpoint's accepted size limits.
       content:
         application/json:
           schema:
@@ -6676,6 +6720,16 @@ components:
       schema:
         type: string
         format: uuid
+    CanonicalPdfReportFormatId:
+      name: report_format_id
+      in: query
+      required: false
+      description: Optional canonical PDF report-format UUID. Omitting it selects the same native evidence PDF. Any other value is rejected; custom report configurations, filters, and scripts are not supported by this contract.
+      schema:
+        type: string
+        format: uuid
+        default: c402cc3e-b531-11e1-9163-406186ea4fc5
+        enum: [c402cc3e-b531-11e1-9163-406186ea4fc5]
     ResultId:
       name: result_id
       in: path

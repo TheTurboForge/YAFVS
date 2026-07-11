@@ -344,6 +344,9 @@ NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS = 100_000
 NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT = 1_000_000
 NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES = 512 * 1024 * 1024
 NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT = 4 * 1024 * 1024 * 1024
+NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES = 512 * 1024 * 1024
+NATIVE_REPORT_PDF_MAX_BYTES_LIMIT = 4 * 1024 * 1024 * 1024
+NATIVE_REPORT_PDF_ERROR_BODY_MAX_BYTES = 64 * 1024
 NATIVE_OVERRIDE_DELETE_DEFAULT_MAX = 100
 NATIVE_OVERRIDE_DELETE_MAX_LIMIT = 500
 NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX = 100
@@ -410,9 +413,7 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     "compatibility_probe": set(),
     "credential_or_account": {
     },
-    "export_or_report_generation": {
-        "export-pdf-report.gmp.py",
-    },
+    "export_or_report_generation": set(),
     "scanner_or_task_control": {
     },
     "write_or_mutation": set(),
@@ -426,11 +427,10 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
     "write_or_mutation": "Write, mutation, destructive, or side-effecting script; not safe for read-only native API retirement.",
     "needs_review": "Script is still marked as a removal candidate but lacks a specific retirement-safety bucket.",
 }
-NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
-    "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
-}
+NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS: dict[str, str] = {}
 # Historical denominator from 807ed060, when explicit helper-removal tracking landed.
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BASELINE_COUNT = 26
+NATIVE_TOOLING_DIRECT_LEGACY_BLOCKER_BASELINE_COUNT = 59
 NATIVE_API_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^/{}]*\}")
 OPENAPI_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OPENAPI_WRITE_CONTROL_METHODS = frozenset({"post", "put", "patch", "delete"})
@@ -520,6 +520,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
         "cert-bund-advisory-metadata-export-read",
+        "native-evidence-pdf-report-download",
         "credential-redacted-metadata-export-read",
         "credential-redacted-metadata-detail-read",
         "credential-redacted-metadata-list-read",
@@ -697,7 +698,8 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "host-os-catalog-target-creation-tags-export-and-rich-history",
         "operating-system-writes-deletes-and-rich-history",
         "override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion",
-        "raw-report-generation-xml-export-retention-and-mutations",
+        "non-pdf-custom-report-format-config-filter-and-script-rendering",
+        "raw-report-generation-non-pdf-export-retention-and-mutations",
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "saved-filter-alert-linkage",
@@ -810,6 +812,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/trashcan/empty"): "direct-write",
     ("get", "/reports"): "direct-read",
     ("get", "/reports/{report_id}"): "direct-read",
+    ("get", "/reports/{report_id}/download"): "direct-read",
     ("get", "/results/{result_id}/export"): "direct-read",
     ("get", "/reports/{report_id}/results"): "direct-read",
     ("get", "/reports/{report_id}/raw-results"): "direct-read",
@@ -1512,7 +1515,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "report-format-metadata-export-read",
     },
     ("get", "/reports"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-list-read",
     },
@@ -1537,9 +1540,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "vulnerability-metadata-export-read",
     },
     ("get", "/reports/{report_id}"): {
-        "x-turbovas-inherited-still-owns": "raw-report-generation-xml-export-retention-and-mutations",
+        "x-turbovas-inherited-still-owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "raw-report-detail-summary-read",
+    },
+    ("get", "/reports/{report_id}/download"): {
+        "x-turbovas-inherited-still-owns": "non-pdf-custom-report-format-config-filter-and-script-rendering",
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "native-evidence-pdf-report-download",
     },
     ("get", "/reports/{report_id}/results"): {
         "x-turbovas-maturity": "live-read",
@@ -1909,6 +1917,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/trashcan/empty-preview",
         "/api/v1/reports",
         "/api/v1/reports/{}",
+        "/api/v1/reports/{}/download",
         "/api/v1/reports/{}/results",
         "/api/v1/reports/{}/raw-results",
         "/api/v1/reports/{}/hosts",
@@ -2752,6 +2761,154 @@ def direct_native_api_display_command(
         command.extend(["--data-binary", "<redacted-body>"])
     command.append(f"{native_api_direct_base_url(env)}{path}")
     return command
+
+
+def native_api_binary_response_headers(raw_headers: bytes) -> tuple[int | None, dict[str, str]]:
+    status_code: int | None = None
+    headers: dict[str, str] = {}
+    for block in re.split(br"\r?\n\r?\n", raw_headers):
+        lines = block.splitlines()
+        if not lines:
+            continue
+        match = re.fullmatch(br"HTTP/\d(?:\.\d)?\s+(\d{3})(?:\s.*)?", lines[0])
+        if match is None:
+            continue
+        status_code = int(match.group(1))
+        headers = {}
+        for line in lines[1:]:
+            name, separator, value = line.partition(b":")
+            if not separator:
+                continue
+            try:
+                normalized_name = name.decode("ascii").strip().lower()
+            except UnicodeDecodeError:
+                continue
+            if normalized_name:
+                headers[normalized_name] = value.decode("latin-1").strip()
+    return status_code, headers
+
+
+def native_api_binary_error_summary(body: bytes) -> dict[str, Any]:
+    if not body:
+        return {}
+    try:
+        parsed = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {"error_body_format": "non-json"}
+    if not isinstance(parsed, dict):
+        return {"error_body_format": "json-non-object"}
+    return {"error_json_keys": sorted(str(key) for key in parsed)[:10]}
+
+
+def direct_native_api_binary_download(
+    repo_root: Path,
+    path: str,
+    *,
+    token: str,
+    env: dict[str, str],
+    output: Any,
+    max_bytes: int,
+) -> dict[str, Any]:
+    """Stream one bounded direct-native response into an already-private file."""
+    header_path: Path | None = None
+    authorization_header: io.BufferedRandom | None = None
+    process: subprocess.Popen[bytes] | None = None
+    byte_count = 0
+    prefix = bytearray()
+    error_body = bytearray()
+    cap_exceeded = False
+    stderr = ""
+    try:
+        headers = tempfile.NamedTemporaryFile(mode="w+b", prefix="turbovasctl-pdf-headers-", delete=False)
+        header_path = Path(headers.name)
+        headers.close()
+        authorization_header = tempfile.TemporaryFile(mode="w+b", prefix="turbovasctl-auth-")
+        os.fchmod(authorization_header.fileno(), 0o600)
+        authorization_header.write(f"Authorization: Bearer {token}\n".encode("utf-8"))
+        authorization_header.flush()
+        authorization_header.seek(0)
+        command = [
+            "curl",
+            "-sS",
+            "--max-time",
+            "30",
+            "--max-filesize",
+            str(max_bytes),
+            "-D",
+            str(header_path),
+            "-o",
+            "-",
+            "-H",
+            f"@/proc/self/fd/{authorization_header.fileno()}",
+            f"{native_api_direct_base_url(env)}{path}",
+        ]
+        process = subprocess.Popen(
+            command,
+            cwd=repo_root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            pass_fds=(authorization_header.fileno(),),
+        )
+        assert process.stdout is not None
+        while chunk := process.stdout.read(64 * 1024):
+            if len(prefix) < 5:
+                prefix.extend(chunk[: 5 - len(prefix)])
+            if len(error_body) < NATIVE_REPORT_PDF_ERROR_BODY_MAX_BYTES:
+                error_body.extend(chunk[: NATIVE_REPORT_PDF_ERROR_BODY_MAX_BYTES - len(error_body)])
+            remaining = max_bytes - byte_count
+            if len(chunk) > remaining:
+                if remaining > 0:
+                    output.write(chunk[:remaining])
+                    byte_count += remaining
+                cap_exceeded = True
+                process.kill()
+                break
+            output.write(chunk)
+            byte_count += len(chunk)
+        process.stdout.close()
+        assert process.stderr is not None
+        stderr = process.stderr.read().decode("utf-8", errors="replace")
+        process.stderr.close()
+        return_code = process.wait()
+    except OSError as exc:
+        if header_path is not None:
+            header_path.unlink(missing_ok=True)
+        return {
+            "returncode": 1,
+            "http_status": None,
+            "headers": {},
+            "byte_count": byte_count,
+            "prefix": bytes(prefix),
+            "error_body": bytes(error_body),
+            "cap_exceeded": cap_exceeded,
+            "stderr": str(exc),
+        }
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait()
+        if authorization_header is not None:
+            authorization_header.close()
+
+    raw_headers = b""
+    if header_path is not None:
+        try:
+            raw_headers = header_path.read_bytes()
+        finally:
+            header_path.unlink(missing_ok=True)
+    http_status, response_headers = native_api_binary_response_headers(raw_headers)
+    return {
+        "returncode": return_code,
+        "http_status": http_status,
+        "headers": response_headers,
+        "byte_count": byte_count,
+        "prefix": bytes(prefix),
+        "error_body": bytes(error_body),
+        "cap_exceeded": cap_exceeded,
+        "stderr": stderr,
+    }
 
 
 def direct_native_api_health_probe(
@@ -8777,6 +8934,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA raw report detail summary (migrated through gsad same-origin proxy)", "runtime-report-summary helper"],
             },
             {
+                "endpoint": "/api/v1/reports/{report_id}/download",
+                "status": "implemented_internal_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["native-export-report-pdf helper", "direct native evidence PDF download without GMP/XML"],
+            },
+            {
                 "endpoint": "/api/v1/reports/{report_id}/results",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["runtime-report-summary helper (migrated)", "runtime-report-export helper (migrated)", "GSA raw report Results tab (migrated through gsad same-origin proxy)"],
@@ -10926,8 +11089,11 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
     product_workflow_count = int(category_counts.get("product_workflow") or 0)
     blocked_or_review_count = int(removal_review.get("blocked_or_review_count") or 0)
     direct_legacy_blocker_count = required_runtime_count + required_test_count + product_workflow_count + blocked_or_review_count
+    direct_legacy_blocker_baseline_count = NATIVE_TOOLING_DIRECT_LEGACY_BLOCKER_BASELINE_COUNT
     direct_legacy_dependency_burndown_percent = bounded_percent(
-        (100.0 * (total_tooling_items - direct_legacy_blocker_count) / total_tooling_items) if total_tooling_items else 0.0
+        100.0
+        * (direct_legacy_blocker_baseline_count - direct_legacy_blocker_count)
+        / direct_legacy_blocker_baseline_count
     )
     gvm_tools_script_removal_percent = bounded_percent(
         (100.0 * tracked_removed_count / removal_baseline) if removal_baseline else 100.0
@@ -11016,6 +11182,7 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
             },
             "blockers": {
                 "direct_legacy_blocker_count": direct_legacy_blocker_count,
+                "direct_legacy_blocker_baseline_count": direct_legacy_blocker_baseline_count,
                 "required_runtime_count": required_runtime_count,
                 "required_test_count": required_test_count,
                 "product_workflow_count": product_workflow_count,
@@ -22545,6 +22712,142 @@ def native_export_report_csv_result(
     return native_export_report_csv_status_only_result(result) if status_only else result
 
 
+def native_export_report_pdf_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        key: details.get(key)
+        for key in ("report_id", "output", "max_bytes", "http_status", "content_type", "byte_count", "sha256")
+    }
+    compact["findings"] = [
+        compact_doctor_finding(item)
+        for item in result.get("findings", [])
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ] or [finding("pass", "native-export-report-pdf.status-only", "Native PDF report export completed; PDF content omitted.")]
+    return compact
+
+
+def native_export_report_pdf_result(
+    repo_root: Path,
+    summary: str,
+    findings: list[dict[str, Any]],
+    details: dict[str, Any],
+    *,
+    status_only: bool,
+    artifacts: list[str] | None = None,
+) -> dict[str, Any]:
+    result = make_result("native-export-report-pdf", repo_root, summary, findings, artifacts or [])
+    result["details"] = details
+    return native_export_report_pdf_status_only_result(result) if status_only else result
+
+
+def install_atomic_download(temp_path: Path, output_path: Path, *, overwrite: bool) -> None:
+    if overwrite:
+        os.replace(temp_path, output_path)
+        return
+    # A same-directory hard link atomically fails if another process creates the
+    # destination after the preflight check. Unlinking the private temporary name
+    # then leaves the accepted inode reachable only through the requested path.
+    os.link(temp_path, output_path, follow_symlinks=False)
+    temp_path.unlink()
+
+
+def command_native_export_report_pdf(
+    repo_root: Path,
+    *,
+    report_id: str,
+    output: Path | None = None,
+    max_bytes: int = NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES,
+    overwrite: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {"report_id": report_id, "max_bytes": max_bytes, "byte_count": 0}
+    try:
+        report_id = validate_native_api_operator_uuid_value(report_id, env_name="--report-id")
+        if type(max_bytes) is not int or not 1 <= max_bytes <= NATIVE_REPORT_PDF_MAX_BYTES_LIMIT:
+            raise ValueError(f"--max-bytes must be between 1 and {NATIVE_REPORT_PDF_MAX_BYTES_LIMIT}")
+        output_path = (output or Path(f"{report_id}.pdf")).expanduser()
+        if output_path.exists() and output_path.is_dir():
+            raise ValueError("--output must name a file, not a directory")
+        if output_path.exists() and not overwrite:
+            raise ValueError("--output already exists; use --overwrite to replace it")
+        if not output_path.parent.is_dir() or not os.access(output_path.parent, os.W_OK):
+            raise ValueError("--output parent directory must exist and be writable")
+    except (OSError, ValueError) as exc:
+        findings.append(finding("fail", "native-export-report-pdf.arguments", str(exc)))
+        return native_export_report_pdf_result(repo_root, "Native PDF report export rejected before runtime access.", findings, details, status_only=status_only)
+
+    details.update({"report_id": report_id, "output": str(output_path), "max_bytes": max_bytes})
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-export-report-pdf.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return native_export_report_pdf_result(repo_root, "Direct native API PDF export rejected before runtime access.", findings, details, status_only=status_only)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(finding("fail", "native-export-report-pdf.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        return native_export_report_pdf_result(repo_root, "Direct native API PDF export rejected before runtime access.", findings, details, status_only=status_only)
+
+    query = urllib.parse.urlencode({"report_format_id": "c402cc3e-b531-11e1-9163-406186ea4fc5"})
+    path = f"/api/v1/reports/{urllib.parse.quote(report_id)}/download?{query}"
+    temp_path = output_path.parent / f".{output_path.name}.tmp-{os.getpid()}-{secrets.token_hex(8)}"
+    try:
+        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            response = direct_native_api_binary_download(repo_root, path, token=token, env=env, output=handle, max_bytes=max_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+        headers = response.get("headers") if isinstance(response.get("headers"), dict) else {}
+        content_type = headers.get("content-type") if isinstance(headers.get("content-type"), str) else None
+        normalized_content_type = content_type.split(";", 1)[0].strip().lower() if content_type else None
+        byte_count = response.get("byte_count") if type(response.get("byte_count")) is int else 0
+        details.update({"http_status": response.get("http_status"), "content_type": normalized_content_type, "byte_count": byte_count})
+        valid_pdf = (
+            response.get("returncode") == 0
+            and response.get("http_status") == 200
+            and normalized_content_type == "application/pdf"
+            and response.get("prefix") == b"%PDF-"
+            and byte_count <= max_bytes
+            and not response.get("cap_exceeded")
+        )
+        if not valid_pdf:
+            error_details = native_api_binary_error_summary(response.get("error_body", b""))
+            findings.append(
+                finding(
+                    "fail",
+                    "native-export-report-pdf.download",
+                    "Direct native API did not return a bounded PDF report; no output was replaced.",
+                    details={
+                        "http_status": response.get("http_status"),
+                        "content_type": normalized_content_type,
+                        "byte_count": byte_count,
+                        "max_bytes": max_bytes,
+                        "cap_exceeded": bool(response.get("cap_exceeded")),
+                        **error_details,
+                    },
+                )
+            )
+            return native_export_report_pdf_result(repo_root, "Native PDF report export stopped before replacing the output.", findings, details, status_only=status_only)
+        digest = hashlib.sha256()
+        with temp_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        install_atomic_download(temp_path, output_path, overwrite=overwrite)
+    except OSError as exc:
+        findings.append(finding("fail", "native-export-report-pdf.output", f"Atomic PDF output failed: {exc}", details={"output": str(output_path)}))
+        return native_export_report_pdf_result(repo_root, "Native PDF report export could not write the output; any existing file was preserved.", findings, details, status_only=status_only)
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    details["sha256"] = digest.hexdigest()
+    findings.append(finding("pass", "native-export-report-pdf.output", "Native PDF report was downloaded and written atomically.", details={"output": str(output_path), "byte_count": byte_count, "sha256": digest.hexdigest()}))
+    return native_export_report_pdf_result(repo_root, "Native PDF report export completed.", findings, details, status_only=status_only, artifacts=[str(output_path)])
+
+
 def command_native_export_report_csv(
     repo_root: Path,
     *,
@@ -29220,6 +29523,12 @@ def build_parser() -> argparse.ArgumentParser:
     native_export_report_csv.add_argument("--max-results", type=int, default=NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS, help=f"safety cap from 1 to {NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT}")
     native_export_report_csv.add_argument("--overwrite", action="store_true", help="replace an existing output atomically")
     native_export_report_csv.add_argument("--status-only", action="store_true", help="emit compact export metadata without evidence rows")
+    native_export_report_pdf = subparsers.add_parser("native-export-report-pdf", parents=[common], help="download one bounded PDF report through the direct native API")
+    native_export_report_pdf.add_argument("--report-id", required=True, help="raw report UUID")
+    native_export_report_pdf.add_argument("--output", type=Path, help="PDF output path; defaults to REPORT_ID.pdf")
+    native_export_report_pdf.add_argument("--max-bytes", type=int, default=NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES, help=f"PDF safety cap from 1 to {NATIVE_REPORT_PDF_MAX_BYTES_LIMIT}")
+    native_export_report_pdf.add_argument("--overwrite", action="store_true", help="replace an existing output atomically")
+    native_export_report_pdf.add_argument("--status-only", action="store_true", help="emit compact PDF export metadata without PDF content")
     native_export_report_bundle = subparsers.add_parser("native-export-report-bundle", parents=[common], help="export a complete versioned native report evidence bundle")
     native_export_report_bundle.add_argument("--report-id", required=True, help="raw report UUID")
     native_export_report_bundle.add_argument("--output", type=Path, help="ZIP output path; defaults to REPORT_ID.turbovas-report.zip")
@@ -29484,6 +29793,15 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-export-report-pdf":
+        result = command_native_export_report_pdf(
+            repo_root,
+            report_id=args.report_id,
+            output=args.output,
+            max_bytes=args.max_bytes,
+            overwrite=args.overwrite,
             status_only=args.status_only,
         )
     elif args.command == "native-nvt-diagnostic-scan":

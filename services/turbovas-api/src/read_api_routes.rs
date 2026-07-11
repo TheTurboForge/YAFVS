@@ -27,6 +27,7 @@ use crate::{
     report_hosts::report_hosts,
     report_operating_systems::report_operating_systems,
     report_payloads::*,
+    report_pdf::report_pdf_download,
     report_ports::report_ports,
     report_raw_results::report_raw_results,
     report_tls_certificates::report_tls_certificates,
@@ -216,6 +217,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route("/api/v1/trashcan/items", get(trashcan_items))
         .route("/api/v1/reports", get(reports))
         .route("/api/v1/reports/:report_id", get(report_detail))
+        .route(
+            "/api/v1/reports/:report_id/download",
+            get(report_pdf_download),
+        )
         .route("/api/v1/reports/:report_id/results", get(report_results))
         .route(
             "/api/v1/reports/:report_id/raw-results",

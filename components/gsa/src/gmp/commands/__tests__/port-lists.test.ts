@@ -54,7 +54,9 @@ describe('PortListsCommand', () => {
     const http = createNativeHttp();
     const command = new PortListsCommand(http);
 
-    const result = await command.get({filter: 'first=1 rows=25 search=alpha'});
+    const result = await command.get({
+      filter: 'first=1 rows=25 search=alpha predefined=1',
+    });
 
     expect(http.request).not.toHaveBeenCalled();
     expect(result.data[0].id).toEqual('p1');
@@ -65,6 +67,7 @@ describe('PortListsCommand', () => {
       page_size: 25,
       sort: 'name',
       filter: 'alpha',
+      predefined: '1',
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/port-lists',

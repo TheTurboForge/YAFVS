@@ -20,6 +20,7 @@ import {
   exportNativeScannerMetadata,
   fetchNativeScanner,
   patchNativeScanner,
+  verifyNativeScanner,
 } from 'gmp/native-api/scanners';
 
 export interface ScannerCommandCreateParams {
@@ -165,6 +166,9 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
   }
 
   verify({id}: ScannerCommandVerifyParams) {
+    if (canUseNativeApi(this.http)) {
+      return verifyNativeScanner(this.http, id);
+    }
     return this.action({
       cmd: 'verify_scanner',
       id,

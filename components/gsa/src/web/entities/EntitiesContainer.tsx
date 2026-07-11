@@ -332,9 +332,6 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
       onDownload({filename, data});
       showSuccessNotification('', _('Bulk download completed.'));
     } catch (error) {
-      // A sequential native bulk operation may have committed earlier items.
-      // Reloading is harmless for all-or-nothing failures and prevents stale UI.
-      this.handleChanged();
       this.handleError(error as Error);
     }
   }
@@ -358,6 +355,9 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
       this.handleChanged();
       return await Promise.resolve();
     } catch (error) {
+      // A sequential native bulk operation may have committed earlier items.
+      // Reloading is harmless for all-or-nothing failures and prevents stale UI.
+      this.handleChanged();
       this.handleError(error as Error);
       return await Promise.reject(
         error instanceof Error ? error : new Error(String(error)),

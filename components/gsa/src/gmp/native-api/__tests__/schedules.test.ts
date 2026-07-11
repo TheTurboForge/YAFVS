@@ -5,13 +5,12 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {ScheduleCommand, SchedulesCommand} from 'gmp/commands/schedules';
 import {
-  createActionResultResponse,
-  createHttp,
-  createPlainResponse,
-  createResponse,
-} from 'gmp/commands/testing';
+  NativeScheduleBulkDeleteError,
+  ScheduleCommand,
+  SchedulesCommand,
+} from 'gmp/native-api/schedules';
+import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -186,22 +185,6 @@ describe('ScheduleCommand tests', () => {
       },
     );
     expect(result.data.id).toEqual('created-schedule-id');
-  });
-
-  test('should reject schedule create when native API is unavailable', () => {
-    const response = createActionResultResponse({id: 'created-schedule-id'});
-    const fakeHttp = createHttp(response);
-    const cmd = new ScheduleCommand(fakeHttp);
-
-    expect(() =>
-      cmd.create({
-        name: 'created-schedule',
-        comment: 'calendar-bearing create',
-        icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
-        timezone: 'UTC',
-      }),
-    ).toThrow('Native API is required to create schedules');
-    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should export schedule metadata through native API when available', async () => {
@@ -509,23 +492,6 @@ describe('ScheduleCommand tests', () => {
       }),
     );
   });
-
-  test('should reject schedule save when native API is unavailable', () => {
-    const response = createActionResultResponse({id: 'saved-schedule-id'});
-    const fakeHttp = createHttp(response);
-    const cmd = new ScheduleCommand(fakeHttp);
-
-    expect(() =>
-      cmd.save({
-        id: 'schedule-id',
-        name: 'updated-schedule',
-        comment: 'calendar-bearing',
-        icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
-        timezone: 'UTC',
-      }),
-    ).toThrow('Native API is required to modify schedules');
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-  });
 });
 
 describe('SchedulesCommand tests', () => {
@@ -570,7 +536,13 @@ describe('SchedulesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'daily'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'daily',
+          },
           items: [{id: 's2', name: 'Daily B', icalendar: TEST_ICALENDAR}],
         }),
         ok: true,
@@ -611,7 +583,13 @@ describe('SchedulesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'daily'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'daily',
+          },
           items: [{id: 's1', name: 'Daily A', icalendar: TEST_ICALENDAR}],
         }),
         ok: true,
@@ -619,7 +597,13 @@ describe('SchedulesCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'daily'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'daily',
+          },
           items: [{id: 's2', name: 'Daily B', icalendar: TEST_ICALENDAR}],
         }),
         ok: true,
@@ -661,5 +645,189 @@ describe('SchedulesCommand tests', () => {
       {id: 's1', name: 'Daily A'},
       {id: 's2', name: 'Daily B'},
     ]);
+  });
+
+  test('should list schedules through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'daily'},
+        items: [{id: 's1', name: 'Daily A', icalendar: TEST_ICALENDAR}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new SchedulesCommand(fakeHttp);
+
+    const result = await cmd.get({filter: 'first=1 rows=25 search=daily'});
+
+    expect(result.data.map(schedule => schedule.id)).toEqual(['s1']);
+    expect(result.meta.filter).toBeInstanceOf(Filter);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/schedules', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: 'name',
+      filter: 'daily',
+    });
+  });
+
+  test('should get all schedules through bounded native pages', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'daily',
+          },
+          items: [{id: 's1', name: 'Daily A', icalendar: TEST_ICALENDAR}],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'daily',
+          },
+          items: [{id: 's2', name: 'Daily B', icalendar: TEST_ICALENDAR}],
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new SchedulesCommand(fakeHttp);
+
+    const result = await cmd.getAll({
+      filter: 'first=1 rows=1 search=daily',
+    });
+
+    expect(result.data.map(schedule => schedule.id)).toEqual(['s1', 's2']);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/schedules', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'daily',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/schedules', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'daily',
+    });
+  });
+
+  test('should delete selected schedules sequentially through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new SchedulesCommand(fakeHttp);
+
+    const result = await cmd.deleteByIds(['s1', 's2']);
+
+    expect(result.data).toEqual(['s1', 's2']);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/schedules/s1');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/schedules/s2');
+  });
+
+  test('should report deleted, failed, and pending IDs after partial deletion', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: false, status: 503});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new SchedulesCommand(fakeHttp);
+
+    await expect(cmd.deleteByIds(['s1', 's2', 's3'])).rejects.toMatchObject({
+      name: 'NativeScheduleBulkDeleteError',
+      deletedIds: ['s1'],
+      failedId: 's2',
+      pendingIds: ['s2', 's3'],
+    } satisfies Partial<NativeScheduleBulkDeleteError>);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledTimes(2);
+  });
+
+  test('should repeatedly drain page one for all-filter deletion', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'daily',
+          },
+          items: [
+            {id: 's1', name: 'Daily A', icalendar: TEST_ICALENDAR},
+            {id: 's2', name: 'Daily B', icalendar: TEST_ICALENDAR},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 0,
+            sort: 'name',
+            filter: 'daily',
+          },
+          items: [],
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new SchedulesCommand(fakeHttp);
+
+    const result = await cmd.deleteByFilter(
+      Filter.fromString('first=1 rows=1 search=daily').all(),
+    );
+
+    expect(result.data.map(schedule => schedule.id)).toEqual(['s1', 's2']);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/schedules', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'daily',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/schedules/s1');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(3, 'api/v1/schedules/s2');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(4, 'api/v1/schedules', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'daily',
+    });
   });
 });

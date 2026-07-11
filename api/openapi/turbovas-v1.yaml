@@ -2818,6 +2818,13 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - name: predefined
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['0', '1']
+          description: Optional predefined filter; use 1 for feed-defined port lists and 0 for operator-created port lists.
       responses:
         '200':
           description: Port-list collection

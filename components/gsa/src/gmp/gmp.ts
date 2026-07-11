@@ -8,7 +8,6 @@ import 'gmp/commands/license';
 import 'gmp/commands/os';
 import 'gmp/commands/overrides';
 import 'gmp/commands/scan-configs';
-import 'gmp/commands/schedules';
 import 'gmp/commands/tls-certificates';
 import 'gmp/commands/vulns';
 
@@ -62,6 +61,7 @@ import Http, {type ErrorHandler} from 'gmp/http/http';
 import {buildServerUrl, buildUrlParams, type UrlParams} from 'gmp/http/utils';
 import {setLocale} from 'gmp/locale/lang';
 import logger, {type RootLogger} from 'gmp/log';
+import {ScheduleCommand, SchedulesCommand} from 'gmp/native-api/schedules';
 import type Session from 'gmp/session/session';
 import type Settings from 'gmp/settings';
 import {HostCommand, HostsCommand} from 'gmp/native-api/hosts';
@@ -118,6 +118,8 @@ class Gmp {
   public readonly scanners: ScannersCommand;
   public readonly scopereports: ScopeReportsCommand;
   public readonly scopes: ScopesCommand;
+  public readonly schedule: ScheduleCommand;
+  public readonly schedules: SchedulesCommand;
   public readonly tag: TagCommand;
   public readonly tags: TagsCommand;
   public readonly target: TargetCommand;
@@ -191,6 +193,8 @@ class Gmp {
     this.scanners = new ScannersCommand(this.http);
     this.scopereports = new ScopeReportsCommand(this.http);
     this.scopes = new ScopesCommand(this.http);
+    this.schedule = new ScheduleCommand(this.http);
+    this.schedules = new SchedulesCommand(this.http);
     this.tag = new TagCommand(this.http);
     this.tags = new TagsCommand(this.http);
     this.target = new TargetCommand(this.http);

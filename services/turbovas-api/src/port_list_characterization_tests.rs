@@ -418,12 +418,21 @@ fn native_direct_api_allows_current_port_list_write_control_paths_only_when_enab
 #[test]
 fn openapi_documents_port_list_write_control_boundary() {
     let list = openapi_path_block("/port-lists");
+    let results = openapi_path_block("/results");
+    let vulnerabilities = openapi_path_block("/vulnerabilities");
+    let scan_configs = openapi_path_block("/scan-configs");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(!list.contains("x-turbovas-inherited-still-owns: port-list-bulk-xml-export"));
     assert!(list.contains("operationId: postPortLists"));
     assert!(list.contains("x-turbovas-replaces: port-list-create"));
+    assert!(list.contains("name: predefined"));
+    assert!(list.contains("enum: ['0', '1']"));
+    assert!(!results.contains("name: predefined"));
+    assert!(!vulnerabilities.contains("name: predefined"));
+    assert!(scan_configs.contains("name: predefined"));
+    assert_eq!(OPENAPI.matches("- name: predefined").count(), 2);
 
     let import = openapi_path_block("/port-list-imports");
     assert!(import.contains("post:"));

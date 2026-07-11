@@ -92,6 +92,24 @@ export interface NativeScannerResponse {
   scanner: Scanner;
 }
 
+export interface NativeScannerVerifyResult {
+  scanner_id: string;
+  scanner_type: number;
+  verified: boolean;
+  verification_mode:
+    | 'osp-unix-socket'
+    | 'openvasd-no-contact'
+    | 'cve-builtin';
+  name?: string;
+  version?: string;
+  scanner_name?: string;
+  scanner_version?: string;
+  daemon_name?: string;
+  daemon_version?: string;
+  protocol_name?: string;
+  protocol_version?: string;
+}
+
 const SCANNER_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   host: 'host',
@@ -332,4 +350,16 @@ export const patchNativeScanner = async (
       },
     }),
   );
+};
+
+export const verifyNativeScanner = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<NativeScannerVerifyResult>> => {
+  const payload = await writeNativeJson<NativeScannerVerifyResult>(
+    gmp,
+    `api/v1/scanners/${encodeURIComponent(id)}/verify`,
+    {},
+  );
+  return new Response(payload);
 };

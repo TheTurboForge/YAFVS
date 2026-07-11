@@ -296,7 +296,45 @@ describe('ScannerCommand tests', () => {
     });
   });
 
-  test('should send the correct data to verify a scanner', async () => {
+  test('should verify a scanner through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        scanner_id: '123',
+        scanner_type: Number(OPENVASD_SCANNER_TYPE),
+        verified: true,
+        verification_mode: 'openvasd-no-contact',
+        name: 'Test Scanner',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+    const result = await cmd.verify({id: '123'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scanners/123/verify',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners/123/verify',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    expect('verified' in result.data && result.data.verified).toBe(true);
+  });
+
+  test('should retain GMP scanner verification without native API', async () => {
     const response = createActionResultResponse({
       action: 'verify_scanner',
       id: '123',

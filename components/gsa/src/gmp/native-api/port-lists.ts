@@ -104,6 +104,7 @@ export interface NativePortListsQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  predefined?: string;
 }
 
 export interface NativePortListsResponse {
@@ -168,6 +169,10 @@ export const nativePortListsQueryFromFilter = (
     pageSize,
     sort: nativeSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    predefined:
+      filter?.get('predefined') === undefined
+        ? undefined
+        : String(filter.get('predefined')),
   };
 };
 
@@ -299,6 +304,7 @@ export const fetchNativePortLists = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      predefined: query.predefined,
     },
   );
   const page = {

@@ -5,10 +5,17 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import {
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
 import Response from 'gmp/http/response';
+import type Http from 'gmp/http/http';
 import type {UrlParams} from 'gmp/http/utils';
 import Schedule from 'gmp/models/schedule';
-import type QueryFilter from 'gmp/models/filter';
+import type Filter from 'gmp/models/filter';
+import {filterString} from 'gmp/models/filter/utils';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -87,6 +94,22 @@ export interface NativeSchedulesResponse {
   page: NativePage;
 }
 
+interface ScheduleCommandParams {
+  id: string;
+  filter?: Filter | string;
+  [key: string]: unknown;
+}
+
+interface ScheduleCommandOptions {
+  filter?: Filter | string;
+  [key: string]: unknown;
+}
+
+interface SchedulesCommandParams {
+  filter?: Filter | string;
+  [key: string]: unknown;
+}
+
 const SCHEDULE_SORT_FIELDS: Record<string, string> = {
   name: 'name',
   first_run: 'first_run',
@@ -106,7 +129,7 @@ const integerValue = (value: unknown, fallback = 0): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const nativeSortFromFilter = (filter?: QueryFilter): string => {
+const nativeSortFromFilter = (filter?: Filter): string => {
   const reverse = filter?.get('sort-reverse');
   const ascending = filter?.get('sort');
   const rawField = stringValue(reverse ?? ascending, 'name');
@@ -114,7 +137,7 @@ const nativeSortFromFilter = (filter?: QueryFilter): string => {
   return reverse !== undefined ? `-${nativeField}` : nativeField;
 };
 
-const nativeSearchFromFilter = (filter?: QueryFilter): string => {
+const nativeSearchFromFilter = (filter?: Filter): string => {
   const search = filter?.get('search');
   if (search !== undefined) {
     return String(search);
@@ -124,7 +147,7 @@ const nativeSearchFromFilter = (filter?: QueryFilter): string => {
 };
 
 export const nativeSchedulesQueryFromFilter = (
-  filter?: QueryFilter,
+  filter?: Filter,
 ): NativeSchedulesQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
@@ -323,6 +346,216 @@ export const cloneNativeSchedule = async (
   );
   return new Response({id: stringValue(payload.id)});
 };
+
+const shouldApplyToAllFilteredSchedules = (filter: Filter) => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
+const scheduleIds = (schedules: Schedule[]) =>
+  schedules.flatMap(schedule =>
+    schedule.id === undefined ? [] : [schedule.id],
+  );
+
+const nativeScheduleDetailSupportsFilter = (filter?: Filter | string) => {
+  const value = filterString(filter);
+  return filter === undefined || value === 'tasks=1' || value === 'alerts=1';
+};
+
+export class NativeScheduleBulkDeleteError extends Error {
+  readonly deletedIds: string[];
+  readonly failedId: string;
+  readonly pendingIds: string[];
+
+  constructor(
+    deletedIds: string[],
+    failedId: string,
+    pendingIds: string[],
+    cause: unknown,
+  ) {
+    super(
+      `Native schedule bulk delete stopped at ${failedId} after deleting ${deletedIds.length} schedule(s).`,
+      {cause},
+    );
+    this.name = 'NativeScheduleBulkDeleteError';
+    this.deletedIds = deletedIds;
+    this.failedId = failedId;
+    this.pendingIds = pendingIds;
+  }
+}
+
+export class ScheduleCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get(
+    {id}: ScheduleCommandParams,
+    {filter}: ScheduleCommandOptions = {},
+  ) {
+    if (!nativeScheduleDetailSupportsFilter(filter)) {
+      throw new Error('Native schedule detail filter is not supported');
+    }
+    return new Response(await fetchNativeSchedule(this.http, id));
+  }
+
+  create(args: NativeScheduleCreateArgs) {
+    return createNativeSchedule(this.http, args);
+  }
+
+  save(args: NativeSchedulePatchArgs) {
+    return patchNativeSchedule(this.http, args);
+  }
+
+  async delete({id}: ScheduleCommandParams) {
+    await deleteNativeSchedule(this.http, id);
+    return new Response(undefined);
+  }
+
+  export({id}: ScheduleCommandParams) {
+    return exportNativeScheduleMetadata(this.http, id);
+  }
+
+  clone({id}: ScheduleCommandParams) {
+    return cloneNativeSchedule(this.http, id);
+  }
+}
+
+export class SchedulesCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get(params: SchedulesCommandParams = {}) {
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeSchedules(
+      this.http,
+      nativeSchedulesQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.schedules, {
+      filter,
+      counts: nativeResponse.counts,
+    });
+  }
+
+  async getAll(params: SchedulesCommandParams = {}) {
+    const filter = filterFromCommandParams(params).all();
+    const schedules: Schedule[] = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; schedules.length < total; page += 1) {
+      const nativeResponse = await fetchNativeSchedules(this.http, {
+        ...nativeSchedulesQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      schedules.push(...nativeResponse.schedules);
+      total = nativeResponse.page.total;
+      if (nativeResponse.schedules.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      schedules,
+      nativeCollectionMeta(
+        filter,
+        schedules,
+        Number.isFinite(total) ? total : 0,
+      ),
+    );
+  }
+
+  export(schedules: Schedule[]) {
+    return this.exportByIds(scheduleIds(schedules));
+  }
+
+  exportByIds(ids: string[]) {
+    return exportNativeSchedulesMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    const schedules: Schedule[] = [];
+    if (shouldApplyToAllFilteredSchedules(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; schedules.length < total; page += 1) {
+        const nativeResponse = await fetchNativeSchedules(this.http, {
+          ...nativeSchedulesQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        schedules.push(...nativeResponse.schedules);
+        total = nativeResponse.page.total;
+        if (nativeResponse.schedules.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeSchedules(
+        this.http,
+        nativeSchedulesQueryFromFilter(filter),
+      );
+      schedules.push(...nativeResponse.schedules);
+    }
+
+    return this.exportByIds(scheduleIds(schedules));
+  }
+
+  async delete(schedules: Schedule[]) {
+    const response = await this.deleteByIds(scheduleIds(schedules));
+    return response.setData(schedules);
+  }
+
+  async deleteByIds(ids: string[]) {
+    const deletedIds: string[] = [];
+    await this.deleteIds(ids, deletedIds);
+    return new Response(deletedIds);
+  }
+
+  async deleteByFilter(filter: Filter) {
+    const deletedSchedules: Schedule[] = [];
+    const deletedIds: string[] = [];
+    const query = nativeSchedulesQueryFromFilter(filter);
+    const deleteAll = shouldApplyToAllFilteredSchedules(filter);
+    let hasMore = true;
+
+    while (hasMore) {
+      const nativeResponse = await fetchNativeSchedules(this.http, {
+        ...query,
+        ...(deleteAll ? {page: 1, pageSize: NATIVE_COMMAND_PAGE_SIZE} : {}),
+      });
+      const schedules = nativeResponse.schedules;
+      hasMore = deleteAll && schedules.length > 0;
+      if (schedules.length === 0) {
+        break;
+      }
+      await this.deleteIds(scheduleIds(schedules), deletedIds);
+      deletedSchedules.push(...schedules);
+    }
+
+    return new Response(deletedSchedules);
+  }
+
+  private async deleteIds(ids: string[], deletedIds: string[]) {
+    for (const [index, id] of ids.entries()) {
+      try {
+        await deleteNativeSchedule(this.http, id);
+      } catch (cause) {
+        throw new NativeScheduleBulkDeleteError(
+          [...deletedIds],
+          id,
+          ids.slice(index),
+          cause,
+        );
+      }
+      deletedIds.push(id);
+    }
+  }
+}
 
 export const createNativeSchedule = async (
   gmp: NativeApiGmp,

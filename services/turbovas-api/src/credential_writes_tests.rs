@@ -6,7 +6,9 @@ use crate::{
     credential_write_db::ensure_credential_owner_matches_operator,
     credential_write_sql::*,
     credential_write_validation::{
-        CredentialPatchRequest, MAX_CREDENTIAL_TEXT_BYTES, validate_credential_patch_request,
+        CredentialCreateRequest, CredentialCreateType, CredentialPatchRequest,
+        MAX_CREDENTIAL_PRIVATE_KEY_BYTES, MAX_CREDENTIAL_TEXT_BYTES,
+        validate_credential_create_request, validate_credential_patch_request,
     },
     errors::ApiError,
 };
@@ -16,6 +18,142 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRe
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
     }
+}
+
+fn create_request(credential_type: CredentialCreateType) -> CredentialCreateRequest {
+    CredentialCreateRequest {
+        name: "  operator credential  ".to_string(),
+        comment: Some("  imported  ".to_string()),
+        login: "  operator  ".to_string(),
+        credential_type,
+        password: (credential_type == CredentialCreateType::Up)
+            .then(|| serde_json::from_value(serde_json::json!("password")).unwrap()),
+        passphrase: None,
+        private_key: (credential_type == CredentialCreateType::Usk).then(|| {
+            serde_json::from_value(serde_json::json!(
+                "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n"
+            ))
+            .unwrap()
+        }),
+    }
+}
+
+#[test]
+fn credential_create_validates_up_and_usk_without_echoing_secrets() {
+    let up = validate_credential_create_request(create_request(CredentialCreateType::Up))
+        .expect("valid up credential");
+    assert_eq!(up.name, "operator credential");
+    assert_eq!(up.comment, "imported");
+    assert_eq!(up.login, "operator");
+    assert_eq!(up.secret.as_bytes(), b"password");
+    assert!(up.private_key.as_bytes().is_empty());
+
+    let mut usk_request = create_request(CredentialCreateType::Usk);
+    usk_request.passphrase = Some(serde_json::from_value(serde_json::json!("")).unwrap());
+    let usk = validate_credential_create_request(usk_request).expect("valid usk credential");
+    assert_eq!(usk.credential_type, CredentialCreateType::Usk);
+    assert!(usk.secret.as_bytes().is_empty());
+    assert!(
+        std::str::from_utf8(usk.private_key.as_bytes())
+            .unwrap()
+            .contains("BEGIN PRIVATE KEY")
+    );
+
+    let command = crate::credential_writes::credential_create_command(
+        "0123456789abcdef0123456789abcdef",
+        "123e4567-e89b-12d3-a456-426614174000",
+        &up,
+    );
+    let command = String::from_utf8(command).unwrap();
+    assert!(command.starts_with("credential-create "));
+    assert!(command.contains(" up "));
+    assert!(!command.contains("password"));
+    assert!(!command.contains("operator credential"));
+}
+
+#[test]
+fn credential_create_rejects_cross_type_fields_unknown_fields_and_bad_bounds() {
+    let mut up = create_request(CredentialCreateType::Up);
+    up.private_key = Some(serde_json::from_value(serde_json::json!("key")).unwrap());
+    assert!(matches!(
+        validate_credential_create_request(up),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let mut usk = create_request(CredentialCreateType::Usk);
+    usk.password = Some(serde_json::from_value(serde_json::json!("wrong field")).unwrap());
+    assert!(matches!(
+        validate_credential_create_request(usk),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let mut oversized = create_request(CredentialCreateType::Usk);
+    oversized.private_key = Some(
+        serde_json::from_value(serde_json::json!(
+            "x".repeat(MAX_CREDENTIAL_PRIVATE_KEY_BYTES + 1)
+        ))
+        .unwrap(),
+    );
+    assert!(matches!(
+        validate_credential_create_request(oversized),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let mut oversized_aggregate = create_request(CredentialCreateType::Usk);
+    oversized_aggregate.name = "n".repeat(MAX_CREDENTIAL_TEXT_BYTES);
+    oversized_aggregate.comment = Some("c".repeat(MAX_CREDENTIAL_TEXT_BYTES));
+    oversized_aggregate.login = "l".repeat(MAX_CREDENTIAL_TEXT_BYTES);
+    oversized_aggregate.passphrase = Some(
+        serde_json::from_value(serde_json::json!("p".repeat(MAX_CREDENTIAL_TEXT_BYTES))).unwrap(),
+    );
+    oversized_aggregate.private_key = Some(
+        serde_json::from_value(serde_json::json!(
+            "k".repeat(MAX_CREDENTIAL_PRIVATE_KEY_BYTES)
+        ))
+        .unwrap(),
+    );
+    assert!(matches!(
+        validate_credential_create_request(oversized_aggregate),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    assert!(
+        serde_json::from_value::<CredentialCreateRequest>(serde_json::json!({
+            "name": "credential",
+            "login": "operator",
+            "type": "up",
+            "password": "secret",
+            "unexpected": true
+        }))
+        .is_err()
+    );
+}
+
+#[test]
+fn credential_create_maps_only_bounded_control_responses() {
+    use crate::credential_writes::parse_credential_create_response;
+
+    assert_eq!(
+        parse_credential_create_response(b"0 created 123e4567-e89b-12d3-a456-426614174003")
+            .unwrap(),
+        "123e4567-e89b-12d3-a456-426614174003"
+    );
+    assert!(matches!(
+        parse_credential_create_response(b"1 exists"),
+        Err(ApiError::Conflict(_))
+    ));
+    assert!(matches!(
+        parse_credential_create_response(b"3 invalid_key"),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        parse_credential_create_response(b"99 forbidden"),
+        Err(ApiError::Forbidden)
+    ));
+    assert!(matches!(
+        parse_credential_create_response(b"0 created not-a-uuid"),
+        Err(ApiError::ControlFailure)
+    ));
 }
 
 #[test]

@@ -81,7 +81,18 @@ fn credential_openapi_documents_exact_type_filter() {
 }
 
 #[test]
-fn credential_routes_are_direct_read_only_allowlisted() {
+fn credential_routes_are_direct_read_and_bounded_create_allowlisted() {
+    let list_path = "/api/v1/credentials";
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        list_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        list_path,
+        true
+    ));
     for path in [
         "/api/v1/credentials",
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc",
@@ -129,8 +140,7 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "x-turbovas-exposure: direct-read",
             "x-turbovas-maturity: live-read",
             replaces,
-            "credential-secrets-writes-and-deletes",
-            "credential secrets",
+            "credential-secret-updates-non-up-usk-types-and-deletes",
             "credential-store secret selectors",
             "secret",
         ] {
@@ -139,6 +149,37 @@ fn credential_openapi_declares_redacted_read_boundary() {
                 "{path} OpenAPI block missing {required}"
             );
         }
+    }
+}
+
+#[test]
+fn credential_create_openapi_is_write_only_secret_bearing_and_redacted_on_response() {
+    let block = openapi_path_block("/credentials");
+    for required in [
+        "    post:",
+        "operationId: postCredentials",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: credential-up-usk-create",
+        "x-turbovas-owner-semantics: request-operator-owner",
+        "x-turbovas-side-effect: credential-secret-control",
+        "CredentialCreateRequest",
+        "response contains redacted metadata only",
+    ] {
+        assert!(
+            block.contains(required),
+            "credential create missing {required}"
+        );
+    }
+    let schema = OPENAPI
+        .split_once("    CredentialCreateRequest:")
+        .expect("credential create schema")
+        .1
+        .split_once("    ScannerPatchRequest:")
+        .expect("next schema")
+        .0;
+    for secret in ["password:", "passphrase:", "private_key:"] {
+        let property = schema.split_once(secret).expect("secret property").1;
+        assert!(property.contains("writeOnly: true"));
     }
 }
 
@@ -165,7 +206,7 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-turbovas-safety-contract: write-control-v1",
         "x-turbovas-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "Credential secrets, credential-store selectors, allow_insecure, credential type, target/scanner links, export, download, create, clone, restore, and delete remain on inherited compatibility paths.",
+        "Secret updates, credential-store selectors, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.",
     ] {
         assert!(
             block.contains(required),

@@ -2,11 +2,186 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::errors::ApiError;
 
 pub(crate) const MAX_CREDENTIAL_TEXT_BYTES: usize = 4096;
+pub(crate) const MAX_CREDENTIAL_SECRET_BYTES: usize = 4096;
+pub(crate) const MAX_CREDENTIAL_PRIVATE_KEY_BYTES: usize = 32768;
+pub(crate) const MAX_CREDENTIAL_CREATE_DECODED_BYTES: usize = 48800;
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum CredentialCreateType {
+    Up,
+    Usk,
+}
+
+pub(crate) struct SensitiveBytes(Vec<u8>);
+
+impl SensitiveBytes {
+    fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<'de> Deserialize<'de> for SensitiveBytes {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|value| Self(value.into_bytes()))
+    }
+}
+
+impl Drop for SensitiveBytes {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
+}
+
+impl CredentialCreateType {
+    pub(crate) fn control_token(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Usk => "usk",
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CredentialCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) login: String,
+    #[serde(rename = "type")]
+    pub(crate) credential_type: CredentialCreateType,
+    #[serde(default)]
+    pub(crate) password: Option<SensitiveBytes>,
+    #[serde(default)]
+    pub(crate) passphrase: Option<SensitiveBytes>,
+    #[serde(default)]
+    pub(crate) private_key: Option<SensitiveBytes>,
+}
+
+pub(crate) struct ValidatedCredentialCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) login: String,
+    pub(crate) credential_type: CredentialCreateType,
+    pub(crate) secret: SensitiveBytes,
+    pub(crate) private_key: SensitiveBytes,
+}
+
+pub(crate) fn validate_credential_create_request(
+    request: CredentialCreateRequest,
+) -> Result<ValidatedCredentialCreate, ApiError> {
+    let name = normalize_required_credential_text(request.name, "name")?;
+    let comment =
+        normalize_optional_credential_text(request.comment, "comment")?.unwrap_or_default();
+    let login = normalize_required_credential_text(request.login, "login")?;
+    let (secret, private_key) = match request.credential_type {
+        CredentialCreateType::Up => {
+            if request.passphrase.is_some() || request.private_key.is_some() {
+                return Err(ApiError::BadRequest(
+                    "up credentials accept password but not passphrase or private_key".to_string(),
+                ));
+            }
+            let password = validate_credential_secret(
+                request.password,
+                "password",
+                true,
+                MAX_CREDENTIAL_SECRET_BYTES,
+            )?;
+            (password, SensitiveBytes::empty())
+        }
+        CredentialCreateType::Usk => {
+            if request.password.is_some() {
+                return Err(ApiError::BadRequest(
+                    "usk credentials accept passphrase and private_key but not password"
+                        .to_string(),
+                ));
+            }
+            let passphrase = validate_credential_secret(
+                request.passphrase,
+                "passphrase",
+                false,
+                MAX_CREDENTIAL_SECRET_BYTES,
+            )?;
+            let private_key = validate_private_key(request.private_key)?;
+            (passphrase, private_key)
+        }
+    };
+    let decoded_bytes = name.len()
+        + comment.len()
+        + login.len()
+        + secret.as_bytes().len()
+        + private_key.as_bytes().len();
+    if decoded_bytes > MAX_CREDENTIAL_CREATE_DECODED_BYTES {
+        return Err(ApiError::BadRequest(format!(
+            "combined credential fields must not exceed {MAX_CREDENTIAL_CREATE_DECODED_BYTES} decoded bytes"
+        )));
+    }
+
+    Ok(ValidatedCredentialCreate {
+        name,
+        comment,
+        login,
+        credential_type: request.credential_type,
+        secret,
+        private_key,
+    })
+}
+
+fn validate_credential_secret(
+    value: Option<SensitiveBytes>,
+    field_name: &str,
+    required: bool,
+    max_bytes: usize,
+) -> Result<SensitiveBytes, ApiError> {
+    let value = value.unwrap_or_else(SensitiveBytes::empty);
+    if (required && value.is_empty()) || value.len() > max_bytes || value.as_bytes().contains(&0) {
+        let requirement = if required { "non-empty " } else { "" };
+        return Err(ApiError::BadRequest(format!(
+            "{field_name} must be {requirement}UTF-8 text up to {max_bytes} bytes without NUL bytes"
+        )));
+    }
+    Ok(value)
+}
+
+fn validate_private_key(value: Option<SensitiveBytes>) -> Result<SensitiveBytes, ApiError> {
+    let value = value.unwrap_or_else(SensitiveBytes::empty);
+    let key_text = std::str::from_utf8(value.as_bytes()).map_err(|_| {
+        ApiError::BadRequest("private_key must be valid UTF-8 key text".to_string())
+    })?;
+    if value.is_empty()
+        || value.len() > MAX_CREDENTIAL_PRIVATE_KEY_BYTES
+        || value.as_bytes().contains(&0)
+        || key_text
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\r' | '\n' | '\t'))
+    {
+        return Err(ApiError::BadRequest(format!(
+            "private_key must be key text up to {MAX_CREDENTIAL_PRIVATE_KEY_BYTES} bytes without unsupported control characters"
+        )));
+    }
+    Ok(value)
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

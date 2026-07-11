@@ -44,6 +44,16 @@
 #define TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES 256
 #define TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES 32768
+#define TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND "credential-create "
+#define TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_CREDENTIAL_NAME_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_CREDENTIAL_COMMENT_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_CREDENTIAL_LOGIN_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_CREDENTIAL_SECRET_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES 32768
+#define TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP "up"
+#define TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK "usk"
 
 typedef struct
 {
@@ -60,6 +70,16 @@ typedef struct
   gchar *timezone;
   gchar *icalendar;
 } turbovas_control_schedule_modify_request_t;
+
+typedef struct
+{
+  gchar *credential_type;
+  gchar *name;
+  gchar *comment;
+  gchar *login;
+  gchar *secret;
+  gchar *private_key;
+} turbovas_control_credential_create_request_t;
 
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
@@ -263,6 +283,41 @@ turbovas_control_schedule_create_request_clear
   memset (request, 0, sizeof (*request));
 }
 
+static void
+turbovas_control_secure_clear (void *value, size_t length)
+{
+  volatile unsigned char *cursor = value;
+
+  if (value == NULL)
+    return;
+
+  while (length--)
+    *cursor++ = 0;
+}
+
+static void
+turbovas_control_secure_free (gchar *value)
+{
+  if (value == NULL)
+    return;
+
+  turbovas_control_secure_clear (value, strlen (value));
+  g_free (value);
+}
+
+static void
+turbovas_control_credential_create_request_clear
+  (turbovas_control_credential_create_request_t *request)
+{
+  g_free (request->credential_type);
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->login);
+  turbovas_control_secure_free (request->secret);
+  turbovas_control_secure_free (request->private_key);
+  memset (request, 0, sizeof (*request));
+}
+
 static gboolean
 turbovas_control_decode_base64_field (const char *value, size_t value_len,
                                       size_t max_decoded_len,
@@ -298,6 +353,10 @@ turbovas_control_decode_base64_field (const char *value, size_t value_len,
   if (valid)
     *decoded_out = g_strndup ((const gchar *) decoded, decoded_len);
 
+  if (canonical)
+    turbovas_control_secure_clear (canonical, strlen (canonical));
+  turbovas_control_secure_clear (decoded, decoded_len);
+  turbovas_control_secure_clear (encoded, encoded_len);
   g_free (canonical);
   g_free (decoded);
   g_free (encoded);
@@ -500,6 +559,110 @@ turbovas_control_parse_schedule_create_request
   return valid;
 }
 
+static gboolean
+turbovas_control_parse_credential_create_request
+  (const char *request, size_t request_len, const char *expected_secret,
+   size_t expected_secret_len, char operator_uuid[37],
+   turbovas_control_credential_create_request_t *credential)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  const char *operator_start;
+  const char *secret;
+  const char *secret_end;
+  size_t field_len;
+  size_t secret_len;
+  gboolean is_up;
+  gboolean valid;
+
+  memset (credential, 0, sizeof (*credential));
+  if (request == NULL
+      || request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH
+                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
+      || memcmp (request, TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND,
+                 TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len,
+                                           expected_secret,
+                                           expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if (operator_start + 37 > end || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  cursor = operator_start + 37;
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && ((field_len == strlen (TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP)
+               && memcmp (field, TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP,
+                          field_len) == 0)
+              || (field_len == strlen (TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK)
+                  && memcmp (field, TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK,
+                             field_len) == 0));
+  if (!valid)
+    return FALSE;
+
+  credential->credential_type = g_strndup (field, field_len);
+  is_up = strcmp (credential->credential_type,
+                  TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP) == 0;
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_CREDENTIAL_NAME_MAX_BYTES,
+                TRUE, &credential->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len,
+                TURBOVAS_CONTROL_CREDENTIAL_COMMENT_MAX_BYTES, FALSE,
+                &credential->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_CREDENTIAL_LOGIN_MAX_BYTES,
+                TRUE, &credential->login)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len,
+                TURBOVAS_CONTROL_CREDENTIAL_SECRET_MAX_BYTES, is_up,
+                &credential->secret)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len,
+                TURBOVAS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES, !is_up,
+                &credential->private_key)
+          && cursor == end
+          && (is_up ? credential->private_key[0] == '\0'
+                    : credential->private_key[0] != '\0')
+          && turbovas_control_text_has_allowed_controls
+               (credential->name, strlen (credential->name), FALSE)
+          && turbovas_control_text_has_allowed_controls
+               (credential->comment, strlen (credential->comment), FALSE)
+          && turbovas_control_text_has_allowed_controls
+               (credential->login, strlen (credential->login), FALSE)
+          && turbovas_control_text_has_allowed_controls
+               (credential->private_key, strlen (credential->private_key),
+                TRUE);
+  if (!valid)
+    turbovas_control_credential_create_request_clear (credential);
+
+  return valid;
+}
+
 static const char *
 turbovas_control_response (int result)
 {
@@ -555,6 +718,55 @@ turbovas_control_schedule_create_response
         break;
       case 99:
         status = "99 forbidden\n";
+        break;
+      default:
+        status = "-1 internal\n";
+        break;
+    }
+
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
+static const char *
+turbovas_control_credential_create_response
+  (int result, const char *uuid,
+   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 1:
+        status = "1 exists\n";
+        break;
+      case 2:
+        status = "2 invalid_login\n";
+        break;
+      case 3:
+        status = "3 invalid_key\n";
+        break;
+      case 5:
+        status = "5 login_required\n";
+        break;
+      case 6:
+        status = "6 password_required\n";
+        break;
+      case 7:
+        status = "7 key_required\n";
+        break;
+      case 99:
+        status = "99 forbidden\n";
+        break;
+      case -2:
+        status = "-2 malformed\n";
         break;
       default:
         status = "-1 internal\n";
@@ -634,6 +846,7 @@ turbovas_control_read_request
                                size_t *request_len)
 {
   size_t length = 0;
+  *request_len = 0;
 
   while (length < TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
@@ -644,6 +857,7 @@ turbovas_control_read_request
       if (ret > 0)
         {
           length += ret;
+          *request_len = length;
           newline = memchr (request, '\n', length);
           if (newline)
             {
@@ -759,6 +973,45 @@ turbovas_control_create_schedule
 }
 
 static int
+turbovas_control_create_credential
+  (const char *operator_uuid,
+   const turbovas_control_credential_create_request_t *request,
+   char created_uuid[37])
+{
+  char *uuid = NULL;
+  const char *key_private;
+  credential_t credential = 0;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  key_private = strcmp (request->credential_type,
+                        TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK) == 0
+                  ? request->private_key : NULL;
+  result = create_credential (request->name, request->comment,
+                              request->login, request->secret, key_private,
+                              NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                              NULL, NULL, NULL, NULL, NULL,
+                              request->credential_type, "0", &credential);
+  if (result == 0)
+    {
+      uuid = credential_uuid (credential);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        result = -1;
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+        }
+    }
+
+  free (uuid);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_modify_schedule
   (const char *operator_uuid, const char *schedule_uuid,
    const turbovas_control_schedule_modify_request_t *request)
@@ -790,10 +1043,12 @@ turbovas_control_serve_client (int client_socket)
   const char *expected_secret;
   const char *result_response;
   size_t expected_secret_len;
-  size_t request_len;
+  size_t request_len = 0;
   int result = -1;
   turbovas_control_schedule_create_request_t schedule_request = {0};
   turbovas_control_schedule_modify_request_t schedule_modify_request = {0};
+  turbovas_control_credential_create_request_t credential_request = {0};
+  memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
   if (turbovas_control_configured_secret (&expected_secret,
@@ -818,6 +1073,16 @@ turbovas_control_serve_client (int client_socket)
           result_response = turbovas_control_schedule_create_response
                               (result, created_uuid, response);
         }
+      else if (turbovas_control_parse_credential_create_request
+                 (request, request_len, expected_secret, expected_secret_len,
+                  operator_uuid, &credential_request))
+        {
+          result = turbovas_control_create_credential (operator_uuid,
+                                                        &credential_request,
+                                                        created_uuid);
+          result_response = turbovas_control_credential_create_response
+                              (result, created_uuid, response);
+        }
       else if (turbovas_control_parse_schedule_modify_request
                  (request, request_len, expected_secret, expected_secret_len,
                   operator_uuid, schedule_uuid, &schedule_modify_request))
@@ -834,6 +1099,13 @@ turbovas_control_serve_client (int client_socket)
                     == 0)
         result_response = turbovas_control_schedule_modify_response (-2,
                                                                       response);
+      else if (request_len >= TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH)
+                    == 0)
+        result_response = turbovas_control_credential_create_response (-2,
+                                                                        NULL,
+                                                                        response);
       else
         result_response = turbovas_control_response (result);
     }
@@ -844,6 +1116,11 @@ turbovas_control_serve_client (int client_socket)
                                       result_response);
   turbovas_control_schedule_create_request_clear (&schedule_request);
   turbovas_control_schedule_modify_request_clear (&schedule_modify_request);
+  turbovas_control_credential_create_request_clear (&credential_request);
+  if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
+    {
+      turbovas_control_secure_clear (request, request_len);
+    }
 }
 
 void

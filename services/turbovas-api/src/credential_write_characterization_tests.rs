@@ -265,7 +265,7 @@ fn gsa_credential_command_still_carries_inherited_secret_write_download_surface(
 }
 
 #[test]
-fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
+fn native_credential_create_is_narrow_and_broad_mutation_routes_remain_closed() {
     for path in [
         "/api/v1/credentials",
         "/api/v1/credentials/12345678-1234-1234-1234-123456789abc",
@@ -278,11 +278,17 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
             direct_api_v1_method_is_allowed(&Method::GET, path, false),
             "credential read path must allow GET without write control: {path}"
         );
-        for method in [Method::POST, Method::PUT, Method::DELETE] {
+        for method in [Method::PUT, Method::DELETE] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, path, true),
                 "credential native mutation must remain closed for {method} {path}"
             );
+        }
+        if path == "/api/v1/credentials" {
+            assert!(!direct_api_v1_method_is_allowed(&Method::POST, path, false));
+            assert!(direct_api_v1_method_is_allowed(&Method::POST, path, true));
+        } else {
+            assert!(!direct_api_v1_method_is_allowed(&Method::POST, path, true));
         }
         if path.ends_with("123456789abc") {
             assert!(
@@ -342,8 +348,7 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
         for required in [
             "x-turbovas-exposure: direct-read",
             replaces,
-            "credential-secrets-writes-and-deletes",
-            "credential secrets",
+            "credential-secret-updates-non-up-usk-types-and-deletes",
             "credential-store secret selectors",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
@@ -359,11 +364,17 @@ fn native_credential_secret_transfer_and_broad_mutation_routes_remain_closed() {
                 "{path} must leave inherited export/download behavior out of native reads"
             );
         }
-        for forbidden in ["    post:", "    put:", "    delete:"] {
+        for forbidden in ["    put:", "    delete:"] {
             assert!(
                 !block.contains(forbidden),
                 "{path} must not declare credential mutation method {forbidden}"
             );
+        }
+        if path == "/credentials" {
+            assert!(block.contains("    post:"));
+            assert!(block.contains("credential-up-usk-create"));
+        } else {
+            assert!(!block.contains("    post:"));
         }
         if path == "/credentials/{credential_id}" {
             assert!(block.contains("    patch:"));

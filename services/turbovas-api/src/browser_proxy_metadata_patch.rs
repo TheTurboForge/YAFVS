@@ -15,8 +15,8 @@ use crate::{
     app_state::AppState,
     browser_proxy_api::{BrowserProxyAuth, browser_proxy_operator_from_headers},
     credential_payloads::CredentialAssetItem,
-    credential_write_validation::CredentialPatchRequest,
-    credential_writes::patch_credential,
+    credential_write_validation::{CredentialCreateRequest, CredentialPatchRequest},
+    credential_writes::{create_credential, patch_credential},
     errors::ApiError,
     override_writes::delete_override,
     report_format_payloads::ReportFormatAssetItem,
@@ -187,6 +187,16 @@ pub(crate) async fn browser_proxy_patch_credential(
         Json(request),
     )
     .await
+}
+
+pub(crate) async fn browser_proxy_create_credential(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<CredentialCreateRequest>,
+) -> Result<(StatusCode, Json<CredentialAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_credential(State(state), Some(Extension(operator)), Json(request)).await
 }
 
 pub(crate) async fn browser_proxy_patch_alert(

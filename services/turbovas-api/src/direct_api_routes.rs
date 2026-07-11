@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     alert_writes::{clone_alert, delete_alert, patch_alert},
     app_state::AppState,
-    credential_writes::patch_credential,
+    credential_writes::{create_credential, patch_credential},
     filter_writes::{
         clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
         restore_filter,
@@ -148,6 +148,7 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/credentials/:credential_id",
                 patch(patch_credential),
             )
+            .route("/api/v1/credentials", post(create_credential))
             .route("/api/v1/scanners/:scanner_id", patch(patch_scanner))
             .route("/api/v1/scanners/:scanner_id/verify", post(verify_scanner))
             .route("/api/v1/targets/:target_id", patch(patch_target))

@@ -57,6 +57,14 @@ pub(crate) async fn request_gvmd_control_response(
     control_secret: &str,
     command: &str,
 ) -> Result<Vec<u8>, ControlSocketError> {
+    request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes()).await
+}
+
+pub(crate) async fn request_gvmd_control_response_bytes(
+    socket_path: &str,
+    control_secret: &str,
+    command: &[u8],
+) -> Result<Vec<u8>, ControlSocketError> {
     if !control_secret_is_acceptable(control_secret) {
         return Err(ControlSocketError::Configuration);
     }
@@ -64,13 +72,10 @@ pub(crate) async fn request_gvmd_control_response(
         .await
         .map_err(|_| ControlSocketError::Unavailable)?
         .map_err(|_| ControlSocketError::Unavailable)?;
-    timeout(
-        CONTROL_SOCKET_IO_TIMEOUT,
-        stream.write_all(command.as_bytes()),
-    )
-    .await
-    .map_err(|_| ControlSocketError::Unavailable)?
-    .map_err(|_| ControlSocketError::Unavailable)?;
+    timeout(CONTROL_SOCKET_IO_TIMEOUT, stream.write_all(command))
+        .await
+        .map_err(|_| ControlSocketError::Unavailable)?
+        .map_err(|_| ControlSocketError::Unavailable)?;
     timeout(
         CONTROL_RESPONSE_TIMEOUT,
         read_gvmd_control_response(&mut stream),

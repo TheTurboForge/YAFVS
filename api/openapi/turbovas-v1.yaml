@@ -1399,9 +1399,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: credential-redacted-metadata-list-read
-      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       summary: List redacted credential metadata
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native direct write-control can patch credential name/comment metadata; credential secrets, credential-store secret selectors, credential type, allow_insecure, target/scanner links, export/download behavior, create, clone, restore, and delete remain on inherited compatibility paths.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native write-control can create username/password and username/SSH-key credentials and patch name/comment metadata. Other credential types, secret updates, credential-store secret selectors, allow_insecure, target/scanner links, export/download behavior, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1432,6 +1432,48 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postCredentials
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: credential-up-usk-create
+      x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: credential-secret-control
+      summary: Create a username/password or username/SSH-key credential
+      description: Creates one operator-owned username/password (`up`) or username/SSH-key (`usk`) credential through gvmd's authoritative ACL, key validation, encryption, and transaction path. Passwords, passphrases, and private keys are write-only and are never returned. Other credential types, secret updates, clone, restore, and delete remain inherited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialCreateRequest'
+      responses:
+        '201':
+          description: Credential created; response contains redacted metadata only
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /credentials/{credential_id}:
     get:
       operationId: getCredentialsByCredentialId
@@ -1439,9 +1481,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: credential-redacted-metadata-detail-read
-      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       summary: Read one redacted credential metadata record
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native direct write-control can patch credential name/comment metadata; credential secrets, credential-store secret selectors, credential type, allow_insecure, target/scanner links, export/download behavior, create, clone, restore, and delete remain on inherited compatibility paths.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native write-control can create username/password and username/SSH-key credentials and patch name/comment metadata. Other credential types, secret updates, credential-store secret selectors, allow_insecure, target/scanner links, export/download behavior, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:
@@ -1471,13 +1513,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: credential-metadata-modify
-      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update credential metadata
-      description: Direct write-control endpoint for updating credential name and comment only. Credential secrets, credential-store selectors, allow_insecure, credential type, target/scanner links, export, download, create, clone, restore, and delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating credential name and comment only. Secret updates, credential-store selectors, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       requestBody:
@@ -1516,7 +1558,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: credential-redacted-metadata-export-read
-      x-turbovas-inherited-still-owns: credential-secrets-writes-and-deletes
+      x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       summary: Export redacted credential metadata
       description: Direct native JSON metadata export for one credential backed by the same redacted credential detail payload. This export includes credential identity, type label, owner, timestamps, allow-insecure flag, and target/scanner backlinks, but never credential secrets, credential secret values, credential-store secret selectors, private keys, passwords, certificates, downloads, clone/restore/delete behavior, or inherited secret export semantics.
       parameters:
@@ -7830,6 +7872,40 @@ components:
           type: string
           maxLength: 4096
           description: New credential comment. Blank comments clear the comment after trimming.
+    CredentialCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, login, type]
+      description: Write-only secret-bearing request for username/password (`up`) or username/SSH-key (`usk`) credential creation. `up` requires password and forbids passphrase/private_key; `usk` requires private_key, accepts an optional passphrase, and forbids password. The combined decoded name, comment, login, secret, and private-key content must not exceed 48,800 bytes so every accepted request fits the bounded private control frame.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        login:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        type:
+          type: string
+          enum: [up, usk]
+        password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+        passphrase:
+          type: string
+          maxLength: 4096
+          writeOnly: true
+        private_key:
+          type: string
+          minLength: 1
+          maxLength: 32768
+          writeOnly: true
     ScannerPatchRequest:
       type: object
       additionalProperties: false

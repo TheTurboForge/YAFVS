@@ -415,6 +415,7 @@ static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
   const gchar *alert_prefix = "/api/v1/alerts/";
+  const gchar *credentials_path = "/api/v1/credentials";
   const gchar *filters_path = "/api/v1/filters";
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *port_list_imports_path = "/api/v1/port-list-imports";
@@ -447,6 +448,9 @@ native_api_post_path_is_allowed (const gchar *path)
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
+
+  if (g_strcmp0 (path, credentials_path) == 0)
+    return TRUE;
 
   if (g_strcmp0 (path, filters_path) == 0)
     return TRUE;

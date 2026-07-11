@@ -7,7 +7,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
-import FeedStatusCommand, {feedStatusRejection} from 'gmp/commands/feed-status';
+import FeedStatusCommand, {feedStatusRejection} from 'gmp/native-api/feeds';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import {type ResponseRejection} from 'gmp/http/rejection';

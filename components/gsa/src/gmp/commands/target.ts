@@ -6,7 +6,7 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {feedStatusRejection} from 'gmp/commands/feed-status';
+import {feedStatusRejection} from 'gmp/native-api/feeds';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';

@@ -29,7 +29,7 @@ import CveCommand from 'gmp/commands/cve';
 import CvesCommand from 'gmp/commands/cves';
 import DfnCertAdvisoriesCommand from 'gmp/commands/dfn-cert-advisories';
 import DfnCertAdvisoryCommand from 'gmp/commands/dfn-cert-advisory';
-import FeedStatusCommand from 'gmp/commands/feed-status';
+import FeedStatusCommand from 'gmp/native-api/feeds';
 import FilterCommand from 'gmp/commands/filter';
 import FiltersCommand from 'gmp/commands/filters';
 import LoginCommand from 'gmp/commands/login';

@@ -10,7 +10,7 @@ import FeedStatusCommand, {
   FEED_COMMUNITY,
   feedStatusRejection,
   FEED_ENTERPRISE,
-} from 'gmp/commands/feed-status';
+} from 'gmp/native-api/feeds';
 import {
   createPlainResponse,
   createHttp,

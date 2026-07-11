@@ -12,7 +12,7 @@ import {
   afterAll,
   testing,
 } from '@gsa/testing';
-import FeedStatusCommand from 'gmp/commands/feed-status';
+import FeedStatusCommand from 'gmp/native-api/feeds';
 import TaskCommand, {
   isTaskStartManagerResponseFailure,
 } from 'gmp/commands/task';

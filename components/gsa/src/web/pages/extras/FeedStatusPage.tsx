@@ -11,7 +11,7 @@ import {
   CERT_FEED,
   GVMD_DATA_FEED,
   type Feed,
-} from 'gmp/commands/feed-status';
+} from 'gmp/native-api/feeds';
 import {isDefined} from 'gmp/utils/identity';
 import {
   CertBundAdvIcon,

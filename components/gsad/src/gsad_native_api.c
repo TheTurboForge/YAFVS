@@ -420,6 +420,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *port_list_imports_path = "/api/v1/port-list-imports";
   const gchar *port_lists_path = "/api/v1/port-lists";
   const gchar *report_configs_path = "/api/v1/report-configs";
+  const gchar *schedules_path = "/api/v1/schedules";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
   const gchar *tags_path = "/api/v1/tags";
@@ -460,6 +461,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, report_configs_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, schedules_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, scopes_path) == 0)

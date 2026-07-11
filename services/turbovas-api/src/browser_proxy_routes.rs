@@ -44,7 +44,7 @@ use crate::{
         browser_proxy_patch_scan_config, browser_proxy_restore_scan_config,
     },
     browser_proxy_schedule::{
-        browser_proxy_clone_schedule, browser_proxy_delete_schedule,
+        browser_proxy_clone_schedule, browser_proxy_create_schedule, browser_proxy_delete_schedule,
         browser_proxy_hard_delete_schedule, browser_proxy_patch_schedule,
         browser_proxy_restore_schedule,
     },
@@ -247,6 +247,7 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/schedules/:schedule_id/trash",
             delete(browser_proxy_hard_delete_schedule),
         )
+        .route("/api/v1/schedules", post(browser_proxy_create_schedule))
         .route("/api/v1/scopes", post(browser_proxy_create_scope))
         .route("/api/v1/scopes/:scope_id", patch(browser_proxy_patch_scope))
         .route(

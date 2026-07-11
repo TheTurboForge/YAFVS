@@ -7,6 +7,19 @@ use serde::Deserialize;
 use crate::errors::ApiError;
 
 pub(crate) const MAX_SCHEDULE_TEXT_BYTES: usize = 4096;
+pub(crate) const MAX_SCHEDULE_TIMEZONE_BYTES: usize = 256;
+pub(crate) const MAX_SCHEDULE_ICALENDAR_BYTES: usize = 32768;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScheduleCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    #[serde(default)]
+    pub(crate) timezone: Option<String>,
+    pub(crate) icalendar: String,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -17,6 +30,25 @@ pub(crate) struct SchedulePatchRequest {
     pub(crate) comment: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScheduleCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) timezone: String,
+    pub(crate) icalendar: String,
+}
+
+pub(crate) fn validate_schedule_create_request(
+    request: ScheduleCreateRequest,
+) -> Result<ValidatedScheduleCreate, ApiError> {
+    Ok(ValidatedScheduleCreate {
+        name: normalize_required_schedule_text(request.name, "name")?,
+        comment: normalize_optional_schedule_text(request.comment, "comment")?.unwrap_or_default(),
+        timezone: normalize_schedule_timezone(request.timezone)?.unwrap_or_default(),
+        icalendar: normalize_schedule_icalendar(request.icalendar)?,
+    })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ScheduleCloneRequest {
@@ -24,6 +56,36 @@ pub(crate) struct ScheduleCloneRequest {
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+}
+
+fn normalize_schedule_timezone(value: Option<String>) -> Result<Option<String>, ApiError> {
+    value
+        .map(|value| {
+            let value = value.trim().to_string();
+            if value.len() > MAX_SCHEDULE_TIMEZONE_BYTES || value.chars().any(char::is_control) {
+                return Err(ApiError::BadRequest(format!(
+                    "timezone must be printable text up to {MAX_SCHEDULE_TIMEZONE_BYTES} bytes"
+                )));
+            }
+            Ok(value)
+        })
+        .transpose()
+}
+
+fn normalize_schedule_icalendar(value: String) -> Result<String, ApiError> {
+    if value.trim().is_empty() {
+        return Err(ApiError::BadRequest("icalendar is required".to_string()));
+    }
+    if value.len() > MAX_SCHEDULE_ICALENDAR_BYTES
+        || value
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\r' | '\n' | '\t'))
+    {
+        return Err(ApiError::BadRequest(format!(
+            "icalendar must be calendar text up to {MAX_SCHEDULE_ICALENDAR_BYTES} bytes without unsupported control characters"
+        )));
+    }
+    Ok(value)
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 axum = "0.7"
+base64 = "0.22"
 deadpool-postgres = "0.14"
 libc = "0.2"
 quick-xml = "0.41"

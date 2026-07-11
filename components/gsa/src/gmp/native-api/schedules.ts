@@ -65,6 +65,13 @@ interface NativeSchedulePatchArgs {
   comment?: string;
 }
 
+export interface NativeScheduleCreateArgs {
+  name: string;
+  comment?: string;
+  timezone?: string;
+  icalendar: string;
+}
+
 export interface NativeSchedulesQuery {
   page: number;
   pageSize: number;
@@ -311,6 +318,23 @@ export const cloneNativeSchedule = async (
     gmp,
     `api/v1/schedules/${encodeURIComponent(id)}/clone`,
     {},
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const createNativeSchedule = async (
+  gmp: NativeApiGmp,
+  {name, comment = '', timezone, icalendar}: NativeScheduleCreateArgs,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeSchedulePayload>(
+    gmp,
+    'api/v1/schedules',
+    {
+      name,
+      comment,
+      ...(timezone !== undefined ? {timezone} : {}),
+      icalendar,
+    },
   );
   return new Response({id: stringValue(payload.id)});
 };

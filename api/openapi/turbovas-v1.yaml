@@ -3123,9 +3123,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: schedule-metadata-list-read
-      x-turbovas-inherited-still-owns: schedule-create-calendar-edit
+      x-turbovas-inherited-still-owns: schedule-calendar-edit-and-task-recalculation
       summary: List schedules
-      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Native direct write-control can clone existing schedules, patch schedule name/comment metadata, move unlinked live schedules to trash, restore trashed schedules, and hard-delete unlinked trashed schedules; create, calendar mutation, and task next-time recalculation remain on inherited compatibility paths while native safety contracts are designed.
+      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Native direct write-control can create schedules through gvmd's authoritative timezone/iCalendar parser, clone existing schedules, patch schedule name/comment metadata, move unlinked live schedules to trash, restore trashed schedules, and hard-delete unlinked trashed schedules. Calendar mutation and linked-task next-time recalculation remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3144,6 +3144,47 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postSchedules
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: schedule-create
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Create a schedule
+      description: Create an operator-owned schedule through gvmd's authoritative timezone and iCalendar parser. gvmd derives normalized calendar text, first run, duration, recurrence, and timezone fields transactionally. This endpoint does not modify existing schedules or recalculate linked task next-run values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleCreateRequest'
+      responses:
+        '201':
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -6677,6 +6718,28 @@ components:
             type: string
             format: uuid
           uniqueItems: true
+    ScheduleCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - icalendar
+      description: Create a schedule using gvmd's authoritative timezone and iCalendar semantics. Blank timezone uses the operator's configured timezone and then UTC fallback.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        timezone:
+          type: string
+          maxLength: 256
+        icalendar:
+          type: string
+          minLength: 1
+          maxLength: 32768
     ScopePatchRequest:
       type: object
       additionalProperties: false

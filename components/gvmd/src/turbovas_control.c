@@ -5,7 +5,7 @@
 
 /**
  * @file
- * @brief Private TurboVAS task-stop control listener.
+ * @brief Private TurboVAS control listener.
  */
 
 #include "turbovas_control.h"
@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "manage.h"
+#include "manage_schedules.h"
 #include "manage_users.h"
 
 #undef G_LOG_DOMAIN
@@ -29,8 +30,25 @@
 #define TURBOVAS_CONTROL_SECRET_ENV "TURBOVAS_GVMD_CONTROL_SECRET"
 #define TURBOVAS_CONTROL_SECRET_MIN_BYTES 32
 #define TURBOVAS_CONTROL_SECRET_MAX_BYTES 128
-#define TURBOVAS_CONTROL_MAX_REQUEST_BYTES 256
+#define TURBOVAS_CONTROL_STOP_MAX_REQUEST_BYTES 256
+#define TURBOVAS_CONTROL_MAX_REQUEST_BYTES 65536
+#define TURBOVAS_CONTROL_MAX_RESPONSE_BYTES 64
 #define TURBOVAS_CONTROL_TIMEOUT_SECONDS 5
+#define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND "schedule-create "
+#define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES 256
+#define TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES 32768
+
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *timezone;
+  gchar *icalendar;
+} turbovas_control_schedule_create_request_t;
 
 static gboolean
 turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
@@ -129,7 +147,7 @@ turbovas_control_parse_request (const char *request, size_t request_len,
   const char *task_start;
   size_t secret_len;
 
-  if (request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+  if (request_len > TURBOVAS_CONTROL_STOP_MAX_REQUEST_BYTES
       || request_len < 80 + TURBOVAS_CONTROL_SECRET_MIN_BYTES
       || memcmp (request, "stop ", 5)
       || request[request_len - 1] != '\n'
@@ -163,6 +181,158 @@ turbovas_control_parse_request (const char *request, size_t request_len,
          && turbovas_control_uuid_is_valid (task_uuid);
 }
 
+static void
+turbovas_control_schedule_create_request_clear
+  (turbovas_control_schedule_create_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->timezone);
+  g_free (request->icalendar);
+  memset (request, 0, sizeof (*request));
+}
+
+static gboolean
+turbovas_control_decode_base64_field (const char *value, size_t value_len,
+                                      size_t max_decoded_len,
+                                      gboolean required, gchar **decoded_out)
+{
+  gchar *canonical;
+  gchar *encoded;
+  guchar *decoded;
+  gsize decoded_len;
+  size_t encoded_len;
+  gboolean valid;
+
+  encoded_len = value_len;
+  if (encoded_len == 0)
+    {
+      if (required)
+        return FALSE;
+      *decoded_out = g_strdup ("");
+      return TRUE;
+    }
+  if (encoded_len % 4)
+    return FALSE;
+
+  encoded = g_strndup (value, encoded_len);
+  decoded = g_base64_decode (encoded, &decoded_len);
+  canonical = decoded ? g_base64_encode (decoded, decoded_len) : NULL;
+  valid = canonical != NULL && strlen (canonical) == encoded_len
+          && memcmp (canonical, encoded, encoded_len) == 0
+          && decoded_len <= max_decoded_len
+          && (!required || decoded_len > 0)
+          && memchr (decoded, '\0', decoded_len) == NULL
+          && g_utf8_validate ((const gchar *) decoded, decoded_len, NULL);
+  if (valid)
+    *decoded_out = g_strndup ((const gchar *) decoded, decoded_len);
+
+  g_free (canonical);
+  g_free (decoded);
+  g_free (encoded);
+  return valid;
+}
+
+static gboolean
+turbovas_control_next_field (const char **cursor, const char *end,
+                             const char **field, size_t *field_len)
+{
+  const char *separator;
+
+  if (*cursor > end)
+    return FALSE;
+
+  separator = memchr (*cursor, ' ', (size_t) (end - *cursor));
+  if (separator)
+    {
+      *field = *cursor;
+      *field_len = (size_t) (separator - *cursor);
+      *cursor = separator + 1;
+    }
+  else
+    {
+      *field = *cursor;
+      *field_len = (size_t) (end - *cursor);
+      *cursor = end;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_schedule_create_request
+  (const char *request, size_t request_len, const char *expected_secret,
+   size_t expected_secret_len, char operator_uuid[37],
+   turbovas_control_schedule_create_request_t *schedule)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  const char *operator_start;
+  const char *secret;
+  const char *secret_end;
+  size_t field_len;
+  size_t secret_len;
+  gboolean valid;
+
+  memset (schedule, 0, sizeof (*schedule));
+  if (request == NULL
+      || request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH
+                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37
+      || memcmp (request, TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND,
+                 TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len,
+                                           expected_secret,
+                                           expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if (operator_start + 37 > end || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  cursor = operator_start + 37;
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES,
+                TRUE, &schedule->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES,
+                FALSE, &schedule->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len,
+                TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES, FALSE,
+                &schedule->timezone)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len,
+                TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, TRUE,
+                &schedule->icalendar)
+          && cursor == end;
+  if (!valid)
+    turbovas_control_schedule_create_request_clear (schedule);
+
+  return valid;
+}
+
 static const char *
 turbovas_control_response (int result)
 {
@@ -191,6 +361,43 @@ turbovas_control_response (int result)
     }
 }
 
+static const char *
+turbovas_control_schedule_create_response
+  (int result, const char *uuid,
+   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 1:
+        status = "1 exists\n";
+        break;
+      case 3:
+        status = "3 invalid_ical\n";
+        break;
+      case 4:
+        status = "4 invalid_timezone\n";
+        break;
+      case 99:
+        status = "99 forbidden\n";
+        break;
+      default:
+        status = "-1 internal\n";
+        break;
+    }
+
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
 static gboolean
 turbovas_control_write_all (int socket, const char *response)
 {
@@ -215,7 +422,8 @@ turbovas_control_write_all (int socket, const char *response)
 }
 
 static gboolean
-turbovas_control_read_request (int socket, char request[257],
+turbovas_control_read_request
+  (int socket, char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1],
                                size_t *request_len)
 {
   size_t length = 0;
@@ -260,12 +468,11 @@ turbovas_control_set_timeouts (int socket)
                strerror (errno));
 }
 
-static int
-turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
+static gboolean
+turbovas_control_start_operator_session (const char *operator_uuid)
 {
   gchar *operator_uuid_copy;
   gchar *operator_name;
-  int result;
 
   reinit_manage_process ();
 
@@ -275,20 +482,72 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
     {
       g_free (operator_uuid_copy);
       cleanup_manage_process (FALSE);
-      return 99;
+      return FALSE;
     }
   current_credentials.uuid = operator_uuid_copy;
   current_credentials.username = operator_name;
   manage_session_init (current_credentials.uuid);
 
-  result = stop_task (task_uuid);
+  return TRUE;
+}
 
+static void
+turbovas_control_finish_operator_session (void)
+{
   g_free (current_credentials.username);
   g_free (current_credentials.uuid);
   current_credentials.username = NULL;
   current_credentials.uuid = NULL;
   cleanup_manage_process (FALSE);
+}
 
+static int
+turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
+{
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = stop_task (task_uuid);
+
+  turbovas_control_finish_operator_session ();
+
+  return result;
+}
+
+static int
+turbovas_control_create_schedule
+  (const char *operator_uuid,
+   const turbovas_control_schedule_create_request_t *request,
+   char created_uuid[37])
+{
+  gchar *ical_error = NULL;
+  char *uuid = NULL;
+  schedule_t schedule = 0;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = create_schedule (request->name, request->comment,
+                            request->icalendar, request->timezone, &schedule,
+                            &ical_error);
+  if (result == 0)
+    {
+      uuid = schedule_uuid (schedule);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        result = -1;
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+        }
+    }
+
+  free (uuid);
+  g_free (ical_error);
+  turbovas_control_finish_operator_session ();
   return result;
 }
 
@@ -297,24 +556,48 @@ turbovas_control_serve_client (int client_socket)
 {
   char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1];
   char operator_uuid[37];
+  char created_uuid[37];
   char task_uuid[37];
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
   const char *expected_secret;
+  const char *result_response;
   size_t expected_secret_len;
   size_t request_len;
   int result = -1;
+  turbovas_control_schedule_create_request_t schedule_request = {0};
 
   turbovas_control_set_timeouts (client_socket);
   if (turbovas_control_configured_secret (&expected_secret,
                                           &expected_secret_len)
-      && turbovas_control_read_request (client_socket, request, &request_len)
-      && turbovas_control_parse_request (request, request_len,
-                                         expected_secret,
-                                         expected_secret_len,
-                                         operator_uuid, task_uuid))
-    result = turbovas_control_stop_task (operator_uuid, task_uuid);
+      && turbovas_control_read_request (client_socket, request, &request_len))
+    {
+      if (turbovas_control_parse_request (request, request_len,
+                                          expected_secret,
+                                          expected_secret_len,
+                                          operator_uuid, task_uuid))
+        {
+          result = turbovas_control_stop_task (operator_uuid, task_uuid);
+          result_response = turbovas_control_response (result);
+        }
+      else if (turbovas_control_parse_schedule_create_request
+                 (request, request_len, expected_secret, expected_secret_len,
+                  operator_uuid, &schedule_request))
+        {
+          result = turbovas_control_create_schedule (operator_uuid,
+                                                      &schedule_request,
+                                                      created_uuid);
+          result_response = turbovas_control_schedule_create_response
+                              (result, created_uuid, response);
+        }
+      else
+        result_response = turbovas_control_response (result);
+    }
+  else
+    result_response = turbovas_control_response (result);
 
   (void) turbovas_control_write_all (client_socket,
-                                      turbovas_control_response (result));
+                                      result_response);
+  turbovas_control_schedule_create_request_clear (&schedule_request);
 }
 
 void

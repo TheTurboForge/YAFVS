@@ -1229,6 +1229,7 @@ name = "turbovas-api"
 version = "0.1.0-alpha.0"
 dependencies = [
  "axum",
+ "base64",
  "deadpool-postgres",
  "libc",
  "quick-xml",

@@ -147,20 +147,14 @@ describe('ScheduleCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should keep schedule create on inherited GMP when native API is available', async () => {
-    const response = createActionResultResponse({id: 'created-schedule-id'});
-    const fetchMock = testing.fn();
+  test('should create a schedule through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'created-schedule-id'}),
+      ok: true,
+      status: 201,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
+    const fakeHttp = createNativeHttp();
 
     const cmd = new ScheduleCommand(fakeHttp);
     const result = await cmd.create({
@@ -170,7 +164,42 @@ describe('ScheduleCommand tests', () => {
       timezone: 'UTC',
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/schedules');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/schedules',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'created-schedule',
+          comment: 'calendar-bearing create',
+          timezone: 'UTC',
+          icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('created-schedule-id');
+  });
+
+  test('should fall back to inherited GMP when native API is unavailable', async () => {
+    const response = createActionResultResponse({id: 'created-schedule-id'});
+    const fakeHttp = createHttp(response);
+    const cmd = new ScheduleCommand(fakeHttp);
+
+    const result = await cmd.create({
+      name: 'created-schedule',
+      comment: 'calendar-bearing create',
+      icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+      timezone: 'UTC',
+    });
+
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         cmd: 'create_schedule',

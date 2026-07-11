@@ -36,6 +36,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/schedules",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/scopes/:scope_id",
         safety_contract: "write-control-v1",
@@ -594,6 +599,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id/clone"));
     assert!(browser_routes.contains("/api/v1/scan-configs"));
     assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/clone"));
+    assert!(browser_routes.contains("/api/v1/schedules"));
     assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/clone"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/clone"));
     assert!(browser_routes.contains("/api/v1/targets"));
@@ -633,6 +639,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_clone_port_list)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_report_config)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_scan_config)"));
+    assert!(browser_routes.contains("post(browser_proxy_create_schedule)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_schedule)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_target)"));

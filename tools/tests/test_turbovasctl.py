@@ -2472,10 +2472,10 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 174)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 175)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 105)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 69)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 69)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 70)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 70)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
@@ -2509,8 +2509,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 69)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 69)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 70)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 70)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
@@ -2564,7 +2564,7 @@ class TurboVASCtlTests(unittest.TestCase):
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 34)
+        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 35)
         self.assertEqual(status_only["details"]["openapi_contract"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
@@ -2573,7 +2573,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["operations_missing_error_response_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_error_schema_field_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_error_schema_field_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["request_body_schema_ref_count"], 34)
+        self.assertEqual(status_only["details"]["openapi_contract"]["request_body_schema_ref_count"], 35)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_request_body_schema_ref_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_request_body_schema_ref_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["auth_contract_alignment_status"], "pass")
@@ -2590,8 +2590,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 69)
-        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 69)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 70)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 70)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_path_parameter_count"], 0)
@@ -2629,7 +2629,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
         self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 105)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 69)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 70)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
@@ -2687,6 +2687,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/scan-configs/{scan_config_id}/clone",
                 "POST /api/v1/scan-configs/{scan_config_id}/restore",
                 "POST /api/v1/scanners/{scanner_id}/verify",
+                "POST /api/v1/schedules",
                 "POST /api/v1/schedules/{schedule_id}/clone",
                 "POST /api/v1/schedules/{schedule_id}/restore",
                 "POST /api/v1/scopes",
@@ -2704,7 +2705,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/tasks/{task_id}/stop",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 69)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 70)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
@@ -2762,6 +2763,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/scan-configs/{scan_config_id}/clone",
                 "POST /api/v1/scan-configs/{scan_config_id}/restore",
                 "POST /api/v1/scanners/{scanner_id}/verify",
+                "POST /api/v1/schedules",
                 "POST /api/v1/schedules/{schedule_id}/clone",
                 "POST /api/v1/schedules/{schedule_id}/restore",
                 "POST /api/v1/scopes",
@@ -2938,8 +2940,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 69)
-        self.assertEqual(contract["direct_write_control_count"], 69)
+        self.assertEqual(contract["browser_write_proxy_count"], 70)
+        self.assertEqual(contract["direct_write_control_count"], 70)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "GET", "PATCH", "POST"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
@@ -3567,7 +3569,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 174)
+        self.assertEqual(contract["operation_count"], 175)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -3580,7 +3582,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 for operation in contract["operations_with_request_bodies"]
                 if operation != "POST /tasks/{task_id}/replace-target"
             ],
-            ["POST /hosts", "PATCH /hosts/{host_id}", "PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "PATCH /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /tasks", "PATCH /tasks/{task_id}"],
+            ["POST /hosts", "PATCH /hosts/{host_id}", "PATCH /scanners/{scanner_id}", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "POST /filters/{filter_id}/clone", "PATCH /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/resources", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "POST /port-lists/{port_list_id}/clone", "POST /schedules", "PATCH /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "POST /targets", "PATCH /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /tasks", "PATCH /tasks/{task_id}"],
         )
         self.assertEqual(contract["duplicate_operation_ids"], [])
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
@@ -3715,6 +3717,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'scanner-metadata-modify',
          'scanner-verify',
          'schedule-clone',
+         'schedule-create',
          'schedule-hard-delete',
          'schedule-metadata-detail-read',
          'schedule-metadata-export-read',
@@ -3791,7 +3794,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'retention-mutations',
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',
-         'schedule-create-calendar-edit',
+         'schedule-calendar-edit-and-task-recalculation',
          'tag-filter-actions-and-resource-type-change-semantics',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
@@ -3874,8 +3877,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 174)
-        self.assertEqual(details["direct_operation_count"], 174)
+        self.assertEqual(details["operation_count"], 175)
+        self.assertEqual(details["direct_operation_count"], 175)
         self.assertEqual(details["direct_read_operation_count"], 105)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
@@ -3887,7 +3890,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 for operation in details["non_get_direct_operations"]
                 if operation != "POST /tasks/{task_id}/replace-target"
             ],
-            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "POST /scanners/{scanner_id}/verify", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "DELETE /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "DELETE /overrides/{override_id}", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /scopes/{scope_id}/reports", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "POST /tasks", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "POST /tasks/{task_id}/start", "POST /tasks/{task_id}/stop", "DELETE /scope-reports/{scope_report_id}"],
+            ["POST /hosts", "PATCH /hosts/{host_id}", "DELETE /hosts/{host_id}", "DELETE /host-identifiers/{identifier_id}", "DELETE /host-operating-systems/{host_operating_system_id}", "DELETE /tls-certificates/{certificate_id}", "PATCH /scanners/{scanner_id}", "POST /scanners/{scanner_id}/verify", "PATCH /credentials/{credential_id}", "POST /filters", "PATCH /filters/{filter_id}", "DELETE /filters/{filter_id}", "POST /filters/{filter_id}/clone", "POST /filters/{filter_id}/restore", "DELETE /filters/{filter_id}/trash", "PATCH /alerts/{alert_id}", "DELETE /alerts/{alert_id}", "POST /alerts/{alert_id}/clone", "POST /tags", "PATCH /tags/{tag_id}", "DELETE /tags/{tag_id}", "POST /tags/{tag_id}/clone", "POST /tags/{tag_id}/restore", "DELETE /tags/{tag_id}/trash", "POST /tags/{tag_id}/resources", "DELETE /overrides/{override_id}", "POST /port-lists", "POST /port-list-imports", "PATCH /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}", "DELETE /port-lists/{port_list_id}/ranges/{port_range_id}", "POST /port-lists/{port_list_id}/clone", "POST /port-lists/{port_list_id}/restore", "DELETE /port-lists/{port_list_id}/trash", "POST /schedules", "PATCH /schedules/{schedule_id}", "DELETE /schedules/{schedule_id}", "POST /schedules/{schedule_id}/clone", "POST /schedules/{schedule_id}/restore", "DELETE /schedules/{schedule_id}/trash", "POST /scan-configs", "PATCH /scan-configs/{scan_config_id}", "DELETE /scan-configs/{scan_config_id}", "POST /scan-configs/{scan_config_id}/clone", "POST /scan-configs/{scan_config_id}/restore", "DELETE /scan-configs/{scan_config_id}/trash", "POST /report-configs", "PATCH /report-configs/{report_config_id}", "DELETE /report-configs/{report_config_id}", "POST /report-configs/{report_config_id}/clone", "POST /report-configs/{report_config_id}/restore", "DELETE /report-configs/{report_config_id}/trash", "PATCH /report-formats/{report_format_id}", "POST /scopes", "PATCH /scopes/{scope_id}", "DELETE /scopes/{scope_id}", "POST /scopes/{scope_id}/reports", "POST /targets", "PATCH /targets/{target_id}", "DELETE /targets/{target_id}", "POST /targets/{target_id}/clone", "POST /targets/{target_id}/restore", "DELETE /targets/{target_id}/trash", "POST /tasks", "PATCH /tasks/{task_id}", "DELETE /tasks/{task_id}", "POST /tasks/{task_id}/start", "POST /tasks/{task_id}/stop", "DELETE /scope-reports/{scope_report_id}"],
         )
         self.assertIn("/api/v1", details["servers"])
         self.assertIn("http://127.0.0.1:19080/api/v1", details["servers"])
@@ -3914,10 +3917,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 69)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 69)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 69)
-        self.assertEqual(status_only["details"]["operation_request_body_count"], 34)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 70)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 70)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 70)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 35)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
@@ -4097,11 +4100,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 174)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 174)
-        self.assertEqual(details["summary"]["inventory_rows"], 174)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 174)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 174)
+        self.assertEqual(details["summary"]["total_rows"], 175)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 175)
+        self.assertEqual(details["summary"]["inventory_rows"], 175)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 175)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 175)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -4604,7 +4607,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "schedule-metadata-list-read",
-                "x_turbovas_inherited_still_owns": "schedule-create-calendar-edit",
+                "x_turbovas_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
                 "replacement_candidates": ["read-only schedule automation"],
             },
             {
@@ -4645,7 +4648,7 @@ class TurboVASCtlTests(unittest.TestCase):
                     "direct_access": "scriptable_read",
                     "browser_access": "browser_proxied",
                     "x_turbovas_replaces": "schedule-metadata-list-read",
-                    "x_turbovas_inherited_still_owns": "schedule-create-calendar-edit",
+                    "x_turbovas_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
                 }
             ],
         )
@@ -4688,7 +4691,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "x_turbovas_exposure": "direct-read",
                 "x_turbovas_maturity": "live-read",
                 "x_turbovas_replaces": "schedule-metadata-list-read",
-                "x_turbovas_inherited_still_owns": "schedule-create-calendar-edit",
+                "x_turbovas_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
                 "replacement_candidates": ["read-only schedule automation"],
             },
             {
@@ -4962,7 +4965,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 174)
+        self.assertEqual(len(operation_ids), 175)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -7477,6 +7480,198 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["created_target_count"], 2)
         self.assertTrue(result["details"]["port_list_created"])
 
+    def test_native_schedules_from_csv_parses_rows_and_dry_runs_without_calendar_payloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "schedules.csv"
+            csv_file.write_text(
+                'Nightly,Europe/Berlin,"BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR"\n',
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_csv(root, csv_file, dry_run=True)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "pass")
+        planned = result["details"]["planned_schedules"][0]
+        self.assertEqual(planned["name"], "Nightly")
+        self.assertEqual(planned["comment"], turbovasctl.NATIVE_SCHEDULE_CSV_COMMENT)
+        self.assertNotIn("icalendar", planned)
+        self.assertEqual(planned["icalendar_bytes"], len("BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR".encode()))
+        self.assertNotIn("BEGIN:VCALENDAR", json.dumps(result))
+
+    def test_native_schedules_from_csv_rejects_malformed_rows_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "schedules.csv"
+            csv_file.write_text("Valid,UTC,BEGIN:VCALENDAR\nMalformed,UTC\n", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_csv(root, csv_file, allow_write_control=True)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["findings"][0]["check"], "native-schedules-from-csv.rows")
+
+    def test_native_schedules_from_csv_skips_duplicates_and_existing_names_through_paged_get(self):
+        paths: list[str] = []
+        created: list[dict[str, object]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            paths.append(path)
+            if path.startswith("/api/v1/schedules?"):
+                query = turbovasctl.urllib.parse.parse_qs(turbovasctl.urllib.parse.urlsplit(path).query)
+                name = query["filter"][0]
+                page = int(query["page"][0])
+                if name == "Existing":
+                    items = [] if page == 1 else [{"id": "existing-id", "name": name}]
+                    total = 101
+                else:
+                    items = []
+                    total = 0
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": total, "page": page, "page_size": 100}, "items": items}) + "\n200", "")
+            self.assertEqual(path, "/api/v1/schedules")
+            created.append(json.loads(kwargs["body"]))
+            return subprocess.CompletedProcess(["curl"], 0, '{"id":"new-id"}\n201', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "schedules.csv"
+            csv_file.write_text(
+                "New,UTC,BEGIN:VCALENDAR\nNew,UTC,BEGIN:VCALENDAR\nExisting,UTC,BEGIN:VCALENDAR\n",
+                encoding="utf-8",
+            )
+            with (
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="a" * 64),
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct),
+            ):
+                result = turbovasctl.command_native_schedules_from_csv(root, csv_file, allow_write_control=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["created_schedule_count"], 1)
+        self.assertEqual(result["details"]["duplicate_csv_name_count"], 1)
+        self.assertEqual(result["details"]["skipped_existing_schedule_count"], 1)
+        self.assertEqual(len(created), 1)
+        self.assertTrue(any("filter=Existing" in path and "page=2" in path for path in paths))
+
+    def test_native_schedules_from_csv_matches_api_byte_and_control_boundaries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid = root / "valid.csv"
+            calendar = "BEGIN:VCALENDAR\r\nSUMMARY:Übernachtung\r\n\tEND:VCALENDAR"
+            csv_buffer = io.StringIO()
+            csv.writer(csv_buffer, lineterminator="\n").writerow(["é" * 2048, "  Europe/Berlin  ", calendar])
+            valid.write_text(csv_buffer.getvalue(), encoding="utf-8", newline="")
+            rows = turbovasctl.load_native_schedule_csv_rows(valid)
+
+            self.assertEqual(rows[0].name, "é" * 2048)
+            self.assertEqual(rows[0].timezone, "Europe/Berlin")
+            self.assertEqual(rows[0].icalendar, calendar)
+            self.assertEqual(turbovasctl.native_schedule_csv_schedule_body(rows[0])["icalendar"], calendar)
+
+            too_long = root / "too-long.csv"
+            too_long.write_text(f"{'é' * 2049},UTC,BEGIN:VCALENDAR\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exceeds 4096"):
+                turbovasctl.load_native_schedule_csv_rows(too_long)
+
+            bad_calendar = root / "bad-calendar.csv"
+            bad_calendar.write_text("Name,UTC,BEGIN:VCALENDAR\x0b\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unsupported control"):
+                turbovasctl.load_native_schedule_csv_rows(bad_calendar)
+
+            bad_name = root / "bad-name.csv"
+            bad_name.write_text("Bad\x01Name,UTC,BEGIN:VCALENDAR\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "schedule name must be printable"):
+                turbovasctl.load_native_schedule_csv_rows(bad_name)
+
+    def test_native_schedules_from_csv_requires_explicit_write_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "schedules.csv"
+            csv_file.write_text("Nightly,UTC,BEGIN:VCALENDAR\n", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_csv(root, csv_file)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["findings"][1]["check"], "native-schedules-from-csv.write-control-intent")
+
+    def test_native_schedules_from_csv_posts_exact_native_request_shape(self):
+        requests: list[tuple[str, dict[str, object]]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            if path.startswith("/api/v1/schedules?"):
+                return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
+            requests.append((path, {"method": kwargs["method"], "body": json.loads(kwargs["body"]), "headers": kwargs["extra_headers"]}))
+            return subprocess.CompletedProcess(["curl"], 0, '{"id":"new-id"}\n201', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "schedules.csv"
+            csv_file.write_text("Nightly,Europe/Berlin,BEGIN:VCALENDAR\n", encoding="utf-8")
+            with (
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="b" * 64),
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct),
+            ):
+                result = turbovasctl.command_native_schedules_from_csv(root, csv_file, allow_write_control=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(requests[0][0], "/api/v1/schedules")
+        self.assertEqual(requests[0][1]["method"], "POST")
+        self.assertEqual(
+            requests[0][1]["body"],
+            {
+                "name": "Nightly",
+                "comment": turbovasctl.NATIVE_SCHEDULE_CSV_COMMENT,
+                "timezone": "Europe/Berlin",
+                "icalendar": "BEGIN:VCALENDAR",
+            },
+        )
+        self.assertEqual(requests[0][1]["headers"], (("Content-Type", "application/json"),))
+
+    def test_native_schedules_from_csv_continues_and_aggregates_create_failures(self):
+        attempted: list[str] = []
+
+        def fake_direct(_root, path, **kwargs):
+            if path.startswith("/api/v1/schedules?"):
+                return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
+            body = json.loads(kwargs["body"])
+            attempted.append(body["name"])
+            if body["name"] == "Broken":
+                return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"conflict","message":"rejected"}}\n409', "")
+            return subprocess.CompletedProcess(["curl"], 0, '{"id":"created-id"}\n201', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_file = root / "schedules.csv"
+            csv_file.write_text(
+                "First,UTC,BEGIN:VCALENDAR\nBroken,UTC,BEGIN:VCALENDAR\nLast,UTC,BEGIN:VCALENDAR\n",
+                encoding="utf-8",
+            )
+            with (
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="c" * 64),
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct),
+            ):
+                result = turbovasctl.command_native_schedules_from_csv(root, csv_file, allow_write_control=True)
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(attempted, ["First", "Broken", "Last"])
+        self.assertEqual(result["details"]["created_schedule_count"], 2)
+        self.assertEqual(result["details"]["create_failure_count"], 1)
+        self.assertIn("rejected", json.dumps(result))
+        self.assertNotIn("BEGIN:VCALENDAR", json.dumps(result))
+
+    def test_native_schedule_create_openapi_schema_is_exact(self):
+        root = Path(__file__).resolve().parents[2]
+        drift = turbovasctl.openapi_schedule_create_schema_contract_drift(root, turbovasctl.openapi_contract_operations(root))
+        self.assertEqual(drift["schedule_create_schema_missing"], [])
+        self.assertEqual(drift["schedule_create_schema_invalid"], [])
+
     def test_native_targets_from_csv_parses_rows_and_dry_runs_payloads(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -8213,6 +8408,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/empty-trash.gmp.py")[0], "candidate_for_removal")
         self.assertEqual(turbovasctl.native_tooling_category("docs/GMP_XML_STRANGLER.md")[0], "compatibility_bridge")
 
+    def test_native_schedule_csv_script_is_absent_after_native_retirement(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertFalse((root / "components/gvm-tools/scripts/create-schedules-from-csv.gmp.py").exists())
+
     def test_native_tooling_candidate_removal_review_splits_safety_buckets(self):
         review = turbovasctl.native_tooling_removal_review(
             [
@@ -8254,7 +8453,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/start-alert-scan.gmp.py",
                 "components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
-                "components/gvm-tools/scripts/create-schedules-from-csv.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
                 "components/gvm-tools/scripts/send-schedules.gmp.py",
@@ -8274,7 +8472,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("CERT-Bund scan-config generation", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
         self.assertIn("CVE-to-NVT", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
-        self.assertIn("CSV schedule creation", write_blockers["components/gvm-tools/scripts/create-schedules-from-csv.gmp.py"])
         self.assertNotIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_blockers)
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
@@ -9934,7 +10131,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 {"status": "pass", "check": "native-api-direct.write-control-operator", "message": "ok"},
                 {"status": "warn", "check": "native-api-direct.report-config-fixture", "message": "missing configurable report-format fixture"},
                 {"status": "pass", "check": "native-api-direct.report-config-missing-format-denied", "message": "ok"},
-                {"status": "warn", "check": "native-api-direct.schedule-fixture", "message": "missing schedule fixture"},
+                {"status": "warn", "check": "native-api-direct.schedule-write-create", "message": "missing schedule fixture"},
                 {"status": "pass", "check": "native-api-direct.tag-resource-add", "message": "ok"},
                 {"status": "pass", "check": "native-api-direct.task-stop-missing", "message": "ok"},
                 {"status": "pass", "check": "native-api-direct.scope-report-delete-missing", "message": "ok"},
@@ -9946,11 +10143,11 @@ db2:keys=5,expires=0,avg_ttl=0
 
         self.assertEqual(compact["status"], "warn")
         self.assertEqual(compact["details"]["non_pass_count"], 2)
-        self.assertEqual([item["check"] for item in compact["findings"]], ["native-api-direct.report-config-fixture", "native-api-direct.schedule-fixture"])
+        self.assertEqual([item["check"] for item in compact["findings"]], ["native-api-direct.report-config-fixture", "native-api-direct.schedule-write-create"])
         checks = compact["details"]["important_checks"]
         self.assertEqual(checks["native-api-direct.report-config-fixture"], "warn")
         self.assertEqual(checks["native-api-direct.report-config-missing-format-denied"], "pass")
-        self.assertEqual(checks["native-api-direct.schedule-fixture"], "warn")
+        self.assertEqual(checks["native-api-direct.schedule-write-create"], "warn")
         self.assertEqual(checks["native-api-direct.tag-resource-add"], "pass")
         self.assertEqual(checks["native-api-direct.task-stop-missing"], "pass")
         self.assertEqual(checks["native-api-direct.scope-report-delete-missing"], "pass")
@@ -10004,6 +10201,7 @@ db2:keys=5,expires=0,avg_ttl=0
             alert_tag_deleted = {"value": False}
             scan_config_live = {"value": True}
             schedule_live = {"value": True}
+            schedule_fixture = {"icalendar": "", "timezone": ""}
             report_config_created_name = {"value": ""}
             target_in_use = {"value": False}
             target_credential_link_count = {"value": 0}
@@ -10270,12 +10468,18 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "GET" and path == "/api/v1/schedules?page_size=1":
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": schedule_uuid, "name": "Daily", "comment": "original schedule comment"}], "page": {"total": 1}}) + "\n200", "")
+                if method == "POST" and path == "/api/v1/schedules":
+                    payload = json.loads(body)
+                    schedule_fixture["icalendar"] = payload["icalendar"]
+                    schedule_fixture["timezone"] = payload["timezone"]
+                    schedule_live["value"] = True
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "name": payload["name"], "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n201", "")
                 if method == "PATCH" and path.startswith("/api/v1/schedules/"):
                     payload = json.loads(body)
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": payload["comment"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/schedules/{schedule_uuid}/clone"):
                     payload = json.loads(body)
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_clone_uuid, "name": payload["name"], "comment": payload["comment"], "icalendar": "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20300101T000000Z\nDURATION:PT1H\nRRULE:FREQ=DAILY\nEND:VEVENT\nEND:VCALENDAR"}) + "\n201", "")
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_clone_uuid, "name": payload["name"], "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n201", "")
                 if method == "POST" and path.startswith(f"/api/v1/schedules/{schedule_uuid}/restore"):
                     schedule_live["value"] = True
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": ""}) + "\n200", "")
@@ -10473,7 +10677,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.filter-write-post-hard-delete"], "pass")
         self.assertEqual(checks["native-api-direct.filter-write-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.filter-write-post-cleanup"], "pass")
-        self.assertEqual(checks["native-api-direct.schedule-fixture"], "pass")
+        self.assertEqual(checks["native-api-direct.schedule-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-restore"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-clone"], "pass")

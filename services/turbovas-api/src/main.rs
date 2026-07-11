@@ -58,6 +58,7 @@ mod filter_write_validation;
 mod filter_writes;
 mod filters;
 mod formatters;
+mod gvmd_control;
 mod host_asset_payloads;
 mod host_asset_query_sql;
 mod host_assets;

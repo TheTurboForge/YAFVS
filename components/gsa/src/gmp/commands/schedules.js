@@ -19,6 +19,7 @@ import {filterString} from 'gmp/models/filter/utils';
 import Schedule from 'gmp/models/schedule';
 import {
   cloneNativeSchedule,
+  createNativeSchedule,
   deleteNativeSchedule,
   exportNativeScheduleMetadata,
   exportNativeSchedulesMetadata,
@@ -60,6 +61,14 @@ export class ScheduleCommand extends EntityCommand {
   create(args) {
     const {name, comment = '', icalendar, timezone} = args;
     log.debug('Creating new schedule', args);
+    if (canUseNativeApi(this.http)) {
+      return createNativeSchedule(this.http, {
+        name,
+        comment,
+        icalendar,
+        timezone,
+      });
+    }
     return this.action({
       cmd: 'create_schedule',
       name,

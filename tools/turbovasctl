@@ -361,7 +361,7 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "saved-filter-gsa-filter-actions-or-alert-linkage",
     "scan-config-preference-write-or-export",
     "scanner-control-or-credential",
-    "schedule-create-or-calendar-edit",
+    "schedule-calendar-edit-and-task-recalculation",
     "tag-write-or-resource-actions",
     "task-target-scan-control-or-credential",
     "trashcan-row-or-mutation",
@@ -396,7 +396,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "bulk-modify-schedules.gmp.py",
         "cfg-gen-for-certs.gmp.py",
         "create-alerts-from-csv.gmp.py",
-        "create-schedules-from-csv.gmp.py",
         "empty-trash.gmp.py",
         "send-schedules.gmp.py",
     },
@@ -415,7 +414,6 @@ NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "cfg-gen-for-certs.gmp.py": "Inherited CERT-Bund scan-config generation is characterized; native tooling still lacks a safe scan-config creation/selector contract for advisory CVE-to-NVT resolution, whole-family selection, and required port-scanner NVTs.",
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
-    "create-schedules-from-csv.gmp.py": "Inherited CSV schedule creation is characterized; native tooling still lacks a contract for timezone/iCalendar schedule creation.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
@@ -606,6 +604,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "schedule-metadata-export-read",
         "schedule-metadata-list-read",
         "schedule-metadata-modify",
+        "schedule-create",
         "schedule-clone",
         "schedule-hard-delete",
         "schedule-restore",
@@ -682,7 +681,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "retention-mutations",
         "saved-filter-alert-linkage",
         "scan-config-preference-selector-mutation-import-export-blank-create",
-        "schedule-create-calendar-edit",
+        "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "tag-filter-actions-and-resource-type-change-semantics",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -1357,9 +1356,13 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "trashcan-redacted-row-metadata-read",
     },
     ("get", "/schedules"): {
-        "x-turbovas-inherited-still-owns": "schedule-create-calendar-edit",
+        "x-turbovas-inherited-still-owns": "schedule-calendar-edit-and-task-recalculation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-list-read",
+    },
+    ("post", "/schedules"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-replaces": "schedule-create",
     },
     ("get", "/schedules/{schedule_id}"): {
         "x-turbovas-maturity": "live-read",
@@ -3285,7 +3288,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "scan-configs.js":
         return "scan-config-preference-write-or-export", "Scan-config preferences, selectors, imports, exports, creates, deletes, and trash handling remain inherited."
     if name == "schedules.js":
-        return "schedule-create-or-calendar-edit", "GSA schedule create and calendar edit/recalculation semantics remain inherited."
+        return "schedule-calendar-edit-and-task-recalculation", "Existing-schedule calendar edit and linked-task next-time recalculation remain inherited."
     if name == "filter.ts":
         return "saved-filter-gsa-filter-actions-or-alert-linkage", "GSA saved-filter dialog actions, export/settings behavior, and alert linkage remain inherited outside the bounded direct write-control contract."
     if name == "tag.ts":
@@ -6447,6 +6450,84 @@ def openapi_request_body_schema_contract_drift(repo_root: Path | None, operation
     }
 
 
+OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_VALUES = {
+    "type": "object",
+    "additionalProperties": "false",
+    "properties.name.type": "string",
+    "properties.name.minLength": "1",
+    "properties.name.maxLength": "4096",
+    "properties.comment.type": "string",
+    "properties.comment.maxLength": "4096",
+    "properties.timezone.type": "string",
+    "properties.timezone.maxLength": "256",
+    "properties.icalendar.type": "string",
+    "properties.icalendar.minLength": "1",
+    "properties.icalendar.maxLength": "32768",
+}
+OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_REQUIRED = ("name", "icalendar")
+
+
+def openapi_schedule_create_schema_contract_drift(repo_root: Path | None, operations: list[dict[str, Any]]) -> dict[str, Any]:
+    candidates = [operation for operation in operations if operation.get("method") == "post" and operation.get("path") == "/schedules"]
+    missing: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    observed: dict[str, Any] = {"schema_ref": None, "required": [], "values": {}}
+    if len(candidates) != 1:
+        missing.append({"field": "POST /schedules", "expected": "exactly one operation"})
+        return {
+            "schedule_create_schema_missing": missing,
+            "schedule_create_schema_invalid": invalid,
+            "schedule_create_schema_observed": observed,
+        }
+    operation = candidates[0]
+    ref = operation.get("request_body_schema_ref")
+    observed["schema_ref"] = ref
+    if ref != "#/components/schemas/ScheduleCreateRequest":
+        invalid.append(
+            {
+                "field": "POST /schedules.requestBody.schema.$ref",
+                "actual": ref,
+                "expected": "#/components/schemas/ScheduleCreateRequest",
+            }
+        )
+        return {
+            "schedule_create_schema_missing": missing,
+            "schedule_create_schema_invalid": invalid,
+            "schedule_create_schema_observed": observed,
+        }
+    block = openapi_component_schema_block(repo_root, "ScheduleCreateRequest")
+    values = openapi_indented_scalar_fields(block)
+    required = tuple(line.strip()[2:] for line in block if line.startswith("        - "))
+    observed["required"] = list(required)
+    observed["values"] = values
+    if not block:
+        missing.append({"field": "components.schemas.ScheduleCreateRequest", "expected": "schema"})
+    if required != OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_REQUIRED:
+        invalid.append(
+            {
+                "field": "components.schemas.ScheduleCreateRequest.required",
+                "actual": list(required),
+                "expected": list(OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_REQUIRED),
+            }
+        )
+    for field, expected in sorted(OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_VALUES.items()):
+        if field not in values:
+            missing.append({"field": f"components.schemas.ScheduleCreateRequest.{field}", "expected": expected})
+        elif values[field] != expected:
+            invalid.append(
+                {
+                    "field": f"components.schemas.ScheduleCreateRequest.{field}",
+                    "actual": values[field],
+                    "expected": expected,
+                }
+            )
+    return {
+        "schedule_create_schema_missing": missing,
+        "schedule_create_schema_invalid": invalid,
+        "schedule_create_schema_observed": observed,
+    }
+
+
 def rust_collection_contract_constants(repo_root: Path | None) -> dict[str, int | None]:
     if repo_root is None:
         return {"default_page_size": None, "max_page_size": None, "max_filter_length": None}
@@ -6614,6 +6695,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     migration_metadata_drift = openapi_migration_metadata_contract_drift(operations)
     error_schema_drift = openapi_error_schema_contract_drift(repo_root)
     request_body_schema_drift = openapi_request_body_schema_contract_drift(repo_root, operations)
+    schedule_create_schema_drift = openapi_schedule_create_schema_contract_drift(repo_root, operations)
     collection_query_contract = openapi_collection_query_contract_summary(repo_root, operations)
     auth_contract = openapi_auth_contract_summary(repo_root)
 
@@ -6658,6 +6740,8 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         or error_schema_drift["invalid_error_schema_fields"]
         or request_body_schema_drift["missing_request_body_schema_refs"]
         or request_body_schema_drift["invalid_request_body_schema_refs"]
+        or schedule_create_schema_drift["schedule_create_schema_missing"]
+        or schedule_create_schema_drift["schedule_create_schema_invalid"]
         or collection_query_contract["alignment_status"] != "pass"
         or auth_contract["alignment_status"] != "pass"
         or write_control_contract["alignment_status"] != "pass"
@@ -6686,6 +6770,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         "operations_missing_error_responses": operations_missing_error_responses,
         **error_schema_drift,
         **request_body_schema_drift,
+        **schedule_create_schema_drift,
         "collection_query_contract": collection_query_contract,
         "auth_contract": auth_contract,
         "write_control_contract": write_control_contract,
@@ -8315,6 +8400,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/schedules",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Schedules list (migrated through gsad same-origin proxy)", "read-only schedule automation", "native-api-request helper"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/schedules",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA schedule create dialog", "direct native schedule creation", "native CSV schedule creation"],
+                "residual_inherited": [
+                    "Existing-schedule calendar mutation and linked-task next-time recalculation remain inherited until separately migrated."
+                ],
             },
             {
                 "endpoint": "/api/v1/schedules/{schedule_id}",
@@ -14795,7 +14890,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.filter-write-post-hard-delete",
             "native-api-direct.filter-write-cleanup",
             "native-api-direct.filter-write-post-cleanup",
-            "native-api-direct.schedule-fixture",
+            "native-api-direct.schedule-write-create",
             "native-api-direct.schedule-write-update",
             "native-api-direct.schedule-write-restore",
             "native-api-direct.schedule-write-clone",
@@ -15471,7 +15566,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     schedule_original_comment = ""
     schedule_name = f"turbovas-direct-write-smoke-schedule-{int(time.time())}-{os.getpid()}"
     schedule_clone_name = f"{schedule_name}-clone"
-    schedule_icalendar = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20300101T000000Z\nDURATION:PT1H\nRRULE:FREQ=DAILY\nEND:VEVENT\nEND:VCALENDAR"
+    schedule_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20350101T000000Z\r\nRRULE:FREQ=DAILY\r\nDURATION:PT1H\r\nUID:turbovas-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     scan_config_id: str | None = None
     scan_config_clone_id: str | None = None
     scan_config_name = f"turbovas-direct-write-smoke-scan-config-{int(time.time())}-{os.getpid()}"
@@ -16113,24 +16208,60 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             filter_post_cleanup_ok = filter_post_cleanup.returncode == 0 and filter_post_cleanup_status == 404 and isinstance(filter_post_cleanup_json, dict) and filter_post_cleanup_json.get("error", {}).get("code") == "not_found"
             findings.append(native_api_probe_finding("pass" if filter_post_cleanup_ok else "fail", "native-api-direct.filter-write-post-cleanup", "Direct API confirms the temporary saved-filter fixture is gone after cleanup." if filter_post_cleanup_ok else "Direct API did not confirm the temporary saved-filter fixture was removed.", filter_post_cleanup, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}", token=token, env=env), filter_post_cleanup_json, {"http_status": filter_post_cleanup_status, "filter_id": filter_id, **summarize_native_api_response(filter_post_cleanup_json)}))
 
-        schedule_fixture_sql = (
-            "WITH inserted_schedule AS (INSERT INTO schedules "
-            "(uuid, owner, name, comment, first_time, period, period_months, byday, duration, timezone, icalendar, creation_time, modification_time) "
-            "VALUES (make_uuid(), "
-            f"(SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid or '')}), "
-            f"{sql_literal(schedule_name)}, {sql_literal(schedule_original_comment)}, "
-            "1893456000, 86400, 0, 0, 3600, 'UTC', "
-            f"{sql_literal(schedule_icalendar)}, m_now(), m_now()) "
-            "RETURNING uuid::text) SELECT uuid FROM inserted_schedule;"
+        schedule_create_body = json.dumps(
+            {
+                "name": schedule_name,
+                "comment": schedule_original_comment,
+                "timezone": "UTC",
+                "icalendar": schedule_icalendar,
+            },
+            separators=(",", ":"),
         )
-        schedule_fixture = psql(repo_root, schedule_fixture_sql)
-        schedule_id = psql_value(schedule_fixture) or None
-        schedule_fixture_ok = schedule_fixture.returncode == 0 and bool(schedule_id)
-        schedule_fixture_finding = process_step_finding("pass" if schedule_fixture_ok else "fail", "native-api-direct.schedule-fixture", "Direct write-control smoke created a temporary unlinked schedule fixture for reversible metadata patching." if schedule_fixture_ok else "Direct write-control smoke failed to create a temporary unlinked schedule fixture for reversible metadata patching.", schedule_fixture, ["psql", "fixed-schedule-smoke-fixture"])
-        schedule_fixture_details = schedule_fixture_finding.setdefault("details", {})
-        if isinstance(schedule_fixture_details, dict):
-            schedule_fixture_details.update({"schedule_id": schedule_id, "schedule_name": schedule_name})
-        findings.append(schedule_fixture_finding)
+        schedule_create = direct_native_api_curl(
+            repo_root,
+            "/api/v1/schedules",
+            token=token,
+            env=env,
+            method="POST",
+            body=schedule_create_body,
+            extra_headers=content_type,
+        )
+        schedule_create_json, schedule_create_status = parse_json_output_with_http_status(schedule_create)
+        schedule_id = schedule_create_json.get("id") if isinstance(schedule_create_json, dict) else None
+        schedule_create_ok = (
+            schedule_create.returncode == 0
+            and schedule_create_status == 201
+            and isinstance(schedule_id, str)
+            and schedule_create_json.get("name") == schedule_name
+            and schedule_create_json.get("timezone") == "UTC"
+            and isinstance(schedule_create_json.get("icalendar"), str)
+            and bool(schedule_create_json.get("icalendar"))
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if schedule_create_ok else "fail",
+                "native-api-direct.schedule-write-create",
+                "Direct write-control created a temporary schedule through gvmd's authoritative iCalendar path."
+                if schedule_create_ok
+                else "Direct write-control failed to create a temporary schedule through gvmd.",
+                schedule_create,
+                direct_native_api_display_command(
+                    "/api/v1/schedules",
+                    token=token,
+                    env=env,
+                    method="POST",
+                    body=schedule_create_body,
+                    extra_headers=content_type,
+                ),
+                schedule_create_json,
+                {
+                    "http_status": schedule_create_status,
+                    "schedule_id": schedule_id,
+                    "schedule_name": schedule_name,
+                    **summarize_native_api_response(schedule_create_json),
+                },
+            )
+        )
 
         if schedule_id:
             schedule_patch_comment = "TurboVAS direct write smoke updated schedule comment"
@@ -16159,7 +16290,16 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             schedule_clone = direct_native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}/clone", token=token, env=env, method="POST", body=schedule_clone_body, extra_headers=content_type)
             schedule_clone_json, schedule_clone_status = parse_json_output_with_http_status(schedule_clone)
             schedule_clone_id = schedule_clone_json.get("id") if isinstance(schedule_clone_json, dict) and isinstance(schedule_clone_json.get("id"), str) else None
-            schedule_clone_ok = schedule_clone.returncode == 0 and schedule_clone_status == 201 and bool(schedule_clone_id) and schedule_clone_id != schedule_id and schedule_clone_json.get("name") == schedule_clone_name and schedule_clone_json.get("comment") == "TurboVAS direct write smoke cloned schedule comment" and schedule_clone_json.get("icalendar") == schedule_icalendar
+            schedule_clone_ok = (
+                schedule_clone.returncode == 0
+                and schedule_clone_status == 201
+                and bool(schedule_clone_id)
+                and schedule_clone_id != schedule_id
+                and schedule_clone_json.get("name") == schedule_clone_name
+                and schedule_clone_json.get("comment") == "TurboVAS direct write smoke cloned schedule comment"
+                and schedule_clone_json.get("timezone") == schedule_create_json.get("timezone")
+                and schedule_clone_json.get("icalendar") == schedule_create_json.get("icalendar")
+            )
             findings.append(native_api_probe_finding("pass" if schedule_clone_ok else "fail", "native-api-direct.schedule-write-clone", "Direct write-control cloned the temporary schedule fixture with copied calendar data." if schedule_clone_ok else "Direct write-control failed to clone the temporary schedule fixture with copied calendar data.", schedule_clone, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}/clone", token=token, env=env, method="POST", body=schedule_clone_body, extra_headers=content_type), schedule_clone_json, {"http_status": schedule_clone_status, "schedule_id": schedule_id, "schedule_clone_id": schedule_clone_id, **summarize_native_api_response(schedule_clone_json)}))
 
             if schedule_clone_id:
@@ -17663,6 +17803,27 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     disabled_port_list_hard_delete_json, disabled_port_list_hard_delete_status = parse_json_output_with_http_status(disabled_port_list_hard_delete)
     disabled_port_list_hard_delete_ok = disabled_port_list_hard_delete.returncode == 0 and disabled_port_list_hard_delete_status == 405 and isinstance(disabled_port_list_hard_delete_json, dict) and disabled_port_list_hard_delete_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_port_list_hard_delete_ok else "fail", "native-api-direct.port-list-hard-delete-disabled", "Direct native API rejects port-list hard deletes while direct write-control is disabled." if disabled_port_list_hard_delete_ok else "Direct native API did not reject a port-list hard delete while direct write-control is disabled.", disabled_port_list_hard_delete, direct_native_api_display_command("/api/v1/port-lists/00000000-0000-0000-0000-000000000000/trash", token=token, env=env, method="DELETE"), disabled_port_list_hard_delete_json, {"http_status": disabled_port_list_hard_delete_status, **summarize_native_api_response(disabled_port_list_hard_delete_json)}))
+
+    disabled_schedule_create_body = json.dumps(
+        {
+            "name": "disabled-write-schedule",
+            "timezone": "UTC",
+            "icalendar": "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:20300101T000000Z\nEND:VEVENT\nEND:VCALENDAR",
+        },
+        separators=(",", ":"),
+    )
+    disabled_schedule_create = direct_native_api_curl(
+        repo_root,
+        "/api/v1/schedules",
+        token=token,
+        env=env,
+        method="POST",
+        body=disabled_schedule_create_body,
+        extra_headers=content_type,
+    )
+    disabled_schedule_create_json, disabled_schedule_create_status = parse_json_output_with_http_status(disabled_schedule_create)
+    disabled_schedule_create_ok = disabled_schedule_create.returncode == 0 and disabled_schedule_create_status == 405 and isinstance(disabled_schedule_create_json, dict) and disabled_schedule_create_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_schedule_create_ok else "fail", "native-api-direct.schedule-create-disabled", "Direct native API rejects schedule creates while direct write-control is disabled." if disabled_schedule_create_ok else "Direct native API did not reject a schedule create while direct write-control is disabled.", disabled_schedule_create, direct_native_api_display_command("/api/v1/schedules", token=token, env=env, method="POST", body=disabled_schedule_create_body, extra_headers=content_type), disabled_schedule_create_json, {"http_status": disabled_schedule_create_status, **summarize_native_api_response(disabled_schedule_create_json)}))
 
     disabled_schedule_patch = direct_native_api_curl(
         repo_root,
@@ -21480,6 +21641,333 @@ def native_target_csv_fetch_exact_items(
         page += 1
         if page > 1000:
             return matches, {"reason": "lookup pagination exceeded safety limit", "page": page, "total": total}
+
+
+NATIVE_SCHEDULE_CSV_COMMENT = "Created by TurboVAS native-schedules-from-csv"
+NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS = 10
+NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH = 4096
+NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH = 256
+NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH = 32768
+
+
+@dataclass(frozen=True)
+class NativeScheduleCsvRow:
+    row_number: int
+    name: str
+    timezone: str
+    icalendar: str
+
+
+def load_native_schedule_csv_rows(csv_file: Path) -> list[NativeScheduleCsvRow]:
+    rows: list[NativeScheduleCsvRow] = []
+    try:
+        with csv_file.open(encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle, delimiter=",")
+            for row_number, row in enumerate(reader, start=1):
+                if not row:
+                    continue
+                if len(row) != 3:
+                    raise ValueError(f"row {row_number} must have exactly 3 columns: name, timezone, icalendar")
+                name = row[0].strip()
+                timezone_name = row[1].strip()
+                icalendar = row[2]
+                if not name:
+                    raise ValueError(f"row {row_number} must include a schedule name")
+                if not icalendar.strip():
+                    raise ValueError(f"row {row_number} must include an iCalendar value")
+                if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in name):
+                    raise ValueError(f"row {row_number} schedule name must be printable text")
+                if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in timezone_name):
+                    raise ValueError(f"row {row_number} timezone must be printable text")
+                if any(
+                    (ord(character) < 32 or 127 <= ord(character) <= 159)
+                    and character not in {"\r", "\n", "\t"}
+                    for character in icalendar
+                ):
+                    raise ValueError(f"row {row_number} iCalendar contains unsupported control characters")
+                if len(name.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH:
+                    raise ValueError(f"row {row_number} schedule name exceeds {NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH} bytes")
+                if len(timezone_name.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH:
+                    raise ValueError(f"row {row_number} timezone exceeds {NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH} bytes")
+                if len(icalendar.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH:
+                    raise ValueError(f"row {row_number} iCalendar value exceeds {NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH} bytes")
+                rows.append(
+                    NativeScheduleCsvRow(
+                        row_number=row_number,
+                        name=name,
+                        timezone=timezone_name,
+                        icalendar=icalendar,
+                    )
+                )
+    except (OSError, csv.Error) as exc:
+        raise ValueError(f"failed to read schedule CSV file: {exc}") from exc
+    if not rows:
+        raise ValueError("schedule CSV file is empty")
+    return rows
+
+
+def native_schedule_csv_schedule_body(row: NativeScheduleCsvRow) -> dict[str, Any]:
+    return {
+        "name": row.name,
+        "comment": NATIVE_SCHEDULE_CSV_COMMENT,
+        "timezone": row.timezone,
+        "icalendar": row.icalendar,
+    }
+
+
+def native_schedule_csv_safe_summary(row: NativeScheduleCsvRow) -> dict[str, Any]:
+    encoded = row.icalendar.encode("utf-8")
+    return {
+        "row": row.row_number,
+        "name": row.name,
+        "timezone": row.timezone,
+        "comment": NATIVE_SCHEDULE_CSV_COMMENT,
+        "icalendar_bytes": len(encoded),
+        "icalendar_sha256": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
+def native_schedule_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        "csv_file": details.get("csv_file"),
+        "row_count": details.get("row_count", 0),
+        "dry_run": details.get("dry_run", False),
+        "duplicate_csv_name_count": details.get("duplicate_csv_name_count", 0),
+        "skipped_existing_schedule_count": details.get("skipped_existing_schedule_count", 0),
+        "preflight_failure_count": details.get("preflight_failure_count", 0),
+        "created_schedule_count": details.get("created_schedule_count", 0),
+        "create_failure_count": details.get("create_failure_count", 0),
+    }
+    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
+    compact["findings"] = non_pass or [
+        finding("pass", "native-schedules-from-csv.status-only", "Native CSV schedule creation passed; details summarized.")
+    ]
+    return compact
+
+
+def native_schedule_csv_exact_items(parsed: dict[str, Any] | None, name: str) -> list[dict[str, Any]]:
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        return []
+    return [item for item in parsed["items"] if isinstance(item, dict) and item.get("name") == name]
+
+
+def native_schedule_csv_fetch_existing(
+    repo_root: Path,
+    name: str,
+    *,
+    token: str,
+    env: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    matches: list[dict[str, Any]] = []
+    page = 1
+    page_size = 100
+    encoded_name = urllib.parse.quote(name, safe="")
+    while True:
+        path = f"/api/v1/schedules?filter={encoded_name}&page={page}&page_size={page_size}"
+        response = direct_native_api_curl(repo_root, path, token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+            return matches, {
+                "reason": "lookup failed",
+                "http_status": http_status,
+                "page": page,
+                **summarize_native_api_response(parsed),
+            }
+        matches.extend(native_schedule_csv_exact_items(parsed, name))
+        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
+        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(parsed["items"])
+        actual_page_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else page_size
+        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) and page_info.get("page") else page
+        if actual_page * actual_page_size >= total:
+            return matches, None
+        page += 1
+        if page > 1000:
+            return matches, {"reason": "lookup pagination exceeded safety limit", "page": page, "total": total}
+
+
+def command_native_schedules_from_csv(
+    repo_root: Path,
+    csv_file: Path,
+    *,
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "csv_file": str(csv_file),
+        "dry_run": dry_run,
+        "duplicate_csv_name_count": 0,
+        "skipped_existing_schedule_count": 0,
+        "preflight_failure_count": 0,
+        "created_schedule_count": 0,
+        "create_failure_count": 0,
+    }
+    try:
+        rows = load_native_schedule_csv_rows(csv_file)
+        details["row_count"] = len(rows)
+        findings.append(finding("pass", "native-schedules-from-csv.rows", f"Loaded {len(rows)} non-empty CSV row(s)."))
+    except ValueError as exc:
+        findings.append(finding("fail", "native-schedules-from-csv.rows", str(exc), details={"csv_file": str(csv_file)}))
+        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_schedule_csv_status_only_result(result) if status_only else result
+
+    if dry_run:
+        details["planned_schedule_count"] = len(rows)
+        details["planned_schedules"] = [
+            native_schedule_csv_safe_summary(row) for row in rows[:NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS]
+        ]
+        findings.append(
+            finding(
+                "pass",
+                "native-schedules-from-csv.dry-run",
+                "Dry run planned native schedule writes without runtime access or calendar payload logging.",
+                details={"reported_schedule_count": len(details["planned_schedules"])},
+            )
+        )
+        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation dry run completed.", findings)
+        result["details"] = details
+        return native_schedule_csv_status_only_result(result) if status_only else result
+
+    if not allow_write_control:
+        findings.append(finding("fail", "native-schedules-from-csv.write-control-intent", "Creating schedules requires --allow-write-control."))
+        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_schedule_csv_status_only_result(result) if status_only else result
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check="native-schedules-from-csv.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        result = make_result("native-schedules-from-csv", repo_root, "Direct native API CSV schedule creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_schedule_csv_status_only_result(result) if status_only else result
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(
+            finding(
+                "fail",
+                "native-schedules-from-csv.direct-token-strength",
+                "Direct native API bearer token is too short or contains unsafe characters.",
+                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+            )
+        )
+        result = make_result("native-schedules-from-csv", repo_root, "Direct native API CSV schedule creation rejected before runtime access.", findings)
+        result["details"] = details
+        return native_schedule_csv_status_only_result(result) if status_only else result
+
+    rows_to_create: list[NativeScheduleCsvRow] = []
+    existing_names: list[str] = []
+    duplicate_names: list[str] = []
+    preflight_failures: list[dict[str, Any]] = []
+    planned_names: set[str] = set()
+    for row in rows:
+        if row.name in planned_names:
+            details["duplicate_csv_name_count"] += 1
+            if len(duplicate_names) < NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS:
+                duplicate_names.append(row.name)
+            continue
+        planned_names.add(row.name)
+        matches, lookup_failure = native_schedule_csv_fetch_existing(repo_root, row.name, token=token, env=env)
+        if lookup_failure:
+            details["preflight_failure_count"] += 1
+            if len(preflight_failures) < NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS:
+                preflight_failures.append({"row": row.row_number, "name": row.name, **lookup_failure})
+            continue
+        if matches:
+            details["skipped_existing_schedule_count"] += 1
+            if len(existing_names) < NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS:
+                existing_names.append(row.name)
+            continue
+        rows_to_create.append(row)
+
+    details["duplicate_csv_names"] = duplicate_names
+    details["skipped_existing_schedule_names"] = existing_names
+    if preflight_failures:
+        details["preflight_failures"] = preflight_failures
+        findings.append(
+            finding(
+                "fail",
+                "native-schedules-from-csv.preflight",
+                "Native CSV schedule preflight failed before creating schedules.",
+                details={"failure_count": details["preflight_failure_count"], "failures": preflight_failures},
+            )
+        )
+        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation rejected before schedule writes.", findings)
+        result["details"] = details
+        return native_schedule_csv_status_only_result(result) if status_only else result
+
+    findings.append(
+        finding(
+            "pass",
+            "native-schedules-from-csv.preflight",
+            f"Preflight selected {len(rows_to_create)} schedule create row(s), skipped {details['skipped_existing_schedule_count']} existing schedule(s), and skipped {details['duplicate_csv_name_count']} duplicate row(s).",
+        )
+    )
+
+    create_failures: list[dict[str, Any]] = []
+    created_ids: list[str] = []
+    for row in rows_to_create:
+        body = native_schedule_csv_schedule_body(row)
+        response = direct_native_api_curl(
+            repo_root,
+            "/api/v1/schedules",
+            token=token,
+            env=env,
+            method="POST",
+            body=json.dumps(body, separators=(",", ":")),
+            extra_headers=(("Content-Type", "application/json"),),
+        )
+        parsed, http_status = parse_json_output_with_http_status(response)
+        ok = response.returncode == 0 and http_status == 201 and isinstance(parsed, dict)
+        if ok:
+            schedule_id = parsed.get("id")
+            if isinstance(schedule_id, str) and len(created_ids) < NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS:
+                created_ids.append(schedule_id)
+            details["created_schedule_count"] += 1
+            continue
+        details["create_failure_count"] += 1
+        if len(create_failures) < NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS:
+            create_failures.append(
+                {
+                    "row": row.row_number,
+                    "name": row.name,
+                    "http_status": http_status,
+                    **summarize_native_api_response(parsed),
+                }
+            )
+
+    details["created_schedule_ids"] = created_ids
+    if create_failures:
+        details["create_failures"] = create_failures
+        findings.append(
+            finding(
+                "fail",
+                "native-schedules-from-csv.create",
+                "One or more native schedule create requests failed; remaining rows were attempted.",
+                details={"failure_count": details["create_failure_count"], "failures": create_failures},
+            )
+        )
+    else:
+        findings.append(
+            finding(
+                "pass",
+                "native-schedules-from-csv.create",
+                f"Created {details['created_schedule_count']} schedule(s) through the native API.",
+            )
+        )
+
+    result_status = aggregate_status(findings)
+    result = make_result(
+        "native-schedules-from-csv",
+        repo_root,
+        "Native CSV schedule creation completed." if result_status != "fail" else "Native CSV schedule creation failed.",
+        findings,
+    )
+    result["details"] = details
+    return native_schedule_csv_status_only_result(result) if status_only else result
 
 
 NATIVE_TAG_CSV_RESOURCE_TYPES: dict[str, str] = {
@@ -25314,6 +25802,11 @@ def build_parser() -> argparse.ArgumentParser:
     native_tags_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional tag creation")
     native_tags_csv.add_argument("--dry-run", action="store_true", help="plan tag request bodies without contacting the runtime")
     native_tags_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_schedules_csv = subparsers.add_parser("native-schedules-from-csv", parents=[common], help="create native schedules from the inherited three-column CSV shape through the direct native API")
+    native_schedules_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with schedule name, timezone, and iCalendar columns")
+    native_schedules_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule creation")
+    native_schedules_csv.add_argument("--dry-run", action="store_true", help="plan schedule request summaries without contacting the runtime")
+    native_schedules_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -25478,6 +25971,14 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-schedules-from-csv":
+        result = command_native_schedules_from_csv(
+            repo_root,
+            args.csv_file,
+            allow_write_control=args.allow_write_control,
+            dry_run=args.dry_run,
             status_only=args.status_only,
         )
     elif args.command == "native-export-report-bundle":

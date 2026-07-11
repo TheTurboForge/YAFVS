@@ -13,11 +13,24 @@ use crate::{
     browser_proxy_api::{BrowserProxyAuth, browser_proxy_operator_from_headers},
     errors::ApiError,
     schedule_payloads::ScheduleAssetDetail,
-    schedule_write_validation::{ScheduleCloneRequest, SchedulePatchRequest},
+    schedule_write_validation::{
+        ScheduleCloneRequest, ScheduleCreateRequest, SchedulePatchRequest,
+    },
     schedule_writes::{
-        clone_schedule, delete_schedule, hard_delete_schedule, patch_schedule, restore_schedule,
+        clone_schedule, create_schedule, delete_schedule, hard_delete_schedule, patch_schedule,
+        restore_schedule,
     },
 };
+
+pub(crate) async fn browser_proxy_create_schedule(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<ScheduleCreateRequest>,
+) -> Result<(StatusCode, Json<ScheduleAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_schedule(State(state), Some(Extension(operator)), Json(request)).await
+}
 
 pub(crate) async fn browser_proxy_patch_schedule(
     State(state): State<AppState>,

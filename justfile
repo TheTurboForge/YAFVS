@@ -30,6 +30,9 @@ native-start-task *args:
 native-scan-new-system *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-scan-new-system "$@"
 
+native-scan-with-delivery *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-scan-with-delivery "$@"
+
 native-export-report-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-export-report-csv "$@"
 

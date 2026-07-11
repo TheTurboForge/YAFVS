@@ -36,6 +36,7 @@ use crate::{
     schedule_query_sql::{schedule_asset_detail_sql, schedule_assets_sql, schedule_tasks_sql},
     tag_query_sql::{tag_asset_detail_sql, tag_assets_sql, tag_resource_lookup_sql},
     target_query_sql::target_sql,
+    task_query_sql::task_sql,
     tls_certificate_query_sql::{
         tls_certificate_asset_detail_sql, tls_certificate_assets_sql, tls_certificate_pem_sql,
         tls_certificate_sources_sql,
@@ -219,6 +220,76 @@ fn task_detail_contract_includes_db_owned_schedule_lifecycle_metadata() {
         assert!(
             payload_source.contains(field),
             "task payload must keep {field}"
+        );
+    }
+}
+
+#[test]
+fn operator_owner_uuid_metadata_is_selected_and_exposed_without_secrets() {
+    let alert_list_sql = alert_assets_sql("name ASC");
+    let alert_detail_sql = alert_asset_detail_sql();
+    let target_sql = target_sql("lower(uuid) = lower($1)", "name ASC", "LIMIT $2 OFFSET $3");
+    let task_sql = task_sql("lower(uuid) = lower($1)", "name ASC", "LIMIT $2 OFFSET $3");
+    let alert_payloads = include_str!("alert_payloads.rs");
+    let task_target_payloads = include_str!("task_target_payloads.rs");
+    let openapi = include_str!("../../../api/openapi/turbovas-v1.yaml");
+
+    for sql in [
+        alert_list_sql.as_str(),
+        alert_detail_sql,
+        target_sql.as_str(),
+        task_sql.as_str(),
+    ] {
+        assert!(
+            sql.contains("u.uuid AS owner_id"),
+            "asset metadata SQL must select the owner's UUID"
+        );
+        assert!(
+            sql.contains("LEFT JOIN users u ON u.id ="),
+            "asset metadata SQL must resolve owner UUID through users"
+        );
+    }
+
+    assert!(alert_payloads.contains("owner_id: Option<String>"));
+    assert!(alert_payloads.contains("owner_id: row.get(\"owner_id\")"));
+    assert!(alert_payloads.contains("owner: AlertOwner"));
+    assert!(
+        task_target_payloads
+            .matches("owner_id: Option<String>")
+            .count()
+            >= 2
+    );
+    assert!(
+        task_target_payloads
+            .matches("owner_id: row.get(\"owner_id\")")
+            .count()
+            >= 2
+    );
+
+    for source in [alert_payloads, task_target_payloads] {
+        for forbidden in ["password:", "secret:", "private_key:", "credential_data:"] {
+            assert!(
+                !source.contains(forbidden),
+                "owner metadata payload must not expose {forbidden}"
+            );
+        }
+    }
+
+    for (schema, next_schema) in [
+        ("Target", "Task"),
+        ("Task", "ResourceReference"),
+        ("AlertAsset", "AlertCreateRequest"),
+    ] {
+        let body = openapi
+            .split_once(&format!("    {schema}:\n"))
+            .unwrap_or_else(|| panic!("OpenAPI must define {schema}"))
+            .1
+            .split_once(&format!("\n    {next_schema}:\n"))
+            .map(|(body, _)| body)
+            .unwrap_or_default();
+        assert!(
+            body.contains("owner_id:"),
+            "OpenAPI {schema} must expose owner UUID metadata"
         );
     }
 }

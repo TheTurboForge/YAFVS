@@ -330,6 +330,18 @@ path. If those checks fail, or if a completed raw report contains Nmap wrapper
 messages saying requested scan types require root privileges, treat the scan as
 incomplete evidence rather than a trustworthy baseline.
 
+To scan and deliver results in one composition workflow, first create and
+configure an active EMAIL or SMB delivery alert separately through the UI or
+native API. Then run `just native-scan-with-delivery` with the existing
+`--alert-id` and exactly one target source: `--target-id` or explicit
+`--host`. The command preflights the alert, target, scan configuration, and
+scanner references, attaches the alert atomically during task creation, and
+starts only when `--allow-scan-control` is explicit. Use `--dry-run` to
+plan and validate arguments without runtime access; real execution preflights
+all references before creating or starting a scan. Delivery recipients,
+credentials, and alert configuration are not looked up or synthesized by the
+composition command.
+
 TurboVAS does not treat a raw task report as the main operator reporting unit.
 Raw reports are important evidence, but they can be too tightly coupled to
 technical scan boundaries such as subnets, credentials, reachability, or scanner

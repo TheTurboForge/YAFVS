@@ -51,6 +51,7 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     task.uuid,
                     task.name,
                     coalesce(task.comment, '') AS comment,
+                    u.uuid AS owner_id,
                     run_status_name(coalesce(task.run_status, 0)) AS status,
                     CASE WHEN run_status_name(coalesce(task.run_status, 0)) = 'Done' THEN 100::bigint
                          WHEN latest_report.report_pk IS NOT NULL THEN coalesce(report_progress(latest_report.report_pk), 0)::bigint
@@ -130,6 +131,7 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     coalesce(task.creation_time, 0)::bigint AS creation_time,
                     coalesce(task.modification_time, 0)::bigint AS modification_time
                FROM tasks task
+               LEFT JOIN users u ON u.id = task.owner
                LEFT JOIN targets target ON target.id = task.target
                LEFT JOIN configs config ON config.id = task.config
                LEFT JOIN scanners scanner ON scanner.id = task.scanner

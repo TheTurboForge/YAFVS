@@ -8,6 +8,7 @@ pub(crate) fn alert_assets_sql(sort_sql: &str) -> String {
              SELECT a.uuid AS id,
                     coalesce(a.name, '') AS name,
                     coalesce(a.comment, '') AS comment,
+                    u.uuid AS owner_id,
                     coalesce(u.name, '') AS owner_name,
                     coalesce(a.active, 0)::integer AS active_int,
                     CASE coalesce(a.event, 0)::integer
@@ -75,6 +76,7 @@ pub(crate) fn alert_asset_detail_sql() -> &'static str {
     r#"SELECT a.uuid AS id,
               coalesce(a.name, '') AS name,
               coalesce(a.comment, '') AS comment,
+              u.uuid AS owner_id,
               coalesce(u.name, '') AS owner_name,
               coalesce(a.active, 0)::integer AS active_int,
               CASE coalesce(a.event, 0)::integer

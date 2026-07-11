@@ -9,6 +9,7 @@ pub(crate) fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause:
                     t.uuid,
                     t.name,
                     coalesce(t.comment, '') AS comment,
+                    u.uuid AS owner_id,
                     coalesce(t.hosts, '') AS hosts,
                     coalesce(t.exclude_hosts, '') AS exclude_hosts,
                     coalesce(t.alive_test, 0)::bigint AS alive_test,
@@ -73,12 +74,13 @@ pub(crate) fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause:
                     coalesce(array_agg(task.uuid ORDER BY task.name) FILTER (WHERE task.id IS NOT NULL), ARRAY[]::text[]) AS task_ids,
                     coalesce(array_agg(task.name ORDER BY task.name) FILTER (WHERE task.id IS NOT NULL), ARRAY[]::text[]) AS task_names
                FROM targets t
+               LEFT JOIN users u ON u.id = t.owner
                LEFT JOIN port_lists pl ON pl.id = t.port_list
                LEFT JOIN tasks task
                  ON task.target = t.id
                 AND coalesce(task.hidden, 0) = 0
                 AND coalesce(task.usage_type, 'scan') = 'scan'
-              GROUP BY t.id, t.uuid, t.name, t.comment, t.hosts, t.exclude_hosts,
+              GROUP BY t.id, t.uuid, t.name, t.comment, u.uuid, t.hosts, t.exclude_hosts,
                        t.alive_test, t.allow_simultaneous_ips, t.reverse_lookup_only,
                        t.reverse_lookup_unify, pl.uuid, pl.name,
                        t.creation_time, t.modification_time

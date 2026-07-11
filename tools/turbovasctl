@@ -394,7 +394,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     },
     "scanner_or_task_control": {
         "nvt-scan.gmp.py",
-        "start-alert-scan.gmp.py",
         "start-nvt-scan.gmp.py",
     },
     "write_or_mutation": set(),
@@ -411,7 +410,6 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
 NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
-    "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; the native alert, target, port-list, task, and task-start contracts now exist, but one guarded composition helper still must preflight and sequence them before this script can be retired.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
 }
 # Historical denominator from 807ed060, when explicit helper-removal tracking landed.
@@ -21306,16 +21304,27 @@ def native_scan_new_system_target_body(host: str, port_list_id: str, timestamp: 
     return body
 
 
-def native_scan_new_system_task_body(host: str, target_id: str, scan_config_id: str, scanner_id: str, timestamp: str) -> dict[str, Any]:
-    return {
+def native_scan_new_system_task_body(
+    host: str,
+    target_id: str,
+    scan_config_id: str,
+    scanner_id: str,
+    timestamp: str,
+    *,
+    alert_id: str | None = None,
+) -> dict[str, Any]:
+    body = {
         "name": f"Native scan task {host} {timestamp}",
         "target_id": target_id,
         "config_id": scan_config_id,
         "scanner_id": scanner_id,
     }
+    if alert_id is not None:
+        body["alert_ids"] = [alert_id]
+    return body
 
 
-def native_scan_new_system_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+def native_scan_new_system_status_only_result(result: dict[str, Any], *, command: str = "native-scan-new-system") -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     compact = dict(result)
     compact["details"] = {
@@ -21328,7 +21337,10 @@ def native_scan_new_system_status_only_result(result: dict[str, Any]) -> dict[st
             "port_list_id",
             "scan_config_id",
             "scanner_id",
+            "alert_id",
             "target_id",
+            "target_name",
+            "task_name",
             "task_id",
             "report_id",
             "observed_task_status",
@@ -21341,7 +21353,7 @@ def native_scan_new_system_status_only_result(result: dict[str, Any]) -> dict[st
         compact_doctor_finding(item)
         for item in result.get("findings", [])
         if isinstance(item, dict) and item.get("status") != "pass"
-    ] or [finding("pass", "native-scan-new-system.status-only", "Native scan request completed; identifiers summarized.")]
+    ] or [finding("pass", f"{command}.status-only", "Native scan request completed; identifiers summarized.")]
     return compact
 
 
@@ -21352,27 +21364,79 @@ def native_scan_new_system_result(
     details: dict[str, Any],
     *,
     status_only: bool,
+    command: str = "native-scan-new-system",
 ) -> dict[str, Any]:
-    result = make_result("native-scan-new-system", repo_root, summary, findings)
-    result["details"] = details
-    return native_scan_new_system_status_only_result(result) if status_only else result
+    result = make_result(command, repo_root, summary, findings)
+    if command == "native-scan-with-delivery":
+        result["details"] = {
+            key: details.get(key)
+            for key in (
+                "dry_run",
+                "status",
+                "operation_status",
+                "host",
+                "port_list_id",
+                "scan_config_id",
+                "scanner_id",
+                "alert_id",
+                "target_id",
+                "target_name",
+                "task_name",
+                "task_id",
+                "report_id",
+                "observed_task_status",
+                "observed_report_id",
+                "start_follow_up_http_status",
+                "cleanup",
+            )
+        }
+    else:
+        result["details"] = details
+    return native_scan_new_system_status_only_result(result, command=command) if status_only else result
+
+
+def native_scan_delivery_alert_is_eligible(alert: Any, *, alert_id: str, operator_uuid: str, task_id: str | None = None) -> bool:
+    if not isinstance(alert, dict):
+        return False
+    method = alert.get("method")
+    method_type = method.get("type") if isinstance(method, dict) else None
+    tasks = alert.get("tasks")
+    task_attached = task_id is None or (
+        isinstance(tasks, list)
+        and any(isinstance(task, dict) and task.get("id") == task_id for task in tasks)
+    )
+    return (
+        alert.get("id") == alert_id and alert.get("owner_id") == operator_uuid
+        and alert.get("active") is True and isinstance(method_type, str)
+        and method_type.upper() in {"EMAIL", "SMB"} and task_attached
+    )
 
 
 def native_scan_new_system_preflight(
     repo_root: Path,
     *,
-    port_list_id: str,
+    port_list_id: str | None,
     scan_config_id: str,
     scanner_id: str,
+    target_id: str | None = None,
+    alert_id: str | None = None,
     token: str,
     env: dict[str, str],
+    command: str = "native-scan-new-system",
+    operator_uuid: str = "",
 ) -> tuple[list[dict[str, Any]], bool]:
     findings: list[dict[str, Any]] = []
-    checks = (
-        ("port-list", port_list_id, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}"),
+    checks: list[tuple[str, str, str]] = []
+    if target_id is not None:
+        checks.append(("target", target_id, f"/api/v1/targets/{urllib.parse.quote(target_id)}"))
+    elif port_list_id is not None:
+        checks.append(("port-list", port_list_id, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}"))
+    checks.extend((
         ("scan-config", scan_config_id, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}"),
         ("scanner", scanner_id, f"/api/v1/scanners/{urllib.parse.quote(scanner_id)}"),
-    )
+    ))
+    if alert_id is not None:
+        checks.append(("alert", alert_id, f"/api/v1/alerts/{urllib.parse.quote(alert_id)}"))
     passed = True
     for resource_name, expected_id, path in checks:
         response = direct_native_api_curl(repo_root, path, token=token, env=env)
@@ -21385,14 +21449,18 @@ def native_scan_new_system_preflight(
         )
         if resource_name == "scanner":
             typed = typed and type(parsed.get("scanner_type")) is int and parsed["scanner_type"] in NATIVE_SCAN_NEW_SYSTEM_TASK_SCANNER_TYPES
+        if resource_name == "alert":
+            typed = typed and native_scan_delivery_alert_is_eligible(parsed, alert_id=expected_id, operator_uuid=operator_uuid)
+        if resource_name == "target" and alert_id is not None:
+            typed = typed and parsed.get("owner_id") == operator_uuid
         accepted = response.returncode == 0 and http_status == 200 and typed
         findings.append(
             native_api_probe_finding(
                 "pass" if accepted else "fail",
-                f"native-scan-new-system.preflight.{resource_name}",
+                f"{command}.preflight.{resource_name}",
                 f"Native {resource_name} preflight returned the expected typed resource."
                 if accepted
-                else f"Native {resource_name} preflight failed, returned the wrong resource, or was not scan-task capable.",
+                else f"Native {resource_name} preflight failed, returned the wrong resource, or was not valid for this scan request.",
                 response,
                 direct_native_api_display_command(path, token=token, env=env),
                 parsed,
@@ -21400,7 +21468,7 @@ def native_scan_new_system_preflight(
                     "http_status": http_status,
                     "expected_id": expected_id,
                     "scanner_type": parsed.get("scanner_type") if isinstance(parsed, dict) else None,
-                    **summarize_native_api_response(parsed),
+                    **({"parsed": isinstance(parsed, dict)} if resource_name == "alert" else summarize_native_api_response(parsed)),
                 },
             )
         )
@@ -21414,6 +21482,7 @@ def native_scan_new_system_cleanup_target(
     *,
     token: str,
     env: dict[str, str],
+    command: str = "native-scan-new-system",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     cleanup: dict[str, Any] = {"attempted": True, "target_id": target_id, "live_delete": "not_attempted", "trash_hard_delete": "not_attempted"}
@@ -21426,7 +21495,7 @@ def native_scan_new_system_cleanup_target(
     findings.append(
         native_api_probe_finding(
             "pass" if live_deleted else "fail",
-            "native-scan-new-system.cleanup.target-live-delete",
+            f"{command}.cleanup.target-live-delete",
             "Created target was live-deleted after task creation failed."
             if live_deleted
             else "Created target could not be live-deleted after task creation failed.",
@@ -21449,7 +21518,7 @@ def native_scan_new_system_cleanup_target(
     findings.append(
         native_api_probe_finding(
             "pass" if trash_deleted else "fail",
-            "native-scan-new-system.cleanup.target-trash-hard-delete",
+            f"{command}.cleanup.target-trash-hard-delete",
             "Created target was hard-deleted from trash after task creation failed."
             if trash_deleted
             else "Created target was moved to trash but could not be hard-deleted.",
@@ -21468,6 +21537,7 @@ def native_scan_new_system_start_follow_up(
     *,
     token: str,
     env: dict[str, str],
+    command: str = "native-scan-new-system",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}"
     response = direct_native_api_curl(repo_root, path, token=token, env=env)
@@ -21487,7 +21557,7 @@ def native_scan_new_system_start_follow_up(
     outcome = "prepared_not_started" if confirmed_not_started else "start_outcome_unconfirmed"
     follow_up = native_api_probe_finding(
         "pass" if confirmed_not_started else "warn",
-        "native-scan-new-system.start-follow-up",
+        f"{command}.start-follow-up",
         "Task detail confirms New status with no current report after the non-accepted start response."
         if confirmed_not_started
         else "Task start outcome could not be proven inactive after the non-accepted start response; task and target were retained.",
@@ -21511,6 +21581,213 @@ def native_scan_new_system_start_follow_up(
     }
 
 
+def native_scan_create_response_is_ambiguous(response: subprocess.CompletedProcess[str], http_status: int | None) -> bool:
+    return response.returncode != 0 or http_status is None or http_status >= 500 or 200 <= http_status < 300
+
+
+def native_scan_reconcile_named_resource(
+    repo_root: Path,
+    *,
+    collection: str,
+    name: str,
+    operator_uuid: str,
+    expected: dict[str, str],
+    token: str,
+    env: dict[str, str],
+    command: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    path = f"/api/v1/{collection}?filter={urllib.parse.quote(name)}&page_size=100&sort=name"
+    response = direct_native_api_curl(repo_root, path, token=token, env=env)
+    parsed, http_status = parse_json_output_with_http_status(response)
+    items = parsed.get("items") if isinstance(parsed, dict) else None
+    matches: list[dict[str, Any]] = []
+    if response.returncode == 0 and http_status == 200 and isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict) or item.get("name") != name or item.get("owner_id") != operator_uuid:
+                continue
+            if collection == "targets":
+                port_list = item.get("port_list")
+                matches_expected = item.get("hosts") == [expected["host"]] and isinstance(port_list, dict) and port_list.get("id") == expected["port_list_id"]
+            else:
+                target = item.get("target")
+                config = item.get("config")
+                scanner = item.get("scanner")
+                matches_expected = all(
+                    isinstance(reference, dict) and reference.get("id") == expected[key]
+                    for reference, key in ((target, "target_id"), (config, "config_id"), (scanner, "scanner_id"))
+                )
+            if matches_expected:
+                matches.append(item)
+    reconciled = matches[0] if len(matches) == 1 else None
+    finding_result = native_api_probe_finding(
+        "pass" if reconciled is not None else "warn",
+        f"{command}.{collection[:-1]}-create-reconciliation",
+        f"Reconciled exactly one operator-owned {collection[:-1]} after an ambiguous create response."
+        if reconciled is not None
+        else f"Could not reconcile exactly one operator-owned {collection[:-1]} after an ambiguous create response; resources are retained.",
+        response,
+        direct_native_api_display_command(path, token=token, env=env),
+        parsed,
+        {"http_status": http_status, "match_count": len(matches)},
+    )
+    return reconciled, finding_result
+
+
+def command_native_scan_request(
+    repo_root: Path,
+    *,
+    command: str,
+    host: str | None,
+    target_id: str | None,
+    alert_id: str | None,
+    port_list_id: str = IANA_TCP_UDP_PORT_LIST_ID,
+    scan_config_id: str = FULL_AND_FAST_SCAN_CONFIG_ID,
+    scanner_id: str = NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID,
+    allow_scan_control: bool = False,
+    dry_run: bool = False,
+    default_to_dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    effective_dry_run = dry_run or (default_to_dry_run and not allow_scan_control)
+    details: dict[str, Any] = {"dry_run": effective_dry_run, "target_id": None, "target_name": None, "task_name": None, "task_id": None, "report_id": None, "cleanup": {"attempted": False}}
+    try:
+        if (host is None) == (target_id is None):
+            raise ValueError("exactly one of --target-id or --host is required")
+        if host is not None:
+            host = validate_native_scan_new_system_host(host)
+            port_list_id = validate_native_api_operator_uuid_value(port_list_id, env_name="--port-list-id")
+        if target_id is not None:
+            target_id = validate_native_api_operator_uuid_value(target_id, env_name="--target-id")
+        if alert_id is not None:
+            alert_id = validate_native_api_operator_uuid_value(alert_id, env_name="--alert-id")
+        scan_config_id = validate_native_api_operator_uuid_value(scan_config_id, env_name="--scan-config-id")
+        scanner_id = validate_native_api_operator_uuid_value(scanner_id, env_name="--scanner-id")
+    except ValueError as exc:
+        findings.append(finding("fail", f"{command}.arguments", str(exc)))
+        return native_scan_new_system_result(repo_root, "Native scan request rejected before runtime access.", findings, details, status_only=status_only, command=command)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + secrets.token_hex(4)
+    target_body = native_scan_new_system_target_body(host, port_list_id, timestamp) if host is not None else None
+    task_subject = host if host is not None else target_id
+    planned_task_body = native_scan_new_system_task_body(task_subject, target_id or "<created-target-id>", scan_config_id, scanner_id, timestamp, alert_id=alert_id)
+    details["target_name"] = target_body["name"] if target_body is not None else None
+    details["task_name"] = planned_task_body["name"]
+    details.update({"host": host, "port_list_id": port_list_id if host is not None else None, "scan_config_id": scan_config_id, "scanner_id": scanner_id, "alert_id": alert_id, "planned_task": planned_task_body})
+    if target_body is not None:
+        details["planned_target"] = target_body
+    if target_id is not None:
+        details["target_id"] = target_id
+
+    if effective_dry_run:
+        details["status"] = "dry_run"
+        details["operation_status"] = "dry_run"
+        findings.append(finding("pass", f"{command}.dry-run", "Native scan request bodies were planned without runtime access."))
+        return native_scan_new_system_result(repo_root, "Native scan request dry run completed without runtime access.", findings, details, status_only=status_only, command=command)
+    if not allow_scan_control:
+        findings.append(finding("fail", f"{command}.scan-control-intent", "Creating and starting a scan requires --allow-scan-control."))
+        return native_scan_new_system_result(repo_root, "Native scan request rejected before runtime access.", findings, details, status_only=status_only, command=command)
+
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check=f"{command}.direct-config-shape"))
+    if aggregate_status(findings) == "fail":
+        return native_scan_new_system_result(repo_root, "Direct native API scan request rejected before runtime access.", findings, details, status_only=status_only, command=command)
+    token = native_api_direct_bearer_token(repo_root, env)
+    if not direct_api_bearer_token_is_acceptable(token):
+        findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        return native_scan_new_system_result(repo_root, "Direct native API scan request rejected before runtime access.", findings, details, status_only=status_only, command=command)
+
+    operator_uuid = env.get(TURBOVAS_API_OPERATOR_UUID_ENV, "").strip()
+    preflight_findings, preflight_ok = native_scan_new_system_preflight(repo_root, port_list_id=port_list_id if host is not None else None, target_id=target_id, alert_id=alert_id, scan_config_id=scan_config_id, scanner_id=scanner_id, token=token, env=env, command=command, operator_uuid=operator_uuid)
+    findings.extend(preflight_findings)
+    if not preflight_ok:
+        return native_scan_new_system_result(repo_root, "Native scan request rejected during reference preflight; no writes were attempted.", findings, details, status_only=status_only, command=command)
+
+    content_type = (("Content-Type", "application/json"),)
+    target_created = False
+    if target_body is not None:
+        target_response = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=json.dumps(target_body, separators=(",", ":")), extra_headers=content_type)
+        target_parsed, target_status = parse_json_output_with_http_status(target_response)
+        created_target_id = target_parsed.get("id") if isinstance(target_parsed, dict) else None
+        target_created = target_response.returncode == 0 and target_status == 201 and isinstance(created_target_id, str) and bool(UUID_VALUE_RE.fullmatch(created_target_id)) and target_parsed.get("name") == target_body["name"]
+        target_ambiguous = not target_created and native_scan_create_response_is_ambiguous(target_response, target_status)
+        findings.append(native_api_probe_finding("pass" if target_created else ("warn" if target_ambiguous else "fail"), f"{command}.target-create", "Native API created the scan target." if target_created else ("Native API target create response was ambiguous; deterministic reconciliation is required." if target_ambiguous else "Native API target creation was rejected."), target_response, direct_native_api_display_command("/api/v1/targets", token=token, env=env, method="POST", body=json.dumps(target_body, separators=(",", ":")), extra_headers=content_type), target_parsed, {"http_status": target_status, "target_id": created_target_id, **summarize_native_api_response(target_parsed)}))
+        if target_ambiguous:
+            reconciled, reconciliation_finding = native_scan_reconcile_named_resource(repo_root, collection="targets", name=target_body["name"], operator_uuid=operator_uuid, expected={"host": host, "port_list_id": port_list_id}, token=token, env=env, command=command)
+            findings.append(reconciliation_finding)
+            if reconciled is not None:
+                created_target_id = reconciled.get("id")
+                target_created = isinstance(created_target_id, str) and bool(UUID_VALUE_RE.fullmatch(created_target_id))
+        if not target_created:
+            details["status"] = "target_create_outcome_unconfirmed" if target_ambiguous else "target_create_failed"
+            details["operation_status"] = details["status"]
+            return native_scan_new_system_result(repo_root, "Native target creation outcome is unconfirmed; deterministic names were retained for reconciliation." if target_ambiguous else "Native scan request failed while creating the target.", findings, details, status_only=status_only, command=command)
+        target_id = created_target_id
+        details["target_id"] = target_id
+
+    task_body = native_scan_new_system_task_body(task_subject, target_id, scan_config_id, scanner_id, timestamp, alert_id=alert_id)
+    task_response = direct_native_api_curl(repo_root, "/api/v1/tasks", token=token, env=env, method="POST", body=json.dumps(task_body, separators=(",", ":")), extra_headers=content_type)
+    task_parsed, task_status = parse_json_output_with_http_status(task_response)
+    task_id = task_parsed.get("id") if isinstance(task_parsed, dict) else None
+    task_created = task_response.returncode == 0 and task_status == 201 and isinstance(task_id, str) and bool(UUID_VALUE_RE.fullmatch(task_id)) and task_parsed.get("name") == task_body["name"]
+    task_ambiguous = not task_created and native_scan_create_response_is_ambiguous(task_response, task_status)
+    findings.append(native_api_probe_finding("pass" if task_created else ("warn" if task_ambiguous else "fail"), f"{command}.task-create", "Native API created the scan task." if task_created else ("Native API task create response was ambiguous; deterministic reconciliation is required." if task_ambiguous else "Native API task creation was rejected."), task_response, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=json.dumps(task_body, separators=(",", ":")), extra_headers=content_type), task_parsed, {"http_status": task_status, "task_id": task_id, **summarize_native_api_response(task_parsed)}))
+    if task_ambiguous:
+        reconciled, reconciliation_finding = native_scan_reconcile_named_resource(repo_root, collection="tasks", name=task_body["name"], operator_uuid=operator_uuid, expected={"target_id": target_id, "config_id": scan_config_id, "scanner_id": scanner_id}, token=token, env=env, command=command)
+        findings.append(reconciliation_finding)
+        if reconciled is not None:
+            task_id = reconciled.get("id")
+            task_created = isinstance(task_id, str) and bool(UUID_VALUE_RE.fullmatch(task_id))
+    if not task_created:
+        if target_created and not task_ambiguous:
+            cleanup_findings, cleanup = native_scan_new_system_cleanup_target(repo_root, target_id, token=token, env=env, command=command)
+            findings.extend(cleanup_findings)
+            details["cleanup"] = cleanup
+        details["status"] = "task_create_outcome_unconfirmed" if task_ambiguous else "task_create_failed"
+        details["operation_status"] = details["status"]
+        return native_scan_new_system_result(repo_root, "Native task creation outcome is unconfirmed; target and deterministic names were retained for reconciliation." if task_ambiguous else "Native scan request failed while creating the task; created-target cleanup was attempted when applicable.", findings, details, status_only=status_only, command=command)
+    details["task_id"] = task_id
+    if alert_id is not None:
+        alert_path = f"/api/v1/alerts/{urllib.parse.quote(alert_id)}"
+        alert_response = direct_native_api_curl(repo_root, alert_path, token=token, env=env)
+        alert_parsed, alert_status = parse_json_output_with_http_status(alert_response)
+        alert_ready = alert_response.returncode == 0 and alert_status == 200 and native_scan_delivery_alert_is_eligible(alert_parsed, alert_id=alert_id, operator_uuid=operator_uuid, task_id=task_id)
+        findings.append(native_api_probe_finding("pass" if alert_ready else "fail", f"{command}.pre-start-alert", "Alert remains active, operator-owned, delivery-capable, and attached to the prepared task." if alert_ready else "Alert eligibility or task attachment changed after task creation; the prepared task and target were retained without starting.", alert_response, direct_native_api_display_command(alert_path, token=token, env=env), alert_parsed, {"http_status": alert_status, "alert_id": alert_id, "task_id": task_id, "parsed": isinstance(alert_parsed, dict)}))
+        if not alert_ready:
+            details["status"] = "prepared_not_started"
+            details["operation_status"] = "prepared_not_started"
+            return native_scan_new_system_result(repo_root, "Native scan was prepared but not started because delivery eligibility could not be re-proven.", findings, details, status_only=status_only, command=command)
+
+    start_path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/start"
+    start_response = direct_native_api_curl(repo_root, start_path, token=token, env=env, method="POST")
+    start_parsed, start_status = parse_json_output_with_http_status(start_response)
+    report_id = start_parsed.get("report_id") if isinstance(start_parsed, dict) else None
+    started = start_response.returncode == 0 and start_status == 202 and isinstance(start_parsed, dict) and start_parsed.get("task_id") == task_id and isinstance(report_id, str) and bool(UUID_VALUE_RE.fullmatch(report_id)) and start_parsed.get("status") == "requested"
+    findings.append(native_api_probe_finding("pass" if started else "fail", f"{command}.task-start", "Native API accepted the scan request." if started else "Native API task start failed or returned an invalid acknowledgement; the prepared task and target were retained.", start_response, direct_native_api_display_command(start_path, token=token, env=env, method="POST"), start_parsed, {"http_status": start_status, "task_id": task_id, "report_id": report_id, **summarize_native_api_response(start_parsed)}))
+    if started:
+        details["report_id"] = report_id
+        details["status"] = "requested"
+        details["operation_status"] = "requested"
+        return native_scan_new_system_result(repo_root, "Native scan request accepted.", findings, details, status_only=status_only, command=command)
+
+    follow_up, follow_up_details = native_scan_new_system_start_follow_up(
+        repo_root,
+        task_id,
+        token=token,
+        env=env,
+        command=command,
+    )
+    findings.append(follow_up)
+    details.update(follow_up_details)
+    details["report_id"] = follow_up_details["observed_report_id"]
+    summary = (
+        "Native scan task was prepared but not started; task and target were retained."
+        if details["operation_status"] == "prepared_not_started"
+        else "Native scan start outcome is unconfirmed; task and target were retained."
+    )
+    return native_scan_new_system_result(repo_root, summary, findings, details, status_only=status_only, command=command)
+
+
 def command_native_scan_new_system(
     repo_root: Path,
     *,
@@ -21522,97 +21799,23 @@ def command_native_scan_new_system(
     dry_run: bool = False,
     status_only: bool = False,
 ) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {"dry_run": dry_run, "target_id": None, "task_id": None, "report_id": None, "cleanup": {"attempted": False}}
-    try:
-        host = validate_native_scan_new_system_host(host)
-        port_list_id = validate_native_api_operator_uuid_value(port_list_id, env_name="--port-list-id")
-        scan_config_id = validate_native_api_operator_uuid_value(scan_config_id, env_name="--scan-config-id")
-        scanner_id = validate_native_api_operator_uuid_value(scanner_id, env_name="--scanner-id")
-    except ValueError as exc:
-        findings.append(finding("fail", "native-scan-new-system.arguments", str(exc)))
-        return native_scan_new_system_result(repo_root, "Native scan request rejected before runtime access.", findings, details, status_only=status_only)
+    return command_native_scan_request(repo_root, command="native-scan-new-system", host=host, target_id=None, alert_id=None, port_list_id=port_list_id, scan_config_id=scan_config_id, scanner_id=scanner_id, allow_scan_control=allow_scan_control, dry_run=dry_run, status_only=status_only)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + secrets.token_hex(4)
-    target_body = native_scan_new_system_target_body(host, port_list_id, timestamp)
-    planned_task_body = native_scan_new_system_task_body(host, "<created-target-id>", scan_config_id, scanner_id, timestamp)
-    details.update({"host": host, "port_list_id": port_list_id, "scan_config_id": scan_config_id, "scanner_id": scanner_id, "planned_target": target_body, "planned_task": planned_task_body})
 
-    if dry_run:
-        details["status"] = "dry_run"
-        details["operation_status"] = "dry_run"
-        findings.append(finding("pass", "native-scan-new-system.dry-run", "Native scan request bodies were planned without runtime writes."))
-        return native_scan_new_system_result(repo_root, "Native scan request dry run completed without runtime writes.", findings, details, status_only=status_only)
-    if not allow_scan_control:
-        findings.append(finding("fail", "native-scan-new-system.scan-control-intent", "Creating and starting a scan requires --allow-scan-control."))
-        return native_scan_new_system_result(repo_root, "Native scan request rejected before runtime access.", findings, details, status_only=status_only)
-
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-scan-new-system.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return native_scan_new_system_result(repo_root, "Direct native API scan request rejected before runtime access.", findings, details, status_only=status_only)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-scan-new-system.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
-        return native_scan_new_system_result(repo_root, "Direct native API scan request rejected before runtime access.", findings, details, status_only=status_only)
-
-    preflight_findings, preflight_ok = native_scan_new_system_preflight(repo_root, port_list_id=port_list_id, scan_config_id=scan_config_id, scanner_id=scanner_id, token=token, env=env)
-    findings.extend(preflight_findings)
-    if not preflight_ok:
-        return native_scan_new_system_result(repo_root, "Native scan request rejected during reference preflight; no writes were attempted.", findings, details, status_only=status_only)
-
-    content_type = (("Content-Type", "application/json"),)
-    target_response = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=json.dumps(target_body, separators=(",", ":")), extra_headers=content_type)
-    target_parsed, target_status = parse_json_output_with_http_status(target_response)
-    target_id = target_parsed.get("id") if isinstance(target_parsed, dict) else None
-    target_created = target_response.returncode == 0 and target_status == 201 and isinstance(target_id, str) and bool(UUID_VALUE_RE.fullmatch(target_id)) and target_parsed.get("name") == target_body["name"]
-    findings.append(native_api_probe_finding("pass" if target_created else "fail", "native-scan-new-system.target-create", "Native API created the scan target." if target_created else "Native API target creation failed or returned an invalid acknowledgement.", target_response, direct_native_api_display_command("/api/v1/targets", token=token, env=env, method="POST", body=json.dumps(target_body, separators=(",", ":")), extra_headers=content_type), target_parsed, {"http_status": target_status, "target_id": target_id, **summarize_native_api_response(target_parsed)}))
-    if not target_created:
-        return native_scan_new_system_result(repo_root, "Native scan request failed while creating the target.", findings, details, status_only=status_only)
-    details["target_id"] = target_id
-
-    task_body = native_scan_new_system_task_body(host, target_id, scan_config_id, scanner_id, timestamp)
-    task_response = direct_native_api_curl(repo_root, "/api/v1/tasks", token=token, env=env, method="POST", body=json.dumps(task_body, separators=(",", ":")), extra_headers=content_type)
-    task_parsed, task_status = parse_json_output_with_http_status(task_response)
-    task_id = task_parsed.get("id") if isinstance(task_parsed, dict) else None
-    task_created = task_response.returncode == 0 and task_status == 201 and isinstance(task_id, str) and bool(UUID_VALUE_RE.fullmatch(task_id)) and task_parsed.get("name") == task_body["name"]
-    findings.append(native_api_probe_finding("pass" if task_created else "fail", "native-scan-new-system.task-create", "Native API created the scan task." if task_created else "Native API task creation failed or returned an invalid acknowledgement.", task_response, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=json.dumps(task_body, separators=(",", ":")), extra_headers=content_type), task_parsed, {"http_status": task_status, "task_id": task_id, **summarize_native_api_response(task_parsed)}))
-    if not task_created:
-        cleanup_findings, cleanup = native_scan_new_system_cleanup_target(repo_root, target_id, token=token, env=env)
-        findings.extend(cleanup_findings)
-        details["cleanup"] = cleanup
-        details["status"] = "task_create_failed"
-        details["operation_status"] = "task_create_failed"
-        return native_scan_new_system_result(repo_root, "Native scan request failed while creating the task; target cleanup was attempted.", findings, details, status_only=status_only)
-    details["task_id"] = task_id
-
-    start_path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/start"
-    start_response = direct_native_api_curl(repo_root, start_path, token=token, env=env, method="POST")
-    start_parsed, start_status = parse_json_output_with_http_status(start_response)
-    report_id = start_parsed.get("report_id") if isinstance(start_parsed, dict) else None
-    started = start_response.returncode == 0 and start_status == 202 and isinstance(start_parsed, dict) and start_parsed.get("task_id") == task_id and isinstance(report_id, str) and bool(UUID_VALUE_RE.fullmatch(report_id)) and start_parsed.get("status") == "requested"
-    findings.append(native_api_probe_finding("pass" if started else "fail", "native-scan-new-system.task-start", "Native API accepted the scan request." if started else "Native API task start failed or returned an invalid acknowledgement; the prepared task and target were retained.", start_response, direct_native_api_display_command(start_path, token=token, env=env, method="POST"), start_parsed, {"http_status": start_status, "task_id": task_id, "report_id": report_id, **summarize_native_api_response(start_parsed)}))
-    if started:
-        details["report_id"] = report_id
-        details["status"] = "requested"
-        details["operation_status"] = "requested"
-        return native_scan_new_system_result(repo_root, "Native scan request accepted.", findings, details, status_only=status_only)
-
-    follow_up, follow_up_details = native_scan_new_system_start_follow_up(
-        repo_root,
-        task_id,
-        token=token,
-        env=env,
-    )
-    findings.append(follow_up)
-    details.update(follow_up_details)
-    details["report_id"] = follow_up_details["observed_report_id"]
-    summary = (
-        "Native scan task was prepared but not started; task and target were retained."
-        if details["operation_status"] == "prepared_not_started"
-        else "Native scan start outcome is unconfirmed; task and target were retained."
-    )
-    return native_scan_new_system_result(repo_root, summary, findings, details, status_only=status_only)
+def command_native_scan_with_delivery(
+    repo_root: Path,
+    *,
+    alert_id: str,
+    host: str | None = None,
+    target_id: str | None = None,
+    port_list_id: str = IANA_TCP_UDP_PORT_LIST_ID,
+    scan_config_id: str = FULL_AND_FAST_SCAN_CONFIG_ID,
+    scanner_id: str = NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID,
+    allow_scan_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    return command_native_scan_request(repo_root, command="native-scan-with-delivery", host=host, target_id=target_id, alert_id=alert_id, port_list_id=port_list_id, scan_config_id=scan_config_id, scanner_id=scanner_id, allow_scan_control=allow_scan_control, dry_run=dry_run, default_to_dry_run=True, status_only=status_only)
 
 
 NATIVE_REPORT_CSV_FIELDS = (
@@ -28402,6 +28605,17 @@ def build_parser() -> argparse.ArgumentParser:
     native_scan_new_system.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
     native_scan_new_system.add_argument("--dry-run", action="store_true", help="plan target and task request bodies without runtime writes")
     native_scan_new_system.add_argument("--status-only", action="store_true", help="emit compact scan request identifiers and state")
+    native_scan_with_delivery = subparsers.add_parser("native-scan-with-delivery", parents=[common], help="create and start one guarded native scan with one existing EMAIL or SMB alert")
+    native_scan_with_delivery.add_argument("--alert-id", required=True, help="existing active EMAIL or SMB alert UUID")
+    target_source = native_scan_with_delivery.add_mutually_exclusive_group(required=True)
+    target_source.add_argument("--target-id", help="existing target UUID; the target is never modified")
+    target_source.add_argument("--host", help="one explicit IPv4 or IPv6 address; creates a new target")
+    native_scan_with_delivery.add_argument("--port-list-id", default=IANA_TCP_UDP_PORT_LIST_ID, help="existing port-list UUID for --host mode")
+    native_scan_with_delivery.add_argument("--scan-config-id", default=FULL_AND_FAST_SCAN_CONFIG_ID, help="existing scan-config UUID")
+    native_scan_with_delivery.add_argument("--scanner-id", default=NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID, help="existing scan-task-capable scanner UUID")
+    native_scan_with_delivery.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
+    native_scan_with_delivery.add_argument("--dry-run", action="store_true", help="plan request bodies without runtime access; this is the default without --allow-scan-control")
+    native_scan_with_delivery.add_argument("--status-only", action="store_true", help="emit compact resource identifiers and state")
     native_export_report_csv = subparsers.add_parser("native-export-report-csv", parents=[common], help="export deterministic report result evidence through the direct native API")
     native_export_report_csv.add_argument("--report-id", required=True, help="raw report UUID")
     native_export_report_csv.add_argument("--output", type=Path, help="CSV output path; defaults to REPORT_ID.csv")
@@ -28672,6 +28886,19 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-scan-with-delivery":
+        result = command_native_scan_with_delivery(
+            repo_root,
+            alert_id=args.alert_id,
+            host=args.host,
+            target_id=args.target_id,
+            port_list_id=args.port_list_id,
+            scan_config_id=args.scan_config_id,
+            scanner_id=args.scanner_id,
+            allow_scan_control=args.allow_scan_control,
+            dry_run=args.dry_run,
             status_only=args.status_only,
         )
     elif args.command == "native-bulk-modify-schedules":

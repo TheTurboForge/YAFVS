@@ -99,18 +99,16 @@ This script requests the given report and saves it as a pdf file locally.
 
 ---
 
-## `start-alert-scan.gmp.py`
+## Native scan with delivery
 
-This script makes an alert scan and sends the report via email.
-
-### Arguments
-
-* `<sender_email>`:      E-Mail of the sender
-* `<receiver_email>`:    E-Mail of the receiver
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/start-alert-scan.gmp.py <sender_email> <receiver_email>`
+The inherited alert-scan script has been retired. Use
+`just native-scan-with-delivery` after creating and configuring an active EMAIL
+or SMB alert through the UI or native API. The composition command preflights
+the alert, target, scan configuration, and scanner references, attaches the
+existing alert atomically while creating the task, and starts the scan only
+with explicit `--allow-scan-control`. Use exactly one of `--target-id` or
+explicit `--host`; `--dry-run` plans and validates arguments without runtime
+access, while real execution preflights every reference before writing.
 
 ---
 

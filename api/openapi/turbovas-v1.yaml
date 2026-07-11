@@ -8818,11 +8818,16 @@ components:
           $ref: '#/components/schemas/TargetCredentialReference'
     Target:
       type: object
-      required: [id, name, hosts, exclude_hosts, alive_tests, allow_simultaneous_ips, credentials, task_count]
+      required: [id, owner_id, name, hosts, exclude_hosts, alive_tests, allow_simultaneous_ips, credentials, task_count]
       properties:
         id:
           type: string
           format: uuid
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the owning operator, exposed as nonsecret metadata for safe script reconciliation.
         name:
           type: string
         comment:
@@ -8866,11 +8871,16 @@ components:
           format: date-time
     Task:
       type: object
-      required: [id, name, status, progress, trend, usage_type, report_count, max_severity]
+      required: [id, owner_id, name, status, progress, trend, usage_type, report_count, max_severity]
       properties:
         id:
           type: string
           format: uuid
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the owning operator, exposed as nonsecret metadata for safe script reconciliation.
         name:
           type: string
         comment:
@@ -9692,11 +9702,16 @@ components:
           description: Human-readable inherited alert enum label. Associated data values are intentionally omitted from the redacted native contract.
     AlertAsset:
       type: object
-      required: [id, name, owner, active, in_use, task_count, event, condition, method, method_data_redacted]
+      required: [id, owner_id, name, owner, active, in_use, task_count, event, condition, method, method_data_redacted]
       properties:
         id:
           type: string
           format: uuid
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the owning operator, exposed as nonsecret metadata for safe script preflight and reconciliation.
         name:
           type: string
         comment:

@@ -29,6 +29,7 @@ pub(crate) struct AlertAssetItem {
     id: String,
     name: String,
     comment: String,
+    owner_id: Option<String>,
     owner: AlertOwner,
     active: bool,
     in_use: bool,
@@ -62,6 +63,7 @@ pub(crate) fn alert_asset_from_row(row: &Row) -> AlertAssetItem {
         id: row.get("id"),
         name: row.get("name"),
         comment: row.get("comment"),
+        owner_id: row.get("owner_id"),
         owner: AlertOwner {
             name: row.get("owner_name"),
         },

@@ -394,10 +394,8 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     },
     "write_or_mutation": {
         "bulk-modify-schedules.gmp.py",
-        "cfg-gen-for-certs.gmp.py",
         "create-alerts-from-csv.gmp.py",
         "empty-trash.gmp.py",
-        "send-schedules.gmp.py",
     },
 }
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
@@ -411,14 +409,12 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
 }
 NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
     "bulk-modify-schedules.gmp.py": "Inherited bulk schedule timezone/iCalendar modification is characterized; native tooling still lacks a safe bulk schedule calendar-mutation contract.",
-    "cfg-gen-for-certs.gmp.py": "Inherited CERT-Bund scan-config generation is characterized; native tooling still lacks a safe scan-config creation/selector contract for advisory CVE-to-NVT resolution, whole-family selection, and required port-scanner NVTs.",
     "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "create-credentials-from-csv.gmp.py": "Inherited CSV credential creation is characterized; native tooling still lacks a secret-safe native contract for username/password, SSH-key file import, and unfinished SNMP/ESX behavior.",
     "empty-trash.gmp.py": "Inherited global trashcan-empty behavior is characterized; native tooling still lacks an explicit destructive bulk-trash contract and safety gate.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
     "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
-    "send-schedules.gmp.py": "Inherited XML schedule send/create behavior is characterized; native tooling still lacks a safe schedule import contract.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
 }
 # Historical denominator from 807ed060, when explicit helper-removal tracking landed.

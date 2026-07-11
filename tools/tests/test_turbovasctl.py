@@ -8532,11 +8532,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
                 "components/gvm-tools/scripts/nvt-scan.gmp.py",
                 "components/gvm-tools/scripts/start-alert-scan.gmp.py",
-                "components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
                 "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
-                "components/gvm-tools/scripts/send-schedules.gmp.py",
             ]
         )
 
@@ -8550,13 +8548,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("NVT scan setup", control_blockers["components/gvm-tools/scripts/nvt-scan.gmp.py"])
         self.assertIn("start-alert-scan behavior", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
         self.assertIn("email alert payloads", control_blockers["components/gvm-tools/scripts/start-alert-scan.gmp.py"])
-        self.assertIn("CERT-Bund scan-config generation", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
-        self.assertIn("CVE-to-NVT", write_blockers["components/gvm-tools/scripts/cfg-gen-for-certs.gmp.py"])
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
         self.assertNotIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_blockers)
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
         self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
-        self.assertIn("XML schedule send", write_blockers["components/gvm-tools/scripts/send-schedules.gmp.py"])
 
     def test_native_override_delete_script_is_not_remaining_replacement_candidate(self):
         candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
@@ -8566,6 +8561,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertFalse(
             (Path(__file__).resolve().parents[2] / "components" / "gvm-tools" / "scripts" / name).exists()
         )
+
+    def test_retired_schedule_import_and_cert_config_scripts_leave_no_candidate_accounting(self):
+        root = Path(__file__).resolve().parents[2]
+        candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
+        for name in ("cfg-gen-for-certs.gmp.py", "send-schedules.gmp.py"):
+            self.assertNotIn(name, candidates)
+            self.assertNotIn(name, turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
+            self.assertFalse((root / "components" / "gvm-tools" / "scripts" / name).exists())
 
     def test_gos_monthly_report_scripts_are_not_remaining_replacement_candidates(self):
         candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())

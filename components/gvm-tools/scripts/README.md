@@ -4,17 +4,15 @@
 
 # GVM Example Scripts
 
-## `cfg-gen-for-certs.gmp.py`
+## CERT-Bund scan configurations
 
-This script creates a new scan config with nvts from a given CERT-Bund!
+The unreliable `cfg-gen-for-certs.gmp.py` compatibility script has been
+retired without a parity replacement. Use ordinary retained scan
+configurations together with native CERT-Bund, CVE, and NVT reporting.
 
-### Arguments
-
-* `<cert>`: Name or ID of the CERT-Bund
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/cfg-gen-for-certs.gmp.py CB-K16/0943`
+The script could lose duplicate OIDs, perform incomplete partial writes, rely
+on hardcoded feed OIDs and family authority, report errors misleadingly, and
+provide no provenance for generated configurations.
 
 ---
 

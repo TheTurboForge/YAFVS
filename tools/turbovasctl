@@ -189,6 +189,7 @@ COMPLETED_SCAN_RUN_STATUS = 1
 RUNTIME_DIRS = (
     "postgres",
     "mosquitto",
+    "mosquitto/secrets",
     "feeds",
     "run",
     "logs",
@@ -197,9 +198,11 @@ RUNTIME_DIRS = (
     "certs/private/CA",
     "secrets",
     "state",
+    "state/ospd",
     "state/feed-gnupg",
     "redis-openvas",
-    "run/gvmd",
+    "run/gvmd-gmp",
+    "run/gvmd-control",
     "run/ospd",
     "run/notus",
     "run/redis-openvas",
@@ -253,6 +256,18 @@ TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE = "/runtime/secrets/native-api-bearer-t
 TURBOVAS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
 TURBOVAS_API_BROWSER_PROXY_SECRET_ENV = "TURBOVAS_API_BROWSER_PROXY_SECRET"
 TURBOVAS_API_BROWSER_PROXY_SECRET = "native-api-browser-proxy-secret"
+TURBOVAS_GVMD_CONTROL_SECRET_ENV = "TURBOVAS_GVMD_CONTROL_SECRET"
+TURBOVAS_GVMD_CONTROL_SECRET = "gvmd-control-secret"
+TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV = "TURBOVAS_MQTT_OPENVAS_PASSWORD"
+TURBOVAS_MQTT_NOTUS_PASSWORD_ENV = "TURBOVAS_MQTT_NOTUS_PASSWORD"
+TURBOVAS_MQTT_OSPD_PASSWORD_ENV = "TURBOVAS_MQTT_OSPD_PASSWORD"
+TURBOVAS_MQTT_HEALTH_PASSWORD_ENV = "TURBOVAS_MQTT_HEALTH_PASSWORD"
+TURBOVAS_MQTT_RUNTIME_SECRETS = (
+    (TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV, "mqtt-openvas-password"),
+    (TURBOVAS_MQTT_NOTUS_PASSWORD_ENV, "mqtt-notus-password"),
+    (TURBOVAS_MQTT_OSPD_PASSWORD_ENV, "mqtt-ospd-password"),
+    (TURBOVAS_MQTT_HEALTH_PASSWORD_ENV, "mqtt-health-password"),
+)
 TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH = 32
 TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH = 1024
 UUID_VALUE_RE = re.compile(
@@ -4249,7 +4264,7 @@ def wait_for_ospd_vt_load(repo_root: Path, timeout_seconds: int = 300) -> tuple[
 
 
 def gvmd_socket_path(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "run", "gvmd", "gvmd.sock")
+    return runtime_path(repo_root, "run", "gvmd-gmp", "gvmd.sock")
 
 
 def ospd_socket_path(repo_root: Path) -> Path:
@@ -4261,7 +4276,7 @@ def scanner_redis_socket_path(repo_root: Path) -> Path:
 
 
 def openvas_runtime_config_path(repo_root: Path) -> Path:
-    return repo_root / "build" / "prefix" / "etc" / "openvas" / "openvas.conf"
+    return runtime_path(repo_root, "state", "ospd", "openvas.conf")
 
 
 def runtime_full_test_scan_probe_path(repo_root: Path) -> Path:
@@ -4512,6 +4527,10 @@ def runtime_env(repo_root: Path) -> dict[str, str]:
     env.setdefault("POSTGRES_DB", POSTGRES_DEFAULTS["database"])
     env.setdefault("OPENVAS_CONFIG", str(openvas_runtime_config_path(repo_root)))
     env.setdefault(GSAD_HOST_ENV, DEFAULT_GSAD_HOST)
+    for env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS:
+        if not env.get(env_name):
+            secret, _created = read_or_create_runtime_secret(repo_root, secret_name)
+            env[env_name] = secret
     return env
 
 
@@ -4520,6 +4539,9 @@ def runtime_app_env(repo_root: Path) -> dict[str, str]:
     if not env.get(TURBOVAS_API_BROWSER_PROXY_SECRET_ENV):
         secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_API_BROWSER_PROXY_SECRET)
         env[TURBOVAS_API_BROWSER_PROXY_SECRET_ENV] = secret
+    if not env.get(TURBOVAS_GVMD_CONTROL_SECRET_ENV):
+        secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_GVMD_CONTROL_SECRET)
+        env[TURBOVAS_GVMD_CONTROL_SECRET_ENV] = secret
     return env
 
 
@@ -5512,14 +5534,18 @@ def scanner_redis_ping(repo_root: Path) -> subprocess.CompletedProcess[str]:
 def write_openvas_runtime_config(repo_root: Path) -> Path:
     path = openvas_runtime_config_path(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    mqtt_password, _created = read_or_create_runtime_secret(repo_root, "mqtt-openvas-password")
+    write_private_text(
+        path,
         "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n"
         "# SPDX-License-Identifier: GPL-3.0-or-later\n"
         "# Generated development runtime configuration.\n"
         "db_address = /runtime/run/redis-openvas/redis.sock\n"
         "plugins_folder = /runtime/feeds/openvas/plugins\n"
-        "include_folders = /runtime/feeds/openvas/plugins\n",
-        encoding="utf-8",
+        "include_folders = /runtime/feeds/openvas/plugins\n"
+        "mqtt_server_uri = mosquitto:1883\n"
+        "mqtt_user = openvas\n"
+        f"mqtt_pass = {mqtt_password}\n",
     )
     return path
 
@@ -14732,7 +14758,7 @@ def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[s
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-    control_socket = runtime_dir(repo_root) / "run" / "gvmd" / "turbovas-control.sock"
+    control_socket = runtime_dir(repo_root) / "run" / "gvmd-control" / "turbovas-control.sock"
     wait_for_socket(control_socket, timeout_seconds=20)
     findings.append(
         socket_readiness_finding(

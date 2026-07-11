@@ -9,6 +9,7 @@
 """Setup for the OSP OpenVAS Server."""
 
 import logging
+import math
 import time
 import copy
 
@@ -46,6 +47,13 @@ logger = logging.getLogger(__name__)
 # TurboVAS defaults scanner plugin execution to 180 seconds because it is
 # preferable for things to fail quickly.
 TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS = 180
+# Keep scanner startup bounded by the same fast-fail default as per-NVT and
+# plugin execution. A shorter deadline risks rejecting legitimate startup work.
+OPENVAS_STARTUP_TIMEOUT_SECONDS = TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS
+OPENVAS_STOP_GRACE_PERIOD_SECONDS = 15
+OPENVAS_STOP_TERMINATE_GRACE_PERIOD_SECONDS = 5
+OPENVAS_STOP_KILL_GRACE_PERIOD_SECONDS = 5
+OPENVAS_PROCESS_POLL_INTERVAL_SECONDS = 0.1
 
 
 OSPD_DESC = """
@@ -553,11 +561,17 @@ class OSPDopenvas(OSPDaemon):
 
         # Do not init MQTT daemon if Notus runs via openvasd.
         if not self.scan_only_params.get("openvasd_server"):
-            notus_handler = NotusResultHandler(self.report_results)
+            notus_handler = NotusResultHandler(
+                self.report_results, self.scan_collection.id_exists
+            )
 
             if self._mqtt_broker_address:
                 client = MQTTClient(
-                    self._mqtt_broker_address, self._mqtt_broker_port, "ospd"
+                    self._mqtt_broker_address,
+                    self._mqtt_broker_port,
+                    "ospd",
+                    self._mqtt_broker_username,
+                    self._mqtt_broker_password,
                 )
                 daemon = MQTTDaemon(client)
                 subscriber = MQTTSubscriber(client)
@@ -798,6 +812,9 @@ class OSPDopenvas(OSPDaemon):
             )
         return has_openvas
 
+    MAX_REDIS_PROGRESS_ROW_LENGTH = 4 * 1024
+    MAX_REDIS_RESULT_ROW_LENGTH = 4 * 1024 * 1024
+
     def report_openvas_scan_status(self, kbdb: BaseDB, scan_id: str):
         """Get all status entries from redis kb.
 
@@ -810,19 +827,49 @@ class OSPDopenvas(OSPDaemon):
         finished_hosts = list()
         for res in all_status:
             try:
-                current_host, launched, total = res.split('/')
-            except ValueError:
+                if len(res) > self.MAX_REDIS_PROGRESS_ROW_LENGTH:
+                    logger.warning(
+                        '%s: Ignoring oversized Redis progress row.', scan_id
+                    )
+                    continue
+                current_host, launched, total = res.split('/', maxsplit=2)
+                launched = float(launched)
+                total = float(total)
+            except (AttributeError, TypeError, ValueError):
+                logger.warning(
+                    '%s: Ignoring malformed Redis progress row.', scan_id
+                )
                 continue
 
-            try:
-                if float(total) == 0:
-                    continue
-                elif float(total) == ScanProgress.DEAD_HOST:
-                    host_prog = ScanProgress.DEAD_HOST
-                else:
-                    host_prog = int((float(launched) / float(total)) * 100)
-            except TypeError:
+            if (
+                not current_host
+                or not math.isfinite(launched)
+                or not math.isfinite(total)
+            ):
+                logger.warning(
+                    '%s: Ignoring malformed Redis progress row.', scan_id
+                )
                 continue
+            if launched < 0:
+                logger.warning(
+                    '%s: Ignoring out-of-range Redis progress row.', scan_id
+                )
+                continue
+            if total == ScanProgress.DEAD_HOST:
+                host_prog = ScanProgress.DEAD_HOST
+            elif total <= 0 or launched > total:
+                logger.warning(
+                    '%s: Ignoring out-of-range Redis progress row.', scan_id
+                )
+                continue
+            else:
+                host_prog = int((launched / total) * 100)
+                if not ScanProgress.INIT <= host_prog <= ScanProgress.FINISHED:
+                    logger.warning(
+                        '%s: Ignoring out-of-range Redis progress row.',
+                        scan_id,
+                    )
+                    continue
 
             all_hosts[current_host] = host_prog
 
@@ -854,7 +901,23 @@ class OSPDopenvas(OSPDaemon):
         for res in all_results:
             if not res:
                 continue
-            msg = res.split('|||')
+            try:
+                if len(res) > self.MAX_REDIS_RESULT_ROW_LENGTH:
+                    logger.warning(
+                        '%s: Ignoring oversized Redis result row.', scan_id
+                    )
+                    continue
+                msg = res.split('|||', maxsplit=6)
+            except (AttributeError, TypeError, ValueError):
+                logger.warning(
+                    '%s: Ignoring malformed Redis result row.', scan_id
+                )
+                continue
+            if len(msg) < 6:
+                logger.warning(
+                    '%s: Ignoring malformed Redis result row.', scan_id
+                )
+                continue
             result = {
                 "result_type": msg[0],
                 "host_ip": msg[1],
@@ -869,6 +932,25 @@ class OSPDopenvas(OSPDaemon):
             results.append(result)
 
         return self.report_results(results, scan_id)
+
+    MAX_OPENVAS_HOST_COUNT = 2**31 - 1
+
+    @classmethod
+    def parse_openvas_host_count(
+        cls, value: Any, scan_id: str, kind: str
+    ) -> Optional[int]:
+        """Return a bounded scanner host count without logging raw values."""
+        try:
+            count = int(value)
+        except (OverflowError, TypeError, ValueError):
+            logger.warning('%s: Ignoring malformed Redis %s.', scan_id, kind)
+            return None
+
+        if count < 0 or count > cls.MAX_OPENVAS_HOST_COUNT:
+            logger.warning('%s: Ignoring out-of-range Redis %s.', scan_id, kind)
+            return None
+
+        return count
 
     def report_results(self, results: list, scan_id: str) -> bool:
         """Reports all results given in a list.
@@ -993,36 +1075,37 @@ class OSPDopenvas(OSPDaemon):
             # To process non-scanned dead hosts when
             # test_alive_host_only in openvas is enable
             elif res["result_type"] == 'DEADHOST':
-                try:
-                    total_dead = total_dead + int(res["value"])
-                except TypeError:
-                    logger.debug('Error processing dead host count')
+                dead_hosts = self.parse_openvas_host_count(
+                    res["value"], scan_id, 'dead host count'
+                )
+                if dead_hosts is not None:
+                    total_dead = total_dead + dead_hosts
 
             # To update total host count
             if res["result_type"] == 'HOSTS_COUNT':
-                try:
-                    count_total = int(res["value"])
+                count_total = self.parse_openvas_host_count(
+                    res["value"], scan_id, 'total host count'
+                )
+                if count_total is not None:
                     logger.debug(
                         '%s: Set total hosts counted by OpenVAS: %d',
                         scan_id,
                         count_total,
                     )
                     self.set_scan_total_hosts(scan_id, count_total)
-                except TypeError:
-                    logger.debug('Error processing total host count')
 
             # To update total excluded hosts
             if res["result_type"] == 'HOSTS_EXCLUDED':
-                try:
-                    total_excluded = int(res["value"])
+                total_excluded = self.parse_openvas_host_count(
+                    res["value"], scan_id, 'excluded host count'
+                )
+                if total_excluded is not None:
                     logger.debug(
                         '%s: Set total excluded counted by OpenVAS: %d',
                         scan_id,
                         total_excluded,
                     )
                     self.set_scan_total_excluded_hosts(scan_id, total_excluded)
-                except TypeError:
-                    logger.debug('Error processing total excluded hosts')
 
         # Insert result batch into the scan collection table.
         if len(res_list):
@@ -1055,6 +1138,63 @@ class OSPDopenvas(OSPDaemon):
 
         return openvas_process.is_running()
 
+    @staticmethod
+    def is_matching_openvas_scan_process(
+        openvas_process: psutil.Process, scan_id: str
+    ) -> bool:
+        """Return whether a PID still belongs to this scan before escalation."""
+        try:
+            if not openvas_process.is_running():
+                return False
+            if openvas_process.name() != 'openvas':
+                return False
+
+            cmdline = openvas_process.cmdline()
+            return any(
+                cmdline[index : index + 2] == ['--scan-start', scan_id]
+                for index in range(len(cmdline) - 1)
+            )
+        except (
+            psutil.NoSuchProcess,
+            psutil.AccessDenied,
+            psutil.ZombieProcess,
+        ):
+            return False
+
+    @staticmethod
+    def wait_for_openvas_process_exit(
+        openvas_process: psutil.Process, timeout: float
+    ) -> bool:
+        """Wait for a process exit without allowing cleanup to block forever."""
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                if not openvas_process.is_running():
+                    return True
+                if openvas_process.status() == psutil.STATUS_ZOMBIE:
+                    openvas_process.wait(
+                        timeout=max(0, deadline - time.monotonic())
+                    )
+                    return True
+            except psutil.NoSuchProcess:
+                return True
+            except (psutil.AccessDenied, psutil.TimeoutExpired):
+                return False
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(OPENVAS_PROCESS_POLL_INTERVAL_SECONDS, remaining))
+
+    def abort_scan_startup(
+        self, kbdb: BaseDB, scan_id: str, error: str
+    ) -> None:
+        """Record a startup failure and release the allocated scanner state."""
+        self.add_scan_error(scan_id, name='', host='', value=error)
+        logger.error('%s: %s', scan_id, error)
+        self.stop_scan_cleanup(kbdb, scan_id, kbdb.get_scan_process_id())
+        self.main_db.release_database(kbdb)
+
     def stop_scan_cleanup(
         self,
         kbdb: BaseDB,
@@ -1075,44 +1215,83 @@ class OSPDopenvas(OSPDaemon):
 
             try:
                 ovas_process = psutil.Process(int(ovas_pid))
-            except psutil.NoSuchProcess:
+            except (psutil.NoSuchProcess, TypeError, ValueError):
                 ovas_process = None
 
-            # Check if openvas is running
-            if (
-                ovas_process
-                and ovas_process.is_running()
-                and ovas_process.name() == "openvas"
-            ):
+            if ovas_process:
+                try:
+                    process_status = ovas_process.status()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    process_status = None
+
                 # Cleaning in case of Zombie Process
-                if ovas_process.status() == psutil.STATUS_ZOMBIE:
+                if process_status == psutil.STATUS_ZOMBIE:
                     logger.debug(
                         '%s: Process with PID %s is a Zombie process.'
                         ' Cleaning up...',
                         scan_id,
                         ovas_process.pid,
                     )
-                    ovas_process.wait()
-                # Stop openvas process and wait until it stopped
+                    self.wait_for_openvas_process_exit(
+                        ovas_process, OPENVAS_STOP_GRACE_PERIOD_SECONDS
+                    )
+                elif not self.is_matching_openvas_scan_process(
+                    ovas_process, scan_id
+                ):
+                    logger.warning(
+                        '%s: Refusing to signal PID %s because it does not '
+                        'match the recorded OpenVAS scan command.',
+                        scan_id,
+                        ovas_pid,
+                    )
                 else:
                     can_stop_scan = Openvas.stop_scan(
                         scan_id,
                         not self.is_running_as_root and self.sudo_available,
                     )
                     if not can_stop_scan:
-                        logger.debug(
-                            'Not possible to stop scan process: %s.',
+                        logger.warning(
+                            '%s: Graceful OpenVAS stop command failed for %s.',
+                            scan_id,
                             ovas_process,
                         )
-                        return
+                    if self.wait_for_openvas_process_exit(
+                        ovas_process, OPENVAS_STOP_GRACE_PERIOD_SECONDS
+                    ):
+                        logger.debug('Stopped process: %s', ovas_process)
+                    else:
+                        logger.warning(
+                            '%s: OpenVAS did not exit after the graceful stop; '
+                            'sending SIGTERM.',
+                            scan_id,
+                        )
+                        try:
+                            ovas_process.terminate()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
 
-                    logger.debug('Stopping process: %s', ovas_process)
-
-                    while ovas_process.is_running():
-                        if ovas_process.status() == psutil.STATUS_ZOMBIE:
-                            ovas_process.wait()
-                        else:
-                            time.sleep(0.1)
+                        if not self.wait_for_openvas_process_exit(
+                            ovas_process,
+                            OPENVAS_STOP_TERMINATE_GRACE_PERIOD_SECONDS,
+                        ):
+                            logger.error(
+                                '%s: OpenVAS did not exit after SIGTERM; '
+                                'sending SIGKILL.',
+                                scan_id,
+                            )
+                            try:
+                                ovas_process.kill()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                pass
+                            if not self.wait_for_openvas_process_exit(
+                                ovas_process,
+                                OPENVAS_STOP_KILL_GRACE_PERIOD_SECONDS,
+                            ):
+                                logger.error(
+                                    '%s: OpenVAS remained running after '
+                                    'SIGKILL.',
+                                    scan_id,
+                                )
             else:
                 logger.debug(
                     "%s: Process with PID %s already stopped",
@@ -1155,12 +1334,10 @@ class OSPDopenvas(OSPDaemon):
             )
             do_not_launch = True
 
-        # Set credentials
+        # Credential preparation and parsing failures are unsafe to downgrade
+        # into an unauthenticated scan.
         if not scan_prefs.prepare_credentials_for_openvas():
-            error = (
-                'All authentifications contain errors.'
-                + 'Starting unauthenticated scan instead.'
-            )
+            error = 'Credential preparation failed. Scan was not launched.'
             self.add_scan_error(
                 scan_id,
                 name='',
@@ -1168,6 +1345,7 @@ class OSPDopenvas(OSPDaemon):
                 value=error,
             )
             logger.error(error)
+            do_not_launch = True
         errors = scan_prefs.get_error_messages()
         for e in errors:
             error = 'Malformed credential. ' + e
@@ -1178,6 +1356,7 @@ class OSPDopenvas(OSPDaemon):
                 value=error,
             )
             logger.error(error)
+            do_not_launch = True
 
         if not scan_prefs.prepare_plugins_for_openvas():
             self.add_scan_error(
@@ -1219,20 +1398,28 @@ class OSPDopenvas(OSPDaemon):
         logger.debug('pid = %s', openvas_process.pid)
 
         # Wait until the scanner starts and loads all the preferences.
+        startup_deadline = time.monotonic() + OPENVAS_STARTUP_TIMEOUT_SECONDS
         while kbdb.get_status(scan_id) == 'new':
-            res = openvas_process.poll()
-            if res and res < 0:
-                self.stop_scan_cleanup(
-                    kbdb, scan_id, kbdb.get_scan_process_id()
-                )
-                logger.error(
-                    'It was not possible run the task %s, since openvas ended '
-                    'unexpectedly with errors during launching.',
+            exit_code = openvas_process.poll()
+            if exit_code is not None:
+                self.abort_scan_startup(
+                    kbdb,
                     scan_id,
+                    'OpenVAS scanner exited before reporting startup readiness '
+                    f'(exit code {exit_code}).',
                 )
                 return
 
-            time.sleep(1)
+            remaining = startup_deadline - time.monotonic()
+            if remaining <= 0:
+                self.abort_scan_startup(
+                    kbdb,
+                    scan_id,
+                    'OpenVAS scanner did not report startup readiness within '
+                    f'{OPENVAS_STARTUP_TIMEOUT_SECONDS} seconds.',
+                )
+                return
+            time.sleep(min(1, remaining))
 
         got_results = False
         while True:

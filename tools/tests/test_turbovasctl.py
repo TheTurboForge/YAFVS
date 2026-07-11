@@ -1710,6 +1710,25 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["result_count"], 0)
         self.assertEqual(result["findings"][0]["check"], "native-api-semgrep-audit.status-only")
 
+    def test_native_api_semgrep_policy_covers_the_tokio_postgres_query_surface(self):
+        policy = (
+            TURBOVASCTL_PATH.parents[1] / "policy" / "semgrep-native-api.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("sqlx::", policy)
+        for method in (
+            "query",
+            "query_one",
+            "query_opt",
+            "query_raw",
+            "execute",
+            "batch_execute",
+            "simple_query",
+            "prepare",
+            "prepare_typed",
+        ):
+            self.assertIn(f"$CLIENT.{method}", policy)
+
     def test_native_api_semgrep_audit_fails_for_findings(self):
         payload = {
             "results": [
@@ -11225,9 +11244,12 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("certs/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("certs/private/CA", turbovasctl.RUNTIME_DIRS)
         self.assertIn("secrets", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("mosquitto/secrets", turbovasctl.RUNTIME_DIRS)
         self.assertIn("state/feed-gnupg", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("state/ospd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("redis-openvas", turbovasctl.RUNTIME_DIRS)
-        self.assertIn("run/gvmd", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("run/gvmd-gmp", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("run/gvmd-control", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/ospd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/notus", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/redis-openvas", turbovasctl.RUNTIME_DIRS)
@@ -13060,7 +13082,7 @@ db2:keys=5,expires=0,avg_ttl=0
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             self.assertEqual(turbovasctl.scanner_redis_socket_path(root), Path(tmp) / "TurboVAS-runtime" / "run" / "redis-openvas" / "redis.sock")
-            self.assertEqual(turbovasctl.openvas_runtime_config_path(root), root / "build" / "prefix" / "etc" / "openvas" / "openvas.conf")
+            self.assertEqual(turbovasctl.openvas_runtime_config_path(root), Path(tmp) / "TurboVAS-runtime" / "state" / "ospd" / "openvas.conf")
             self.assertEqual(turbovasctl.runtime_full_test_scan_probe_path(root), root / "tools" / "runtime_full_test_scan.py")
             self.assertEqual(turbovasctl.full_test_scan_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "full-test-scan")
 
@@ -13415,6 +13437,78 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertIn("db_address = /runtime/run/redis-openvas/redis.sock", text)
             self.assertIn("plugins_folder = /runtime/feeds/openvas/plugins", text)
             self.assertIn("include_folders = /runtime/feeds/openvas/plugins", text)
+            self.assertIn("mqtt_server_uri = mosquitto:1883", text)
+            self.assertIn("mqtt_user = openvas", text)
+            self.assertIn("mqtt_pass = ", text)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_runtime_app_env_separates_control_proxy_and_mqtt_secrets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            env = turbovasctl.runtime_app_env(root)
+
+            self.assertNotEqual(
+                env[turbovasctl.TURBOVAS_API_BROWSER_PROXY_SECRET_ENV],
+                env[turbovasctl.TURBOVAS_GVMD_CONTROL_SECRET_ENV],
+            )
+            for env_name, secret_name in turbovasctl.TURBOVAS_MQTT_RUNTIME_SECRETS:
+                self.assertTrue(env[env_name])
+                self.assertEqual(
+                    turbovasctl.runtime_secret_path(root, secret_name).stat().st_mode & 0o777,
+                    0o600,
+                )
+
+    def test_runtime_containment_compose_and_broker_policy(self):
+        root = Path(__file__).resolve().parents[2]
+        compose = (root / "compose" / "dev.yaml").read_text(encoding="utf-8")
+        broker = (root / "docker" / "runtime" / "mosquitto.conf").read_text(encoding="utf-8")
+        acl = (root / "docker" / "runtime" / "mosquitto.acl").read_text(encoding="utf-8")
+        dev_shell = compose.split("  dev-shell:\n", 1)[1].split("\n  gvmd:", 1)[0]
+        mosquitto = compose.split("  mosquitto:\n", 1)[1].split("\n  dev-shell:", 1)[0]
+
+        self.assertIn("TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_GVMD_CONTROL_SECRET:-}", compose)
+        self.assertNotIn("TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}", compose)
+        gvmd = compose.split("  gvmd:\n", 1)[1].split("\n  ospd-openvas:", 1)[0]
+        self.assertIn("/run/ospd", gvmd)
+        self.assertNotIn("source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime", gvmd)
+        gsad = compose.split("  gsad:\n", 1)[1].split("\n  turbovas-api:", 1)[0]
+        turbovas_api = compose.split("  turbovas-api:\n", 1)[1]
+        app_services = {
+            "gvmd": compose.split("  gvmd:\n", 1)[1].split("\n  ospd-openvas:", 1)[0],
+            "ospd-openvas": compose.split("  ospd-openvas:\n", 1)[1].split("\n  notus-scanner:", 1)[0],
+            "notus-scanner": compose.split("  notus-scanner:\n", 1)[1].split("\n  gsad:", 1)[0],
+            "gsad": gsad,
+            "turbovas-api": turbovas_api,
+        }
+        broad_runtime_mount = "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime"
+        for service, block in app_services.items():
+            self.assertNotIn(broad_runtime_mount, block, service)
+            self.assertNotIn("/runtime/secrets", block, service)
+        self.assertIn(broad_runtime_mount, dev_shell)
+        self.assertIn("/mosquitto/secrets", mosquitto)
+        self.assertNotIn("${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets", mosquitto)
+        self.assertIn("/run/gvmd-gmp", gsad)
+        self.assertIn("/run/gvmd-control", turbovas_api)
+        self.assertNotIn("/run/gvmd-gmp", turbovas_api)
+        self.assertIn("/run/ospd", app_services["ospd-openvas"])
+        self.assertIn("/run/redis-openvas", app_services["ospd-openvas"])
+        self.assertIn("/feeds/openvas", app_services["ospd-openvas"])
+        self.assertIn("/state/ospd/openvas.conf", app_services["ospd-openvas"])
+        self.assertIn("/feeds/notus", app_services["notus-scanner"])
+        self.assertIn("allow_anonymous false", broker)
+        self.assertIn("password_file /mosquitto/config-secrets/passwords", broker)
+        self.assertIn("acl_file /mosquitto/config-secrets/mosquitto.acl", broker)
+        self.assertIn("max_packet_size 4194304", broker)
+        for rule in (
+            "topic write scanner/package/cmd/notus",
+            "topic read scanner/status",
+            "topic read scanner/package/cmd/notus",
+            "topic write scanner/status",
+            "topic write scanner/scan/info",
+            "topic read scanner/scan/info",
+        ):
+            self.assertIn(rule, acl)
 
     def test_runtime_plan_json_shape(self):
         with tempfile.TemporaryDirectory() as tmp:

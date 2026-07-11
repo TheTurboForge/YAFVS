@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -9,10 +10,10 @@ import logging
 import subprocess
 import psutil
 
-
 logger = logging.getLogger(__name__)
 
 _BOOL_DICT = {'no': 0, 'yes': 1}
+STOP_SCAN_COMMAND_TIMEOUT_SECONDS = 10
 
 
 class NASLCli:
@@ -172,7 +173,11 @@ class Openvas:
             return None
 
     @staticmethod
-    def stop_scan(scan_id: str, sudo: bool = False) -> bool:
+    def stop_scan(
+        scan_id: str,
+        sudo: bool = False,
+        timeout: float = STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
+    ) -> bool:
         """Calls openvas to stop a scan process"""
         cmd = []
 
@@ -182,8 +187,13 @@ class Openvas:
         cmd += ['openvas', '--scan-stop', scan_id]
 
         try:
-            subprocess.check_call(cmd)
+            subprocess.run(cmd, check=True, timeout=timeout)
             return True
+        except subprocess.TimeoutExpired:
+            logger.error(
+                'Timed out stopping scan %s after %s seconds.', scan_id, timeout
+            )
+            return False
         except (subprocess.SubprocessError, OSError) as e:
             # the command is not available
             logger.warning(

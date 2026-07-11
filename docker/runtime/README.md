@@ -10,7 +10,8 @@ The default Compose stack starts infrastructure services:
 
 - Postgres, using a TurboVAS development image with pg-gvm runtime dependencies
 - Redis for OpenVAS scanner KB state, using a Unix socket only
-- Mosquitto
+- Mosquitto, with runtime-only credentials and ACLs limited to the retained
+  OpenVAS/Notus message flow
 - optional `dev-shell` profile for toolchain/container experiments
 
 The experimental `app` profile adds inherited application services:
@@ -26,6 +27,10 @@ Persistent state is stored outside the repository by default, normally in the
 sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
 storage for Postgres, scanner Redis, Mosquitto, feeds, run sockets, logs,
 artifacts, certificates, secrets, and service state.
+
+`tools/turbovasctl` creates the ignored runtime-only MQTT passwords before it
+starts the broker. A raw `docker compose up` must supply those passwords
+explicitly; empty broker credentials intentionally fail startup.
 
 Infrastructure services bind host ports to `127.0.0.1` only. `gsad` also
 defaults to loopback, but can be explicitly bound for development by setting
@@ -110,8 +115,10 @@ runtime `secrets/` directory, aligns it to the `admin` / `admin` development
 default, and sets the feed import owner when possible.
 
 `runtime-scanner-redis-init` starts the dedicated scanner Redis service, writes
-the ignored development OpenVAS config under `build/prefix/etc/openvas/`, and
-verifies that `openvas -s` reports the scanner Redis Unix socket as `db_address`.
+the ignored development OpenVAS config under runtime state, and verifies that
+`openvas -s` reports the scanner Redis Unix socket as `db_address`. The
+generated config carries the runtime-only OpenVAS MQTT credential and is mounted
+only into OSPD; do not copy it into tracked configuration or operator artifacts.
 
 `runtime-gmp-smoke` authenticates over the persistent `gvmd` Unix socket with a
 small `python-gvm` probe and calls `get_version` without printing secrets.
@@ -156,7 +163,9 @@ with `NMAP_PRIVILEGED=1` and file capabilities on `/usr/bin/nmap`.
 
 The current app profile reaches inherited manager-scanner connectivity:
 
-- `gvmd` starts and creates `/runtime/run/gvmd/gvmd.sock`.
+- `gvmd` creates separate GMP and native-control sockets. `gsad` receives only
+  the GMP socket mount; `turbovas-api` receives only the native-control socket
+  mount and a distinct control secret from the browser-proxy secret.
 - authenticated GMP `get_version` succeeds over the runtime Unix socket.
 - scanner Redis is reachable through `/runtime/run/redis-openvas/redis.sock`.
 - `ospd-openvas` starts and creates `/runtime/run/ospd/ospd-openvas.sock`.

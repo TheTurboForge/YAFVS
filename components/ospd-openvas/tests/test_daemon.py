@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
-# pylint: disable=invalid-name,line-too-long,no-value-for-parameter
+# pylint: disable=invalid-name,line-too-long,no-member,no-value-for-parameter
 
 """Unit Test for ospd-openvas"""
 
@@ -617,6 +617,64 @@ class TestOspdOpenvas(TestCase):
             4,
         )
 
+    @patch('ospd_openvas.daemon.logger.warning')
+    @patch('ospd_openvas.daemon.BaseDB')
+    @patch('ospd_openvas.daemon.ResultList.add_scan_log_to_list')
+    def test_get_openvas_result_quarantines_malformed_rows(
+        self, mock_add_scan_log_to_list, MockDBClass, mock_warning
+    ):
+        w = DummyDaemon()
+        target_element = w.create_xml_target()
+        targets = OspRequest.process_target_element(target_element)
+        w.create_scan('123-456', targets, None, [])
+
+        hostile_row = 'HOSTILE-RESULT-PAYLOAD'
+        MockDBClass.get_result.return_value = [
+            hostile_row,
+            b'not-a-text-result-row',
+            'x' * (w.MAX_REDIS_RESULT_ROW_LENGTH + 1),
+            'LOG|||192.168.0.1|||localhost|||general/Host_Details||||||Host dead',
+        ]
+
+        w.report_openvas_results(MockDBClass, '123-456')
+
+        mock_add_scan_log_to_list.assert_called_once()
+        self.assertEqual(mock_warning.call_count, 3)
+        self.assertNotIn(hostile_row, str(mock_warning.call_args_list))
+
+    @patch('ospd_openvas.daemon.logger.warning')
+    @patch('ospd_openvas.daemon.BaseDB')
+    def test_get_openvas_result_quarantines_invalid_host_counts(
+        self, MockDBClass, mock_warning
+    ):
+        w = DummyDaemon()
+        target_element = w.create_xml_target()
+        targets = OspRequest.process_target_element(target_element)
+        w.create_scan('123-456', targets, None, [])
+        w.set_scan_total_hosts = MagicMock()
+        w.set_scan_total_excluded_hosts = MagicMock()
+        w.scan_collection.set_amount_dead_hosts = MagicMock()
+
+        MockDBClass.get_result.return_value = [
+            'HOSTS_COUNT||| ||| ||| ||| |||NaN',
+            'HOSTS_COUNT||| ||| ||| ||| |||-1',
+            'HOSTS_COUNT||| ||| ||| ||| |||2147483648',
+            'HOSTS_COUNT||| ||| ||| ||| |||4',
+            'HOSTS_EXCLUDED||| ||| ||| ||| |||Infinity',
+            'HOSTS_EXCLUDED||| ||| ||| ||| |||2',
+            'DEADHOST||| ||| ||| ||| |||-1',
+            'DEADHOST||| ||| ||| ||| |||3',
+        ]
+
+        w.report_openvas_results(MockDBClass, '123-456')
+
+        w.set_scan_total_hosts.assert_called_once_with('123-456', 4)
+        w.set_scan_total_excluded_hosts.assert_called_once_with('123-456', 2)
+        w.scan_collection.set_amount_dead_hosts.assert_called_once_with(
+            '123-456', total_dead=3
+        )
+        self.assertEqual(mock_warning.call_count, 5)
+
     @patch('ospd_openvas.daemon.BaseDB')
     @patch('ospd_openvas.daemon.ResultList.add_scan_alarm_to_list')
     def test_result_without_vt_oid(
@@ -653,6 +711,175 @@ class TestOspdOpenvas(TestCase):
         ret = w.is_openvas_process_alive(mock_process)
         self.assertFalse(ret)
 
+    def configure_exec_scan(self, daemon, kbdb):
+        daemon.scan_collection.get_options = MagicMock(return_value={})
+        daemon.main_db.check_consistency.return_value = (None, 0)
+        daemon.main_db.get_new_kb_database.return_value = kbdb
+        daemon.main_db.reset_mock()
+        daemon.notus = MagicMock()
+        daemon.get_scan_status = MagicMock(return_value=None)
+        daemon.add_scan_error = MagicMock()
+        kbdb.scan_is_stopped.return_value = False
+
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_does_not_launch_after_credential_preparation_failure(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = False
+        preferences.get_error_messages.return_value = []
+        preferences.prepare_plugins_for_openvas.return_value = True
+
+        daemon.exec_scan('scan-1')
+
+        mock_start_scan.assert_not_called()
+        daemon.add_scan_error.assert_called_once_with(
+            'scan-1',
+            name='',
+            host='',
+            value='Credential preparation failed. Scan was not launched.',
+        )
+        daemon.main_db.release_database.assert_called_once_with(kbdb)
+
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_does_not_launch_after_malformed_credential(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = True
+        preferences.get_error_messages.return_value = ['Missing service type.']
+        preferences.prepare_plugins_for_openvas.return_value = True
+
+        daemon.exec_scan('scan-1')
+
+        mock_start_scan.assert_not_called()
+        daemon.add_scan_error.assert_called_once_with(
+            'scan-1',
+            name='',
+            host='',
+            value='Malformed credential. Missing service type.',
+        )
+        daemon.main_db.release_database.assert_called_once_with(kbdb)
+
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_records_zero_exit_during_startup(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = True
+        preferences.get_error_messages.return_value = []
+        preferences.prepare_plugins_for_openvas.return_value = True
+        process = MagicMock(pid=42)
+        process.poll.return_value = 0
+        mock_start_scan.return_value = process
+        kbdb.get_status.return_value = 'new'
+        kbdb.get_scan_process_id.return_value = '42'
+        daemon.stop_scan_cleanup = MagicMock()
+
+        daemon.exec_scan('scan-1')
+
+        daemon.stop_scan_cleanup.assert_called_once_with(kbdb, 'scan-1', '42')
+        daemon.add_scan_error.assert_called_once_with(
+            'scan-1',
+            name='',
+            host='',
+            value=(
+                'OpenVAS scanner exited before reporting startup readiness '
+                '(exit code 0).'
+            ),
+        )
+        daemon.main_db.release_database.assert_called_once_with(kbdb)
+
+    @patch('ospd_openvas.daemon.OPENVAS_STARTUP_TIMEOUT_SECONDS', 0)
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_records_startup_timeout(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = True
+        preferences.get_error_messages.return_value = []
+        preferences.prepare_plugins_for_openvas.return_value = True
+        process = MagicMock(pid=42)
+        process.poll.return_value = None
+        mock_start_scan.return_value = process
+        kbdb.get_status.return_value = 'new'
+        kbdb.get_scan_process_id.return_value = '42'
+        daemon.stop_scan_cleanup = MagicMock()
+
+        daemon.exec_scan('scan-1')
+
+        daemon.stop_scan_cleanup.assert_called_once_with(kbdb, 'scan-1', '42')
+        daemon.add_scan_error.assert_called_once_with(
+            'scan-1',
+            name='',
+            host='',
+            value=(
+                'OpenVAS scanner did not report startup readiness within '
+                '0 seconds.'
+            ),
+        )
+        daemon.main_db.release_database.assert_called_once_with(kbdb)
+
+    @patch('ospd_openvas.daemon.psutil.Process')
+    @patch('ospd_openvas.daemon.Openvas.stop_scan')
+    def test_stop_scan_cleanup_escalates_only_after_bounded_waits(
+        self, mock_stop_scan, mock_process
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        process = mock_process.return_value
+        process.is_running.return_value = True
+        process.name.return_value = 'openvas'
+        process.cmdline.return_value = ['openvas', '--scan-start', 'scan-1']
+        mock_stop_scan.return_value = True
+        daemon.wait_for_openvas_process_exit = MagicMock(
+            side_effect=[False, False, True]
+        )
+
+        daemon.stop_scan_cleanup(kbdb, 'scan-1', '42')
+
+        mock_stop_scan.assert_called_once()
+        process.terminate.assert_called_once()
+        process.kill.assert_called_once()
+
+    @patch('ospd_openvas.daemon.psutil.Process')
+    @patch('ospd_openvas.daemon.Openvas.stop_scan')
+    def test_stop_scan_cleanup_rejects_reused_pid(
+        self, mock_stop_scan, mock_process
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        process = mock_process.return_value
+        process.is_running.return_value = True
+        process.name.return_value = 'openvas'
+        process.cmdline.return_value = ['openvas', '--scan-start', 'other-scan']
+
+        daemon.stop_scan_cleanup(kbdb, 'scan-1', '42')
+
+        mock_stop_scan.assert_not_called()
+        process.terminate.assert_not_called()
+        process.kill.assert_not_called()
+
     @patch('ospd_openvas.daemon.OSPDaemon.set_scan_progress_batch')
     @patch('ospd_openvas.daemon.OSPDaemon.sort_host_finished')
     @patch('ospd_openvas.db.KbDB')
@@ -688,6 +915,47 @@ class TestOspdOpenvas(TestCase):
         mock_sort_host_finished.assert_called_with(
             '123-456', ['192.168.0.3', '192.168.0.4']
         )
+
+    @patch('ospd_openvas.daemon.logger.warning')
+    @patch('ospd_openvas.daemon.OSPDaemon.set_scan_progress_batch')
+    @patch('ospd_openvas.daemon.OSPDaemon.sort_host_finished')
+    @patch('ospd_openvas.db.KbDB')
+    def test_report_openvas_scan_status_quarantines_invalid_rows(
+        self,
+        mock_db,
+        mock_sort_host_finished,
+        mock_set_scan_progress_batch,
+        mock_warning,
+    ):
+        w = DummyDaemon()
+        hostile_row = 'HOSTILE-PROGRESS-PAYLOAD'
+        mock_db.get_scan_status.return_value = [
+            hostile_row,
+            b'not-a-text-progress-row',
+            '192.168.0.1/NaN/1',
+            '192.168.0.2/Infinity/1',
+            '192.168.0.3/2/1',
+            '192.168.0.4/-1/1',
+            '192.168.0.4/-1/-1',
+            'x' * (w.MAX_REDIS_PROGRESS_ROW_LENGTH + 1),
+            '192.168.0.5/1/1',
+            '192.168.0.6/15/-1',
+        ]
+
+        w.report_openvas_scan_status(mock_db, '123-456')
+
+        mock_set_scan_progress_batch.assert_called_once_with(
+            '123-456',
+            host_progress={
+                '192.168.0.5': 100,
+                '192.168.0.6': -1,
+            },
+        )
+        mock_sort_host_finished.assert_called_once_with(
+            '123-456', ['192.168.0.5', '192.168.0.6']
+        )
+        self.assertEqual(mock_warning.call_count, 8)
+        self.assertNotIn(hostile_row, str(mock_warning.call_args_list))
 
 
 class TestFilters(TestCase):

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2021-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -12,6 +13,7 @@ from unittest import TestCase, mock
 from ospd_openvas.messages.result import ResultMessage
 from ospd_openvas.messaging.mqtt import (
     MQTTDaemon,
+    MQTTClient,
     MQTTPublisher,
     MQTTSubscriber,
 )
@@ -56,6 +58,16 @@ class MQTTPublisherTestCase(TestCase):
             '"result_type": "ALARM"}',
             qos=1,
         )
+
+
+class MQTTClientTestCase(TestCase):
+    def test_configures_credentials_when_present(self):
+        with mock.patch.object(
+            MQTTClient, 'username_pw_set'
+        ) as set_credentials:
+            MQTTClient('broker', 1883, 'ospd', 'ospd', 'secret')
+
+        set_credentials.assert_called_once_with('ospd', 'secret')
 
 
 class MQTTSubscriberTestCase(TestCase):

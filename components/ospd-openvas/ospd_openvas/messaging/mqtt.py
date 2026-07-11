@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2021-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -9,7 +10,7 @@ from functools import partial
 from socket import gaierror, timeout
 from threading import Thread
 from time import sleep
-from typing import Callable, Type
+from typing import Callable, Optional, Type
 
 import paho.mqtt.client as mqtt
 from paho.mqtt import __version__ as paho_mqtt_version
@@ -35,6 +36,8 @@ class MQTTClient(mqtt.Client):
         mqtt_broker_address: str,
         mqtt_broker_port: int,
         client_id=OSPD_OPENVAS_MQTT_CLIENT_ID,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
     ):
         self._mqtt_broker_address = mqtt_broker_address
         self._mqtt_broker_port = mqtt_broker_port
@@ -54,6 +57,8 @@ class MQTTClient(mqtt.Client):
             logger.debug("Using Paho MQTT version 1")
 
         super().__init__(**mqtt_client_args)
+        if username and password:
+            self.username_pw_set(username, password)
 
         self.enable_logger()
 

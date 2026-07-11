@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# OpenVAS submits Notus work and consumes terminal package status.
+user openvas
+topic write scanner/package/cmd/notus
+topic read scanner/status
+
+# Notus consumes OpenVAS work and returns status/results to scanner services.
+user notus
+topic read scanner/package/cmd/notus
+topic write scanner/status
+topic write scanner/scan/info
+
+# OSPD consumes Notus package findings.
+user ospd
+topic read scanner/scan/info
+
+# Compose health verification is unable to affect scanner topics.
+user health
+topic write turbovas/health

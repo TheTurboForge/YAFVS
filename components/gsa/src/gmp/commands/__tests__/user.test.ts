@@ -11,6 +11,7 @@ import {
   createActionResultResponse,
 } from 'gmp/commands/testing';
 import UserCommand, {
+  DEFAULT_SETTINGS,
   type CertificateInfo,
   DEFAULT_FILTER_SETTINGS,
   saveDefaultFilterSettingId,
@@ -196,6 +197,15 @@ describe('UserCommand tests', () => {
 });
 
 describe('UserCommand transformSettingName() function tests', () => {
+  test('uses the authoritative SSH default credential setting UUID', () => {
+    expect(DEFAULT_SETTINGS.defaultsshcredential).toEqual(
+      '6fc56b72-c1cf-451c-a4c4-3a9dc784c3bd',
+    );
+    expect(DEFAULT_SETTINGS.defaultsshcredential).not.toEqual(
+      DEFAULT_SETTINGS.defaultsmbcredential,
+    );
+  });
+
   test('should transform string to lower case and remove -', () => {
     const str1 = 'foo';
     const str2 = 'fooBar';

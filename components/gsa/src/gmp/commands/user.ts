@@ -130,7 +130,7 @@ export const DEFAULT_SETTINGS = {
   defaultospscanconfig: 'fb19ac4b-614c-424c-b046-0bc32bf1be73',
   defaultsmbcredential: 'a25c0cfe-f977-417b-b1da-47da370c03e8',
   defaultsnmpcredential: '024550b8-868e-4b3c-98bf-99bb732f6a0d',
-  defaultsshcredential: 'a25c0cfe-f977-417b-b1da-47da370c03e8',
+  defaultsshcredential: '6fc56b72-c1cf-451c-a4c4-3a9dc784c3bd',
   defaultportlist: 'd74a9ee8-7d35-4879-9485-ab23f1bd45bc',
   defaultopenvasscanner: 'f7d0f6ed-6f9e-45dc-8bd9-05cced84e80d',
   defaultospscanner: 'b20697c9-be0a-4cd4-8b4d-5fe7841ebb03',

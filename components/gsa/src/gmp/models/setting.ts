@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -22,10 +23,7 @@ class Setting {
     this.id = element._id;
     this.comment = element.comment === '(null)' ? undefined : element.comment;
     this.name = element.name;
-    this.value =
-      !isEmpty(element.value) && element.value !== '0'
-        ? element.value
-        : undefined;
+    this.value = !isEmpty(element.value) ? element.value : undefined;
   }
 
   static fromElement(element: SettingElement): Setting {

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -35,14 +36,21 @@ describe('Setting tests', () => {
     expect(setting.value).toBeUndefined();
   });
 
-  test('should consider 0 as undefined value', () => {
+  test('should preserve string and numeric zero values', () => {
     const setting = Setting.fromElement({
       _id: 'foo',
       name: 'bar',
       value: '0',
     });
 
-    expect(setting.value).toBeUndefined();
+    const numericSetting = Setting.fromElement({
+      _id: 'numeric',
+      name: 'numeric zero',
+      value: 0,
+    });
+
+    expect(setting.value).toEqual('0');
+    expect(numericSetting.value).toEqual(0);
   });
 
   test('should ignore (null) in comment', () => {

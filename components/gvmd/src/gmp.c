@@ -723,35 +723,6 @@ create_scanner_data_reset (create_scanner_data_t *data)
 }
 
 /**
- * @brief Command data for the create_schedule command.
- */
-typedef struct
-{
-  char *name;                    ///< Name for new schedule.
-  char *comment;                 ///< Comment.
-  char *copy;                    ///< UUID of resource to copy.
-  char *timezone;                ///< Time zone of the schedule
-  char *icalendar;               ///< iCalendar string
-} create_schedule_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_schedule_data_reset (create_schedule_data_t *data)
-{
-  free (data->name);
-  free (data->copy);
-  free (data->comment);
-  free (data->timezone);
-  free (data->icalendar);
-
-  memset (data, 0, sizeof (create_schedule_data_t));
-}
-
-/**
  * @brief Command data for the create_target command.
  */
 typedef struct
@@ -2393,35 +2364,6 @@ modify_scanner_data_reset (modify_scanner_data_t *data)
 }
 
 /**
- * @brief Command data for the modify_schedule command.
- */
-typedef struct
-{
-  char *comment;                 ///< Comment.
-  char *name;                    ///< Name of schedule.
-  char *schedule_id;             ///< Schedule UUID.
-  char *timezone;                ///< Timezone.
-  char *icalendar;               ///< iCalendar string.
-} modify_schedule_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_schedule_data_reset (modify_schedule_data_t *data)
-{
-  free (data->comment);
-  free (data->name);
-  free (data->schedule_id);
-  free (data->timezone);
-  free (data->icalendar);
-
-  memset (data, 0, sizeof (modify_schedule_data_t));
-}
-
-/**
  * @brief Command data for the modify_tag command.
  */
 typedef struct
@@ -2854,7 +2796,6 @@ typedef union
   create_port_range_data_t create_port_range;         ///< create_port_range
   scope_command_data_t create_scope;                  ///< create_scope
   create_scanner_data_t create_scanner;               ///< create_scanner
-  create_schedule_data_t create_schedule;             ///< create_schedule
   create_tag_data_t create_tag;                       ///< create_tag
   create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
@@ -2915,7 +2856,6 @@ typedef union
   modify_report_format_data_t modify_report_format;   ///< modify_report_format
   scope_command_data_t modify_scope;                  ///< modify_scope
   modify_scanner_data_t modify_scanner;               ///< modify_scanner
-  modify_schedule_data_t modify_schedule;             ///< modify_schedule
   modify_setting_data_t modify_setting;               ///< modify_setting
   modify_tag_data_t modify_tag;                       ///< modify_tag
   modify_target_data_t modify_target;                 ///< modify_target
@@ -2997,12 +2937,6 @@ static scope_command_data_t *create_scope_data
  */
 static create_scanner_data_t *create_scanner_data
  = (create_scanner_data_t*) &(command_data.create_scanner);
-
-/**
- * @brief Parser callback data for CREATE_SCHEDULE.
- */
-static create_schedule_data_t *create_schedule_data
- = (create_schedule_data_t*) &(command_data.create_schedule);
 
 /**
  * @brief Parser callback data for CREATE_TAG.
@@ -3365,12 +3299,6 @@ static modify_scanner_data_t *modify_scanner_data
  = &(command_data.modify_scanner);
 
 /**
- * @brief Parser callback data for MODIFY_SCHEDULE.
- */
-static modify_schedule_data_t *modify_schedule_data
- = &(command_data.modify_schedule);
-
-/**
  * @brief Parser callback data for MODIFY_SETTING.
  */
 static modify_setting_data_t *modify_setting_data
@@ -3574,12 +3502,6 @@ typedef enum
   CLIENT_CREATE_SCANNER_CREDENTIAL,
   CLIENT_CREATE_SCANNER_RELAY_HOST,
   CLIENT_CREATE_SCANNER_RELAY_PORT,
-  CLIENT_CREATE_SCHEDULE,
-  CLIENT_CREATE_SCHEDULE_COMMENT,
-  CLIENT_CREATE_SCHEDULE_COPY,
-  CLIENT_CREATE_SCHEDULE_ICALENDAR,
-  CLIENT_CREATE_SCHEDULE_NAME,
-  CLIENT_CREATE_SCHEDULE_TIMEZONE,
   CLIENT_CREATE_TAG,
   CLIENT_CREATE_TAG_ACTIVE,
   CLIENT_CREATE_TAG_COMMENT,
@@ -3792,11 +3714,6 @@ typedef enum
   CLIENT_MODIFY_SCANNER_CREDENTIAL,
   CLIENT_MODIFY_SCANNER_RELAY_HOST,
   CLIENT_MODIFY_SCANNER_RELAY_PORT,
-  CLIENT_MODIFY_SCHEDULE,
-  CLIENT_MODIFY_SCHEDULE_COMMENT,
-  CLIENT_MODIFY_SCHEDULE_ICALENDAR,
-  CLIENT_MODIFY_SCHEDULE_NAME,
-  CLIENT_MODIFY_SCHEDULE_TIMEZONE,
   CLIENT_MODIFY_SETTING,
   CLIENT_MODIFY_SETTING_NAME,
   CLIENT_MODIFY_SETTING_VALUE,
@@ -4102,8 +4019,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("CREATE_SCANNER", element_name) == 0)
           set_client_state (CLIENT_CREATE_SCANNER);
-        else if (strcasecmp ("CREATE_SCHEDULE", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCHEDULE);
         else if (strcasecmp ("CREATE_TAG", element_name) == 0)
           {
             create_tag_data->resource_ids = NULL;
@@ -5083,12 +4998,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_scanner_data->scanner_id);
             set_client_state (CLIENT_MODIFY_SCANNER);
           }
-        else if (strcasecmp ("MODIFY_SCHEDULE", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "schedule_id",
-                              &modify_schedule_data->schedule_id);
-            set_client_state (CLIENT_MODIFY_SCHEDULE);
-          }
         else if (strcasecmp ("MODIFY_SETTING", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values,
@@ -5379,19 +5288,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           set_client_state (CLIENT_CREATE_SCANNER_RELAY_HOST);
         else if (strcasecmp ("RELAY_PORT", element_name) == 0)
           set_client_state (CLIENT_CREATE_SCANNER_RELAY_PORT);
-        ELSE_READ_OVER;
-
-      case CLIENT_CREATE_SCHEDULE:
-        if (strcasecmp ("COMMENT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCHEDULE_COMMENT);
-        else if (strcasecmp ("COPY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCHEDULE_COPY);
-        else if (strcasecmp ("ICALENDAR", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCHEDULE_ICALENDAR);
-        else if (strcasecmp ("NAME", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCHEDULE_NAME);
-        else if (strcasecmp ("TIMEZONE", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCHEDULE_TIMEZONE);
         ELSE_READ_OVER;
 
       case CLIENT_CREATE_TARGET:
@@ -14297,272 +14193,6 @@ handle_get_schedules (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of CREATE_SCHEDULE element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_create_schedule (gmp_parser_t *gmp_parser, GError **error)
-{
-  schedule_t new_schedule;
-  gchar *ical_error = NULL;
-
-  // Copy the schedule
-  if (create_schedule_data->copy)
-    {
-      switch (copy_schedule (create_schedule_data->name,
-                             create_schedule_data->comment,
-                             create_schedule_data->copy,
-                             &new_schedule))
-        {
-          case 0:
-            {
-              char *uuid;
-              uuid = schedule_uuid (new_schedule);
-              SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_schedule"),
-                                       uuid);
-              log_event ("schedule", "Schedule", uuid, "created");
-              free (uuid);
-              break;
-            }
-          case 1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_ERROR_SYNTAX ("create_schedule",
-                                 "Schedule exists already"));
-            log_event_fail ("schedule", "Schedule", NULL, "created");
-            break;
-          case 2:
-            if (send_find_error_to_client ("create_schedule", "schedule",
-                                           create_schedule_data->copy,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            log_event_fail ("schedule", "Schedule", NULL, "created");
-            break;
-          case 99:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_ERROR_SYNTAX ("create_schedule",
-                                 "Permission denied"));
-            log_event_fail ("schedule", "Schedule", NULL, "created");
-            break;
-          case -1:
-          default:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("create_schedule"));
-            log_event_fail ("schedule", "Schedule", NULL, "created");
-            break;
-        }
-      goto create_schedule_leave;
-    }
-  else if (create_schedule_data->name == NULL)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("create_schedule",
-                           "A NAME entity is required"));
-      goto create_schedule_leave;
-    }
-  else if (create_schedule_data->icalendar == NULL
-           || strcmp (create_schedule_data->icalendar, "") == 0)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("create_schedule",
-                           "An ICALENDAR entity is required"));
-      goto create_schedule_leave;
-    }
-
-  switch (create_schedule (create_schedule_data->name,
-                           create_schedule_data->comment,
-                           create_schedule_data->icalendar,
-                           create_schedule_data->timezone,
-                           &new_schedule,
-                           &ical_error))
-    {
-      case 0:
-        {
-          char *uuid = schedule_uuid (new_schedule);
-          SENDF_TO_CLIENT_OR_FAIL
-            ("<create_schedule_response status=\"201\""
-             " status_text=\"OK, resource created\""
-             " id=\"%s\">",
-             uuid);
-          if (ical_error)
-            {
-              SEND_TO_CLIENT_OR_FAIL
-                ("<status_details>");
-              SEND_TO_CLIENT_OR_FAIL
-                (ical_error ? ical_error : "");
-              SEND_TO_CLIENT_OR_FAIL
-                ("</status_details>");
-            }
-          SEND_TO_CLIENT_OR_FAIL
-            ("</create_schedule_response>");
-          log_event ("schedule", "Schedule", uuid, "created");
-          free (uuid);
-          break;
-        }
-      case 1:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_schedule",
-                             "Schedule exists already"));
-        log_event_fail ("schedule", "Schedule", NULL, "created");
-        break;
-      case 3:
-        {
-          SENDF_TO_CLIENT_OR_FAIL
-            ("<create_schedule_response status=\"400\""
-             " status_text=\"Invalid ICALENDAR: %s\">"
-             "</create_schedule_response>", ical_error);
-          log_event_fail ("schedule", "Schedule", NULL, "created");
-        }
-        break;
-      case 4:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_schedule",
-                             "Error in TIMEZONE"));
-        log_event_fail ("schedule", "Schedule", NULL, "created");
-        break;
-      case 99:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_schedule",
-                             "Permission denied"));
-        log_event_fail ("schedule", "Schedule", NULL, "created");
-        break;
-      case -1:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_INTERNAL_ERROR ("create_schedule"));
-        log_event_fail ("schedule", "Schedule", NULL, "created");
-        break;
-      default:
-        assert (0);
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_INTERNAL_ERROR ("create_schedule"));
-        log_event_fail ("schedule", "Schedule", NULL, "created");
-        break;
-    }
-
-create_schedule_leave:
-  create_schedule_data_reset (create_schedule_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of MODIFY_SCHEDULE element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_modify_schedule (gmp_parser_t *gmp_parser, GError **error)
-{
-  gchar *ical_error = NULL;
-
-  if (modify_schedule_data->icalendar == NULL
-      || strcmp (modify_schedule_data->icalendar, "") == 0)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("modify_schedule",
-                           "ICALENDAR element is required"));
-      modify_schedule_data_reset (modify_schedule_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  switch (modify_schedule
-                (modify_schedule_data->schedule_id,
-                 modify_schedule_data->name,
-                 modify_schedule_data->comment,
-                 modify_schedule_data->icalendar,
-                 modify_schedule_data->timezone,
-                 &ical_error))
-    {
-      case 0:
-        SENDF_TO_CLIENT_OR_FAIL
-          ("<modify_schedule_response status=\"200\""
-           " status_text=\"OK\">"
-           "<status_details>%s</status_details>"
-           "</modify_schedule_response>",
-           ical_error ? ical_error : "");
-        log_event ("schedule", "Schedule",
-                   modify_schedule_data->schedule_id, "modified");
-        break;
-      case 1:
-        if (send_find_error_to_client ("modify_schedule", "schedule",
-                                        modify_schedule_data->schedule_id,
-                                        gmp_parser))
-          {
-            error_send_to_client (error);
-            return;
-          }
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id,
-                        "modified");
-        break;
-      case 2:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("modify_schedule",
-                            "Schedule with new name exists already"));
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id,
-                        "modified");
-        break;
-      case 3:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("modify_schedule",
-                             "Error in type name"));
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id,
-                        "modified");
-        break;
-      case 4:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("modify_schedule",
-                             "MODIFY_SCHEDULE requires a schedule_id"));
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id,
-                        "modified");
-        break;
-      case 6:
-        {
-          SENDF_TO_CLIENT_OR_FAIL
-            ("<modify_schedule_response status=\"400\""
-             " status_text=\"Invalid ICALENDAR: %s\">"
-             "</modify_schedule_response>", ical_error);
-          log_event_fail ("schedule", "Schedule",
-                          modify_schedule_data->schedule_id, "modified");
-        }
-        break;
-      case 7:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("modify_schedule",
-                             "Error in TIMEZONE"));
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id, "modified");
-        break;
-      case 99:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("modify_schedule",
-                             "Permission denied"));
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id,
-                        "modified");
-        break;
-      default:
-      case -1:
-        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_schedule"));
-        log_event_fail ("schedule", "Schedule",
-                        modify_schedule_data->schedule_id,
-                        "modified");
-        break;
-    }
-
-  modify_schedule_data_reset (modify_schedule_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_SCHEDULES element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -19380,17 +19010,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_SCANNER, RELAY_HOST);
       CLOSE (CLIENT_CREATE_SCANNER, RELAY_PORT);
 
-      case CLIENT_CREATE_SCHEDULE:
-        {
-          handle_create_schedule (gmp_parser, error);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_SCHEDULE, COMMENT);
-      CLOSE (CLIENT_CREATE_SCHEDULE, COPY);
-      CLOSE (CLIENT_CREATE_SCHEDULE, ICALENDAR);
-      CLOSE (CLIENT_CREATE_SCHEDULE, NAME);
-      CLOSE (CLIENT_CREATE_SCHEDULE, TIMEZONE);
-
       case CLIENT_CREATE_TAG:
         {
           tag_t new_tag;
@@ -21758,16 +21377,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_SCANNER, RELAY_HOST);
       CLOSE (CLIENT_MODIFY_SCANNER, RELAY_PORT);
 
-      case CLIENT_MODIFY_SCHEDULE:
-        {
-          handle_modify_schedule (gmp_parser, error);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_SCHEDULE, COMMENT);
-      CLOSE (CLIENT_MODIFY_SCHEDULE, ICALENDAR);
-      CLOSE (CLIENT_MODIFY_SCHEDULE, NAME);
-      CLOSE (CLIENT_MODIFY_SCHEDULE, TIMEZONE);
-
       case CLIENT_MODIFY_SETTING:
         {
           gchar *errdesc = NULL;
@@ -23677,22 +23286,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
               &create_scanner_data->relay_port);
 
 
-      APPEND (CLIENT_CREATE_SCHEDULE_COMMENT,
-              &create_schedule_data->comment);
-
-      APPEND (CLIENT_CREATE_SCHEDULE_COPY,
-              &create_schedule_data->copy);
-
-      APPEND (CLIENT_CREATE_SCHEDULE_ICALENDAR,
-              &create_schedule_data->icalendar);
-
-      APPEND (CLIENT_CREATE_SCHEDULE_NAME,
-              &create_schedule_data->name);
-
-      APPEND (CLIENT_CREATE_SCHEDULE_TIMEZONE,
-              &create_schedule_data->timezone);
-
-
       APPEND (CLIENT_CREATE_TAG_ACTIVE,
               &create_tag_data->active);
 
@@ -23960,19 +23553,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
       APPEND (CLIENT_MODIFY_SCANNER_RELAY_PORT,
               &modify_scanner_data->relay_port);
-
-
-      APPEND (CLIENT_MODIFY_SCHEDULE_COMMENT,
-              &modify_schedule_data->comment);
-
-      APPEND (CLIENT_MODIFY_SCHEDULE_ICALENDAR,
-              &modify_schedule_data->icalendar);
-
-      APPEND (CLIENT_MODIFY_SCHEDULE_NAME,
-              &modify_schedule_data->name);
-
-      APPEND (CLIENT_MODIFY_SCHEDULE_TIMEZONE,
-              &modify_schedule_data->timezone);
 
 
       APPEND (CLIENT_MODIFY_TAG_ACTIVE,

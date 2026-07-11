@@ -45,7 +45,6 @@ command_t gmp_commands[]
     {"CREATE_REPORT_FORMAT", "Create a report format."},
     {"CREATE_SCOPE", "Create a reporting scope."},
     {"CREATE_SCANNER", "Create a scanner."},
-    {"CREATE_SCHEDULE", "Create a schedule."},
     {"CREATE_TAG", "Create a tag."},
     {"CREATE_TARGET", "Create a target."},
     {"CREATE_TASK", "Create a task."},
@@ -124,7 +123,6 @@ command_t gmp_commands[]
     {"MODIFY_REPORT_FORMAT", "Modify an existing report format."},
     {"MODIFY_SCOPE", "Modify a reporting scope."},
     {"MODIFY_SCANNER", "Modify an existing scanner."},
-    {"MODIFY_SCHEDULE", "Modify an existing schedule."},
     {"MODIFY_SETTING", "Modify an existing setting."},
     {"MODIFY_TAG", "Modify an existing tag."},
     {"MODIFY_TARGET", "Modify an existing target."},
@@ -141,6 +139,13 @@ command_t gmp_commands[]
     {"VERIFY_SCANNER", "Verify a scanner."},
     {NULL, NULL}};
 
+/* Native control paths can retain gvmd ACL operation keys after their public
+ * GMP parser, help, and schema surfaces are removed. */
+static const char *native_acl_operations[] = {
+  "MODIFY_SCHEDULE",
+  NULL
+};
+
 /**
  * @brief Check whether a command name is valid.
  *
@@ -152,12 +157,19 @@ int
 valid_gmp_command (const char* name)
 {
   command_t *command;
+  const char **operation;
   command = gmp_commands;
   while (command[0].name)
     if (strcasecmp (command[0].name, name) == 0)
       return 1;
     else
       command++;
+  operation = native_acl_operations;
+  while (*operation)
+    if (strcasecmp (*operation, name) == 0)
+      return 1;
+    else
+      operation++;
   return 0;
 }
 

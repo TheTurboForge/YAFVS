@@ -4,10 +4,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-from .test_create_schedule import GmpCreateScheduleTestMixin
 from .test_get_schedules import GmpGetSchedulesTestMixin
 
-__all__ = (
-    "GmpCreateScheduleTestMixin",
-    "GmpGetSchedulesTestMixin",
-)
+__all__ = ("GmpGetSchedulesTestMixin",)

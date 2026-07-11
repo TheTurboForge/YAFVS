@@ -22,8 +22,8 @@ afterEach(() => {
   testing.unstubAllGlobals();
 });
 
-const createNativeHttp = () => {
-  const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
+  const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
@@ -238,6 +238,30 @@ test('should get capabilities', async () => {
   expect(caps.mayAccess('report')).toBe(true);
   expect(caps.mayAccess('task')).toBe(true);
   expect(caps.mayAccess('user')).toBe(false);
+  expect(caps.mayCreate('schedule')).toBe(false);
+  expect(caps.mayEdit('schedule')).toBe(false);
+});
+
+test('should expose native schedule create and modification capabilities', async () => {
+  const response = createResponse({
+    get_capabilities: {
+      help_response: {
+        schema: {
+          command: [
+            {
+              name: 'get_schedules',
+            },
+          ],
+        },
+      },
+    },
+  });
+  const fakeHttp = createNativeHttp(response);
+  const cmd = new UserCommand(fakeHttp);
+  const {data: caps} = await cmd.currentCapabilities();
+
+  expect(caps.mayCreate('schedule')).toBe(true);
+  expect(caps.mayEdit('schedule')).toBe(true);
 });
 
 

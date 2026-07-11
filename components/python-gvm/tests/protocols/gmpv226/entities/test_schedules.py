@@ -4,16 +4,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-from ...gmpv224.entities.schedules import (
-    GmpCreateScheduleTestMixin,
-    GmpGetSchedulesTestMixin,
-)
+from ...gmpv224.entities.schedules import GmpGetSchedulesTestMixin
 from ...gmpv226 import GMPTestCase
 
 
 class GMPGetSchedulesTestCase(GmpGetSchedulesTestMixin, GMPTestCase):
-    pass
-
-
-class GMPCreateScheduleTestCase(GmpCreateScheduleTestMixin, GMPTestCase):
     pass

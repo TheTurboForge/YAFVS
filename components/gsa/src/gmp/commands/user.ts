@@ -8,6 +8,7 @@ import Capabilities, {type Capability} from 'gmp/capabilities/capabilities';
 import Features, {type Feature} from 'gmp/capabilities/features';
 import EntityCommand from 'gmp/commands/entity';
 import {type HttpCommandOptions} from 'gmp/commands/http';
+import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
@@ -282,6 +283,9 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     const {data} = response as Response<GetCapabilitiesResponse, XmlMeta>;
     const {command: commands} = data.get_capabilities.help_response.schema;
     const caps = map(commands, command => command.name as Capability);
+    if (canUseNativeApi(this.http)) {
+      caps.push('create_schedule', 'modify_schedule');
+    }
     return response.setData(new Capabilities(caps));
   }
 

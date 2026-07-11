@@ -4623,97 +4623,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     </example>
   </command>
   <command>
-    <name>create_schedule</name>
-    <summary>Create a schedule</summary>
-    <description>
-      <p>
-        The client uses the create_schedule command to create a new schedule.
-      </p>
-    </description>
-    <pattern>
-      <e>name</e>
-      <o><e>comment</e></o>
-      <o><e>copy</e></o>
-      <o><e>icalendar</e></o>
-      <o><e>timezone</e></o>
-    </pattern>
-    <ele>
-      <name>name</name>
-      <summary>A name for the schedule</summary>
-      <pattern><t>name</t></pattern>
-    </ele>
-    <ele>
-      <name>comment</name>
-      <summary>A comment on the schedule</summary>
-      <pattern>
-        text
-      </pattern>
-    </ele>
-    <ele>
-      <name>copy</name>
-      <summary>The UUID of an existing schedule</summary>
-      <pattern>
-        <t>uuid</t>
-      </pattern>
-    </ele>
-    <ele>
-      <name>icalendar</name>
-      <summary>iCalendar text containing the time data. Replaces first_time, duration and period</summary>
-      <pattern>
-        text
-      </pattern>
-    </ele>
-    <ele>
-      <name>timezone</name>
-      <summary>The timezone the schedule will follow</summary>
-      <pattern>timezone</pattern>
-    </ele>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>id</name>
-          <type>uuid</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Create a schedule</summary>
-      <request>
-        <create_schedule>
-          <name>On the third Wednesday of every month</name>
-          <timezone>America/New_York</timezone>
-          <icalendar>
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//XXX//NONSGML//EN
-BEGIN:VEVENT
-DTSTART;TZID="America/New_York":20221214T000100
-RRULE:FREQ=MONTHLY;BYDAY=3WE;
-END:VEVENT
-END:VCALENDAR
-          </icalendar>
-        </create_schedule>
-      </request>
-      <response>
-        <create_schedule_response status="201"
-                                  status_text="OK, resource created"
-                                  id="254cd3ef-bbe1-4d58-859d-21b8d0c046c6">
-        </create_schedule_response>
-      </response>
-    </example>
-  </command>
-  <command>
     <name>create_tag</name>
     <summary>Create a tag</summary>
     <description>
@@ -22262,75 +22171,6 @@ END:VCALENDAR
     </example>
   </command>
   <command>
-    <name>modify_schedule</name>
-    <summary>Modify an existing schedule</summary>
-    <description>
-      <p>
-        The client uses the modify_schedule command to change an existing schedule.
-      </p>
-    </description>
-    <pattern>
-      <attrib>
-        <name>schedule_id</name>
-        <summary>ID of schedule to modify</summary>
-        <type>uuid</type>
-        <required>1</required>
-      </attrib>
-      <o><e>comment</e></o>
-      <o><e>name</e></o>
-      <o><e>icalendar</e></o>
-      <o><e>timezone</e></o>
-    </pattern>
-    <ele>
-      <name>comment</name>
-      <summary>Comment on schedule</summary>
-      <pattern>text</pattern>
-    </ele>
-    <ele>
-      <name>name</name>
-      <summary>Name of schedule</summary>
-      <pattern><t>name</t></pattern>
-    </ele>
-    <ele>
-      <name>icalendar</name>
-      <summary>iCalendar text containing the time data. Replaces first_time, duration and period</summary>
-      <pattern>
-        text
-      </pattern>
-    </ele>
-    <ele>
-      <name>timezone</name>
-      <summary>The timezone the schedule will follow. User's timezone is used if omitted</summary>
-      <pattern>timezone</pattern>
-    </ele>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Modify the name of a schedule</summary>
-      <request>
-        <modify_schedule schedule_id="254cd3ef-bbe1-4d58-859d-21b8d0c046c6">
-          <name>Weekly Scan</name>
-        </modify_schedule>
-      </request>
-      <response>
-        <modify_schedule_response status="200" status_text="OK">
-        </modify_schedule_response>
-      </response>
-    </example>
-  </command>
-  <command>
     <name>modify_setting</name>
     <summary>Modify an existing setting</summary>
     <description>
@@ -23690,13 +23530,12 @@ END:VCALENDAR
     <version>20.08</version>
   </change>
   <change>
-    <command>CREATE_SCHEDULE, GET_SCHEDULES, MODIFY_SCHEDULE</command>
+    <command>GET_SCHEDULES</command>
     <summary>Classic schedule elements removed</summary>
     <description>
       <p>
         The classic schedule elements like PERIOD, DURATION and BYDAY have been
-        removed.  Schedules are now always created, defined and modified using
-        the newer iCalendar elements.
+        removed.  Schedules are represented using iCalendar elements.
       </p>
       <p>
         This includes the filter keyword 'initial_offset'.

@@ -1530,7 +1530,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
-        for command in ("native-export-report-csv", "native-export-report-bundle", "native-delete-overrides-by-filter"):
+        for command in ("native-export-report-csv", "native-export-report-bundle", "native-delete-overrides-by-filter", "native-bulk-modify-schedules"):
             self.assertIn(command, source)
             self.assertIn(f"{command} *args:", justfile)
             self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
@@ -5877,6 +5877,61 @@ class TurboVASCtlTests(unittest.TestCase):
             turbovasctl.validate_native_api_request_shape("GET", body='{}', allow_write_control=True)
         with self.assertRaises(ValueError):
             turbovasctl.validate_native_api_request_shape("DELETE", body='{}', allow_write_control=True)
+
+    def test_direct_control_probe_retries_only_control_unavailable(self):
+        unavailable = turbovasctl.subprocess.CompletedProcess(
+            [],
+            0,
+            '{"error":{"code":"control_unavailable"}}\n503',
+            "",
+        )
+        not_found = turbovasctl.subprocess.CompletedProcess(
+            [],
+            0,
+            '{"error":{"code":"not_found"}}\n404',
+            "",
+        )
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "direct_native_api_curl",
+            side_effect=[unavailable, not_found],
+        ) as request, unittest.mock.patch.object(turbovasctl.time, "sleep") as sleep:
+            response, parsed, status, attempts = (
+                turbovasctl.direct_native_api_control_probe_with_retry(
+                    Path("/repo"),
+                    "/api/v1/tasks/00000000-0000-0000-0000-000000000000/stop",
+                    token="x" * 32,
+                    env={},
+                )
+            )
+        self.assertIs(response, not_found)
+        self.assertEqual(parsed, {"error": {"code": "not_found"}})
+        self.assertEqual(status, 404)
+        self.assertEqual(attempts, 2)
+        self.assertEqual(request.call_count, 2)
+        sleep.assert_called_once_with(0.5)
+
+        forbidden = turbovasctl.subprocess.CompletedProcess(
+            [],
+            0,
+            '{"error":{"code":"forbidden"}}\n403',
+            "",
+        )
+        with unittest.mock.patch.object(
+            turbovasctl, "direct_native_api_curl", return_value=forbidden
+        ) as request, unittest.mock.patch.object(turbovasctl.time, "sleep") as sleep:
+            _response, _parsed, status, attempts = (
+                turbovasctl.direct_native_api_control_probe_with_retry(
+                    Path("/repo"),
+                    "/api/v1/tasks/00000000-0000-0000-0000-000000000000/stop",
+                    token="x" * 32,
+                    env={},
+                )
+            )
+        self.assertEqual(status, 403)
+        self.assertEqual(attempts, 1)
+        request.assert_called_once()
+        sleep.assert_not_called()
         with self.assertRaises(ValueError):
             turbovasctl.validate_native_api_request_shape("PATCH", body='{}', allow_write_control=True, request_path="/api/v1/tags/123?unexpected=1")
 
@@ -6650,6 +6705,152 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertNotIn(override_id, rendered_compact)
         self.assertEqual([method for method, _path in calls], ["GET", "DELETE", "DELETE"])
         sleep.assert_called_once_with(0.25)
+
+    def test_native_bulk_modify_schedules_parser_and_pre_runtime_guards(self):
+        args = turbovasctl.build_parser().parse_args(["native-bulk-modify-schedules", "--filter", "nightly", "--timezone", "UTC", "--dry-run"])
+        self.assertEqual(args.command, "native-bulk-modify-schedules")
+        self.assertEqual(args.max_schedules, turbovasctl.NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            calendar = root / "calendar.ics"
+            calendar.write_text("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                missing_input = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", dry_run=True)
+                unconfirmed = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", timezone="UTC")
+                invalid_calendar = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=root / "missing.ics", dry_run=True)
+                oversized = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=calendar, max_schedules=0, dry_run=True)
+                curl.assert_not_called()
+        for result in (missing_input, unconfirmed, invalid_calendar, oversized):
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["findings"][0]["check"], "native-bulk-modify-schedules.arguments")
+
+    def test_native_bulk_modify_schedules_rejects_invalid_calendar_text_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            control_calendar = root / "control.ics"
+            invalid_utf8_calendar = root / "invalid-utf8.ics"
+            invalid_utf8_calendar.write_bytes(b"BEGIN:VCALENDAR\xff\nEND:VCALENDAR\n")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                controls = []
+                for character in ("\x01", "\x7f", "\x85"):
+                    control_calendar.write_text(f"BEGIN:VCALENDAR\r\nX-BAD:{character}\r\nEND:VCALENDAR\r\n", encoding="utf-8")
+                    controls.append(turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=control_calendar, dry_run=True))
+                invalid_utf8 = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=invalid_utf8_calendar, dry_run=True)
+                curl.assert_not_called()
+        for control in controls:
+            self.assertEqual(control["status"], "fail")
+            self.assertIn("unsupported control characters", control["findings"][0]["message"])
+        self.assertEqual(invalid_utf8["status"], "fail")
+        self.assertIn("failed to read iCalendar file", invalid_utf8["findings"][0]["message"])
+
+    def test_native_bulk_modify_schedules_dry_run_paginates_hashes_and_redacts_calendar(self):
+        ids = [
+            "22222222-2222-4222-8222-222222222222",
+            "11111111-1111-4111-8111-111111111111",
+        ]
+        calendar_text = "BEGIN:VCALENDAR\r\nX-SECRET:do-not-print\r\nEND:VCALENDAR\r\n"
+        calls = []
+
+        def fake_direct(_root, path, **kwargs):
+            calls.append((kwargs.get("method", "GET"), path))
+            page = 1 if "page=1&" in path else 2
+            payload = {"items": [{"id": ids[page - 1]}], "page": {"page": page, "page_size": 500, "total": 2}}
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            calendar = Path(tmp) / "calendar.ics"
+            calendar.write_text(calendar_text, encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                full = turbovasctl.command_native_bulk_modify_schedules(Path(tmp), filter_value="nightly", timezone="Europe/Berlin", icalendar_file=calendar, dry_run=True)
+                compact = turbovasctl.command_native_bulk_modify_schedules(Path(tmp), filter_value="nightly", timezone="Europe/Berlin", icalendar_file=calendar, dry_run=True, status_only=True)
+        expected_ids = sorted(ids)
+        expected_filter, expected_calendar, expected_snapshot = turbovasctl.native_bulk_modify_schedules_snapshot("nightly", expected_ids, timezone="Europe/Berlin", icalendar=calendar_text)
+        self.assertEqual(full["status"], "pass")
+        self.assertEqual(full["details"]["schedule_ids"], expected_ids)
+        self.assertEqual(full["details"]["filter_sha256"], expected_filter)
+        self.assertEqual(full["details"]["icalendar_sha256"], expected_calendar)
+        self.assertEqual(full["details"]["snapshot_sha256"], expected_snapshot)
+        self.assertEqual(compact["details"]["matched_count"], 2)
+        self.assertNotIn("schedule_ids", compact["details"])
+        self.assertNotIn(calendar_text, json.dumps(full))
+        self.assertNotIn(calendar_text, json.dumps(compact))
+        self.assertTrue(all(method == "GET" for method, _path in calls))
+        self.assertTrue(all("filter=nightly" in path and "sort=id" in path for _method, path in calls))
+
+    def test_native_bulk_modify_schedules_requires_matching_snapshot_and_preserves_omitted_fields(self):
+        schedule_id = "11111111-1111-4111-8111-111111111111"
+        calendar_text = "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"
+        patch_bodies = []
+
+        def fake_direct(_root, path, **kwargs):
+            method = kwargs.get("method", "GET")
+            if method == "GET":
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"items": [{"id": schedule_id}], "page": {"page": 1, "page_size": 500, "total": 1}}) + "\n200", "")
+            patch_bodies.append(json.loads(kwargs["body"]))
+            return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": schedule_id}) + "\n200", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            calendar = root / "calendar.ics"
+            calendar.write_text(calendar_text, encoding="utf-8")
+            timezone_snapshot = turbovasctl.native_bulk_modify_schedules_snapshot("nightly", [schedule_id], timezone="UTC", icalendar=None)[2]
+            calendar_snapshot = turbovasctl.native_bulk_modify_schedules_snapshot("nightly", [schedule_id], timezone=None, icalendar=calendar_text)[2]
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                mismatch = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", timezone="UTC", allow_write_control=True, confirm_snapshot="0" * 64)
+                timezone_result = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", timezone="UTC", allow_write_control=True, confirm_snapshot=timezone_snapshot)
+                calendar_result = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=calendar, allow_write_control=True, confirm_snapshot=calendar_snapshot)
+        self.assertEqual(mismatch["status"], "fail")
+        self.assertEqual(mismatch["findings"][-1]["check"], "native-bulk-modify-schedules.snapshot-confirmation")
+        self.assertEqual(timezone_result["status"], "pass")
+        self.assertEqual(calendar_result["status"], "pass")
+        self.assertEqual(patch_bodies, [{"timezone": "UTC"}, {"icalendar": calendar_text}])
+
+    def test_native_bulk_modify_schedules_stops_at_first_failure_and_redacts_calendar(self):
+        ids = [
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+            "33333333-3333-4333-8333-333333333333",
+        ]
+        calendar_text = "BEGIN:VCALENDAR\r\nX-SECRET:do-not-print\r\nEND:VCALENDAR\r\n"
+        calls = []
+
+        def fake_direct(_root, path, **kwargs):
+            method = kwargs.get("method", "GET")
+            calls.append((method, path))
+            if method == "GET":
+                payload = {"items": [{"id": item} for item in ids], "page": {"page": 1, "page_size": 500, "total": 3}}
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
+            if path.endswith(ids[0]):
+                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": ids[0]}) + "\n200", "")
+            return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"forbidden"}}\n403', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            calendar = root / "calendar.ics"
+            calendar.write_text(calendar_text, encoding="utf-8")
+            snapshot = turbovasctl.native_bulk_modify_schedules_snapshot("nightly", ids, timezone=None, icalendar=calendar_text)[2]
+            with unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")), \
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="t" * 64), \
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct):
+                result = turbovasctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=calendar, allow_write_control=True, confirm_snapshot=snapshot)
+                compact = turbovasctl.native_bulk_modify_schedules_status_only_result(result)
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["details"]["attempted_count"], 2)
+        self.assertEqual(result["details"]["succeeded_count"], 1)
+        self.assertEqual(result["details"]["failed_count"], 1)
+        self.assertEqual(result["details"]["unattempted_count"], 1)
+        self.assertEqual([method for method, _path in calls], ["GET", "PATCH", "PATCH"])
+        self.assertIn("no rollback was attempted", result["summary"])
+        self.assertNotIn(calendar_text, json.dumps(result))
+        self.assertNotIn(calendar_text, json.dumps(compact))
 
     def test_native_start_tasks_from_csv_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -8534,7 +8735,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 "components/gvm-tools/scripts/start-alert-scan.gmp.py",
                 "components/gvm-tools/scripts/create-alerts-from-csv.gmp.py",
                 "components/gvm-tools/scripts/empty-trash.gmp.py",
-                "components/gvm-tools/scripts/bulk-modify-schedules.gmp.py",
             ]
         )
 
@@ -8551,7 +8751,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("CSV bulk-alert behavior", write_blockers["components/gvm-tools/scripts/create-alerts-from-csv.gmp.py"])
         self.assertNotIn("components/gvm-tools/scripts/create-tasks-from-csv.gmp.py", write_blockers)
         self.assertIn("global trashcan-empty behavior", write_blockers["components/gvm-tools/scripts/empty-trash.gmp.py"])
-        self.assertIn("bulk schedule timezone", write_blockers["components/gvm-tools/scripts/bulk-modify-schedules.gmp.py"])
 
     def test_native_override_delete_script_is_not_remaining_replacement_candidate(self):
         candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
@@ -8565,9 +8764,10 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_retired_schedule_import_and_cert_config_scripts_leave_no_candidate_accounting(self):
         root = Path(__file__).resolve().parents[2]
         candidates = set().union(*turbovasctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
-        for name in ("cfg-gen-for-certs.gmp.py", "send-schedules.gmp.py"):
+        for name in ("bulk-modify-schedules.gmp.py", "cfg-gen-for-certs.gmp.py", "create-schedules-from-csv.gmp.py", "send-schedules.gmp.py"):
             self.assertNotIn(name, candidates)
             self.assertNotIn(name, turbovasctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
+            self.assertFalse((root / "components" / "gvm-tools" / "scripts" / name).exists())
             self.assertFalse((root / "components" / "gvm-tools" / "scripts" / name).exists())
 
     def test_gos_monthly_report_scripts_are_not_remaining_replacement_candidates(self):
@@ -10285,7 +10485,7 @@ db2:keys=5,expires=0,avg_ttl=0
             alert_tag_deleted = {"value": False}
             scan_config_live = {"value": True}
             schedule_live = {"value": True}
-            schedule_fixture = {"icalendar": "", "timezone": ""}
+            schedule_fixture = {"comment": "", "icalendar": "", "timezone": ""}
             report_config_created_name = {"value": ""}
             target_in_use = {"value": False}
             target_credential_link_count = {"value": 0}
@@ -10552,19 +10752,24 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "GET" and path == "/api/v1/schedules?page_size=1":
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": schedule_uuid, "name": "Daily", "comment": "original schedule comment"}], "page": {"total": 1}}) + "\n200", "")
+                if method == "GET" and path.startswith("/api/v1/schedules?filter="):
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": schedule_uuid}], "page": {"page": 1, "total": 1}}) + "\n200", "")
                 if method == "POST" and path == "/api/v1/schedules":
                     payload = json.loads(body)
+                    schedule_fixture["comment"] = payload["comment"]
                     schedule_fixture["icalendar"] = payload["icalendar"]
                     schedule_fixture["timezone"] = payload["timezone"]
                     schedule_live["value"] = True
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "name": payload["name"], "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n201", "")
                 if method == "PATCH" and path.startswith("/api/v1/schedules/"):
                     payload = json.loads(body)
+                    if "comment" in payload:
+                        schedule_fixture["comment"] = payload["comment"]
                     if "timezone" in payload:
                         schedule_fixture["timezone"] = payload["timezone"]
                     if "icalendar" in payload:
                         schedule_fixture["icalendar"] = payload["icalendar"]
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n200", "")
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": schedule_fixture["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/schedules/{schedule_uuid}/clone"):
                     payload = json.loads(body)
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_clone_uuid, "name": payload["name"], "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n201", "")
@@ -10766,6 +10971,8 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.filter-write-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.filter-write-post-cleanup"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-create"], "pass")
+        self.assertEqual(checks["native-api-direct.schedule-bulk-helper-dry-run"], "pass")
+        self.assertEqual(checks["native-api-direct.schedule-bulk-helper-write"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-update"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-restore"], "pass")
         self.assertEqual(checks["native-api-direct.schedule-write-clone"], "pass")

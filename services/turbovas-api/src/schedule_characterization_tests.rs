@@ -7,8 +7,11 @@ use axum::http::Method;
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
+const MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const MANAGE_SQL_SCHEDULES: &str =
     include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
+const GMP_XML_SCHEMA: &str =
+    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -144,6 +147,23 @@ fn inherited_modify_schedule_refreshes_ical_timezone_and_task_next_times() {
         );
     }
     assert!(!modify_schedule.contains("schedules_trash"));
+}
+
+#[test]
+fn native_schedule_write_acl_key_is_not_a_public_gmp_command() {
+    let public_commands = MANAGE_COMMANDS
+        .split_once("command_t gmp_commands[]")
+        .expect("public GMP command registry must exist")
+        .1
+        .split_once("{NULL, NULL}};")
+        .expect("public GMP command registry must terminate")
+        .0;
+    assert!(!public_commands.contains("CREATE_SCHEDULE"));
+    assert!(!public_commands.contains("MODIFY_SCHEDULE"));
+    assert!(MANAGE_COMMANDS.contains("native_acl_operations"));
+    assert!(MANAGE_COMMANDS.contains("\"MODIFY_SCHEDULE\""));
+    assert!(!GMP_XML_SCHEMA.contains("<name>create_schedule</name>"));
+    assert!(!GMP_XML_SCHEMA.contains("<name>modify_schedule</name>"));
 }
 
 #[test]

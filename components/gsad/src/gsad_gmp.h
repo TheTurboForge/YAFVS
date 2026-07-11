@@ -214,9 +214,6 @@ verify_scanner_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                     gsad_command_response_data_t *);
 
 char *
-create_schedule_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                     gsad_command_response_data_t *);
-char *
 delete_schedule_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 char *
@@ -224,9 +221,6 @@ get_schedule_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *
 get_schedules_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-save_schedule_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *
 export_schedule_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

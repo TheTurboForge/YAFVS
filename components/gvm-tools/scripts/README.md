@@ -165,6 +165,18 @@ children. Name, timezone, and iCalendar are required; comment is optional.
 Use --dry-run to validate every row and show only bounded, calendar-redacted
 summaries before runtime access.
 
+## Native bulk schedule calendar modification
+
+TurboVAS retired the inherited `bulk-modify-schedules.gmp.py` script. Use
+`tools/turbovasctl native-bulk-modify-schedules` with a bounded `--filter` and
+at least one of `--timezone` or `--icalendar-file`. Start with `--dry-run` to
+obtain the deterministic snapshot hash, then repeat the same request with
+`--allow-write-control --confirm-snapshot HASH` to issue sequential native
+PATCH requests. The snapshot binds the filter, selected UUIDs, timezone, and
+iCalendar SHA-256 without printing calendar content. The command stops on the
+first failed PATCH; prior successes remain committed and it does not claim a
+rollback.
+
 ## `create-credentials-from-csv.gmp.py`
 
 Creates credentials as specified in a csv-file. See credentials.csv for file format/contents.

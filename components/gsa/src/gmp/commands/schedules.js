@@ -49,16 +49,11 @@ export class ScheduleCommand extends EntityCommand {
   create(args) {
     const {name, comment = '', icalendar, timezone} = args;
     log.debug('Creating new schedule', args);
-    if (canUseNativeApi(this.http)) {
-      return createNativeSchedule(this.http, {
-        name,
-        comment,
-        icalendar,
-        timezone,
-      });
+    if (!canUseNativeApi(this.http)) {
+      throw new Error('Native API is required to create schedules');
     }
-    return this.action({
-      cmd: 'create_schedule',
+
+    return createNativeSchedule(this.http, {
       name,
       comment,
       icalendar,
@@ -67,28 +62,17 @@ export class ScheduleCommand extends EntityCommand {
   }
 
   save(args) {
-    if (canUseNativeApi(this.http)) {
-      return patchNativeSchedule(this.http, {
-        id: args.id,
-        name: args.name,
-        comment: args.comment,
-        icalendar: args.icalendar,
-        timezone: args.timezone,
-      });
+    if (!canUseNativeApi(this.http)) {
+      throw new Error('Native API is required to modify schedules');
     }
 
-    const {comment = '', icalendar, id, name, timezone} = args;
-
-    const data = {
-      cmd: 'save_schedule',
-      comment,
-      id,
-      icalendar,
-      name,
-      timezone,
-    };
-    log.debug('Saving schedule', args, data);
-    return this.action(data);
+    return patchNativeSchedule(this.http, {
+      id: args.id,
+      name: args.name,
+      comment: args.comment,
+      icalendar: args.icalendar,
+      timezone: args.timezone,
+    });
   }
 
   getElementFromRoot(root) {

@@ -1964,64 +1964,12 @@ class GMPv224(GvmProtocol[T]):
             details: Whether to exclude results
         """
         return self._send_request_and_transform_response(
-                Reports.get_reports(
-                    filter_string=filter_string,
-                    filter_id=filter_id,
-                    override_details=override_details,
-                    ignore_pagination=ignore_pagination,
-                    details=details,
-            )
-        )
-
-    def create_schedule(
-        self,
-        name: str,
-        icalendar: str,
-        timezone: str,
-        *,
-        comment: str | None = None,
-    ) -> T:
-        """Create a new schedule based in `iCalendar <https://tools.ietf.org/html/rfc5545>`_ data.
-
-        Example:
-            Requires https://pypi.org/project/icalendar/
-
-            .. code-block:: python
-
-                import pytz
-
-                from datetime import datetime
-
-                from icalendar import Calendar, Event
-
-                cal = Calendar()
-
-                cal.add("prodid", "-//Foo Bar//")
-                cal.add("version", "2.0")
-
-                event = Event()
-                event.add("dtstamp", datetime.now(tz=pytz.UTC))
-                event.add("dtstart", datetime(2020, 1, 1, tzinfo=pytz.utc))
-
-                cal.add_component(event)
-
-                gmp.create_schedule(
-                    name="My Schedule", icalendar=cal.to_ical(), timezone="UTC"
-                )
-
-        Args:
-            name: Name of the new schedule
-            icalendar: `iCalendar <https://tools.ietf.org/html/rfc5545>`_ (RFC 5545) based data.
-            timezone: Timezone to use for the icalendar events e.g
-                Europe/Berlin. If the datetime values in the icalendar data are
-                missing timezone information this timezone gets applied.
-                Otherwise the datetime values from the icalendar data are
-                displayed in this timezone
-            comment: Comment on schedule.
-        """
-        return self._send_request_and_transform_response(
-            Schedules.create_schedule(
-                name, icalendar, timezone, comment=comment
+            Reports.get_reports(
+                filter_string=filter_string,
+                filter_id=filter_id,
+                override_details=override_details,
+                ignore_pagination=ignore_pagination,
+                details=details,
             )
         )
 

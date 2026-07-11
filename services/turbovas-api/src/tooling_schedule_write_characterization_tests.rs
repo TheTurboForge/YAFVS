@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-const BULK_MODIFY_SCHEDULES: &str =
-    include_str!("../../../components/gvm-tools/scripts/bulk-modify-schedules.gmp.py");
 const TURBOVASCTL: &str = include_str!("../../../tools/turbovasctl");
 
 #[test]
@@ -14,31 +12,6 @@ fn inherited_create_schedules_from_csv_script_is_retired() {
         !script.is_file(),
         "retired schedule CSV script still exists: {script:?}"
     );
-}
-
-#[test]
-fn inherited_bulk_modify_schedules_preserves_existing_fields_when_args_empty() {
-    for required in [
-        "get_response = gmp.get_schedules(filter_string=filter_term)",
-        "schedules = get_response.findall(\"schedule\")",
-        "uuid = schedule.attrib[\"id\"]",
-        "name = schedule.find(\"name\").text",
-        "comment = schedule.find(\"comment\").text",
-        "if new_timezone:",
-        "timezone = schedule.find(\"timezone\").text",
-        "if new_icalendar:",
-        "icalendar = schedule.find(\"icalendar\").text",
-        "gmp.modify_schedule(",
-        "name=name",
-        "comment=comment",
-        "timezone=timezone",
-        "icalendar=icalendar",
-    ] {
-        assert!(
-            BULK_MODIFY_SCHEDULES.contains(required),
-            "bulk-modify-schedules missing {required}"
-        );
-    }
 }
 
 #[test]

@@ -9625,87 +9625,6 @@ get_schedules_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Create a schedule, get all schedules, envelope the result.
- * @param[in]  connection     Connection to manager.
- *
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_schedule_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  char *ret;
-  gchar *response;
-  const char *name, *comment, *timezone, *icalendar;
-  entity_t entity;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  timezone = params_value (params, "timezone");
-  icalendar = params_value (params, "icalendar");
-
-  CHECK_VARIABLE_INVALID (name, "Create Schedule");
-  CHECK_VARIABLE_INVALID (comment, "Create Schedule");
-  CHECK_VARIABLE_INVALID (timezone, "Create Schedule");
-  CHECK_VARIABLE_INVALID (icalendar, "Create Schedule");
-
-  response = NULL;
-  entity = NULL;
-  switch (gmpf (connection, credentials, &response, &entity, response_data,
-                "<create_schedule>"
-                "<name>%s</name>"
-                "<comment>%s</comment>"
-                "<timezone>%s</timezone>"
-                "<icalendar>%s</icalendar>"
-                "</create_schedule>",
-                name, comment, timezone, icalendar))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new schedule. "
-        "No new schedule was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new schedule. "
-        "It is unclear whether the schedule has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new schedule. "
-        "It is unclear whether the schedule has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "schedule_id", entity_attribute (entity, "id"));
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Create Schedule", response_data);
-  free_entity (entity);
-  g_free (response);
-  return ret;
-}
-
-/**
  * @brief Delete a schedule, get all schedules, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -12108,85 +12027,6 @@ export_schedules_gmp (gvm_connection_t *connection,
 {
   return export_many (connection, "schedule", credentials, params,
                       response_data);
-}
-
-/**
- * @brief Save schedule, get next page, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials     Username and password for authentication.
- * @param[in]  params          Request parameters.
- * @param[out] response_data   Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_schedule_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  const char *schedule_id, *name, *comment, *timezone, *icalendar;
-  char *ret;
-
-  schedule_id = params_value (params, "schedule_id");
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  icalendar = params_value (params, "icalendar");
-  timezone = params_value (params, "timezone");
-
-  CHECK_VARIABLE_INVALID (schedule_id, "Save Schedule");
-  CHECK_VARIABLE_INVALID (name, "Save Schedule");
-  CHECK_VARIABLE_INVALID (comment, "Save Schedule");
-  CHECK_VARIABLE_INVALID (icalendar, "Save Schedule");
-  CHECK_VARIABLE_INVALID (timezone, "Save Schedule");
-
-  entity = NULL;
-  switch (gmpf (connection, credentials, NULL, &entity, response_data,
-                "<modify_schedule schedule_id=\"%s\">"
-                "<name>%s</name>"
-                "<comment>%s</comment>"
-                "<timezone>%s</timezone>"
-                "<icalendar>%s</icalendar>"
-                "</modify_schedule>",
-                schedule_id, name ? name : "", comment ? comment : "", timezone,
-                icalendar))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a schedule. "
-        "The schedule remains the same. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a schedule. "
-        "It is unclear whether the schedule has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a schedule. "
-        "It is unclear whether the schedule has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Save Schedule", response_data);
-  free_entity (entity);
-  return ret;
 }
 
 /* Users. */
@@ -15113,7 +14953,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_port_range)
   ELSE (create_report_config)
   ELSE (create_scanner)
-  ELSE (create_schedule)
   ELSE (create_scope)
   ELSE (create_task)
   ELSE (create_tag)
@@ -15165,7 +15004,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_report_config)
   ELSE (save_report_format)
   ELSE (save_scanner)
-  ELSE (save_schedule)
   ELSE (save_tag)
   ELSE (save_target)
   ELSE (save_task)

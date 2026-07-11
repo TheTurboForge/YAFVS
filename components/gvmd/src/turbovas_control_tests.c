@@ -451,11 +451,11 @@ Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calenda
   const char *absent_request =
     "schedule-modify " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
-    "123e4567-e89b-12d3-a456-426614174001 - - - -\n";
+    "123e4567-e89b-12d3-a456-426614174001 - +bWV0YWRhdGE= - -\n";
   const char *empty_request =
     "schedule-modify " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
-    "123e4567-e89b-12d3-a456-426614174001 - - - +\n";
+    "123e4567-e89b-12d3-a456-426614174001 - +bWV0YWRhdGE= - +\n";
   char operator_uuid[37];
   char schedule_uuid[37];
   turbovas_control_schedule_modify_request_t absent = {0};
@@ -473,6 +473,7 @@ Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calenda
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &absent),
                is_true);
+  assert_that (absent.comment, is_equal_to_string ("metadata"));
   assert_that (absent.icalendar, is_null);
   assert_that (turbovas_control_modify_schedule (operator_uuid, schedule_uuid,
                                                  &absent),
@@ -485,6 +486,7 @@ Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calenda
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &empty),
                is_true);
+  assert_that (empty.comment, is_equal_to_string ("metadata"));
   assert_that (empty.icalendar, is_equal_to_string (""));
   assert_that (turbovas_control_modify_schedule (operator_uuid, schedule_uuid,
                                                  &empty),

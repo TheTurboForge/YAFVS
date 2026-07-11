@@ -5,17 +5,8 @@
 #
 
 from ...gmpv224 import Gmpv224TestCase
-from .schedules import (
-    GmpCreateScheduleTestMixin,
-    GmpGetSchedulesTestMixin,
-)
+from .schedules import GmpGetSchedulesTestMixin
 
 
 class Gmpv224GetSchedulesTestCase(GmpGetSchedulesTestMixin, Gmpv224TestCase):
-    pass
-
-
-class Gmpv224CreateScheduleTestCase(
-    GmpCreateScheduleTestMixin, Gmpv224TestCase
-):
     pass

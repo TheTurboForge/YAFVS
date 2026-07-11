@@ -188,28 +188,20 @@ describe('ScheduleCommand tests', () => {
     expect(result.data.id).toEqual('created-schedule-id');
   });
 
-  test('should fall back to inherited GMP when native API is unavailable', async () => {
+  test('should reject schedule create when native API is unavailable', () => {
     const response = createActionResultResponse({id: 'created-schedule-id'});
     const fakeHttp = createHttp(response);
     const cmd = new ScheduleCommand(fakeHttp);
 
-    const result = await cmd.create({
-      name: 'created-schedule',
-      comment: 'calendar-bearing create',
-      icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
-      timezone: 'UTC',
-    });
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_schedule',
+    expect(() =>
+      cmd.create({
         name: 'created-schedule',
         comment: 'calendar-bearing create',
         icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
         timezone: 'UTC',
-      },
-    });
-    expect(result.data.id).toEqual('created-schedule-id');
+      }),
+    ).toThrow('Native API is required to create schedules');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should export schedule metadata through native API when available', async () => {
@@ -518,30 +510,21 @@ describe('ScheduleCommand tests', () => {
     );
   });
 
-  test('should keep calendar-bearing schedule save on GMP when native API is unavailable', async () => {
+  test('should reject schedule save when native API is unavailable', () => {
     const response = createActionResultResponse({id: 'saved-schedule-id'});
     const fakeHttp = createHttp(response);
     const cmd = new ScheduleCommand(fakeHttp);
 
-    const result = await cmd.save({
-      id: 'schedule-id',
-      name: 'updated-schedule',
-      comment: 'calendar-bearing',
-      icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
-      timezone: 'UTC',
-    });
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_schedule',
-        schedule_id: 'schedule-id',
+    expect(() =>
+      cmd.save({
+        id: 'schedule-id',
         name: 'updated-schedule',
         comment: 'calendar-bearing',
         icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
         timezone: 'UTC',
-      },
-    });
-    expect(result.data.id).toEqual('saved-schedule-id');
+      }),
+    ).toThrow('Native API is required to modify schedules');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });
 

@@ -5,57 +5,10 @@
 
 import unittest
 
-from gvm.errors import RequiredArgument
 from gvm.protocols.gmp.requests.v224 import Schedules
 
 
 class SchedulesTestUnit(unittest.TestCase):
-    def test_create_schedule(self):
-        request = Schedules.create_schedule("name", "icalendar", "timezone")
-        self.assertEqual(
-            bytes(request),
-            b"<create_schedule>"
-            b"<name>name</name>"
-            b"<icalendar>icalendar</icalendar>"
-            b"<timezone>timezone</timezone>"
-            b"</create_schedule>",
-        )
-
-    def test_create_schedule_with_comment(self):
-        request = Schedules.create_schedule(
-            "name", "icalendar", "timezone", comment="comment"
-        )
-        self.assertEqual(
-            bytes(request),
-            b"<create_schedule>"
-            b"<name>name</name>"
-            b"<icalendar>icalendar</icalendar>"
-            b"<timezone>timezone</timezone>"
-            b"<comment>comment</comment>"
-            b"</create_schedule>",
-        )
-
-    def test_create_schedule_missing_name(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.create_schedule(None, "icalendar", "timezone")
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.create_schedule("", "icalendar", "timezone")
-
-    def test_create_schedule_missing_icalendar(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.create_schedule("name", None, "timezone")
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.create_schedule("name", "", "timezone")
-
-    def test_create_schedule_missing_timezone(self):
-        with self.assertRaises(RequiredArgument):
-            Schedules.create_schedule("name", "icalendar", None)
-
-        with self.assertRaises(RequiredArgument):
-            Schedules.create_schedule("name", "icalendar", "")
-
     def test_get_schedules(self):
         request = Schedules.get_schedules()
         self.assertEqual(bytes(request), b"<get_schedules/>")

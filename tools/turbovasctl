@@ -21654,8 +21654,48 @@ NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH = 32768
 class NativeScheduleCsvRow:
     row_number: int
     name: str
+    comment: str
     timezone: str
     icalendar: str
+
+
+def native_schedule_csv_row(
+    row_number: int,
+    name: str | None,
+    comment: str | None,
+    timezone_name: str | None,
+    icalendar: str | None,
+    *,
+    require_timezone: bool = False,
+) -> NativeScheduleCsvRow:
+    name = (name or "").strip()
+    comment = (comment or "").strip()
+    timezone_name = (timezone_name or "").strip()
+    icalendar = icalendar or ""
+    if not name:
+        raise ValueError(f"row {row_number} must include a schedule name")
+    if require_timezone and not timezone_name:
+        raise ValueError(f"row {row_number} must include a timezone")
+    if not icalendar.strip():
+        raise ValueError(f"row {row_number} must include an iCalendar value")
+    for field_name, value, maximum in (
+        ("schedule name", name, NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH),
+        ("schedule comment", comment, NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH),
+        ("timezone", timezone_name, NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH),
+    ):
+        if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value):
+            raise ValueError(f"row {row_number} {field_name} must be printable text")
+        if len(value.encode("utf-8")) > maximum:
+            raise ValueError(f"row {row_number} {field_name} exceeds {maximum} bytes")
+    if any(
+        (ord(character) < 32 or 127 <= ord(character) <= 159)
+        and character not in {"\r", "\n", "\t"}
+        for character in icalendar
+    ):
+        raise ValueError(f"row {row_number} iCalendar contains unsupported control characters")
+    if len(icalendar.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH:
+        raise ValueError(f"row {row_number} iCalendar value exceeds {NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH} bytes")
+    return NativeScheduleCsvRow(row_number, name, comment, timezone_name, icalendar)
 
 
 def load_native_schedule_csv_rows(csv_file: Path) -> list[NativeScheduleCsvRow]:
@@ -21668,37 +21708,7 @@ def load_native_schedule_csv_rows(csv_file: Path) -> list[NativeScheduleCsvRow]:
                     continue
                 if len(row) != 3:
                     raise ValueError(f"row {row_number} must have exactly 3 columns: name, timezone, icalendar")
-                name = row[0].strip()
-                timezone_name = row[1].strip()
-                icalendar = row[2]
-                if not name:
-                    raise ValueError(f"row {row_number} must include a schedule name")
-                if not icalendar.strip():
-                    raise ValueError(f"row {row_number} must include an iCalendar value")
-                if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in name):
-                    raise ValueError(f"row {row_number} schedule name must be printable text")
-                if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in timezone_name):
-                    raise ValueError(f"row {row_number} timezone must be printable text")
-                if any(
-                    (ord(character) < 32 or 127 <= ord(character) <= 159)
-                    and character not in {"\r", "\n", "\t"}
-                    for character in icalendar
-                ):
-                    raise ValueError(f"row {row_number} iCalendar contains unsupported control characters")
-                if len(name.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH:
-                    raise ValueError(f"row {row_number} schedule name exceeds {NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH} bytes")
-                if len(timezone_name.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH:
-                    raise ValueError(f"row {row_number} timezone exceeds {NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH} bytes")
-                if len(icalendar.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH:
-                    raise ValueError(f"row {row_number} iCalendar value exceeds {NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH} bytes")
-                rows.append(
-                    NativeScheduleCsvRow(
-                        row_number=row_number,
-                        name=name,
-                        timezone=timezone_name,
-                        icalendar=icalendar,
-                    )
-                )
+                rows.append(native_schedule_csv_row(row_number, row[0], NATIVE_SCHEDULE_CSV_COMMENT, row[1], row[2]))
     except (OSError, csv.Error) as exc:
         raise ValueError(f"failed to read schedule CSV file: {exc}") from exc
     if not rows:
@@ -21706,10 +21716,31 @@ def load_native_schedule_csv_rows(csv_file: Path) -> list[NativeScheduleCsvRow]:
     return rows
 
 
+def load_native_schedule_xml_rows(xml_file: Path) -> list[NativeScheduleCsvRow]:
+    try:
+        root = ET.parse(xml_file).getroot()
+    except (OSError, ET.ParseError) as exc:
+        raise ValueError(f"failed to read schedule XML file: {exc}") from exc
+    schedules = root.findall("schedule")
+    if not schedules:
+        raise ValueError("schedule XML document must contain direct schedule children")
+    return [
+        native_schedule_csv_row(
+            row_number,
+            schedule.findtext("name"),
+            schedule.findtext("comment"),
+            schedule.findtext("timezone"),
+            schedule.findtext("icalendar"),
+            require_timezone=True,
+        )
+        for row_number, schedule in enumerate(schedules, start=1)
+    ]
+
+
 def native_schedule_csv_schedule_body(row: NativeScheduleCsvRow) -> dict[str, Any]:
     return {
         "name": row.name,
-        "comment": NATIVE_SCHEDULE_CSV_COMMENT,
+        "comment": row.comment,
         "timezone": row.timezone,
         "icalendar": row.icalendar,
     }
@@ -21721,30 +21752,36 @@ def native_schedule_csv_safe_summary(row: NativeScheduleCsvRow) -> dict[str, Any
         "row": row.row_number,
         "name": row.name,
         "timezone": row.timezone,
-        "comment": NATIVE_SCHEDULE_CSV_COMMENT,
+        "comment": row.comment,
         "icalendar_bytes": len(encoded),
         "icalendar_sha256": hashlib.sha256(encoded).hexdigest(),
     }
 
 
-def native_schedule_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+def native_schedule_status_only_result(result: dict[str, Any], source_kind: str) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     compact = dict(result)
     compact["details"] = {
-        "csv_file": details.get("csv_file"),
+        f"{source_kind}_file": details.get(f"{source_kind}_file"),
         "row_count": details.get("row_count", 0),
         "dry_run": details.get("dry_run", False),
-        "duplicate_csv_name_count": details.get("duplicate_csv_name_count", 0),
+        "duplicate_source_name_count": details.get("duplicate_source_name_count", 0),
         "skipped_existing_schedule_count": details.get("skipped_existing_schedule_count", 0),
         "preflight_failure_count": details.get("preflight_failure_count", 0),
         "created_schedule_count": details.get("created_schedule_count", 0),
         "create_failure_count": details.get("create_failure_count", 0),
     }
+    if source_kind == "csv":
+        compact["details"]["duplicate_csv_name_count"] = details.get("duplicate_csv_name_count", 0)
     non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
     compact["findings"] = non_pass or [
-        finding("pass", "native-schedules-from-csv.status-only", "Native CSV schedule creation passed; details summarized.")
+        finding("pass", f"native-schedules-from-{source_kind}.status-only", f"Native {source_kind.upper()} schedule creation passed; details summarized.")
     ]
     return compact
+
+
+def native_schedule_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    return native_schedule_status_only_result(result, "csv")
 
 
 def native_schedule_csv_exact_items(parsed: dict[str, Any] | None, name: str) -> list[dict[str, Any]]:
@@ -21795,25 +21832,50 @@ def command_native_schedules_from_csv(
     dry_run: bool = False,
     status_only: bool = False,
 ) -> dict[str, Any]:
+    return command_native_schedule_import(
+        repo_root,
+        csv_file,
+        source_kind="csv",
+        rows_loader=load_native_schedule_csv_rows,
+        allow_write_control=allow_write_control,
+        dry_run=dry_run,
+        status_only=status_only,
+    )
+
+
+def command_native_schedule_import(
+    repo_root: Path,
+    source_file: Path,
+    *,
+    source_kind: str,
+    rows_loader: Callable[[Path], list[NativeScheduleCsvRow]],
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    command = f"native-schedules-from-{source_kind}"
+    source_label = source_kind.upper()
     findings: list[dict[str, Any]] = []
     details: dict[str, Any] = {
-        "csv_file": str(csv_file),
+        f"{source_kind}_file": str(source_file),
         "dry_run": dry_run,
-        "duplicate_csv_name_count": 0,
+        "duplicate_source_name_count": 0,
         "skipped_existing_schedule_count": 0,
         "preflight_failure_count": 0,
         "created_schedule_count": 0,
         "create_failure_count": 0,
     }
+    if source_kind == "csv":
+        details["duplicate_csv_name_count"] = 0
     try:
-        rows = load_native_schedule_csv_rows(csv_file)
+        rows = rows_loader(source_file)
         details["row_count"] = len(rows)
-        findings.append(finding("pass", "native-schedules-from-csv.rows", f"Loaded {len(rows)} non-empty CSV row(s)."))
+        findings.append(finding("pass", f"{command}.rows", f"Loaded {len(rows)} schedule {source_label} row(s)."))
     except ValueError as exc:
-        findings.append(finding("fail", "native-schedules-from-csv.rows", str(exc), details={"csv_file": str(csv_file)}))
-        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation rejected before runtime access.", findings)
+        findings.append(finding("fail", f"{command}.rows", str(exc), details={f"{source_kind}_file": str(source_file)}))
+        result = make_result(command, repo_root, f"Native {source_label} schedule creation rejected before runtime access.", findings)
         result["details"] = details
-        return native_schedule_csv_status_only_result(result) if status_only else result
+        return native_schedule_status_only_result(result, source_kind) if status_only else result
 
     if dry_run:
         details["planned_schedule_count"] = len(rows)
@@ -21823,40 +21885,40 @@ def command_native_schedules_from_csv(
         findings.append(
             finding(
                 "pass",
-                "native-schedules-from-csv.dry-run",
+                f"{command}.dry-run",
                 "Dry run planned native schedule writes without runtime access or calendar payload logging.",
                 details={"reported_schedule_count": len(details["planned_schedules"])},
             )
         )
-        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation dry run completed.", findings)
+        result = make_result(command, repo_root, f"Native {source_label} schedule creation dry run completed.", findings)
         result["details"] = details
-        return native_schedule_csv_status_only_result(result) if status_only else result
+        return native_schedule_status_only_result(result, source_kind) if status_only else result
 
     if not allow_write_control:
-        findings.append(finding("fail", "native-schedules-from-csv.write-control-intent", "Creating schedules requires --allow-write-control."))
-        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation rejected before runtime access.", findings)
+        findings.append(finding("fail", f"{command}.write-control-intent", "Creating schedules requires --allow-write-control."))
+        result = make_result(command, repo_root, f"Native {source_label} schedule creation rejected before runtime access.", findings)
         result["details"] = details
-        return native_schedule_csv_status_only_result(result) if status_only else result
+        return native_schedule_status_only_result(result, source_kind) if status_only else result
 
     env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-schedules-from-csv.direct-config-shape"))
+    findings.append(native_api_direct_config_shape_finding(env, check=f"{command}.direct-config-shape"))
     if aggregate_status(findings) == "fail":
-        result = make_result("native-schedules-from-csv", repo_root, "Direct native API CSV schedule creation rejected before runtime access.", findings)
+        result = make_result(command, repo_root, f"Direct native API {source_label} schedule creation rejected before runtime access.", findings)
         result["details"] = details
-        return native_schedule_csv_status_only_result(result) if status_only else result
+        return native_schedule_status_only_result(result, source_kind) if status_only else result
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
         findings.append(
             finding(
                 "fail",
-                "native-schedules-from-csv.direct-token-strength",
+                f"{command}.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
                 details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
-        result = make_result("native-schedules-from-csv", repo_root, "Direct native API CSV schedule creation rejected before runtime access.", findings)
+        result = make_result(command, repo_root, f"Direct native API {source_label} schedule creation rejected before runtime access.", findings)
         result["details"] = details
-        return native_schedule_csv_status_only_result(result) if status_only else result
+        return native_schedule_status_only_result(result, source_kind) if status_only else result
 
     rows_to_create: list[NativeScheduleCsvRow] = []
     existing_names: list[str] = []
@@ -21865,7 +21927,9 @@ def command_native_schedules_from_csv(
     planned_names: set[str] = set()
     for row in rows:
         if row.name in planned_names:
-            details["duplicate_csv_name_count"] += 1
+            details["duplicate_source_name_count"] += 1
+            if source_kind == "csv":
+                details["duplicate_csv_name_count"] += 1
             if len(duplicate_names) < NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS:
                 duplicate_names.append(row.name)
             continue
@@ -21883,27 +21947,29 @@ def command_native_schedules_from_csv(
             continue
         rows_to_create.append(row)
 
-    details["duplicate_csv_names"] = duplicate_names
+    details["duplicate_source_names"] = duplicate_names
+    if source_kind == "csv":
+        details["duplicate_csv_names"] = duplicate_names
     details["skipped_existing_schedule_names"] = existing_names
     if preflight_failures:
         details["preflight_failures"] = preflight_failures
         findings.append(
             finding(
                 "fail",
-                "native-schedules-from-csv.preflight",
-                "Native CSV schedule preflight failed before creating schedules.",
+                f"{command}.preflight",
+                f"Native {source_label} schedule preflight failed before creating schedules.",
                 details={"failure_count": details["preflight_failure_count"], "failures": preflight_failures},
             )
         )
-        result = make_result("native-schedules-from-csv", repo_root, "Native CSV schedule creation rejected before schedule writes.", findings)
+        result = make_result(command, repo_root, f"Native {source_label} schedule creation rejected before schedule writes.", findings)
         result["details"] = details
-        return native_schedule_csv_status_only_result(result) if status_only else result
+        return native_schedule_status_only_result(result, source_kind) if status_only else result
 
     findings.append(
         finding(
             "pass",
-            "native-schedules-from-csv.preflight",
-            f"Preflight selected {len(rows_to_create)} schedule create row(s), skipped {details['skipped_existing_schedule_count']} existing schedule(s), and skipped {details['duplicate_csv_name_count']} duplicate row(s).",
+            f"{command}.preflight",
+            f"Preflight selected {len(rows_to_create)} schedule create row(s), skipped {details['skipped_existing_schedule_count']} existing schedule(s), and skipped {details['duplicate_source_name_count']} duplicate row(s).",
         )
     )
 
@@ -21945,7 +22011,7 @@ def command_native_schedules_from_csv(
         findings.append(
             finding(
                 "fail",
-                "native-schedules-from-csv.create",
+                f"{command}.create",
                 "One or more native schedule create requests failed; remaining rows were attempted.",
                 details={"failure_count": details["create_failure_count"], "failures": create_failures},
             )
@@ -21954,20 +22020,39 @@ def command_native_schedules_from_csv(
         findings.append(
             finding(
                 "pass",
-                "native-schedules-from-csv.create",
+                f"{command}.create",
                 f"Created {details['created_schedule_count']} schedule(s) through the native API.",
             )
         )
 
     result_status = aggregate_status(findings)
     result = make_result(
-        "native-schedules-from-csv",
+        command,
         repo_root,
-        "Native CSV schedule creation completed." if result_status != "fail" else "Native CSV schedule creation failed.",
+        f"Native {source_label} schedule creation completed." if result_status != "fail" else f"Native {source_label} schedule creation failed.",
         findings,
     )
     result["details"] = details
-    return native_schedule_csv_status_only_result(result) if status_only else result
+    return native_schedule_status_only_result(result, source_kind) if status_only else result
+
+
+def command_native_schedules_from_xml(
+    repo_root: Path,
+    xml_file: Path,
+    *,
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    return command_native_schedule_import(
+        repo_root,
+        xml_file,
+        source_kind="xml",
+        rows_loader=load_native_schedule_xml_rows,
+        allow_write_control=allow_write_control,
+        dry_run=dry_run,
+        status_only=status_only,
+    )
 
 
 NATIVE_TAG_CSV_RESOURCE_TYPES: dict[str, str] = {
@@ -25807,6 +25892,11 @@ def build_parser() -> argparse.ArgumentParser:
     native_schedules_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule creation")
     native_schedules_csv.add_argument("--dry-run", action="store_true", help="plan schedule request summaries without contacting the runtime")
     native_schedules_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
+    native_schedules_xml = subparsers.add_parser("native-schedules-from-xml", parents=[common], help="create native schedules from the inherited XML schedule export through the direct native API")
+    native_schedules_xml.add_argument("--xml-file", required=True, type=Path, help="XML document with direct inherited <schedule> rows")
+    native_schedules_xml.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule creation")
+    native_schedules_xml.add_argument("--dry-run", action="store_true", help="plan schedule request summaries without contacting the runtime")
+    native_schedules_xml.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -25971,6 +26061,14 @@ def main(argv: list[str] | None = None) -> int:
             request_id=args.request_id,
             body_json=args.body_json,
             allow_write_control=args.allow_write_control,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-schedules-from-xml":
+        result = command_native_schedules_from_xml(
+            repo_root,
+            args.xml_file,
+            allow_write_control=args.allow_write_control,
+            dry_run=args.dry_run,
             status_only=args.status_only,
         )
     elif args.command == "native-schedules-from-csv":

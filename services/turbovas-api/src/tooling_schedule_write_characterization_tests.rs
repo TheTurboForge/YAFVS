@@ -4,8 +4,7 @@
 
 const BULK_MODIFY_SCHEDULES: &str =
     include_str!("../../../components/gvm-tools/scripts/bulk-modify-schedules.gmp.py");
-const SEND_SCHEDULES: &str =
-    include_str!("../../../components/gvm-tools/scripts/send-schedules.gmp.py");
+const TURBOVASCTL: &str = include_str!("../../../tools/turbovasctl");
 
 #[test]
 fn inherited_create_schedules_from_csv_script_is_retired() {
@@ -43,23 +42,25 @@ fn inherited_bulk_modify_schedules_preserves_existing_fields_when_args_empty() {
 }
 
 #[test]
-fn inherited_send_schedules_imports_xml_schedules_after_protocol_check() {
+fn inherited_send_schedules_xml_import_is_retired_for_guarded_native_tooling() {
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../components/gvm-tools/scripts/send-schedules.gmp.py");
+    assert!(
+        !script.is_file(),
+        "retired XML schedule script still exists: {script:?}"
+    );
     for required in [
-        "major, minor = gmp.get_protocol_version()",
-        "if major < 21 and minor < 5:",
-        "xml_tree = create_xml_tree(xml_doc)",
-        "for schedule in xml_tree.xpath(\"schedule\"):",
-        "name = schedule.find(\"name\").text",
-        "comment = schedule.find(\"comment\").text",
-        "if comment is None:\n            comment = \"\"",
-        "ical = schedule.find(\"icalendar\").text",
-        "timezone = schedule.find(\"timezone\").text",
-        "gmp.create_schedule(",
-        "name=name, comment=comment, timezone=timezone, icalendar=ical",
+        "def load_native_schedule_xml_rows",
+        "ET.parse(xml_file).getroot()",
+        "root.findall(\"schedule\")",
+        "def command_native_schedules_from_xml",
+        "native-schedules-from-xml",
+        "--allow-write-control",
+        "native_schedule_csv_safe_summary",
     ] {
         assert!(
-            SEND_SCHEDULES.contains(required),
-            "send-schedules missing {required}"
+            TURBOVASCTL.contains(required),
+            "native XML schedule import missing {required}"
         );
     }
 }

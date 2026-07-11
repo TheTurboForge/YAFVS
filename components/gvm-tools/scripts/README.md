@@ -101,20 +101,6 @@ This script requests the given report and saves it as a pdf file locally.
 
 ---
 
-## `send-schedules.gmp.py`
-
-This script pulls schedule data from an xml document and feeds it to a desired GSM.
-
-### Arguments
-
-* `<xml_doc>`:   .xml file containing schedules
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/send-schedules.gmp.py example_file.xml`
-
----
-
 ## `start-alert-scan.gmp.py`
 
 This script makes an alert scan and sends the report via email.
@@ -171,6 +157,15 @@ Use tools/turbovasctl native-schedules-from-csv with --csv-file and
 --allow-write-control for the inherited three-column name,timezone,icalendar
 shape. Use --dry-run to inspect bounded request summaries without contacting
 the runtime.
+
+## Native XML schedule import
+
+TurboVAS retired the inherited send-schedules.gmp.py script. Use
+tools/turbovasctl native-schedules-from-xml with --xml-file and
+--allow-write-control for an inherited XML document containing direct schedule
+children. Name, timezone, and iCalendar are required; comment is optional.
+Use --dry-run to validate every row and show only bounded, calendar-redacted
+summaries before runtime access.
 
 ## `create-credentials-from-csv.gmp.py`
 

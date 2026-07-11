@@ -7550,7 +7550,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["details"]["created_schedule_count"], 1)
-        self.assertEqual(result["details"]["duplicate_csv_name_count"], 1)
+        self.assertEqual(result["details"]["duplicate_source_name_count"], 1)
         self.assertEqual(result["details"]["skipped_existing_schedule_count"], 1)
         self.assertEqual(len(created), 1)
         self.assertTrue(any("filter=Existing" in path and "page=2" in path for path in paths))
@@ -7584,6 +7584,10 @@ class TurboVASCtlTests(unittest.TestCase):
             bad_name.write_text("Bad\x01Name,UTC,BEGIN:VCALENDAR\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "schedule name must be printable"):
                 turbovasctl.load_native_schedule_csv_rows(bad_name)
+
+            blank_timezone = root / "blank-timezone.csv"
+            blank_timezone.write_text("Default timezone,,BEGIN:VCALENDAR\n", encoding="utf-8")
+            self.assertEqual(turbovasctl.load_native_schedule_csv_rows(blank_timezone)[0].timezone, "")
 
     def test_native_schedules_from_csv_requires_explicit_write_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -7665,6 +7669,83 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["create_failure_count"], 1)
         self.assertIn("rejected", json.dumps(result))
         self.assertNotIn("BEGIN:VCALENDAR", json.dumps(result))
+
+    def test_native_schedules_from_xml_parses_direct_rows_and_redacts_calendar_dry_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "schedules.xml"
+            calendar = "BEGIN:VCALENDAR\nSUMMARY:Private calendar\nEND:VCALENDAR"
+            xml_file.write_text(
+                f"<schedules><schedule><name> Nightly </name><comment> Imported </comment><timezone> UTC </timezone><icalendar>{calendar}</icalendar></schedule></schedules>",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_xml(root, xml_file, dry_run=True)
+                curl.assert_not_called()
+
+        self.assertEqual(result["status"], "pass")
+        planned = result["details"]["planned_schedules"][0]
+        self.assertEqual(planned["name"], "Nightly")
+        self.assertEqual(planned["comment"], "Imported")
+        self.assertEqual(planned["timezone"], "UTC")
+        self.assertNotIn("icalendar", planned)
+        self.assertNotIn("Private calendar", json.dumps(result))
+
+    def test_native_schedules_from_xml_rejects_invalid_or_nested_rows_before_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "schedules.xml"
+            xml_file.write_text("<schedules><schedule>", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_xml(root, xml_file, allow_write_control=True)
+                curl.assert_not_called()
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("failed to read schedule XML", result["findings"][0]["message"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "schedules.xml"
+            xml_file.write_text("<schedules><group><schedule><name>Nested</name><timezone>UTC</timezone><icalendar>BEGIN:VCALENDAR</icalendar></schedule></group></schedules>", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_xml(root, xml_file, allow_write_control=True)
+                curl.assert_not_called()
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("direct schedule children", result["findings"][0]["message"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "schedules.xml"
+            xml_file.write_text("<schedules><schedule><name>Blank timezone</name><timezone> </timezone><icalendar>BEGIN:VCALENDAR</icalendar></schedule></schedules>", encoding="utf-8")
+            with unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                result = turbovasctl.command_native_schedules_from_xml(root, xml_file)
+                curl.assert_not_called()
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("timezone", result["findings"][0]["message"])
+
+    def test_native_schedules_from_xml_preflights_and_posts_exact_shape(self):
+        requests: list[dict[str, object]] = []
+
+        def fake_direct(_root, path, **kwargs):
+            if path.startswith("/api/v1/schedules?"):
+                return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
+            requests.append(json.loads(kwargs["body"]))
+            return subprocess.CompletedProcess(["curl"], 0, '{"id":"new-id"}\n201', "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_file = root / "schedules.xml"
+            xml_file.write_text("<schedules><schedule><name>Nightly</name><timezone>Europe/Berlin</timezone><icalendar>BEGIN:VCALENDAR\r\nEND:VCALENDAR</icalendar></schedule><schedule><name>Nightly</name><timezone>UTC</timezone><icalendar>ignored</icalendar></schedule></schedules>", encoding="utf-8")
+            with (
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_runtime_env", return_value={}),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_config_shape_finding", return_value=turbovasctl.finding("pass", "direct-config", "ok")),
+                unittest.mock.patch.object(turbovasctl, "native_api_direct_bearer_token", return_value="x" * 64),
+                unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct),
+            ):
+                result = turbovasctl.command_native_schedules_from_xml(root, xml_file, allow_write_control=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["duplicate_source_name_count"], 1)
+        self.assertEqual(requests, [{"name": "Nightly", "comment": "", "timezone": "Europe/Berlin", "icalendar": "BEGIN:VCALENDAR\nEND:VCALENDAR"}])
 
     def test_native_schedule_create_openapi_schema_is_exact(self):
         root = Path(__file__).resolve().parents[2]

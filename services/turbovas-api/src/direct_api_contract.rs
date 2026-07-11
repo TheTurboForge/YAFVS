@@ -207,6 +207,17 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::POST, ["", "api", "v1", "scan-configs", scan_config_id, "clone"]) => {
             direct_api_write_id_segment_is_allowed(scan_config_id)
         }
+        (
+            &Method::POST,
+            [
+                "",
+                "api",
+                "v1",
+                "scan-configs",
+                scan_config_id,
+                "diagnostic-nvt-selection",
+            ],
+        ) => direct_api_write_id_segment_is_allowed(scan_config_id),
         (&Method::POST, ["", "api", "v1", "scan-configs", scan_config_id, "restore"]) => {
             direct_api_write_id_segment_is_allowed(scan_config_id)
         }

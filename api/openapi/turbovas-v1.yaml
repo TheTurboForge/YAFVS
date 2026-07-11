@@ -3804,6 +3804,56 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /scan-configs/{scan_config_id}/diagnostic-nvt-selection:
+    post:
+      operationId: postScanConfigsByScanConfigIdDiagnosticNvtSelection
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scan-config-diagnostic-nvt-selection
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scan-config-nvt-selector-write
+      summary: Select one diagnostic NVT
+      description: Direct write-control endpoint for selecting one NVT in a scan config through gvmd's authoritative selector mutation path. gvmd authenticates the direct API operator, records the mutation audit event, preserves selector and prerequisite invariants, rejects in-use configs and shared selectors, and treats an already-selected NVT as success. The response returns only the requested config and NVT identifiers plus an acknowledgement status.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnosticNvtSelectionRequest'
+      responses:
+        '200':
+          description: Diagnostic NVT selected or already selected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticNvtSelectionAcknowledgement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /scan-configs/{scan_config_id}/clone:
     post:
       operationId: postScanConfigsByScanConfigIdClone
@@ -8155,6 +8205,30 @@ components:
         comment:
           type: string
           maxLength: 4096
+    DiagnosticNvtSelectionRequest:
+      type: object
+      additionalProperties: false
+      required: [nvt_id]
+      properties:
+        nvt_id:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: '^[0-9]+(?:\.[0-9]+)+$'
+          description: Numeric dotted NVT OID to select for diagnostic scanning.
+    DiagnosticNvtSelectionAcknowledgement:
+      type: object
+      required: [config_id, nvt_id, status]
+      properties:
+        config_id:
+          type: string
+          format: uuid
+        nvt_id:
+          type: string
+          pattern: '^[0-9]+(?:\.[0-9]+)+$'
+        status:
+          type: string
+          enum: [selected]
     ScheduleCloneRequest:
       type: object
       additionalProperties: false

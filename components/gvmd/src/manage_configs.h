@@ -1,4 +1,5 @@
 /* Copyright (C) 2019-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -136,6 +137,10 @@ manage_set_config (config_t, const char*, const char *);
 
 int
 manage_set_config_nvts (config_t, const char*, GPtrArray*);
+
+int
+manage_configure_diagnostic_nvt (const char *, const char *, gboolean *,
+                                 gboolean *);
 
 int
 manage_set_config_families (config_t, GPtrArray*, GPtrArray*, GPtrArray*, int,

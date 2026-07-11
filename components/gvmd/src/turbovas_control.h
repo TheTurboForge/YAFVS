@@ -34,6 +34,9 @@
  *                  <report_format_uuid_b64> <report_config_uuid_b64>
  *                  <max_protocol_b64>\n
  *
+ * scan-config-nvt-diagnostic <secret> <operator_uuid> <config_uuid>
+ *                            <nvt_oid>\n
+ *
  * Standard base64 fields contain no spaces. Empty optional fields are encoded
  * as empty tokens between their delimiter spaces.
  */

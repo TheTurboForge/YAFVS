@@ -70,17 +70,22 @@ contract. Use native raw-report evidence or scope reports instead.
 
 ---
 
-## `nvt-scan.gmp.py`
+## Native diagnostic NVT scan
 
-This script creates a new task with specific host and nvt!
+The inherited `nvt-scan.gmp.py` and `start-nvt-scan.gmp.py` scripts have been
+retired. Use the guarded native composition command with an explicit IP and
+NVT OID:
 
-### Arguments
-* `<oid>`:   oid of the nvt
-* `<target>`: scan target.
+`$ just native-nvt-diagnostic-scan -- --host 192.0.2.10 --nvt-id 1.3.6.1.4.1.25623.1.0.106223 --dry-run --status-only`
 
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> 1.3.6.1.4.1.25623.1.0.106223 localhost`
+The default is a zero-runtime dry run. A real config clone, diagnostic NVT
+selection, target/task creation, and scanner start require
+`--allow-scan-control`. The helper clones the predefined Empty scan config,
+then selects only the requested NVT plus the fixed Ping Host and Nmap
+prerequisites through the native diagnostic-selection contract. An explicit
+source config is accepted only when it is proven operator-owned, mutable, and
+not in use. Deterministic names support safe retry reconciliation; ambiguous
+writes and starts retain their identifiers for operator follow-up.
 
 ---
 
@@ -111,18 +116,6 @@ explicit `--host`; `--dry-run` plans and validates arguments without runtime
 access, while real execution preflights every reference before writing.
 
 ---
-
-## `start-nvt-scan.gmp.py`
-
-This script creates a new task (if the target is not existing) with specific host and nvt!
-
-### Arguments
-* `<oid>`:   oid of the nvt
-* `<target>`: scan target.
-
-### Example
-
-`$ gvm-script --gmp-username name --gmp-password pass ssh --hostname <gsm> scripts/start-nvt-scan.gmp.py 1.3.6.1.4.1.25623.1.0.106223 localhost`
 
 ---
 

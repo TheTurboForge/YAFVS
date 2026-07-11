@@ -27,6 +27,9 @@ native-verify-scanners *args:
 native-start-task *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-task "$@"
 
+native-nvt-diagnostic-scan *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-nvt-diagnostic-scan "$@"
+
 native-scan-new-system *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-scan-new-system "$@"
 

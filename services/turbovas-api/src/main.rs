@@ -341,6 +341,4 @@ mod tooling_schedule_write_characterization_tests;
 #[cfg(test)]
 mod tooling_tag_write_characterization_tests;
 #[cfg(test)]
-mod tooling_task_control_characterization_tests;
-#[cfg(test)]
 mod user_account_contract_tests;

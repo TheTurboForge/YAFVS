@@ -4,24 +4,153 @@
 
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, State, rejection::JsonRejection},
     http::{HeaderMap, HeaderValue, StatusCode, header},
 };
+use serde::Serialize;
 
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     errors::ApiError,
+    gvmd_control::{
+        ScrubbedControlFrame, gvmd_control_secret, gvmd_control_socket_path,
+        map_control_socket_error, request_gvmd_control_response_bytes,
+    },
+    path_ids::parse_uuid,
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_db::*,
     scan_config_write_transactions::*,
     scan_config_write_validation::{
-        ScanConfigCloneRequest, ScanConfigCreateRequest, ScanConfigPatchRequest,
+        DiagnosticNvtSelectionRequest, ScanConfigCloneRequest, ScanConfigCreateRequest,
+        ScanConfigPatchRequest, validate_diagnostic_nvt_selection_request,
         validate_scan_config_clone_request, validate_scan_config_create_request,
         validate_scan_config_patch_request,
     },
     scan_configs::load_scan_config_asset_detail,
 };
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct DiagnosticNvtSelectionAcknowledgement {
+    config_id: String,
+    nvt_id: String,
+    status: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiagnosticNvtSelectionOutcome {
+    Selected,
+}
+
+pub(crate) async fn select_diagnostic_nvt(
+    Path(scan_config_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+    payload: Result<Json<DiagnosticNvtSelectionRequest>, JsonRejection>,
+) -> Result<Json<DiagnosticNvtSelectionAcknowledgement>, ApiError> {
+    let operator = require_scan_config_write_operator(operator)?;
+    let config_id = parse_uuid(&scan_config_id)?.to_string();
+    let request = parse_diagnostic_nvt_selection_payload(payload)?;
+    let request = validate_diagnostic_nvt_selection_request(request)?;
+    let control_secret = gvmd_control_secret()?;
+    let outcome = request_diagnostic_nvt_selection(
+        &gvmd_control_socket_path(),
+        &control_secret,
+        operator.user_uuid(),
+        &config_id,
+        &request.nvt_id,
+    )
+    .await?;
+
+    match outcome {
+        DiagnosticNvtSelectionOutcome::Selected => {
+            Ok(Json(DiagnosticNvtSelectionAcknowledgement {
+                config_id,
+                nvt_id: request.nvt_id,
+                status: "selected",
+            }))
+        }
+    }
+}
+
+pub(crate) fn parse_diagnostic_nvt_selection_payload(
+    payload: Result<Json<DiagnosticNvtSelectionRequest>, JsonRejection>,
+) -> Result<DiagnosticNvtSelectionRequest, ApiError> {
+    payload.map(|Json(request)| request).map_err(|_| {
+        ApiError::BadRequest(
+            "request body must be application/json matching DiagnosticNvtSelectionRequest"
+                .to_string(),
+        )
+    })
+}
+
+pub(crate) async fn request_diagnostic_nvt_selection(
+    socket_path: &str,
+    control_secret: &str,
+    operator_uuid: &str,
+    config_uuid: &str,
+    nvt_oid: &str,
+) -> Result<DiagnosticNvtSelectionOutcome, ApiError> {
+    let command =
+        diagnostic_nvt_selection_command(control_secret, operator_uuid, config_uuid, nvt_oid);
+    let response =
+        request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes())
+            .await
+            .map_err(map_control_socket_error)?;
+    parse_diagnostic_nvt_selection_response(&response)
+}
+
+pub(crate) fn diagnostic_nvt_selection_command(
+    control_secret: &str,
+    operator_uuid: &str,
+    config_uuid: &str,
+    nvt_oid: &str,
+) -> ScrubbedControlFrame {
+    let mut command = Vec::with_capacity(384);
+    for field in [
+        b"scan-config-nvt-diagnostic ".as_slice(),
+        control_secret.as_bytes(),
+        b" ",
+        operator_uuid.as_bytes(),
+        b" ",
+        config_uuid.as_bytes(),
+        b" ",
+        nvt_oid.as_bytes(),
+        b"\n",
+    ] {
+        command.extend_from_slice(field);
+    }
+    ScrubbedControlFrame::new(command)
+}
+
+pub(crate) fn parse_diagnostic_nvt_selection_response(
+    response: &[u8],
+) -> Result<DiagnosticNvtSelectionOutcome, ApiError> {
+    match response {
+        b"0 selected" => Ok(DiagnosticNvtSelectionOutcome::Selected),
+        b"1 in_use" => Err(ApiError::Conflict(
+            "The scan config is in use and cannot change diagnostic NVT selection.".to_string(),
+        )),
+        b"2 whole_only" => Err(ApiError::Conflict(
+            "The selected NVT belongs to a whole-only family.".to_string(),
+        )),
+        b"3 config_not_found" => Err(ApiError::NotFound),
+        b"4 nvt_not_found" => Err(ApiError::NotFound),
+        b"5 prerequisite_not_found" => Err(ApiError::Conflict(
+            "The diagnostic NVT selection prerequisite was not found.".to_string(),
+        )),
+        b"6 shared_selector" => Err(ApiError::Conflict(
+            "The scan config shares its NVT selector and cannot change diagnostic NVT selection."
+                .to_string(),
+        )),
+        b"99 forbidden" => Err(ApiError::Forbidden),
+        b"-2 malformed" => Err(ApiError::BadRequest(
+            "The diagnostic NVT selection request was rejected.".to_string(),
+        )),
+        b"-3 committed_indeterminate" => Err(ApiError::MutationCommittedResponseUnavailable),
+        b"-1 internal" => Err(ApiError::ControlFailure),
+        _ => Err(ApiError::MutationOutcomeIndeterminate),
+    }
+}
 
 pub(crate) async fn create_scan_config(
     State(state): State<AppState>,

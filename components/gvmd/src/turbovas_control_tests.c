@@ -12,6 +12,9 @@
 #include <string.h>
 
 #define TEST_CONTROL_SECRET "0123456789abcdef0123456789abcdef"
+#define TEST_DIAGNOSTIC_NMAP_OID "1.3.6.1.4.1.25623.1.0.14259"
+#define TEST_DIAGNOSTIC_PING_OID "1.3.6.1.4.1.25623.1.0.100315"
+#define TEST_DIAGNOSTIC_PREREQUISITE_FAMILY "Port scanners"
 
 Describe (turbovas_control);
 BeforeEach (turbovas_control) {}
@@ -24,6 +27,12 @@ static int create_schedule_calls;
 static int create_credential_calls;
 static int create_credential_result;
 static int create_schedule_result;
+static int diagnostic_audit_fail_calls;
+static int diagnostic_audit_success_calls;
+static int diagnostic_control_calls;
+static int diagnostic_control_result;
+static gboolean diagnostic_control_changed;
+static gboolean diagnostic_control_committed;
 static int modify_schedule_calls;
 static int modify_schedule_result;
 static int reinit_calls;
@@ -69,6 +78,8 @@ static gchar *received_name;
 static gchar *received_secret;
 static gchar *received_schedule_uuid;
 static gchar *received_timezone;
+static gchar *received_diagnostic_config_uuid;
+static gchar *received_diagnostic_nvt_oid;
 static gchar *trash_empty_audit_actual_total;
 static gchar *trash_empty_audit_expected_total;
 static gchar *trash_empty_audit_message;
@@ -304,7 +315,16 @@ void
 __wrap_log_event (const char *resource, const char *resource_name,
                   const char *uuid, const char *action)
 {
-  if (strcmp (resource, "alert") == 0)
+  if (strcmp (resource, "config") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Scan Config"));
+      assert_that (uuid,
+                   is_equal_to_string (
+                     "123e4567-e89b-12d3-a456-426614174001"));
+      assert_that (action, is_equal_to_string ("modified"));
+      diagnostic_audit_success_calls++;
+    }
+  else if (strcmp (resource, "alert") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Alert"));
       assert_that (action, is_equal_to_string ("created"));
@@ -327,7 +347,16 @@ void
 __wrap_log_event_fail (const char *resource, const char *resource_name,
                        const char *uuid, const char *action)
 {
-  if (strcmp (resource, "alert") == 0)
+  if (strcmp (resource, "config") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Scan Config"));
+      assert_that (uuid,
+                   is_equal_to_string (
+                     "123e4567-e89b-12d3-a456-426614174001"));
+      assert_that (action, is_equal_to_string ("modified"));
+      diagnostic_audit_fail_calls++;
+    }
+  else if (strcmp (resource, "alert") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Alert"));
       assert_that (uuid, is_null);
@@ -464,6 +493,22 @@ __wrap_manage_empty_trashcan_confirmed (long long int expected_total,
   return trash_empty_result;
 }
 
+int
+__wrap_manage_configure_diagnostic_nvt (const char *config_uuid,
+                                        const char *nvt_oid,
+                                        gboolean *changed,
+                                        gboolean *committed)
+{
+  diagnostic_control_calls++;
+  g_free (received_diagnostic_config_uuid);
+  g_free (received_diagnostic_nvt_oid);
+  received_diagnostic_config_uuid = g_strdup (config_uuid);
+  received_diagnostic_nvt_oid = g_strdup (nvt_oid);
+  *changed = diagnostic_control_changed;
+  *committed = diagnostic_control_committed;
+  return diagnostic_control_result;
+}
+
 enum trash_empty_db_event
 {
   TRASH_EMPTY_DB_BEGIN,
@@ -519,6 +564,73 @@ static const char *alert_smb_db_report_format_uuid;
 static unsigned int alert_smb_db_method_inserts;
 static unsigned int alert_smb_db_credential_resolves;
 
+enum diagnostic_db_event
+{
+  DIAGNOSTIC_DB_BEGIN,
+  DIAGNOSTIC_DB_RESOURCE_LOCK,
+  DIAGNOSTIC_DB_NVT_LOCK,
+  DIAGNOSTIC_DB_DELETE,
+  DIAGNOSTIC_DB_INSERT,
+  DIAGNOSTIC_DB_CACHE,
+  DIAGNOSTIC_DB_ROLLBACK,
+  DIAGNOSTIC_DB_COMMIT,
+  DIAGNOSTIC_DB_POSTVERIFY,
+};
+
+static enum diagnostic_db_event diagnostic_db_events[32];
+static size_t diagnostic_db_event_count;
+static gboolean diagnostic_db_active;
+static gboolean diagnostic_db_acl;
+static gboolean diagnostic_db_owner_exists;
+static gboolean diagnostic_db_config_exists;
+static gboolean diagnostic_db_owned;
+static gboolean diagnostic_db_predefined;
+static gboolean diagnostic_db_in_use;
+static long long int diagnostic_db_selector_refs;
+static gboolean diagnostic_db_nvt_exists;
+static const char *diagnostic_db_nvt_family;
+static gboolean diagnostic_db_nmap_exists;
+static gboolean diagnostic_db_ping_exists;
+static gboolean diagnostic_db_state_matches;
+static gboolean diagnostic_db_postcommit_matches;
+static gboolean diagnostic_db_commit_seen;
+static unsigned int diagnostic_db_inserts;
+static unsigned int diagnostic_db_cache_updates;
+static const char *diagnostic_db_requested_oid;
+
+static void
+diagnostic_record_db_event (enum diagnostic_db_event event)
+{
+  assert_that (
+    diagnostic_db_event_count < G_N_ELEMENTS (diagnostic_db_events), is_true);
+  diagnostic_db_events[diagnostic_db_event_count++] = event;
+}
+
+static void
+reset_diagnostic_db (const char *requested_oid)
+{
+  diagnostic_db_event_count = 0;
+  diagnostic_db_active = TRUE;
+  alert_smb_db_active = FALSE;
+  diagnostic_db_acl = TRUE;
+  diagnostic_db_owner_exists = TRUE;
+  diagnostic_db_config_exists = TRUE;
+  diagnostic_db_owned = TRUE;
+  diagnostic_db_predefined = FALSE;
+  diagnostic_db_in_use = FALSE;
+  diagnostic_db_selector_refs = 1;
+  diagnostic_db_nvt_exists = TRUE;
+  diagnostic_db_nvt_family = "General";
+  diagnostic_db_nmap_exists = TRUE;
+  diagnostic_db_ping_exists = TRUE;
+  diagnostic_db_state_matches = FALSE;
+  diagnostic_db_postcommit_matches = TRUE;
+  diagnostic_db_commit_seen = FALSE;
+  diagnostic_db_inserts = 0;
+  diagnostic_db_cache_updates = 0;
+  diagnostic_db_requested_oid = requested_oid;
+}
+
 static void
 alert_smb_record_db_event (enum alert_smb_db_event event)
 {
@@ -530,6 +642,7 @@ alert_smb_record_db_event (enum alert_smb_db_event event)
 static void
 reset_alert_smb_db (void)
 {
+  diagnostic_db_active = FALSE;
   alert_smb_db_event_count = 0;
   alert_smb_db_active = TRUE;
   alert_smb_db_acl = TRUE;
@@ -560,7 +673,9 @@ trash_empty_record_db_event (enum trash_empty_db_event event)
 void
 __wrap_sql_begin_immediate (void)
 {
-  if (alert_smb_db_active)
+  if (diagnostic_db_active)
+    diagnostic_record_db_event (DIAGNOSTIC_DB_BEGIN);
+  else if (alert_smb_db_active)
     alert_smb_record_db_event (ALERT_SMB_DB_BEGIN);
   else
     trash_empty_record_db_event (TRASH_EMPTY_DB_BEGIN);
@@ -569,6 +684,92 @@ __wrap_sql_begin_immediate (void)
 int
 __wrap_sql_int64 (long long int *value, const char *statement, ...)
 {
+  if (diagnostic_db_active)
+    {
+      if (strstr (statement, "SELECT id FROM users") != NULL)
+        {
+          if (!diagnostic_db_owner_exists)
+            return 1;
+          *value = 42;
+          return 0;
+        }
+      if (strstr (statement, "SELECT id FROM configs WHERE uuid") != NULL)
+        {
+          if (!diagnostic_db_config_exists)
+            return 1;
+          *value = 51;
+          return 0;
+        }
+      if (strstr (statement, "owner =") != NULL)
+        {
+          *value = diagnostic_db_owned ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement, "SELECT predefined") != NULL)
+        {
+          *value = diagnostic_db_predefined ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement, "FROM tasks") != NULL)
+        {
+          *value = diagnostic_db_in_use ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement, "SELECT ((SELECT count(*) FROM configs")
+          != NULL)
+        {
+          *value = diagnostic_db_selector_refs;
+          return 0;
+        }
+      if (strstr (statement, "FROM nvts") != NULL
+          && strstr (statement, TEST_DIAGNOSTIC_NMAP_OID) != NULL)
+        {
+          *value = diagnostic_db_nmap_exists ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement, "FROM nvts") != NULL
+          && strstr (statement, TEST_DIAGNOSTIC_PING_OID) != NULL)
+        {
+          *value = diagnostic_db_ping_exists ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement, "FROM nvts WHERE oid") != NULL)
+        {
+          *value = diagnostic_db_nvt_exists ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement,
+                  "SELECT count(*) FROM nvt_selectors WHERE name")
+            != NULL
+          && strstr (statement, "exclude =") == NULL)
+        {
+          if (diagnostic_db_commit_seen)
+            diagnostic_record_db_event (DIAGNOSTIC_DB_POSTVERIFY);
+          *value =
+            diagnostic_db_state_matches
+              ? 1
+                  + (strcmp (diagnostic_db_requested_oid,
+                             TEST_DIAGNOSTIC_NMAP_OID)
+                     != 0)
+                  + (strcmp (diagnostic_db_requested_oid,
+                             TEST_DIAGNOSTIC_PING_OID)
+                     != 0)
+              : 0;
+          return 0;
+        }
+      if (strstr (statement, "family_or_nvt =") != NULL)
+        {
+          *value = diagnostic_db_state_matches ? 1 : 0;
+          return 0;
+        }
+      if (strstr (statement, "family_count =") != NULL)
+        {
+          *value = diagnostic_db_state_matches ? 1 : 0;
+          return 0;
+        }
+      return -1;
+    }
+
   if (alert_smb_db_active)
     {
       if (strstr (statement, "SELECT id FROM users") != NULL)
@@ -630,9 +831,44 @@ __wrap_sql_int64 (long long int *value, const char *statement, ...)
   return -1;
 }
 
+char *
+__wrap_sql_string (const char *statement, ...)
+{
+  assert_that (diagnostic_db_active, is_true);
+
+  if (strstr (statement, "SELECT nvt_selector FROM configs") != NULL)
+    return g_strdup ("123e4567-e89b-12d3-a456-426614174099");
+  if (strstr (statement, "SELECT family FROM nvts") != NULL)
+    return diagnostic_db_nvt_family
+             ? g_strdup (diagnostic_db_nvt_family) : NULL;
+  return NULL;
+}
+
 void
 __wrap_sql (const char *statement, ...)
 {
+  if (diagnostic_db_active)
+    {
+      if (strstr (statement, "LOCK TABLE configs") != NULL)
+        diagnostic_record_db_event (DIAGNOSTIC_DB_RESOURCE_LOCK);
+      else if (strstr (statement, "LOCK TABLE nvts") != NULL)
+        diagnostic_record_db_event (DIAGNOSTIC_DB_NVT_LOCK);
+      else if (strstr (statement, "DELETE FROM nvt_selectors") != NULL)
+        diagnostic_record_db_event (DIAGNOSTIC_DB_DELETE);
+      else if (strstr (statement, "INSERT INTO nvt_selectors") != NULL)
+        {
+          diagnostic_db_inserts++;
+          diagnostic_record_db_event (DIAGNOSTIC_DB_INSERT);
+        }
+      else if (strstr (statement, "UPDATE configs") != NULL
+               && strstr (statement, "SET family_count") != NULL)
+        {
+          diagnostic_db_cache_updates++;
+          diagnostic_record_db_event (DIAGNOSTIC_DB_CACHE);
+        }
+      return;
+    }
+
   if (alert_smb_db_active)
     {
       if (strstr (statement, "INSERT INTO alerts") != NULL)
@@ -669,7 +905,9 @@ __wrap_sql_last_insert_id (void)
 void
 __wrap_sql_rollback (void)
 {
-  if (alert_smb_db_active)
+  if (diagnostic_db_active)
+    diagnostic_record_db_event (DIAGNOSTIC_DB_ROLLBACK);
+  else if (alert_smb_db_active)
     alert_smb_record_db_event (ALERT_SMB_DB_ROLLBACK);
   else
     trash_empty_record_db_event (TRASH_EMPTY_DB_ROLLBACK);
@@ -678,7 +916,14 @@ __wrap_sql_rollback (void)
 void
 __wrap_sql_commit (void)
 {
-  if (alert_smb_db_active)
+  if (diagnostic_db_active)
+    {
+      diagnostic_record_db_event (DIAGNOSTIC_DB_COMMIT);
+      diagnostic_db_commit_seen = TRUE;
+      if (diagnostic_db_inserts)
+        diagnostic_db_state_matches = diagnostic_db_postcommit_matches;
+    }
+  else if (alert_smb_db_active)
     alert_smb_record_db_event (ALERT_SMB_DB_COMMIT);
   else
     trash_empty_record_db_event (TRASH_EMPTY_DB_COMMIT);
@@ -687,6 +932,12 @@ __wrap_sql_commit (void)
 int
 __wrap_acl_user_may (const char *operation)
 {
+  if (diagnostic_db_active)
+    {
+      assert_that (operation, is_equal_to_string ("modify_config"));
+      return diagnostic_db_acl;
+    }
+
   if (alert_smb_db_active)
     {
       assert_that (operation, is_equal_to_string ("create_alert"));
@@ -3018,6 +3269,345 @@ Ensure (turbovas_control, rejects_nonexistent_operator_before_session_setup)
   assert_that (current_credentials.username, is_null);
 }
 
+Ensure (turbovas_control, parses_bounded_diagnostic_nvt_request)
+{
+  const char *request =
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 "
+    "1.3.6.1.4.1.25623.1.0.900001\n";
+  char operator_uuid[37];
+  char config_uuid[37];
+  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
+
+  assert_that (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, config_uuid,
+                 nvt_oid),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (config_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (nvt_oid,
+               is_equal_to_string ("1.3.6.1.4.1.25623.1.0.900001"));
+}
+
+Ensure (turbovas_control, rejects_malformed_diagnostic_nvt_requests)
+{
+  const char *requests[] = {
+    "scan-config-nvt-diagnostic wrong-secret "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 1.3.6.1\n",
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-42661417400z "
+    "123e4567-e89b-12d3-a456-426614174001 1.3.6.1\n",
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-42661417400z 1.3.6.1\n",
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 1..3\n",
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 1.3.6.1 extra\n",
+  };
+  gchar *oversized_oid =
+    g_strnfill (TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1, '1');
+  gchar *oversized_request = g_strdup_printf (
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 %s\n",
+    oversized_oid);
+  char operator_uuid[37];
+  char config_uuid[37];
+  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (requests); index++)
+    assert_that (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+                   requests[index], strlen (requests[index]),
+                   TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                   operator_uuid, config_uuid, nvt_oid),
+                 is_false);
+  assert_that (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+                 oversized_request, strlen (oversized_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, config_uuid, nvt_oid),
+               is_false);
+
+  g_free (oversized_request);
+  g_free (oversized_oid);
+}
+
+Ensure (turbovas_control, maps_diagnostic_nvt_responses)
+{
+  static const struct
+  {
+    int result;
+    const char *response;
+  } cases[] = {
+    {0, "0 configured\n"},
+    {1, "1 in_use\n"},
+    {2, "2 whole_only\n"},
+    {3, "3 config_not_found\n"},
+    {4, "4 nvt_not_found\n"},
+    {5, "5 prerequisite_not_found\n"},
+    {6, "6 shared_selector\n"},
+    {99, "99 forbidden\n"},
+    {-2, "-2 malformed\n"},
+    {-3, "-3 committed_indeterminate\n"},
+    {-1, "-1 internal\n"},
+    {42, "-1 internal\n"},
+  };
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (cases); index++)
+    assert_that (
+      turbovas_control_scan_config_nvt_diagnostic_response (
+        cases[index].result),
+      is_equal_to_string (cases[index].response));
+}
+
+Ensure (turbovas_control, runs_diagnostic_nvt_in_operator_session_and_audits)
+{
+  const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
+  const char *config_uuid = "123e4567-e89b-12d3-a456-426614174001";
+  const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  diagnostic_control_calls = 0;
+  diagnostic_audit_success_calls = 0;
+  diagnostic_audit_fail_calls = 0;
+  mock_operator_name = "operator";
+
+  diagnostic_control_result = 0;
+  diagnostic_control_changed = TRUE;
+  diagnostic_control_committed = TRUE;
+  assert_that (turbovas_control_configure_diagnostic_nvt (
+                 operator_uuid, config_uuid, nvt_oid),
+               is_equal_to (0));
+
+  diagnostic_control_result = -3;
+  diagnostic_control_committed = TRUE;
+  assert_that (turbovas_control_configure_diagnostic_nvt (
+                 operator_uuid, config_uuid, nvt_oid),
+               is_equal_to (-3));
+
+  diagnostic_control_result = 1;
+  diagnostic_control_changed = FALSE;
+  diagnostic_control_committed = FALSE;
+  assert_that (turbovas_control_configure_diagnostic_nvt (
+                 operator_uuid, config_uuid, nvt_oid),
+               is_equal_to (1));
+
+  assert_that (diagnostic_control_calls, is_equal_to (3));
+  assert_that (diagnostic_audit_success_calls, is_equal_to (2));
+  assert_that (diagnostic_audit_fail_calls, is_equal_to (1));
+  assert_that (reinit_calls, is_equal_to (3));
+  assert_that (session_init_calls, is_equal_to (3));
+  assert_that (cleanup_calls, is_equal_to (3));
+  assert_that (received_diagnostic_config_uuid,
+               is_equal_to_string (config_uuid));
+  assert_that (received_diagnostic_nvt_oid, is_equal_to_string (nvt_oid));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, dispatches_malformed_diagnostic_nvt_frame)
+{
+  const char *request =
+    "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 1..3\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  ssize_t response_len;
+
+  diagnostic_control_calls = 0;
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (diagnostic_control_calls, is_equal_to (0));
+}
+
+int
+__real_manage_configure_diagnostic_nvt (const char *, const char *,
+                                        gboolean *, gboolean *);
+
+static int
+run_real_diagnostic_nvt (const char *nvt_oid, gboolean *changed,
+                         gboolean *committed)
+{
+  int result;
+
+  current_credentials.uuid =
+    g_strdup ("123e4567-e89b-12d3-a456-426614174000");
+  result = __real_manage_configure_diagnostic_nvt (
+    "123e4567-e89b-12d3-a456-426614174001", nvt_oid, changed, committed);
+  g_clear_pointer (&current_credentials.uuid, g_free);
+  return result;
+}
+
+Ensure (turbovas_control, atomically_configures_diagnostic_nvt_and_cache)
+{
+  const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
+  static const enum diagnostic_db_event expected[] = {
+    DIAGNOSTIC_DB_BEGIN,
+    DIAGNOSTIC_DB_RESOURCE_LOCK,
+    DIAGNOSTIC_DB_NVT_LOCK,
+    DIAGNOSTIC_DB_DELETE,
+    DIAGNOSTIC_DB_INSERT,
+    DIAGNOSTIC_DB_INSERT,
+    DIAGNOSTIC_DB_INSERT,
+    DIAGNOSTIC_DB_CACHE,
+    DIAGNOSTIC_DB_COMMIT,
+    DIAGNOSTIC_DB_POSTVERIFY,
+  };
+  gboolean changed = FALSE;
+  gboolean committed = FALSE;
+
+  reset_diagnostic_db (nvt_oid);
+  assert_that (run_real_diagnostic_nvt (nvt_oid, &changed, &committed),
+               is_equal_to (0));
+  assert_that (changed, is_true);
+  assert_that (committed, is_true);
+  assert_that (diagnostic_db_inserts, is_equal_to (3));
+  assert_that (diagnostic_db_cache_updates, is_equal_to (1));
+  assert_that (diagnostic_db_event_count, is_equal_to (G_N_ELEMENTS (expected)));
+  assert_that (memcmp (diagnostic_db_events, expected, sizeof (expected)),
+               is_equal_to (0));
+  diagnostic_db_active = FALSE;
+}
+
+Ensure (turbovas_control, retries_identical_diagnostic_state_idempotently)
+{
+  const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
+  static const enum diagnostic_db_event expected[] = {
+    DIAGNOSTIC_DB_BEGIN,
+    DIAGNOSTIC_DB_RESOURCE_LOCK,
+    DIAGNOSTIC_DB_NVT_LOCK,
+    DIAGNOSTIC_DB_COMMIT,
+  };
+  gboolean changed = TRUE;
+  gboolean committed = TRUE;
+
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_state_matches = TRUE;
+  assert_that (run_real_diagnostic_nvt (nvt_oid, &changed, &committed),
+               is_equal_to (0));
+  assert_that (changed, is_false);
+  assert_that (committed, is_false);
+  assert_that (diagnostic_db_inserts, is_equal_to (0));
+  assert_that (diagnostic_db_cache_updates, is_equal_to (0));
+  assert_that (diagnostic_db_event_count, is_equal_to (G_N_ELEMENTS (expected)));
+  assert_that (memcmp (diagnostic_db_events, expected, sizeof (expected)),
+               is_equal_to (0));
+  diagnostic_db_active = FALSE;
+}
+
+Ensure (turbovas_control, deduplicates_requested_diagnostic_prerequisite)
+{
+  gboolean changed = FALSE;
+  gboolean committed = FALSE;
+
+  reset_diagnostic_db (TEST_DIAGNOSTIC_NMAP_OID);
+  diagnostic_db_nvt_family = TEST_DIAGNOSTIC_PREREQUISITE_FAMILY;
+  assert_that (run_real_diagnostic_nvt (
+                 TEST_DIAGNOSTIC_NMAP_OID, &changed, &committed),
+               is_equal_to (0));
+  assert_that (diagnostic_db_inserts, is_equal_to (2));
+  assert_that (diagnostic_db_cache_updates, is_equal_to (1));
+  diagnostic_db_active = FALSE;
+}
+
+Ensure (turbovas_control, rejects_unsafe_diagnostic_config_states)
+{
+  const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
+  gboolean changed;
+  gboolean committed;
+
+#define ASSERT_DIAGNOSTIC_REJECTION(expected)                                \
+  do                                                                         \
+    {                                                                        \
+      changed = TRUE;                                                        \
+      committed = TRUE;                                                      \
+      assert_that (run_real_diagnostic_nvt (nvt_oid, &changed, &committed),  \
+                   is_equal_to (expected));                                  \
+      assert_that (changed, is_false);                                       \
+      assert_that (committed, is_false);                                     \
+      assert_that (diagnostic_db_events[diagnostic_db_event_count - 1],      \
+                   is_equal_to (DIAGNOSTIC_DB_ROLLBACK));                    \
+    }                                                                        \
+  while (0)
+
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_acl = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (99);
+  assert_that (diagnostic_db_event_count, is_equal_to (2));
+  assert_that (diagnostic_db_events[0], is_equal_to (DIAGNOSTIC_DB_BEGIN));
+  assert_that (diagnostic_db_events[1],
+               is_equal_to (DIAGNOSTIC_DB_ROLLBACK));
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_owner_exists = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (99);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_config_exists = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (3);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_owned = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (99);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_predefined = TRUE;
+  ASSERT_DIAGNOSTIC_REJECTION (99);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_in_use = TRUE;
+  ASSERT_DIAGNOSTIC_REJECTION (1);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_selector_refs = 2;
+  ASSERT_DIAGNOSTIC_REJECTION (6);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_nvt_exists = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (4);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_nvt_family = "Debian Local Security Checks";
+  ASSERT_DIAGNOSTIC_REJECTION (2);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_nmap_exists = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (5);
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_ping_exists = FALSE;
+  ASSERT_DIAGNOSTIC_REJECTION (5);
+
+#undef ASSERT_DIAGNOSTIC_REJECTION
+  diagnostic_db_active = FALSE;
+}
+
+Ensure (turbovas_control, reports_indeterminate_after_diagnostic_commit)
+{
+  const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
+  gboolean changed = FALSE;
+  gboolean committed = FALSE;
+
+  reset_diagnostic_db (nvt_oid);
+  diagnostic_db_postcommit_matches = FALSE;
+  assert_that (run_real_diagnostic_nvt (nvt_oid, &changed, &committed),
+               is_equal_to (-3));
+  assert_that (changed, is_true);
+  assert_that (committed, is_true);
+  assert_that (diagnostic_db_cache_updates, is_equal_to (1));
+  assert_that (diagnostic_db_events[diagnostic_db_event_count - 2],
+               is_equal_to (DIAGNOSTIC_DB_COMMIT));
+  assert_that (diagnostic_db_events[diagnostic_db_event_count - 1],
+               is_equal_to (DIAGNOSTIC_DB_POSTVERIFY));
+  diagnostic_db_active = FALSE;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -3088,6 +3678,26 @@ main (int argc, char **argv)
                          maps_schedule_modify_responses);
   add_test_with_context (suite, turbovas_control,
                          rejects_nonexistent_operator_before_session_setup);
+  add_test_with_context (suite, turbovas_control,
+                         parses_bounded_diagnostic_nvt_request);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_diagnostic_nvt_requests);
+  add_test_with_context (suite, turbovas_control,
+                         maps_diagnostic_nvt_responses);
+  add_test_with_context (suite, turbovas_control,
+                         runs_diagnostic_nvt_in_operator_session_and_audits);
+  add_test_with_context (suite, turbovas_control,
+                         dispatches_malformed_diagnostic_nvt_frame);
+  add_test_with_context (suite, turbovas_control,
+                         atomically_configures_diagnostic_nvt_and_cache);
+  add_test_with_context (suite, turbovas_control,
+                         retries_identical_diagnostic_state_idempotently);
+  add_test_with_context (suite, turbovas_control,
+                         deduplicates_requested_diagnostic_prerequisite);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_unsafe_diagnostic_config_states);
+  add_test_with_context (suite, turbovas_control,
+                         reports_indeterminate_after_diagnostic_commit);
   add_test_with_context (suite, turbovas_control,
                          parses_canonical_bounded_alert_email_request);
   add_test_with_context (suite, turbovas_control,

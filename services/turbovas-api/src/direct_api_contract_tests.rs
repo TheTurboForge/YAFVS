@@ -167,6 +167,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     },
     NativeWriteRouteContract {
         method: "post",
+        path: "/api/v1/scan-configs/:scan_config_id/diagnostic-nvt-selection",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
         path: "/api/v1/scan-configs/:scan_config_id/restore",
         safety_contract: "write-control-v1",
     },

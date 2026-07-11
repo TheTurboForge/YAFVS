@@ -13,6 +13,7 @@
 #include "gmp_base.h"
 #include "manage.h"
 #include "manage_alerts.h"
+#include "manage_configs.h"
 #include "manage_schedules.h"
 #include "manage_sql.h"
 #include "manage_sql_alerts.h"
@@ -76,6 +77,12 @@
   (sizeof (TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND) - 1)
 #define TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES 4
+#define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND \
+  "scan-config-nvt-diagnostic "
+#define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND) - 1)
+#define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES 512
+#define TURBOVAS_CONTROL_NVT_OID_MAX_BYTES 128
 
 typedef struct
 {
@@ -289,6 +296,89 @@ turbovas_control_uuid_is_valid (const char *uuid)
       else if (!g_ascii_isxdigit (uuid[i]))
         return FALSE;
     }
+
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_nvt_oid_is_valid (const char *oid, size_t oid_len)
+{
+  size_t index;
+  gboolean previous_was_dot = TRUE;
+
+  if (oid == NULL || oid_len == 0
+      || oid_len > TURBOVAS_CONTROL_NVT_OID_MAX_BYTES)
+    return FALSE;
+
+  for (index = 0; index < oid_len; index++)
+    {
+      if (oid[index] == '.')
+        {
+          if (previous_was_dot)
+            return FALSE;
+          previous_was_dot = TRUE;
+        }
+      else if (g_ascii_isdigit (oid[index]))
+        previous_was_dot = FALSE;
+      else
+        return FALSE;
+    }
+
+  return !previous_was_dot;
+}
+
+static gboolean
+turbovas_control_parse_scan_config_nvt_diagnostic_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char config_uuid[37],
+  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1])
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (request == NULL
+      || request_len
+           > TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES
+      || request_len
+           < TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
+               + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 36 + 1
+               + 1 + 1
+      || memcmp (request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
+                 TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  cursor =
+    request + TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH;
+  end = request + request_len - 1;
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_secret_is_valid (field, field_len)
+      || !turbovas_control_secret_matches (
+           field, field_len, expected_secret, expected_secret_len))
+    return FALSE;
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || field_len != 36)
+    return FALSE;
+  memcpy (operator_uuid, field, field_len);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || field_len != 36)
+    return FALSE;
+  memcpy (config_uuid, field, field_len);
+  config_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (config_uuid))
+    return FALSE;
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end || !turbovas_control_nvt_oid_is_valid (field, field_len))
+    return FALSE;
+  memcpy (nvt_oid, field, field_len);
+  nvt_oid[field_len] = '\0';
 
   return TRUE;
 }
@@ -1408,6 +1498,25 @@ turbovas_control_schedule_modify_response
   return response;
 }
 
+static const char *
+turbovas_control_scan_config_nvt_diagnostic_response (int result)
+{
+  switch (result)
+    {
+      case 0: return "0 configured\n";
+      case 1: return "1 in_use\n";
+      case 2: return "2 whole_only\n";
+      case 3: return "3 config_not_found\n";
+      case 4: return "4 nvt_not_found\n";
+      case 5: return "5 prerequisite_not_found\n";
+      case 6: return "6 shared_selector\n";
+      case 99: return "99 forbidden\n";
+      case -3: return "-3 committed_indeterminate\n";
+      case -2: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
+}
+
 static gboolean
 turbovas_control_write_all (int socket, const char *response)
 {
@@ -1841,14 +1950,39 @@ turbovas_control_modify_schedule
   return result;
 }
 
+static int
+turbovas_control_configure_diagnostic_nvt (const char *operator_uuid,
+                                           const char *config_uuid,
+                                           const char *nvt_oid)
+{
+  gboolean changed = FALSE;
+  gboolean committed = FALSE;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = manage_configure_diagnostic_nvt (config_uuid, nvt_oid, &changed,
+                                            &committed);
+  if (result == 0 || committed)
+    log_event ("config", "Scan Config", config_uuid, "modified");
+  else
+    log_event_fail ("config", "Scan Config", config_uuid, "modified");
+
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
 static void
 turbovas_control_serve_client (int client_socket)
 {
   char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1];
   char operator_uuid[37];
   char created_uuid[37];
+  char config_uuid[37];
   char schedule_uuid[37];
   char task_uuid[37];
+  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
   const char *expected_secret;
   const char *result_response;
@@ -1869,7 +2003,25 @@ turbovas_control_serve_client (int client_socket)
                                           &expected_secret_len)
       && turbovas_control_read_request (client_socket, request, &request_len))
     {
-      if (turbovas_control_parse_trash_empty_request
+      if (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+            request, request_len, expected_secret, expected_secret_len,
+            operator_uuid, config_uuid, nvt_oid))
+        {
+          result = turbovas_control_configure_diagnostic_nvt (
+            operator_uuid, config_uuid, nvt_oid);
+          result_response =
+            turbovas_control_scan_config_nvt_diagnostic_response (result);
+        }
+      else if (
+        request_len
+          >= TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
+        && memcmp (
+             request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
+             TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
+             == 0)
+        result_response =
+          turbovas_control_scan_config_nvt_diagnostic_response (-2);
+      else if (turbovas_control_parse_trash_empty_request
             (request, request_len, expected_secret, expected_secret_len,
              operator_uuid, &expected_total))
         {
@@ -1971,6 +2123,13 @@ turbovas_control_serve_client (int client_socket)
       else
         result_response = turbovas_control_response (result);
     }
+  else if (
+    request_len >= TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
+    && memcmp (request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
+               TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
+         == 0)
+    result_response =
+      turbovas_control_scan_config_nvt_diagnostic_response (-2);
   else if (request_len >= TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
            && memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
                       TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)

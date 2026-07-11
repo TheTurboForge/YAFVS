@@ -52,6 +52,10 @@ switch_representation (config_t, int);
 static void
 update_config_caches (config_t);
 
+#define TURBOVAS_DIAGNOSTIC_NMAP_OID "1.3.6.1.4.1.25623.1.0.14259"
+#define TURBOVAS_DIAGNOSTIC_PING_OID OID_PING_HOST
+#define TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "Port scanners"
+
 
 
 /* Helpers. */
@@ -3763,6 +3767,323 @@ family_whole_only (const gchar *family)
     if (strcmp (*whole, family) == 0)
       return 1;
   return 0;
+}
+
+static int
+diagnostic_selector_oid_count (const char *quoted_selector,
+                               const char *quoted_oid,
+                               const char *quoted_family,
+                               long long int *count)
+{
+  return sql_int64 (
+    count,
+    "SELECT count(*) FROM nvt_selectors"
+    " WHERE name = '%s' AND exclude = 0"
+    " AND type = " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
+    " AND family_or_nvt = '%s' AND family = '%s';",
+    quoted_selector, quoted_oid, quoted_family);
+}
+
+static int
+diagnostic_nvt_state_matches (config_t config, const char *quoted_selector,
+                              const char *quoted_nvt_oid,
+                              const char *quoted_nvt_family)
+{
+  const int desired_nvt_count =
+    1 + (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_NMAP_OID) != 0)
+      + (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_PING_OID) != 0);
+  const int desired_family_count =
+    strcmp (quoted_nvt_family, TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY)
+      == 0 ? 1 : 2;
+  long long int count;
+
+  if (sql_int64 (&count,
+                 "SELECT count(*) FROM nvt_selectors WHERE name = '%s';",
+                 quoted_selector))
+    return -1;
+  if (count != desired_nvt_count)
+    return 0;
+  if (diagnostic_selector_oid_count (quoted_selector, quoted_nvt_oid,
+                                     quoted_nvt_family, &count))
+    return -1;
+  if (count != 1)
+    return 0;
+  if (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_NMAP_OID))
+    {
+      if (diagnostic_selector_oid_count (
+            quoted_selector, TURBOVAS_DIAGNOSTIC_NMAP_OID,
+            TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY, &count))
+        return -1;
+      if (count != 1)
+        return 0;
+    }
+  if (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_PING_OID))
+    {
+      if (diagnostic_selector_oid_count (
+            quoted_selector, TURBOVAS_DIAGNOSTIC_PING_OID,
+            TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY, &count))
+        return -1;
+      if (count != 1)
+        return 0;
+    }
+  if (sql_int64 (&count,
+                 "SELECT count(*) FROM configs"
+                 " WHERE id = %llu AND family_count = %i"
+                 " AND nvt_count = %i AND families_growing = 0"
+                 " AND nvts_growing = 0;",
+                 config, desired_family_count, desired_nvt_count))
+    return -1;
+  if (count != 1)
+    return 0;
+
+  return 1;
+}
+
+/**
+ * @brief Configure a private scan config for one diagnostic NVT.
+ *
+ * The resulting static selection contains the requested NVT and the fixed
+ * Nmap and Ping Host prerequisites.  The operation owns its transaction.
+ *
+ * @param[in]  config_id  UUID of the live scan config.
+ * @param[in]  nvt_oid    OID of the requested diagnostic NVT.
+ * @param[out] changed    Whether selector rows were replaced.
+ * @param[out] committed  Whether a replacement transaction committed.
+ *
+ * @return 0 configured, 1 in use, 2 whole-only family, 3 config not found,
+ *         4 NVT not found, 5 prerequisite not found, 6 shared selector,
+ *         99 forbidden, -3 committed but verification indeterminate,
+ *         -1 internal error.
+ */
+int
+manage_configure_diagnostic_nvt (const char *config_id, const char *nvt_oid,
+                                 gboolean *changed, gboolean *committed)
+{
+  config_t config = 0;
+  user_t owner = 0;
+  gchar *nvt_family = NULL;
+  gchar *quoted_config_id = NULL;
+  gchar *quoted_nvt_family = NULL;
+  gchar *quoted_nvt_oid = NULL;
+  gchar *quoted_operator_uuid = NULL;
+  gchar *quoted_selector = NULL;
+  gchar *selector = NULL;
+  long long int value;
+  gboolean transaction_open = FALSE;
+  int state_matches;
+  int result = -1;
+
+  if (changed == NULL || committed == NULL || config_id == NULL
+      || nvt_oid == NULL || current_credentials.uuid == NULL)
+    return -1;
+  *changed = FALSE;
+  *committed = FALSE;
+
+  quoted_config_id = sql_quote (config_id);
+  quoted_nvt_oid = sql_quote (nvt_oid);
+  quoted_operator_uuid = sql_quote (current_credentials.uuid);
+
+  sql_begin_immediate ();
+  transaction_open = TRUE;
+
+  if (!acl_user_may ("modify_config"))
+    {
+      result = 99;
+      goto rollback;
+    }
+
+  sql ("LOCK TABLE configs, configs_trash, tasks, nvt_selectors"
+       " IN SHARE ROW EXCLUSIVE MODE;");
+  sql ("LOCK TABLE nvts IN SHARE MODE;");
+
+  switch (sql_int64 (&owner,
+                     "SELECT id FROM users WHERE uuid = '%s' FOR SHARE;",
+                     quoted_operator_uuid))
+    {
+      case 0:
+        break;
+      case 1:
+        result = 99;
+        goto rollback;
+      default:
+        goto rollback;
+    }
+
+  switch (sql_int64 (&config,
+                     "SELECT id FROM configs WHERE uuid = '%s' FOR UPDATE;",
+                     quoted_config_id))
+    {
+      case 0:
+        break;
+      case 1:
+        result = 3;
+        goto rollback;
+      default:
+        goto rollback;
+    }
+
+  if (sql_int64 (&value,
+                 "SELECT count(*) FROM configs"
+                 " WHERE id = %llu AND owner = %llu;",
+                 config, owner))
+    goto rollback;
+  if (value != 1)
+    {
+      result = 99;
+      goto rollback;
+    }
+  if (sql_int64 (&value, "SELECT predefined FROM configs WHERE id = %llu;",
+                 config))
+    goto rollback;
+  if (value)
+    {
+      result = 99;
+      goto rollback;
+    }
+  if (sql_int64 (&value,
+                 "SELECT count(*) FROM tasks"
+                 " WHERE config = %llu"
+                 " AND config_location = " G_STRINGIFY (LOCATION_TABLE) ";",
+                 config))
+    goto rollback;
+  if (value)
+    {
+      result = 1;
+      goto rollback;
+    }
+
+  selector =
+    sql_string ("SELECT nvt_selector FROM configs WHERE id = %llu;", config);
+  if (selector == NULL)
+    goto rollback;
+  quoted_selector = sql_quote (selector);
+  if (sql_int64 (&value,
+                 "SELECT ((SELECT count(*) FROM configs"
+                 "         WHERE nvt_selector = '%s')"
+                 "        + (SELECT count(*) FROM configs_trash"
+                 "           WHERE nvt_selector = '%s'));",
+                 quoted_selector, quoted_selector))
+    goto rollback;
+  if (value != 1
+      || strcmp (selector, MANAGE_NVT_SELECTOR_UUID_ALL) == 0)
+    {
+      result = 6;
+      goto rollback;
+    }
+
+  if (sql_int64 (&value, "SELECT count(*) FROM nvts WHERE oid = '%s';",
+                 quoted_nvt_oid))
+    goto rollback;
+  if (value != 1)
+    {
+      result = 4;
+      goto rollback;
+    }
+  nvt_family =
+    sql_string ("SELECT family FROM nvts WHERE oid = '%s';", quoted_nvt_oid);
+  if (nvt_family == NULL)
+    goto rollback;
+  if (family_whole_only (nvt_family))
+    {
+      result = 2;
+      goto rollback;
+    }
+  quoted_nvt_family = sql_quote (nvt_family);
+
+  if (sql_int64 (
+        &value,
+        "SELECT count(*) FROM nvts"
+        " WHERE oid = '" TURBOVAS_DIAGNOSTIC_NMAP_OID "'"
+        " AND family = '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "';"))
+    goto rollback;
+  if (value != 1)
+    {
+      result = 5;
+      goto rollback;
+    }
+  if (sql_int64 (
+        &value,
+        "SELECT count(*) FROM nvts"
+        " WHERE oid = '" TURBOVAS_DIAGNOSTIC_PING_OID "'"
+        " AND family = '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "';"))
+    goto rollback;
+  if (value != 1)
+    {
+      result = 5;
+      goto rollback;
+    }
+
+  state_matches = diagnostic_nvt_state_matches (
+    config, quoted_selector, quoted_nvt_oid, quoted_nvt_family);
+  if (state_matches < 0)
+    goto rollback;
+  if (state_matches)
+    {
+      sql_commit ();
+      transaction_open = FALSE;
+      result = 0;
+      goto out;
+    }
+
+  sql ("DELETE FROM nvt_selectors WHERE name = '%s';", quoted_selector);
+  sql ("INSERT INTO nvt_selectors"
+       " (name, exclude, type, family_or_nvt, family)"
+       " VALUES ('%s', 0, " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
+       ", '%s', '%s');",
+       quoted_selector, quoted_nvt_oid, quoted_nvt_family);
+  if (strcmp (nvt_oid, TURBOVAS_DIAGNOSTIC_NMAP_OID))
+    sql ("INSERT INTO nvt_selectors"
+         " (name, exclude, type, family_or_nvt, family)"
+         " VALUES ('%s', 0, " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
+         ", '" TURBOVAS_DIAGNOSTIC_NMAP_OID "',"
+         " '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "');",
+         quoted_selector);
+  if (strcmp (nvt_oid, TURBOVAS_DIAGNOSTIC_PING_OID))
+    sql ("INSERT INTO nvt_selectors"
+         " (name, exclude, type, family_or_nvt, family)"
+         " VALUES ('%s', 0, " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
+         ", '" TURBOVAS_DIAGNOSTIC_PING_OID "',"
+         " '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "');",
+         quoted_selector);
+
+  sql ("UPDATE configs"
+       " SET family_count ="
+       "       (SELECT count(DISTINCT family) FROM nvt_selectors"
+       "         WHERE name = '%s' AND exclude = 0"
+       "           AND type = " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT) "),"
+       "     nvt_count ="
+       "       (SELECT count(DISTINCT family_or_nvt) FROM nvt_selectors"
+       "         WHERE name = '%s' AND exclude = 0"
+       "           AND type = " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT) "),"
+       "     families_growing = 0, nvts_growing = 0,"
+       "     modification_time = m_now ()"
+       " WHERE id = %llu;",
+       quoted_selector, quoted_selector, config);
+  *changed = TRUE;
+  sql_commit ();
+  transaction_open = FALSE;
+  *committed = TRUE;
+
+  state_matches = diagnostic_nvt_state_matches (
+    config, quoted_selector, quoted_nvt_oid, quoted_nvt_family);
+  result = state_matches == 1 ? 0 : -3;
+  goto out;
+
+rollback:
+  if (transaction_open)
+    {
+      sql_rollback ();
+      transaction_open = FALSE;
+    }
+out:
+  g_free (nvt_family);
+  g_free (quoted_config_id);
+  g_free (quoted_nvt_family);
+  g_free (quoted_nvt_oid);
+  g_free (quoted_operator_uuid);
+  g_free (quoted_selector);
+  g_free (selector);
+  return result;
 }
 
 /**

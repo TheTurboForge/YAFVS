@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use crate::errors::ApiError;
+use crate::{errors::ApiError, path_ids::validate_nvt_oid};
 
 pub(crate) const MAX_SCAN_CONFIG_TEXT_BYTES: usize = 4096;
 
@@ -19,11 +19,22 @@ pub(crate) struct ScanConfigCreateRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct DiagnosticNvtSelectionRequest {
+    pub(crate) nvt_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ScanConfigPatchRequest {
     #[serde(default)]
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedDiagnosticNvtSelection {
+    pub(crate) nvt_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +44,17 @@ pub(crate) struct ScanConfigCloneRequest {
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+}
+
+pub(crate) fn validate_diagnostic_nvt_selection_request(
+    request: DiagnosticNvtSelectionRequest,
+) -> Result<ValidatedDiagnosticNvtSelection, ApiError> {
+    validate_nvt_oid(&request.nvt_id).map_err(|_| {
+        ApiError::BadRequest("nvt_id must be a numeric dotted NVT OID up to 128 bytes".to_string())
+    })?;
+    Ok(ValidatedDiagnosticNvtSelection {
+        nvt_id: request.nvt_id,
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]

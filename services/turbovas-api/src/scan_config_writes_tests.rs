@@ -3,12 +3,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::errors::ApiError;
+use crate::gvmd_control::MAX_CONTROL_REQUEST_BYTES;
 use crate::scan_config_write_db::{
     ScanConfigWriteState, ensure_scan_config_clone_source_allowed,
     ensure_scan_config_not_predefined, ensure_scan_config_owner_matches_operator,
 };
 use crate::scan_config_write_sql::*;
 use crate::scan_config_write_validation::*;
+use crate::scan_config_writes::{
+    DiagnosticNvtSelectionOutcome, diagnostic_nvt_selection_command,
+    parse_diagnostic_nvt_selection_response,
+};
 
 fn create_request(
     name: &str,
@@ -19,6 +24,156 @@ fn create_request(
         name: name.to_string(),
         base_scan_config_id: base_scan_config_id.to_string(),
         comment: comment.map(str::to_string),
+    }
+}
+
+#[test]
+fn diagnostic_nvt_selection_request_is_exact_and_strictly_bounded() {
+    let request = serde_json::json!({"nvt_id": "1.3.6.1.4.1.25623.1.0.100001"});
+    let request = serde_json::from_value::<DiagnosticNvtSelectionRequest>(request)
+        .expect("diagnostic NVT selection request shape");
+    let validated =
+        validate_diagnostic_nvt_selection_request(request).expect("bounded numeric dotted NVT OID");
+    assert_eq!(validated.nvt_id, "1.3.6.1.4.1.25623.1.0.100001");
+
+    for nvt_id in [
+        "",
+        "1",
+        "1.3.6.",
+        "1.3.6.a",
+        "1.3.6.1\n",
+        &format!("1.{}", "2".repeat(128)),
+    ] {
+        assert!(matches!(
+            validate_diagnostic_nvt_selection_request(DiagnosticNvtSelectionRequest {
+                nvt_id: nvt_id.to_string(),
+            }),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    let unknown = serde_json::json!({"nvt_id": "1.3.6", "extra": true});
+    assert!(serde_json::from_value::<DiagnosticNvtSelectionRequest>(unknown).is_err());
+}
+
+#[test]
+fn diagnostic_nvt_selection_control_frame_is_exact_scrubbed_and_capped() {
+    let mut frame = diagnostic_nvt_selection_command(
+        "0123456789abcdef0123456789abcdef",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        "1.3.6.1.4.1.25623.1.0.100001",
+    );
+    assert_eq!(
+        frame.as_bytes(),
+        b"scan-config-nvt-diagnostic 0123456789abcdef0123456789abcdef 11111111-1111-1111-1111-111111111111 22222222-2222-2222-2222-222222222222 1.3.6.1.4.1.25623.1.0.100001\n"
+    );
+    assert!(frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    frame.scrub();
+    assert!(frame.as_bytes().iter().all(|byte| *byte == 0));
+}
+
+#[test]
+fn diagnostic_nvt_selection_response_parser_maps_only_documented_gvmd_statuses() {
+    assert!(matches!(
+        parse_diagnostic_nvt_selection_response(b"0 selected"),
+        Ok(DiagnosticNvtSelectionOutcome::Selected)
+    ));
+    for (response, expected_status, expected_code) in [
+        (b"1 in_use".as_slice(), 409, "conflict"),
+        (b"2 whole_only", 409, "conflict"),
+        (b"3 config_not_found", 404, "not_found"),
+        (b"4 nvt_not_found", 404, "not_found"),
+        (b"5 prerequisite_not_found", 409, "conflict"),
+        (b"6 shared_selector", 409, "conflict"),
+        (b"99 forbidden", 403, "forbidden"),
+        (b"-2 malformed", 400, "bad_request"),
+        (
+            b"-3 committed_indeterminate",
+            502,
+            "committed_response_unavailable",
+        ),
+        (b"-1 internal", 502, "control_failure"),
+        (b"unexpected", 502, "mutation_outcome_indeterminate"),
+    ] {
+        let error = parse_diagnostic_nvt_selection_response(response).unwrap_err();
+        assert_eq!(error.status_code().as_u16(), expected_status);
+        assert_eq!(error.code(), expected_code);
+    }
+}
+
+#[test]
+fn diagnostic_nvt_selection_handler_is_operator_authenticated_and_gvmd_authoritative() {
+    let source = include_str!("scan_config_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn select_diagnostic_nvt")
+        .unwrap()
+        .1
+        .split_once("pub(crate) fn parse_diagnostic_nvt_selection_payload")
+        .unwrap()
+        .0;
+    for required in [
+        "require_scan_config_write_operator(operator)?",
+        "parse_uuid(&scan_config_id)?",
+        "parse_diagnostic_nvt_selection_payload(payload)?",
+        "validate_diagnostic_nvt_selection_request(request)?",
+        "operator.user_uuid()",
+        "request_diagnostic_nvt_selection(",
+    ] {
+        assert!(handler.contains(required), "handler missing {required}");
+    }
+    for forbidden in ["state.pool", "transaction()", "unsafe"] {
+        assert!(
+            !handler.contains(forbidden),
+            "handler must delegate selector authority to gvmd, not {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn diagnostic_nvt_selection_openapi_contract_is_direct_guarded_and_minimal() {
+    let openapi = include_str!("../../../api/openapi/turbovas-v1.yaml");
+    let block = openapi
+        .split_once("  /scan-configs/{scan_config_id}/diagnostic-nvt-selection:\n")
+        .unwrap()
+        .1
+        .split_once("  /scan-configs/{scan_config_id}/clone:\n")
+        .unwrap()
+        .0;
+    for expected in [
+        "operationId: postScanConfigsByScanConfigIdDiagnosticNvtSelection",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-safety-contract: write-control-v1",
+        "x-turbovas-side-effect: scan-config-nvt-selector-write",
+        "$ref: '#/components/schemas/DiagnosticNvtSelectionRequest'",
+        "$ref: '#/components/schemas/DiagnosticNvtSelectionAcknowledgement'",
+        "'502':",
+        "'503':",
+    ] {
+        assert!(
+            block.contains(expected),
+            "diagnostic selection OpenAPI missing {expected}"
+        );
+    }
+    let schema = openapi
+        .split_once("    DiagnosticNvtSelectionAcknowledgement:\n")
+        .unwrap()
+        .1
+        .split_once("    ScheduleCloneRequest:\n")
+        .unwrap()
+        .0;
+    for expected in ["config_id:", "nvt_id:", "status:", "enum: [selected]"] {
+        assert!(
+            schema.contains(expected),
+            "acknowledgement schema missing {expected}"
+        );
+    }
+    for forbidden in ["feed", "name", "family", "secret"] {
+        assert!(
+            !schema.contains(forbidden),
+            "acknowledgement schema must not disclose {forbidden} data"
+        );
     }
 }
 

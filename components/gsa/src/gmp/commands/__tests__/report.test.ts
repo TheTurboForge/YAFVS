@@ -4,15 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {afterEach, describe, test, expect, testing} from '@gsa/testing';
+import {describe, test, expect, testing} from '@gsa/testing';
 import ReportCommand from 'gmp/commands/report';
-import {createHttp, createHttpError} from 'gmp/commands/testing';
-import {ResponseRejection} from 'gmp/http/rejection';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
-
-afterEach(() => {
-  testing.unstubAllGlobals();
-});
 
 const createNativeHttp = () => {
   const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
@@ -75,49 +70,5 @@ describe('ReportCommand tests', () => {
     const {data} = resp;
     expect(data.id).toEqual('foo');
     expect(data.name).toEqual('Report Foo');
-  });
-
-  test('should allow to download a report', async () => {
-    const data = new ArrayBuffer(8);
-    const fakeHttp = createHttp(data);
-    const cmd = new ReportCommand(fakeHttp);
-    const response = await cmd.download(
-      {id: 'report-uuid'},
-      {
-        reportConfigId: 'config-uuid',
-        reportFormatId: 'format-uuid',
-      },
-    );
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_report',
-        details: 1,
-        report_id: 'report-uuid',
-        report_config_id: 'config-uuid',
-        report_format_id: 'format-uuid',
-        filter: 'first=1 rows=-1',
-      },
-      responseType: 'arraybuffer',
-    });
-    expect(response).toBe(data);
-  });
-
-  test('should transform error during report download', async () => {
-    const error = new ResponseRejection<string>(
-      {status: 500} as XMLHttpRequest,
-      'some error',
-      '<gsad_message>Some error</gsad_message>',
-    );
-    const http = createHttpError(error);
-    const cmd = new ReportCommand(http);
-    await expect(
-      cmd.download(
-        {id: 'report-uuid'},
-        {
-          reportConfigId: 'config-uuid',
-          reportFormatId: 'format-uuid',
-        },
-      ),
-    ).rejects.toThrow('some error');
   });
 });

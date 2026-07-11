@@ -266,6 +266,9 @@ if(BUILD_TESTING)
   )
   add_unit_test(gsad-command-response-data)
   add_unit_test(gsad-env gsad_utils.c)
+  add_unit_test(gsad-native-api)
+  target_compile_definitions(gsad-native-api-test PRIVATE GSAD_NATIVE_API_TEST)
+  target_link_libraries(gsad-native-api-test ${CJSON_LDFLAGS})
   add_custom_target(
     tests
     DEPENDS
@@ -284,6 +287,7 @@ if(BUILD_TESTING)
       gsad-user-session-test
       gsad-command-response-data-test
       gsad-env-test
+      gsad-native-api-test
   )
 endif(BUILD_TESTING)
 

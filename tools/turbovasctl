@@ -344,7 +344,7 @@ NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS = 100_000
 NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT = 1_000_000
 NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES = 512 * 1024 * 1024
 NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT = 4 * 1024 * 1024 * 1024
-NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES = 512 * 1024 * 1024
+NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 NATIVE_REPORT_PDF_MAX_BYTES_LIMIT = 4 * 1024 * 1024 * 1024
 NATIVE_REPORT_PDF_ERROR_BODY_MAX_BYTES = 64 * 1024
 NATIVE_OVERRIDE_DELETE_DEFAULT_MAX = 100
@@ -5853,6 +5853,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
     path = Path(relative_path)
     if relative_path.startswith(GSA_NATIVE_API_CLIENT_PREFIX):
         return None
+    if relative_path == "components/gsa/src/gmp/__tests__/gmp.test.ts":
+        return "compatibility_bridge", "GSA session tests characterize compatibility login/logout behavior; they are not a product workflow."
     if relative_path == "tools/runtime_browser_smoke.py":
         return "compatibility_bridge", "Browser smoke uses native cleanup first; inherited GMP/python-gvm remains only as optional fallback cleanup plumbing."
     if relative_path == "tools/turbovasctl":
@@ -7465,6 +7467,23 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     templates: set[str] = set()
     errors: list[str] = []
 
+    pdf_function_body = c_source_function_body(
+        source, "native_api_pdf_download_path_is_allowed"
+    )
+    if pdf_function_body:
+        pdf_constants = c_string_constants(pdf_function_body)
+        pdf_prefix = pdf_constants.get("prefix")
+        pdf_suffix = pdf_constants.get("suffix")
+        if (
+            pdf_prefix
+            and pdf_suffix
+            and "g_str_has_prefix (path, prefix)" in pdf_function_body
+            and "g_str_has_suffix (path, suffix)" in pdf_function_body
+        ):
+            templates.add(f"{pdf_prefix.rstrip('/')}/{{}}{pdf_suffix}")
+        else:
+            errors.append("unresolved_pdf_download_path")
+
     for match in re.finditer(
         r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
         function_body,
@@ -8935,9 +8954,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}/download",
-                "status": "implemented_internal_and_scriptable_read",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
-                "replacement_candidates": ["native-export-report-pdf helper", "direct native evidence PDF download without GMP/XML"],
+                "replacement_candidates": ["GSA native evidence PDF download", "native-export-report-pdf helper"],
             },
             {
                 "endpoint": "/api/v1/reports/{report_id}/results",

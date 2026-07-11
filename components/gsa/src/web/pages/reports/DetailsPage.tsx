@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {useParams} from 'react-router';
 import logger from 'gmp/log';
@@ -12,6 +12,7 @@ import Filter, {RESET_FILTER} from 'gmp/models/filter';
 import type Report from 'gmp/models/report';
 import type ReportTLSCertificate from 'gmp/models/report/tls-certificate';
 import {isActive} from 'gmp/models/task';
+import {fetchNativeReportPdf} from 'gmp/native-api/reports';
 import {fetchNativeTarget} from 'gmp/native-api/targets';
 import {isDefined} from 'gmp/utils/identity';
 import Download from 'web/components/form/Download';
@@ -23,9 +24,7 @@ import useGetReportCves from 'web/hooks/use-query/report-cves';
 import useGetReportTlsCertificates from 'web/hooks/use-query/report-tls-certificates';
 import {
   useGetReport,
-  useGetReportConfigs,
   useGetReportExportFileName,
-  useGetReportFormats,
   useGetResultsFilters,
 } from 'web/hooks/use-query/reports';
 import useGmp from 'web/hooks/useGmp';
@@ -33,7 +32,6 @@ import usePageFilter from 'web/hooks/usePageFilter';
 import useTranslation from 'web/hooks/useTranslation';
 import useUserName from 'web/hooks/useUserName';
 import Page from 'web/pages/reports/DetailsContent';
-import DownloadReportDialog from 'web/pages/reports/DownloadReportDialog';
 import ReportDetailsFilterDialog from 'web/pages/reports/ReportDetailsFilterDialog';
 import TargetComponent from 'web/pages/targets/TargetComponent';
 import {create_pem_certificate} from 'web/utils/Cert';
@@ -53,19 +51,6 @@ interface SortingState {
   cves: SortState;
   tlscerts: SortState;
   errors: SortState;
-}
-
-interface ReportComposerDefaults {
-  defaultReportConfigId?: string;
-  defaultReportFormatId?: string;
-  includeOverrides?: boolean;
-}
-
-interface DownloadReportState {
-  includeOverrides: boolean;
-  reportConfigId: string;
-  reportFormatId: string;
-  storeAsDefault: boolean;
 }
 
 interface ReportTargetRef {
@@ -133,11 +118,7 @@ const ReportDetailsPage = () => {
   const [downloadRef, handleDownload] = useDownload();
 
   const [showFilterDialog, setShowFilterDialog] = useState(false);
-  const [showDownloadReportDialog, setShowDownloadReportDialog] =
-    useState(false);
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
-  const [reportComposerDefaults, setReportComposerDefaults] =
-    useState<ReportComposerDefaults>({});
 
   // Filter management
   const [pageFilter, , {changeFilter}] = usePageFilter(
@@ -189,48 +170,8 @@ const ReportDetailsPage = () => {
     useGetResultsFilters();
   const filters = filtersData?.entities ?? [];
 
-  // Report formats for download dialog
-  const {data: reportFormatsData} = useGetReportFormats();
-  const reportFormats = reportFormatsData?.entities;
-
-  // Report configs for download dialog
-  const {data: reportConfigsData} = useGetReportConfigs();
-  const reportConfigs = reportConfigsData?.entities ?? [];
-
   // User settings: report export filename
   const {data: reportExportFileName} = useGetReportExportFileName();
-
-  // Report composer defaults
-  useEffect(() => {
-    const loadReportComposerDefaults = async () => {
-      try {
-        const response = await gmp.user.getReportComposerDefaults();
-        setReportComposerDefaults(response.data);
-      } catch (error) {
-        log.error('Error loading report composer defaults', error);
-      }
-    };
-
-    void loadReportComposerDefaults();
-  }, [gmp]);
-
-  // Set initial report format ID from available formats
-  useEffect(() => {
-    if (isDefined(reportFormats) && reportFormats.length > 0) {
-      const reportFormatId = reportFormats[0]?.id;
-      if (!isDefined(reportFormatId)) {
-        const noReportFormatError = _(
-          'The report cannot be displayed because' +
-            ' no report format is available.' +
-            ' This could be due to a missing gvmd data feed. Please update' +
-            ' the gvmd data feed, check the "feed import owner" setting,' +
-            ' the feed status page, or' +
-            ' contact your system administrator.',
-        );
-        throw new Error(noReportFormatError);
-      }
-    }
-  }, [reportFormats, _]);
 
   // Derive counts from report entity
   const report = entity?.report;
@@ -245,12 +186,6 @@ const ReportDetailsPage = () => {
     reportTlsCertificatesData?.entitiesCounts ??
     report?.tlsCertificates?.counts;
   const errorsCounts = report?.errors?.counts;
-
-  const threshold = gmp.settings.reportResultsThreshold;
-  const showThresholdMessage =
-    isDefined(report) &&
-    isDefined(resultsCounts) &&
-    resultsCounts.filtered > threshold;
 
   // Handlers
   const handleFilterChange = useCallback(
@@ -326,88 +261,28 @@ const ReportDetailsPage = () => {
     setShowFilterDialog(false);
   }, []);
 
-  const handleOpenDownloadReportDialog = useCallback(() => {
-    setShowDownloadReportDialog(true);
-  }, []);
+  const handleReportDownload = useCallback(async () => {
+    if (!entity) return;
+    try {
+      const data = await fetchNativeReportPdf(gmp, entity.id as string);
+      const filename = generateFilename({
+        creationTime: entity.creationTime,
+        extension: 'pdf',
+        fileNameFormat: reportExportFileName,
+        id: entity.id as string,
+        modificationTime: entity.modificationTime,
+        reportFormat: 'PDF',
+        resourceName: entity.task?.name,
+        resourceType: 'report',
+        username,
+      });
 
-  const handleCloseDownloadReportDialog = useCallback(() => {
-    setShowDownloadReportDialog(false);
-  }, []);
-
-  const handleReportDownload = useCallback(
-    async (values: Record<string, unknown>) => {
-      const state = values as unknown as DownloadReportState;
-      if (!entity || !reportFilter) return;
-      const {includeOverrides, reportConfigId, reportFormatId, storeAsDefault} =
-        state;
-
-      const newFilter = reportFilter.copy();
-      newFilter.set('overrides', includeOverrides);
-
-      if (storeAsDefault) {
-        const defaults = {
-          ...reportComposerDefaults,
-          defaultReportConfigId: reportConfigId,
-          defaultReportFormatId: reportFormatId,
-          includeOverrides,
-        };
-        try {
-          await gmp.user.saveReportComposerDefaults(defaults);
-          setReportComposerDefaults(defaults);
-        } catch (error) {
-          log.error('Error saving report composer defaults', error);
-        }
-      }
-
-      const reportFormat = reportFormats?.find(
-        format => reportFormatId === format.id,
-      );
-
-      const extension = isDefined(reportFormat)
-        ? reportFormat.extension
-        : 'unknown';
-
-      try {
-        const response = await gmp.report.download(
-          {id: entity.id as string},
-          {
-            reportConfigId,
-            reportFormatId,
-            filter: newFilter,
-          },
-        );
-        setShowDownloadReportDialog(false);
-        const {data} = response;
-        const filename = generateFilename({
-          creationTime: entity.creationTime,
-          extension,
-          fileNameFormat: reportExportFileName,
-          id: entity.id as string,
-          modificationTime: entity.modificationTime,
-          reportFormat: reportFormat?.name,
-          resourceName: entity.task?.name,
-          resourceType: 'report',
-          username,
-        });
-
-        handleDownload({filename, data});
-      } catch (error) {
-        log.error(error);
-        showError(error as Error);
-      }
-    },
-    [
-      entity,
-      gmp,
-      handleDownload,
-      reportComposerDefaults,
-      reportExportFileName,
-      reportFilter,
-      reportFormats,
-      showError,
-      username,
-    ],
-  );
+      handleDownload({filename, data, mimetype: 'application/pdf'});
+    } catch (error) {
+      log.error(error);
+      showError(error as Error);
+    }
+  }, [entity, gmp, handleDownload, reportExportFileName, showError, username]);
 
   const handleTlsCertificateDownload = useCallback(
     (cert: ReportTLSCertificate) => {
@@ -541,7 +416,7 @@ const ReportDetailsPage = () => {
             onFilterRemoveSeverityClick={handleFilterRemoveSeverity}
             onFilterResetClick={handleFilterResetClick}
             onRemoveFromAssetsClick={handleRemoveFromAssets}
-            onReportDownloadClick={handleOpenDownloadReportDialog}
+            onReportDownloadClick={handleReportDownload}
             onSortChange={handleSortChange}
             onTagSuccess={handleChanged}
             onTargetEditClick={async () => {
@@ -558,21 +433,6 @@ const ReportDetailsPage = () => {
           onClose={handleFilterDialogClose}
           onFilterChanged={handleFilterChange}
           onFilterCreated={handleFilterCreated}
-        />
-      )}
-      {showDownloadReportDialog && reportFilter && (
-        <DownloadReportDialog
-          defaultReportConfigId={reportComposerDefaults.defaultReportConfigId}
-          defaultReportFormatId={reportComposerDefaults.defaultReportFormatId}
-          filter={reportFilter}
-          includeOverrides={reportComposerDefaults.includeOverrides}
-          reportConfigs={reportConfigs}
-          reportFormats={reportFormats ?? []}
-          showThresholdMessage={showThresholdMessage}
-          threshold={threshold}
-          totalResultCount={resultsCounts?.all ?? 0}
-          onClose={handleCloseDownloadReportDialog}
-          onSave={handleReportDownload}
         />
       )}
     </>

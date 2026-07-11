@@ -19,6 +19,7 @@ pub(crate) const CANONICAL_PDF_REPORT_FORMAT_ID: &str = "c402cc3e-b531-11e1-9163
 const MAX_PDF_RESULT_ROWS: i64 = 3_000;
 const MAX_PDF_SOURCE_TEXT_BYTES: i64 = 8 * 1024 * 1024;
 const MAX_PDF_RENDERED_LINES: usize = 24_000;
+const MAX_PDF_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
 static PDF_GENERATION_PERMITS: Semaphore = Semaphore::const_new(2);
 const PAGE_WIDTH_POINTS: f32 = 595.0;
 const PAGE_HEIGHT_POINTS: f32 = 842.0;
@@ -483,7 +484,16 @@ fn render_native_pdf(report: &NativePdfReport) -> Result<Vec<u8>, ApiError> {
         render_scanner_error(&mut layout, index + 1, evidence)?;
     }
 
-    Ok(write_pdf_document(layout.finish()))
+    let pdf = write_pdf_document(layout.finish());
+    if pdf_output_is_within_limit(pdf.len()) {
+        Ok(pdf)
+    } else {
+        Err(ApiError::ReportPdfTooLarge)
+    }
+}
+
+fn pdf_output_is_within_limit(output_bytes: usize) -> bool {
+    output_bytes <= MAX_PDF_OUTPUT_BYTES
 }
 
 fn render_evidence(
@@ -929,6 +939,8 @@ mod tests {
             0,
             MAX_PDF_SOURCE_TEXT_BYTES + 1
         ));
+        assert!(pdf_output_is_within_limit(MAX_PDF_OUTPUT_BYTES));
+        assert!(!pdf_output_is_within_limit(MAX_PDF_OUTPUT_BYTES + 1));
         let error = ApiError::ReportPdfTooLarge;
         assert_eq!(error.status_code(), StatusCode::PAYLOAD_TOO_LARGE);
         assert_eq!(error.code(), "report_pdf_too_large");

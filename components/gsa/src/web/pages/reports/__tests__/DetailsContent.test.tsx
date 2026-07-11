@@ -328,7 +328,7 @@ describe('DetailsContent', () => {
 
       screen.getByTitle(/^Add to Assets/);
       screen.getByTitle(/^Remove from Assets/);
-      screen.getByTitle(/^Download filtered Report/);
+      screen.getByTitle(/^Download Report as PDF/);
       screen.getByTitle(/^Trigger Alert/);
     });
   });

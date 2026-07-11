@@ -111,55 +111,6 @@ const nativeResultFiltersPayload = {
   ],
 };
 
-const validReportFormatId = 'a994b278-1f62-11e1-96ac-406186ea4fc5';
-
-const nativeReportFormatsPayload = {
-  page: {page: 1, page_size: 500, total: 3, sort: 'name', filter: ''},
-  items: [
-    {
-      id: 'inactive-report-format',
-      name: 'Inactive XML',
-      extension: 'xml',
-      report_type: 'scan',
-      trust: 'yes',
-      active: false,
-    },
-    {
-      id: 'untrusted-report-format',
-      name: 'Untrusted XML',
-      extension: 'xml',
-      report_type: 'scan',
-      trust: 'no',
-      active: true,
-    },
-    {
-      id: validReportFormatId,
-      name: 'XML',
-      extension: 'xml',
-      report_type: 'scan',
-      trust: 'yes',
-      active: true,
-    },
-  ],
-};
-
-const nativeReportConfigsPayload = {
-  page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
-  items: [
-    {
-      id: 'afde48df-7f26-4b2b-9c1e-03b0e1bfb3a6',
-      name: 'Default config',
-      report_format: {
-        id: validReportFormatId,
-        name: 'XML',
-      },
-      writable: true,
-      in_use: false,
-      orphan: false,
-    },
-  ],
-};
-
 const nativeReportCvesPayload = {
   page: {page: 1, page_size: 1, total: 7, sort: '-max_severity', filter: ''},
   items: [
@@ -246,17 +197,10 @@ const createGmp = () => ({
   credentials: {
     getAll: testing.fn().mockResolvedValue({data: []}),
   },
-  reportconfigs: {
-    get: testing.fn().mockResolvedValue(emptyCollectionResponse),
-  },
-  reportformats: {
-    get: testing.fn().mockResolvedValue(emptyCollectionResponse),
-  },
   report: {
     get: testing.fn().mockResolvedValue({data: entity}),
     addAssets: testing.fn().mockResolvedValue({}),
     removeAssets: testing.fn().mockResolvedValue({}),
-    download: testing.fn().mockResolvedValue({data: 'report-blob-data'}),
   },
   target: {
     get: testing.fn().mockResolvedValue({data: {}}),
@@ -273,12 +217,6 @@ const createFetchMock = (reportPayload = nativeReportPayload) =>
         (() => {
           if (url.includes('/api/v1/filters')) {
             return nativeResultFiltersPayload;
-          }
-          if (url.includes('/api/v1/report-formats')) {
-            return nativeReportFormatsPayload;
-          }
-          if (url.includes('/api/v1/report-configs')) {
-            return nativeReportConfigsPayload;
           }
           if (url.includes('/api/v1/targets/')) {
             return nativeTargetPayload;
@@ -298,6 +236,7 @@ const createFetchMock = (reportPayload = nativeReportPayload) =>
           return reportPayload;
         })(),
       ),
+      arrayBuffer: testing.fn().mockResolvedValue(new ArrayBuffer(8)),
       ok: true,
       status: 200,
     }),
@@ -518,79 +457,23 @@ describe('DetailsPage', () => {
       });
     });
 
-    test('should load report dropdown choices through the native API', async () => {
+    test('should download the native evidence PDF', async () => {
       const gmp = createGmp();
       const {render} = setupRenderer(gmp);
       renderPage(render);
 
-      await screen.findByRole('heading', {name: /Report:/});
+      await screen.findByTitle(/^Download Report as PDF/);
+      fireEvent.click(screen.getByTitle(/^Download Report as PDF/));
 
       await waitFor(() => {
-        expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/report-formats', {
-          token: 'test-token',
-          page: 1,
-          page_size: 500,
-          sort: 'name',
-          filter: '',
-        });
-        expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/report-configs', {
-          token: 'test-token',
-          page: 1,
-          page_size: 500,
-          sort: 'name',
-          filter: '',
-        });
+        expect(gmp.buildUrl).toHaveBeenCalledWith(
+          `api/v1/reports/${reportId}/download`,
+          {
+            token: 'test-token',
+            report_format_id: 'c402cc3e-b531-11e1-9163-406186ea4fc5',
+          },
+        );
       });
-      expect(gmp.reportformats.get).not.toHaveBeenCalled();
-      expect(gmp.reportconfigs.get).not.toHaveBeenCalled();
-
-      await screen.findByTitle(/^Download filtered Report/);
-      fireEvent.click(screen.getByTitle(/^Download filtered Report/));
-
-      await screen.findByRole('heading', {
-        name: /Compose Content for Scan Report/,
-      });
-      expect(screen.getByDisplayValue('XML')).toBeInTheDocument();
-      expect(
-        screen.queryByDisplayValue('Inactive XML'),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByDisplayValue('Untrusted XML'),
-      ).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Download Report Dialog', () => {
-    test('should open Download Report dialog when download button is clicked', async () => {
-      const {render} = setupRenderer();
-      renderPage(render);
-
-      await screen.findByTitle(/^Download filtered Report/);
-      fireEvent.click(screen.getByTitle(/^Download filtered Report/));
-
-      await screen.findByRole('heading', {
-        name: /Compose Content for Scan Report/,
-      });
-    });
-
-    test('should close Download Report dialog when cancelled', async () => {
-      const {render} = setupRenderer();
-      renderPage(render);
-
-      await screen.findByTitle(/^Download filtered Report/);
-      fireEvent.click(screen.getByTitle(/^Download filtered Report/));
-
-      await screen.findByRole('heading', {
-        name: /Compose Content for Scan Report/,
-      });
-
-      fireEvent.click(screen.getByRole('button', {name: 'Cancel'}));
-
-      expect(
-        screen.queryByRole('heading', {
-          name: /Compose Content for Scan Report/,
-        }),
-      ).not.toBeInTheDocument();
     });
   });
 
@@ -720,73 +603,6 @@ describe('DetailsPage', () => {
       fireEvent.click(screen.getByTitle(/^Remove from Assets/));
 
       await screen.findByText(/Server error/);
-    });
-  });
-
-  describe('Report download flow', () => {
-    test('should call report download when download dialog OK is clicked', async () => {
-      const gmp = createGmp();
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Download filtered Report/);
-      fireEvent.click(screen.getByTitle(/^Download filtered Report/));
-
-      await screen.findByRole('heading', {
-        name: /Compose Content for Scan Report/,
-      });
-
-      fireEvent.click(screen.getByRole('button', {name: 'OK'}));
-
-      await waitFor(() => {
-        expect(gmp.report.download).toHaveBeenCalled();
-      });
-    });
-
-    test('should close download dialog after successful download', async () => {
-      const gmp = createGmp();
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Download filtered Report/);
-      fireEvent.click(screen.getByTitle(/^Download filtered Report/));
-
-      await screen.findByRole('heading', {
-        name: /Compose Content for Scan Report/,
-      });
-
-      fireEvent.click(screen.getByRole('button', {name: 'OK'}));
-
-      await waitFor(() => {
-        expect(
-          screen.queryByRole('heading', {
-            name: /Compose Content for Scan Report/,
-          }),
-        ).not.toBeInTheDocument();
-      });
-    });
-
-    test('should show error when download fails', async () => {
-      const gmp = createGmp();
-      gmp.report.download = testing
-        .fn()
-        .mockRejectedValue(new Error('Download failed'));
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Download filtered Report/);
-      fireEvent.click(screen.getByTitle(/^Download filtered Report/));
-
-      await screen.findByRole('heading', {
-        name: /Compose Content for Scan Report/,
-      });
-
-      fireEvent.click(screen.getByRole('button', {name: 'OK'}));
-
-      await screen.findByText(/Download failed/);
     });
   });
 

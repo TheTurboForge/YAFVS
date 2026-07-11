@@ -15,6 +15,41 @@ afterEach(() => {
 });
 
 describe('HostCommand tests', () => {
+  test('should fetch a host through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        asset: {
+          id: 'host-id',
+          name: '192.0.2.10',
+          comment: 'native detail',
+          severity: 7.5,
+        },
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      path => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new HostCommand(fakeHttp);
+    const result = await cmd.get({id: 'host-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/hosts/host-id', {
+      token: 'test-token',
+    });
+    expect(result.data.id).toEqual('host-id');
+    expect(result.data.comment).toEqual('native detail');
+  });
+
   test('should create host through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

@@ -5,15 +5,18 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import type {UrlParams} from 'gmp/http/utils';
 import type Filter from 'gmp/models/filter';
 import Report from 'gmp/models/report';
 import Result from 'gmp/models/result';
-import type {UrlParams} from 'gmp/http/utils';
 
 interface NativeApiSession {
   readonly jwt?: string;
   readonly token?: string;
 }
+
+const NATIVE_PDF_REPORT_FORMAT_ID =
+  'c402cc3e-b531-11e1-9163-406186ea4fc5';
 
 interface NativeReportApplicationPayload {
   name: string;
@@ -1164,6 +1167,24 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+const fetchNativePdf = async (
+  gmp: NativeApiGmp,
+  path: string,
+  params: UrlParams,
+): Promise<ArrayBuffer> => {
+  const response = await fetch(gmp.buildUrl(path, params), {
+    credentials: 'include',
+    headers: {
+      Accept: 'application/pdf',
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+  return response.arrayBuffer();
+};
+
 export const fetchNativeReport = async (
   gmp: NativeApiGmp,
   id: string,
@@ -1175,6 +1196,20 @@ export const fetchNativeReport = async (
     {token: gmp.session.token},
   );
   return {report: nativeReportToModel(payload, filter)};
+};
+
+export const fetchNativeReportPdf = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<ArrayBuffer> => {
+  return fetchNativePdf(
+    gmp,
+    `api/v1/reports/${encodeURIComponent(id)}/download`,
+    {
+      token: gmp.session.token,
+      report_format_id: NATIVE_PDF_REPORT_FORMAT_ID,
+    },
+  );
 };
 
 export const fetchNativeReports = async (

@@ -116,7 +116,7 @@ const ToolBarIcons = ({
           </IconDivider>
           <IconDivider>
             <DownloadIcon
-              title={_('Download filtered Report')}
+              title={_('Download Report as PDF')}
               onClick={onReportDownloadClick}
             />
             <AlertActions

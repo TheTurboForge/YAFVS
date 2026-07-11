@@ -7,10 +7,8 @@
 import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type default as Filter, ALL_FILTER} from 'gmp/models/filter';
-import {filterString} from 'gmp/models/filter/utils';
+import type Filter from 'gmp/models/filter';
 import {fetchNativeReport} from 'gmp/native-api/reports';
-import {isDefined} from 'gmp/utils/identity';
 
 interface ReportCommandAddAssetsParams {
   id: string;
@@ -37,37 +35,9 @@ interface ReportCommandGetParams {
   options?: Record<string, unknown>;
 }
 
-interface ReportCommandDownloadParams {
-  id: string;
-}
-
-interface ReportCommandDownloadOptions {
-  reportFormatId: string;
-  reportConfigId: string;
-  filter?: Filter;
-}
-
 class ReportCommand extends HttpCommand {
   constructor(http: Http) {
     super(http);
-  }
-
-  download(
-    {id}: ReportCommandDownloadParams,
-    {reportFormatId, reportConfigId, filter}: ReportCommandDownloadOptions,
-  ) {
-    const allFilter = isDefined(filter) ? filter.all() : ALL_FILTER;
-    return this.httpRequestWithRejectionTransform<ArrayBuffer>('get', {
-      args: {
-        cmd: 'get_report',
-        details: 1,
-        report_id: id,
-        report_config_id: reportConfigId,
-        report_format_id: reportFormatId,
-        filter: filterString(allFilter),
-      },
-      responseType: 'arraybuffer',
-    });
   }
 
   addAssets({id, filter = ''}: ReportCommandAddAssetsParams) {

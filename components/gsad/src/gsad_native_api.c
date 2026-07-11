@@ -32,6 +32,8 @@
 #define DEFAULT_NATIVE_API_HOST "turbovas-api"
 #define DEFAULT_NATIVE_API_PORT "9080"
 #define NATIVE_API_MAX_RESPONSE_BYTES (10 * 1024 * 1024)
+#define NATIVE_API_MAX_PDF_RESPONSE_BYTES (32 * 1024 * 1024)
+#define PDF_REPORT_FORMAT_ID "c402cc3e-b531-11e1-9163-406186ea4fc5"
 #define BROWSER_PROXY_SECRET_ENV "TURBOVAS_API_BROWSER_PROXY_SECRET"
 #define BROWSER_PROXY_SECRET_HEADER "x-turbovas-browser-proxy-secret"
 #define BROWSER_PROXY_OPERATOR_HEADER "x-turbovas-operator-name"
@@ -78,6 +80,242 @@ is_uuid_segment (const gchar *value, gsize length)
     }
 
   return TRUE;
+}
+
+typedef struct
+{
+  guint status_code;
+  GBytes *body;
+  gchar *content_disposition;
+} native_api_pdf_response_t;
+
+static void
+native_api_pdf_response_clear (native_api_pdf_response_t *response)
+{
+  if (response == NULL)
+    return;
+
+  g_clear_pointer (&response->body, g_bytes_unref);
+  g_clear_pointer (&response->content_disposition, g_free);
+  response->status_code = 0;
+}
+
+static gssize
+find_crlf (const guint8 *data, gsize start, gsize limit)
+{
+  for (gsize index = start; index + 1 < limit; index++)
+    if (data[index] == '\r' && data[index + 1] == '\n')
+      return (gssize) index;
+
+  return -1;
+}
+
+static gssize
+find_header_end (const guint8 *data, gsize length)
+{
+  for (gsize index = 0; index + 3 < length; index++)
+    if (memcmp (data + index, "\r\n\r\n", 4) == 0)
+      return (gssize) index;
+
+  return -1;
+}
+
+static gboolean
+parse_response_status (const guint8 *data, gsize length, guint *status_code)
+{
+  gchar *status_line;
+  int parsed_status;
+
+  status_line = g_strndup ((const gchar *) data, length);
+  if (sscanf (status_line, "HTTP/%*d.%*d %d", &parsed_status) != 1
+      || parsed_status < 100 || parsed_status > 599)
+    {
+      g_free (status_line);
+      return FALSE;
+    }
+
+  g_free (status_line);
+  *status_code = (guint) parsed_status;
+  return TRUE;
+}
+
+static gboolean
+parse_content_length_value (const gchar *value, gsize *content_length)
+{
+  gchar *endptr;
+  guint64 parsed;
+
+  if (value == NULL || *value == '\0' || !g_ascii_isdigit (*value))
+    return FALSE;
+
+  errno = 0;
+  parsed = g_ascii_strtoull (value, &endptr, 10);
+  if (errno || *endptr != '\0' || parsed > G_MAXSIZE)
+    return FALSE;
+
+  *content_length = (gsize) parsed;
+  return TRUE;
+}
+
+static gboolean
+content_disposition_is_safe (const gchar *value)
+{
+  const gchar *separator;
+  gsize disposition_type_length;
+
+  if (value == NULL || value[0] == '\0' || strlen (value) > 1024)
+    return FALSE;
+
+  separator = strchr (value, ';');
+  disposition_type_length =
+    separator ? (gsize) (separator - value) : strlen (value);
+  if (!((disposition_type_length == strlen ("attachment")
+         && g_ascii_strncasecmp (value, "attachment", disposition_type_length)
+              == 0)
+        || (disposition_type_length == strlen ("inline")
+            && g_ascii_strncasecmp (value, "inline", disposition_type_length)
+                 == 0)))
+    return FALSE;
+
+  for (const guchar *cursor = (const guchar *) value; *cursor != '\0'; cursor++)
+    if (*cursor < 0x20 || *cursor > 0x7e)
+      return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+parse_native_api_pdf_response (const guint8 *data, gsize length,
+                               native_api_pdf_response_t *response,
+                               gchar **error_message)
+{
+  gssize header_end;
+  gssize status_end;
+  gsize cursor;
+  gsize content_length = 0;
+  gboolean content_length_present = FALSE;
+  gchar *content_type = NULL;
+  gchar *content_disposition = NULL;
+
+  native_api_pdf_response_clear (response);
+  header_end = find_header_end (data, length);
+  status_end =
+    find_crlf (data, 0, header_end < 0 ? length : (gsize) header_end);
+  if (header_end < 0 || status_end < 0
+      || !parse_response_status (data, (gsize) status_end,
+                                 &response->status_code))
+    {
+      *error_message = g_strdup ("Native API returned a malformed response.");
+      return FALSE;
+    }
+
+  cursor = (gsize) status_end + 2;
+  while (cursor < (gsize) header_end)
+    {
+      gssize line_end = find_crlf (data, cursor, (gsize) header_end + 2);
+      const guint8 *colon;
+      gchar *name;
+      gchar *value;
+
+      if (line_end < 0 || data[cursor] == ' ' || data[cursor] == '\t')
+        goto malformed;
+      colon = memchr (data + cursor, ':', (gsize) line_end - cursor);
+      if (colon == NULL)
+        goto malformed;
+
+      name = g_strndup ((const gchar *) data + cursor,
+                        (gsize) (colon - data - cursor));
+      value = g_strndup ((const gchar *) colon + 1,
+                         (gsize) line_end - (gsize) (colon - data) - 1);
+      g_strstrip (value);
+      if (g_ascii_strcasecmp (name, "Content-Length") == 0)
+        {
+          if (content_length_present
+              || !parse_content_length_value (value, &content_length))
+            {
+              g_free (name);
+              g_free (value);
+              goto malformed;
+            }
+          content_length_present = TRUE;
+        }
+      else if (g_ascii_strcasecmp (name, "Content-Type") == 0)
+        {
+          if (content_type != NULL)
+            {
+              g_free (name);
+              g_free (value);
+              goto malformed;
+            }
+          content_type = g_steal_pointer (&value);
+        }
+      else if (g_ascii_strcasecmp (name, "Content-Disposition") == 0)
+        {
+          if (content_disposition != NULL
+              || !content_disposition_is_safe (value))
+            {
+              g_free (name);
+              g_free (value);
+              goto malformed;
+            }
+          content_disposition = g_steal_pointer (&value);
+        }
+      g_free (name);
+      g_free (value);
+      cursor = (gsize) line_end + 2;
+    }
+
+  if (!content_length_present
+      || length - (gsize) header_end - 4 != content_length)
+    goto malformed;
+
+  if (response->status_code == MHD_HTTP_OK
+      && (content_type == NULL
+          || g_ascii_strcasecmp (content_type, "application/pdf") != 0
+          || content_length < 5
+          || memcmp (data + header_end + 4, "%PDF-", 5) != 0))
+    goto malformed;
+
+  response->body = g_bytes_new (data + header_end + 4, content_length);
+  response->content_disposition = content_disposition;
+  g_free (content_type);
+  return TRUE;
+
+malformed:
+  native_api_pdf_response_clear (response);
+  g_free (content_type);
+  g_free (content_disposition);
+  *error_message =
+    g_strdup ("Native API returned invalid PDF response framing.");
+  return FALSE;
+}
+
+static gboolean
+native_api_pdf_download_path_is_allowed (const gchar *path)
+{
+  const gchar *prefix = "/api/v1/reports/";
+  const gchar *suffix = "/download";
+  const gchar *report_id;
+  gsize report_id_length;
+
+  if (path == NULL || strchr (path, '?') != NULL
+      || !g_str_has_prefix (path, prefix) || !g_str_has_suffix (path, suffix))
+    return FALSE;
+
+  report_id = path + strlen (prefix);
+  report_id_length = strlen (path) - strlen (prefix) - strlen (suffix);
+  return is_uuid_segment (report_id, report_id_length);
+}
+
+static gchar *
+native_api_pdf_download_target (const gchar *path,
+                                const gchar *report_format_id)
+{
+  if (!native_api_pdf_download_path_is_allowed (path)
+      || g_strcmp0 (report_format_id, PDF_REPORT_FORMAT_ID) != 0)
+    return NULL;
+
+  return g_strdup_printf ("%s?report_format_id=%s", path, PDF_REPORT_FORMAT_ID);
 }
 
 static gboolean
@@ -1415,6 +1653,13 @@ native_api_request_target (const gchar *path, params_t *params)
   return g_string_free (target, FALSE);
 }
 
+static gchar *
+native_api_pdf_download_request_target (const gchar *path, params_t *params)
+{
+  return native_api_pdf_download_target (
+    path, params ? params_value (params, "report_format_id") : NULL);
+}
+
 static gsad_http_result_t
 send_json_error (gsad_http_connection_t *connection, int status_code,
                  const gchar *code, const gchar *message)
@@ -1775,6 +2020,80 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   return body;
 }
 
+static gboolean
+fetch_native_api_pdf (const gchar *path,
+                      native_api_pdf_response_t *pdf_response,
+                      gchar **error_message)
+{
+  const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
+  const gchar *port = g_getenv ("TURBOVAS_NATIVE_API_PORT");
+  int fd;
+  GString *request;
+  GByteArray *response;
+  gchar buffer[8192];
+  gboolean parsed;
+
+  if (host == NULL || host[0] == 0)
+    host = DEFAULT_NATIVE_API_HOST;
+  if (port == NULL || port[0] == 0)
+    port = DEFAULT_NATIVE_API_PORT;
+
+  fd = connect_to_native_api (host, port);
+  if (fd == -1)
+    {
+      *error_message = g_strdup ("Native API service is unavailable.");
+      return FALSE;
+    }
+
+  request = g_string_new (NULL);
+  g_string_printf (request,
+                   "GET %s HTTP/1.1\r\n"
+                   "Host: %s:%s\r\n"
+                   "Accept: application/pdf\r\n"
+                   "Connection: close\r\n"
+                   "User-Agent: gsad-native-api-proxy\r\n"
+                   "\r\n",
+                   path, host, port);
+  if (!send_all (fd, request->str, request->len))
+    {
+      secure_gstring_free (request);
+      close (fd);
+      *error_message = g_strdup ("Native API request could not be sent.");
+      return FALSE;
+    }
+  secure_gstring_free (request);
+
+  response = g_byte_array_new ();
+  while (TRUE)
+    {
+      ssize_t count = recv (fd, buffer, sizeof (buffer), 0);
+
+      if (count == 0)
+        break;
+      if (count < 0)
+        {
+          g_byte_array_unref (response);
+          close (fd);
+          *error_message = g_strdup ("Native API response could not be read.");
+          return FALSE;
+        }
+      if ((gsize) count > NATIVE_API_MAX_PDF_RESPONSE_BYTES - response->len)
+        {
+          g_byte_array_unref (response);
+          close (fd);
+          *error_message = g_strdup ("Native API response is too large.");
+          return FALSE;
+        }
+      g_byte_array_append (response, (const guint8 *) buffer, (guint) count);
+    }
+  close (fd);
+
+  parsed = parse_native_api_pdf_response (response->data, response->len,
+                                          pdf_response, error_message);
+  g_byte_array_unref (response);
+  return parsed;
+}
+
 gsad_http_result_t
 gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
                                  void *handler_data,
@@ -1793,6 +2112,60 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
 
   (void) handler_next;
   (void) handler_data;
+
+  if (browser_proxy_operator_name (credentials) == NULL)
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (
+        connection, MHD_HTTP_UNAUTHORIZED, "unauthorized",
+        "Native API browser reads require an authenticated session user.");
+    }
+
+  if (native_api_pdf_download_path_is_allowed (path))
+    {
+      native_api_pdf_response_t pdf_response = {0};
+      gchar *pdf_request_target =
+        native_api_pdf_download_request_target (path, params);
+
+      if (pdf_request_target == NULL)
+        {
+          gsad_credentials_free (credentials);
+          return send_json_error (connection, MHD_HTTP_NOT_FOUND, "not_found",
+                                  "Native API path is not available.");
+        }
+
+      if (!fetch_native_api_pdf (pdf_request_target, &pdf_response,
+                                 &error_message))
+        {
+          g_warning ("%s: %s", __func__, error_message);
+          g_free (pdf_request_target);
+          gsad_credentials_free (credentials);
+          g_free (error_message);
+          return send_json_error (connection, MHD_HTTP_BAD_GATEWAY,
+                                  "control_unavailable",
+                                  "Native API service is unavailable.");
+        }
+      g_free (pdf_request_target);
+      gsad_credentials_free (credentials);
+
+      if (pdf_response.status_code != MHD_HTTP_OK)
+        {
+          guint status_code = pdf_response.status_code;
+
+          native_api_pdf_response_clear (&pdf_response);
+          return send_json_error (connection, (int) status_code,
+                                  "report_download_failed",
+                                  "Native API report download failed.");
+        }
+
+      gsize pdf_length;
+      const gchar *pdf = g_bytes_get_data (pdf_response.body, &pdf_length);
+      ret = gsad_http_send_response_for_content (
+        connection, pdf, MHD_HTTP_OK, NULL, GSAD_CONTENT_TYPE_APP_PDF,
+        pdf_response.content_disposition, pdf_length);
+      native_api_pdf_response_clear (&pdf_response);
+      return ret;
+    }
 
   if (!native_api_path_is_allowed (path))
     {
@@ -1947,3 +2320,41 @@ gsad_http_handle_native_api_delete (gsad_http_handler_t *handler_next,
                                   con_info, data, "DELETE",
                                   native_api_delete_path_is_allowed);
 }
+
+#ifdef GSAD_NATIVE_API_TEST
+gboolean
+gsad_native_api_test_pdf_download_target (const gchar *path,
+                                          const gchar *report_format_id,
+                                          gchar **target)
+{
+  *target = native_api_pdf_download_target (path, report_format_id);
+  return *target != NULL;
+}
+
+gboolean
+gsad_native_api_test_parse_pdf_response (const guint8 *data, gsize length,
+                                         guint *status_code, GBytes **body,
+                                         gchar **content_disposition)
+{
+  native_api_pdf_response_t response = {0};
+  gchar *error_message = NULL;
+  gboolean parsed =
+    parse_native_api_pdf_response (data, length, &response, &error_message);
+
+  g_free (error_message);
+  if (!parsed)
+    return FALSE;
+
+  *status_code = response.status_code;
+  *body = g_steal_pointer (&response.body);
+  *content_disposition = g_steal_pointer (&response.content_disposition);
+  return TRUE;
+}
+
+gboolean
+gsad_native_api_test_browser_credentials_are_session_bound (
+  gsad_credentials_t *credentials)
+{
+  return browser_proxy_operator_name (credentials) != NULL;
+}
+#endif

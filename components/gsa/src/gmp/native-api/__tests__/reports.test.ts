@@ -4,15 +4,54 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {describe, expect, test} from '@gsa/testing';
+import {describe, expect, test, testing} from '@gsa/testing';
 import Filter from 'gmp/models/filter';
 import {
   nativeReportToModel,
   nativeReportErrorsQueryFromFilter,
   nativeReportTlsCertificatesQueryFromFilter,
+  fetchNativeReportPdf,
 } from 'gmp/native-api/reports';
 
+const createNativeHttp = () => ({
+  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  session: {token: 'test-token', jwt: 'jwt-token'},
+});
+
 describe('report native API query builders', () => {
+  test('should download the native evidence PDF through the same-origin API', async () => {
+    const data = new ArrayBuffer(8);
+    const fetchMock = testing.fn().mockResolvedValue({
+      arrayBuffer: testing.fn().mockResolvedValue(data),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createNativeHttp();
+
+    const reportId = '12345678-1234-1234-1234-123456789abc';
+    const result = await fetchNativeReportPdf(gmp, reportId);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      `api/v1/reports/${reportId}/download`,
+      {
+        token: 'test-token',
+        report_format_id: 'c402cc3e-b531-11e1-9163-406186ea4fc5',
+      },
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://turbovas.example/api/v1/reports/${reportId}/download`,
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/pdf',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result).toBe(data);
+  });
+
   test('should fall back to endpoint defaults for unsupported shared sorts', () => {
     const filter = Filter.fromString(
       'search=postgres rows=25 first=51 sort-reverse=severity',

@@ -505,6 +505,11 @@ export class HostCommand {
     this.http = http;
   }
 
+  async get({id}: HostCommandParams) {
+    const response = await fetchNativeHost(this.http, id);
+    return new Response(response.host);
+  }
+
   create({name, comment = ''}: HostCommandCreateParams) {
     return createNativeHost(this.http, {name, comment});
   }

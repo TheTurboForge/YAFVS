@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -128,7 +129,7 @@ describe('Report Details ToolBarIcons tests', () => {
     expect(links[6]).toHaveAttribute('title', 'Corresponding Performance');
 
     // Download Report Icon
-    expect(buttons[2]).toHaveAttribute('title', 'Download filtered Report');
+    expect(buttons[2]).toHaveAttribute('title', 'Download Report as PDF');
 
     // Trigger Alert Icon
     expect(buttons[3]).toHaveAttribute('title', 'Trigger Alert');
@@ -183,7 +184,7 @@ describe('Report Details ToolBarIcons tests', () => {
     fireEvent.click(buttons[1]);
     expect(onRemoveFromAssetsClick).toHaveBeenCalled();
 
-    expect(buttons[2]).toHaveAttribute('title', 'Download filtered Report');
+    expect(buttons[2]).toHaveAttribute('title', 'Download Report as PDF');
     fireEvent.click(buttons[2]);
     expect(onReportDownloadClick).toHaveBeenCalled();
   });

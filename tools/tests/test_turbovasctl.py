@@ -2046,6 +2046,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "id": "alert-1",
             "name": "Daily report",
             "comment": "operator note",
+            "owner_id": "11111111-1111-4111-8111-111111111111",
             "owner": {"name": "admin"},
             "active": True,
             "event_type": "Task run status changed",
@@ -2062,6 +2063,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertFalse(turbovasctl.alert_metadata_item_ok(leaked_method))
         unredacted = dict(safe, method_data_redacted=False)
         self.assertFalse(turbovasctl.alert_metadata_item_ok(unredacted))
+        invalid_owner = dict(safe, owner_id="not-a-uuid")
+        self.assertFalse(turbovasctl.alert_metadata_item_ok(invalid_owner))
 
     def test_native_api_probe_finding_uses_response_summary(self):
         result = turbovasctl.subprocess.CompletedProcess(
@@ -13458,6 +13461,16 @@ db2:keys=5,expires=0,avg_ttl=0
                     turbovasctl.runtime_secret_path(root, secret_name).stat().st_mode & 0o777,
                     0o600,
                 )
+
+    def test_runtime_scanner_config_artifact_is_runtime_relative(self):
+        source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
+        helper = source.split("def command_runtime_scanner_redis_init", 1)[1]
+        helper = helper.split("\ndef ", 1)[0]
+
+        self.assertIn(
+            "config_path.relative_to(runtime_dir(repo_root))", helper
+        )
+        self.assertNotIn("config_path.relative_to(repo_root)", helper)
 
     def test_runtime_containment_compose_and_broker_policy(self):
         root = Path(__file__).resolve().parents[2]

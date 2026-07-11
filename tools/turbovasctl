@@ -1956,6 +1956,7 @@ ALERT_ALLOWED_PAYLOAD_KEYS = frozenset(
         "id",
         "name",
         "comment",
+        "owner_id",
         "owner",
         "active",
         "in_use",
@@ -12963,10 +12964,11 @@ def command_runtime_scanner_redis_init(repo_root: Path, probe_openvas: bool = Tr
     findings.append(finding("pass" if ping and ping.returncode == 0 and "PONG" in ping.stdout else "fail", "redis-openvas.ready", f"scanner Redis Unix socket ping exit code {ping.returncode if ping else 'unavailable'}.", str(scanner_redis_socket_path(repo_root)), {"output_tail": output_tail(ping.stdout if ping else "", 20)}))
 
     config_path = write_openvas_runtime_config(repo_root)
-    findings.append(finding("pass", "openvas.config", "OpenVAS runtime config points db_address and feed plugin paths to runtime state.", str(config_path.relative_to(repo_root))))
+    config_artifact = str(config_path.relative_to(runtime_dir(repo_root)))
+    findings.append(finding("pass", "openvas.config", "OpenVAS runtime config points db_address and feed plugin paths to runtime state.", config_artifact))
     if not probe_openvas:
         findings.append(finding("pass", "openvas.config-probe", "OpenVAS settings probe deferred until app services are built and started."))
-        return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), str(config_path.relative_to(repo_root))])
+        return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), config_artifact])
     app_build = run_command(compose_command(repo_root, "--profile", "app", "build", "ospd-openvas"), repo_root, env=runtime_env(repo_root), timeout=900)
     findings.append(finding("pass" if app_build.returncode == 0 else "fail", "compose.ospd-build", f"docker compose build ospd-openvas exit code {app_build.returncode}.", details={"output_tail": output_tail(app_build.stdout, 120)}))
     if app_build.returncode != 0:
@@ -12981,7 +12983,7 @@ def command_runtime_scanner_redis_init(repo_root: Path, probe_openvas: bool = Tr
     findings.append(finding("pass" if db_ok else "fail", "openvas.db_address", f"openvas -s runtime db_address check exit code {openvas_settings.returncode}.", details={"db_address_lines": db_lines, "output_tail": output_tail(openvas_settings.stdout, 80)}))
     findings.append(finding("pass" if plugins_ok else "fail", "openvas.plugins_folder", f"openvas -s runtime plugins_folder check exit code {openvas_settings.returncode}.", details={"plugins_folder_lines": plugin_lines, "output_tail": output_tail(openvas_settings.stdout, 80)}))
     findings.append(finding("pass" if include_ok else "fail", "openvas.include_folders", f"openvas -s runtime include_folders check exit code {openvas_settings.returncode}.", details={"include_folders_lines": include_lines, "output_tail": output_tail(openvas_settings.stdout, 80)}))
-    return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), str(config_path.relative_to(repo_root))])
+    return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), config_artifact])
 
 
 def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
@@ -26294,6 +26296,11 @@ def alert_metadata_item_ok(item: Any) -> bool:
     if forbidden_alert_payload_keys(item):
         return False
     if item.get("method_data_redacted") is not True:
+        return False
+    owner_id = item.get("owner_id")
+    if owner_id is not None and not (
+        isinstance(owner_id, str) and UUID_VALUE_RE.fullmatch(owner_id)
+    ):
         return False
     owner = item.get("owner")
     if owner is not None and not (isinstance(owner, str) or (isinstance(owner, dict) and set(owner) <= {"name"})):

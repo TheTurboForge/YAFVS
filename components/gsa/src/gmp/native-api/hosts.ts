@@ -4,8 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import {
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
+import type Http from 'gmp/http/http';
 import type {UrlParams} from 'gmp/http/utils';
 import type Filter from 'gmp/models/filter';
 import Host from 'gmp/models/host';
@@ -118,6 +124,24 @@ export interface NativeHostCreateArgs {
 export interface NativeHostPatchArgs {
   id: string;
   comment?: string;
+}
+
+interface HostCommandParams {
+  id: string;
+}
+
+interface HostCommandCreateParams {
+  name: string;
+  comment?: string;
+}
+
+interface HostCommandSaveParams extends HostCommandParams {
+  comment?: string;
+}
+
+interface HostsCommandParams {
+  filter?: Filter | string;
+  [key: string]: unknown;
 }
 
 const HOST_SORT_FIELDS: Record<string, string> = {
@@ -443,6 +467,195 @@ export const createNativeHost = async (
   );
   return new Response(nativeHostToModel(payload.asset, payload));
 };
+
+const shouldApplyToAllFilteredHosts = (filter: Filter) => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
+const hostIds = (hosts: Host[]) =>
+  hosts.flatMap(host => (host.id === undefined ? [] : [host.id]));
+
+export class NativeHostBulkDeleteError extends Error {
+  readonly deletedIds: string[];
+  readonly failedId: string;
+  readonly pendingIds: string[];
+
+  constructor(
+    deletedIds: string[],
+    failedId: string,
+    pendingIds: string[],
+    cause: unknown,
+  ) {
+    super(
+      `Native host bulk delete stopped at ${failedId} after deleting ${deletedIds.length} host(s).`,
+      {cause},
+    );
+    this.name = 'NativeHostBulkDeleteError';
+    this.deletedIds = deletedIds;
+    this.failedId = failedId;
+    this.pendingIds = pendingIds;
+  }
+}
+
+export class HostCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  create({name, comment = ''}: HostCommandCreateParams) {
+    return createNativeHost(this.http, {name, comment});
+  }
+
+  save({id, comment = ''}: HostCommandSaveParams) {
+    return patchNativeHostComment(this.http, {id, comment});
+  }
+
+  deleteIdentifier({id}: HostCommandParams) {
+    return deleteNativeHostIdentifier(this.http, id);
+  }
+
+  async delete({id}: HostCommandParams) {
+    await deleteNativeHost(this.http, id);
+    return new Response(undefined);
+  }
+
+  export({id}: HostCommandParams) {
+    return exportNativeHostMetadata(this.http, id);
+  }
+}
+
+export class HostsCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get(params: HostsCommandParams = {}) {
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeHosts(
+      this.http,
+      nativeHostsQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.hosts, {
+      filter,
+      counts: nativeResponse.counts,
+    });
+  }
+
+  async getAll(params: HostsCommandParams = {}) {
+    const filter = filterFromCommandParams(params).all();
+    const hosts: Host[] = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; hosts.length < total; page += 1) {
+      const nativeResponse = await fetchNativeHosts(this.http, {
+        ...nativeHostsQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      hosts.push(...nativeResponse.hosts);
+      total = nativeResponse.page.total;
+      if (nativeResponse.hosts.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      hosts,
+      nativeCollectionMeta(filter, hosts, Number.isFinite(total) ? total : 0),
+    );
+  }
+
+  exportByIds(ids: string[]) {
+    return exportNativeHostsMetadata(this.http, ids);
+  }
+
+  export(hosts: Host[]) {
+    return this.exportByIds(hostIds(hosts));
+  }
+
+  async exportByFilter(filter: Filter) {
+    const hosts: Host[] = [];
+    if (shouldApplyToAllFilteredHosts(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; hosts.length < total; page += 1) {
+        const nativeResponse = await fetchNativeHosts(this.http, {
+          ...nativeHostsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        hosts.push(...nativeResponse.hosts);
+        total = nativeResponse.page.total;
+        if (nativeResponse.hosts.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeHosts(
+        this.http,
+        nativeHostsQueryFromFilter(filter),
+      );
+      hosts.push(...nativeResponse.hosts);
+    }
+
+    return this.exportByIds(hostIds(hosts));
+  }
+
+  async delete(hosts: Host[]) {
+    const response = await this.deleteByIds(hostIds(hosts));
+    return response.setData(hosts);
+  }
+
+  async deleteByIds(ids: string[]) {
+    const deletedIds: string[] = [];
+    await this.deleteIds(ids, deletedIds);
+    return new Response(deletedIds);
+  }
+
+  async deleteByFilter(filter: Filter) {
+    const deletedHosts: Host[] = [];
+    const deletedIds: string[] = [];
+    const query = nativeHostsQueryFromFilter(filter);
+    const deleteAll = shouldApplyToAllFilteredHosts(filter);
+    let hasMore = true;
+
+    while (hasMore) {
+      const nativeResponse = await fetchNativeHosts(this.http, {
+        ...query,
+        ...(deleteAll ? {page: 1, pageSize: NATIVE_COMMAND_PAGE_SIZE} : {}),
+      });
+      const hosts = nativeResponse.hosts;
+      hasMore = deleteAll && hosts.length > 0;
+      if (hosts.length === 0) {
+        break;
+      }
+      await this.deleteIds(hostIds(hosts), deletedIds);
+      deletedHosts.push(...hosts);
+    }
+
+    return new Response(deletedHosts);
+  }
+
+  private async deleteIds(ids: string[], deletedIds: string[]) {
+    for (const [index, id] of ids.entries()) {
+      try {
+        await deleteNativeHost(this.http, id);
+      } catch (cause) {
+        throw new NativeHostBulkDeleteError(
+          [...deletedIds],
+          id,
+          ids.slice(index),
+          cause,
+        );
+      }
+      deletedIds.push(id);
+    }
+  }
+}
 
 export const deleteNativeHost = async (
   gmp: NativeApiGmp,

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import 'gmp/commands/hosts';
 import 'gmp/commands/license';
 import 'gmp/commands/os';
 import 'gmp/commands/overrides';
@@ -65,6 +64,7 @@ import {setLocale} from 'gmp/locale/lang';
 import logger, {type RootLogger} from 'gmp/log';
 import type Session from 'gmp/session/session';
 import type Settings from 'gmp/settings';
+import {HostCommand, HostsCommand} from 'gmp/native-api/hosts';
 import {isDefined} from 'gmp/utils/identity';
 
 type Listener = () => void;
@@ -96,6 +96,8 @@ class Gmp {
   public readonly dfncert: DfnCertAdvisoryCommand;
   public readonly dfncerts: DfnCertAdvisoriesCommand;
   public readonly feedstatus: FeedStatusCommand;
+  public readonly host: HostCommand;
+  public readonly hosts: HostsCommand;
   public readonly filter: FilterCommand;
   public readonly filters: FiltersCommand;
   public readonly nvt: NvtCommand;
@@ -167,6 +169,8 @@ class Gmp {
     this.dfncert = new DfnCertAdvisoryCommand(this.http);
     this.dfncerts = new DfnCertAdvisoriesCommand(this.http);
     this.feedstatus = new FeedStatusCommand(this.http);
+    this.host = new HostCommand(this.http);
+    this.hosts = new HostsCommand(this.http);
     this.filter = new FilterCommand(this.http);
     this.filters = new FiltersCommand(this.http);
     this.nvt = new NvtCommand(this.http);

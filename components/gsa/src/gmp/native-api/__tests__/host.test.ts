@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {HostCommand} from 'gmp/commands/hosts';
+import {HostCommand} from 'gmp/native-api/hosts';
 import {createHttp} from 'gmp/commands/testing';
 import Host from 'gmp/models/host';
 import {createSession} from 'gmp/testing';

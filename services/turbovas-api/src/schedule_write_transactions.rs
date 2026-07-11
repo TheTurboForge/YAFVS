@@ -8,10 +8,10 @@ use crate::{
     errors::ApiError,
     schedule_write_db::{
         ScheduleTrashWriteRecord, ScheduleWriteRecord, execute_schedule_write_sql,
-        query_schedule_trash_write_record, query_schedule_write_record,
+        query_schedule_trash_write_record,
     },
     schedule_write_sql::*,
-    schedule_write_validation::{ValidatedScheduleClone, ValidatedSchedulePatch},
+    schedule_write_validation::ValidatedScheduleClone,
 };
 
 pub(crate) async fn execute_schedule_trash_transaction(
@@ -54,20 +54,6 @@ pub(crate) async fn execute_schedule_trash_transaction(
     )
     .await?;
     Ok(record)
-}
-
-pub(crate) async fn execute_schedule_patch_transaction(
-    tx: &Transaction<'_>,
-    schedule_internal_id: i32,
-    request: &ValidatedSchedulePatch,
-) -> Result<ScheduleWriteRecord, ApiError> {
-    query_schedule_write_record(
-        tx,
-        schedule_update_metadata_sql(),
-        &[&schedule_internal_id, &request.name, &request.comment],
-        "update schedule metadata",
-    )
-    .await
 }
 
 pub(crate) async fn execute_schedule_clone_transaction(

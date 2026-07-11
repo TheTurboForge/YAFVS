@@ -469,6 +469,7 @@ OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
         "metadata-delete",
         "resource-assignment-write",
         "report-generation",
+        "schedule-and-task-timing-write",
         "scanner-control",
     }
 )
@@ -1352,7 +1353,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "trashcan-redacted-row-metadata-read",
     },
     ("get", "/schedules"): {
-        "x-turbovas-inherited-still-owns": "schedule-calendar-edit-and-task-recalculation",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "schedule-metadata-list-read",
     },
@@ -9377,7 +9377,6 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "symbols": (
             "pub(crate) fn schedule_write_state_sql",
             "pub(crate) fn schedule_unique_name_sql",
-            "pub(crate) fn schedule_update_metadata_sql",
         ),
     },
     {
@@ -9395,7 +9394,6 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
         "symbols": (
             "pub(crate) async fn execute_schedule_trash_transaction",
-            "pub(crate) async fn execute_schedule_patch_transaction",
             "pub(crate) async fn execute_schedule_clone_transaction",
             "pub(crate) async fn execute_schedule_restore_transaction",
             "pub(crate) async fn execute_schedule_hard_delete_transaction",
@@ -15563,6 +15561,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     schedule_name = f"turbovas-direct-write-smoke-schedule-{int(time.time())}-{os.getpid()}"
     schedule_clone_name = f"{schedule_name}-clone"
     schedule_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20350101T000000Z\r\nRRULE:FREQ=DAILY\r\nDURATION:PT1H\r\nUID:turbovas-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    schedule_patch_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20360101T000000Z\r\nRRULE:FREQ=WEEKLY\r\nDURATION:PT2H\r\nUID:turbovas-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     scan_config_id: str | None = None
     scan_config_clone_id: str | None = None
     scan_config_name = f"turbovas-direct-write-smoke-scan-config-{int(time.time())}-{os.getpid()}"
@@ -16262,13 +16261,17 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         if schedule_id:
             schedule_patch_comment = "TurboVAS direct write smoke updated schedule comment"
             schedule_patch_body = json.dumps(
-                {"comment": schedule_patch_comment},
+                {
+                    "comment": schedule_patch_comment,
+                    "timezone": "UTC",
+                    "icalendar": schedule_patch_icalendar,
+                },
                 separators=(",", ":"),
             )
             schedule_patch = direct_native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env, method="PATCH", body=schedule_patch_body, extra_headers=content_type)
             schedule_patch_json, schedule_patch_status = parse_json_output_with_http_status(schedule_patch)
-            schedule_patch_ok = schedule_patch.returncode == 0 and schedule_patch_status == 200 and isinstance(schedule_patch_json, dict) and schedule_patch_json.get("id") == schedule_id and schedule_patch_json.get("comment") == schedule_patch_comment
-            findings.append(native_api_probe_finding("pass" if schedule_patch_ok else "fail", "native-api-direct.schedule-write-update", "Direct write-control patched schedule comment metadata." if schedule_patch_ok else "Direct write-control failed to patch schedule comment metadata.", schedule_patch, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env, method="PATCH", body=schedule_patch_body, extra_headers=content_type), schedule_patch_json, {"http_status": schedule_patch_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_patch_json)}))
+            schedule_patch_ok = schedule_patch.returncode == 0 and schedule_patch_status == 200 and isinstance(schedule_patch_json, dict) and schedule_patch_json.get("id") == schedule_id and schedule_patch_json.get("comment") == schedule_patch_comment and schedule_patch_json.get("timezone") == "UTC" and "DTSTART:20360101T000000Z" in schedule_patch_json.get("icalendar", "") and "RRULE:FREQ=WEEKLY" in schedule_patch_json.get("icalendar", "")
+            findings.append(native_api_probe_finding("pass" if schedule_patch_ok else "fail", "native-api-direct.schedule-write-update", "Direct write-control patched schedule metadata and canonical calendar data through gvmd." if schedule_patch_ok else "Direct write-control failed to patch schedule metadata and calendar data through gvmd.", schedule_patch, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env, method="PATCH", body=schedule_patch_body, extra_headers=content_type), schedule_patch_json, {"http_status": schedule_patch_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_patch_json)}))
 
             schedule_restore_body = json.dumps(
                 {"comment": schedule_original_comment},
@@ -16293,8 +16296,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 and schedule_clone_id != schedule_id
                 and schedule_clone_json.get("name") == schedule_clone_name
                 and schedule_clone_json.get("comment") == "TurboVAS direct write smoke cloned schedule comment"
-                and schedule_clone_json.get("timezone") == schedule_create_json.get("timezone")
-                and schedule_clone_json.get("icalendar") == schedule_create_json.get("icalendar")
+                and schedule_clone_json.get("timezone") == schedule_restore_json.get("timezone")
+                and schedule_clone_json.get("icalendar") == schedule_restore_json.get("icalendar")
             )
             findings.append(native_api_probe_finding("pass" if schedule_clone_ok else "fail", "native-api-direct.schedule-write-clone", "Direct write-control cloned the temporary schedule fixture with copied calendar data." if schedule_clone_ok else "Direct write-control failed to clone the temporary schedule fixture with copied calendar data.", schedule_clone, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}/clone", token=token, env=env, method="POST", body=schedule_clone_body, extra_headers=content_type), schedule_clone_json, {"http_status": schedule_clone_status, "schedule_id": schedule_id, "schedule_clone_id": schedule_clone_id, **summarize_native_api_response(schedule_clone_json)}))
 

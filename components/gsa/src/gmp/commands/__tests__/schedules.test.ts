@@ -441,11 +441,14 @@ describe('ScheduleCommand tests', () => {
     expect(result.data.id).toEqual('schedule-id');
   });
 
-  test('should keep calendar-bearing schedule save on GMP', async () => {
-    const response = createActionResultResponse({id: 'saved-schedule-id'});
-    const fetchMock = testing.fn();
+  test('should save calendar and timezone through native API when available', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'saved-schedule-id'}),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -454,6 +457,7 @@ describe('ScheduleCommand tests', () => {
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new ScheduleCommand(fakeHttp);
     const result = await cmd.save({
@@ -464,7 +468,69 @@ describe('ScheduleCommand tests', () => {
       timezone: 'UTC',
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/schedules/schedule-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'updated-schedule',
+          comment: 'calendar-bearing',
+          icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+          timezone: 'UTC',
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('saved-schedule-id');
+  });
+
+  test('should omit absent calendar fields from native schedule patch', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'schedule-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScheduleCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'schedule-id',
+      name: 'updated-schedule',
+      timezone: 'Europe/Berlin',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/schedules/schedule-id',
+      expect.objectContaining({
+        body: JSON.stringify({
+          name: 'updated-schedule',
+          timezone: 'Europe/Berlin',
+        }),
+      }),
+    );
+  });
+
+  test('should keep calendar-bearing schedule save on GMP when native API is unavailable', async () => {
+    const response = createActionResultResponse({id: 'saved-schedule-id'});
+    const fakeHttp = createHttp(response);
+    const cmd = new ScheduleCommand(fakeHttp);
+
+    const result = await cmd.save({
+      id: 'schedule-id',
+      name: 'updated-schedule',
+      comment: 'calendar-bearing',
+      icalendar: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+      timezone: 'UTC',
+    });
+
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         cmd: 'save_schedule',

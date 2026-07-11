@@ -10560,7 +10560,11 @@ db2:keys=5,expires=0,avg_ttl=0
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "name": payload["name"], "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n201", "")
                 if method == "PATCH" and path.startswith("/api/v1/schedules/"):
                     payload = json.loads(body)
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": payload["comment"]}) + "\n200", "")
+                    if "timezone" in payload:
+                        schedule_fixture["timezone"] = payload["timezone"]
+                    if "icalendar" in payload:
+                        schedule_fixture["icalendar"] = payload["icalendar"]
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_uuid, "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/schedules/{schedule_uuid}/clone"):
                     payload = json.loads(body)
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": schedule_clone_uuid, "name": payload["name"], "comment": payload["comment"], "timezone": schedule_fixture["timezone"], "icalendar": schedule_fixture["icalendar"]}) + "\n201", "")

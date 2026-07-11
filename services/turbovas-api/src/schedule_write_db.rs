@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use axum::extract::Extension;
-use tokio_postgres::{Row, Transaction, types::ToSql};
+use tokio_postgres::{Transaction, types::ToSql};
 
 use crate::{
     auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, schedule_write_sql::*,
@@ -226,23 +226,6 @@ pub(crate) async fn query_schedule_trash_write_record(
             uuid: row.get(1),
         })
         .ok_or(ApiError::NotFound)
-}
-
-pub(crate) async fn query_schedule_write_record(
-    tx: &Transaction<'_>,
-    sql: &str,
-    params: &[&(dyn ToSql + Sync)],
-    action: &'static str,
-) -> Result<ScheduleWriteRecord, ApiError> {
-    tx.query_opt(sql, params)
-        .await
-        .map_err(|error| map_schedule_write_db_error(error, action))?
-        .map(schedule_write_record_from_row)
-        .ok_or(ApiError::NotFound)
-}
-
-fn schedule_write_record_from_row(row: Row) -> ScheduleWriteRecord {
-    ScheduleWriteRecord { uuid: row.get(0) }
 }
 
 pub(crate) fn map_schedule_write_db_error(

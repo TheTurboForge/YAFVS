@@ -37,6 +37,9 @@
 #define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND "schedule-create "
 #define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND "schedule-modify "
+#define TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND) - 1)
 #define TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES 256
@@ -49,6 +52,22 @@ typedef struct
   gchar *timezone;
   gchar *icalendar;
 } turbovas_control_schedule_create_request_t;
+
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *timezone;
+  gchar *icalendar;
+} turbovas_control_schedule_modify_request_t;
+
+static gboolean
+turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
+                                      gchar **);
+
+static gboolean
+turbovas_control_next_field (const char **, const char *, const char **,
+                             size_t *);
 
 static gboolean
 turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
@@ -63,6 +82,58 @@ turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
     if (!g_ascii_isalnum (secret[i]) && secret[i] != '-'
         && secret[i] != '_')
       return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
+                                             gboolean icalendar)
+{
+  const gchar *cursor = text;
+  const gchar *end = text + text_len;
+
+  while (cursor < end)
+    {
+      gunichar character = g_utf8_get_char_validated (cursor, end - cursor);
+
+      if (character == (gunichar) -1 || character == (gunichar) -2)
+        return FALSE;
+      if (g_unichar_iscntrl (character)
+          && (!icalendar || (character != '\r' && character != '\n'
+                              && character != '\t')))
+        return FALSE;
+      cursor = g_utf8_next_char (cursor);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_decode_schedule_modify_field (const char *value,
+                                                size_t value_len,
+                                                size_t max_decoded_len,
+                                                gboolean icalendar,
+                                                gchar **decoded_out)
+{
+  if (value_len == 1 && value[0] == '-')
+    {
+      *decoded_out = NULL;
+      return TRUE;
+    }
+  if (value_len == 0 || value[0] != '+'
+      || !turbovas_control_decode_base64_field (
+           value + 1, value_len - 1, max_decoded_len, FALSE, decoded_out))
+    return FALSE;
+
+  if (!turbovas_control_text_has_allowed_controls (*decoded_out,
+                                                   strlen (*decoded_out),
+                                                   icalendar))
+    {
+      g_free (*decoded_out);
+      *decoded_out = NULL;
+      return FALSE;
+    }
 
   return TRUE;
 }
@@ -233,6 +304,102 @@ turbovas_control_decode_base64_field (const char *value, size_t value_len,
   return valid;
 }
 
+static void
+turbovas_control_schedule_modify_request_clear
+  (turbovas_control_schedule_modify_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->timezone);
+  g_free (request->icalendar);
+  memset (request, 0, sizeof (*request));
+}
+
+static gboolean
+turbovas_control_parse_schedule_modify_request
+  (const char *request, size_t request_len, const char *expected_secret,
+   size_t expected_secret_len, char operator_uuid[37], char schedule_uuid[37],
+   turbovas_control_schedule_modify_request_t *schedule)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  const char *operator_start;
+  const char *schedule_start;
+  const char *secret;
+  const char *secret_end;
+  size_t field_len;
+  size_t secret_len;
+  gboolean valid;
+
+  memset (schedule, 0, sizeof (*schedule));
+  if (request == NULL
+      || request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
+                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 37
+      || memcmp (request, TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND,
+                 TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len,
+                                           expected_secret,
+                                           expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if (operator_start + 37 > end || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  schedule_start = operator_start + 37;
+  if (schedule_start + 37 > end || schedule_start[36] != ' ')
+    return FALSE;
+  memcpy (schedule_uuid, schedule_start, 36);
+  schedule_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (schedule_uuid))
+    return FALSE;
+
+  cursor = schedule_start + 37;
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_schedule_modify_field
+               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES,
+                FALSE, &schedule->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_schedule_modify_field
+               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES,
+                FALSE, &schedule->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_schedule_modify_field
+               (field, field_len,
+                TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES, FALSE,
+                &schedule->timezone)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_schedule_modify_field
+               (field, field_len,
+                TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, TRUE,
+                &schedule->icalendar)
+          && cursor == end
+          && (schedule->name || schedule->comment || schedule->timezone
+              || schedule->icalendar);
+  if (!valid)
+    turbovas_control_schedule_modify_request_clear (schedule);
+
+  return valid;
+}
+
 static gboolean
 turbovas_control_next_field (const char **cursor, const char *end,
                              const char **field, size_t *field_len)
@@ -398,6 +565,46 @@ turbovas_control_schedule_create_response
   return response;
 }
 
+static const char *
+turbovas_control_schedule_modify_response
+  (int result, char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  switch (result)
+    {
+      case 0:
+        status = "0 modified\n";
+        break;
+      case 1:
+        status = "1 not_found\n";
+        break;
+      case 2:
+        status = "2 duplicate\n";
+        break;
+      case 6:
+        status = "6 invalid_ical\n";
+        break;
+      case 7:
+        status = "7 invalid_timezone\n";
+        break;
+      case 99:
+        status = "99 forbidden\n";
+        break;
+      case 3:
+      case 4:
+      case -2:
+        status = "-2 malformed\n";
+        break;
+      default:
+        status = "-1 internal\n";
+        break;
+    }
+
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
 static gboolean
 turbovas_control_write_all (int socket, const char *response)
 {
@@ -551,12 +758,33 @@ turbovas_control_create_schedule
   return result;
 }
 
+static int
+turbovas_control_modify_schedule
+  (const char *operator_uuid, const char *schedule_uuid,
+   const turbovas_control_schedule_modify_request_t *request)
+{
+  gchar *ical_error = NULL;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = modify_schedule (schedule_uuid, request->name, request->comment,
+                            request->icalendar, request->timezone,
+                            &ical_error);
+
+  g_free (ical_error);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
 static void
 turbovas_control_serve_client (int client_socket)
 {
   char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1];
   char operator_uuid[37];
   char created_uuid[37];
+  char schedule_uuid[37];
   char task_uuid[37];
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
   const char *expected_secret;
@@ -565,6 +793,7 @@ turbovas_control_serve_client (int client_socket)
   size_t request_len;
   int result = -1;
   turbovas_control_schedule_create_request_t schedule_request = {0};
+  turbovas_control_schedule_modify_request_t schedule_modify_request = {0};
 
   turbovas_control_set_timeouts (client_socket);
   if (turbovas_control_configured_secret (&expected_secret,
@@ -589,6 +818,22 @@ turbovas_control_serve_client (int client_socket)
           result_response = turbovas_control_schedule_create_response
                               (result, created_uuid, response);
         }
+      else if (turbovas_control_parse_schedule_modify_request
+                 (request, request_len, expected_secret, expected_secret_len,
+                  operator_uuid, schedule_uuid, &schedule_modify_request))
+        {
+          result = turbovas_control_modify_schedule (operator_uuid,
+                                                      schedule_uuid,
+                                                      &schedule_modify_request);
+          result_response = turbovas_control_schedule_modify_response
+                              (result, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND,
+                          TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
+                    == 0)
+        result_response = turbovas_control_schedule_modify_response (-2,
+                                                                      response);
       else
         result_response = turbovas_control_response (result);
     }
@@ -598,6 +843,7 @@ turbovas_control_serve_client (int client_socket)
   (void) turbovas_control_write_all (client_socket,
                                       result_response);
   turbovas_control_schedule_create_request_clear (&schedule_request);
+  turbovas_control_schedule_modify_request_clear (&schedule_modify_request);
 }
 
 void

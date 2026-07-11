@@ -95,15 +95,6 @@ pub(crate) fn schedule_live_uuid_conflict_sql() -> &'static str {
       WHERE uuid = $1;"
 }
 
-pub(crate) fn schedule_update_metadata_sql() -> &'static str {
-    "UPDATE schedules
-        SET name = coalesce($2, name),
-            comment = coalesce($3, comment),
-            modification_time = m_now()
-      WHERE id = $1
-      RETURNING uuid::text;"
-}
-
 pub(crate) fn schedule_clone_metadata_sql() -> &'static str {
     "INSERT INTO schedules
         (uuid, owner, name, comment, first_time, period, period_months,

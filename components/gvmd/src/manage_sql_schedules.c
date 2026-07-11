@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -287,7 +288,8 @@ delete_schedule (const char *schedule_id, int ultimate)
  * @param[in]   schedule_id  UUID of schedule.
  * @param[in]   name         Name of schedule.
  * @param[in]   comment      Comment on schedule.
- * @param[in]   ical_string  iCalendar string.  Overrides first_time, period,
+ * @param[in]   ical_string  iCalendar string, or NULL to retain the existing
+ *                           calendar.  Overrides first_time, period,
  *                           period_months, byday and duration.
  * @param[in]   zone         Timezone.
  * @param[out]  error_out    Output for iCalendar errors and warnings.
@@ -301,14 +303,14 @@ int
 modify_schedule (const char *schedule_id, const char *name, const char *comment,
                  const char *ical_string, const char *zone, gchar **error_out)
 {
+  gchar *existing_icalendar;
   gchar *quoted_name, *quoted_comment, *quoted_timezone, *quoted_icalendar;
   icalcomponent *ical_component;
   icaltimezone *ical_timezone;
+  const char *effective_icalendar;
   schedule_t schedule;
   time_t new_next_time, ical_first_time, ical_duration;
   gchar *real_timezone;
-
-  assert (ical_string && strcmp (ical_string, ""));
 
   if (schedule_id == NULL)
     return 4;
@@ -383,6 +385,16 @@ modify_schedule (const char *schedule_id, const char *name, const char *comment,
   real_timezone
     = sql_string ("SELECT timezone FROM schedules WHERE id = %llu;",
                   schedule);
+  existing_icalendar = NULL;
+  if (ical_string == NULL)
+    {
+      existing_icalendar
+        = sql_string ("SELECT icalendar FROM schedules WHERE id = %llu;",
+                      schedule);
+      effective_icalendar = existing_icalendar;
+    }
+  else
+    effective_icalendar = ical_string;
 
   /* Update times */
 
@@ -390,15 +402,24 @@ modify_schedule (const char *schedule_id, const char *name, const char *comment,
   if (ical_timezone == NULL)
     {
       g_free (real_timezone);
+      free (existing_icalendar);
       sql_rollback ();
       return 7;
     }
 
-  ical_component = icalendar_from_string (ical_string, ical_timezone,
+  if (effective_icalendar == NULL)
+    {
+      g_free (real_timezone);
+      sql_rollback ();
+      return -1;
+    }
+
+  ical_component = icalendar_from_string (effective_icalendar, ical_timezone,
                                           error_out);
   if (ical_component == NULL)
     {
       g_free (real_timezone);
+      free (existing_icalendar);
       sql_rollback ();
       return 6;
     }
@@ -441,6 +462,7 @@ modify_schedule (const char *schedule_id, const char *name, const char *comment,
   g_free (quoted_icalendar);
 
   free (real_timezone);
+  free (existing_icalendar);
   icalcomponent_free (ical_component);
 
   sql_commit ();

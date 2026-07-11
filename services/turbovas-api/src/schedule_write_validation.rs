@@ -28,6 +28,10 @@ pub(crate) struct SchedulePatchRequest {
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+    #[serde(default)]
+    pub(crate) timezone: Option<String>,
+    #[serde(default)]
+    pub(crate) icalendar: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -92,6 +96,8 @@ fn normalize_schedule_icalendar(value: String) -> Result<String, ApiError> {
 pub(crate) struct ValidatedSchedulePatch {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
+    pub(crate) timezone: Option<String>,
+    pub(crate) icalendar: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -106,8 +112,17 @@ pub(crate) fn validate_schedule_patch_request(
     let validated = ValidatedSchedulePatch {
         name: normalize_optional_required_schedule_text(request.name, "name")?,
         comment: normalize_optional_schedule_text(request.comment, "comment")?,
+        timezone: normalize_schedule_timezone(request.timezone)?,
+        icalendar: request
+            .icalendar
+            .map(normalize_schedule_icalendar)
+            .transpose()?,
     };
-    if validated.name.is_none() && validated.comment.is_none() {
+    if validated.name.is_none()
+        && validated.comment.is_none()
+        && validated.timezone.is_none()
+        && validated.icalendar.is_none()
+    {
         return Err(ApiError::BadRequest(
             "schedule patch request must include at least one field".to_string(),
         ));

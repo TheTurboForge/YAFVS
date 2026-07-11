@@ -272,9 +272,7 @@ fn openapi_documents_schedule_create_metadata_patch_and_trash_move_boundary() {
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(list.contains("x-turbovas-exposure: direct-write"));
     assert!(list.contains("x-turbovas-replaces: schedule-create"));
-    assert!(list.contains(
-        "x-turbovas-inherited-still-owns: schedule-calendar-edit-and-task-recalculation"
-    ));
+    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
     assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
 
     let detail = openapi_path_block("/schedules/{schedule_id}");
@@ -284,9 +282,26 @@ fn openapi_documents_schedule_create_metadata_patch_and_trash_move_boundary() {
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
     assert!(detail.contains("x-turbovas-replaces: schedule-metadata-modify"));
+    assert!(detail.contains("timezone"));
+    assert!(detail.contains("iCalendar value"));
+    assert!(detail.contains("'422':"));
+    assert!(detail.contains("'503':"));
     assert!(detail.contains("x-turbovas-replaces: schedule-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(!detail.contains("x-turbovas-inherited-still-owns:"));
+
+    let openapi = include_str!("../../../api/openapi/turbovas-v1.yaml");
+    let patch_schema = openapi
+        .split_once("    SchedulePatchRequest:\n")
+        .expect("schedule patch schema must exist")
+        .1
+        .split_once("    ScanConfigPatchRequest:\n")
+        .expect("schedule patch schema must be bounded")
+        .0;
+    assert_eq!(patch_schema.matches("        timezone:\n").count(), 1);
+    assert_eq!(patch_schema.matches("        icalendar:\n").count(), 1);
+    assert!(openapi.contains("    Forbidden:\n"));
+    assert!(openapi.contains("    UnprocessableEntity:\n"));
 
     let restore = openapi_path_block("/schedules/{schedule_id}/restore");
     assert!(restore.contains("post:"));

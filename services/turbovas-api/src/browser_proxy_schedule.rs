@@ -17,8 +17,8 @@ use crate::{
         ScheduleCloneRequest, ScheduleCreateRequest, SchedulePatchRequest,
     },
     schedule_writes::{
-        clone_schedule, create_schedule, delete_schedule, hard_delete_schedule, patch_schedule,
-        restore_schedule,
+        SchedulePatchError, clone_schedule, create_schedule, delete_schedule, hard_delete_schedule,
+        patch_schedule, restore_schedule,
     },
 };
 
@@ -38,7 +38,7 @@ pub(crate) async fn browser_proxy_patch_schedule(
     Path(schedule_id): Path<String>,
     headers: HeaderMap,
     Json(request): Json<SchedulePatchRequest>,
-) -> Result<Json<ScheduleAssetDetail>, ApiError> {
+) -> Result<Json<ScheduleAssetDetail>, SchedulePatchError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     patch_schedule(
         State(state),

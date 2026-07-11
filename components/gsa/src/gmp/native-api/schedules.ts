@@ -63,6 +63,8 @@ interface NativeSchedulePatchArgs {
   id: string;
   name?: string;
   comment?: string;
+  icalendar?: string;
+  timezone?: string;
 }
 
 export interface NativeScheduleCreateArgs {
@@ -347,11 +349,13 @@ export const deleteNativeSchedule = async (
 
 export const patchNativeSchedule = async (
   gmp: NativeApiGmp,
-  {id, name, comment}: NativeSchedulePatchArgs,
+  {id, name, comment, icalendar, timezone}: NativeSchedulePatchArgs,
 ): Promise<Response<{id: string}>> => {
   const body = {
     ...(name !== undefined ? {name} : {}),
     ...(comment !== undefined ? {comment} : {}),
+    ...(icalendar !== undefined ? {icalendar} : {}),
+    ...(timezone !== undefined ? {timezone} : {}),
   };
   const payload = await writeNativeJson<NativeSchedulePayload>(
     gmp,

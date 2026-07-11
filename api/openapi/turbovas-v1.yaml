@@ -3123,9 +3123,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: schedule-metadata-list-read
-      x-turbovas-inherited-still-owns: schedule-calendar-edit-and-task-recalculation
       summary: List schedules
-      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Native direct write-control can create schedules through gvmd's authoritative timezone/iCalendar parser, clone existing schedules, patch schedule name/comment metadata, move unlinked live schedules to trash, restore trashed schedules, and hard-delete unlinked trashed schedules. Calendar mutation and linked-task next-time recalculation remain on inherited compatibility paths.
+      description: Read-only schedule metadata backed by gvmd/PostgreSQL. Native direct write-control can create schedules through gvmd's authoritative timezone/iCalendar parser, clone existing schedules, patch schedule metadata and calendars through gvmd, move unlinked live schedules to trash, restore trashed schedules, and hard-delete unlinked trashed schedules.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3231,9 +3230,9 @@ paths:
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Patch schedule metadata
-      description: Direct write-control endpoint for changing a schedule name or comment. Calendar data, timezone changes, task next-time recalculation, and create semantics remain inherited.
+      x-turbovas-side-effect: schedule-and-task-timing-write
+      summary: Patch a schedule
+      description: Direct write-control endpoint for changing any supplied name, comment, timezone, or iCalendar value through gvmd's authoritative schedule mutation path. Omitted fields are preserved. gvmd enforces ACL and name uniqueness, validates and derives calendar fields, and recalculates linked task next-run values transactionally.
       parameters:
         - $ref: '#/components/parameters/ScheduleId'
       requestBody:
@@ -3255,14 +3254,20 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalError'
     delete:
@@ -6330,6 +6335,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The authenticated operator is not allowed to perform this operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     NotFound:
       description: The requested native API resource was not found.
       content:
@@ -6338,6 +6349,12 @@ components:
             $ref: '#/components/schemas/Error'
     Conflict:
       description: The native API request conflicts with existing persistent state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnprocessableEntity:
+      description: The request shape is valid, but authoritative resource validation rejected its values.
       content:
         application/json:
           schema:
@@ -7838,6 +7855,16 @@ components:
         comment:
           type: string
           maxLength: 4096
+          description: New schedule comment. Blank comments clear the comment after trimming.
+        timezone:
+          type: string
+          maxLength: 256
+          description: New schedule timezone. Blank values preserve the existing timezone.
+        icalendar:
+          type: string
+          minLength: 1
+          maxLength: 32768
+          description: New iCalendar content. CRLF, LF, and tab folding are accepted; other control characters are rejected.
     ScanConfigPatchRequest:
       type: object
       minProperties: 1

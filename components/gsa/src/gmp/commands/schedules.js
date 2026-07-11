@@ -31,18 +31,6 @@ import {
 
 const log = logger.getLogger('gmp.commands.schedules');
 
-const SCHEDULE_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
-
-const isScheduleMetadataOnlySave = args => {
-  const keys = Object.keys(args);
-  return (
-    keys.every(key => SCHEDULE_METADATA_SAVE_KEYS.has(key)) &&
-    typeof args.id === 'string' &&
-    typeof args.name === 'string' &&
-    (args.comment === undefined || typeof args.comment === 'string')
-  );
-};
-
 const shouldExportAllByFilter = filter => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
   return Number.isFinite(rows) && rows < 0;
@@ -79,11 +67,13 @@ export class ScheduleCommand extends EntityCommand {
   }
 
   save(args) {
-    if (canUseNativeApi(this.http) && isScheduleMetadataOnlySave(args)) {
+    if (canUseNativeApi(this.http)) {
       return patchNativeSchedule(this.http, {
         id: args.id,
         name: args.name,
         comment: args.comment,
+        icalendar: args.icalendar,
+        timezone: args.timezone,
       });
     }
 

@@ -274,6 +274,126 @@ fn schedule_create_handler_and_browser_proxy_delegate_authorization_calendar_and
     );
 }
 
+#[tokio::test]
+async fn schedule_patch_mock_uds_sends_exact_presence_tokens_and_reloads_after_success() {
+    let calendar = "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n";
+    let request = validate_schedule_patch_request(patch_request_with_calendar(
+        Some("  New name  "),
+        Some("   "),
+        Some("  Europe/Berlin  "),
+        Some(calendar),
+    ))
+    .expect("valid schedule patch request");
+    let schedule_id = "22222222-2222-2222-8222-222222222222";
+    let (socket_path, handle) = mock_schedule_create_socket(b"0 modified\n".to_vec());
+
+    request_schedule_patch(
+        socket_path.to_str().unwrap(),
+        CONTROL_SECRET,
+        OPERATOR_UUID,
+        schedule_id,
+        &request,
+    )
+    .await
+    .expect("schedule patch must succeed");
+    let command = handle.join().expect("mock UDS thread must finish");
+    std::fs::remove_file(socket_path).expect("mock UDS path must be removed");
+
+    assert_eq!(
+        command,
+        format!(
+            "schedule-modify {CONTROL_SECRET} {OPERATOR_UUID} {schedule_id} +TmV3IG5hbWU= + +RXVyb3BlL0Jlcmxpbg== +QkVHSU46VkNBTEVOREFSDQpFTkQ6VkNBTEVOREFSDQo=\n"
+        )
+        .into_bytes()
+    );
+}
+
+#[test]
+fn schedule_patch_protocol_distinguishes_omitted_and_explicit_empty_fields() {
+    let request = validate_schedule_patch_request(patch_request_with_calendar(
+        None,
+        Some("   "),
+        Some(" "),
+        None,
+    ))
+    .expect("explicit empty comment and timezone are valid");
+    assert_eq!(request.comment.as_deref(), Some(""));
+    assert_eq!(request.timezone.as_deref(), Some(""));
+    assert_eq!(
+        schedule_patch_command(
+            CONTROL_SECRET,
+            OPERATOR_UUID,
+            "22222222-2222-2222-8222-222222222222",
+            &request,
+        ),
+        format!(
+            "schedule-modify {CONTROL_SECRET} {OPERATOR_UUID} 22222222-2222-2222-8222-222222222222 - + + -\n"
+        )
+    );
+}
+
+#[test]
+fn schedule_patch_validation_accepts_calendar_fields_and_rejects_invalid_values() {
+    let calendar = "BEGIN:VCALENDAR\r\n\tX-FOLDED:value\r\nEND:VCALENDAR\r\n";
+    let validated = validate_schedule_patch_request(patch_request_with_calendar(
+        None,
+        None,
+        Some("  Europe/Berlin  "),
+        Some(calendar),
+    ))
+    .expect("calendar patch request must validate");
+    assert_eq!(validated.timezone.as_deref(), Some("Europe/Berlin"));
+    assert_eq!(validated.icalendar.as_deref(), Some(calendar));
+
+    for request in [
+        patch_request_with_calendar(
+            None,
+            None,
+            Some(&"t".repeat(MAX_SCHEDULE_TIMEZONE_BYTES + 1)),
+            None,
+        ),
+        patch_request_with_calendar(None, None, None, Some("")),
+        patch_request_with_calendar(None, None, None, Some("BEGIN:VCALENDAR\u{0}")),
+        patch_request_with_calendar(
+            None,
+            None,
+            None,
+            Some(&"i".repeat(MAX_SCHEDULE_ICALENDAR_BYTES + 1)),
+        ),
+    ] {
+        assert!(matches!(
+            validate_schedule_patch_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+}
+
+#[test]
+fn schedule_patch_protocol_maps_only_authoritative_responses_to_documented_http_statuses() {
+    let cases = [
+        (b"1 not_found".as_slice(), 404),
+        (b"2 duplicate".as_slice(), 409),
+        (b"6 invalid_ical".as_slice(), 422),
+        (b"7 invalid_timezone".as_slice(), 422),
+        (b"99 forbidden".as_slice(), 403),
+        (b"-2 malformed".as_slice(), 400),
+        (b"-1 internal".as_slice(), 500),
+        (b"unexpected".as_slice(), 500),
+    ];
+    for (response, status) in cases {
+        let error = parse_schedule_patch_response(response).expect_err("response must fail");
+        assert_eq!(error.into_response().status().as_u16(), status);
+    }
+    assert!(parse_schedule_patch_response(b"0 modified").is_ok());
+    assert_eq!(
+        map_schedule_patch_control_socket_error(ControlSocketError::Unavailable)
+            .into_response()
+            .status()
+            .as_u16(),
+        503
+    );
+}
+
 fn mock_schedule_create_socket(response: Vec<u8>) -> (PathBuf, thread::JoinHandle<Vec<u8>>) {
     let socket_path = mock_socket_path();
     let listener = UnixListener::bind(&socket_path).expect("mock UDS must bind");
@@ -320,6 +440,22 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> SchedulePatchRequ
     SchedulePatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+        timezone: None,
+        icalendar: None,
+    }
+}
+
+fn patch_request_with_calendar(
+    name: Option<&str>,
+    comment: Option<&str>,
+    timezone: Option<&str>,
+    icalendar: Option<&str>,
+) -> SchedulePatchRequest {
+    SchedulePatchRequest {
+        name: name.map(str::to_string),
+        comment: comment.map(str::to_string),
+        timezone: timezone.map(str::to_string),
+        icalendar: icalendar.map(str::to_string),
     }
 }
 
@@ -392,14 +528,6 @@ fn schedule_mutating_handlers_enforce_owner_and_task_safety_before_side_effects(
             "ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
             "ensure_schedule_uuid_not_live",
             "execute_schedule_restore_transaction",
-        ),
-        (
-            "patch",
-            "pub(crate) async fn patch_schedule",
-            "#[cfg(test)]",
-            "ensure_schedule_owner_matches_operator(state.owner_id, operator_owner_id)?;",
-            "ensure_unique_schedule_name",
-            "execute_schedule_patch_transaction",
         ),
     ] {
         let handler = source
@@ -662,6 +790,8 @@ fn schedule_patch_request_trims_metadata_fields() {
         ValidatedSchedulePatch {
             name: Some("Weekday scan".to_string()),
             comment: Some("operator-visible note".to_string()),
+            timezone: None,
+            icalendar: None,
         }
     );
 }
@@ -689,6 +819,8 @@ fn schedule_patch_request_allows_blank_comment_to_clear_comment() {
         ValidatedSchedulePatch {
             name: None,
             comment: Some(String::new()),
+            timezone: None,
+            icalendar: None,
         }
     );
 }
@@ -706,12 +838,20 @@ fn schedule_patch_request_rejects_control_characters() {
 }
 
 #[test]
-fn schedule_patch_request_rejects_unknown_calendar_fields() {
+fn schedule_patch_request_accepts_calendar_fields_and_rejects_unknown_fields() {
     let request = serde_json::json!({
         "name": "Weekday scan",
+        "timezone": "Europe/Berlin",
         "icalendar": "BEGIN:VCALENDAR\nEND:VCALENDAR",
     });
-    assert!(serde_json::from_value::<SchedulePatchRequest>(request).is_err());
+    assert!(serde_json::from_value::<SchedulePatchRequest>(request).is_ok());
+    assert!(
+        serde_json::from_value::<SchedulePatchRequest>(serde_json::json!({
+            "name": "Weekday scan",
+            "period": 3600,
+        }))
+        .is_err()
+    );
 }
 
 #[test]
@@ -721,71 +861,50 @@ fn schedule_patch_request_rejects_oversized_metadata_fields() {
         validate_schedule_patch_request(SchedulePatchRequest {
             name: Some(oversized),
             comment: None,
+            timezone: None,
+            icalendar: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
 }
 
 #[test]
-fn schedule_patch_plan_refreshes_tasks_only_for_calendar_changes() {
-    assert_eq!(
-        schedule_patch_transaction_plan(false).steps,
-        vec![
-            ScheduleWriteStep::ResolveOperatorOwner,
-            ScheduleWriteStep::VerifyExistingScheduleMutable,
-            ScheduleWriteStep::VerifyUniqueLiveName,
-            ScheduleWriteStep::UpdateScheduleMetadata,
-        ]
-    );
-    assert_eq!(
-        schedule_patch_transaction_plan(true).steps,
-        vec![
-            ScheduleWriteStep::ResolveOperatorOwner,
-            ScheduleWriteStep::VerifyExistingScheduleMutable,
-            ScheduleWriteStep::ResolveTimezone,
-            ScheduleWriteStep::ValidateTimezone,
-            ScheduleWriteStep::ParseICalendar,
-            ScheduleWriteStep::DeriveScheduleFields,
-            ScheduleWriteStep::VerifyUniqueLiveName,
-            ScheduleWriteStep::UpdateScheduleMetadata,
-            ScheduleWriteStep::RefreshTaskNextTimes,
-        ]
-    );
-}
-
-#[test]
-fn schedule_patch_sql_is_metadata_only() {
-    let state = schedule_write_state_sql();
-    assert!(state.contains("owner::integer"));
-
-    let sql = schedule_update_metadata_sql();
-    assert!(sql.contains("UPDATE schedules"));
-    assert!(sql.contains("name = coalesce($2, name)"));
-    assert!(sql.contains("comment = coalesce($3, comment)"));
-    assert!(sql.contains("modification_time = m_now()"));
-    for forbidden in [
-        "icalendar",
-        "timezone",
-        "first_time",
-        "period",
-        "period_months",
-        "byday",
-        "duration",
-        "tasks",
-        "schedule_next_time",
+fn schedule_patch_no_longer_has_a_direct_sql_mutation_path() {
+    let handler = include_str!("schedule_writes.rs")
+        .split_once("pub(crate) async fn patch_schedule")
+        .expect("schedule patch handler must exist")
+        .1
+        .split_once("pub(crate) async fn request_schedule_patch")
+        .expect("schedule patch request helper must follow handler")
+        .0;
+    for required in [
+        "gvmd_control_secret()?",
+        "request_schedule_patch(",
+        "operator.user_uuid()",
+        "load_schedule_asset_detail(&client, &schedule_id)",
     ] {
         assert!(
-            !sql.contains(forbidden),
-            "schedule patch SQL must not touch {forbidden}"
+            handler.contains(required),
+            "schedule patch missing {required}"
         );
     }
-}
-
-#[test]
-fn schedule_patch_uniqueness_checks_live_and_trash_names() {
-    let sql = schedule_unique_name_sql();
-    assert!(sql.contains("FROM schedules WHERE name = $1 AND id != $2"));
-    assert!(sql.contains("FROM schedules_trash WHERE name = $1"));
+    for forbidden in [
+        "transaction()",
+        "resolve_schedule_write_operator_owner",
+        "ensure_schedule_owner_matches_operator",
+        "ensure_unique_schedule_name",
+        "execute_schedule_patch_transaction",
+    ] {
+        assert!(
+            !handler.contains(forbidden),
+            "schedule patch must delegate {forbidden} to gvmd"
+        );
+    }
+    assert!(
+        !include_str!("schedule_write_transactions.rs")
+            .contains("execute_schedule_patch_transaction")
+    );
+    assert!(!include_str!("schedule_write_sql.rs").contains("schedule_update_metadata_sql"));
 }
 
 #[test]

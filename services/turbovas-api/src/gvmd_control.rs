@@ -20,6 +20,7 @@ const MAX_CONTROL_SECRET_BYTES: usize = 128;
 const CONTROL_SOCKET_IO_TIMEOUT: Duration = Duration::from_secs(5);
 const CONTROL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_CONTROL_RESPONSE_BYTES: usize = 256;
+pub(crate) const MAX_CONTROL_REQUEST_BYTES: usize = 65_536;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ControlSocketError {
@@ -30,6 +31,29 @@ pub(crate) enum ControlSocketError {
     ScannerUnverified,
     Unavailable,
     Failure,
+    OutcomeIndeterminate,
+}
+
+pub(crate) struct ScrubbedControlFrame(Vec<u8>);
+
+impl ScrubbedControlFrame {
+    pub(crate) fn new(frame: Vec<u8>) -> Self {
+        Self(frame)
+    }
+
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub(crate) fn scrub(&mut self) {
+        self.0.fill(0);
+    }
+}
+
+impl Drop for ScrubbedControlFrame {
+    fn drop(&mut self) {
+        self.scrub();
+    }
 }
 
 pub(crate) fn gvmd_control_socket_path() -> String {
@@ -68,20 +92,24 @@ pub(crate) async fn request_gvmd_control_response_bytes(
     if !control_secret_is_acceptable(control_secret) {
         return Err(ControlSocketError::Configuration);
     }
+    if command.is_empty() || command.len() >= MAX_CONTROL_REQUEST_BYTES {
+        return Err(ControlSocketError::Failure);
+    }
     let mut stream = timeout(CONTROL_SOCKET_IO_TIMEOUT, UnixStream::connect(socket_path))
         .await
         .map_err(|_| ControlSocketError::Unavailable)?
         .map_err(|_| ControlSocketError::Unavailable)?;
     timeout(CONTROL_SOCKET_IO_TIMEOUT, stream.write_all(command))
         .await
-        .map_err(|_| ControlSocketError::Unavailable)?
-        .map_err(|_| ControlSocketError::Unavailable)?;
+        .map_err(|_| ControlSocketError::OutcomeIndeterminate)?
+        .map_err(|_| ControlSocketError::OutcomeIndeterminate)?;
     timeout(
         CONTROL_RESPONSE_TIMEOUT,
         read_gvmd_control_response(&mut stream),
     )
     .await
-    .map_err(|_| ControlSocketError::Unavailable)?
+    .map_err(|_| ControlSocketError::OutcomeIndeterminate)?
+    .map_err(|_| ControlSocketError::OutcomeIndeterminate)
 }
 
 async fn read_gvmd_control_response(
@@ -131,5 +159,6 @@ pub(crate) fn map_control_socket_error(error: ControlSocketError) -> ApiError {
         ControlSocketError::ScannerUnverified => ApiError::ScannerUnverified,
         ControlSocketError::Unavailable => ApiError::ControlUnavailable,
         ControlSocketError::Failure => ApiError::ControlFailure,
+        ControlSocketError::OutcomeIndeterminate => ApiError::MutationOutcomeIndeterminate,
     }
 }

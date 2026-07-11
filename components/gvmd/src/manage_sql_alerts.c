@@ -1,4 +1,5 @@
 /* Copyright (C) 2019-2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -8,6 +9,7 @@
 #include "manage_sql.h"
 #include "manage_sql_filters.h"
 #include "manage_sql_permissions.h"
+#include "manage_report_configs.h"
 #include "manage_sql_report_formats.h"
 #include "manage_sql_resources.h"
 #include "manage_sql_tags.h"
@@ -15,6 +17,17 @@
 #include <ctype.h>
 
 #include <gvm/base/hosts.h>
+
+static void
+secure_gfree (gchar *value, gboolean sensitive)
+{
+  volatile unsigned char *cursor = (unsigned char *) value;
+  size_t length = value ? strlen (value) : 0;
+
+  while (sensitive && length--)
+    *cursor++ = 0;
+  g_free (value);
+}
 
 #undef G_LOG_DOMAIN
 /**
@@ -805,7 +818,7 @@ check_alert_params (event_t event, alert_condition_t condition,
 }
 
 /**
- * @brief Create an alert.
+ * @brief Create an alert inside the caller's transaction.
  *
  * @param[in]  name            Name of alert.
  * @param[in]  comment         Comment on alert.
@@ -839,12 +852,12 @@ check_alert_params (event_t event, alert_condition_t condition,
  *         71 invalid vFire credential type,
  *         99 permission denied, -1 error.
  */
-int
-create_alert (const char* name, const char* comment, const char* filter_id,
-              const char* active, event_t event, GPtrArray* event_data,
-              alert_condition_t condition, GPtrArray* condition_data,
-              alert_method_t method, GPtrArray* method_data,
-              alert_t *alert)
+static int
+create_alert_body (const char* name, const char* comment,
+                   const char* filter_id, const char* active, event_t event,
+                   GPtrArray* event_data, alert_condition_t condition,
+                   GPtrArray* condition_data, alert_method_t method,
+                   GPtrArray* method_data, alert_t *alert)
 {
   int index, ret;
   gchar *item, *quoted_comment;
@@ -853,20 +866,9 @@ create_alert (const char* name, const char* comment, const char* filter_id,
 
   assert (current_credentials.uuid);
 
-  sql_begin_immediate ();
-
-  if (acl_user_may ("create_alert") == 0)
-    {
-      sql_rollback ();
-      return 99;
-    }
-
   ret = check_alert_params (event, condition, method);
   if (ret)
-    {
-      sql_rollback ();
-      return ret;
-    }
+    return ret;
 
   filter = 0;
   if (event != EVENT_NEW_SECINFO && event != EVENT_UPDATED_SECINFO && filter_id
@@ -875,16 +877,10 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       char *type;
 
       if (find_filter_with_permission (filter_id, &filter, "get_filters"))
-        {
-          sql_rollback ();
-          return -1;
-        }
+        return -1;
 
       if (filter == 0)
-        {
-          sql_rollback ();
-          return 3;
-        }
+        return 3;
 
       /* Filter type must be result if specified. */
 
@@ -893,17 +889,13 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (type && strcasecmp (type, "result"))
         {
           free (type);
-          sql_rollback ();
           return 4;
         }
       free (type);
     }
 
   if (resource_with_name_exists (name, "alert", 0))
-    {
-      sql_rollback ();
-      return 1;
-    }
+    return 1;
   quoted_name = sql_quote (name);
   quoted_comment = sql_quote (comment ?: "");
 
@@ -941,8 +933,6 @@ create_alert (const char* name, const char* comment, const char* filter_id,
         {
           g_free (data_name);
           g_free (data);
-          sql_rollback ();
-
           switch (validation_result)
             {
               case 1:
@@ -978,8 +968,6 @@ create_alert (const char* name, const char* comment, const char* filter_id,
         {
           g_free (data_name);
           g_free (data);
-          sql_rollback ();
-
           switch (validation_result)
             {
               case 1:
@@ -1004,16 +992,16 @@ create_alert (const char* name, const char* comment, const char* filter_id,
   while ((item = (gchar*) g_ptr_array_index (method_data, index++)))
     {
       gchar *data_name, *data;
-
       data_name = sql_quote (item);
-      data = sql_quote (item + strlen (item) + 1);
+      data = method == ALERT_METHOD_EMAIL
+               ? g_strdup (item + strlen (item) + 1)
+               : sql_quote (item + strlen (item) + 1);
 
       ret = validate_email_data (method, data_name, &data, 0);
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
@@ -1021,8 +1009,7 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
@@ -1030,8 +1017,7 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
@@ -1039,8 +1025,7 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
@@ -1048,8 +1033,7 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
@@ -1057,8 +1041,7 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
@@ -1066,22 +1049,284 @@ create_alert (const char* name, const char* comment, const char* filter_id,
       if (ret)
         {
           g_free (data_name);
-          g_free (data);
-          sql_rollback ();
+          secure_gfree (data, method == ALERT_METHOD_EMAIL);
           return ret;
         }
 
-      sql ("INSERT INTO alert_method_data (alert, name, data)"
-           " VALUES (%llu, '%s', '%s');",
-           *alert,
-           data_name,
-           data);
+      if (method == ALERT_METHOD_EMAIL)
+        sql_ps_sensitive
+          ("INSERT INTO alert_method_data (alert, name, data)"
+           " VALUES ($1, $2, $3);",
+           SQL_RESOURCE_PARAM (*alert), SQL_STR_PARAM (item),
+           SQL_STR_PARAM (data), NULL);
+      else
+        sql ("INSERT INTO alert_method_data (alert, name, data)"
+             " VALUES (%llu, '%s', '%s');",
+             *alert,
+             data_name,
+             data);
       g_free (data_name);
-      g_free (data);
+      secure_gfree (data, method == ALERT_METHOD_EMAIL);
+    }
+
+  return 0;
+}
+
+/**
+ * @brief Create an alert.
+ *
+ * This public entry point retains the transaction and permission behavior of
+ * the original implementation while sharing its body with specialized atomic
+ * creators.
+ *
+ * @return See create_alert_body().
+ */
+static int lock_alert_create_owner ();
+
+int
+create_alert (const char* name, const char* comment, const char* filter_id,
+              const char* active, event_t event, GPtrArray* event_data,
+              alert_condition_t condition, GPtrArray* condition_data,
+              alert_method_t method, GPtrArray* method_data,
+              alert_t *alert)
+{
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  sql_begin_immediate ();
+
+  if (acl_user_may ("create_alert") == 0)
+    {
+      sql_rollback ();
+      return 99;
+    }
+
+  ret = lock_alert_create_owner ();
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
+    }
+
+  ret = create_alert_body (name, comment, filter_id, active, event, event_data,
+                           condition, condition_data, method, method_data,
+                           alert);
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
     }
 
   sql_commit ();
+  return 0;
+}
 
+/**
+ * @brief Lock the current owner while an alert name is checked and inserted.
+ *
+ * All alert creation entry points take this row lock before checking names.
+ * It serializes creates for one operator and prevents concurrent user deletion
+ * from turning the owner subquery into NULL before commit.
+ *
+ * @return 0 success, 99 owner unavailable, -1 database error.
+ */
+static int
+lock_alert_create_owner ()
+{
+  user_t owner;
+  gchar *quoted_uuid;
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  quoted_uuid = sql_quote (current_credentials.uuid);
+  ret = sql_int64 (&owner,
+                   "SELECT id FROM users WHERE uuid = '%s' FOR UPDATE;",
+                   quoted_uuid);
+  g_free (quoted_uuid);
+
+  if (ret == 0)
+    return 0;
+  return ret == 1 ? 99 : -1;
+}
+
+/**
+ * @brief Resolve and lock a readable report format for alert creation.
+ *
+ * @return 0 success, 90 unavailable report format, -1 database error.
+ */
+static int
+lock_alert_report_format (const char *report_format_id,
+                          report_format_t *report_format)
+{
+  report_format_t locked_report_format;
+
+  *report_format = 0;
+  if (find_report_format_with_permission (report_format_id, report_format,
+                                          "get_report_formats"))
+    return -1;
+  if (*report_format == 0)
+    return 90;
+
+  switch (sql_int64 (&locked_report_format,
+                     "SELECT id FROM report_formats"
+                     " WHERE id = %llu FOR SHARE;",
+                     *report_format))
+    {
+      case 0:
+        return locked_report_format == *report_format ? 0 : -1;
+      case 1:
+        return 90;
+      default:
+        return -1;
+    }
+}
+
+/**
+ * @brief Resolve, lock and type-check an optional recipient credential.
+ *
+ * @return 0 success, 60 unavailable recipient credential,
+ *         61 invalid recipient credential type, -1 database error.
+ */
+static int
+lock_alert_recipient_credential (const char *credential_id)
+{
+  credential_t credential = 0;
+  credential_t locked_credential;
+  char *type;
+  int ret;
+
+  if (credential_id == NULL || credential_id[0] == '\0')
+    return 0;
+  if (find_credential_with_permission (credential_id, &credential, NULL))
+    return -1;
+  if (credential == 0)
+    return 60;
+
+  switch (sql_int64 (&locked_credential,
+                     "SELECT id FROM credentials"
+                     " WHERE id = %llu FOR SHARE;",
+                     credential))
+    {
+      case 0:
+        if (locked_credential != credential)
+          return -1;
+        break;
+      case 1:
+        return 60;
+      default:
+        return -1;
+    }
+
+  type = credential_type (credential);
+  if (type == NULL)
+    return -1;
+  ret = strcmp (type, "pgp") && strcmp (type, "smime") ? 61 : 0;
+  free (type);
+  return ret;
+}
+
+static int
+lock_alert_report_config (const char *report_config_id,
+                          report_format_t report_format)
+{
+  report_config_t locked_report_config;
+  report_config_t report_config = 0;
+  report_format_t config_report_format;
+
+  if (find_report_config_with_permission (report_config_id, &report_config,
+                                          "get_report_configs"))
+    return -1;
+  if (report_config == 0)
+    return 91;
+
+  switch (sql_int64 (&locked_report_config,
+                     "SELECT id FROM report_configs"
+                     " WHERE id = %llu FOR SHARE;",
+                     report_config))
+    {
+      case 0:
+        if (locked_report_config != report_config)
+          return -1;
+        break;
+      case 1:
+        return 91;
+      default:
+        return -1;
+    }
+
+  switch (sql_int64 (&config_report_format,
+                     "SELECT id FROM report_formats"
+                     " WHERE uuid = (SELECT report_format_id"
+                     "               FROM report_configs WHERE id = %llu);",
+                     report_config))
+    {
+      case 0:
+        return config_report_format == report_format ? 0 : 92;
+      default:
+        return -1;
+    }
+}
+
+/**
+ * @brief Atomically create a task-status EMAIL alert with delivery references.
+ *
+ * Permission is checked before reference resolution so unavailable and
+ * unreadable references are not disclosed to a caller lacking create_alert.
+ * Selected credential and report rows stay share-locked until this function
+ * commits or rolls back the same transaction that creates the alert.
+ *
+ * @return See create_alert_body(), plus 60 unavailable recipient credential,
+ *         61 invalid recipient credential type, 90 unavailable report format,
+ *         91 unavailable report config, 92 report config format mismatch.
+ */
+int
+create_alert_email_with_report_refs
+  (const char *name, const char *comment, const char *active,
+   GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
+   const char *recipient_credential_id, const char *report_format_id,
+   const char *report_config_id, alert_t *alert)
+{
+  report_format_t report_format = 0;
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  sql_begin_immediate ();
+
+  if (acl_user_may ("create_alert") == 0)
+    {
+      sql_rollback ();
+      return 99;
+    }
+
+  ret = lock_alert_create_owner ();
+  if (ret == 0)
+    ret = lock_alert_recipient_credential (recipient_credential_id);
+
+  if (ret == 0 && report_config_id && report_config_id[0]
+      && (report_format_id == NULL || report_format_id[0] == '\0'))
+    ret = 90;
+  else if (ret == 0 && report_format_id && report_format_id[0])
+    ret = lock_alert_report_format (report_format_id, &report_format);
+
+  if (ret == 0 && report_config_id && report_config_id[0])
+    ret = lock_alert_report_config (report_config_id, report_format);
+
+  if (ret == 0)
+    ret = create_alert_body (name, comment, NULL, active,
+                             EVENT_TASK_RUN_STATUS_CHANGED, event_data,
+                             ALERT_CONDITION_ALWAYS, condition_data,
+                             ALERT_METHOD_EMAIL, method_data, alert);
+
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
+    }
+
+  sql_commit ();
   return 0;
 }
 
@@ -2530,7 +2775,8 @@ alert_smb_file_path (alert_t alert, task_t task)
   return alert_data (alert, "method", "smb_file_path");
 }
 
-
+
+
 /* SecInfo. */
 
 /**

@@ -1,4 +1,5 @@
 /* Copyright (C) 2012-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -170,6 +171,9 @@ sql (const char *sql, ...);
 
 void
 sql_ps (const char *sql, ...);
+
+void
+sql_ps_sensitive (const char *sql, ...);
 
 int
 sql_error (const char *sql, ...);

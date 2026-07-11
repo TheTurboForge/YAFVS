@@ -1987,6 +1987,58 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postAlerts
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: alert-email-create
+      x-turbovas-inherited-still-owns: alert-smb-create-gsa-ui-authoring-test-and-delivery-payload-mutations
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: alert-delivery-control
+      summary: Create a task-status EMAIL alert
+      description: Creates one operator-owned EMAIL alert through gvmd's authoritative ACL, transactionally locked reference validation, transaction, and audit path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Recipient addresses, sender address, subject, credential and report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. SMB alert creation, GSA authoring UI, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertEmailCreateRequest'
+      responses:
+        '201':
+          description: EMAIL alert created; response contains redacted metadata only
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          description: The mutation committed without a complete authoritative response (committed_response_unavailable), may have committed without any authoritative response (mutation_outcome_indeterminate), or the private control service returned an invalid response. Inspect the Error code and verify current state before retrying an indeterminate mutation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /alerts/{alert_id}:
     get:
       operationId: getAlertsByAlertId
@@ -6426,7 +6478,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     BadGateway:
-      description: The private gvmd control service returned an invalid response.
+      description: The private gvmd control transport failed, returned an invalid response, or left a mutation outcome indeterminate. Inspect the Error code before retrying.
       content:
         application/json:
           schema:
@@ -9533,6 +9585,84 @@ components:
         modified_at:
           type: string
           format: date-time
+    AlertEmailCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, active, status, to_address, subject, notice]
+      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + EMAIL alert creation. Simple notices forbid report format and report config fields but may carry a plain-text message. Include and attach notices require a report format and may include a matching report config and message.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+        to_address:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        from_address:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 80
+          x-turbovas-max-bytes: 80
+          writeOnly: true
+        notice:
+          type: string
+          enum: [simple, include, attach]
+        recipient_credential_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        report_format_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        report_config_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        message:
+          type: string
+          maxLength: 2000
+          x-turbovas-max-bytes: 2000
+          writeOnly: true
+          description: Optional message body for any notice mode. CR, LF, and tab are preserved; other control characters are rejected.
+      oneOf:
+        - properties:
+            notice:
+              const: simple
+          not:
+            anyOf:
+              - required: [report_format_id]
+              - required: [report_config_id]
+        - properties:
+            notice:
+              enum: [include, attach]
+          required: [report_format_id]
     AlertPatchRequest:
       type: object
       additionalProperties: false

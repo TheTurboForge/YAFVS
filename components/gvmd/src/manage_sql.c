@@ -17211,6 +17211,7 @@ int
 delete_credential (const char *credential_id, int ultimate)
 {
   credential_t credential = 0;
+  credential_t locked_credential;
 
   sql_begin_immediate ();
 
@@ -17263,6 +17264,15 @@ delete_credential (const char *credential_id, int ultimate)
       sql ("DELETE FROM credentials_trash WHERE id = %llu;", credential);
       sql_commit ();
       return 0;
+    }
+
+  if (sql_int64 (&locked_credential,
+                 "SELECT id FROM credentials WHERE id = %llu FOR UPDATE;",
+                 credential)
+      || locked_credential != credential)
+    {
+      sql_rollback ();
+      return -1;
     }
 
   /* Check if it's in use by another resource. */

@@ -1,4 +1,5 @@
 /* Copyright (C) 2009-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -38,7 +39,8 @@
  */
 #define DEADLOCK_THRESHOLD 25
 
-
+
+
 /* Headers of internal symbols defined in backend files. */
 
 int
@@ -56,6 +58,9 @@ sql_exec_internal (sql_stmt_t *);
 void
 sql_finalize (sql_stmt_t *);
 
+void
+sql_finalize_sensitive (sql_stmt_t *);
+
 double
 sql_column_double (sql_stmt_t *, int);
 
@@ -71,7 +76,8 @@ sql_column_int64 (sql_stmt_t *, int);
 gchar **
 sql_column_array (sql_stmt_t *, int);
 
-
+
+
 /* Variables. */
 
 /**
@@ -81,7 +87,8 @@ sql_column_array (sql_stmt_t *, int);
  */
 int log_errors = 1;
 
-
+
+
 /* Helpers. */
 
 /**
@@ -217,7 +224,7 @@ sql_insert (const char *string)
  *         4 deadlock, -1 error.
  */
 static int
-sqlv (int syntax, const char *sql, va_list args)
+sqlv (int syntax, int sensitive, const char *sql, va_list args)
 {
   while (1)
     {
@@ -230,9 +237,9 @@ sqlv (int syntax, const char *sql, va_list args)
        */
       va_copy (args_copy, args);
       if (syntax)
-        sql_prepare_ps_internal (1, sql, args_copy, &stmt);
+        sql_prepare_ps_internal (sensitive ? 0 : 1, sql, args_copy, &stmt);
       else
-        sql_prepare_internal (1, sql, args_copy, &stmt);
+        sql_prepare_internal (sensitive ? 0 : 1, sql, args_copy, &stmt);
       va_end (args_copy);
 
       /* Run statement. */
@@ -241,7 +248,10 @@ sqlv (int syntax, const char *sql, va_list args)
         ;
       if ((ret == -1) && log_errors)
         g_warning ("%s: sql_exec_internal failed", __func__);
-      sql_finalize (stmt);
+      if (sensitive)
+        sql_finalize_sensitive (stmt);
+      else
+        sql_finalize (stmt);
       if (ret == 2)
         continue;
       if (ret == -2)
@@ -275,14 +285,14 @@ sqlv (int syntax, const char *sql, va_list args)
  * @param[in]  args   Arguments to bind to template / format string.
  */
 static void
-sql_internal (int syntax, const char *sql, va_list args)
+sql_internal (int syntax, int sensitive, const char *sql, va_list args)
 {
   unsigned int deadlock_amount = 0;
   while (1)
     {
       int ret;
 
-      ret = sqlv (syntax, sql, args);
+      ret = sqlv (syntax, sensitive, sql, args);
       if (ret == 1)
         /* Gave up with statement reset. */
         continue;
@@ -313,7 +323,7 @@ sql (const char *sql, ...)
 {
   va_list args;
   va_start (args, sql);
-  sql_internal (FALSE, sql, args);
+  sql_internal (FALSE, FALSE, sql, args);
   va_end (args);
 }
 
@@ -333,7 +343,25 @@ sql_ps (const char *sql, ...)
 {
   va_list args;
   va_start (args, sql);
-  sql_internal (TRUE, sql, args);
+  sql_internal (TRUE, FALSE, sql, args);
+  va_end (args);
+}
+
+/**
+ * @brief Perform a parameterized SQL statement without logging parameter
+ *        values, scrubbing copied values before release.
+ *
+ * Use only for statements carrying secrets or privacy-sensitive payloads.
+ *
+ * @param[in]  sql  SQL statement in prepared statement syntax.
+ * @param[in]  ...  Statement parameters, terminated with NULL.
+ */
+void
+sql_ps_sensitive (const char *sql, ...)
+{
+  va_list args;
+  va_start (args, sql);
+  sql_internal (TRUE, TRUE, sql, args);
   va_end (args);
 }
 
@@ -378,7 +406,7 @@ sql_error_internal (int syntax, const char *sql, va_list args)
 
   while (1)
     {
-      ret = sqlv (syntax, sql, args);
+      ret = sqlv (syntax, FALSE, sql, args);
       if (ret == 1)
         /* Gave up with statement reset. */
         continue;
@@ -464,7 +492,7 @@ static int
 sql_giveup_internal (int syntax, const char *sql, va_list args)
 {
   int ret;
-  ret = sqlv (syntax, sql, args);
+  ret = sqlv (syntax, FALSE, sql, args);
   return ret;
 }
 
@@ -1059,7 +1087,8 @@ sql_int64_0_ps (const char *sql, ...)
   return ret;
 }
 
-
+
+
 /* Iterators. */
 
 /**

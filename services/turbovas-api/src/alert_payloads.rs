@@ -41,7 +41,9 @@ pub(crate) struct AlertAssetItem {
     filter: Option<AlertReference>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) tasks: Vec<AlertReference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     modified_at: Option<String>,
 }
 

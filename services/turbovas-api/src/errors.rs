@@ -50,6 +50,10 @@ pub(crate) enum ApiError {
     ControlFailure,
     #[error("control service unavailable")]
     ControlUnavailable,
+    #[error("mutation committed but response completion failed")]
+    MutationCommittedResponseUnavailable,
+    #[error("mutation outcome is indeterminate")]
+    MutationOutcomeIndeterminate,
 }
 
 impl ApiError {
@@ -68,6 +72,8 @@ impl ApiError {
             Self::ScannerUnverified => StatusCode::BAD_GATEWAY,
             Self::ControlFailure => StatusCode::BAD_GATEWAY,
             Self::ControlUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::MutationCommittedResponseUnavailable => StatusCode::BAD_GATEWAY,
+            Self::MutationOutcomeIndeterminate => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -87,6 +93,8 @@ impl ApiError {
             Self::ScannerUnverified => "scanner_unverified",
             Self::ControlFailure => "control_failure",
             Self::ControlUnavailable => "control_unavailable",
+            Self::MutationCommittedResponseUnavailable => "committed_response_unavailable",
+            Self::MutationOutcomeIndeterminate => "mutation_outcome_indeterminate",
         }
     }
 
@@ -120,6 +128,14 @@ impl ApiError {
             }
             Self::ControlFailure => "The control service failed.".to_string(),
             Self::ControlUnavailable => "The control service is temporarily unavailable.".to_string(),
+            Self::MutationCommittedResponseUnavailable => {
+                "The mutation committed, but its response could not be completed; verify current state before retrying."
+                    .to_string()
+            }
+            Self::MutationOutcomeIndeterminate => {
+                "The mutation may have committed, but no authoritative response was received; verify current state before retrying."
+                    .to_string()
+            }
         }
     }
 }
@@ -253,6 +269,34 @@ mod tests {
                 StatusCode::SERVICE_UNAVAILABLE,
                 "control_unavailable",
                 "temporarily unavailable",
+                &[
+                    "socket",
+                    "path",
+                    "secret",
+                    "token",
+                    "password",
+                    "credential",
+                ][..],
+            ),
+            (
+                ApiError::MutationCommittedResponseUnavailable,
+                StatusCode::BAD_GATEWAY,
+                "committed_response_unavailable",
+                "verify current state before retrying",
+                &[
+                    "socket",
+                    "path",
+                    "secret",
+                    "token",
+                    "password",
+                    "credential",
+                ][..],
+            ),
+            (
+                ApiError::MutationOutcomeIndeterminate,
+                StatusCode::BAD_GATEWAY,
+                "mutation_outcome_indeterminate",
+                "verify current state before retrying",
                 &[
                     "socket",
                     "path",

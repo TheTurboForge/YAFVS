@@ -32,6 +32,11 @@ struct NativeWriteRouteContract {
 const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     NativeWriteRouteContract {
         method: "post",
+        path: "/api/v1/alerts",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
         path: "/api/v1/scopes",
         safety_contract: "write-control-v1",
     },
@@ -587,6 +592,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(startup_source.contains("let browser_proxy_auth = browser_proxy_api_config()?;"));
     assert!(browser_routes.contains("let Some(auth) = auth else"));
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id"));
+    assert!(browser_routes.contains("/api/v1/alerts"));
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id/clone"));
     assert!(browser_routes.contains("/api/v1/overrides/:override_id"));
     assert!(browser_routes.contains("/api/v1/filters"));

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import csv
 import errno
 import fcntl
@@ -459,6 +460,7 @@ OPENAPI_ALLOWED_OWNER_SEMANTICS_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
     {
+        "alert-delivery-control",
         "account-auth-control",
         "credential-secret-control",
         "destructive-mutation",
@@ -499,6 +501,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-export-read",
         "alert-metadata-modify",
         "alert-clone",
+        "alert-email-create",
         "alert-trash-move",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
@@ -670,6 +673,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
+        "alert-smb-create-gsa-ui-authoring-test-and-delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
         "credential-secret-updates-non-up-usk-types-and-deletes",
         "feed-sync-import-control",
@@ -706,6 +710,7 @@ OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES = {
 }
 OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts"): "direct-read",
+    ("post", "/alerts"): "direct-write",
     ("get", "/alerts/{alert_id}"): "direct-read",
     ("get", "/alerts/{alert_id}/export"): "direct-read",
     ("patch", "/alerts/{alert_id}"): "direct-write",
@@ -852,6 +857,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "alert-metadata-list-read",
+    },
+    ("post", "/alerts"): {
+        "x-turbovas-inherited-still-owns": "alert-smb-create-gsa-ui-authoring-test-and-delivery-payload-mutations",
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "alert-email-create",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "alert-delivery-control",
     },
     ("get", "/alerts/{alert_id}"): {
         "x-turbovas-maturity": "live-read",
@@ -8289,6 +8303,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 ],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/alerts",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA EMAIL alert authoring (migrated through gsad same-origin proxy)", "direct native EMAIL alert creation"],
+                "residual_inherited": [
+                    "SMB alert creation, GSA UI authoring/test actions, and delivery-payload mutations remain inherited.",
+                    "Recipient addresses, sender address, subject, credential and report references, and message content are write-only and are never returned by the native API.",
+                ],
+            },
+            {
                 "endpoint": "/api/v1/alerts/{alert_id}",
                 "status": alert_detail_endpoint_status(repo_root),
                 "replacement_candidates": ["GSA Alert detail redacted metadata (migrated through gsad same-origin proxy)", "read-only alert detail automation", "native-api-request helper"],
@@ -15013,7 +15038,11 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.tag-resource-set",
             "native-api-direct.tag-resource-remove",
             "native-api-direct.tag-resource-in-use-after-remove",
-            "native-api-direct.alert-fixture",
+            "native-api-direct.alert-malformed-json-denied",
+            "native-api-direct.alert-concurrent-name-serialized",
+            "native-api-direct.alert-write-create",
+            "native-api-direct.alert-missing-format-denied",
+            "native-api-direct.alert-missing-recipient-credential-denied",
             "native-api-direct.alert-write-update",
             "native-api-direct.credential-write-create",
             "native-api-direct.credential-write-update",
@@ -15065,7 +15094,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.alert-tag-resource-in-use-after-remove",
             "native-api-direct.alert-tag-write-delete",
             "native-api-direct.alert-tag-write-post-delete",
-            "native-api-direct.alert-fixture-cleanup",
+            "native-api-direct.alert-write-cleanup",
             "native-api-direct.tag-write-query-denied",
             "native-api-direct.tag-delete-body-denied",
             "native-api-direct.tag-write-delete",
@@ -16775,26 +16804,126 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 tag_after_remove_ok = tag_after_remove.returncode == 0 and tag_after_remove_status == 200 and isinstance(tag_after_remove_json, dict) and tag_after_remove_json.get("id") == tag_id and tag_after_remove_json.get("resource_count") == 0 and tag_after_remove_json.get("in_use") is False
                 findings.append(native_api_probe_finding("pass" if tag_after_remove_ok else "fail", "native-api-direct.tag-resource-in-use-after-remove", "Direct API reports the temporary tag not in use after removing its resource." if tag_after_remove_ok else "Direct API did not report the temporary tag not in use after removing its resource.", tag_after_remove, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env), tag_after_remove_json, {"http_status": tag_after_remove_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_after_remove_json)}))
 
-            alert_fixture_sql = (
-                "WITH owner_row AS (SELECT id FROM users "
-                f"WHERE uuid = {sql_literal(admin_uuid or '')}), "
-                "inserted_alert AS (INSERT INTO alerts "
-                "(uuid, owner, name, comment, event, condition, method, active, creation_time, modification_time) "
-                "SELECT make_uuid(), id, "
-                f"{sql_literal(alert_name)}, "
-                "'TurboVAS direct write smoke temporary alert metadata fixture', "
-                "1, 1, 1, 1, m_now(), m_now() "
-                "FROM owner_row RETURNING uuid) "
-                "SELECT uuid FROM inserted_alert;"
+            alert_malformed = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body="{", extra_headers=content_type)
+            alert_malformed_json, alert_malformed_status = parse_json_output_with_http_status(alert_malformed)
+            alert_malformed_ok = alert_malformed.returncode == 0 and alert_malformed_status == 400 and isinstance(alert_malformed_json, dict) and alert_malformed_json.get("error", {}).get("code") == "bad_request"
+            findings.append(native_api_probe_finding("pass" if alert_malformed_ok else "fail", "native-api-direct.alert-malformed-json-denied", "Direct write-control returned a typed JSON bad-request response for malformed alert JSON." if alert_malformed_ok else "Direct write-control did not return the expected typed JSON bad-request response for malformed alert JSON.", alert_malformed, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body="{", extra_headers=content_type), alert_malformed_json, {"http_status": alert_malformed_status, **summarize_native_api_response(alert_malformed_json)}))
+
+            alert_concurrent_name = f"{alert_name}-concurrent"
+            alert_concurrent_body = json.dumps(
+                {
+                    "name": alert_concurrent_name,
+                    "comment": "TurboVAS concurrent alert create serialization proof",
+                    "active": False,
+                    "status": "Done",
+                    "to_address": "turbovas-smoke@example.invalid",
+                    "subject": "TurboVAS concurrent create proof",
+                    "notice": "simple",
+                },
+                separators=(",", ":"),
             )
-            alert_fixture = psql(repo_root, alert_fixture_sql)
-            alert_resource_id = psql_value(alert_fixture) or None
-            alert_fixture_ok = alert_fixture.returncode == 0 and bool(alert_resource_id)
-            alert_fixture_finding = process_step_finding("pass" if alert_fixture_ok else "fail", "native-api-direct.alert-fixture", "Direct write-control smoke created a temporary redacted alert metadata fixture." if alert_fixture_ok else "Direct write-control smoke failed to create a temporary alert metadata fixture for tag assignment.", alert_fixture, ["psql", "fixed-alert-smoke-fixture"])
-            alert_fixture_details = alert_fixture_finding.setdefault("details", {})
-            if isinstance(alert_fixture_details, dict):
-                alert_fixture_details.update({"alert_id": alert_resource_id, "alert_name": alert_name})
-            findings.append(alert_fixture_finding)
+
+            def create_concurrent_alert() -> subprocess.CompletedProcess[str]:
+                return direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=alert_concurrent_body, extra_headers=content_type)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                alert_concurrent_responses = list(executor.map(lambda _index: create_concurrent_alert(), range(2)))
+            alert_concurrent_parsed = [parse_json_output_with_http_status(response) for response in alert_concurrent_responses]
+            alert_concurrent_statuses = sorted(status for _body, status in alert_concurrent_parsed)
+            alert_concurrent_codes = sorted(
+                body.get("error", {}).get("code")
+                for body, status in alert_concurrent_parsed
+                if status == 409 and isinstance(body, dict) and isinstance(body.get("error"), dict)
+            )
+            alert_concurrent_cleanup_sql = (
+                "WITH live_alert AS (SELECT id FROM alerts "
+                f"WHERE name = {sql_literal(alert_concurrent_name)} AND owner = (SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid)})), "
+                "deleted_method_data AS (DELETE FROM alert_method_data WHERE alert IN (SELECT id FROM live_alert)), "
+                "deleted_event_data AS (DELETE FROM alert_event_data WHERE alert IN (SELECT id FROM live_alert)), "
+                "deleted_condition_data AS (DELETE FROM alert_condition_data WHERE alert IN (SELECT id FROM live_alert)), "
+                "deleted_alert AS (DELETE FROM alerts WHERE id IN (SELECT id FROM live_alert) RETURNING id) "
+                "SELECT count(*) FROM deleted_alert;"
+            )
+            alert_concurrent_cleanup = psql(repo_root, alert_concurrent_cleanup_sql)
+            alert_concurrent_deleted = psql_value(alert_concurrent_cleanup)
+            alert_concurrent_ok = (
+                all(response.returncode == 0 for response in alert_concurrent_responses)
+                and alert_concurrent_statuses == [201, 409]
+                and alert_concurrent_codes == ["conflict"]
+                and alert_concurrent_cleanup.returncode == 0
+                and alert_concurrent_deleted == "1"
+            )
+            alert_concurrent_finding = finding(
+                "pass" if alert_concurrent_ok else "fail",
+                "native-api-direct.alert-concurrent-name-serialized",
+                "Concurrent same-owner alert creates serialized to one committed alert and one conflict, then cleaned up." if alert_concurrent_ok else "Concurrent same-owner alert creates did not serialize to exactly one success and one conflict with complete cleanup.",
+                details={"http_statuses": alert_concurrent_statuses, "error_codes": alert_concurrent_codes, "deleted_alerts": alert_concurrent_deleted},
+            )
+            findings.append(alert_concurrent_finding)
+
+            alert_create_body = json.dumps(
+                {
+                    "name": alert_name,
+                    "comment": "TurboVAS direct write smoke temporary EMAIL alert",
+                    "active": False,
+                    "status": "Done",
+                    "to_address": "turbovas-smoke@example.invalid",
+                    "subject": "TurboVAS delivery subject sentinel",
+                    "notice": "simple",
+                },
+                separators=(",", ":"),
+            )
+            alert_create = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=alert_create_body, extra_headers=content_type)
+            alert_create_json, alert_create_status = parse_json_output_with_http_status(alert_create)
+            alert_resource_id = alert_create_json.get("id") if isinstance(alert_create_json, dict) and isinstance(alert_create_json.get("id"), str) else None
+            alert_create_error_code = alert_create_json.get("error", {}).get("code") if isinstance(alert_create_json, dict) and isinstance(alert_create_json.get("error"), dict) else None
+            alert_create_outcome_uncertain = alert_create.returncode != 0 or alert_create_error_code in {"committed_response_unavailable", "mutation_outcome_indeterminate"}
+            alert_create_serialized = json.dumps(alert_create_json, sort_keys=True) if isinstance(alert_create_json, dict) else ""
+            alert_create_ok = (
+                alert_create.returncode == 0
+                and alert_create_status == 201
+                and bool(alert_resource_id)
+                and alert_create_json.get("name") == alert_name
+                and alert_create_json.get("active") is False
+                and alert_metadata_item_ok(alert_create_json)
+                and "turbovas-smoke@example.invalid" not in alert_create_serialized
+                and "TurboVAS delivery subject sentinel" not in alert_create_serialized
+            )
+            findings.append(native_api_probe_finding("pass" if alert_create_ok else "fail", "native-api-direct.alert-write-create", "Direct write-control created an inactive EMAIL alert and returned redacted metadata only." if alert_create_ok else "Direct write-control failed to create an inactive EMAIL alert with a redacted response.", alert_create, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body=alert_create_body, extra_headers=content_type), alert_create_json, {"http_status": alert_create_status, "alert_id": alert_resource_id, **summarize_native_alert_detail_response(alert_create_json)}))
+
+            alert_missing_format_body = json.dumps(
+                {
+                    "name": f"{alert_name}-missing-format",
+                    "active": False,
+                    "status": "Done",
+                    "to_address": "turbovas-smoke@example.invalid",
+                    "subject": "TurboVAS missing format probe",
+                    "notice": "include",
+                    "report_format_id": "00000000-0000-0000-0000-000000000000",
+                },
+                separators=(",", ":"),
+            )
+            alert_missing_format = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=alert_missing_format_body, extra_headers=content_type)
+            alert_missing_format_json, alert_missing_format_status = parse_json_output_with_http_status(alert_missing_format)
+            alert_missing_format_ok = alert_missing_format.returncode == 0 and alert_missing_format_status == 404 and isinstance(alert_missing_format_json, dict) and alert_missing_format_json.get("error", {}).get("code") == "not_found"
+            findings.append(native_api_probe_finding("pass" if alert_missing_format_ok else "fail", "native-api-direct.alert-missing-format-denied", "Direct write-control rejected a missing EMAIL report format before creating alert state." if alert_missing_format_ok else "Direct write-control did not reject a missing EMAIL report format as expected.", alert_missing_format, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body=alert_missing_format_body, extra_headers=content_type), alert_missing_format_json, {"http_status": alert_missing_format_status, **summarize_native_api_response(alert_missing_format_json)}))
+
+            alert_missing_credential_body = json.dumps(
+                {
+                    "name": f"{alert_name}-missing-recipient-credential",
+                    "active": False,
+                    "status": "Done",
+                    "to_address": "turbovas-smoke@example.invalid",
+                    "subject": "TurboVAS missing credential probe",
+                    "notice": "simple",
+                    "recipient_credential_id": "00000000-0000-0000-0000-000000000000",
+                },
+                separators=(",", ":"),
+            )
+            alert_missing_credential = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=alert_missing_credential_body, extra_headers=content_type)
+            alert_missing_credential_json, alert_missing_credential_status = parse_json_output_with_http_status(alert_missing_credential)
+            alert_missing_credential_ok = alert_missing_credential.returncode == 0 and alert_missing_credential_status == 404 and isinstance(alert_missing_credential_json, dict) and alert_missing_credential_json.get("error", {}).get("code") == "not_found"
+            findings.append(native_api_probe_finding("pass" if alert_missing_credential_ok else "fail", "native-api-direct.alert-missing-recipient-credential-denied", "Direct write-control rejected a missing EMAIL recipient credential before creating alert state." if alert_missing_credential_ok else "Direct write-control did not reject a missing EMAIL recipient credential as expected.", alert_missing_credential, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body=alert_missing_credential_body, extra_headers=content_type), alert_missing_credential_json, {"http_status": alert_missing_credential_status, **summarize_native_api_response(alert_missing_credential_json)}))
 
             if alert_resource_id:
                 alert_patch_body = json.dumps(
@@ -16863,10 +16992,15 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 alert_tag_post_delete_ok = alert_tag_post_delete.returncode == 0 and alert_tag_post_delete_status == 404 and isinstance(alert_tag_post_delete_json, dict) and alert_tag_post_delete_json.get("error", {}).get("code") == "not_found"
                 findings.append(native_api_probe_finding("pass" if alert_tag_post_delete_ok else "fail", "native-api-direct.alert-tag-write-post-delete", "Direct API confirms the temporary alert tag is gone after delete." if alert_tag_post_delete_ok else "Direct API did not confirm the temporary alert tag was deleted.", alert_tag_post_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env), alert_tag_post_delete_json, {"http_status": alert_tag_post_delete_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_post_delete_json)}))
 
-            if alert_resource_id:
+            if alert_resource_id or alert_create_outcome_uncertain:
+                alert_identity_predicate = (
+                    f"uuid = {sql_literal(alert_resource_id)} AND name = {sql_literal(alert_name)}"
+                    if alert_resource_id
+                    else f"name = {sql_literal(alert_name)}"
+                )
                 alert_cleanup_sql = (
                     "WITH live_alert AS (SELECT id FROM alerts "
-                    f"WHERE uuid = {sql_literal(alert_resource_id)} AND name = {sql_literal(alert_name)}), "
+                    f"WHERE {alert_identity_predicate} AND owner = (SELECT id FROM users WHERE uuid = {sql_literal(admin_uuid)})), "
                     "live_tag AS (SELECT id FROM tags "
                     f"WHERE (uuid = {sql_literal(alert_tag_id or '')} OR name = {sql_literal(alert_tag_name)}) AND resource_type = 'alert'), "
                     "deleted_live_tag_resources AS (DELETE FROM tag_resources WHERE resource_type = 'alert' "
@@ -16882,8 +17016,10 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 )
                 alert_cleanup = psql(repo_root, alert_cleanup_sql)
                 alert_cleanup_deleted = psql_value(alert_cleanup)
-                alert_cleanup_ok = alert_cleanup.returncode == 0 and alert_cleanup_deleted in {"1|0", "1|1"}
-                alert_cleanup_finding = process_step_finding("pass" if alert_cleanup_ok else "fail", "native-api-direct.alert-fixture-cleanup", "Direct write-control smoke removed the temporary alert fixture and any alert-tag residue." if alert_cleanup_ok else "Direct write-control smoke failed to clean up the temporary alert fixture or alert-tag residue.", alert_cleanup, ["psql", "fixed-alert-smoke-cleanup"])
+                expected_alert_counts = {"1"} if alert_resource_id else {"0", "1"}
+                deleted_alert_count = alert_cleanup_deleted.split("|", 1)[0] if alert_cleanup_deleted and "|" in alert_cleanup_deleted else None
+                alert_cleanup_ok = alert_cleanup.returncode == 0 and deleted_alert_count in expected_alert_counts
+                alert_cleanup_finding = process_step_finding("pass" if alert_cleanup_ok else "fail", "native-api-direct.alert-write-cleanup", "Direct write-control smoke proved no temporary alert or alert-tag residue remains, including owner/name fallback after an uncertain response." if alert_cleanup_ok else "Direct write-control smoke failed to prove cleanup of the temporary alert or alert-tag residue.", alert_cleanup, ["psql", "fixed-alert-smoke-cleanup"])
                 alert_cleanup_details = alert_cleanup_finding.setdefault("details", {})
                 if isinstance(alert_cleanup_details, dict):
                     alert_cleanup_details.update({"alert_id": alert_resource_id, "alert_name": alert_name, "alert_tag_id": alert_tag_id, "alert_tag_name": alert_tag_name, "deleted_counts": alert_cleanup_deleted})
@@ -23900,6 +24036,9 @@ def summarize_native_alert_detail_response(parsed: dict[str, Any] | None) -> dic
         return {"parsed": False}
     summary = summarize_native_alert_item(parsed)
     summary["parsed"] = True
+    error = parsed.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        summary["error_code"] = error["code"]
     tasks = parsed.get("tasks")
     if isinstance(tasks, list):
         summary["task_count_in_response"] = len(tasks)

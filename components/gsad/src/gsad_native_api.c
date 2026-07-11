@@ -18,6 +18,7 @@
 #include "gsad_user.h"
 
 #include <errno.h>
+#include <cjson/cJSON.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +39,26 @@
 #define BROWSER_PROXY_SECRET_MAX_LENGTH 4096
 #define BROWSER_PROXY_OPERATOR_MAX_LENGTH 256
 
+static void
+secure_clear (void *value, gsize length)
+{
+  volatile unsigned char *cursor = value;
+
+  if (value == NULL)
+    return;
+  while (length--)
+    *cursor++ = 0;
+}
+
+static void
+secure_gstring_free (GString *value)
+{
+  if (value == NULL)
+    return;
+  secure_clear (value->str, value->len);
+  g_string_free (value, TRUE);
+}
+
 static gboolean
 is_uuid_segment (const gchar *value, gsize length)
 {
@@ -57,6 +78,22 @@ is_uuid_segment (const gchar *value, gsize length)
     }
 
   return TRUE;
+}
+
+static gboolean
+response_body_is_json_object (const gchar *body)
+{
+  cJSON *document;
+  const char *parse_end = NULL;
+  gboolean valid;
+
+  if (body == NULL)
+    return FALSE;
+  document = cJSON_ParseWithOpts (body, &parse_end, TRUE);
+  valid = document != NULL && cJSON_IsObject (document) && parse_end != NULL
+          && *parse_end == '\0';
+  cJSON_Delete (document);
+  return valid;
 }
 
 static gboolean
@@ -414,6 +451,7 @@ native_api_delete_path_is_allowed (const gchar *path)
 static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
+  const gchar *alerts_path = "/api/v1/alerts";
   const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *credentials_path = "/api/v1/credentials";
   const gchar *filters_path = "/api/v1/filters";
@@ -448,6 +486,9 @@ native_api_post_path_is_allowed (const gchar *path)
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
+
+  if (g_strcmp0 (path, alerts_path) == 0)
+    return TRUE;
 
   if (g_strcmp0 (path, credentials_path) == 0)
     return TRUE;
@@ -1368,14 +1409,116 @@ native_api_request_target (const gchar *path, params_t *params)
 
 static gsad_http_result_t
 send_json_error (gsad_http_connection_t *connection, int status_code,
-                 const gchar *message)
+                 const gchar *code, const gchar *message)
 {
-  gchar *body = g_strdup_printf ("{\"error\":{\"message\":\"%s\"}}\n",
-                                 message);
+  GString *escaped_code = g_string_new (NULL);
+  GString *escaped_message = g_string_new (NULL);
+  const unsigned char *cursor;
+  gchar *body;
+
+  for (cursor = (const unsigned char *) code; *cursor; cursor++)
+    {
+      if (*cursor == '"' || *cursor == '\\')
+        g_string_append_c (escaped_code, '\\');
+      if (*cursor < 0x20)
+        g_string_append_printf (escaped_code, "\\u%04x", *cursor);
+      else
+        g_string_append_c (escaped_code, (gchar) *cursor);
+    }
+  for (cursor = (const unsigned char *) message; *cursor; cursor++)
+    {
+      switch (*cursor)
+        {
+          case '"':
+          case '\\':
+            g_string_append_c (escaped_message, '\\');
+            g_string_append_c (escaped_message, (gchar) *cursor);
+            break;
+          case '\b':
+            g_string_append (escaped_message, "\\b");
+            break;
+          case '\f':
+            g_string_append (escaped_message, "\\f");
+            break;
+          case '\n':
+            g_string_append (escaped_message, "\\n");
+            break;
+          case '\r':
+            g_string_append (escaped_message, "\\r");
+            break;
+          case '\t':
+            g_string_append (escaped_message, "\\t");
+            break;
+          default:
+            if (*cursor < 0x20)
+              g_string_append_printf (escaped_message, "\\u%04x", *cursor);
+            else
+              g_string_append_c (escaped_message, (gchar) *cursor);
+        }
+    }
+  body = g_strdup_printf (
+    "{\"error\":{\"code\":\"%s\",\"message\":\"%s\"}}\n",
+    escaped_code->str, escaped_message->str);
+  g_string_free (escaped_code, TRUE);
+  g_string_free (escaped_message, TRUE);
   gsad_http_result_t ret = gsad_http_send_response_for_content (
     connection, body, status_code, NULL, GSAD_CONTENT_TYPE_APP_JSON, NULL, 0);
   g_free (body);
   return ret;
+}
+
+static gboolean
+response_content_length (GString *raw_response, gsize *content_length,
+                         gboolean *present)
+{
+  const gchar *header_end = strstr (raw_response->str, "\r\n\r\n");
+  const gchar *cursor = strstr (raw_response->str, "\r\n");
+
+  *content_length = 0;
+  *present = FALSE;
+  if (header_end == NULL || cursor == NULL || cursor >= header_end)
+    return FALSE;
+  cursor += 2;
+  while (cursor < header_end)
+    {
+      const gchar *line_end = strstr (cursor, "\r\n");
+      const gchar *value;
+      gchar *endptr;
+      guint64 parsed;
+
+      if (line_end == NULL || line_end > header_end)
+        return FALSE;
+      if ((gsize) (line_end - cursor) < strlen ("Content-Length:")
+          || g_ascii_strncasecmp (cursor, "Content-Length:",
+                                  strlen ("Content-Length:")))
+        {
+          cursor = line_end + 2;
+          continue;
+        }
+      value = cursor + strlen ("Content-Length:");
+      while (value < line_end && g_ascii_isspace (*value))
+        value++;
+      if (*present || value == line_end || !g_ascii_isdigit (*value))
+        return FALSE;
+      endptr = (gchar *) value;
+      while (endptr < line_end && g_ascii_isdigit (*endptr))
+        endptr++;
+      {
+        gchar *number_end = endptr;
+        while (endptr < line_end && g_ascii_isspace (*endptr))
+          endptr++;
+        if (endptr != line_end)
+          return FALSE;
+        errno = 0;
+        parsed = g_ascii_strtoull (value, &endptr, 10);
+        if (errno || endptr != number_end || parsed > G_MAXSIZE)
+          return FALSE;
+      }
+      *content_length = (gsize) parsed;
+      *present = TRUE;
+      cursor = line_end + 2;
+    }
+  return TRUE;
 }
 
 static int
@@ -1465,7 +1608,8 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                        const gchar *request_body, gsize request_body_length,
                        const gchar *browser_proxy_secret,
                        const gchar *operator_name, guint *status_code,
-                       gchar **error_message)
+                       gchar **error_message,
+                       gboolean *mutation_outcome_indeterminate)
 {
   const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
   const gchar *port = g_getenv ("TURBOVAS_NATIVE_API_PORT");
@@ -1474,11 +1618,30 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   GString *response;
   gchar buffer[8192];
   gchar *body;
+  gsize request_capacity;
+  gboolean mutation_method;
+  gsize proxy_secret_length;
+  gsize operator_name_length;
+  gsize declared_content_length;
+  gboolean content_length_present;
 
   if (host == NULL || host[0] == 0)
     host = DEFAULT_NATIVE_API_HOST;
   if (port == NULL || port[0] == 0)
     port = DEFAULT_NATIVE_API_PORT;
+  mutation_method = g_strcmp0 (method, "POST") == 0
+                    || g_strcmp0 (method, "PATCH") == 0
+                    || g_strcmp0 (method, "DELETE") == 0;
+  *mutation_outcome_indeterminate = FALSE;
+  if (mutation_method
+      && (browser_proxy_secret == NULL || operator_name == NULL))
+    {
+      *error_message = g_strdup ("Native API browser write proxy is not configured.");
+      return NULL;
+    }
+  proxy_secret_length = browser_proxy_secret
+                          ? strlen (browser_proxy_secret) : 0;
+  operator_name_length = operator_name ? strlen (operator_name) : 0;
 
   fd = connect_to_native_api (host, port);
   if (fd == -1)
@@ -1487,7 +1650,20 @@ fetch_native_api_json (const gchar *method, const gchar *path,
       return NULL;
     }
 
-  request = g_string_new (NULL);
+  if (request_body_length
+      > G_MAXSIZE - strlen (method) - strlen (path) - strlen (host)
+          - strlen (port) - proxy_secret_length
+          - operator_name_length - 512)
+    {
+      close (fd);
+      *error_message = g_strdup ("Native API request is too large.");
+      return NULL;
+    }
+  request_capacity = request_body_length + strlen (method) + strlen (path)
+                     + strlen (host) + strlen (port)
+                     + proxy_secret_length + operator_name_length
+                     + 512;
+  request = g_string_sized_new (request_capacity);
   g_string_printf (request,
                    "%s %s HTTP/1.1\r\n"
                    "Host: %s:%s\r\n"
@@ -1495,8 +1671,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                    "Connection: close\r\n"
                    "User-Agent: gsad-native-api-proxy\r\n",
                    method, path, host, port);
-  if (g_strcmp0 (method, "POST") == 0 || g_strcmp0 (method, "PATCH") == 0
-      || g_strcmp0 (method, "DELETE") == 0)
+  if (mutation_method)
     {
       g_string_append_printf (request,
                               "Content-Type: application/json\r\n"
@@ -1512,12 +1687,16 @@ fetch_native_api_json (const gchar *method, const gchar *path,
 
   if (!send_all (fd, request->str, request->len))
     {
-      g_string_free (request, TRUE);
+      secure_gstring_free (request);
       close (fd);
-      *error_message = g_strdup ("Native API request could not be sent.");
+      *error_message = g_strdup (
+        mutation_method
+          ? "The mutation may have been forwarded; verify current state before retrying."
+          : "Native API request could not be sent.");
+      *mutation_outcome_indeterminate = mutation_method;
       return NULL;
     }
-  g_string_free (request, TRUE);
+  secure_gstring_free (request);
 
   response = g_string_new (NULL);
   while (TRUE)
@@ -1529,7 +1708,11 @@ fetch_native_api_json (const gchar *method, const gchar *path,
         {
           g_string_free (response, TRUE);
           close (fd);
-          *error_message = g_strdup ("Native API response could not be read.");
+          *error_message = g_strdup (
+            mutation_method
+              ? "The mutation may have committed; verify current state before retrying."
+              : "Native API response could not be read.");
+          *mutation_outcome_indeterminate = mutation_method;
           return NULL;
         }
 
@@ -1538,6 +1721,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
           g_string_free (response, TRUE);
           close (fd);
           *error_message = g_strdup ("Native API response is too large.");
+          *mutation_outcome_indeterminate = mutation_method;
           return NULL;
         }
 
@@ -1546,7 +1730,40 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   close (fd);
 
   body = extract_response_body (response, status_code, error_message);
+  if (!response_content_length (response, &declared_content_length,
+                                &content_length_present))
+    {
+      g_free (body);
+      body = NULL;
+      g_free (*error_message);
+      *error_message = g_strdup ("Native API returned invalid response framing.");
+    }
   g_string_free (response, TRUE);
+  if (body == NULL)
+    *mutation_outcome_indeterminate = mutation_method;
+  else if ((content_length_present
+            && strlen (body) != declared_content_length)
+           || (mutation_method && *status_code != MHD_HTTP_NO_CONTENT
+               && !content_length_present))
+    {
+      g_free (body);
+      body = NULL;
+      g_free (*error_message);
+      *error_message = g_strdup ("Native API returned incomplete response framing.");
+      *mutation_outcome_indeterminate = mutation_method;
+    }
+  else if (mutation_method && *status_code != MHD_HTTP_NO_CONTENT)
+    {
+      if (!response_body_is_json_object (body))
+        {
+          g_free (body);
+          body = NULL;
+          g_free (*error_message);
+          *error_message =
+            g_strdup ("Native API returned a truncated or malformed mutation response.");
+          *mutation_outcome_indeterminate = TRUE;
+        }
+    }
   return body;
 }
 
@@ -1564,6 +1781,7 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
   gchar *error_message = NULL;
   guint status_code = MHD_HTTP_BAD_GATEWAY;
   gsad_http_result_t ret;
+  gboolean mutation_outcome_indeterminate;
 
   (void) handler_next;
   (void) handler_data;
@@ -1571,13 +1789,14 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
   if (!native_api_path_is_allowed (path))
     {
       gsad_credentials_free (credentials);
-      return send_json_error (connection, MHD_HTTP_NOT_FOUND,
+      return send_json_error (connection, MHD_HTTP_NOT_FOUND, "not_found",
                               "Native API path is not available.");
     }
 
   request_target = native_api_request_target (path, params);
   body = fetch_native_api_json ("GET", request_target, NULL, 0, NULL, NULL,
-                                &status_code, &error_message);
+                                &status_code, &error_message,
+                                &mutation_outcome_indeterminate);
   g_free (request_target);
   gsad_credentials_free (credentials);
 
@@ -1586,6 +1805,7 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
       g_warning ("%s: %s", __func__, error_message);
       g_free (error_message);
       return send_json_error (connection, MHD_HTTP_BAD_GATEWAY,
+                              "control_unavailable",
                               "Native API service is unavailable.");
     }
 
@@ -1615,6 +1835,7 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
   gchar *error_message = NULL;
   guint status_code = MHD_HTTP_BAD_GATEWAY;
   gsad_http_result_t ret;
+  gboolean mutation_outcome_indeterminate;
 
   (void) handler_next;
   (void) handler_data;
@@ -1622,7 +1843,7 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
   if (!path_is_allowed (path))
     {
       gsad_credentials_free (credentials);
-      return send_json_error (connection, MHD_HTTP_NOT_FOUND,
+      return send_json_error (connection, MHD_HTTP_NOT_FOUND, "not_found",
                               "Native API path is not available.");
     }
 
@@ -1631,6 +1852,7 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
     {
       gsad_credentials_free (credentials);
       return send_json_error (connection, MHD_HTTP_SERVICE_UNAVAILABLE,
+                              "control_unavailable",
                               "Native API browser write proxy is not configured.");
     }
 
@@ -1639,6 +1861,7 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
     {
       gsad_credentials_free (credentials);
       return send_json_error (connection, MHD_HTTP_UNAUTHORIZED,
+                              "unauthorized",
                               "Native API browser write proxy requires a session user.");
     }
 
@@ -1648,19 +1871,30 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
     {
       gsad_credentials_free (credentials);
       return send_json_error (connection, MHD_HTTP_NOT_ACCEPTABLE,
+                              "request_body_not_allowed",
                               "Native API DELETE requests must not include a request body.");
     }
   body = fetch_native_api_json (method, path, request_body, request_body_length,
                                 secret, operator_name, &status_code,
-                                &error_message);
+                                &error_message,
+                                &mutation_outcome_indeterminate);
   gsad_credentials_free (credentials);
 
   if (body == NULL)
     {
+      gsad_http_result_t error_ret;
+
       g_warning ("%s: %s", __func__, error_message);
+      if (mutation_outcome_indeterminate)
+        error_ret = send_json_error (
+          connection, MHD_HTTP_BAD_GATEWAY, "mutation_outcome_indeterminate",
+          "The mutation may have committed; verify current state before retrying.");
+      else
+        error_ret = send_json_error (
+          connection, MHD_HTTP_SERVICE_UNAVAILABLE, "control_unavailable",
+          "Native API service is unavailable.");
       g_free (error_message);
-      return send_json_error (connection, MHD_HTTP_BAD_GATEWAY,
-                              "Native API service is unavailable.");
+      return error_ret;
     }
 
   ret = gsad_http_send_response_for_content (connection, body, (int) status_code,

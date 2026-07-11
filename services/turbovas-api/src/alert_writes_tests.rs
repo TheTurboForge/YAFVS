@@ -3,14 +3,569 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
+    alert_payloads::AlertAssetItem,
     alert_write_db::ensure_alert_owner_matches_operator,
     alert_write_sql::*,
     alert_write_validation::{
-        AlertCloneRequest, AlertPatchRequest, MAX_ALERT_TEXT_BYTES, validate_alert_clone_request,
-        validate_alert_patch_request,
+        AlertCloneRequest, AlertEmailCreateRequest, AlertPatchRequest, MAX_ALERT_MESSAGE_BYTES,
+        MAX_ALERT_SUBJECT_BYTES, MAX_ALERT_TEXT_BYTES, validate_alert_clone_request,
+        validate_alert_email_create_request, validate_alert_patch_request,
     },
+    alert_writes::{alert_email_create_command, parse_alert_email_create_response},
     errors::ApiError,
+    gvmd_control::{
+        ControlSocketError, MAX_CONTROL_REQUEST_BYTES, request_gvmd_control_response_bytes,
+    },
 };
+
+const TEST_UUID: &str = "12345678-1234-4234-8234-123456789abc";
+
+fn email_create_json(notice: &str) -> serde_json::Value {
+    serde_json::json!({
+        "name": "Daily findings",
+        "comment": "Operator delivery",
+        "active": true,
+        "status": "Done",
+        "to_address": "security@example.invalid",
+        "from_address": "scanner@example.invalid",
+        "subject": "Scan report",
+        "notice": notice
+    })
+}
+
+#[test]
+fn email_alert_report_references_are_locked_inside_the_create_transaction() {
+    let manager = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+    let function = manager
+        .split_once("create_alert_email_with_report_refs")
+        .unwrap()
+        .1
+        .split_once("/* SecInfo. */")
+        .unwrap()
+        .0;
+    for required in [
+        "sql_begin_immediate ();",
+        "acl_user_may (\"create_alert\")",
+        "lock_alert_create_owner",
+        "lock_alert_report_format",
+        "lock_alert_report_config",
+        "lock_alert_recipient_credential",
+        "create_alert_body",
+        "sql_rollback ();",
+        "sql_commit ();",
+    ] {
+        assert!(
+            function.contains(required),
+            "atomic EMAIL create missing {required}"
+        );
+    }
+    assert!(manager.matches("FOR SHARE").count() >= 3);
+    assert!(manager.contains("SELECT id FROM users WHERE uuid = '%s' FOR UPDATE;"));
+    assert_eq!(
+        manager.matches("ret = lock_alert_create_owner ();").count(),
+        2
+    );
+    assert!(
+        function.find("acl_user_may").unwrap() < function.find("lock_alert_report_format").unwrap()
+    );
+    assert!(
+        function.find("lock_alert_report_format").unwrap()
+            < function.find("create_alert_body").unwrap()
+    );
+    assert!(function.find("create_alert_body").unwrap() < function.rfind("sql_commit").unwrap());
+
+    let user_manager = include_str!("../../../components/gvmd/src/manage_sql_users.c");
+    let delete_user = user_manager
+        .split_once("delete_user (const char *user_id_arg")
+        .unwrap()
+        .1
+        .split_once("int\ncopy_user")
+        .unwrap()
+        .0;
+    assert!(delete_user.contains("SELECT id FROM users WHERE id = %llu FOR UPDATE;"));
+    assert!(
+        delete_user.find("FOR UPDATE").unwrap()
+            < delete_user.find("information_schema.columns").unwrap()
+    );
+
+    let control = include_str!("../../../components/gvmd/src/turbovas_control.c");
+    let control_create = control
+        .split_once("turbovas_control_create_alert_email")
+        .unwrap()
+        .1
+        .split_once("turbovas_control_create_schedule")
+        .unwrap()
+        .0;
+    assert!(control_create.contains("create_alert_email_with_report_refs"));
+    assert!(!control_create.contains("create_alert ("));
+}
+
+#[test]
+fn alert_email_create_openapi_metadata_is_direct_guarded_and_redacted() {
+    let openapi = include_str!("../../../api/openapi/turbovas-v1.yaml");
+    let block = openapi
+        .split_once("  /alerts:\n")
+        .unwrap()
+        .1
+        .split_once("  /alerts/{alert_id}:\n")
+        .unwrap()
+        .0;
+    for expected in [
+        "operationId: postAlerts",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: alert-email-create",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-owner-semantics: request-operator-owner",
+        "x-turbovas-safety-contract: write-control-v1",
+        "x-turbovas-side-effect: alert-delivery-control",
+        "$ref: '#/components/schemas/AlertEmailCreateRequest'",
+        "$ref: '#/components/schemas/AlertAsset'",
+        "response contains redacted metadata only",
+        "'502':",
+        "'503':",
+    ] {
+        assert!(
+            block.contains(expected),
+            "alert create OpenAPI missing {expected}"
+        );
+    }
+    let mut simple_with_empty_message = email_create_json("simple");
+    simple_with_empty_message["message"] = serde_json::json!("");
+    let request =
+        serde_json::from_value::<AlertEmailCreateRequest>(simple_with_empty_message).unwrap();
+    assert!(validate_alert_email_create_request(request).is_ok());
+    let schema = openapi
+        .split_once("    AlertEmailCreateRequest:\n")
+        .unwrap()
+        .1
+        .split_once("    AlertPatchRequest:\n")
+        .unwrap()
+        .0;
+    assert!(schema.contains("additionalProperties: false"));
+    assert!(schema.contains("enum: [simple, include, attach]"));
+    assert!(schema.contains("writeOnly: true"));
+    for field in [
+        "to_address",
+        "from_address",
+        "subject",
+        "recipient_credential_id",
+        "report_format_id",
+        "report_config_id",
+        "message",
+    ] {
+        assert!(schema.contains(&format!("{field}:")));
+    }
+    let mut padded_uuid = email_create_json("include");
+    padded_uuid["report_format_id"] = serde_json::json!(format!(" {TEST_UUID} "));
+    let request = serde_json::from_value::<AlertEmailCreateRequest>(padded_uuid).unwrap();
+    assert!(matches!(
+        validate_alert_email_create_request(request),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+fn validated_email_create(
+    notice: &str,
+) -> crate::alert_write_validation::ValidatedAlertEmailCreate {
+    let mut value = email_create_json(notice);
+    if notice != "simple" {
+        value["report_format_id"] = serde_json::json!(TEST_UUID);
+    }
+    let request = serde_json::from_value::<AlertEmailCreateRequest>(value)
+        .expect("valid email alert request shape");
+    validate_alert_email_create_request(request).expect("valid email alert request")
+}
+
+#[test]
+fn alert_email_create_schema_requires_fixed_fields_and_rejects_unknown_fields() {
+    for field in [
+        "name",
+        "active",
+        "status",
+        "to_address",
+        "subject",
+        "notice",
+    ] {
+        let mut value = email_create_json("simple");
+        value.as_object_mut().unwrap().remove(field);
+        assert!(
+            serde_json::from_value::<AlertEmailCreateRequest>(value).is_err(),
+            "{field} must be required"
+        );
+    }
+    let mut unknown = email_create_json("simple");
+    unknown["method"] = serde_json::json!("EMAIL");
+    assert!(serde_json::from_value::<AlertEmailCreateRequest>(unknown).is_err());
+}
+
+#[test]
+fn alert_email_create_accepts_only_exact_status_values() {
+    for status in [
+        "Delete Requested",
+        "Ultimate Delete Requested",
+        "Ultimate Delete Waiting",
+        "Delete Waiting",
+        "Done",
+        "New",
+        "Requested",
+        "Running",
+        "Queued",
+        "Stop Requested",
+        "Stop Waiting",
+        "Stopped",
+        "Processing",
+        "Interrupted",
+    ] {
+        let mut value = email_create_json("simple");
+        value["status"] = serde_json::json!(status);
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(value).unwrap();
+        assert!(
+            validate_alert_email_create_request(request).is_ok(),
+            "{status}"
+        );
+    }
+    for status in ["done", "Delete requested", "Container", ""] {
+        let mut value = email_create_json("simple");
+        value["status"] = serde_json::json!(status);
+        assert!(serde_json::from_value::<AlertEmailCreateRequest>(value).is_err());
+    }
+    for field in ["name", "comment", "to_address", "from_address"] {
+        let mut value = email_create_json("simple");
+        value[field] = serde_json::json!(format!("{} ", "x".repeat(MAX_ALERT_TEXT_BYTES)));
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(value).unwrap();
+        assert!(
+            matches!(
+                validate_alert_email_create_request(request),
+                Err(ApiError::BadRequest(_))
+            ),
+            "{field} raw byte cap"
+        );
+    }
+}
+
+#[test]
+fn alert_email_create_enforces_notice_mode_cross_fields() {
+    assert_eq!(validated_email_create("simple").notice.control_token(), 1);
+    assert_eq!(validated_email_create("include").notice.control_token(), 0);
+    assert_eq!(validated_email_create("attach").notice.control_token(), 2);
+
+    let mut simple = email_create_json("simple");
+    for field in ["report_format_id", "report_config_id"] {
+        simple[field] = serde_json::json!(TEST_UUID);
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(simple.clone()).unwrap();
+        assert!(matches!(
+            validate_alert_email_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+        simple.as_object_mut().unwrap().remove(field);
+    }
+    let mut simple_with_message = email_create_json("simple");
+    simple_with_message["message"] = serde_json::json!("plain text body");
+    let request = serde_json::from_value::<AlertEmailCreateRequest>(simple_with_message).unwrap();
+    assert!(validate_alert_email_create_request(request).is_ok());
+
+    for notice in ["include", "attach"] {
+        let request =
+            serde_json::from_value::<AlertEmailCreateRequest>(email_create_json(notice)).unwrap();
+        assert!(matches!(
+            validate_alert_email_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+
+        let mut valid = email_create_json(notice);
+        valid["report_format_id"] = serde_json::json!(TEST_UUID);
+        valid["report_config_id"] = serde_json::json!(TEST_UUID);
+        valid["message"] = serde_json::json!("bounded body");
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(valid).unwrap();
+        assert!(validate_alert_email_create_request(request).is_ok());
+    }
+}
+
+#[test]
+fn alert_email_create_rejects_bad_uuids_controls_blanks_and_byte_overflow() {
+    for field in [
+        "recipient_credential_id",
+        "report_format_id",
+        "report_config_id",
+    ] {
+        let mut value = email_create_json("include");
+        value["report_format_id"] = serde_json::json!(TEST_UUID);
+        value[field] = serde_json::json!("not-a-uuid");
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(value).unwrap();
+        assert!(matches!(
+            validate_alert_email_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    for (field, value) in [
+        ("name", ""),
+        ("to_address", "bad\naddress"),
+        ("from_address", "bad\0address"),
+        ("subject", ""),
+        ("message", "bad\u{000b}message"),
+    ] {
+        let mut request = email_create_json(if field == "message" {
+            "include"
+        } else {
+            "simple"
+        });
+        if field == "message" {
+            request["report_format_id"] = serde_json::json!(TEST_UUID);
+        }
+        request[field] = serde_json::json!(value);
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(request).unwrap();
+        assert!(matches!(
+            validate_alert_email_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    for (field, limit, notice) in [
+        ("name", MAX_ALERT_TEXT_BYTES, "simple"),
+        ("comment", MAX_ALERT_TEXT_BYTES, "simple"),
+        ("to_address", MAX_ALERT_TEXT_BYTES, "simple"),
+        ("from_address", MAX_ALERT_TEXT_BYTES, "simple"),
+        ("subject", MAX_ALERT_SUBJECT_BYTES, "simple"),
+        ("message", MAX_ALERT_MESSAGE_BYTES, "include"),
+    ] {
+        let mut value = email_create_json(notice);
+        if notice == "include" {
+            value["report_format_id"] = serde_json::json!(TEST_UUID);
+        }
+        value[field] = serde_json::json!("x".repeat(limit + 1));
+        let request = serde_json::from_value::<AlertEmailCreateRequest>(value).unwrap();
+        assert!(
+            matches!(
+                validate_alert_email_create_request(request),
+                Err(ApiError::BadRequest(_))
+            ),
+            "{field}"
+        );
+    }
+}
+
+#[test]
+fn alert_email_create_preserves_multiline_message_content() {
+    let mut value = email_create_json("include");
+    value["report_format_id"] = serde_json::json!(TEST_UUID);
+    value["message"] = serde_json::json!("  first line\r\nsecond\tline  ");
+    let request = serde_json::from_value::<AlertEmailCreateRequest>(value).unwrap();
+    let validated = validate_alert_email_create_request(request).unwrap();
+    assert_eq!(
+        validated.message.as_bytes(),
+        b"  first line\r\nsecond\tline  "
+    );
+}
+
+#[test]
+fn alert_email_create_frame_is_exact_bounded_and_scrubbable() {
+    let request = validated_email_create("include");
+    let mut frame =
+        alert_email_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &request);
+    assert_eq!(
+        frame.as_bytes(),
+        concat!(
+            "alert-email-create 0123456789abcdef0123456789abcdef ",
+            "12345678-1234-4234-8234-123456789abc 1 ",
+            "RGFpbHkgZmluZGluZ3M= T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
+            "c2VjdXJpdHlAZXhhbXBsZS5pbnZhbGlk c2Nhbm5lckBleGFtcGxlLmludmFsaWQ= ",
+            "U2NhbiByZXBvcnQ= 0  ",
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj  \n"
+        )
+        .as_bytes()
+    );
+    assert!(frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    frame.scrub();
+    assert!(frame.as_bytes().iter().all(|byte| *byte == 0));
+}
+
+#[tokio::test]
+async fn alert_email_create_control_frame_cap_is_enforced_before_socket_io() {
+    let command = vec![b'x'; MAX_CONTROL_REQUEST_BYTES];
+    assert_eq!(
+        request_gvmd_control_response_bytes(
+            "/definitely/not/a/socket",
+            "0123456789abcdef0123456789abcdef",
+            &command,
+        )
+        .await,
+        Err(ControlSocketError::Failure)
+    );
+}
+
+#[test]
+fn alert_email_create_maps_explicit_control_responses() {
+    for response in [
+        b"2 invalid_email".as_slice(),
+        b"4 invalid_filter_type",
+        b"5 invalid_condition_name",
+        b"6 invalid_condition_data",
+        b"7 subject_too_long",
+        b"8 message_too_long",
+        b"12 invalid_send_host",
+        b"13 invalid_send_port",
+        b"15 invalid_scp_host",
+        b"16 invalid_scp_port",
+        b"18 invalid_scp_credential",
+        b"19 invalid_scp_path",
+        b"20 method_event_mismatch",
+        b"21 condition_event_mismatch",
+        b"31 invalid_event_name",
+        b"32 invalid_event_data",
+        b"40 invalid_smb_credential",
+        b"41 invalid_smb_share",
+        b"42 invalid_smb_path",
+        b"43 dotted_smb_path",
+        b"50 invalid_tp_credential",
+        b"51 invalid_tp_host",
+        b"52 invalid_tp_certificate",
+        b"53 invalid_tp_tls",
+        b"61 invalid_recipient_credential",
+        b"71 invalid_vfire_credential",
+        b"81 invalid_sourcefire_credential",
+        b"-2 malformed",
+    ] {
+        assert!(matches!(
+            parse_alert_email_create_response(response),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    assert!(matches!(
+        parse_alert_email_create_response(b"99 forbidden"),
+        Err(ApiError::Forbidden)
+    ));
+    for response in [
+        b"3 filter_not_found".as_slice(),
+        b"9 condition_filter_not_found",
+        b"14 send_format_not_found",
+        b"17 scp_format_not_found",
+        b"60 recipient_credential_not_found",
+        b"70 vfire_credential_not_found",
+        b"80 sourcefire_credential_not_found",
+        b"90 report_format_not_found",
+        b"91 report_config_not_found",
+    ] {
+        assert!(matches!(
+            parse_alert_email_create_response(response),
+            Err(ApiError::NotFound)
+        ));
+    }
+    assert!(matches!(
+        parse_alert_email_create_response(b"1 exists"),
+        Err(ApiError::Conflict(_))
+    ));
+    assert!(matches!(
+        parse_alert_email_create_response(b"92 report_config_mismatch"),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(matches!(
+        parse_alert_email_create_response(b"-3 committed_indeterminate"),
+        Err(ApiError::MutationCommittedResponseUnavailable)
+    ));
+    let internal = parse_alert_email_create_response(b"-1 internal").unwrap_err();
+    assert_eq!(
+        internal.status_code(),
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
+        parse_alert_email_create_response(b"0 created 12345678-1234-4234-8234-123456789abc")
+            .unwrap(),
+        TEST_UUID
+    );
+    assert!(matches!(
+        parse_alert_email_create_response(b"0 created not-a-uuid"),
+        Err(ApiError::MutationCommittedResponseUnavailable)
+    ));
+    assert!(matches!(
+        parse_alert_email_create_response(b"unexpected-response"),
+        Err(ApiError::MutationOutcomeIndeterminate)
+    ));
+
+    let gsad = include_str!("../../../components/gsad/src/gsad_native_api.c");
+    assert!(gsad.contains("cJSON_ParseWithOpts"));
+    assert!(gsad.contains("cJSON_IsObject"));
+    assert!(gsad.contains("response_body_is_json_object (body)"));
+}
+
+#[test]
+fn alert_email_create_handler_returns_only_existing_redacted_asset_shape() {
+    let handler = include_str!("alert_writes.rs")
+        .split_once("pub(crate) async fn create_email_alert")
+        .unwrap()
+        .1
+        .split_once("pub(crate) async fn request_alert_email_create")
+        .unwrap()
+        .0;
+    assert!(handler.contains("StatusCode::CREATED"));
+    assert!(handler.contains("parse_alert_email_create_payload(payload)?"));
+    assert!(handler.contains("load_alert_asset_detail"));
+    assert!(handler.contains("JOIN users u ON u.id = a.owner"));
+    assert!(handler.contains("u.uuid = $2"));
+    assert!(handler.contains("MutationCommittedResponseUnavailable"));
+    assert!(!handler.contains(".user_name()"));
+    for forbidden in [
+        "to_address",
+        "from_address",
+        "subject",
+        "message",
+        "recipient_credential_id",
+        "report_format_id",
+        "report_config_id",
+    ] {
+        assert!(
+            !handler.contains(forbidden),
+            "handler response leaked {forbidden}"
+        );
+    }
+    let response_shape = std::any::type_name::<AlertAssetItem>();
+    assert!(response_shape.ends_with("AlertAssetItem"));
+    let payload_source = include_str!("alert_payloads.rs");
+    assert!(payload_source.contains("method_data_redacted: true"));
+    for forbidden in ["to_address", "from_address", "subject", "message"] {
+        assert!(!payload_source.contains(forbidden));
+    }
+}
+
+#[test]
+fn alert_email_create_maps_json_extractor_rejections_before_mutation() {
+    let direct = include_str!("alert_writes.rs");
+    let browser = include_str!("browser_proxy_metadata_patch.rs");
+    assert!(direct.contains("Result<Json<AlertEmailCreateRequest>, JsonRejection>"));
+    assert!(
+        direct.contains("request body must be application/json matching AlertEmailCreateRequest")
+    );
+    assert!(browser.contains("Result<Json<AlertEmailCreateRequest>, JsonRejection>"));
+    assert!(browser.contains("parse_alert_email_create_payload(payload)?"));
+}
+
+#[test]
+fn alert_email_create_sensitive_sql_is_parameterized_unlogged_and_scrubbed() {
+    let manager = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+    let sql_api = include_str!("../../../components/gvmd/src/sql.c");
+    let sql_backend = include_str!("../../../components/gvmd/src/sql_pg.c");
+    assert!(manager.contains("sql_ps_sensitive"));
+    assert!(manager.contains("VALUES ($1, $2, $3)"));
+    assert!(sql_api.contains("sql_prepare_ps_internal (sensitive ? 0 : 1"));
+    assert!(sql_backend.contains("sql_finalize_sensitive"));
+    assert!(sql_backend.contains("*cursor++ = 0"));
+}
+
+#[test]
+fn alert_delivery_reference_deletes_lock_before_usage_checks() {
+    let credential_sql = include_str!("../../../components/gvmd/src/manage_sql.c");
+    let format_sql = include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
+    let config_sql = include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
+    for source in [credential_sql, format_sql, config_sql] {
+        let lock = source.find("FOR UPDATE;").expect("delete lock");
+        let usage = source[lock..]
+            .find("_in_use (")
+            .expect("usage check after delete lock");
+        assert!(usage > 0);
+    }
+    assert!(config_sql.contains("'notice_report_config'"));
+    assert!(config_sql.contains("'notice_attach_config'"));
+    assert!(!config_sql.contains("TODO: Check for alerts using the report config"));
+}
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> AlertPatchRequest {
     AlertPatchRequest {

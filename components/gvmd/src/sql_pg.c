@@ -1,4 +1,5 @@
 /* Copyright (C) 2014-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -31,7 +32,8 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Types. */
 
 /**
@@ -48,7 +50,8 @@ struct sql_stmt
   GArray *param_formats; ///< Parameter formats (int's).
 };
 
-
+
+
 /* Variables. */
 
 /**
@@ -64,7 +67,8 @@ extern int log_errors;
  */
 static PGconn *conn = NULL;
 
-
+
+
 /* Helpers. */
 
 /**
@@ -521,7 +525,7 @@ sql_prepare_ps_internal (int log, const char *sql, va_list args,
 
       (*stmt)->param_values->pdata[i] = pq_value;
       if (pq_value)
-        (*stmt)->param_lengths->data[i] = strlen (pq_value);
+        g_array_index ((*stmt)->param_lengths, int, i) = strlen (pq_value);
     }
   va_end (args_copy);
 }
@@ -609,7 +613,8 @@ sql_exec_internal (sql_stmt_t *stmt)
   return 0;
 }
 
-
+
+
 /* Transactions. */
 
 /**
@@ -697,7 +702,8 @@ sql_table_shared_lock_wait (const char *table, int lock_timeout)
   return ret;
 }
 
-
+
+
 /* Iterators. */
 
 /**
@@ -731,7 +737,8 @@ iterator_rewind (iterator_t *iterator)
   iterator->stmt->current_row = -1;
 }
 
-
+
+
 /* Statements. */
 
 /**
@@ -748,6 +755,27 @@ sql_finalize (sql_stmt_t *stmt)
   g_array_free (stmt->param_lengths, TRUE);
   g_array_free (stmt->param_formats, TRUE);
   g_free (stmt);
+}
+
+/**
+ * @brief Scrub copied parameter values and free a sensitive statement.
+ *
+ * @param[in]  stmt  Statement.
+ */
+void
+sql_finalize_sensitive (sql_stmt_t *stmt)
+{
+  guint index;
+
+  for (index = 0; index < stmt->param_values->len; index++)
+    {
+      volatile unsigned char *cursor = stmt->param_values->pdata[index];
+      size_t length = cursor ? strlen ((const char *) cursor) : 0;
+
+      while (length-- > 0)
+        *cursor++ = 0;
+    }
+  sql_finalize (stmt);
 }
 
 /**

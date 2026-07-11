@@ -549,7 +549,7 @@ delete_user (const char *user_id_arg, const char *name_arg,
              int forbid_super_admin,
              const char* inheritor_id, const char *inheritor_name)
 {
-  user_t user, inheritor;
+  user_t user, inheritor, locked_user;
 
 
   assert (user_id_arg || name_arg);
@@ -589,6 +589,25 @@ delete_user (const char *user_id_arg, const char *name_arg,
     {
       sql_rollback ();
       return 2;
+    }
+
+  switch (sql_int64 (&locked_user,
+                     "SELECT id FROM users WHERE id = %llu FOR UPDATE;",
+                     user))
+    {
+      case 0:
+        if (locked_user != user)
+          {
+            sql_rollback ();
+            return -1;
+          }
+        break;
+      case 1:
+        sql_rollback ();
+        return 2;
+      default:
+        sql_rollback ();
+        return -1;
     }
 
   if (sql_int ("SELECT count(*) <= 1 FROM users;"))

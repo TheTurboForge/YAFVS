@@ -1,4 +1,5 @@
 /* Copyright (C) 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -392,7 +393,7 @@ modify_report_config (const char *report_config_id,
 int
 delete_report_config (const char *report_config_id, int ultimate)
 {
-  report_config_t report_config, trash_report_config;
+  report_config_t report_config, trash_report_config, locked_report_config;
 
   sql_begin_immediate ();
 
@@ -455,6 +456,15 @@ delete_report_config (const char *report_config_id, int ultimate)
       sql_commit ();
 
       return 0;
+    }
+
+  if (sql_int64 (&locked_report_config,
+                 "SELECT id FROM report_configs WHERE id = %llu FOR UPDATE;",
+                 report_config)
+      || locked_report_config != report_config)
+    {
+      sql_rollback ();
+      return -1;
     }
 
   if (ultimate)
@@ -1075,8 +1085,19 @@ report_config_report_format (report_config_t report_config)
 int
 report_config_in_use (report_config_t report_config)
 {
-  // TODO: Check for alerts using the report config
-  return 0;
+  return sql_int
+           ("SELECT ("
+            " (SELECT count(*) FROM alert_method_data"
+            "   WHERE data = (SELECT uuid FROM report_configs WHERE id = %llu)"
+            "     AND name IN ('notice_report_config',"
+            "                  'notice_attach_config'))"
+            " +"
+            " (SELECT count(*) FROM alert_method_data_trash"
+            "   WHERE data = (SELECT uuid FROM report_configs WHERE id = %llu)"
+            "     AND name IN ('notice_report_config',"
+            "                  'notice_attach_config'))"
+            ")::integer;",
+            report_config, report_config);
 }
 
 /**
@@ -1089,8 +1110,21 @@ report_config_in_use (report_config_t report_config)
 int
 trash_report_config_in_use (report_config_t report_config)
 {
-  // TODO: Check for alerts using the report config
-  return 0;
+  return sql_int
+           ("SELECT ("
+            " (SELECT count(*) FROM alert_method_data"
+            "   WHERE data = (SELECT uuid FROM report_configs_trash"
+            "                 WHERE id = %llu)"
+            "     AND name IN ('notice_report_config',"
+            "                  'notice_attach_config'))"
+            " +"
+            " (SELECT count(*) FROM alert_method_data_trash"
+            "   WHERE data = (SELECT uuid FROM report_configs_trash"
+            "                 WHERE id = %llu)"
+            "     AND name IN ('notice_report_config',"
+            "                  'notice_attach_config'))"
+            ")::integer;",
+            report_config, report_config);
 }
 
 /**

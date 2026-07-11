@@ -15,6 +15,8 @@ BeforeEach (turbovas_control) {}
 AfterEach (turbovas_control) {}
 
 static int cleanup_calls;
+static int create_alert_calls;
+static int create_alert_result;
 static int create_schedule_calls;
 static int create_credential_calls;
 static int create_credential_result;
@@ -24,7 +26,26 @@ static int modify_schedule_result;
 static int reinit_calls;
 static int session_init_calls;
 static int stop_task_calls;
+static int audit_fail_calls;
+static int audit_success_calls;
 static const char *mock_operator_name;
+static gboolean alert_uuid_lookup_fails;
+static alert_condition_t received_alert_condition;
+static alert_method_t received_alert_method;
+static event_t received_alert_event;
+static gchar *received_active;
+static gchar *received_event_status;
+static gchar *received_from_address;
+static gchar *received_message;
+static gchar *received_notice;
+static gchar *received_recipient_credential;
+static gchar *received_report_config;
+static gchar *received_report_format;
+static gchar *received_atomic_report_config;
+static gchar *received_atomic_report_format;
+static gchar *received_subject;
+static gchar *received_to_address;
+static gchar *received_audit_uuid;
 static gchar *received_credential_type;
 static gchar *received_comment;
 static gchar *received_icalendar;
@@ -40,6 +61,110 @@ __wrap_user_name (const char *uuid)
 {
   (void) uuid;
   return mock_operator_name ? g_strdup (mock_operator_name) : NULL;
+}
+
+static const char *
+test_alert_data_value (GPtrArray *array, const char *name)
+{
+  guint index;
+
+  for (index = 0; index < array->len; index++)
+    {
+      const char *item = g_ptr_array_index (array, index);
+
+      if (item && strcmp (item, name) == 0)
+        return item + strlen (item) + 1;
+    }
+  return NULL;
+}
+
+int
+__wrap_create_alert_email_with_report_refs
+  (const char *name, const char *comment, const char *active,
+   GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
+   const char *recipient_credential_id, const char *report_format_id,
+   const char *report_config_id, alert_t *alert)
+{
+  (void) name;
+  (void) comment;
+  create_alert_calls++;
+  received_alert_event = EVENT_TASK_RUN_STATUS_CHANGED;
+  received_alert_condition = ALERT_CONDITION_ALWAYS;
+  received_alert_method = ALERT_METHOD_EMAIL;
+  g_free (received_active);
+  g_free (received_event_status);
+  g_free (received_to_address);
+  g_free (received_from_address);
+  g_free (received_subject);
+  g_free (received_notice);
+  g_free (received_recipient_credential);
+  g_free (received_report_format);
+  g_free (received_report_config);
+  g_free (received_atomic_report_format);
+  g_free (received_atomic_report_config);
+  g_free (received_message);
+  received_active = g_strdup (active);
+  received_event_status = g_strdup (test_alert_data_value (event_data,
+                                                            "status"));
+  received_to_address = g_strdup (test_alert_data_value (method_data,
+                                                         "to_address"));
+  received_from_address = g_strdup (test_alert_data_value (method_data,
+                                                           "from_address"));
+  received_subject = g_strdup (test_alert_data_value (method_data, "subject"));
+  received_notice = g_strdup (test_alert_data_value (method_data, "notice"));
+  received_recipient_credential =
+    g_strdup (test_alert_data_value (method_data, "recipient_credential"));
+  received_report_format =
+    g_strdup (test_alert_data_value (method_data, "notice_report_format"));
+  if (received_report_format == NULL)
+    received_report_format =
+      g_strdup (test_alert_data_value (method_data, "notice_attach_format"));
+  received_report_config =
+    g_strdup (test_alert_data_value (method_data, "notice_report_config"));
+  if (received_report_config == NULL)
+    received_report_config =
+      g_strdup (test_alert_data_value (method_data, "notice_attach_config"));
+  received_message = g_strdup (test_alert_data_value (method_data, "message"));
+  received_atomic_report_format = g_strdup (report_format_id);
+  received_atomic_report_config = g_strdup (report_config_id);
+  assert_that (
+    recipient_credential_id,
+    is_equal_to_string (received_recipient_credential
+                          ? received_recipient_credential : ""));
+  assert_that (condition_data->len, is_equal_to (1));
+  assert_that (g_ptr_array_index (condition_data, 0), is_null);
+  *alert = 9;
+  return create_alert_result;
+}
+
+char *
+__wrap_alert_uuid (alert_t alert)
+{
+  return alert == 9 && !alert_uuid_lookup_fails
+         ? g_strdup ("123e4567-e89b-12d3-a456-426614174004") : NULL;
+}
+
+void
+__wrap_log_event (const char *resource, const char *resource_name,
+                  const char *uuid, const char *action)
+{
+  assert_that (resource, is_equal_to_string ("alert"));
+  assert_that (resource_name, is_equal_to_string ("Alert"));
+  assert_that (action, is_equal_to_string ("created"));
+  audit_success_calls++;
+  g_free (received_audit_uuid);
+  received_audit_uuid = g_strdup (uuid);
+}
+
+void
+__wrap_log_event_fail (const char *resource, const char *resource_name,
+                       const char *uuid, const char *action)
+{
+  assert_that (resource, is_equal_to_string ("alert"));
+  assert_that (resource_name, is_equal_to_string ("Alert"));
+  assert_that (uuid, is_null);
+  assert_that (action, is_equal_to_string ("created"));
+  audit_fail_calls++;
 }
 
 void
@@ -306,6 +431,627 @@ Ensure (turbovas_control, creates_schedule_in_operator_session)
   assert_that (received_icalendar, is_equal_to_string (request.icalendar));
   assert_that (current_credentials.uuid, is_null);
   assert_that (current_credentials.username, is_null);
+}
+
+static gchar *
+test_alert_email_create_request (const char *active, const char *name,
+                                 const char *comment, const char *status,
+                                 const char *to_address,
+                                 const char *from_address,
+                                 const char *subject, const char *notice,
+                                 const char *recipient_credential_uuid,
+                                 const char *report_format_uuid,
+                                 const char *report_config_uuid,
+                                 const char *message)
+{
+  gchar *fields[10];
+  gchar *request;
+  size_t index;
+
+  fields[0] = g_base64_encode ((const guchar *) name, strlen (name));
+  fields[1] = g_base64_encode ((const guchar *) comment, strlen (comment));
+  fields[2] = g_base64_encode ((const guchar *) status, strlen (status));
+  fields[3] = g_base64_encode ((const guchar *) to_address,
+                               strlen (to_address));
+  fields[4] = g_base64_encode ((const guchar *) from_address,
+                               strlen (from_address));
+  fields[5] = g_base64_encode ((const guchar *) subject, strlen (subject));
+  fields[6] = g_base64_encode ((const guchar *) recipient_credential_uuid,
+                               strlen (recipient_credential_uuid));
+  fields[7] = g_base64_encode ((const guchar *) report_format_uuid,
+                               strlen (report_format_uuid));
+  fields[8] = g_base64_encode ((const guchar *) report_config_uuid,
+                               strlen (report_config_uuid));
+  fields[9] = g_base64_encode ((const guchar *) message, strlen (message));
+  request = g_strdup_printf (
+    "alert-email-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s %s %s "
+    "%s\n",
+    active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
+    notice, fields[6], fields[7], fields[8], fields[9]);
+  for (index = 0; index < G_N_ELEMENTS (fields); index++)
+    g_free (fields[index]);
+  return request;
+}
+
+Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
+{
+  static const char *statuses[] = {
+    "Delete Requested", "Ultimate Delete Requested",
+    "Ultimate Delete Waiting", "Delete Waiting", "Done", "New", "Requested",
+    "Running", "Queued", "Stop Requested", "Stop Waiting", "Stopped",
+    "Processing", "Interrupted",
+  };
+  const char *recipient = "123e4567-e89b-12d3-a456-426614174010";
+  const char *format = "123e4567-e89b-12d3-a456-426614174011";
+  const char *config = "123e4567-e89b-12d3-a456-426614174012";
+  char operator_uuid[37];
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (statuses); index++)
+    {
+      gchar *request = test_alert_email_create_request (
+        "1", "Email alert", "comment", statuses[index], "ops@example.com",
+        "sender@example.com", "subject", "0", recipient, format, config,
+        "Line one\nLine two");
+      turbovas_control_alert_email_create_request_t alert = {0};
+
+      assert_that (turbovas_control_parse_alert_email_create_request (
+                     request, strlen (request), TEST_CONTROL_SECRET,
+                     strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+                   is_true);
+      assert_that (operator_uuid,
+                   is_equal_to_string
+                     ("123e4567-e89b-12d3-a456-426614174000"));
+      assert_that (alert.active, is_true);
+      assert_that (alert.notice, is_equal_to (0));
+      assert_that (alert.status, is_equal_to_string (statuses[index]));
+      assert_that (alert.to_address,
+                   is_equal_to_string ("ops@example.com"));
+      assert_that (alert.recipient_credential_uuid,
+                   is_equal_to_string (recipient));
+      assert_that (alert.report_format_uuid, is_equal_to_string (format));
+      assert_that (alert.report_config_uuid, is_equal_to_string (config));
+      assert_that (alert.message,
+                   is_equal_to_string ("Line one\nLine two"));
+      turbovas_control_alert_email_create_request_clear (&alert);
+      g_free (request);
+    }
+}
+
+Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
+{
+  const char *format = "123e4567-e89b-12d3-a456-426614174011";
+  const char *report_notices[] = {"0", "2"};
+  gchar *request;
+  gchar *invalid[5];
+  char operator_uuid[37];
+  size_t index;
+  turbovas_control_alert_email_create_request_t alert = {0};
+
+  request = test_alert_email_create_request (
+    "1", "Simple", "", "Running", "ops@example.com", "", "subject", "1",
+    "", "", "", "simple message");
+  assert_that (turbovas_control_parse_alert_email_create_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+               is_true);
+  assert_that (alert.message, is_equal_to_string ("simple message"));
+  turbovas_control_alert_email_create_request_clear (&alert);
+  g_free (request);
+
+  for (index = 0; index < G_N_ELEMENTS (report_notices); index++)
+    {
+      request = test_alert_email_create_request (
+        "1", "Report", "", "Running", "ops@example.com", "", "subject",
+        report_notices[index], "", format, "", "");
+      assert_that (turbovas_control_parse_alert_email_create_request (
+                     request, strlen (request), TEST_CONTROL_SECRET,
+                     strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+                   is_true);
+      turbovas_control_alert_email_create_request_clear (&alert);
+      g_free (request);
+    }
+
+  invalid[0] = test_alert_email_create_request (
+    "1", "Missing subject", "", "Running", "ops@example.com", "", "", "0",
+    "", format, "", "");
+  invalid[1] = test_alert_email_create_request (
+    "1", "Simple format", "", "Running", "ops@example.com", "", "subject",
+    "1", "", format, "", "");
+  invalid[2] = test_alert_email_create_request (
+    "1", "Simple config", "", "Running", "ops@example.com", "", "subject",
+    "1", "", "", "123e4567-e89b-12d3-a456-426614174012", "");
+  invalid[3] = test_alert_email_create_request (
+    "1", "Include no format", "", "Running", "ops@example.com", "",
+    "subject", "0", "", "", "", "");
+  invalid[4] = test_alert_email_create_request (
+    "1", "Attach no format", "", "Running", "ops@example.com", "",
+    "subject", "2", "", "", "", "");
+  for (index = 0; index < G_N_ELEMENTS (invalid); index++)
+    {
+      assert_that (turbovas_control_parse_alert_email_create_request (
+                     invalid[index], strlen (invalid[index]),
+                     TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                     operator_uuid, &alert),
+                   is_false);
+      g_free (invalid[index]);
+    }
+}
+
+Ensure (turbovas_control, returns_malformed_for_truncated_alert_frame)
+{
+  const char *partial = "alert-email-create " TEST_CONTROL_SECRET " partial";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  int sockets[2];
+  ssize_t response_len;
+
+  assert_that (socketpair (AF_UNIX, SOCK_STREAM, 0, sockets), is_equal_to (0));
+  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+                         TRUE),
+               is_true);
+  assert_that (write (sockets[0], partial, strlen (partial)),
+               is_equal_to ((ssize_t) strlen (partial)));
+  assert_that (shutdown (sockets[0], SHUT_WR), is_equal_to (0));
+  turbovas_control_serve_client (sockets[1]);
+  response_len = read (sockets[0], response, sizeof (response) - 1);
+  assert_that (response_len, is_equal_to ((ssize_t) strlen ("-2 malformed\n")));
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  close (sockets[0]);
+  close (sockets[1]);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+}
+
+Ensure (turbovas_control, enforces_alert_email_canonicalization_and_bounds)
+{
+  gchar *max_name = g_strnfill (TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, 'n');
+  gchar *max_comment =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, 'c');
+  gchar *max_to = g_strnfill (TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES, 't');
+  gchar *max_from =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES, 'f');
+  gchar *max_subject =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES, 's');
+  gchar *max_message =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES, 'm');
+  gchar *oversized_name =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES + 1, 'n');
+  gchar *oversized_subject =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES + 1, 's');
+  gchar *oversized_message =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES + 1, 'm');
+  gchar *requests[6];
+  char full_frame[TURBOVAS_CONTROL_MAX_REQUEST_BYTES];
+  char operator_uuid[37];
+  size_t index;
+  turbovas_control_alert_email_create_request_t alert = {0};
+
+  requests[0] = test_alert_email_create_request (
+    "0", max_name, max_comment, "Running", max_to, max_from, max_subject, "2",
+    "", "123e4567-e89b-12d3-a456-426614174011",
+    "123e4567-e89b-12d3-a456-426614174012", max_message);
+  assert_that (strlen (requests[0]),
+               is_less_than (TURBOVAS_CONTROL_MAX_REQUEST_BYTES));
+  assert_that (turbovas_control_parse_alert_email_create_request (
+                 requests[0], strlen (requests[0]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+               is_true);
+  turbovas_control_alert_email_create_request_clear (&alert);
+
+  requests[1] = test_alert_email_create_request (
+    "0", oversized_name, "", "Running", "ops@example.com", "", "", "1", "",
+    "", "", "");
+  requests[2] = test_alert_email_create_request (
+    "0", "name", "", "Running", "ops@example.com", "", oversized_subject,
+    "1", "", "", "", "");
+  requests[3] = test_alert_email_create_request (
+    "0", "name", "", "Running", "ops@example.com", "", "", "1", "", "", "",
+    oversized_message);
+  requests[4] = test_alert_email_create_request (
+    "2", "name", "", "Not a status", "ops@example.com", "", "", "3",
+    "not-a-uuid", "", "", "");
+  requests[5] = g_strdup (
+    "alert-email-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 QQ Q29tbWVudA== UnVubmluZw== "
+    "b3BzQGV4YW1wbGUuY29t   1    \n");
+  for (index = 1; index < G_N_ELEMENTS (requests); index++)
+    assert_that (turbovas_control_parse_alert_email_create_request (
+                   requests[index], strlen (requests[index]),
+                   TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                   operator_uuid, &alert),
+                 is_false);
+  memset (full_frame, 'x', sizeof (full_frame));
+  memcpy (full_frame, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+          TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH);
+  full_frame[sizeof (full_frame) - 1] = '\n';
+  assert_that (turbovas_control_parse_alert_email_create_request (
+                 full_frame, sizeof (full_frame), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+               is_false);
+
+  for (index = 0; index < G_N_ELEMENTS (requests); index++)
+    g_free (requests[index]);
+  g_free (max_name);
+  g_free (max_comment);
+  g_free (max_to);
+  g_free (max_from);
+  g_free (max_subject);
+  g_free (max_message);
+  g_free (oversized_name);
+  g_free (oversized_subject);
+  g_free (oversized_message);
+}
+
+Ensure (turbovas_control, maps_alert_email_arrays_session_and_success_audit)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Email alert",
+    .comment = "comment",
+    .status = "Running",
+    .to_address = "ops@example.com",
+    .from_address = "sender@example.com",
+    .subject = "subject",
+    .recipient_credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
+    .message = "selected include message",
+    .active = TRUE,
+    .notice = 0,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174004"));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (received_alert_event,
+               is_equal_to (EVENT_TASK_RUN_STATUS_CHANGED));
+  assert_that (received_alert_condition, is_equal_to (ALERT_CONDITION_ALWAYS));
+  assert_that (received_alert_method, is_equal_to (ALERT_METHOD_EMAIL));
+  assert_that (received_active, is_equal_to_string ("1"));
+  assert_that (received_event_status, is_equal_to_string ("Running"));
+  assert_that (received_to_address, is_equal_to_string ("ops@example.com"));
+  assert_that (received_from_address,
+               is_equal_to_string ("sender@example.com"));
+  assert_that (received_subject, is_equal_to_string ("subject"));
+  assert_that (received_notice, is_equal_to_string ("0"));
+  assert_that (received_recipient_credential,
+               is_equal_to_string (request.recipient_credential_uuid));
+  assert_that (received_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_report_config,
+               is_equal_to_string (request.report_config_uuid));
+  assert_that (received_atomic_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_atomic_report_config,
+               is_equal_to_string (request.report_config_uuid));
+  assert_that (received_message, is_equal_to_string (request.message));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (received_audit_uuid, is_equal_to_string (created_uuid));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, maps_selected_attach_message_and_failure_audit)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Attach alert", .comment = "", .status = "Done",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
+    .message = "selected attach message", .active = FALSE, .notice = 2,
+  };
+  char created_uuid[37];
+
+  create_alert_calls = 0;
+  create_alert_result = 2;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (2));
+  assert_that (received_active, is_equal_to_string ("0"));
+  assert_that (received_notice, is_equal_to_string ("2"));
+  assert_that (received_from_address, is_null);
+  assert_that (received_recipient_credential, is_null);
+  assert_that (received_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_report_config,
+               is_equal_to_string (request.report_config_uuid));
+  assert_that (received_message, is_equal_to_string (request.message));
+  assert_that (audit_success_calls, is_equal_to (0));
+  assert_that (audit_fail_calls, is_equal_to (1));
+}
+
+Ensure (turbovas_control, maps_simple_notice_without_report_selectors)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Simple alert", .comment = "", .status = "Stopped",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "", .report_format_uuid = "",
+    .report_config_uuid = "", .message = "simple message",
+    .active = TRUE, .notice = 1,
+  };
+  char created_uuid[37];
+
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (0));
+  assert_that (received_notice, is_equal_to_string ("1"));
+  assert_that (received_report_format, is_null);
+  assert_that (received_report_config, is_null);
+  assert_that (received_atomic_report_format, is_equal_to_string (""));
+  assert_that (received_atomic_report_config, is_equal_to_string (""));
+  assert_that (received_from_address, is_null);
+  assert_that (received_recipient_credential, is_null);
+  assert_that (received_message, is_equal_to_string (request.message));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+}
+
+Ensure (turbovas_control, omits_empty_optional_report_method_data)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Include alert", .comment = "", .status = "Done",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "", .message = "", .active = TRUE, .notice = 0,
+  };
+  char created_uuid[37];
+
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (0));
+  assert_that (received_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_report_config, is_null);
+  assert_that (received_from_address, is_null);
+  assert_that (received_recipient_credential, is_null);
+  assert_that (received_message, is_null);
+}
+
+Ensure (turbovas_control, rejects_missing_alert_operator_before_authority)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Email alert", .comment = "", .status = "Running",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "", .report_format_uuid = "",
+    .report_config_uuid = "", .message = "", .active = TRUE, .notice = 1,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  audit_fail_calls = 0;
+  mock_operator_name = NULL;
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (99));
+  assert_that (create_alert_calls, is_equal_to (0));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (0));
+}
+
+Ensure (turbovas_control, maps_atomic_unavailable_alert_report_format)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Include alert", .comment = "", .status = "Done",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "", .message = "delivery payload",
+    .active = TRUE, .notice = 0,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  audit_fail_calls = 0;
+  create_alert_result = 90;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (90));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (received_atomic_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_atomic_report_config, is_equal_to_string (""));
+  assert_that (audit_fail_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, maps_atomic_unavailable_alert_report_config)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Attach alert", .comment = "", .status = "Done",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
+    .message = "delivery payload", .active = TRUE, .notice = 2,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  audit_fail_calls = 0;
+  create_alert_result = 91;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (91));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (received_atomic_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_atomic_report_config,
+               is_equal_to_string (request.report_config_uuid));
+  assert_that (audit_fail_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, maps_atomic_alert_report_config_mismatch)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Include alert", .comment = "", .status = "Done",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
+    .message = "delivery payload", .active = TRUE, .notice = 0,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  audit_fail_calls = 0;
+  create_alert_result = 92;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (92));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (received_atomic_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_atomic_report_config,
+               is_equal_to_string (request.report_config_uuid));
+  assert_that (audit_fail_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, reports_postcommit_alert_uuid_failure_without_failed_audit)
+{
+  const turbovas_control_alert_email_create_request_t request = {
+    .name = "Simple alert", .comment = "", .status = "Done",
+    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
+    .recipient_credential_uuid = "", .report_format_uuid = "",
+    .report_config_uuid = "", .message = "delivery payload",
+    .active = TRUE, .notice = 1,
+  };
+  char created_uuid[37];
+
+  alert_uuid_lookup_fails = TRUE;
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_email (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (-3));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (received_audit_uuid, is_null);
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  alert_uuid_lookup_fails = FALSE;
+}
+
+Ensure (turbovas_control, maps_every_alert_create_response)
+{
+  static const struct
+  {
+    int result;
+    const char *response;
+  } cases[] = {
+    {1, "1 exists\n"}, {2, "2 invalid_email\n"},
+    {3, "3 filter_not_found\n"}, {4, "4 invalid_filter_type\n"},
+    {5, "5 invalid_condition_name\n"}, {6, "6 invalid_condition_data\n"},
+    {7, "7 subject_too_long\n"}, {8, "8 message_too_long\n"},
+    {9, "9 condition_filter_not_found\n"}, {12, "12 invalid_send_host\n"},
+    {13, "13 invalid_send_port\n"}, {14, "14 send_format_not_found\n"},
+    {15, "15 invalid_scp_host\n"}, {16, "16 invalid_scp_port\n"},
+    {17, "17 scp_format_not_found\n"},
+    {18, "18 invalid_scp_credential\n"}, {19, "19 invalid_scp_path\n"},
+    {20, "20 method_event_mismatch\n"},
+    {21, "21 condition_event_mismatch\n"},
+    {31, "31 invalid_event_name\n"}, {32, "32 invalid_event_data\n"},
+    {40, "40 invalid_smb_credential\n"}, {41, "41 invalid_smb_share\n"},
+    {42, "42 invalid_smb_path\n"}, {43, "43 dotted_smb_path\n"},
+    {50, "50 invalid_tp_credential\n"}, {51, "51 invalid_tp_host\n"},
+    {52, "52 invalid_tp_certificate\n"}, {53, "53 invalid_tp_tls\n"},
+    {60, "60 recipient_credential_not_found\n"},
+    {61, "61 invalid_recipient_credential\n"},
+    {70, "70 vfire_credential_not_found\n"},
+    {71, "71 invalid_vfire_credential\n"},
+    {80, "80 sourcefire_credential_not_found\n"},
+    {81, "81 invalid_sourcefire_credential\n"},
+    {90, "90 report_format_not_found\n"},
+    {91, "91 report_config_not_found\n"},
+    {92, "92 report_config_mismatch\n"}, {99, "99 forbidden\n"},
+    {-3, "-3 committed_indeterminate\n"}, {-2, "-2 malformed\n"},
+    {-1, "-1 internal\n"},
+  };
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  size_t index;
+
+  assert_that (turbovas_control_alert_email_create_response (
+                 0, "123e4567-e89b-12d3-a456-426614174004", response),
+               is_equal_to_string
+                 ("0 created 123e4567-e89b-12d3-a456-426614174004\n"));
+  assert_that (turbovas_control_alert_email_create_response (
+                 0, NULL, response),
+               is_equal_to_string ("-1 internal\n"));
+  for (index = 0; index < G_N_ELEMENTS (cases); index++)
+    {
+      assert_that (strlen (cases[index].response),
+                   is_less_than (TURBOVAS_CONTROL_MAX_RESPONSE_BYTES));
+      assert_that (turbovas_control_alert_email_create_response (
+                     cases[index].result, NULL, response),
+                   is_equal_to_string (cases[index].response));
+    }
 }
 
 Ensure (turbovas_control, maps_schedule_create_responses)
@@ -1024,6 +1770,35 @@ main (int argc, char **argv)
                          maps_schedule_modify_responses);
   add_test_with_context (suite, turbovas_control,
                          rejects_nonexistent_operator_before_session_setup);
+  add_test_with_context (suite, turbovas_control,
+                         parses_canonical_bounded_alert_email_request);
+  add_test_with_context (suite, turbovas_control,
+                         enforces_alert_email_notice_mode_semantics);
+  add_test_with_context (suite, turbovas_control,
+                         enforces_alert_email_canonicalization_and_bounds);
+  add_test_with_context (suite, turbovas_control,
+                         maps_alert_email_arrays_session_and_success_audit);
+  add_test_with_context (suite, turbovas_control,
+                         maps_selected_attach_message_and_failure_audit);
+  add_test_with_context (suite, turbovas_control,
+                         maps_simple_notice_without_report_selectors);
+  add_test_with_context (suite, turbovas_control,
+                         omits_empty_optional_report_method_data);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_missing_alert_operator_before_authority);
+  add_test_with_context (suite, turbovas_control,
+                         maps_atomic_unavailable_alert_report_format);
+  add_test_with_context (suite, turbovas_control,
+                         maps_atomic_unavailable_alert_report_config);
+  add_test_with_context (suite, turbovas_control,
+                         maps_atomic_alert_report_config_mismatch);
+  add_test_with_context (
+    suite, turbovas_control,
+    reports_postcommit_alert_uuid_failure_without_failed_audit);
+  add_test_with_context (suite, turbovas_control,
+                         maps_every_alert_create_response);
+  add_test_with_context (suite, turbovas_control,
+                         returns_malformed_for_truncated_alert_frame);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

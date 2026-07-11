@@ -74,7 +74,11 @@ fn openapi_operation_block(path_block: &str, method: &str) -> String {
 
 #[test]
 fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
-    let create = inherited_function(MANAGE_SQL_ALERTS_C, "create_alert");
+    let create = format!(
+        "{}\n{}",
+        inherited_function(MANAGE_SQL_ALERTS_C, "create_alert"),
+        inherited_function(MANAGE_SQL_ALERTS_C, "create_alert_body")
+    );
     for required in [
         "acl_user_may (\"create_alert\") == 0",
         "check_alert_params (event, condition, method)",
@@ -334,7 +338,7 @@ fn python_gvm_still_exposes_alert_mutation_and_test_requests() {
 }
 
 #[test]
-fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
+fn native_email_alert_create_is_guarded_and_broad_mutation_routes_remain_closed() {
     for path in [
         "/api/v1/alerts",
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc",
@@ -347,13 +351,29 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
             direct_api_v1_method_is_allowed(&Method::GET, path, false),
             "alert read path must allow GET without write control: {path}"
         );
-        for method in [Method::POST, Method::PUT] {
+        for method in [Method::PUT] {
             assert!(
                 !direct_api_v1_method_is_allowed(&method, path, true),
                 "alert native mutation must remain closed for {method} {path}"
             );
         }
     }
+    assert!(
+        !direct_api_v1_method_is_allowed(&Method::POST, "/api/v1/alerts", false),
+        "EMAIL alert create must require direct write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::POST, "/api/v1/alerts", true),
+        "EMAIL alert create must be enabled by direct write-control"
+    );
+    assert!(
+        !direct_api_v1_method_is_allowed(
+            &Method::POST,
+            "/api/v1/alerts/12345678-1234-1234-1234-123456789abc",
+            true
+        ),
+        "alert detail POST must remain closed"
+    );
     assert!(
         !direct_api_v1_method_is_allowed(&Method::DELETE, "/api/v1/alerts", true),
         "alert collection DELETE must remain closed"
@@ -447,7 +467,7 @@ fn native_alert_delivery_and_broad_mutation_routes_remain_closed() {
         (
             "/alerts",
             "alert-metadata-list-read",
-            ["    post:", "    put:", "    patch:", "    delete:"].as_slice(),
+            ["    put:", "    patch:", "    delete:"].as_slice(),
         ),
         (
             "/alerts/{alert_id}",

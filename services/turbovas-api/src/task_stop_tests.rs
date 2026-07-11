@@ -107,14 +107,14 @@ async fn task_stop_mock_uds_maps_chunked_requested_response_without_reporting_st
 #[tokio::test]
 async fn task_stop_mock_uds_rejects_trailing_and_overlong_responses() {
     let (partial, _) = request_stop_from_mock(vec![b"0 stopped".to_vec()]).await;
-    assert_eq!(partial, Err(ControlSocketError::Failure));
+    assert_eq!(partial, Err(ControlSocketError::OutcomeIndeterminate));
 
     let (trailing, _) =
         request_stop_from_mock(vec![b"0 stopped\n".to_vec(), b"trailing".to_vec()]).await;
-    assert_eq!(trailing, Err(ControlSocketError::Failure));
+    assert_eq!(trailing, Err(ControlSocketError::OutcomeIndeterminate));
 
     let (overlong, _) = request_stop_from_mock(vec![vec![b'x'; 257]]).await;
-    assert_eq!(overlong, Err(ControlSocketError::Failure));
+    assert_eq!(overlong, Err(ControlSocketError::OutcomeIndeterminate));
 }
 
 #[test]

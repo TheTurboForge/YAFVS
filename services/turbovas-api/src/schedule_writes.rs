@@ -375,6 +375,9 @@ fn map_schedule_patch_control_socket_error(error: ControlSocketError) -> Schedul
         ControlSocketError::Forbidden => SchedulePatchError::Api(ApiError::Forbidden),
         ControlSocketError::NotFound => SchedulePatchError::Api(ApiError::NotFound),
         ControlSocketError::Unavailable => SchedulePatchError::Api(ApiError::ControlUnavailable),
+        ControlSocketError::OutcomeIndeterminate => {
+            SchedulePatchError::Api(ApiError::MutationOutcomeIndeterminate)
+        }
         ControlSocketError::Requested
         | ControlSocketError::ScannerUnverified
         | ControlSocketError::Failure => SchedulePatchError::ControlFailure,

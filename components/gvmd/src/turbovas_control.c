@@ -21,8 +21,10 @@
 #include <unistd.h>
 
 #include "manage.h"
+#include "manage_alerts.h"
 #include "manage_schedules.h"
 #include "manage_users.h"
+#include "gmp_base.h"
 
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "md   control"
@@ -54,6 +56,16 @@
 #define TURBOVAS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES 32768
 #define TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP "up"
 #define TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK "usk"
+#define TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND "alert-email-create "
+#define TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES 32
+#define TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES 80
+#define TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES 2000
+#define TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES 36
 
 typedef struct
 {
@@ -81,6 +93,22 @@ typedef struct
   gchar *private_key;
 } turbovas_control_credential_create_request_t;
 
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *status;
+  gchar *to_address;
+  gchar *from_address;
+  gchar *subject;
+  gchar *recipient_credential_uuid;
+  gchar *report_format_uuid;
+  gchar *report_config_uuid;
+  gchar *message;
+  gboolean active;
+  unsigned int notice;
+} turbovas_control_alert_email_create_request_t;
+
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -88,6 +116,9 @@ turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
 static gboolean
 turbovas_control_next_field (const char **, const char *, const char **,
                              size_t *);
+
+static void
+turbovas_control_secure_free (gchar *);
 
 static gboolean
 turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
@@ -284,6 +315,23 @@ turbovas_control_schedule_create_request_clear
 }
 
 static void
+turbovas_control_alert_email_create_request_clear
+  (turbovas_control_alert_email_create_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->status);
+  turbovas_control_secure_free (request->to_address);
+  turbovas_control_secure_free (request->from_address);
+  turbovas_control_secure_free (request->subject);
+  turbovas_control_secure_free (request->recipient_credential_uuid);
+  turbovas_control_secure_free (request->report_format_uuid);
+  turbovas_control_secure_free (request->report_config_uuid);
+  turbovas_control_secure_free (request->message);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
 turbovas_control_secure_clear (void *value, size_t length)
 {
   volatile unsigned char *cursor = value;
@@ -360,6 +408,162 @@ turbovas_control_decode_base64_field (const char *value, size_t value_len,
   g_free (canonical);
   g_free (decoded);
   g_free (encoded);
+  return valid;
+}
+
+static gboolean
+turbovas_control_alert_status_is_valid (const char *status)
+{
+  static const char *allowed[] = {
+    "Delete Requested",
+    "Ultimate Delete Requested",
+    "Ultimate Delete Waiting",
+    "Delete Waiting",
+    "Done",
+    "New",
+    "Requested",
+    "Running",
+    "Queued",
+    "Stop Requested",
+    "Stop Waiting",
+    "Stopped",
+    "Processing",
+    "Interrupted",
+    NULL,
+  };
+  size_t index;
+
+  for (index = 0; allowed[index]; index++)
+    if (strcmp (status, allowed[index]) == 0)
+      return TRUE;
+
+  return FALSE;
+}
+
+static gboolean
+turbovas_control_optional_uuid_is_valid (const char *uuid)
+{
+  return uuid[0] == '\0' || turbovas_control_uuid_is_valid (uuid);
+}
+
+static gboolean
+turbovas_control_parse_alert_email_create_request
+  (const char *request, size_t request_len, const char *expected_secret,
+   size_t expected_secret_len, char operator_uuid[37],
+   turbovas_control_alert_email_create_request_t *alert)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  const char *operator_start;
+  const char *secret;
+  const char *secret_end;
+  size_t field_len;
+  size_t secret_len;
+  gboolean valid;
+
+  memset (alert, 0, sizeof (*alert));
+  if (request == NULL
+      || request_len >= TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
+                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
+      || memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+                 TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len,
+                                           expected_secret,
+                                           expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if ((size_t) (end - operator_start) < 37 || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  cursor = operator_start + 37;
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && field_len == 1 && (field[0] == '0' || field[0] == '1');
+  if (!valid)
+    return FALSE;
+  alert->active = field[0] == '1';
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+                &alert->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES,
+                FALSE, &alert->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+                &alert->status)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES,
+                TRUE, &alert->to_address)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES,
+                FALSE, &alert->from_address)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES,
+                TRUE, &alert->subject)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && field_len == 1 && field[0] >= '0' && field[0] <= '2';
+  if (!valid)
+    {
+      turbovas_control_alert_email_create_request_clear (alert);
+      return FALSE;
+    }
+  alert->notice = (unsigned int) (field[0] - '0');
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
+                &alert->recipient_credential_uuid)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
+                &alert->report_format_uuid)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
+                &alert->report_config_uuid)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field
+               (field, field_len, TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES,
+                FALSE, &alert->message)
+          && cursor == end
+          && turbovas_control_alert_status_is_valid (alert->status)
+          && turbovas_control_optional_uuid_is_valid
+               (alert->recipient_credential_uuid)
+          && turbovas_control_optional_uuid_is_valid (alert->report_format_uuid)
+          && turbovas_control_optional_uuid_is_valid (alert->report_config_uuid)
+          && ((alert->notice == 1
+               && alert->report_format_uuid[0] == '\0'
+               && alert->report_config_uuid[0] == '\0')
+              || (alert->notice != 1
+                  && alert->report_format_uuid[0] != '\0'));
+  if (!valid)
+    turbovas_control_alert_email_create_request_clear (alert);
+
   return valid;
 }
 
@@ -729,6 +933,72 @@ turbovas_control_schedule_create_response
 }
 
 static const char *
+turbovas_control_alert_email_create_response
+  (int result, const char *uuid,
+   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 0: status = "-1 internal\n"; break;
+      case 1: status = "1 exists\n"; break;
+      case 2: status = "2 invalid_email\n"; break;
+      case 3: status = "3 filter_not_found\n"; break;
+      case 4: status = "4 invalid_filter_type\n"; break;
+      case 5: status = "5 invalid_condition_name\n"; break;
+      case 6: status = "6 invalid_condition_data\n"; break;
+      case 7: status = "7 subject_too_long\n"; break;
+      case 8: status = "8 message_too_long\n"; break;
+      case 9: status = "9 condition_filter_not_found\n"; break;
+      case 12: status = "12 invalid_send_host\n"; break;
+      case 13: status = "13 invalid_send_port\n"; break;
+      case 14: status = "14 send_format_not_found\n"; break;
+      case 15: status = "15 invalid_scp_host\n"; break;
+      case 16: status = "16 invalid_scp_port\n"; break;
+      case 17: status = "17 scp_format_not_found\n"; break;
+      case 18: status = "18 invalid_scp_credential\n"; break;
+      case 19: status = "19 invalid_scp_path\n"; break;
+      case 20: status = "20 method_event_mismatch\n"; break;
+      case 21: status = "21 condition_event_mismatch\n"; break;
+      case 31: status = "31 invalid_event_name\n"; break;
+      case 32: status = "32 invalid_event_data\n"; break;
+      case 40: status = "40 invalid_smb_credential\n"; break;
+      case 41: status = "41 invalid_smb_share\n"; break;
+      case 42: status = "42 invalid_smb_path\n"; break;
+      case 43: status = "43 dotted_smb_path\n"; break;
+      case 50: status = "50 invalid_tp_credential\n"; break;
+      case 51: status = "51 invalid_tp_host\n"; break;
+      case 52: status = "52 invalid_tp_certificate\n"; break;
+      case 53: status = "53 invalid_tp_tls\n"; break;
+      case 60: status = "60 recipient_credential_not_found\n"; break;
+      case 61: status = "61 invalid_recipient_credential\n"; break;
+      case 70: status = "70 vfire_credential_not_found\n"; break;
+      case 71: status = "71 invalid_vfire_credential\n"; break;
+      case 80: status = "80 sourcefire_credential_not_found\n"; break;
+      case 81: status = "81 invalid_sourcefire_credential\n"; break;
+      case 90: status = "90 report_format_not_found\n"; break;
+      case 91: status = "91 report_config_not_found\n"; break;
+      case 92: status = "92 report_config_mismatch\n"; break;
+      case 99: status = "99 forbidden\n"; break;
+      case -3: status = "-3 committed_indeterminate\n"; break;
+      case -2: status = "-2 malformed\n"; break;
+      case -1: status = "-1 internal\n"; break;
+      default: status = "-1 internal\n"; break;
+    }
+
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
+static const char *
 turbovas_control_credential_create_response
   (int result, const char *uuid,
    char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
@@ -937,6 +1207,132 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
   return result;
 }
 
+static void
+turbovas_control_array_add_data (array_t *array, const char *name,
+                                 const char *value)
+{
+  size_t name_len = strlen (name);
+  size_t value_len = strlen (value);
+  gchar *item = g_malloc (name_len + value_len + 2);
+
+  memcpy (item, name, name_len + 1);
+  memcpy (item + name_len + 1, value, value_len + 1);
+  array_add (array, item);
+}
+
+static void
+turbovas_control_secure_array_free (array_t *array)
+{
+  guint index;
+
+  if (array == NULL)
+    return;
+
+  for (index = 0; index < array->len; index++)
+    {
+      gchar *item = g_ptr_array_index (array, index);
+      size_t name_len;
+      size_t value_len;
+
+      if (item == NULL)
+        continue;
+      name_len = strlen (item);
+      value_len = strlen (item + name_len + 1);
+      turbovas_control_secure_clear (item, name_len + value_len + 2);
+    }
+  array_free (array);
+}
+
+static int
+turbovas_control_create_alert_email
+  (const char *operator_uuid,
+   const turbovas_control_alert_email_create_request_t *request,
+   char created_uuid[37])
+{
+  array_t *condition_data = NULL;
+  array_t *event_data = NULL;
+  array_t *method_data = NULL;
+  alert_t alert = 0;
+  char active[2] = { request->active ? '1' : '0', '\0' };
+  char notice[2] = { (char) ('0' + request->notice), '\0' };
+  char *uuid = NULL;
+  gboolean committed = FALSE;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  condition_data = make_array ();
+  event_data = make_array ();
+  method_data = make_array ();
+  turbovas_control_array_add_data (event_data, "status", request->status);
+  turbovas_control_array_add_data (method_data, "to_address",
+                                   request->to_address);
+  if (request->from_address[0])
+    turbovas_control_array_add_data (method_data, "from_address",
+                                     request->from_address);
+  turbovas_control_array_add_data (method_data, "subject", request->subject);
+  turbovas_control_array_add_data (method_data, "notice", notice);
+  if (request->recipient_credential_uuid[0])
+    turbovas_control_array_add_data (method_data, "recipient_credential",
+                                     request->recipient_credential_uuid);
+  if (request->notice == 0)
+    {
+      turbovas_control_array_add_data (method_data, "notice_report_format",
+                                       request->report_format_uuid);
+      if (request->report_config_uuid[0])
+        turbovas_control_array_add_data (method_data, "notice_report_config",
+                                         request->report_config_uuid);
+    }
+  else if (request->notice == 2)
+    {
+      turbovas_control_array_add_data (method_data, "notice_attach_format",
+                                       request->report_format_uuid);
+      if (request->report_config_uuid[0])
+        turbovas_control_array_add_data (method_data, "notice_attach_config",
+                                         request->report_config_uuid);
+    }
+  if (request->message[0])
+    turbovas_control_array_add_data (method_data, "message", request->message);
+  array_terminate (condition_data);
+  array_terminate (event_data);
+  array_terminate (method_data);
+
+  result = create_alert_email_with_report_refs
+             (request->name, request->comment, active, event_data,
+              condition_data, method_data, request->recipient_credential_uuid,
+              request->report_format_uuid, request->report_config_uuid,
+              &alert);
+  if (result == 0)
+    {
+      committed = TRUE;
+      uuid = alert_uuid (alert);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        {
+          g_warning ("%s: alert creation committed but UUID lookup failed",
+                     __func__);
+          log_event ("alert", "Alert", NULL, "created");
+          result = -3;
+        }
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+          log_event ("alert", "Alert", created_uuid, "created");
+        }
+    }
+
+  if (result != 0 && !committed)
+    log_event_fail ("alert", "Alert", NULL, "created");
+
+  free (uuid);
+  turbovas_control_secure_array_free (condition_data);
+  turbovas_control_secure_array_free (event_data);
+  turbovas_control_secure_array_free (method_data);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
 static int
 turbovas_control_create_schedule
   (const char *operator_uuid,
@@ -1048,6 +1444,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_schedule_create_request_t schedule_request = {0};
   turbovas_control_schedule_modify_request_t schedule_modify_request = {0};
   turbovas_control_credential_create_request_t credential_request = {0};
+  turbovas_control_alert_email_create_request_t alert_request = {0};
   memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
@@ -1093,6 +1490,24 @@ turbovas_control_serve_client (int client_socket)
           result_response = turbovas_control_schedule_modify_response
                               (result, response);
         }
+      else if (turbovas_control_parse_alert_email_create_request
+                 (request, request_len, expected_secret, expected_secret_len,
+                  operator_uuid, &alert_request))
+        {
+          result = turbovas_control_create_alert_email (operator_uuid,
+                                                        &alert_request,
+                                                        created_uuid);
+          result_response = turbovas_control_alert_email_create_response
+                              (result, created_uuid, response);
+        }
+      else if (request_len
+                 >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
+               && memcmp (request,
+                          TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
+                    == 0)
+        result_response = turbovas_control_alert_email_create_response
+                            (-2, NULL, response);
       else if (request_len >= TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
                && memcmp (request, TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND,
                           TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
@@ -1109,6 +1524,12 @@ turbovas_control_serve_client (int client_socket)
       else
         result_response = turbovas_control_response (result);
     }
+  else if (request_len >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+                      TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
+                == 0)
+    result_response = turbovas_control_alert_email_create_response (-2, NULL,
+                                                                    response);
   else
     result_response = turbovas_control_response (result);
 
@@ -1117,6 +1538,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_schedule_create_request_clear (&schedule_request);
   turbovas_control_schedule_modify_request_clear (&schedule_modify_request);
   turbovas_control_credential_create_request_clear (&credential_request);
+  turbovas_control_alert_email_create_request_clear (&alert_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
       turbovas_control_secure_clear (request, request_len);

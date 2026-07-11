@@ -1710,7 +1710,7 @@ delete_report_format (const char *report_format_id, int ultimate)
 {
   gchar *dir;
   char *owner_uuid;
-  report_format_t report_format, trash_report_format;
+  report_format_t report_format, trash_report_format, locked_report_format;
 
   /* This is complicated in two ways
    *
@@ -1814,6 +1814,15 @@ delete_report_format (const char *report_format_id, int ultimate)
       sql_commit ();
 
       return 0;
+    }
+
+  if (sql_int64 (&locked_report_format,
+                 "SELECT id FROM report_formats WHERE id = %llu FOR UPDATE;",
+                 report_format)
+      || locked_report_format != report_format)
+    {
+      sql_rollback ();
+      return -1;
     }
 
   owner_uuid = report_format_owner_uuid (report_format);

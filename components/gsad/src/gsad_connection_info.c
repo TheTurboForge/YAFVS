@@ -6,6 +6,17 @@
 
 #include "gsad_connection_info.h"
 
+static void
+secure_clear (void *value, gsize length)
+{
+  volatile unsigned char *cursor = value;
+
+  if (value == NULL)
+    return;
+  while (length--)
+    *cursor++ = 0;
+}
+
 struct gsad_connection_info
 {
   gsad_method_type_t method_type;          ///< HTTP method type.
@@ -47,7 +58,10 @@ gsad_connection_info_free (gsad_connection_info_t *con_info)
     MHD_destroy_post_processor (con_info->postprocessor);
 
   if (con_info->raw_body != NULL)
-    g_string_free (con_info->raw_body, TRUE);
+    {
+      secure_clear (con_info->raw_body->str, con_info->raw_body->len);
+      g_string_free (con_info->raw_body, TRUE);
+    }
 
   params_free (con_info->params);
   g_free (con_info->url);

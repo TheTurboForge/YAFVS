@@ -22361,29 +22361,106 @@ manage_empty_trashcan_locked ()
 }
 
 /**
- * @brief Empty trash only if the locked owner-scoped total is expected.
+ * @brief Hash the locked owner-scoped base-resource identity set.
+ */
+static gchar *
+trash_empty_identity_digest (long long int operator_id)
+{
+  GChecksum *checksum;
+  gchar *digest;
+  iterator_t iterator;
+
+  checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  if (checksum == NULL)
+    return NULL;
+
+  init_iterator (
+    &iterator,
+    "SELECT resource_type, item_uuid"
+    " FROM ("
+    "  SELECT 'alerts'::text AS resource_type, uuid::text AS item_uuid FROM alerts_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'configs'::text, uuid::text FROM configs_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'credentials'::text, uuid::text FROM credentials_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'filters'::text, uuid::text FROM filters_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'overrides'::text, uuid::text FROM overrides_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'port_lists'::text, uuid::text FROM port_lists_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'report_configs'::text, uuid::text FROM report_configs_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'report_formats'::text, uuid::text FROM report_formats_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'scanners'::text, uuid::text FROM scanners_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'schedules'::text, uuid::text FROM schedules_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'tags'::text, uuid::text FROM tags_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'targets'::text, uuid::text FROM targets_trash"
+    "   WHERE owner = %lld"
+    "  UNION ALL SELECT 'tasks'::text, uuid::text FROM tasks"
+    "   WHERE owner = %lld AND hidden = 2"
+    " ) trash_items"
+    " ORDER BY resource_type ASC, item_uuid ASC;",
+    operator_id, operator_id, operator_id, operator_id, operator_id,
+    operator_id, operator_id, operator_id, operator_id, operator_id,
+    operator_id, operator_id, operator_id);
+  while (next (&iterator))
+    {
+      const char *resource_type = iterator_string (&iterator, 0);
+      const char *uuid = iterator_string (&iterator, 1);
+
+      if (resource_type == NULL || uuid == NULL)
+        {
+          cleanup_iterator (&iterator);
+          g_checksum_free (checksum);
+          return NULL;
+        }
+      g_checksum_update (checksum, (const guchar *) resource_type,
+                         strlen (resource_type));
+      g_checksum_update (checksum, (const guchar *) "\0", 1);
+      g_checksum_update (checksum, (const guchar *) uuid, strlen (uuid));
+      g_checksum_update (checksum, (const guchar *) "\0", 1);
+    }
+  cleanup_iterator (&iterator);
+
+  digest = g_strdup (g_checksum_get_string (checksum));
+  g_checksum_free (checksum);
+  return digest;
+}
+
+/**
+ * @brief Empty trash only if the locked owner-scoped snapshot matches.
  *
  * The users table is locked before the user row so concurrent user deletion
  * cannot hold resource-table locks while waiting for this transaction.
  * Count-changing writers take a conflicting users-table gate before resource
- * access, keeping the total stable through the authoritative deletion
- * sequence.
+ * access, keeping the total and identity set stable through the authoritative
+ * deletion sequence.
  *
  * @param[in]  expected_total  Required owner-scoped base resource total.
+ * @param[in]  expected_identity_digest Required SHA-256 identity digest.
  * @param[out] actual_total    Total observed while all locks are held.
  *
- * @return 0 success, 1 total mismatch, 2 permission denied,
+ * @return 0 success, 1 snapshot mismatch, 2 permission denied,
  *         3 operator not found, -1 error.
  */
 int
 manage_empty_trashcan_confirmed (long long int expected_total,
+                                  const char *expected_identity_digest,
                                   long long int *actual_total)
 {
+  gchar *actual_identity_digest;
   long long int operator_id;
   long long int total;
   int ret;
 
   if (current_credentials.uuid == NULL || expected_total < 0
+      || expected_identity_digest == NULL
       || actual_total == NULL)
     return -1;
 
@@ -22438,6 +22515,20 @@ manage_empty_trashcan_confirmed (long long int expected_total,
       sql_rollback ();
       return 1;
     }
+
+  actual_identity_digest = trash_empty_identity_digest (operator_id);
+  if (actual_identity_digest == NULL)
+    {
+      sql_rollback ();
+      return -1;
+    }
+  if (g_strcmp0 (actual_identity_digest, expected_identity_digest))
+    {
+      g_free (actual_identity_digest);
+      sql_rollback ();
+      return 1;
+    }
+  g_free (actual_identity_digest);
 
   if (manage_empty_trashcan_locked ())
     {

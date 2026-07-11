@@ -64,11 +64,27 @@ fn credential_create_validates_up_and_usk_without_echoing_secrets() {
         "123e4567-e89b-12d3-a456-426614174000",
         &up,
     );
-    let command = String::from_utf8(command).unwrap();
+    let command = String::from_utf8(command.as_bytes().to_vec()).unwrap();
     assert!(command.starts_with("credential-create "));
     assert!(command.contains(" up "));
     assert!(!command.contains("password"));
     assert!(!command.contains("operator credential"));
+}
+
+#[test]
+fn credential_create_command_uses_drop_scrubbing_across_the_await_boundary() {
+    let source = include_str!("credential_writes.rs");
+    let request = source
+        .split_once("pub(crate) async fn request_credential_create")
+        .expect("credential create request helper must exist")
+        .1
+        .split_once("pub(crate) fn credential_create_command")
+        .expect("credential create command helper must follow request helper")
+        .0;
+    assert!(request.contains("command.as_bytes()"));
+    assert!(!request.contains("command.fill(0)"));
+    assert!(source.contains(") -> ScrubbedControlFrame"));
+    assert!(source.contains("ScrubbedControlFrame::new(command)"));
 }
 
 #[test]

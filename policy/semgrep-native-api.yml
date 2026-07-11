@@ -28,14 +28,26 @@ rules:
   - id: turbovas.native-api.dynamic-sql-format
     languages: [rust]
     severity: ERROR
-    message: Avoid format!-built SQL in native API sqlx calls; use static SQL with bind parameters.
+    message: Avoid format!-built SQL in native API PostgreSQL calls; use static SQL with bind parameters.
     paths:
       include:
         - /services/turbovas-api/src/**/*.rs
     pattern-either:
-      - pattern: sqlx::query(&format!(...))
-      - pattern: sqlx::query(format!(...).as_str())
-      - pattern: sqlx::query_scalar(&format!(...))
-      - pattern: sqlx::query_scalar(format!(...).as_str())
-      - pattern: sqlx::query_as::<$T, $U>(&format!(...))
-      - pattern: sqlx::query_as::<$T, $U>(format!(...).as_str())
+      - pattern: $CLIENT.query(&format!(...), ...)
+      - pattern: $CLIENT.query(format!(...).as_str(), ...)
+      - pattern: $CLIENT.query_one(&format!(...), ...)
+      - pattern: $CLIENT.query_one(format!(...).as_str(), ...)
+      - pattern: $CLIENT.query_opt(&format!(...), ...)
+      - pattern: $CLIENT.query_opt(format!(...).as_str(), ...)
+      - pattern: $CLIENT.query_raw(&format!(...), ...)
+      - pattern: $CLIENT.query_raw(format!(...).as_str(), ...)
+      - pattern: $CLIENT.execute(&format!(...), ...)
+      - pattern: $CLIENT.execute(format!(...).as_str(), ...)
+      - pattern: $CLIENT.batch_execute(&format!(...))
+      - pattern: $CLIENT.batch_execute(format!(...).as_str())
+      - pattern: $CLIENT.simple_query(&format!(...))
+      - pattern: $CLIENT.simple_query(format!(...).as_str())
+      - pattern: $CLIENT.prepare(&format!(...))
+      - pattern: $CLIENT.prepare(format!(...).as_str())
+      - pattern: $CLIENT.prepare_typed(&format!(...), ...)
+      - pattern: $CLIENT.prepare_typed(format!(...).as_str(), ...)

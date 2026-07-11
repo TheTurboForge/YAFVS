@@ -62,12 +62,11 @@ pub(crate) async fn scope_reports(
               WHERE f.is_global = 1 AND coalesce(rh.host, '') <> ''\n\
               GROUP BY f.id, lower(rh.host)\n\
              UNION\n\
-             SELECT f.id AS scope_report_id, lower(h.name) AS host_key\n\
+             SELECT f.id AS scope_report_id, lower(srh.host_name) AS host_key\n\
                FROM filtered f\n\
-               JOIN scope_hosts sh ON sh.scope = f.scope AND f.is_global = 0\n\
-               JOIN hosts h ON h.id = sh.host\n\
-              WHERE coalesce(h.name, '') <> ''\n\
-              GROUP BY f.id, lower(h.name)\n\
+               JOIN scope_report_hosts srh ON srh.scope_report = f.id AND f.is_global = 0\n\
+              WHERE coalesce(srh.host_name, '') <> ''\n\
+              GROUP BY f.id, lower(srh.host_name)\n\
          ),\n\
          ranked_results AS (\n\
              SELECT f.id AS scope_report_id,\n\
@@ -192,12 +191,11 @@ pub(crate) async fn scope_report_detail(
                   WHERE f.is_global = 1 AND coalesce(rh.host, '') <> ''\n\
                   GROUP BY f.id, lower(rh.host)\n\
                  UNION\n\
-                 SELECT f.id AS scope_report_id, lower(h.name) AS host_key\n\
+                 SELECT f.id AS scope_report_id, lower(srh.host_name) AS host_key\n\
                    FROM selected_scope_report f\n\
-                   JOIN scope_hosts sh ON sh.scope = f.scope AND f.is_global = 0\n\
-                   JOIN hosts h ON h.id = sh.host\n\
-                  WHERE coalesce(h.name, '') <> ''\n\
-                  GROUP BY f.id, lower(h.name)\n\
+                   JOIN scope_report_hosts srh ON srh.scope_report = f.id AND f.is_global = 0\n\
+                  WHERE coalesce(srh.host_name, '') <> ''\n\
+                  GROUP BY f.id, lower(srh.host_name)\n\
              ),\n\
              ranked_results AS (\n\
                  SELECT f.id AS scope_report_id,\n\

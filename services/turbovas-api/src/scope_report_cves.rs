@@ -44,12 +44,11 @@ pub(crate) async fn scope_report_cves(
               WHERE sr.is_global = 1 AND coalesce(rh.host, '') <> ''\n\
               GROUP BY lower(rh.host)\n\
              UNION\n\
-             SELECT lower(h.name) AS host_key\n\
+             SELECT lower(srh.host_name) AS host_key\n\
                FROM selected_scope_report sr\n\
-               JOIN scope_hosts sh ON sh.scope = sr.scope AND sr.is_global = 0\n\
-               JOIN hosts h ON h.id = sh.host\n\
-              WHERE coalesce(h.name, '') <> ''\n\
-              GROUP BY lower(h.name)\n\
+               JOIN scope_report_hosts srh ON srh.scope_report = sr.id AND sr.is_global = 0\n\
+              WHERE coalesce(srh.host_name, '') <> ''\n\
+              GROUP BY lower(srh.host_name)\n\
          ),\n\
          cve_rows AS (\n\
              SELECT vr.ref_id AS id,\n\

@@ -2656,6 +2656,16 @@ create_tables ()
        "  creation_time integer,"
        "  modification_time integer);");
 
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_hosts"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  host_uuid text NOT NULL,"
+       "  host_name text NOT NULL,"
+       "  added_time integer,"
+       "  UNIQUE (scope_report, host_uuid));");
+  sql ("SELECT create_index ('scope_report_hosts_by_report',"
+       "                     'scope_report_hosts', 'scope_report');");
+
   sql ("CREATE TABLE IF NOT EXISTS scope_report_sources"
        " (id SERIAL PRIMARY KEY,"
        "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"

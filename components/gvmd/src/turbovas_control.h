@@ -19,7 +19,7 @@
  * schedule-create <secret> <operator_uuid> <name_b64> <comment_b64>
  *                 <timezone_b64> <icalendar_b64>\n
  *
- * trash-empty <secret> <operator_uuid> <expected_total>\n
+ * trash-empty <secret> <operator_uuid> <expected_total> <snapshot_sha256>\n
  *
  * alert-email-create <secret> <operator_uuid> <active:0|1> <name_b64>
  *                    <comment_b64> <status_b64> <to_b64> <from_b64>

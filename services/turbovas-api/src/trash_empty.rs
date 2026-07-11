@@ -8,6 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio_postgres::Row;
 
 use crate::{
@@ -36,6 +37,7 @@ pub(crate) struct TrashEmptyPreview {
     scope: &'static str,
     items: Vec<TrashEmptyPreviewItem>,
     total: i64,
+    snapshot_digest: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,6 +45,7 @@ pub(crate) struct TrashEmptyPreview {
 pub(crate) struct TrashEmptyRequest {
     acknowledge_permanent_deletion: bool,
     expected_total: u64,
+    expected_snapshot_digest: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,7 +57,7 @@ pub(crate) struct TrashEmptyResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TrashEmptyControlOutcome {
     Emptied(u64),
-    ExpectedTotalMismatch(u64),
+    ExpectedSnapshotMismatch(u64),
 }
 
 pub(crate) async fn trash_empty_preview(
@@ -74,7 +77,14 @@ pub(crate) async fn trash_empty_preview(
         tracing::warn!("trash empty preview operator does not resolve to a database user");
         return Err(ApiError::Forbidden);
     }
-    trash_empty_preview_from_rows(&rows).map(Json)
+    let identity_rows = client
+        .query(trash_empty_identity_sql(), &[&operator.user_uuid()])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "trash empty identity preview query failed");
+            ApiError::Database
+        })?;
+    trash_empty_preview_from_rows(&rows, &identity_rows).map(Json)
 }
 
 pub(crate) async fn empty_trashcan(
@@ -90,6 +100,7 @@ pub(crate) async fn empty_trashcan(
         &control_secret,
         operator.user_uuid(),
         request.expected_total,
+        &request.expected_snapshot_digest,
     )
     .await?;
 
@@ -98,7 +109,7 @@ pub(crate) async fn empty_trashcan(
             scope: "operator",
             deleted_total,
         })),
-        TrashEmptyControlOutcome::ExpectedTotalMismatch(_actual_total) => Err(ApiError::Conflict(
+        TrashEmptyControlOutcome::ExpectedSnapshotMismatch(_actual_total) => Err(ApiError::Conflict(
             "Trashcan contents changed after preview; request a new empty preview before retrying."
                 .to_string(),
         )),
@@ -159,10 +170,25 @@ fn validate_trash_empty_request(request: &TrashEmptyRequest) -> Result<(), ApiEr
             "expected_total exceeds the supported maximum".to_string(),
         ));
     }
+    if !is_snapshot_digest(&request.expected_snapshot_digest) {
+        return Err(ApiError::BadRequest(
+            "expected_snapshot_digest must be a lowercase SHA-256 hex digest".to_string(),
+        ));
+    }
     Ok(())
 }
 
-fn trash_empty_preview_from_rows(rows: &[Row]) -> Result<TrashEmptyPreview, ApiError> {
+fn is_snapshot_digest(value: &str) -> bool {
+    value.len() == 64
+        && value.bytes().all(|byte| {
+            byte.is_ascii_digit() || (byte.is_ascii_lowercase() && byte.is_ascii_hexdigit())
+        })
+}
+
+fn trash_empty_preview_from_rows(
+    rows: &[Row],
+    identity_rows: &[Row],
+) -> Result<TrashEmptyPreview, ApiError> {
     if rows.len() != TRASH_EMPTY_RESOURCE_FAMILY_COUNT {
         tracing::warn!(
             actual = rows.len(),
@@ -188,7 +214,32 @@ fn trash_empty_preview_from_rows(rows: &[Row]) -> Result<TrashEmptyPreview, ApiE
         scope: "operator",
         items,
         total,
+        snapshot_digest: trash_empty_snapshot_digest_from_rows(identity_rows),
     })
+}
+
+fn trash_empty_snapshot_digest_from_rows(rows: &[Row]) -> String {
+    let identities = rows.iter().map(|row| {
+        (
+            row.get::<_, String>("resource_type"),
+            row.get::<_, String>("item_uuid"),
+        )
+    });
+    trash_empty_snapshot_digest(identities)
+}
+
+fn trash_empty_snapshot_digest<I>(identities: I) -> String
+where
+    I: IntoIterator<Item = (String, String)>,
+{
+    let mut digest = Sha256::new();
+    for (resource_type, item_uuid) in identities {
+        digest.update(resource_type.as_bytes());
+        digest.update([0]);
+        digest.update(item_uuid.as_bytes());
+        digest.update([0]);
+    }
+    format!("{:x}", digest.finalize())
 }
 
 pub(crate) fn trash_empty_preview_sql() -> &'static str {
@@ -244,13 +295,71 @@ pub(crate) fn trash_empty_preview_sql() -> &'static str {
         ORDER BY sort_order ASC;"#
 }
 
+fn trash_empty_identity_sql() -> &'static str {
+    r#"WITH operator_owner AS (
+         SELECT id
+           FROM users
+          WHERE uuid = $1
+       )
+       SELECT resource_type, item_uuid
+         FROM (
+           SELECT 'alerts'::text AS resource_type, uuid::text AS item_uuid
+             FROM alerts_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'configs'::text, uuid::text
+             FROM configs_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'credentials'::text, uuid::text
+             FROM credentials_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'filters'::text, uuid::text
+             FROM filters_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'overrides'::text, uuid::text
+             FROM overrides_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'port_lists'::text, uuid::text
+             FROM port_lists_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'report_configs'::text, uuid::text
+             FROM report_configs_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'report_formats'::text, uuid::text
+             FROM report_formats_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'scanners'::text, uuid::text
+             FROM scanners_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'schedules'::text, uuid::text
+             FROM schedules_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'tags'::text, uuid::text
+             FROM tags_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'targets'::text, uuid::text
+             FROM targets_trash WHERE owner = (SELECT id FROM operator_owner)
+           UNION ALL
+           SELECT 'tasks'::text, uuid::text
+             FROM tasks
+            WHERE hidden = 2
+              AND owner = (SELECT id FROM operator_owner)
+         ) trash_items
+        ORDER BY resource_type ASC, item_uuid ASC;"#
+}
+
 pub(crate) async fn request_trash_empty(
     socket_path: &str,
     control_secret: &str,
     operator_uuid: &str,
     expected_total: u64,
+    expected_snapshot_digest: &str,
 ) -> Result<TrashEmptyControlOutcome, ApiError> {
-    let command = trash_empty_command(control_secret, operator_uuid, expected_total);
+    let command = trash_empty_command(
+        control_secret,
+        operator_uuid,
+        expected_total,
+        expected_snapshot_digest,
+    );
     let response =
         request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes())
             .await
@@ -262,9 +371,13 @@ pub(crate) fn trash_empty_command(
     control_secret: &str,
     operator_uuid: &str,
     expected_total: u64,
+    expected_snapshot_digest: &str,
 ) -> ScrubbedControlFrame {
     ScrubbedControlFrame::new(
-        format!("trash-empty {control_secret} {operator_uuid} {expected_total}\n").into_bytes(),
+        format!(
+            "trash-empty {control_secret} {operator_uuid} {expected_total} {expected_snapshot_digest}\n"
+        )
+        .into_bytes(),
     )
 }
 
@@ -297,11 +410,12 @@ pub(crate) fn parse_trash_empty_response(
         return Ok(TrashEmptyControlOutcome::Emptied(count));
     }
     if let Some(count) = response
-        .strip_prefix(b"1 expected-total-mismatch ")
+        .strip_prefix(b"1 expected-snapshot-mismatch ")
         .and_then(parse_trash_empty_count)
     {
-        return Ok(TrashEmptyControlOutcome::ExpectedTotalMismatch(count));
+        return Ok(TrashEmptyControlOutcome::ExpectedSnapshotMismatch(count));
     }
+
     Err(ApiError::MutationOutcomeIndeterminate)
 }
 
@@ -451,11 +565,78 @@ mod tests {
     }
 
     #[test]
+    fn trash_empty_snapshot_digest_contract_matches_gvmd_locked_confirmation() {
+        let rust_identity_sql = trash_empty_identity_sql();
+        let c_source = include_str!("../../../components/gvmd/src/manage_sql.c");
+        let c_digest = c_function_block(
+            c_source,
+            "trash_empty_identity_digest (long long int operator_id)",
+        );
+        let resource_types = [
+            "alerts",
+            "configs",
+            "credentials",
+            "filters",
+            "overrides",
+            "port_lists",
+            "report_configs",
+            "report_formats",
+            "scanners",
+            "schedules",
+            "tags",
+            "targets",
+            "tasks",
+        ];
+
+        for source in [rust_identity_sql, c_digest] {
+            let mut last = 0;
+            for resource_type in resource_types {
+                let marker = format!("'{resource_type}'::text");
+                let offset = source
+                    .find(&marker)
+                    .unwrap_or_else(|| panic!("identity digest missing {resource_type}"));
+                assert!(
+                    offset >= last,
+                    "identity digest resource types must be in lexical order"
+                );
+                last = offset;
+            }
+            assert_eq!(
+                source.matches("uuid::text").count(),
+                resource_types.len(),
+                "identity digest must use the same UUID text representation for every family"
+            );
+        }
+        assert!(rust_identity_sql.contains("ORDER BY resource_type ASC, item_uuid ASC"));
+        assert!(c_digest.contains("ORDER BY resource_type ASC, item_uuid ASC"));
+        assert_eq!(
+            c_digest
+                .matches(r#"g_checksum_update (checksum, (const guchar *) "\0", 1)"#)
+                .count(),
+            2,
+            "gvmd must delimit each resource type and UUID with NUL bytes"
+        );
+        let rust_hasher = include_str!("trash_empty.rs")
+            .split_once("fn trash_empty_snapshot_digest<I>")
+            .expect("Rust digest helper must exist")
+            .1
+            .split_once("pub(crate) fn trash_empty_preview_sql")
+            .expect("Rust digest helper must precede preview SQL")
+            .0;
+        assert_eq!(
+            rust_hasher.matches("digest.update([0]);").count(),
+            2,
+            "Rust must delimit each resource type and UUID with NUL bytes"
+        );
+    }
+
+    #[test]
     fn trash_empty_request_validation_is_explicit_and_bounded() {
         assert!(
             validate_trash_empty_request(&TrashEmptyRequest {
                 acknowledge_permanent_deletion: true,
                 expected_total: 0,
+                expected_snapshot_digest: "0".repeat(64),
             })
             .is_ok()
         );
@@ -463,6 +644,7 @@ mod tests {
             validate_trash_empty_request(&TrashEmptyRequest {
                 acknowledge_permanent_deletion: true,
                 expected_total: MAX_TRASH_EMPTY_TOTAL,
+                expected_snapshot_digest: "0".repeat(64),
             })
             .is_ok()
         );
@@ -470,10 +652,12 @@ mod tests {
             TrashEmptyRequest {
                 acknowledge_permanent_deletion: false,
                 expected_total: 0,
+                expected_snapshot_digest: "0".repeat(64),
             },
             TrashEmptyRequest {
                 acknowledge_permanent_deletion: true,
                 expected_total: MAX_TRASH_EMPTY_TOTAL + 1,
+                expected_snapshot_digest: "0".repeat(64),
             },
         ] {
             assert!(matches!(
@@ -487,12 +671,12 @@ mod tests {
         assert!(source.contains("ApiError::RequestTooLarge"));
         assert!(
             serde_json::from_str::<TrashEmptyRequest>(
-                r#"{"acknowledge_permanent_deletion":true,"expected_total":0}"#
+                r#"{"acknowledge_permanent_deletion":true,"expected_total":0,"expected_snapshot_digest":"0000000000000000000000000000000000000000000000000000000000000000"}"#
             )
             .is_ok()
         );
         for payload in [
-            r#"{"acknowledge_permanent_deletion":true,"expected_total":0,"extra":1}"#,
+            r#"{"acknowledge_permanent_deletion":true,"expected_total":0,"expected_snapshot_digest":"0000000000000000000000000000000000000000000000000000000000000000","extra":1}"#,
             r#"{"acknowledge_permanent_deletion":true,"expected_total":-1}"#,
             r#"{"acknowledge_permanent_deletion":true}"#,
             r#"{"expected_total":0}"#,
@@ -502,6 +686,35 @@ mod tests {
                 "payload must be rejected: {payload}"
             );
         }
+        assert!(matches!(
+            validate_trash_empty_request(&TrashEmptyRequest {
+                acknowledge_permanent_deletion: true,
+                expected_total: 0,
+                expected_snapshot_digest: "not-a-digest".to_string(),
+            }),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+
+    #[test]
+    fn trash_empty_snapshot_digest_binds_ordered_resource_identities() {
+        assert_eq!(
+            trash_empty_snapshot_digest([(
+                "alerts".to_string(),
+                "11111111-1111-1111-1111-111111111111".to_string(),
+            )]),
+            "cbca8704e677d8e0ced4add536b24dc832e0ffdaaef34eb26aaab91406867a21"
+        );
+        assert_ne!(
+            trash_empty_snapshot_digest([
+                ("alerts".to_string(), "a".to_string()),
+                ("targets".to_string(), "b".to_string()),
+            ]),
+            trash_empty_snapshot_digest([
+                ("alerts".to_string(), "b".to_string()),
+                ("targets".to_string(), "a".to_string()),
+            ])
+        );
     }
 
     #[test]
@@ -756,10 +969,11 @@ mod tests {
             "0123456789abcdef0123456789abcdef",
             "11111111-1111-1111-1111-111111111111",
             42,
+            "cbca8704e677d8e0ced4add536b24dc832e0ffdaaef34eb26aaab91406867a21",
         );
         assert_eq!(
             command.as_bytes(),
-            b"trash-empty 0123456789abcdef0123456789abcdef 11111111-1111-1111-1111-111111111111 42\n"
+            b"trash-empty 0123456789abcdef0123456789abcdef 11111111-1111-1111-1111-111111111111 42 cbca8704e677d8e0ced4add536b24dc832e0ffdaaef34eb26aaab91406867a21\n"
         );
     }
 
@@ -774,8 +988,8 @@ mod tests {
             TrashEmptyControlOutcome::Emptied(42)
         );
         assert_eq!(
-            parse_trash_empty_response(b"1 expected-total-mismatch 7").unwrap(),
-            TrashEmptyControlOutcome::ExpectedTotalMismatch(7)
+            parse_trash_empty_response(b"1 expected-snapshot-mismatch 7").unwrap(),
+            TrashEmptyControlOutcome::ExpectedSnapshotMismatch(7)
         );
         for response in [
             b"2 forbidden".as_slice(),
@@ -889,6 +1103,7 @@ mod tests {
             "operationId: postTrashcanEmpty",
             "acknowledge_permanent_deletion",
             "expected_total",
+            "expected_snapshot_digest",
             "additionalProperties: false",
             "mutation_outcome_indeterminate",
             "TrashEmptyPreview",

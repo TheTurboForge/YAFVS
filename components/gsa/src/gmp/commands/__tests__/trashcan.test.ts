@@ -32,9 +32,11 @@ const EMPTY_PREVIEW_RESOURCE_TYPES = [
   'tasks',
   'report_formats',
 ];
+const SNAPSHOT_DIGEST = 'a'.repeat(64);
 
 const emptyPreview = (total: number) => ({
   scope: 'operator' as const,
+  snapshot_digest: SNAPSHOT_DIGEST,
   items: EMPTY_PREVIEW_RESOURCE_TYPES.map(resource_type => ({
     resource_type,
     count: resource_type === 'targets' ? total : 0,
@@ -182,7 +184,10 @@ describe('TrashCanCommand tests', () => {
     fakeHttp.session.jwt = 'jwt-token';
 
     const preview = await cmd.emptyPreview();
-    await cmd.empty({expectedTotal: preview.total});
+    await cmd.empty({
+      expectedTotal: preview.total,
+      expectedSnapshotDigest: preview.snapshot_digest,
+    });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
@@ -220,6 +225,7 @@ describe('TrashCanCommand tests', () => {
         body: JSON.stringify({
           acknowledge_permanent_deletion: true,
           expected_total: 3,
+          expected_snapshot_digest: SNAPSHOT_DIGEST,
         }),
       },
     );
@@ -290,9 +296,9 @@ describe('TrashCanCommand tests', () => {
     fakeHttp.session.token = 'test-token';
     const cmd = new TrashCanCommand(fakeHttp);
 
-    await expect(cmd.empty({expectedTotal: 3})).rejects.toBeInstanceOf(
-      NativeTrashcanEmptyPreviewChangedError,
-    );
+    await expect(
+      cmd.empty({expectedTotal: 3, expectedSnapshotDigest: SNAPSHOT_DIGEST}),
+    ).rejects.toBeInstanceOf(NativeTrashcanEmptyPreviewChangedError);
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -314,9 +320,9 @@ describe('TrashCanCommand tests', () => {
     fakeHttp.session.token = 'test-token';
     const cmd = new TrashCanCommand(fakeHttp);
 
-    await expect(cmd.empty({expectedTotal: 3})).rejects.toBeInstanceOf(
-      NativeTrashcanEmptyIndeterminateError,
-    );
+    await expect(
+      cmd.empty({expectedTotal: 3, expectedSnapshotDigest: SNAPSHOT_DIGEST}),
+    ).rejects.toBeInstanceOf(NativeTrashcanEmptyIndeterminateError);
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

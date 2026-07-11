@@ -570,11 +570,87 @@ validate_send_data (alert_method_t method, const gchar *name, gchar **data)
  * @return 0 valid, 40 invalid credential, 41 invalid SMB share path,
  *         42 invalid SMB file path, 43 SMB file path contains dot, -1 error.
  */
+static gboolean
+smb_path_component_is_valid (const gchar *component, size_t length,
+                             gboolean allow_spaces)
+{
+  gboolean has_non_space = FALSE;
+  size_t index;
+
+  if (length == 0 || component[length - 1] == '.')
+    return FALSE;
+  for (index = 0; index < length; index++)
+    {
+      gchar character = component[index];
+
+      if (g_ascii_isalnum (character)
+          || character == '.' || character == '_' || character == '-'
+          || (allow_spaces && (character == ' ' || character == '%')))
+        {
+          if (character != ' ')
+            has_non_space = TRUE;
+          continue;
+        }
+      return FALSE;
+    }
+  return has_non_space;
+}
+
+static gboolean
+smb_share_path_is_valid (const gchar *path)
+{
+  const gchar *host;
+  const gchar *share;
+  gchar separator;
+
+  if (path == NULL)
+    return FALSE;
+  if (path[0] == '\\' && path[1] == '\\')
+    separator = '\\';
+  else if (path[0] == '/' && path[1] == '/')
+    separator = '/';
+  else
+    return FALSE;
+  host = path + 2;
+  share = strchr (host, separator);
+  return share != NULL
+         && smb_path_component_is_valid (host, (size_t) (share - host), FALSE)
+         && smb_path_component_is_valid (share + 1, strlen (share + 1), FALSE);
+}
+
+static int
+smb_file_path_validation_result (const gchar *path)
+{
+  const gchar *component;
+
+  if (path == NULL || path[0] == '\0')
+    return 42;
+  component = path;
+  while (TRUE)
+    {
+      const gchar *separator = strpbrk (component, "/\\\\");
+      size_t length = separator ? (size_t) (separator - component)
+                                : strlen (component);
+
+      if (!smb_path_component_is_valid (component, length, TRUE))
+        return length > 0 && component[length - 1] == '.' ? 43 : 42;
+      if (separator == NULL)
+        return 0;
+      component = separator + 1;
+    }
+}
+
 static int
 validate_smb_data (alert_method_t method, const gchar *name, gchar **data)
 {
   if (method == ALERT_METHOD_SMB)
     {
+      if (strcmp (name, "smb_share_path") == 0
+          && !smb_share_path_is_valid (*data))
+        return 41;
+      if (strcmp (name, "smb_file_path") == 0)
+        return smb_file_path_validation_result (*data);
+
       if (strcmp (name, "smb_credential") == 0)
         {
           credential_t credential;
@@ -594,43 +670,14 @@ validate_smb_data (alert_method_t method, const gchar *name, gchar **data)
                   return 40;
                 }
 
-              if (strchr (username, '@') || strchr (username, ':'))
+              if (strchr (username, '@') || strchr (username, ':')
+                  || strpbrk (username, "\r\n"))
                 {
                   g_free (username);
                   return 40;
                 }
 
               g_free (username);
-            }
-        }
-
-      if (strcmp (name, "smb_share_path") == 0)
-        {
-          /* Check if share path has the correct format
-           *  "\\<host>\<share>" */
-          if (g_regex_match_simple ("^(?>\\\\\\\\|\\/\\/)[^:?<>|]+"
-                                    "(?>\\\\|\\/)[^:?<>|]+$", *data, 0, 0)
-              == FALSE)
-            {
-              return 41;
-            }
-        }
-
-      if (strcmp (name, "smb_file_path") == 0)
-        {
-          /* Check if file path contains invalid characters:
-           *  ":", "?", "<", ">", "|" */
-          if (g_regex_match_simple ("^[^:?<>|]+$", *data, 0, 0)
-              == FALSE)
-            {
-              return 42;
-            }
-          /* Check if a file or directory name ends with a dot,
-           *  e.g. "../a", "abc/../xyz" or "abc/..". */
-          else if (g_regex_match_simple ("^(?:.*\\.)(?:[\\/\\\\].*)*$",
-                                         *data, 0, 0))
-            {
-              return 43;
             }
         }
 

@@ -57,6 +57,7 @@ export interface TrashCanGetData {
 
 export interface TrashCanEmptyParams {
   expectedTotal: number;
+  expectedSnapshotDigest: string;
 }
 
 interface UsageTypeElement extends ModelElement {
@@ -250,11 +251,15 @@ class TrashCanCommand extends HttpCommand {
     return fetchNativeTrashcanEmptyPreview(this.http);
   }
 
-  async empty({expectedTotal}: TrashCanEmptyParams) {
+  async empty({expectedTotal, expectedSnapshotDigest}: TrashCanEmptyParams) {
     if (!canUseNativeApi(this.http)) {
       throw new Error('Native Trashcan empty is unavailable');
     }
-    return emptyNativeTrashcan(this.http, expectedTotal);
+    return emptyNativeTrashcan(
+      this.http,
+      expectedTotal,
+      expectedSnapshotDigest,
+    );
   }
 
   async get(): Promise<Response<TrashCanGetData, XmlMeta>> {

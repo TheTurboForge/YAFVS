@@ -310,18 +310,8 @@ pub(crate) fn validate_alert_smb_create_request(
     debug_assert!(request.status.as_str().len() <= MAX_ALERT_STATUS_BYTES);
     let smb_credential_id =
         validate_required_alert_uuid(request.smb_credential_id, "smb_credential_id")?;
-    let smb_share_path = validate_sensitive_alert_text(
-        request.smb_share_path,
-        "smb_share_path",
-        true,
-        MAX_ALERT_TEXT_BYTES,
-    )?;
-    let smb_file_path = validate_sensitive_alert_text(
-        request.smb_file_path,
-        "smb_file_path",
-        true,
-        MAX_ALERT_TEXT_BYTES,
-    )?;
+    let smb_share_path = validate_smb_share_path(request.smb_share_path)?;
+    let smb_file_path = validate_smb_file_path(request.smb_file_path)?;
     let report_format_id =
         validate_required_alert_uuid(request.report_format_id, "report_format_id")?;
     let report_config_id =
@@ -339,6 +329,57 @@ pub(crate) fn validate_alert_smb_create_request(
         report_config_id,
         smb_max_protocol: request.smb_max_protocol,
     })
+}
+
+fn validate_smb_share_path(value: SensitiveAlertField) -> Result<SensitiveAlertField, ApiError> {
+    let value = validate_sensitive_alert_text(value, "smb_share_path", true, MAX_ALERT_TEXT_BYTES)?;
+    let path = std::str::from_utf8(value.as_bytes()).expect("validated UTF-8 SMB share path");
+    let (separator, remainder) = if let Some(remainder) = path.strip_prefix(r"\\") {
+        ('\\', remainder)
+    } else if let Some(remainder) = path.strip_prefix("//") {
+        ('/', remainder)
+    } else {
+        return Err(invalid_smb_path("smb_share_path"));
+    };
+    let Some((host, share)) = remainder.split_once(separator) else {
+        return Err(invalid_smb_path("smb_share_path"));
+    };
+    if !is_valid_smb_share_component(host) || !is_valid_smb_share_component(share) {
+        return Err(invalid_smb_path("smb_share_path"));
+    }
+    Ok(value)
+}
+
+fn validate_smb_file_path(value: SensitiveAlertField) -> Result<SensitiveAlertField, ApiError> {
+    let value = validate_sensitive_alert_text(value, "smb_file_path", true, MAX_ALERT_TEXT_BYTES)?;
+    let path = std::str::from_utf8(value.as_bytes()).expect("validated UTF-8 SMB file path");
+    if !path.split(['/', '\\']).all(is_valid_smb_file_component) {
+        return Err(invalid_smb_path("smb_file_path"));
+    }
+    Ok(value)
+}
+
+fn is_valid_smb_share_component(component: &str) -> bool {
+    !component.is_empty()
+        && !component.ends_with('.')
+        && component.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-')
+        })
+}
+
+fn is_valid_smb_file_component(component: &str) -> bool {
+    !component.is_empty()
+        && !component.ends_with('.')
+        && component.chars().any(|character| character != ' ')
+        && component.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, ' ' | '.' | '_' | '-' | '%')
+        })
+}
+
+fn invalid_smb_path(field_name: &str) -> ApiError {
+    ApiError::BadRequest(format!(
+        "{field_name} must use the restricted SMB delivery path grammar"
+    ))
 }
 
 fn validate_sensitive_alert_message(

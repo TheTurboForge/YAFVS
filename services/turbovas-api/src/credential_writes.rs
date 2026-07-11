@@ -23,8 +23,8 @@ use crate::{
     credentials::load_credential_asset_detail,
     errors::ApiError,
     gvmd_control::{
-        gvmd_control_secret, gvmd_control_socket_path, map_control_socket_error,
-        request_gvmd_control_response_bytes,
+        ScrubbedControlFrame, gvmd_control_secret, gvmd_control_socket_path,
+        map_control_socket_error, request_gvmd_control_response_bytes,
     },
 };
 
@@ -56,9 +56,9 @@ pub(crate) async fn request_credential_create(
     operator_uuid: &str,
     request: &ValidatedCredentialCreate,
 ) -> Result<String, ApiError> {
-    let mut command = credential_create_command(control_secret, operator_uuid, request);
-    let response = request_gvmd_control_response_bytes(socket_path, control_secret, &command).await;
-    command.fill(0);
+    let command = credential_create_command(control_secret, operator_uuid, request);
+    let response =
+        request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes()).await;
     let response = response.map_err(map_control_socket_error)?;
     parse_credential_create_response(&response)
 }
@@ -67,7 +67,7 @@ pub(crate) fn credential_create_command(
     control_secret: &str,
     operator_uuid: &str,
     request: &ValidatedCredentialCreate,
-) -> Vec<u8> {
+) -> ScrubbedControlFrame {
     let mut command = Vec::with_capacity(512 + request.private_key.as_bytes().len() * 2);
     command.extend_from_slice(b"credential-create ");
     command.extend_from_slice(control_secret.as_bytes());
@@ -86,7 +86,7 @@ pub(crate) fn credential_create_command(
         append_base64(&mut command, field);
     }
     command.push(b'\n');
-    command
+    ScrubbedControlFrame::new(command)
 }
 
 fn append_base64(command: &mut Vec<u8>, value: &[u8]) {

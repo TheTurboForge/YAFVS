@@ -43,12 +43,11 @@ pub(crate) async fn scope_report_hosts(
               WHERE coalesce(h.name, '') <> ''\n\
               GROUP BY lower(h.name)\n\
              UNION\n\
-             SELECT lower(h.name) AS host_key, min(h.name) AS host\n\
+             SELECT lower(srh.host_name) AS host_key, min(srh.host_name) AS host\n\
                FROM selected_scope_report sr\n\
-               JOIN scope_hosts sh ON sh.scope = sr.scope AND sr.is_global = 0\n\
-               JOIN hosts h ON h.id = sh.host\n\
-              WHERE coalesce(h.name, '') <> ''\n\
-              GROUP BY lower(h.name)\n\
+               JOIN scope_report_hosts srh ON srh.scope_report = sr.id AND sr.is_global = 0\n\
+              WHERE coalesce(srh.host_name, '') <> ''\n\
+              GROUP BY lower(srh.host_name)\n\
          ),\n\
          evidence_hosts AS (\n\
              SELECT lower(rh.host) AS host_key, min(rh.host) AS host,\n\

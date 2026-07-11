@@ -2044,6 +2044,10 @@ smb_send_to_host (const char *password, const char *username,
   if (password == NULL || username == NULL
       || share_path == NULL || file_path == NULL)
     return -1;
+  if (strpbrk (username, "\r\n") || strpbrk (password, "\r\n")
+      || strpbrk (share_path, "\"';|&`$\r\n")
+      || strpbrk (file_path, "\"';|&`$\r\n"))
+    return -1;
 
   clean_share_path = g_shell_quote (share_path);
   clean_file_path = g_shell_quote (file_path);

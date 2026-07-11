@@ -50,9 +50,11 @@ const EMPTY_PREVIEW_RESOURCE_TYPES = [
   'tasks',
   'report_formats',
 ];
+const SNAPSHOT_DIGEST = 'a'.repeat(64);
 
 const emptyPreview = (total: number) => ({
   scope: 'operator' as const,
+  snapshot_digest: SNAPSHOT_DIGEST,
   items: EMPTY_PREVIEW_RESOURCE_TYPES.map(resource_type => ({
     resource_type,
     count: resource_type === 'targets' ? total : 0,
@@ -113,7 +115,10 @@ describe('TrashCanPage tests', () => {
     const confirmButton = screen.getByRole('button', {name: /Confirm/i});
     fireEvent.click(confirmButton);
     await waitFor(() => {
-      expect(empty).toHaveBeenCalledWith({expectedTotal: 3});
+      expect(empty).toHaveBeenCalledWith({
+        expectedTotal: 3,
+        expectedSnapshotDigest: SNAPSHOT_DIGEST,
+      });
       expect(empty).toHaveBeenCalledTimes(1);
       expect(confirmButton).not.toBeVisible();
     });
@@ -149,7 +154,10 @@ describe('TrashCanPage tests', () => {
 
     await waitFor(() => {
       expect(empty).toHaveBeenCalledTimes(1);
-      expect(empty).toHaveBeenCalledWith({expectedTotal: 3});
+      expect(empty).toHaveBeenCalledWith({
+        expectedTotal: 3,
+        expectedSnapshotDigest: SNAPSHOT_DIGEST,
+      });
     });
 
     resolveEmpty({scope: 'operator', deleted_total: 3});
@@ -185,7 +193,10 @@ describe('TrashCanPage tests', () => {
     fireEvent.click(confirmButton);
     await waitFor(() => {
       expect(empty).toHaveBeenCalledTimes(1);
-      expect(empty).toHaveBeenLastCalledWith({expectedTotal: 3});
+      expect(empty).toHaveBeenLastCalledWith({
+        expectedTotal: 3,
+        expectedSnapshotDigest: SNAPSHOT_DIGEST,
+      });
       expect(emptyPreviewRequest).toHaveBeenCalledTimes(2);
       expect(
         screen.getByText(
@@ -198,7 +209,10 @@ describe('TrashCanPage tests', () => {
     fireEvent.click(screen.getByRole('button', {name: /Confirm/i}));
     await waitFor(() => {
       expect(empty).toHaveBeenCalledTimes(2);
-      expect(empty).toHaveBeenLastCalledWith({expectedTotal: 4});
+      expect(empty).toHaveBeenLastCalledWith({
+        expectedTotal: 4,
+        expectedSnapshotDigest: SNAPSHOT_DIGEST,
+      });
     });
   });
 

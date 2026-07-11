@@ -15,6 +15,22 @@ fn scope_report_generation_state_locks_scope_without_rejecting_global_scope() {
 }
 
 #[test]
+fn scope_report_membership_migration_backfills_at_migration_time_only() {
+    let migration = include_str!("../../../components/gvmd/src/manage_migrators.c");
+    let body = migration
+        .split_once("migrate_283_to_284 ()")
+        .expect("membership snapshot migration must exist")
+        .1
+        .split_once("#undef UPDATE_DASHBOARD_SETTINGS")
+        .expect("membership snapshot migration must end before migration table")
+        .0;
+
+    assert!(body.contains("Historical membership cannot be reconstructed."));
+    assert!(body.contains("SELECT sr.id, sh.host_uuid, sh.host_name, m_now ()"));
+    assert!(!body.contains("sr.creation_time"));
+}
+
+#[test]
 fn scope_report_generation_selects_latest_completed_scan_report_per_target() {
     let sql = scope_report_generation_sources_sql();
     for required in [
@@ -44,7 +60,7 @@ fn scope_report_generation_rebuilds_counts_and_metrics_from_snapshot_sources() {
     for required in [
         "scope_report_sources",
         "count(DISTINCT target_uuid)",
-        "scope_hosts",
+        "scope_report_hosts",
         "report_hosts",
         "coalesce(r.severity, 0) != -3.0",
         "greatest(member_summary.member_host_count - evidence_hosts.evidence_host_count, 0)",
@@ -83,6 +99,26 @@ fn scope_report_generation_rebuilds_counts_and_metrics_from_snapshot_sources() {
     }
     let summary = scope_report_generation_metric_summary_sql();
     assert!(summary.contains("metric_authenticated_scan_coverage"));
+}
+
+#[test]
+fn scope_report_generation_snapshots_explicit_scope_members_before_sources() {
+    let snapshot = scope_report_generation_members_sql();
+    assert!(snapshot.contains("INSERT INTO scope_report_hosts"));
+    assert!(snapshot.contains("FROM scope_hosts sh"));
+    assert!(snapshot.contains("WHERE NOT $2 AND sh.scope = $1"));
+
+    let source = include_str!("scope_report_mutations.rs");
+    let snapshot_insert = source
+        .find("insert scope-report membership snapshot")
+        .expect("generation must insert a membership snapshot");
+    let source_insert = source
+        .find("insert scope-report source provenance")
+        .expect("generation must insert source provenance");
+    assert!(
+        snapshot_insert < source_insert,
+        "membership must be captured before source evidence is selected"
+    );
 }
 
 #[test]

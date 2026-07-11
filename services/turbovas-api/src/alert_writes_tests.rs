@@ -51,7 +51,7 @@ fn smb_create_json() -> serde_json::Value {
         "active": true,
         "status": "Done",
         "smb_credential_id": TEST_UUID,
-        "smb_share_path": "reports",
+        "smb_share_path": "\\\\fileserver\\reports",
         "smb_file_path": "daily-%Y%m%d.pdf",
         "report_format_id": TEST_UUID
     })
@@ -392,7 +392,7 @@ fn alert_smb_create_frame_is_exact_bounded_and_scrubbable() {
             "12345678-1234-4234-8234-123456789abc 1 ",
             "RGFpbHkgZmluZGluZ3M= T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
             "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj ",
-            "cmVwb3J0cw== ZGFpbHktJVklbSVkLnBkZg== ",
+            "XFxmaWxlc2VydmVyXHJlcG9ydHM= ZGFpbHktJVklbSVkLnBkZg== ",
             "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj  U01CMw==\n"
         )
         .as_bytes()
@@ -402,9 +402,11 @@ fn alert_smb_create_frame_is_exact_bounded_and_scrubbable() {
     assert!(frame.as_bytes().iter().all(|byte| *byte == 0));
 
     let mut maximum = smb_create_json();
-    for field in ["name", "comment", "smb_share_path", "smb_file_path"] {
+    for field in ["name", "comment", "smb_file_path"] {
         maximum[field] = serde_json::json!("x".repeat(MAX_ALERT_TEXT_BYTES));
     }
+    maximum["smb_share_path"] =
+        serde_json::json!(format!("\\\\h\\{}", "x".repeat(MAX_ALERT_TEXT_BYTES - 4)));
     let maximum = serde_json::from_value::<AlertCreateRequest>(maximum).unwrap();
     let maximum = match validate_alert_create_request(maximum).unwrap() {
         ValidatedAlertCreate::Smb(request) => request,
@@ -557,6 +559,51 @@ fn alert_email_create_rejects_bad_uuids_controls_blanks_and_byte_overflow() {
             validate_alert_email_create_request(request),
             Err(ApiError::BadRequest(_))
         ));
+    }
+    for (field, value) in [
+        ("smb_credential_id", format!("{TEST_UUID}\r\n")),
+        (
+            "smb_share_path",
+            "\\\\fileserver\\reports\"; quit".to_string(),
+        ),
+        ("smb_share_path", "\\\\fileserver\\reports;quit".to_string()),
+        ("smb_share_path", "\\\\fileserver\\reports|quit".to_string()),
+        (
+            "smb_share_path",
+            "\\\\fileserver\\reports&&quit".to_string(),
+        ),
+        (
+            "smb_share_path",
+            "\\\\fileserver\\reports\r\nnext".to_string(),
+        ),
+        ("smb_file_path", "daily.pdf\"; quit".to_string()),
+        ("smb_file_path", "daily.pdf;quit".to_string()),
+        ("smb_file_path", "daily.pdf|quit".to_string()),
+        ("smb_file_path", "daily.pdf&&quit".to_string()),
+        ("smb_file_path", "daily.pdf$HOME".to_string()),
+        ("smb_file_path", "daily.pdf\r\nnext".to_string()),
+    ] {
+        let mut request = smb_create_json();
+        request[field] = serde_json::json!(value);
+        let request = serde_json::from_value::<AlertCreateRequest>(request).unwrap();
+        assert!(matches!(
+            validate_alert_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    for (share_path, file_path) in [
+        ("\\\\fileserver\\reports", "daily-%Y%m%d.pdf"),
+        (
+            "//fileserver/team-reports",
+            "archive/weekly report-%Y%m%d.pdf",
+        ),
+        ("\\\\192.0.2.10\\reports", "2026/scan-report.pdf"),
+    ] {
+        let mut request = smb_create_json();
+        request["smb_share_path"] = serde_json::json!(share_path);
+        request["smb_file_path"] = serde_json::json!(file_path);
+        let request = serde_json::from_value::<AlertCreateRequest>(request).unwrap();
+        assert!(validate_alert_create_request(request).is_ok());
     }
     for (field, limit, notice) in [
         ("name", MAX_ALERT_TEXT_BYTES, "simple"),

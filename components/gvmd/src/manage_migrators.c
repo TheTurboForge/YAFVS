@@ -4748,6 +4748,41 @@ migrate_282_to_283 ()
   return 0;
 }
 
+static int
+migrate_283_to_284 ()
+{
+  sql_begin_immediate ();
+
+  sql ("CREATE TABLE IF NOT EXISTS scope_report_hosts"
+       " (id SERIAL PRIMARY KEY,"
+       "  scope_report integer REFERENCES scope_reports (id) ON DELETE CASCADE,"
+       "  host_uuid text NOT NULL,"
+       "  host_name text NOT NULL,"
+       "  added_time integer,"
+       "  UNIQUE (scope_report, host_uuid));");
+  sql ("SELECT create_index ('scope_report_hosts_by_report',"
+       "                     'scope_report_hosts', 'scope_report');");
+  /*
+   * Historical membership cannot be reconstructed.  Freeze the current
+   * explicit scope members at migration time rather than implying that they
+   * were captured when an older report was generated.
+   */
+  sql ("INSERT INTO scope_report_hosts"
+       " (scope_report, host_uuid, host_name, added_time)"
+       " SELECT sr.id, sh.host_uuid, sh.host_name, m_now ()"
+       " FROM scope_reports sr"
+       " JOIN scopes s ON s.id = sr.scope"
+       " JOIN scope_hosts sh ON sh.scope = sr.scope"
+       " WHERE coalesce (s.is_global, 0) = 0"
+       " ON CONFLICT (scope_report, host_uuid) DO NOTHING;");
+
+  set_db_version (284);
+
+  sql_commit ();
+
+  return 0;
+}
+
 
 #undef UPDATE_DASHBOARD_SETTINGS
 
@@ -4838,6 +4873,7 @@ static migrator_t database_migrators[] = {
   {281, migrate_280_to_281},
   {282, migrate_281_to_282},
   {283, migrate_282_to_283},
+  {284, migrate_283_to_284},
   /* End marker. */
   {-1, NULL}};
 

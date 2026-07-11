@@ -116,6 +116,13 @@ async fn execute_scope_report_generation_transaction(
     ];
     execute_scope_report_generation_sql(
         tx,
+        scope_report_generation_members_sql(),
+        generation_params,
+        "insert scope-report membership snapshot",
+    )
+    .await?;
+    execute_scope_report_generation_sql(
+        tx,
         scope_report_generation_sources_sql(),
         generation_params,
         "insert scope-report source provenance",

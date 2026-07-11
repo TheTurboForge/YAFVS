@@ -18,6 +18,14 @@ pub(crate) fn scope_report_generation_insert_sql() -> &'static str {
      RETURNING id::integer, uuid;"
 }
 
+pub(crate) fn scope_report_generation_members_sql() -> &'static str {
+    "INSERT INTO scope_report_hosts
+       (scope_report, host_uuid, host_name, added_time)
+     SELECT $3, sh.host_uuid, sh.host_name, m_now()
+       FROM scope_hosts sh
+      WHERE NOT $2 AND sh.scope = $1;"
+}
+
 pub(crate) fn scope_report_generation_sources_sql() -> &'static str {
     "WITH selected_targets AS (
        SELECT t.id AS target
@@ -60,7 +68,9 @@ pub(crate) fn scope_report_generation_counts_sql() -> &'static str {
        member_summary AS (
          SELECT CASE WHEN $3
                      THEN (SELECT count(*)::integer FROM hosts)
-                     ELSE (SELECT count(*)::integer FROM scope_hosts WHERE scope = $2)
+                     ELSE (SELECT count(*)::integer
+                             FROM scope_report_hosts
+                            WHERE scope_report = $1)
                 END AS member_host_count
        ),
        evidence_hosts AS (
@@ -70,10 +80,9 @@ pub(crate) fn scope_report_generation_counts_sql() -> &'static str {
           WHERE srs.scope_report = $1
             AND coalesce(rh.host, '') <> ''
             AND ($3 OR EXISTS (
-                  SELECT 1
-                    FROM scope_hosts sh
-                    JOIN hosts h ON h.id = sh.host
-                   WHERE sh.scope = $2 AND lower(h.name) = lower(rh.host)))
+                  SELECT 1 FROM scope_report_hosts srh
+                   WHERE srh.scope_report = $1
+                     AND lower(srh.host_name) = lower(rh.host)))
        ),
        deduped_results AS (
          SELECT lower(coalesce(nullif(r.host, ''), r.hostname, '')) AS host_key,
@@ -85,12 +94,10 @@ pub(crate) fn scope_report_generation_counts_sql() -> &'static str {
           WHERE srs.scope_report = $1
             AND coalesce(r.severity, 0) != -3.0
             AND ($3 OR EXISTS (
-                  SELECT 1
-                    FROM scope_hosts sh
-                    JOIN hosts h ON h.id = sh.host
-                   WHERE sh.scope = $2
-                     AND (lower(h.name) = lower(coalesce(nullif(r.host, ''), r.hostname))
-                          OR lower(h.name) = lower(coalesce(nullif(r.hostname, ''), r.host)))))
+                  SELECT 1 FROM scope_report_hosts srh
+                   WHERE srh.scope_report = $1
+                     AND (lower(srh.host_name) = lower(coalesce(nullif(r.host, ''), r.hostname))
+                          OR lower(srh.host_name) = lower(coalesce(nullif(r.hostname, ''), r.host)))))
           GROUP BY lower(coalesce(nullif(r.host, ''), r.hostname, '')),
                    coalesce(r.nvt, ''), coalesce(r.port, '')
        ),
@@ -105,12 +112,10 @@ pub(crate) fn scope_report_generation_counts_sql() -> &'static str {
            JOIN scope_report_sources srs ON srs.source_report = r.report
           WHERE srs.scope_report = $1
             AND ($3 OR EXISTS (
-                  SELECT 1
-                    FROM scope_hosts sh
-                    JOIN hosts h ON h.id = sh.host
-                   WHERE sh.scope = $2
-                     AND (lower(h.name) = lower(coalesce(nullif(r.host, ''), r.hostname))
-                          OR lower(h.name) = lower(coalesce(nullif(r.hostname, ''), r.host)))))
+                  SELECT 1 FROM scope_report_hosts srh
+                   WHERE srh.scope_report = $1
+                     AND (lower(srh.host_name) = lower(coalesce(nullif(r.host, ''), r.hostname))
+                          OR lower(srh.host_name) = lower(coalesce(nullif(r.hostname, ''), r.host)))))
        ),
        latest_evidence AS (
          SELECT coalesce(max(coalesce(r.end_time, r.creation_time)), 0)::integer AS latest_evidence_time
@@ -126,10 +131,9 @@ pub(crate) fn scope_report_generation_counts_sql() -> &'static str {
                JOIN scope_report_sources srs ON srs.source_report = rh.report
               WHERE srs.scope_report = $1 AND coalesce(rh.host, '') <> ''
              EXCEPT
-             SELECT lower(h.name)
-               FROM scope_hosts sh
-               JOIN hosts h ON h.id = sh.host
-              WHERE sh.scope = $2
+             SELECT lower(srh.host_name)
+               FROM scope_report_hosts srh
+              WHERE srh.scope_report = $1
            ) excluded_hosts
        )
      UPDATE scope_reports sr
@@ -187,9 +191,9 @@ pub(crate) fn scope_report_generation_system_metrics_sql() -> &'static str {
            JOIN source_reports ON source_reports.source_report = rh.report
           WHERE coalesce(nullif(rh.host, ''), rh.hostname, '') <> ''
             AND ($3 OR EXISTS (
-                  SELECT 1 FROM scope_hosts sh
-                   WHERE sh.scope = $2
-                     AND lower(sh.host_name) = lower(coalesce(nullif(rh.host, ''), rh.hostname, ''))))
+                  SELECT 1 FROM scope_report_hosts srh
+                   WHERE srh.scope_report = $1
+                     AND lower(srh.host_name) = lower(coalesce(nullif(rh.host, ''), rh.hostname, ''))))
           GROUP BY lower(coalesce(nullif(rh.host, ''), rh.hostname, ''))
        ),
        vuln_by_system AS (
@@ -201,9 +205,9 @@ pub(crate) fn scope_report_generation_system_metrics_sql() -> &'static str {
           WHERE coalesce(r.severity, 0) > 0 AND coalesce(r.severity, 0) != -3.0
             AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''
             AND ($3 OR EXISTS (
-                  SELECT 1 FROM scope_hosts sh
-                   WHERE sh.scope = $2
-                     AND lower(sh.host_name) = lower(coalesce(nullif(r.host, ''), r.hostname, ''))))
+                  SELECT 1 FROM scope_report_hosts srh
+                   WHERE srh.scope_report = $1
+                     AND lower(srh.host_name) = lower(coalesce(nullif(r.host, ''), r.hostname, ''))))
           GROUP BY lower(coalesce(nullif(r.host, ''), r.hostname, '')),
                    coalesce(nullif(r.nvt, ''), 'unknown')
        ),
@@ -245,9 +249,9 @@ pub(crate) fn scope_report_generation_vulnerability_metrics_sql() -> &'static st
           WHERE coalesce(r.severity, 0) > 0 AND coalesce(r.severity, 0) != -3.0
             AND coalesce(nullif(r.host, ''), r.hostname, '') <> ''
             AND ($3 OR EXISTS (
-                  SELECT 1 FROM scope_hosts sh
-                   WHERE sh.scope = $2
-                     AND lower(sh.host_name) = lower(coalesce(nullif(r.host, ''), r.hostname, ''))))
+                  SELECT 1 FROM scope_report_hosts srh
+                   WHERE srh.scope_report = $1
+                     AND lower(srh.host_name) = lower(coalesce(nullif(r.host, ''), r.hostname, ''))))
           GROUP BY lower(coalesce(nullif(r.host, ''), r.hostname, '')),
                    coalesce(nullif(r.nvt, ''), 'unknown'), r.report
        ),

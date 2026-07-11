@@ -207,7 +207,10 @@ const TrashCan = () => {
     setIsEmptyingTrash(true);
 
     try {
-      await gmp.trashcan.empty({expectedTotal: emptyTrashPreview.total});
+      await gmp.trashcan.empty({
+        expectedTotal: emptyTrashPreview.total,
+        expectedSnapshotDigest: emptyTrashPreview.snapshot_digest,
+      });
       await loadTrash();
       closeEmptyTrashDialog();
     } catch (error) {

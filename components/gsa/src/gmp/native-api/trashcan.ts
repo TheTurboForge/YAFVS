@@ -37,6 +37,7 @@ export interface NativeTrashcanEmptyPreview {
   scope: 'operator';
   items: NativeTrashcanEmptyPreviewItem[];
   total: number;
+  snapshot_digest: string;
 }
 
 export interface NativeTrashcanEmptyResult {
@@ -199,6 +200,9 @@ export const fetchNativeTrashcanSummary = async (
 const isNonNegativeSafeInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
+const isSnapshotDigest = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+
 const isNativeTrashcanEmptyPreview = (
   value: unknown,
 ): value is NativeTrashcanEmptyPreview => {
@@ -209,6 +213,7 @@ const isNativeTrashcanEmptyPreview = (
   if (
     preview.scope !== 'operator' ||
     !isNonNegativeSafeInteger(preview.total) ||
+    !isSnapshotDigest(preview.snapshot_digest) ||
     !Array.isArray(preview.items) ||
     preview.items.length !== CANONICAL_EMPTY_PREVIEW_RESOURCE_TYPES.length
   ) {
@@ -271,9 +276,13 @@ export const fetchNativeTrashcanEmptyPreview = async (
 export const emptyNativeTrashcan = async (
   gmp: NativeTrashcanApiGmp,
   expectedTotal: number,
+  expectedSnapshotDigest: string,
 ): Promise<NativeTrashcanEmptyResult> => {
-  if (!isNonNegativeSafeInteger(expectedTotal)) {
-    throw new Error('Native Trashcan empty expected total is invalid');
+  if (
+    !isNonNegativeSafeInteger(expectedTotal) ||
+    !isSnapshotDigest(expectedSnapshotDigest)
+  ) {
+    throw new Error('Native Trashcan empty preview confirmation is invalid');
   }
 
   let response: globalThis.Response;
@@ -292,6 +301,7 @@ export const emptyNativeTrashcan = async (
       body: JSON.stringify({
         acknowledge_permanent_deletion: true,
         expected_total: expectedTotal,
+        expected_snapshot_digest: expectedSnapshotDigest,
       }),
     });
   } catch {

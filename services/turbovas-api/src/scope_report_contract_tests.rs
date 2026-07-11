@@ -31,6 +31,28 @@ fn scope_report_results_sql_is_source_scoped_and_deduplicated() {
 }
 
 #[test]
+fn scope_report_reads_use_membership_snapshots_not_live_scope_hosts() {
+    let source = [
+        include_str!("scope_report_results.rs"),
+        include_str!("scope_report_applications.rs"),
+        include_str!("scope_report_cves.rs"),
+        include_str!("scope_report_errors.rs"),
+        include_str!("scope_reports.rs"),
+        include_str!("scope_report_hosts.rs"),
+        include_str!("scope_report_operating_systems.rs"),
+        include_str!("scope_report_ports.rs"),
+        include_str!("scope_report_tls_certificates.rs"),
+    ]
+    .join("\n");
+
+    assert!(source.contains("scope_report_hosts"));
+    assert!(
+        !source.contains("JOIN scope_hosts sh"),
+        "historical scope-report reads must not project live scope membership"
+    );
+}
+
+#[test]
 fn scope_report_list_supports_exact_scope_predicate_with_text_filter() {
     let source = include_str!("scope_reports.rs");
     let handler = source

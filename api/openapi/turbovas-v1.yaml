@@ -4622,7 +4622,7 @@ paths:
       x-turbovas-operator-identity: resolved-request-operator
       x-turbovas-owner-semantics: request-operator-owner
       summary: Preview permanent Trashcan deletion
-      description: Returns counts for the exact base resource families that gvmd will permanently delete for the authenticated operator. The direct bearer path requires configured write control and a bound operator identity; the same-origin browser path resolves the operator from the authenticated internal proxy headers. All count branches are owner-scoped and include zero-count rows. Child rows deleted as consequences of the base resources are not counted separately.
+      description: Returns counts and a SHA-256 identity digest for the exact base resource families that gvmd will permanently delete for the authenticated operator. The direct bearer path requires configured write control and a bound operator identity; the same-origin browser path resolves the operator from the authenticated internal proxy headers. All count branches are owner-scoped and include zero-count rows. Child rows deleted as consequences of the base resources are not counted separately.
       security:
         - operatorSession: []
         - bearerAuth: []
@@ -4660,7 +4660,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: permanent-deletion
       summary: Permanently empty the operator Trashcan
-      description: Permanently deletes the authenticated operator's Trashcan through gvmd's private authoritative control path. The caller must explicitly acknowledge permanent deletion and provide the total from a fresh empty preview. A changed total is rejected with 409 before deletion. The direct bearer path requires configured write control and a bound operator identity; the same-origin browser path resolves the operator from authenticated internal proxy headers. A 502 mutation_outcome_indeterminate response means the request may have committed, including when gvmd reports an error after non-transactional report-format filesystem work; verify current state and obtain a new preview before any retry.
+      description: Permanently deletes the authenticated operator's Trashcan through gvmd's private authoritative control path. The caller must explicitly acknowledge permanent deletion and provide the total and SHA-256 identity digest from a fresh empty preview. A changed total or resource identity set is rejected with 409 before deletion. The direct bearer path requires configured write control and a bound operator identity; the same-origin browser path resolves the operator from authenticated internal proxy headers. A 502 mutation_outcome_indeterminate response means the request may have committed, including when gvmd reports an error after non-transactional report-format filesystem work; verify current state and obtain a new preview before any retry.
       security:
         - operatorSession: []
         - bearerAuth: []
@@ -8374,7 +8374,7 @@ components:
           minimum: 0
     TrashEmptyPreview:
       type: object
-      required: [scope, items, total]
+      required: [scope, items, total, snapshot_digest]
       properties:
         scope:
           type: string
@@ -8388,6 +8388,9 @@ components:
         total:
           type: integer
           minimum: 0
+        snapshot_digest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
     TrashEmptyPreviewItem:
       type: object
       required: [resource_type, count]
@@ -8401,7 +8404,7 @@ components:
     TrashEmptyRequest:
       type: object
       additionalProperties: false
-      required: [acknowledge_permanent_deletion, expected_total]
+      required: [acknowledge_permanent_deletion, expected_total, expected_snapshot_digest]
       properties:
         acknowledge_permanent_deletion:
           type: boolean
@@ -8410,6 +8413,9 @@ components:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
+        expected_snapshot_digest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
     TrashEmptyResult:
       type: object
       required: [scope, deleted_total]

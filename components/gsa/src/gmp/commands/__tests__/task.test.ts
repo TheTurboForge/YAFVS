@@ -155,10 +155,10 @@ describe('TaskCommand tests', () => {
   test('should stop a task through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       ok: true,
-      status: 202,
+      status: 200,
       json: testing.fn().mockResolvedValue({
         task_id: 'task-id',
-        status: 'requested',
+        status: 'stopped',
       }),
     });
     testing.stubGlobal('fetch', fetchMock);
@@ -198,6 +198,35 @@ describe('TaskCommand tests', () => {
       },
     );
     expect(getMock).toHaveBeenCalledWith({id: 'task-id'});
+  });
+
+  test('should reject a mismatched native task stop response', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: testing.fn().mockResolvedValue({
+        task_id: 'other-task',
+        status: 'stopped',
+      }),
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new TaskCommand(fakeHttp);
+    const getMock = testing
+      .spyOn(cmd, 'get')
+      .mockResolvedValue(undefined as never);
+
+    await expect(cmd.stop({id: 'task-id'})).rejects.toThrow(
+      'Native API returned an invalid task stop response',
+    );
+    expect(getMock).not.toHaveBeenCalled();
   });
 
   test('should not fall back to GMP when native task stop fails', async () => {

@@ -12,6 +12,8 @@
 #include <string.h>
 
 #define TEST_CONTROL_SECRET "0123456789abcdef0123456789abcdef"
+#define TEST_TRASH_SNAPSHOT_DIGEST \
+  "0000000000000000000000000000000000000000000000000000000000000000"
 #define TEST_DIAGNOSTIC_NMAP_OID "1.3.6.1.4.1.25623.1.0.14259"
 #define TEST_DIAGNOSTIC_PING_OID "1.3.6.1.4.1.25623.1.0.100315"
 #define TEST_DIAGNOSTIC_PREREQUISITE_FAMILY "Port scanners"
@@ -485,8 +487,10 @@ __wrap_manage_session_init (const char *uuid)
 
 int
 __wrap_manage_empty_trashcan_confirmed (long long int expected_total,
+                                        const char *expected_snapshot_digest,
                                         long long int *actual_total)
 {
+  (void) expected_snapshot_digest;
   trash_empty_calls++;
   trash_empty_expected = (gint64) expected_total;
   *actual_total = (long long int) trash_empty_actual;
@@ -1022,7 +1026,8 @@ __wrap_resource_with_name_exists (const char *name, const char *type,
 }
 
 int
-__real_manage_empty_trashcan_confirmed (long long int, long long int *);
+__real_manage_empty_trashcan_confirmed (long long int, const char *,
+                                        long long int *);
 
 int
 __real_create_alert_smb_with_report_refs (const char *, const char *,
@@ -1073,18 +1078,22 @@ Ensure (turbovas_control, accepts_strict_bounded_trash_empty_request)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 9223372036854775807\n";
+    "123e4567-e89b-12d3-a456-426614174000 9223372036854775807 "
+    TEST_TRASH_SNAPSHOT_DIGEST "\n";
   char operator_uuid[37];
+  char expected_snapshot_digest[65];
   gint64 expected_total = -1;
 
   assert_that (turbovas_control_parse_trash_empty_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
-                 &expected_total),
+                 &expected_total, expected_snapshot_digest),
                is_true);
   assert_that (operator_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
   assert_that (expected_total, is_equal_to (G_MAXINT64));
+  assert_that (expected_snapshot_digest,
+               is_equal_to_string (TEST_TRASH_SNAPSHOT_DIGEST));
 }
 
 Ensure (turbovas_control, rejects_malformed_trash_empty_requests)
@@ -1104,6 +1113,7 @@ Ensure (turbovas_control, rejects_malformed_trash_empty_requests)
     "123e4567-e89b-12d3-a456-42661417400z 1\n",
   };
   char operator_uuid[37];
+  char expected_snapshot_digest[65];
   gint64 expected_total;
   size_t index;
 
@@ -1111,7 +1121,7 @@ Ensure (turbovas_control, rejects_malformed_trash_empty_requests)
     assert_that (turbovas_control_parse_trash_empty_request (
                    invalid[index], strlen (invalid[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
-                   operator_uuid, &expected_total),
+                   operator_uuid, &expected_total, expected_snapshot_digest),
                  is_false);
 }
 
@@ -1122,7 +1132,7 @@ Ensure (turbovas_control, maps_trash_empty_contract_responses)
   assert_that (turbovas_control_trash_empty_response (0, 7, response),
                is_equal_to_string ("0 emptied 7\n"));
   assert_that (turbovas_control_trash_empty_response (1, 8, response),
-               is_equal_to_string ("1 expected-total-mismatch 8\n"));
+               is_equal_to_string ("1 expected-snapshot-mismatch 8\n"));
   assert_that (turbovas_control_trash_empty_response (2, 0, response),
                is_equal_to_string ("2 forbidden\n"));
   assert_that (turbovas_control_trash_empty_response (3, 0, response),
@@ -1135,7 +1145,8 @@ Ensure (turbovas_control, dispatches_trash_count_mismatch)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 4\n";
+    "123e4567-e89b-12d3-a456-426614174000 4 "
+    TEST_TRASH_SNAPSHOT_DIGEST "\n";
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
@@ -1156,9 +1167,9 @@ Ensure (turbovas_control, dispatches_trash_count_mismatch)
 
   assert_that (response_len,
                is_equal_to (
-                 (ssize_t) strlen ("1 expected-total-mismatch 5\n")));
+                 (ssize_t) strlen ("1 expected-snapshot-mismatch 5\n")));
   assert_that (response,
-               is_equal_to_string ("1 expected-total-mismatch 5\n"));
+               is_equal_to_string ("1 expected-snapshot-mismatch 5\n"));
   assert_that (trash_empty_calls, is_equal_to (1));
   assert_that (trash_empty_expected, is_equal_to (4));
   assert_that (reinit_calls, is_equal_to (1));
@@ -1169,7 +1180,7 @@ Ensure (turbovas_control, dispatches_trash_count_mismatch)
   assert_that (trash_empty_audit_success_calls, is_equal_to (0));
   assert_that (trash_empty_audit_fail_calls, is_equal_to (0));
   assert_trash_empty_structured_audit ("Trashcan empty request rejected",
-                                       "expected-total-mismatch", "4", "5");
+                                       "expected-snapshot-mismatch", "4", "5");
 
   g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
   reset_trash_empty_audit ();
@@ -1179,7 +1190,8 @@ Ensure (turbovas_control, audits_successful_trash_empty)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 5\n";
+    "123e4567-e89b-12d3-a456-426614174000 5 "
+    TEST_TRASH_SNAPSHOT_DIGEST "\n";
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
@@ -1230,7 +1242,8 @@ Ensure (turbovas_control, audits_trash_empty_failures)
   };
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 5\n";
+    "123e4567-e89b-12d3-a456-426614174000 5 "
+    TEST_TRASH_SNAPSHOT_DIGEST "\n";
   size_t index;
 
   assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
@@ -1278,7 +1291,8 @@ Ensure (turbovas_control, does_not_audit_missing_trash_operator)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 5\n";
+    "123e4567-e89b-12d3-a456-426614174000 5 "
+    TEST_TRASH_SNAPSHOT_DIGEST "\n";
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
@@ -1329,7 +1343,8 @@ Ensure (turbovas_control, locks_before_count_and_skips_delete_on_mismatch)
   current_credentials.uuid =
     (gchar *) "123e4567-e89b-12d3-a456-426614174000";
 
-  assert_that (__real_manage_empty_trashcan_confirmed (5, &actual_total),
+  assert_that (__real_manage_empty_trashcan_confirmed (
+                 5, TEST_TRASH_SNAPSHOT_DIGEST, &actual_total),
                is_equal_to (1));
   assert_that (actual_total, is_equal_to (6));
   assert_that (trash_empty_db_event_count, is_equal_to (6));
@@ -3230,6 +3245,46 @@ Ensure (turbovas_control, preserves_authoritative_alert_smb_validation)
                is_equal_to (43));
   assert_that (alert_smb_db_events[alert_smb_db_event_count - 1],
                is_equal_to (ALERT_SMB_DB_ROLLBACK));
+
+  for (size_t index = 0; index < 5; index++)
+    {
+      static const char *unsafe_share_paths[] = {
+        "\\\\fileserver\\reports\"; quit",
+        "\\\\fileserver\\reports;quit",
+        "\\\\fileserver\\reports|quit",
+        "\\\\fileserver\\reports&&quit",
+        "\\\\fileserver\\reports\r\nnext",
+      };
+      reset_alert_smb_db ();
+      assert_that (call_real_alert_smb_create (unsafe_share_paths[index],
+                                               "scan/report.pdf", ""),
+                   is_equal_to (41));
+    }
+
+  for (size_t index = 0; index < 6; index++)
+    {
+      static const char *unsafe_file_paths[] = {
+        "scan/report\".pdf", "scan/report;quit.pdf",
+        "scan/report|quit.pdf", "scan/report&&quit.pdf",
+        "scan/report$HOME.pdf", "scan/report\r\nnext.pdf",
+      };
+      reset_alert_smb_db ();
+      assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                               unsafe_file_paths[index], ""),
+                   is_equal_to (42));
+    }
+
+  reset_alert_smb_db ();
+  alert_smb_db_credential_username = "operator\r\npassword = replacement";
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (40));
+
+  reset_alert_smb_db ();
+  assert_that (call_real_alert_smb_create ("//fileserver/team-reports",
+                                           "archive/weekly report-%Y%m%d.pdf",
+                                           ""),
+               is_equal_to (0));
 }
 
 Ensure (turbovas_control, dispatches_malformed_alert_smb_without_payload)

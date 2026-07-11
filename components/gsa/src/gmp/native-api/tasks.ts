@@ -102,6 +102,11 @@ interface NativeTaskPatchArgs {
   comment?: string;
 }
 
+interface NativeTaskStopPayload {
+  task_id?: unknown;
+  status?: unknown;
+}
+
 const TASK_SORT_FIELDS: Record<string, string> = {
   config: 'config',
   created: 'creation_time',
@@ -428,11 +433,14 @@ export const stopNativeTask = async (
   gmp: NativeApiGmp,
   id: string,
 ): Promise<void> => {
-  await writeNativeJson(
+  const payload = await writeNativeJson<NativeTaskStopPayload>(
     gmp,
     `api/v1/tasks/${encodeURIComponent(id)}/stop`,
     {},
   );
+  if (payload.task_id !== id || payload.status !== 'stopped') {
+    throw new Error('Native API returned an invalid task stop response');
+  }
 };
 
 export const deleteNativeTask = async (

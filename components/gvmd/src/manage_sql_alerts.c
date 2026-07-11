@@ -992,16 +992,18 @@ create_alert_body (const char* name, const char* comment,
   while ((item = (gchar*) g_ptr_array_index (method_data, index++)))
     {
       gchar *data_name, *data;
+      gboolean sensitive;
+
+      sensitive = method == ALERT_METHOD_EMAIL || method == ALERT_METHOD_SMB;
       data_name = sql_quote (item);
-      data = method == ALERT_METHOD_EMAIL
-               ? g_strdup (item + strlen (item) + 1)
-               : sql_quote (item + strlen (item) + 1);
+      data = sensitive ? g_strdup (item + strlen (item) + 1)
+                       : sql_quote (item + strlen (item) + 1);
 
       ret = validate_email_data (method, data_name, &data, 0);
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
@@ -1009,7 +1011,7 @@ create_alert_body (const char* name, const char* comment,
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
@@ -1017,7 +1019,7 @@ create_alert_body (const char* name, const char* comment,
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
@@ -1025,7 +1027,7 @@ create_alert_body (const char* name, const char* comment,
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
@@ -1033,7 +1035,7 @@ create_alert_body (const char* name, const char* comment,
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
@@ -1041,7 +1043,7 @@ create_alert_body (const char* name, const char* comment,
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
@@ -1049,11 +1051,11 @@ create_alert_body (const char* name, const char* comment,
       if (ret)
         {
           g_free (data_name);
-          secure_gfree (data, method == ALERT_METHOD_EMAIL);
+          secure_gfree (data, sensitive);
           return ret;
         }
 
-      if (method == ALERT_METHOD_EMAIL)
+      if (sensitive)
         sql_ps_sensitive
           ("INSERT INTO alert_method_data (alert, name, data)"
            " VALUES ($1, $2, $3);",
@@ -1066,10 +1068,54 @@ create_alert_body (const char* name, const char* comment,
              data_name,
              data);
       g_free (data_name);
-      secure_gfree (data, method == ALERT_METHOD_EMAIL);
+      secure_gfree (data, sensitive);
     }
 
   return 0;
+}
+
+/**
+ * @brief Resolve, lock and validate an operator-owned SMB credential.
+ *
+ * @return 0 success, 40 unavailable or invalid SMB credential,
+ *         -1 database error.
+ */
+static int
+lock_alert_smb_credential (const char *credential_id)
+{
+  credential_t credential = 0;
+  credential_t locked_credential;
+  gchar *quoted_owner_uuid;
+  char *type;
+  int ret;
+
+  if (credential_id == NULL || credential_id[0] == '\0')
+    return 40;
+  if (find_credential_with_permission (credential_id, &credential,
+                                       "get_credentials"))
+    return -1;
+  if (credential == 0)
+    return 40;
+
+  quoted_owner_uuid = sql_quote (current_credentials.uuid);
+  ret =
+    sql_int64 (&locked_credential,
+               "SELECT credentials.id FROM credentials"
+               " JOIN users ON users.id = credentials.owner"
+               " WHERE credentials.id = %llu AND users.uuid = '%s' FOR SHARE;",
+               credential, quoted_owner_uuid);
+  g_free (quoted_owner_uuid);
+  if (ret == 1)
+    return 40;
+  if (ret || locked_credential != credential)
+    return -1;
+
+  type = credential_type (credential);
+  if (type == NULL)
+    return -1;
+  ret = strcmp (type, "up") == 0 ? 0 : 40;
+  free (type);
+  return ret;
 }
 
 /**
@@ -1319,6 +1365,67 @@ create_alert_email_with_report_refs
                              EVENT_TASK_RUN_STATUS_CHANGED, event_data,
                              ALERT_CONDITION_ALWAYS, condition_data,
                              ALERT_METHOD_EMAIL, method_data, alert);
+
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
+    }
+
+  sql_commit ();
+  return 0;
+}
+
+/**
+ * @brief Atomically create a task-status SMB alert with delivery references.
+ *
+ * Permission is checked before reference resolution. The operator owner,
+ * owned SMB credential, report format and optional report config remain locked
+ * through the alert insert. create_alert_body() performs the inherited SMB
+ * credential-content and path validation inside the same transaction.
+ *
+ * @return See create_alert_body(), plus 90 unavailable report format,
+ *         91 unavailable report config and 92 report config format mismatch.
+ */
+int
+create_alert_smb_with_report_refs (const char *name, const char *comment,
+                                   const char *active, GPtrArray *event_data,
+                                   GPtrArray *condition_data,
+                                   GPtrArray *method_data,
+                                   const char *smb_credential_id,
+                                   const char *report_format_id,
+                                   const char *report_config_id, alert_t *alert)
+{
+  report_format_t report_format = 0;
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  sql_begin_immediate ();
+
+  if (acl_user_may ("create_alert") == 0)
+    {
+      sql_rollback ();
+      return 99;
+    }
+
+  ret = lock_alert_create_owner ();
+  if (ret == 0)
+    ret = lock_alert_smb_credential (smb_credential_id);
+
+  if (ret == 0 && (report_format_id == NULL || report_format_id[0] == '\0'))
+    ret = 90;
+  else if (ret == 0)
+    ret = lock_alert_report_format (report_format_id, &report_format);
+
+  if (ret == 0 && report_config_id && report_config_id[0])
+    ret = lock_alert_report_config (report_config_id, report_format);
+
+  if (ret == 0)
+    ret = create_alert_body (name, comment, NULL, active,
+                             EVENT_TASK_RUN_STATUS_CHANGED, event_data,
+                             ALERT_CONDITION_ALWAYS, condition_data,
+                             ALERT_METHOD_SMB, method_data, alert);
 
   if (ret)
     {

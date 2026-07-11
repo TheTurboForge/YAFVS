@@ -10,10 +10,9 @@ use axum::{
 
 use crate::{
     alert_payloads::AlertAssetItem,
-    alert_write_validation::{AlertCloneRequest, AlertEmailCreateRequest, AlertPatchRequest},
+    alert_write_validation::{AlertCloneRequest, AlertCreateRequest, AlertPatchRequest},
     alert_writes::{
-        clone_alert, create_email_alert, delete_alert, parse_alert_email_create_payload,
-        patch_alert,
+        clone_alert, create_alert, delete_alert, parse_alert_create_payload, patch_alert,
     },
     app_state::AppState,
     browser_proxy_api::{BrowserProxyAuth, browser_proxy_operator_from_headers},
@@ -39,15 +38,15 @@ use crate::{
     tls_certificate_writes::delete_tls_certificate,
 };
 
-pub(crate) async fn browser_proxy_create_email_alert(
+pub(crate) async fn browser_proxy_create_alert(
     State(state): State<AppState>,
     Extension(auth): Extension<BrowserProxyAuth>,
     headers: HeaderMap,
-    payload: Result<Json<AlertEmailCreateRequest>, JsonRejection>,
+    payload: Result<Json<AlertCreateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<AlertAssetItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    let request = parse_alert_email_create_payload(payload)?;
-    create_email_alert(State(state), Some(Extension(operator)), Ok(Json(request))).await
+    let request = parse_alert_create_payload(payload)?;
+    create_alert(State(state), Some(Extension(operator)), Ok(Json(request))).await
 }
 
 pub(crate) async fn browser_proxy_patch_scanner(

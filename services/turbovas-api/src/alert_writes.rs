@@ -18,9 +18,9 @@ use crate::{
         execute_alert_trash_transaction,
     },
     alert_write_validation::{
-        AlertCloneRequest, AlertEmailCreateRequest, AlertPatchRequest, ValidatedAlertEmailCreate,
-        validate_alert_clone_request, validate_alert_email_create_request,
-        validate_alert_patch_request,
+        AlertCloneRequest, AlertCreateRequest, AlertPatchRequest, ValidatedAlertCreate,
+        ValidatedAlertEmailCreate, ValidatedAlertSmbCreate, validate_alert_clone_request,
+        validate_alert_create_request, validate_alert_patch_request,
     },
     alerts::load_alert_asset_detail,
     app_state::AppState,
@@ -32,22 +32,35 @@ use crate::{
     },
 };
 
-pub(crate) async fn create_email_alert(
+pub(crate) async fn create_alert(
     State(state): State<AppState>,
     operator: Option<Extension<DirectApiOperator>>,
-    payload: Result<Json<AlertEmailCreateRequest>, JsonRejection>,
+    payload: Result<Json<AlertCreateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<AlertAssetItem>), ApiError> {
     let operator = require_alert_write_operator(operator)?;
-    let request = parse_alert_email_create_payload(payload)?;
-    let request = validate_alert_email_create_request(request)?;
+    let request = parse_alert_create_payload(payload)?;
+    let request = validate_alert_create_request(request)?;
     let control_secret = gvmd_control_secret()?;
-    let alert_id = request_alert_email_create(
-        &gvmd_control_socket_path(),
-        &control_secret,
-        operator.user_uuid(),
-        &request,
-    )
-    .await?;
+    let alert_id = match &request {
+        ValidatedAlertCreate::Email(request) => {
+            request_alert_email_create(
+                &gvmd_control_socket_path(),
+                &control_secret,
+                operator.user_uuid(),
+                request,
+            )
+            .await?
+        }
+        ValidatedAlertCreate::Smb(request) => {
+            request_alert_smb_create(
+                &gvmd_control_socket_path(),
+                &control_secret,
+                operator.user_uuid(),
+                request,
+            )
+            .await?
+        }
+    };
     let client = state
         .pool
         .get()
@@ -66,7 +79,7 @@ pub(crate) async fn create_email_alert(
         .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?
         .is_some();
     if !owner_matches {
-        tracing::warn!("created EMAIL alert does not resolve to the authenticated operator");
+        tracing::warn!("created alert does not resolve to the authenticated operator");
         return Err(ApiError::MutationCommittedResponseUnavailable);
     }
     let alert = load_alert_asset_detail(&client, &alert_id)
@@ -75,12 +88,12 @@ pub(crate) async fn create_email_alert(
     Ok((StatusCode::CREATED, Json(alert)))
 }
 
-pub(crate) fn parse_alert_email_create_payload(
-    payload: Result<Json<AlertEmailCreateRequest>, JsonRejection>,
-) -> Result<AlertEmailCreateRequest, ApiError> {
+pub(crate) fn parse_alert_create_payload(
+    payload: Result<Json<AlertCreateRequest>, JsonRejection>,
+) -> Result<AlertCreateRequest, ApiError> {
     payload.map(|Json(request)| request).map_err(|_| {
         ApiError::BadRequest(
-            "request body must be application/json matching AlertEmailCreateRequest".to_string(),
+            "request body must be application/json matching AlertCreateRequest".to_string(),
         )
     })
 }
@@ -95,7 +108,7 @@ pub(crate) async fn request_alert_email_create(
     let response =
         request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes()).await;
     let response = response.map_err(map_control_socket_error)?;
-    parse_alert_email_create_response(&response)
+    parse_alert_create_response(&response)
 }
 
 pub(crate) fn alert_email_create_command(
@@ -136,6 +149,49 @@ pub(crate) fn alert_email_create_command(
     ScrubbedControlFrame::new(command)
 }
 
+pub(crate) async fn request_alert_smb_create(
+    socket_path: &str,
+    control_secret: &str,
+    operator_uuid: &str,
+    request: &ValidatedAlertSmbCreate,
+) -> Result<String, ApiError> {
+    let command = alert_smb_create_command(control_secret, operator_uuid, request);
+    let response =
+        request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes()).await;
+    let response = response.map_err(map_control_socket_error)?;
+    parse_alert_create_response(&response)
+}
+
+pub(crate) fn alert_smb_create_command(
+    control_secret: &str,
+    operator_uuid: &str,
+    request: &ValidatedAlertSmbCreate,
+) -> ScrubbedControlFrame {
+    let mut command = Vec::with_capacity(25_600);
+    command.extend_from_slice(b"alert-smb-create ");
+    command.extend_from_slice(control_secret.as_bytes());
+    command.push(b' ');
+    command.extend_from_slice(operator_uuid.as_bytes());
+    command.push(b' ');
+    command.push(if request.active { b'1' } else { b'0' });
+    for field in [
+        request.name.as_bytes(),
+        request.comment.as_bytes(),
+        request.status.as_str().as_bytes(),
+        request.smb_credential_id.as_bytes(),
+        request.smb_share_path.as_bytes(),
+        request.smb_file_path.as_bytes(),
+        request.report_format_id.as_bytes(),
+        request.report_config_id.as_bytes(),
+        request.smb_max_protocol.as_bytes(),
+    ] {
+        command.push(b' ');
+        append_alert_create_base64(&mut command, field);
+    }
+    command.push(b'\n');
+    ScrubbedControlFrame::new(command)
+}
+
 fn append_alert_create_base64(command: &mut Vec<u8>, value: &[u8]) {
     let start = command.len();
     let encoded_capacity = value.len().div_ceil(3) * 4;
@@ -146,7 +202,7 @@ fn append_alert_create_base64(command: &mut Vec<u8>, value: &[u8]) {
     command.truncate(start + written);
 }
 
-pub(crate) fn parse_alert_email_create_response(response: &[u8]) -> Result<String, ApiError> {
+pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, ApiError> {
     match response {
         b"1 exists" => Err(ApiError::Conflict(
             "An alert with this name already exists.".to_string(),

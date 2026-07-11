@@ -61,6 +61,12 @@ alert_name (alert_t);
 char *
 alert_filter_id (alert_t);
 
+int
+create_alert_smb_with_report_refs (const char *, const char *, const char *,
+                                   GPtrArray *, GPtrArray *, GPtrArray *,
+                                   const char *, const char *, const char *,
+                                   alert_t *);
+
 event_t
 alert_event (alert_t);
 

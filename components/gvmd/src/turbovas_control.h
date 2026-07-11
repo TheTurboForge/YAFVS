@@ -28,6 +28,12 @@
  *                    <report_format_uuid_b64> <report_config_uuid_b64>
  *                    <message_b64>\n
  *
+ * alert-smb-create <secret> <operator_uuid> <active:0|1> <name_b64>
+ *                  <comment_b64> <status_b64> <smb_credential_uuid_b64>
+ *                  <share_path_b64> <file_path_b64>
+ *                  <report_format_uuid_b64> <report_config_uuid_b64>
+ *                  <max_protocol_b64>\n
+ *
  * Standard base64 fields contain no spaces. Empty optional fields are encoded
  * as empty tokens between their delimiter spaces.
  */

@@ -43,6 +43,42 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
+static void
+alert_secure_clear (void *value, size_t length)
+{
+  volatile unsigned char *cursor = value;
+
+  if (value == NULL)
+    return;
+  while (length--)
+    *cursor++ = 0;
+}
+
+static void
+alert_secure_gfree (gchar *value)
+{
+  if (value == NULL)
+    return;
+  alert_secure_clear (value, strlen (value));
+  g_free (value);
+}
+
+static void
+alert_secure_free (char *value)
+{
+  if (value == NULL)
+    return;
+  alert_secure_clear (value, strlen (value));
+  free (value);
+}
+
+static void
+alert_secure_gfree_bytes (gpointer value, gsize length)
+{
+  alert_secure_clear (value, length);
+  g_free (value);
+}
+
 static int
 close_alert_fd (int *fd)
 {
@@ -1765,8 +1801,6 @@ run_alert_script (const char *alert_id, const char *command_args,
   if (report == NULL)
     return -1;
 
-  g_debug ("report: %s", report);
-
   /* Setup files. */
   ret = alert_script_init (report_filename, report, report_size,
                            extra_content, extra_size,
@@ -2005,8 +2039,7 @@ smb_send_to_host (const char *password, const char *username,
   gchar *command_args;
   int ret;
 
-  g_debug ("smb as %s to share: %s, path: %s, max_protocol: %s",
-           username, share_path, file_path, max_protocol);
+  g_debug ("Sending report through SMB alert delivery");
 
   if (password == NULL || username == NULL
       || share_path == NULL || file_path == NULL)
@@ -2031,8 +2064,8 @@ smb_send_to_host (const char *password, const char *username,
                           authfile_content, strlen (authfile_content),
                           script_message);
 
-  g_free (authfile_content);
-  g_free (command_args);
+  alert_secure_gfree (authfile_content);
+  alert_secure_gfree (command_args);
   return ret;
 }
 
@@ -2062,7 +2095,6 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
     return -1;
 
   g_debug ("send to sourcefire: %s:%s", ip, port);
-  g_debug ("report: %s", report);
 
   /* Setup files. */
 
@@ -5012,13 +5044,11 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
                               || g_str_has_suffix (file_path_format, "/"));
 
           report_content = NULL;
+          content_length = 0;
           extension = NULL;
           report_format = 0;
 
-          g_debug ("smb_credential: %s", credential_id);
-          g_debug ("smb_share_path: %s", share_path);
-          g_debug ("smb_file_path: %s (%s)",
-                   file_path_format, file_path_is_dir ? "dir" : "file");
+          g_debug ("Preparing SMB alert delivery destination");
 
           ret = report_content_for_alert
                   (alert, report, task, get,
@@ -5031,11 +5061,11 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
                    NULL, NULL, NULL, NULL, &report_format, NULL);
           if (ret || report_content == NULL)
             {
-              free (credential_id);
-              free (share_path);
-              free (file_path_format);
-              free (max_protocol);
-              g_free (report_content);
+              alert_secure_free (credential_id);
+              alert_secure_free (share_path);
+              alert_secure_free (file_path_format);
+              alert_secure_free (max_protocol);
+              alert_secure_gfree_bytes (report_content, content_length);
               g_free (extension);
               return ret ? ret : -1;
             }
@@ -5059,6 +5089,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
               file_path = generate_report_filename (report, report_format,
                                                     file_path_format, TRUE);
             }
+          alert_secure_free (file_path_format);
 
           credential = 0;
           ret = find_credential_with_permission (credential_id, &credential,
@@ -5067,14 +5098,14 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
             {
               if (ret == 0)
                 {
-                  g_warning ("%s: Could not find credential %s",
-                             __func__, credential_id);
+                  g_warning ("%s: Could not find SMB alert credential",
+                             __func__);
                 }
-              free (credential_id);
-              free (share_path);
-              free (file_path);
-              free (max_protocol);
-              g_free (report_content);
+              alert_secure_free (credential_id);
+              alert_secure_free (share_path);
+              alert_secure_free (file_path);
+              alert_secure_free (max_protocol);
+              alert_secure_gfree_bytes (report_content, content_length);
               g_free (extension);
               return ret ? -1 : -4;
             }
@@ -5086,13 +5117,13 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
                                   max_protocol, report_content, content_length,
                                   script_message);
 
-          g_free (username);
-          g_free (password);
-          free (credential_id);
-          free (share_path);
-          free (file_path);
-          free (max_protocol);
-          g_free (report_content);
+          alert_secure_gfree (username);
+          alert_secure_gfree (password);
+          alert_secure_free (credential_id);
+          alert_secure_free (share_path);
+          alert_secure_free (file_path);
+          alert_secure_free (max_protocol);
+          alert_secure_gfree_bytes (report_content, content_length);
           g_free (extension);
           return ret;
         }

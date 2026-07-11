@@ -397,9 +397,7 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
         "start-alert-scan.gmp.py",
         "start-nvt-scan.gmp.py",
     },
-    "write_or_mutation": {
-        "create-alerts-from-csv.gmp.py",
-    },
+    "write_or_mutation": set(),
 }
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
     "native_read_replaced": "Read-only inherited script has an unambiguous native API/tooling replacement and no retained compatibility need.",
@@ -411,10 +409,9 @@ NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKET_REASONS = {
     "needs_review": "Script is still marked as a removal candidate but lacks a specific retirement-safety bucket.",
 }
 NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS = {
-    "create-alerts-from-csv.gmp.py": "Inherited CSV bulk-alert behavior is characterized; native tooling still lacks a contract for alert methods, credentials, report formats, and EMAIL/SMB delivery payloads.",
     "export-pdf-report.gmp.py": "Inherited PDF report export is characterized as base64-decoded report-format output; native tooling still lacks a direct file-export contract.",
     "nvt-scan.gmp.py": "Inherited NVT scan setup behavior is characterized; native tooling still lacks a safe scanner/task-control contract for creating and starting such tasks.",
-    "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; native tooling still lacks a safe native contract for email alert payloads, optional target/port-list creation, task creation, and task start side effects.",
+    "start-alert-scan.gmp.py": "Inherited start-alert-scan behavior is characterized; the native alert, target, port-list, task, and task-start contracts now exist, but one guarded composition helper still must preflight and sequence them before this script can be retired.",
     "start-nvt-scan.gmp.py": "Inherited interactive start-nvt-scan selection and clone flow is characterized; native tooling still lacks a safe scanner/task-control contract for this workflow.",
 }
 # Historical denominator from 807ed060, when explicit helper-removal tracking landed.
@@ -501,7 +498,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-export-read",
         "alert-metadata-modify",
         "alert-clone",
-        "alert-email-create",
+        "alert-email-smb-create",
         "alert-trash-move",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
@@ -675,7 +672,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
-        "alert-smb-create-gsa-ui-authoring-test-and-delivery-payload-mutations",
+        "alert-other-methods-test-actions-and-delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
         "credential-secret-updates-non-up-usk-types-and-deletes",
         "feed-sync-import-control",
@@ -864,11 +861,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "alert-metadata-list-read",
     },
     ("post", "/alerts"): {
-        "x-turbovas-inherited-still-owns": "alert-smb-create-gsa-ui-authoring-test-and-delivery-payload-mutations",
+        "x-turbovas-inherited-still-owns": "alert-other-methods-test-actions-and-delivery-payload-mutations",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
-        "x-turbovas-replaces": "alert-email-create",
+        "x-turbovas-replaces": "alert-email-smb-create",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "alert-delivery-control",
     },
@@ -6530,6 +6527,24 @@ def openapi_request_body_schema_contract_drift(repo_root: Path | None, operation
             continue
         values = openapi_indented_scalar_fields(block)
         top_level_keys = openapi_schema_top_level_keys(block)
+        block_text = "\n".join(block)
+        one_of_refs = re.findall(
+            r"^\s{8}-\s+\$ref:\s+['\"](#/components/schemas/[A-Za-z][A-Za-z0-9_-]*)['\"]\s*$",
+            block_text,
+            re.MULTILINE,
+        )
+        discriminator = re.search(r"^\s{6}discriminator:\s*$\n^\s{8}propertyName:\s+([^\s#]+)\s*$", block_text, re.MULTILINE)
+        is_valid_discriminated_union = (
+            "oneOf" in top_level_keys
+            and discriminator is not None
+            and len(one_of_refs) >= 2
+            and all(openapi_component_schema_block(repo_root, item.rsplit("/", 1)[-1]) for item in one_of_refs)
+        )
+        if is_valid_discriminated_union:
+            continue
+        if "oneOf" in top_level_keys:
+            invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.oneOf", "actual": one_of_refs, "expected": "two or more component schema references with a discriminator propertyName"})
+            continue
         if values.get("type") != "object":
             invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.type", "actual": values.get("type"), "expected": "object"})
         if "properties" not in top_level_keys:
@@ -8325,9 +8340,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": alerts_endpoint_status(repo_root),
                 "replacement_candidates": ["GSA Alerts metadata list (migrated through gsad same-origin proxy)", "read-only alert metadata automation", "native-api-request helper"],
                 "notes": [
-                    "Metadata list only; alert delivery and payload detail remain inherited.",
+                    "Metadata list only; alert delivery payload detail remains redacted.",
                     "Alert method delivery values and event/condition payload data remain redacted or absent.",
-                    "No alert active state, delivery/test, credentials, URLs, hosts, paths, email/message bodies, or certificate data.",
+                    "No delivery/test action, credentials, URLs, hosts, paths, email/message bodies, or certificate data.",
                 ],
             },
             {
@@ -8335,9 +8350,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/alerts",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["GSA EMAIL alert authoring (migrated through gsad same-origin proxy)", "direct native EMAIL alert creation"],
+                "replacement_candidates": ["GSA EMAIL/SMB alert authoring (migrated through gsad same-origin proxy)", "direct native EMAIL/SMB alert creation"],
                 "residual_inherited": [
-                    "SMB alert creation, GSA UI authoring/test actions, and delivery-payload mutations remain inherited.",
+                    "Other alert methods, inherited test actions, and delivery-payload mutations remain inherited.",
                     "Recipient addresses, sender address, subject, credential and report references, and message content are write-only and are never returned by the native API.",
                 ],
             },
@@ -15100,6 +15115,11 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.alert-malformed-json-denied",
             "native-api-direct.alert-concurrent-name-serialized",
             "native-api-direct.alert-write-create",
+            "native-api-direct.alert-smb-report-format-fixture",
+            "native-api-direct.alert-smb-write-create",
+            "native-api-direct.alert-smb-method-data-names",
+            "native-api-direct.alert-smb-write-cleanup",
+            "native-api-direct.alert-smb-report-format-cleanup",
             "native-api-direct.alert-missing-format-denied",
             "native-api-direct.alert-missing-recipient-credential-denied",
             "native-api-direct.alert-write-update",
@@ -15991,6 +16011,171 @@ def direct_trash_empty_runtime_findings(
     return findings
 
 
+def native_api_cleanup_identity_predicate(resource_id: str | None, name: str) -> str:
+    if resource_id:
+        return f"uuid = {sql_literal(resource_id)} AND name = {sql_literal(name)}"
+    return f"name = {sql_literal(name)}"
+
+
+def native_api_create_cleanup_state(
+    response: subprocess.CompletedProcess[str],
+    parsed: dict[str, Any] | None,
+    http_status: int | None,
+    response_ok: bool,
+) -> tuple[bool, bool]:
+    error = parsed.get("error") if isinstance(parsed, dict) else None
+    error_code = error.get("code") if isinstance(error, dict) else None
+    committed = http_status == 201 or error_code == "committed_response_unavailable"
+    uncertain = (
+        response.returncode != 0
+        or http_status is None
+        or http_status >= 500
+        or error_code in {"committed_response_unavailable", "mutation_outcome_indeterminate"}
+        or (http_status == 201 and not response_ok)
+    )
+    return committed, uncertain
+
+
+def native_api_direct_write_smb_fixture_cleanup(
+    repo_root: Path,
+    *,
+    admin_uuid: str,
+    smb_alert_attempted: bool,
+    smb_alert_name: str,
+    smb_report_format_cleanup_required: bool,
+    smb_report_format_id: str | None,
+    smb_report_format_name: str,
+    credential_cleanup_required: bool,
+    credential_create_committed: bool,
+    credential_id: str | None,
+    credential_name: str,
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    smb_alert_cleanup_proven = not smb_alert_attempted
+    if smb_alert_attempted:
+        # Keep residue verification in a second statement: data-modifying CTEs share one snapshot.
+        smb_alert_cleanup_sql = (
+            "LOCK TABLE users IN ROW SHARE MODE; "
+            "WITH operator_owner AS (SELECT id FROM users "
+            f"WHERE uuid = {sql_literal(admin_uuid)}), "
+            "live_alert AS (SELECT id FROM alerts "
+            f"WHERE name = {sql_literal(smb_alert_name)} AND owner = (SELECT id FROM operator_owner)), "
+            "deleted_method_data AS (DELETE FROM alert_method_data WHERE alert IN (SELECT id FROM live_alert)), "
+            "deleted_event_data AS (DELETE FROM alert_event_data WHERE alert IN (SELECT id FROM live_alert)), "
+            "deleted_condition_data AS (DELETE FROM alert_condition_data WHERE alert IN (SELECT id FROM live_alert)), "
+            "deleted_alert AS (DELETE FROM alerts WHERE id IN (SELECT id FROM live_alert) RETURNING id) "
+            "SELECT count(*) FROM deleted_alert; "
+            "WITH operator_owner AS (SELECT id FROM users "
+            f"WHERE uuid = {sql_literal(admin_uuid)}), "
+            "live_alert AS (SELECT id FROM alerts "
+            f"WHERE name = {sql_literal(smb_alert_name)} AND owner = (SELECT id FROM operator_owner)) "
+            "SELECT (SELECT count(*) FROM live_alert) || '|' || "
+            "((SELECT count(*) FROM alert_method_data WHERE alert IN (SELECT id FROM live_alert)) + "
+            "(SELECT count(*) FROM alert_event_data WHERE alert IN (SELECT id FROM live_alert)) + "
+            "(SELECT count(*) FROM alert_condition_data WHERE alert IN (SELECT id FROM live_alert)));"
+        )
+        smb_alert_cleanup = psql(repo_root, smb_alert_cleanup_sql)
+        smb_alert_cleanup_counts = psql_value(smb_alert_cleanup)
+        smb_alert_cleanup_proven = (
+            smb_alert_cleanup.returncode == 0
+            and smb_alert_cleanup_counts == "0|0"
+        )
+        findings.append(process_step_finding(
+            "pass" if smb_alert_cleanup_proven else "fail",
+            "native-api-direct.alert-smb-write-cleanup",
+            "Direct write-control smoke proved no owner-scoped SMB alert or child-row residue remains."
+            if smb_alert_cleanup_proven
+            else "Direct write-control smoke failed to prove removal of the owner-scoped SMB alert and child rows.",
+            smb_alert_cleanup,
+            ["psql", "fixed-smb-alert-smoke-cleanup"],
+        ))
+
+    if smb_report_format_cleanup_required:
+        if smb_alert_cleanup_proven:
+            report_format_identity = native_api_cleanup_identity_predicate(
+                smb_report_format_id,
+                smb_report_format_name,
+            )
+            smb_report_format_cleanup = psql(
+                repo_root,
+                "LOCK TABLE users IN ROW SHARE MODE; "
+                "WITH operator_owner AS (SELECT id FROM users "
+                f"WHERE uuid = {sql_literal(admin_uuid)}), "
+                "target AS (SELECT id FROM report_formats "
+                f"WHERE {report_format_identity} AND owner = (SELECT id FROM operator_owner)), "
+                "deleted_params AS (DELETE FROM report_format_params WHERE report_format IN (SELECT id FROM target)), "
+                "deleted_format AS (DELETE FROM report_formats WHERE id IN (SELECT id FROM target) RETURNING id) "
+                "SELECT count(*) FROM deleted_format;",
+            )
+            smb_report_format_cleanup_ok = (
+                smb_report_format_cleanup.returncode == 0
+                and psql_value(smb_report_format_cleanup) == "1"
+            )
+            findings.append(process_step_finding(
+                "pass" if smb_report_format_cleanup_ok else "fail",
+                "native-api-direct.alert-smb-report-format-cleanup",
+                "Direct write-control smoke removed the owner-scoped temporary SMB report format after alert cleanup."
+                if smb_report_format_cleanup_ok
+                else "Direct write-control smoke failed to remove the owner-scoped temporary SMB report format after alert cleanup.",
+                smb_report_format_cleanup,
+                ["psql", "fixed-smb-alert-report-format-cleanup"],
+            ))
+        else:
+            findings.append(finding(
+                "fail",
+                "native-api-direct.alert-smb-report-format-cleanup",
+                "Direct write-control smoke retained the temporary SMB report format because alert cleanup was not proven.",
+            ))
+
+    if credential_cleanup_required:
+        if smb_alert_cleanup_proven:
+            credential_identity = native_api_cleanup_identity_predicate(
+                credential_id,
+                credential_name,
+            )
+            credential_cleanup_sql = (
+                "LOCK TABLE users IN ROW SHARE MODE; "
+                "WITH operator_owner AS (SELECT id FROM users "
+                f"WHERE uuid = {sql_literal(admin_uuid)}), "
+                "live_credential AS (SELECT id FROM credentials "
+                f"WHERE {credential_identity} AND owner = (SELECT id FROM operator_owner)), "
+                "deleted_data AS (DELETE FROM credentials_data WHERE credential IN (SELECT id FROM live_credential)), "
+                "deleted_credential AS (DELETE FROM credentials WHERE id IN (SELECT id FROM live_credential) RETURNING id) "
+                "SELECT count(*) FROM deleted_credential;"
+            )
+            credential_cleanup = psql(repo_root, credential_cleanup_sql)
+            credential_cleanup_deleted = psql_value(credential_cleanup)
+            expected_credential_counts = {"1"} if credential_create_committed else {"0", "1"}
+            credential_cleanup_ok = (
+                credential_cleanup.returncode == 0
+                and credential_cleanup_deleted in expected_credential_counts
+            )
+            credential_cleanup_finding = process_step_finding(
+                "pass" if credential_cleanup_ok else "fail",
+                "native-api-direct.credential-fixture-cleanup",
+                "Direct write-control smoke removed owner-scoped temporary credential residue by deterministic ID/name or name fallback."
+                if credential_cleanup_ok
+                else "Direct write-control smoke failed to clean owner-scoped temporary credential residue.",
+                credential_cleanup,
+                ["psql", "fixed-credential-smoke-cleanup"],
+            )
+            credential_cleanup_details = credential_cleanup_finding.setdefault("details", {})
+            if isinstance(credential_cleanup_details, dict):
+                credential_cleanup_details.update({
+                    "credential_id": credential_id,
+                    "credential_name": credential_name,
+                    "deleted_count": credential_cleanup_deleted,
+                })
+            findings.append(credential_cleanup_finding)
+        else:
+            findings.append(finding(
+                "fail",
+                "native-api-direct.credential-fixture-cleanup",
+                "Direct write-control smoke retained the temporary credential because SMB alert cleanup was not proven.",
+            ))
+    return findings
+
+
 def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -16092,6 +16277,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     alert_tag_name = f"turbovas-direct-write-smoke-alert-tag-{int(time.time())}-{os.getpid()}"
     credential_id: str | None = None
     credential_name = f"turbovas-direct-write-smoke-credential-{int(time.time())}-{os.getpid()}"
+    smb_alert_name = f"turbovas-direct-write-smoke-smb-alert-{int(time.time())}-{os.getpid()}"
+    smb_report_format_name = f"turbovas-direct-write-smoke-smb-format-{int(time.time())}-{os.getpid()}"
     credential_helper_name = f"{credential_name}-csv-helper"
     credential_updated_comment = "TurboVAS direct write smoke updated credential metadata"
     target_id: str | None = None
@@ -17231,6 +17418,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             alert_concurrent_name = f"{alert_name}-concurrent"
             alert_concurrent_body = json.dumps(
                 {
+                    "method": "EMAIL",
                     "name": alert_concurrent_name,
                     "comment": "TurboVAS concurrent alert create serialization proof",
                     "active": False,
@@ -17282,6 +17470,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
 
             alert_create_body = json.dumps(
                 {
+                    "method": "EMAIL",
                     "name": alert_name,
                     "comment": "TurboVAS direct write smoke temporary EMAIL alert",
                     "active": False,
@@ -17294,9 +17483,13 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             )
             alert_create = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=alert_create_body, extra_headers=content_type)
             alert_create_json, alert_create_status = parse_json_output_with_http_status(alert_create)
-            alert_resource_id = alert_create_json.get("id") if isinstance(alert_create_json, dict) and isinstance(alert_create_json.get("id"), str) else None
-            alert_create_error_code = alert_create_json.get("error", {}).get("code") if isinstance(alert_create_json, dict) and isinstance(alert_create_json.get("error"), dict) else None
-            alert_create_outcome_uncertain = alert_create.returncode != 0 or alert_create_error_code in {"committed_response_unavailable", "mutation_outcome_indeterminate"}
+            alert_resource_id_value = alert_create_json.get("id") if isinstance(alert_create_json, dict) else None
+            alert_resource_id = (
+                alert_resource_id_value
+                if isinstance(alert_resource_id_value, str)
+                and UUID_PATTERN.fullmatch(alert_resource_id_value) is not None
+                else None
+            )
             alert_create_serialized = json.dumps(alert_create_json, sort_keys=True) if isinstance(alert_create_json, dict) else ""
             alert_create_ok = (
                 alert_create.returncode == 0
@@ -17308,10 +17501,19 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 and "turbovas-smoke@example.invalid" not in alert_create_serialized
                 and "TurboVAS delivery subject sentinel" not in alert_create_serialized
             )
+            alert_create_committed, alert_create_outcome_uncertain = native_api_create_cleanup_state(
+                alert_create,
+                alert_create_json,
+                alert_create_status,
+                alert_create_ok,
+            )
+            if not alert_create_ok:
+                alert_resource_id = None
             findings.append(native_api_probe_finding("pass" if alert_create_ok else "fail", "native-api-direct.alert-write-create", "Direct write-control created an inactive EMAIL alert and returned redacted metadata only." if alert_create_ok else "Direct write-control failed to create an inactive EMAIL alert with a redacted response.", alert_create, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body=alert_create_body, extra_headers=content_type), alert_create_json, {"http_status": alert_create_status, "alert_id": alert_resource_id, **summarize_native_alert_detail_response(alert_create_json)}))
 
             alert_missing_format_body = json.dumps(
                 {
+                    "method": "EMAIL",
                     "name": f"{alert_name}-missing-format",
                     "active": False,
                     "status": "Done",
@@ -17329,6 +17531,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
 
             alert_missing_credential_body = json.dumps(
                 {
+                    "method": "EMAIL",
                     "name": f"{alert_name}-missing-recipient-credential",
                     "active": False,
                     "status": "Done",
@@ -17412,10 +17615,9 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 findings.append(native_api_probe_finding("pass" if alert_tag_post_delete_ok else "fail", "native-api-direct.alert-tag-write-post-delete", "Direct API confirms the temporary alert tag is gone after delete." if alert_tag_post_delete_ok else "Direct API did not confirm the temporary alert tag was deleted.", alert_tag_post_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(alert_tag_id)}", token=token, env=env), alert_tag_post_delete_json, {"http_status": alert_tag_post_delete_status, "tag_id": alert_tag_id, "alert_id": alert_resource_id, **summarize_native_api_response(alert_tag_post_delete_json)}))
 
             if alert_resource_id or alert_create_outcome_uncertain:
-                alert_identity_predicate = (
-                    f"uuid = {sql_literal(alert_resource_id)} AND name = {sql_literal(alert_name)}"
-                    if alert_resource_id
-                    else f"name = {sql_literal(alert_name)}"
+                alert_identity_predicate = native_api_cleanup_identity_predicate(
+                    alert_resource_id,
+                    alert_name,
                 )
                 alert_cleanup_sql = (
                     "LOCK TABLE users IN ROW SHARE MODE; "
@@ -17444,7 +17646,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 )
                 alert_cleanup = psql(repo_root, alert_cleanup_sql)
                 alert_cleanup_deleted = psql_value(alert_cleanup)
-                expected_alert_counts = {"1"} if alert_resource_id else {"0", "1"}
+                expected_alert_counts = {"1"} if alert_create_committed else {"0", "1"}
                 expected_tag_counts = {"1"} if alert_tag_id else {"0", "1"}
                 deleted_counts = alert_cleanup_deleted.split("|", 1) if alert_cleanup_deleted and "|" in alert_cleanup_deleted else []
                 deleted_alert_count = deleted_counts[0] if len(deleted_counts) == 2 else None
@@ -17480,17 +17682,33 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 extra_headers=content_type,
             )
             credential_create_json, credential_create_status = parse_json_output_with_http_status(credential_create)
-            credential_id = credential_create_json.get("id") if isinstance(credential_create_json, dict) else None
+            credential_id_value = credential_create_json.get("id") if isinstance(credential_create_json, dict) else None
+            credential_id = (
+                credential_id_value
+                if isinstance(credential_id_value, str)
+                and UUID_PATTERN.fullmatch(credential_id_value) is not None
+                else None
+            )
             credential_create_serialized = json.dumps(credential_create_json, sort_keys=True) if isinstance(credential_create_json, dict) else ""
             credential_create_ok = (
                 credential_create.returncode == 0
                 and credential_create_status == 201
-                and isinstance(credential_id, str)
+                and credential_id is not None
                 and credential_create_json.get("name") == credential_name
                 and credential_create_json.get("credential_type") == "up"
+                and credential_create_json.get("owner_id") == admin_uuid
+                and credential_create_json.get("smb_compatible") is True
                 and "turbovas-direct-write-smoke-secret" not in credential_create_serialized
                 and not any(field in credential_create_json for field in ("password", "passphrase", "private_key", "secret"))
             )
+            credential_create_committed, credential_create_outcome_uncertain = native_api_create_cleanup_state(
+                credential_create,
+                credential_create_json,
+                credential_create_status,
+                credential_create_ok,
+            )
+            if not credential_create_ok:
+                credential_id = None
             findings.append(
                 native_api_probe_finding(
                     "pass" if credential_create_ok else "fail",
@@ -17512,6 +17730,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         "http_status": credential_create_status,
                         "credential_id": credential_id,
                         "credential_name": credential_name,
+                        "outcome_uncertain": credential_create_outcome_uncertain,
                         "secret_fields_returned": sorted(
                             field
                             for field in ("password", "passphrase", "private_key", "secret")
@@ -17522,7 +17741,10 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 )
             )
 
-            if credential_id:
+            smb_alert_attempted = False
+            smb_report_format_cleanup_required = False
+            smb_report_format_id: str | None = None
+            if credential_create_ok and credential_id:
                 credential_secret_sql = (
                     "SELECT md5(string_agg(type || '=' || value, ',' ORDER BY type, value)) "
                     "FROM credentials_data "
@@ -17536,21 +17758,101 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 credential_patch_ok = credential_patch.returncode == 0 and credential_patch_status == 200 and isinstance(credential_patch_json, dict) and credential_patch_json.get("id") == credential_id and credential_patch_json.get("comment") == credential_updated_comment and credential_secret_before and credential_secret_before == credential_secret_after
                 findings.append(native_api_probe_finding("pass" if credential_patch_ok else "fail", "native-api-direct.credential-write-update", "Direct write-control patched credential metadata without changing sentinel secret rows." if credential_patch_ok else "Direct write-control failed to patch credential metadata or changed sentinel secret rows.", credential_patch, direct_native_api_display_command(f"/api/v1/credentials/{urllib.parse.quote(credential_id)}", token=token, env=env, method="PATCH", body=credential_patch_body, extra_headers=content_type), credential_patch_json, {"http_status": credential_patch_status, "credential_id": credential_id, "secret_checksum_before": credential_secret_before, "secret_checksum_after": credential_secret_after, **summarize_native_api_response(credential_patch_json)}))
 
-                credential_cleanup_sql = (
-                    "WITH live_credential AS (SELECT id FROM credentials "
-                    f"WHERE uuid = {sql_literal(credential_id)} AND name = {sql_literal(credential_name)}), "
-                    "deleted_data AS (DELETE FROM credentials_data WHERE credential IN (SELECT id FROM live_credential)), "
-                    "deleted_credential AS (DELETE FROM credentials WHERE id IN (SELECT id FROM live_credential) RETURNING id) "
-                    "SELECT count(*) FROM deleted_credential;"
+                smb_report_format_fixture_sql = (
+                    "WITH owner_row AS (SELECT id FROM users "
+                    f"WHERE uuid = {sql_literal(admin_uuid)}), "
+                    "inserted_format AS (INSERT INTO report_formats "
+                    "(uuid, owner, name, extension, content_type, summary, description, "
+                    "trust, trust_time, flags, predefined, report_type, creation_time, modification_time) "
+                    "SELECT make_uuid(), id, "
+                    f"{sql_literal(smb_report_format_name)}, 'txt', 'text/plain', "
+                    "'TurboVAS direct write smoke SMB report format', "
+                    "'Temporary report format used by runtime-native-api-direct-write-smoke SMB coverage.', "
+                    "1, m_now(), 0, 0, 'all', m_now(), m_now() "
+                    "FROM owner_row RETURNING id, uuid), "
+                    "inserted_param AS (INSERT INTO report_format_params "
+                    "(report_format, name, type, value, type_min, type_max, type_regex, fallback) "
+                    "SELECT id, 'smoke_param', 3, '', 0, 4096, '', '' "
+                    "FROM inserted_format RETURNING report_format) "
+                    "SELECT uuid FROM inserted_format;"
                 )
-                credential_cleanup = psql(repo_root, credential_cleanup_sql)
-                credential_cleanup_deleted = psql_value(credential_cleanup)
-                credential_cleanup_ok = credential_cleanup.returncode == 0 and credential_cleanup_deleted == "1"
-                credential_cleanup_finding = process_step_finding("pass" if credential_cleanup_ok else "fail", "native-api-direct.credential-fixture-cleanup", "Direct write-control smoke removed the temporary credential fixture and sentinel secret rows." if credential_cleanup_ok else "Direct write-control smoke failed to clean up the temporary credential fixture.", credential_cleanup, ["psql", "fixed-credential-smoke-cleanup"])
-                credential_cleanup_details = credential_cleanup_finding.setdefault("details", {})
-                if isinstance(credential_cleanup_details, dict):
-                    credential_cleanup_details.update({"credential_id": credential_id, "credential_name": credential_name, "deleted_count": credential_cleanup_deleted})
-                findings.append(credential_cleanup_finding)
+                smb_report_format_fixture = psql(repo_root, smb_report_format_fixture_sql)
+                # The statement may have committed even if its response was lost; deterministic
+                # owner/name cleanup is therefore required after every dispatched fixture attempt.
+                smb_report_format_cleanup_required = True
+                smb_report_format_id_value = psql_value(smb_report_format_fixture) or None
+                smb_report_format_id = (
+                    smb_report_format_id_value
+                    if isinstance(smb_report_format_id_value, str)
+                    and UUID_PATTERN.fullmatch(smb_report_format_id_value) is not None
+                    else None
+                )
+                smb_report_format_ok = smb_report_format_fixture.returncode == 0 and smb_report_format_id is not None
+                findings.append(process_step_finding("pass" if smb_report_format_ok else "fail", "native-api-direct.alert-smb-report-format-fixture", "Direct write-control smoke created a real temporary report format for SMB alert creation." if smb_report_format_ok else "Direct write-control smoke failed to create a real report format for SMB alert creation.", smb_report_format_fixture, ["psql", "fixed-smb-alert-report-format-fixture"]))
+                if smb_report_format_ok:
+                    smb_alert_body = json.dumps(
+                        {
+                            "method": "SMB",
+                            "name": smb_alert_name,
+                            "comment": "TurboVAS direct write smoke temporary SMB alert",
+                            "active": False,
+                            "status": "Done",
+                            "smb_credential_id": credential_id,
+                            "smb_share_path": "//turbovas-smoke.invalid/reports",
+                            "smb_file_path": "turbovas-direct-write-smoke/report.csv",
+                            "report_format_id": smb_report_format_id,
+                            "smb_max_protocol": "default",
+                        },
+                        separators=(",", ":"),
+                    )
+                    smb_alert_attempted = True
+                    smb_alert_create = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=smb_alert_body, extra_headers=content_type)
+                    smb_alert_create_json, smb_alert_create_status = parse_json_output_with_http_status(smb_alert_create)
+                    smb_alert_id_value = smb_alert_create_json.get("id") if isinstance(smb_alert_create_json, dict) else None
+                    smb_alert_id = (
+                        smb_alert_id_value
+                        if isinstance(smb_alert_id_value, str)
+                        and UUID_PATTERN.fullmatch(smb_alert_id_value) is not None
+                        else None
+                    )
+                    smb_alert_method = smb_alert_create_json.get("method") if isinstance(smb_alert_create_json, dict) else None
+                    smb_alert_method_type = smb_alert_method.get("type") if isinstance(smb_alert_method, dict) else None
+                    smb_alert_serialized = json.dumps(smb_alert_create_json, sort_keys=True) if isinstance(smb_alert_create_json, dict) else ""
+                    smb_alert_create_ok = (
+                        smb_alert_create.returncode == 0 and smb_alert_create_status == 201
+                        and isinstance(smb_alert_id, str) and alert_metadata_item_ok(smb_alert_create_json)
+                        and isinstance(smb_alert_method_type, str) and smb_alert_method_type.upper() == "SMB"
+                        and "turbovas-smoke.invalid" not in smb_alert_serialized
+                        and "turbovas-direct-write-smoke/report.csv" not in smb_alert_serialized
+                        and credential_id not in smb_alert_serialized
+                    )
+                    _smb_alert_create_committed, smb_alert_create_outcome_uncertain = native_api_create_cleanup_state(
+                        smb_alert_create,
+                        smb_alert_create_json,
+                        smb_alert_create_status,
+                        smb_alert_create_ok,
+                    )
+                    if not smb_alert_create_ok:
+                        smb_alert_id = None
+                    findings.append(native_api_probe_finding("pass" if smb_alert_create_ok else "fail", "native-api-direct.alert-smb-write-create", "Direct write-control created an inactive SMB alert with a redacted SMB method response." if smb_alert_create_ok else "Direct write-control failed to create a redacted inactive SMB alert.", smb_alert_create, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body=smb_alert_body, extra_headers=content_type), smb_alert_create_json, {"http_status": smb_alert_create_status, "alert_id": smb_alert_id, "method_type": smb_alert_method_type, "outcome_uncertain": smb_alert_create_outcome_uncertain, **summarize_native_alert_detail_response(smb_alert_create_json)}))
+                    if smb_alert_id:
+                        smb_data_names = psql_value(psql(repo_root, "SELECT string_agg(name, ',' ORDER BY name) FROM alert_method_data " f"WHERE alert = (SELECT id FROM alerts WHERE uuid = {sql_literal(smb_alert_id)});"))
+                        expected_smb_data_names = "smb_credential,smb_file_path,smb_report_format,smb_share_path"
+                        findings.append(finding("pass" if smb_data_names == expected_smb_data_names else "fail", "native-api-direct.alert-smb-method-data-names", "Direct write-control persisted only the expected SMB method-data names." if smb_data_names == expected_smb_data_names else "Direct write-control did not persist the expected SMB method-data names.", details={"method_data_names": smb_data_names}))
+
+            findings.extend(native_api_direct_write_smb_fixture_cleanup(
+                repo_root,
+                admin_uuid=admin_uuid,
+                smb_alert_attempted=smb_alert_attempted,
+                smb_alert_name=smb_alert_name,
+                smb_report_format_cleanup_required=smb_report_format_cleanup_required,
+                smb_report_format_id=smb_report_format_id,
+                smb_report_format_name=smb_report_format_name,
+                credential_cleanup_required=bool(credential_id or credential_create_outcome_uncertain),
+                credential_create_committed=credential_create_committed,
+                credential_id=credential_id,
+                credential_name=credential_name,
+            ))
 
             credential_helper_result: dict[str, Any] | None = None
             credential_helper_id: str | None = None
@@ -23540,6 +23842,391 @@ def command_native_credentials_from_csv(
         native_credential_csv_clear_secrets(rows)
 
 
+NATIVE_ALERT_CSV_COMMENT = "Created by TurboVAS native-alerts-from-csv"
+NATIVE_ALERT_CSV_MAX_FILE_BYTES = 1048576
+NATIVE_ALERT_CSV_MAX_ROWS = 1000
+NATIVE_ALERT_CSV_MAX_TEXT_BYTES = 4096
+NATIVE_ALERT_CSV_MAX_SUBJECT_BYTES = 80
+NATIVE_ALERT_CSV_MAX_MESSAGE_BYTES = 2000
+NATIVE_ALERT_CSV_MAX_REPORTED_ITEMS = 10
+NATIVE_ALERT_CSV_SMB_FORBIDDEN_CHARACTERS = frozenset(":?<>|")
+NATIVE_ALERT_CSV_STATUSES = frozenset({
+    "Delete Requested", "Ultimate Delete Requested", "Ultimate Delete Waiting",
+    "Delete Waiting", "Done", "New", "Requested", "Running", "Queued",
+    "Stop Requested", "Stop Waiting", "Stopped", "Processing", "Interrupted",
+})
+NATIVE_ALERT_CSV_EMAIL_NOTICES = {"0": "include", "1": "simple", "2": "attach"}
+
+
+@dataclass
+class NativeAlertCsvRow:
+    row_number: int
+    name: str
+    method: str
+    status: str
+    report_format_name: str
+    email_from_address: str = ""
+    email_to_address: str = ""
+    email_subject: str = ""
+    email_message: str = ""
+    email_notice: str = ""
+    smb_credential_name: str = ""
+    smb_share_path: str = ""
+    smb_file_path: str = ""
+    report_format_id: str = ""
+    smb_credential_id: str = ""
+
+
+def native_alert_csv_text(row_number: int, field_name: str, value: str, *, max_bytes: int = NATIVE_ALERT_CSV_MAX_TEXT_BYTES) -> str:
+    value = value.strip()
+    if not value or len(value.encode("utf-8")) > max_bytes or any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value):
+        raise ValueError(f"row {row_number} {field_name} must be non-empty printable text")
+    return value
+
+
+def native_alert_csv_message(row_number: int, value: str) -> str:
+    if len(value.encode("utf-8")) > NATIVE_ALERT_CSV_MAX_MESSAGE_BYTES or any(
+        (character != "\t" and character not in {"\r", "\n"} and ord(character) < 32)
+        or 127 <= ord(character) <= 159
+        for character in value
+    ):
+        raise ValueError(f"row {row_number} message must be UTF-8 text up to {NATIVE_ALERT_CSV_MAX_MESSAGE_BYTES} bytes")
+    return value
+
+
+def native_alert_csv_smb_file_path(row_number: int, folder: str, report_name: str) -> str:
+    folder = native_alert_csv_text(row_number, "SMB report folder", folder)
+    report_name = native_alert_csv_text(row_number, "SMB report name", report_name)
+    if (
+        report_name in {".", ".."}
+        or "/" in report_name
+        or "\\" in report_name
+        or report_name.endswith(".")
+        or any(character in NATIVE_ALERT_CSV_SMB_FORBIDDEN_CHARACTERS for character in report_name)
+    ):
+        raise ValueError(f"row {row_number} SMB report name must be a file name")
+    parts = re.split(r"[/\\]", folder)
+    if any(
+        part in {"", ".", ".."}
+        or part.endswith(".")
+        or any(character in NATIVE_ALERT_CSV_SMB_FORBIDDEN_CHARACTERS for character in part)
+        for part in parts
+    ):
+        raise ValueError(f"row {row_number} SMB report folder must not contain empty, traversal, terminal-dot, or invalid-character segments")
+    return f"{folder.rstrip('/')}/{report_name}"
+
+
+def native_alert_csv_smb_share_path(row_number: int, value: str) -> str:
+    share_path = native_alert_csv_text(row_number, "SMB share path", value)
+    if re.fullmatch(r"(?:\\\\|//)[^:?<>|]+(?:\\\\|/)[^:?<>|]+", share_path) is None:
+        raise ValueError(f"row {row_number} SMB share path must be exactly a network host/share without invalid characters")
+    return share_path
+
+
+def native_alert_csv_smb_credential_metadata_valid(
+    credential: dict[str, Any],
+    operator_uuid: str,
+) -> bool:
+    return (
+        credential.get("credential_type") == "up"
+        and credential.get("owner_id") == operator_uuid
+        and credential.get("smb_compatible") is True
+    )
+
+
+def native_alert_csv_row(row_number: int, row: list[str]) -> NativeAlertCsvRow:
+    if len(row) != 9:
+        raise ValueError(f"row {row_number} must have exactly 9 positional columns")
+    name = native_alert_csv_text(row_number, "alert name", row[0])
+    method = row[1].strip()
+    if method not in {"EMAIL", "SMB"}:
+        raise ValueError(f"row {row_number} alert method must be exactly EMAIL or SMB")
+    status = row[8].strip()
+    if status not in NATIVE_ALERT_CSV_STATUSES:
+        raise ValueError(f"row {row_number} alert status is not supported")
+    report_format_name = native_alert_csv_text(row_number, "report format name", row[7])
+    if method == "EMAIL":
+        notice = NATIVE_ALERT_CSV_EMAIL_NOTICES.get(row[6].strip())
+        if notice is None:
+            raise ValueError(f"row {row_number} EMAIL notice must be exactly 0, 1, or 2")
+        return NativeAlertCsvRow(
+            row_number=row_number,
+            name=name,
+            method=method,
+            status=status,
+            report_format_name=report_format_name,
+            email_from_address=native_alert_csv_text(row_number, "EMAIL sender", row[2]),
+            email_to_address=native_alert_csv_text(row_number, "EMAIL recipient", row[3]),
+            email_subject=native_alert_csv_text(row_number, "EMAIL subject", row[4], max_bytes=NATIVE_ALERT_CSV_MAX_SUBJECT_BYTES),
+            email_message=native_alert_csv_message(row_number, row[5]),
+            email_notice=notice,
+        )
+    return NativeAlertCsvRow(
+        row_number=row_number,
+        name=name,
+        method=method,
+        status=status,
+        report_format_name=report_format_name,
+        smb_credential_name=native_alert_csv_text(row_number, "SMB credential name", row[2]),
+        smb_share_path=native_alert_csv_smb_share_path(row_number, row[3]),
+        smb_file_path=native_alert_csv_smb_file_path(row_number, row[5], row[4]),
+    )
+
+
+def load_native_alert_csv_rows(csv_file: Path) -> list[NativeAlertCsvRow]:
+    try:
+        if not csv_file.is_file() or csv_file.stat().st_size > NATIVE_ALERT_CSV_MAX_FILE_BYTES:
+            raise ValueError("alert CSV file must be a regular file within the size limit")
+        with csv_file.open(encoding="utf-8", newline="") as handle:
+            rows = [native_alert_csv_row(number, row) for number, row in enumerate(csv.reader(handle), start=1)]
+    except ValueError:
+        raise
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        raise ValueError("failed to read alert CSV file as UTF-8") from exc
+    if not rows:
+        raise ValueError("alert CSV file is empty")
+    if len(rows) > NATIVE_ALERT_CSV_MAX_ROWS:
+        raise ValueError(f"alert CSV file exceeds {NATIVE_ALERT_CSV_MAX_ROWS} rows")
+    names: dict[str, int] = {}
+    for row in rows:
+        first_row = names.get(row.name)
+        if first_row is not None:
+            raise ValueError(f"duplicate alert name in rows {first_row} and {row.row_number}")
+        names[row.name] = row.row_number
+    return rows
+
+
+def native_alert_csv_exact_items(parsed: dict[str, Any] | None, name: str) -> list[dict[str, Any]]:
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        return []
+    return [item for item in parsed["items"] if isinstance(item, dict) and item.get("name") == name]
+
+
+def native_alert_csv_fetch_exact(repo_root: Path, path: str, name: str, *, token: str, env: dict[str, str]) -> tuple[list[dict[str, Any]], bool]:
+    matches: list[dict[str, Any]] = []
+    page = 1
+    encoded_name = urllib.parse.quote(name, safe="")
+    while page <= 1000:
+        response = direct_native_api_curl(repo_root, f"{path}?filter={encoded_name}&page={page}&page_size=100", token=token, env=env)
+        parsed, http_status = parse_json_output_with_http_status(response)
+        if response.returncode != 0 or http_status != 200 or not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+            return matches, False
+        matches.extend(native_alert_csv_exact_items(parsed, name))
+        page_info = parsed.get("page") if isinstance(parsed.get("page"), dict) else {}
+        total = page_info.get("total") if isinstance(page_info.get("total"), int) else len(parsed["items"])
+        actual_page = page_info.get("page") if isinstance(page_info.get("page"), int) else page
+        actual_size = page_info.get("page_size") if isinstance(page_info.get("page_size"), int) and page_info.get("page_size") else 100
+        if actual_page * actual_size >= total:
+            return matches, True
+        page += 1
+    return matches, False
+
+
+def native_alert_csv_body(row: NativeAlertCsvRow) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "method": row.method,
+        "name": row.name,
+        "comment": NATIVE_ALERT_CSV_COMMENT,
+        "active": True,
+        "status": row.status,
+    }
+    if row.method == "EMAIL":
+        body.update({
+            "to_address": row.email_to_address,
+            "from_address": row.email_from_address,
+            "subject": row.email_subject,
+            "notice": row.email_notice,
+            "message": row.email_message,
+        })
+        if row.email_notice != "simple":
+            body["report_format_id"] = row.report_format_id
+    else:
+        body.update({
+            "smb_credential_id": row.smb_credential_id,
+            "smb_share_path": row.smb_share_path,
+            "smb_file_path": row.smb_file_path,
+            "report_format_id": row.report_format_id,
+            "smb_max_protocol": "default",
+        })
+    return body
+
+
+def native_alert_csv_response_contains_forbidden_method_data(value: object, forbidden_values: dict[str, str]) -> bool:
+    if isinstance(value, list):
+        return any(native_alert_csv_response_contains_forbidden_method_data(item, forbidden_values) for item in value)
+    if not isinstance(value, dict):
+        return False
+    for key, nested_value in value.items():
+        if key in forbidden_values:
+            return True
+        if native_alert_csv_response_contains_forbidden_method_data(nested_value, forbidden_values):
+            return True
+    data_name = value.get("name")
+    if isinstance(data_name, str) and data_name in forbidden_values and value.get("value") == forbidden_values[data_name]:
+        return True
+    return False
+
+
+def native_alert_csv_response_is_redacted(parsed: dict[str, Any] | None, row: NativeAlertCsvRow) -> bool:
+    if not isinstance(parsed, dict) or not alert_metadata_item_ok(parsed):
+        return False
+    if not isinstance(parsed.get("id"), str) or UUID_PATTERN.fullmatch(parsed["id"]) is None or parsed.get("name") != row.name:
+        return False
+    method = parsed.get("method")
+    method_type = method.get("type") if isinstance(method, dict) else parsed.get("method_type")
+    if not isinstance(method_type, str) or method_type.upper() != row.method:
+        return False
+    forbidden_values = {
+        "from_address": row.email_from_address,
+        "to_address": row.email_to_address,
+        "subject": row.email_subject,
+        "message": row.email_message,
+        "email_from_address": row.email_from_address,
+        "email_to_address": row.email_to_address,
+        "email_subject": row.email_subject,
+        "email_message": row.email_message,
+        "smb_credential": row.smb_credential_name,
+        "smb_credential_name": row.smb_credential_name,
+        "smb_share_path": row.smb_share_path,
+        "smb_file_path": row.smb_file_path,
+    }
+    return not native_alert_csv_response_contains_forbidden_method_data(parsed, forbidden_values)
+
+
+def native_alert_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    compact = dict(result)
+    compact["details"] = {
+        key: details.get(key, 0)
+        for key in (
+            "row_count", "email_row_count", "smb_row_count", "dry_run",
+            "skipped_existing_alert_count", "preflight_failure_count", "created_alert_count",
+            "create_failure_count", "indeterminate_alert_count", "unattempted_alert_count",
+        )
+    }
+    compact["findings"] = [item for item in result.get("findings", []) if item.get("status") != "pass"] or [
+        finding("pass", "native-alerts-from-csv.status-only", "Native alert CSV operation passed; details summarized.")
+    ]
+    return compact
+
+
+def native_alert_csv_finish(result: dict[str, Any], details: dict[str, Any], *, status_only: bool) -> dict[str, Any]:
+    result["details"] = details
+    metadata = result.get("metadata")
+    if isinstance(metadata, dict):
+        metadata.pop("repo_root", None)
+    return native_alert_csv_status_only_result(result) if status_only else result
+
+
+def command_native_alerts_from_csv(
+    repo_root: Path,
+    csv_file: Path,
+    *,
+    allow_write_control: bool = False,
+    dry_run: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    command = "native-alerts-from-csv"
+    findings: list[dict[str, Any]] = []
+    details: dict[str, Any] = {
+        "row_count": 0, "email_row_count": 0, "smb_row_count": 0,
+        "dry_run": not allow_write_control, "skipped_existing_alert_count": 0,
+        "preflight_failure_count": 0, "created_alert_count": 0,
+        "create_failure_count": 0, "indeterminate_alert_count": 0,
+        "unattempted_alert_count": 0,
+    }
+    if dry_run and allow_write_control:
+        findings.append(finding("fail", f"{command}.arguments", "--dry-run and --allow-write-control cannot be used together."))
+        result = make_result(command, repo_root, "Native alert CSV operation rejected before runtime access.", findings)
+        return native_alert_csv_finish(result, details, status_only=status_only)
+    try:
+        rows = load_native_alert_csv_rows(csv_file)
+    except ValueError as exc:
+        findings.append(finding("fail", f"{command}.rows", str(exc)))
+        result = make_result(command, repo_root, "Native alert CSV operation rejected before runtime access.", findings)
+        return native_alert_csv_finish(result, details, status_only=status_only)
+    details["row_count"] = len(rows)
+    details["email_row_count"] = sum(row.method == "EMAIL" for row in rows)
+    details["smb_row_count"] = sum(row.method == "SMB" for row in rows)
+    findings.append(finding("pass", f"{command}.rows", "Preflight loaded alert rows without runtime access."))
+    if not allow_write_control:
+        findings.append(finding("pass", f"{command}.dry-run", "Dry run completed strict local alert preflight without runtime access or delivery payload output."))
+        result = make_result(command, repo_root, "Native alert CSV dry run completed.", findings)
+        return native_alert_csv_finish(result, details, status_only=status_only)
+    env = native_api_direct_runtime_env(repo_root)
+    findings.append(native_api_direct_config_shape_finding(env, check=f"{command}.direct-config-shape"))
+    token = native_api_direct_bearer_token(repo_root, env)
+    if aggregate_status(findings) == "fail" or not direct_api_bearer_token_is_acceptable(token):
+        if aggregate_status(findings) != "fail":
+            findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters."))
+        result = make_result(command, repo_root, "Native alert CSV operation rejected before runtime access.", findings)
+        return native_alert_csv_finish(result, details, status_only=status_only)
+    operator_uuid = env.get(TURBOVAS_API_OPERATOR_UUID_ENV, "").strip()
+    rows_to_create: list[NativeAlertCsvRow] = []
+    for row in rows:
+        alerts, alerts_ok = native_alert_csv_fetch_exact(repo_root, "/api/v1/alerts", row.name, token=token, env=env)
+        formats, formats_ok = native_alert_csv_fetch_exact(repo_root, "/api/v1/report-formats", row.report_format_name, token=token, env=env)
+        credentials: list[dict[str, Any]] = []
+        credentials_ok = True
+        if row.method == "SMB":
+            credentials, credentials_ok = native_alert_csv_fetch_exact(repo_root, "/api/v1/credentials", row.smb_credential_name, token=token, env=env)
+        valid = alerts_ok and formats_ok and credentials_ok and len(alerts) <= 1 and len(formats) == 1
+        if row.method == "SMB":
+            credential_valid = False
+            if len(credentials) == 1:
+                credential_valid = native_alert_csv_smb_credential_metadata_valid(
+                    credentials[0],
+                    operator_uuid,
+                )
+            valid = valid and credential_valid
+        if not valid:
+            details["preflight_failure_count"] += 1
+            continue
+        if alerts:
+            details["skipped_existing_alert_count"] += 1
+            continue
+        report_format_id = formats[0].get("id")
+        if not isinstance(report_format_id, str) or UUID_PATTERN.fullmatch(report_format_id) is None:
+            details["preflight_failure_count"] += 1
+            continue
+        row.report_format_id = report_format_id
+        if row.method == "SMB":
+            credential_id = credentials[0].get("id")
+            if not isinstance(credential_id, str) or UUID_PATTERN.fullmatch(credential_id) is None:
+                details["preflight_failure_count"] += 1
+                continue
+            row.smb_credential_id = credential_id
+        rows_to_create.append(row)
+    if details["preflight_failure_count"]:
+        findings.append(finding("fail", f"{command}.preflight", "Native metadata resolution was incomplete, ambiguous, or incompatible; no alert writes were attempted.", details={"failure_count": details["preflight_failure_count"]}))
+        result = make_result(command, repo_root, "Native alert CSV operation rejected before alert writes.", findings)
+        return native_alert_csv_finish(result, details, status_only=status_only)
+    findings.append(finding("pass", f"{command}.preflight", "Resolved all alert and report-format references and confirmed every SMB credential is operator-owned and SMB-compatible before writes."))
+    for index, row in enumerate(rows_to_create):
+        try:
+            response = direct_native_api_curl(repo_root, "/api/v1/alerts", token=token, env=env, method="POST", body=json.dumps(native_alert_csv_body(row), separators=(",", ":")), extra_headers=(("Content-Type", "application/json"),))
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+            response = None
+            http_status = None
+            parsed = None
+        else:
+            parsed, http_status = parse_json_output_with_http_status(response)
+        if response is not None and response.returncode == 0 and http_status == 201 and native_alert_csv_response_is_redacted(parsed, row):
+            details["created_alert_count"] += 1
+            continue
+        details["create_failure_count"] += 1
+        if response is None or response.returncode != 0 or http_status is None or http_status >= 500 or (200 <= http_status < 300):
+            details["indeterminate_alert_count"] += 1
+        details["unattempted_alert_count"] = len(rows_to_create) - index - 1
+        outcome = "indeterminate" if details["indeterminate_alert_count"] else "rejected"
+        findings.append(finding("fail", f"{command}.create", "A native alert create did not complete; later rows were not attempted and prior writes remain committed.", details={"outcome": outcome, "http_status": http_status}))
+        break
+    if details["create_failure_count"] == 0:
+        findings.append(finding("pass", f"{command}.create", "Created native alerts through the direct API."))
+    result = make_result(command, repo_root, "Native alert CSV operation completed." if aggregate_status(findings) != "fail" else "Native alert CSV operation failed.", findings)
+    return native_alert_csv_finish(result, details, status_only=status_only)
+
+
 NATIVE_SCHEDULE_CSV_COMMENT = "Created by TurboVAS native-schedules-from-csv"
 NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS = 10
 NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH = 4096
@@ -27806,6 +28493,11 @@ def build_parser() -> argparse.ArgumentParser:
     native_credentials_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional credential creation after strict local preflight")
     native_credentials_csv.add_argument("--dry-run", action="store_true", help="explicitly retain the default no-runtime dry run; cannot be combined with --allow-write-control")
     native_credentials_csv.add_argument("--status-only", action="store_true", help="emit compact redacted response summary and only non-pass findings")
+    native_alerts_csv = subparsers.add_parser("native-alerts-from-csv", parents=[common], help="strictly preflight retained EMAIL/SMB alert CSV rows; writes require explicit control acknowledgement")
+    native_alerts_csv.add_argument("--csv-file", required=True, type=Path, help="headerless inherited nine-column alert CSV; EMAIL and SMB rows only")
+    native_alerts_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional alert creation after metadata preflight")
+    native_alerts_csv.add_argument("--dry-run", action="store_true", help="explicitly retain the default no-runtime dry run; cannot be combined with --allow-write-control")
+    native_alerts_csv.add_argument("--status-only", action="store_true", help="emit compact redacted response summary and only non-pass findings")
     native_schedules_csv = subparsers.add_parser("native-schedules-from-csv", parents=[common], help="create native schedules from the inherited three-column CSV shape through the direct native API")
     native_schedules_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with schedule name, timezone, and iCalendar columns")
     native_schedules_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule creation")
@@ -28012,6 +28704,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "native-credentials-from-csv":
         result = command_native_credentials_from_csv(
+            repo_root,
+            args.csv_file,
+            allow_write_control=args.allow_write_control,
+            dry_run=args.dry_run,
+            status_only=args.status_only,
+        )
+    elif args.command == "native-alerts-from-csv":
+        result = command_native_alerts_from_csv(
             repo_root,
             args.csv_file,
             allow_write_control=args.allow_write_control,

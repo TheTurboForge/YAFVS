@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand from 'gmp/commands/entity';
-import type {EntityCommandParams} from 'gmp/commands/entity';
+import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi, NATIVE_COMMAND_PAGE_SIZE} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
@@ -14,6 +13,10 @@ import Alert, {
   type AlertConditionType,
   type AlertMethodType,
   type AlertEventType,
+  CONDITION_TYPE_ALWAYS,
+  EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+  METHOD_TYPE_EMAIL,
+  METHOD_TYPE_SMB,
 } from 'gmp/models/alert';
 import Credential from 'gmp/models/credential';
 import Filter from 'gmp/models/filter';
@@ -22,28 +25,30 @@ import {
   type ModelElement,
   parseModelFromElement,
 } from 'gmp/models/model';
-import {parseYesNo} from 'gmp/parser';
 import {
   cloneNativeAlert,
+  createNativeAlert,
   deleteNativeAlert,
   exportNativeAlertMetadata,
   fetchNativeAlert,
   patchNativeAlert,
+  type NativeAlertCreateArgs,
 } from 'gmp/native-api/alerts';
 import {fetchNativeCredentials} from 'gmp/native-api/credentials';
 import {fetchNativeFilters} from 'gmp/native-api/filters';
 import {fetchNativeReportConfigs} from 'gmp/native-api/report-configs';
 import {fetchNativeReportFormats} from 'gmp/native-api/report-formats';
 import {fetchNativeTasks} from 'gmp/native-api/tasks';
+import {parseYesNo, YES_VALUE} from 'gmp/parser';
 import {map} from 'gmp/utils/array';
 
 interface AlertCreateParams {
-  active: boolean;
+  active: string | number | boolean;
   name: string;
   comment?: string;
   event: AlertEventType;
   condition: AlertConditionType;
-  filter_id: string;
+  filter_id?: string | number;
   method: AlertMethodType;
   report_format_ids?: string[];
   report_config_ids?: string[];
@@ -251,6 +256,103 @@ const convertData = (
   return converted;
 };
 
+const isNativeAlertOptionalId = (value: unknown): boolean =>
+  value === 0 || value === '0' || value === undefined;
+
+const isNativeAlertNoFilter = (value: unknown): boolean =>
+  value === 0 || value === '0' || value === '' || value === undefined;
+
+const nativeAlertOptionalId = (key: string, value: unknown) =>
+  isNativeAlertOptionalId(value) ? {} : {[key]: value};
+
+const nativeAlertCreateRequestFromParams = ({
+  active,
+  name,
+  comment = '',
+  event,
+  condition,
+  filter_id: filterId,
+  method,
+  ...other
+}: AlertCreateParams): NativeAlertCreateArgs | undefined => {
+  if (
+    event !== EVENT_TYPE_TASK_RUN_STATUS_CHANGED ||
+    condition !== CONDITION_TYPE_ALWAYS ||
+    !isNativeAlertNoFilter(filterId) ||
+    (method !== METHOD_TYPE_EMAIL && method !== METHOD_TYPE_SMB)
+  ) {
+    return undefined;
+  }
+
+  const shared = {
+    name,
+    comment,
+    active: parseYesNo(active) === YES_VALUE,
+    status: other.event_data_status,
+  };
+
+  if (method === METHOD_TYPE_SMB) {
+    const smbMaxProtocol = other.method_data_smb_max_protocol;
+    return {
+      method: 'SMB',
+      ...shared,
+      smb_credential_id: other.method_data_smb_credential,
+      smb_share_path: other.method_data_smb_share_path,
+      smb_file_path: other.method_data_smb_file_path,
+      report_format_id: other.method_data_smb_report_format,
+      ...nativeAlertOptionalId(
+        'report_config_id',
+        other.method_data_smb_report_config,
+      ),
+      ...(smbMaxProtocol === ''
+        ? {smb_max_protocol: 'default'}
+        : smbMaxProtocol !== undefined
+          ? {smb_max_protocol: smbMaxProtocol}
+          : {}),
+    };
+  }
+
+  const email = {
+    method: 'EMAIL' as const,
+    ...shared,
+    to_address: other.method_data_to_address,
+    from_address: other.method_data_from_address,
+    subject: other.method_data_subject,
+    ...nativeAlertOptionalId(
+      'recipient_credential_id',
+      other.method_data_recipient_credential,
+    ),
+  };
+  switch (other.method_data_notice) {
+    case '1':
+      return {...email, notice: 'simple'};
+    case '0':
+      return {
+        ...email,
+        notice: 'include',
+        report_format_id: other.method_data_notice_report_format,
+        ...nativeAlertOptionalId(
+          'report_config_id',
+          other.method_data_notice_report_config,
+        ),
+        message: other.method_data_message,
+      };
+    case '2':
+      return {
+        ...email,
+        notice: 'attach',
+        report_format_id: other.method_data_notice_attach_format,
+        ...nativeAlertOptionalId(
+          'report_config_id',
+          other.method_data_notice_attach_config,
+        ),
+        message: other.method_data_message_attach,
+      };
+    default:
+      return {...email, notice: other.method_data_notice};
+  }
+};
+
 class AlertCommand extends EntityCommand<Alert> {
   constructor(http: Http) {
     super(http, 'alert', Alert);
@@ -288,15 +390,28 @@ class AlertCommand extends EntityCommand<Alert> {
     comment = '',
     event,
     condition,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    filter_id,
+    filter_id: filterId,
     method,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    report_format_ids,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    report_config_ids,
+    report_format_ids: reportFormatIds,
+    report_config_ids: reportConfigIds,
     ...other
   }: AlertCreateParams) {
+    const nativeRequest = nativeAlertCreateRequestFromParams({
+      active,
+      name,
+      comment,
+      event,
+      condition,
+      filter_id: filterId,
+      method,
+      report_format_ids: reportFormatIds,
+      report_config_ids: reportConfigIds,
+      ...other,
+    });
+    if (canUseNativeApi(this.http) && nativeRequest !== undefined) {
+      return createNativeAlert(this.http, nativeRequest);
+    }
+
     const data = {
       ...convertData('method_data', other, method_data_fields),
       ...convertData('condition_data', other, condition_data_fields),
@@ -308,9 +423,9 @@ class AlertCommand extends EntityCommand<Alert> {
       event,
       condition,
       method,
-      filter_id,
-      'report_format_ids:': report_format_ids,
-      'report_config_ids:': report_config_ids,
+      filter_id: filterId as string | undefined,
+      'report_format_ids:': reportFormatIds,
+      'report_config_ids:': reportConfigIds,
     };
     log.debug('Creating new alert', data);
     return this.action(data);
@@ -332,12 +447,9 @@ class AlertCommand extends EntityCommand<Alert> {
       comment = '',
       event,
       condition,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
       filter_id,
       method,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
       report_format_ids = [],
-      // eslint-disable-next-line @typescript-eslint/naming-convention
       report_config_ids = [],
       ...other
     } = args as AlertSaveParams;
@@ -353,7 +465,7 @@ class AlertCommand extends EntityCommand<Alert> {
       event,
       condition,
       method,
-      filter_id,
+      filter_id: filter_id as string | undefined,
       'report_format_ids:':
         report_format_ids.length > 0 ? report_format_ids : undefined,
       'report_config_ids:':

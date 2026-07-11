@@ -37,6 +37,27 @@ pub(crate) enum AlertCreateStatus {
     Interrupted,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+pub(crate) enum AlertSmbMaxProtocol {
+    #[default]
+    #[serde(rename = "default")]
+    Default,
+    NT1,
+    SMB2,
+    SMB3,
+}
+
+impl AlertSmbMaxProtocol {
+    pub(crate) fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::Default => b"",
+            Self::NT1 => b"NT1",
+            Self::SMB2 => b"SMB2",
+            Self::SMB3 => b"SMB3",
+        }
+    }
+}
+
 impl AlertCreateStatus {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -126,6 +147,33 @@ pub(crate) struct AlertEmailCreateRequest {
     pub(crate) message: Option<SensitiveAlertField>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AlertSmbCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) smb_credential_id: SensitiveAlertField,
+    pub(crate) smb_share_path: SensitiveAlertField,
+    pub(crate) smb_file_path: SensitiveAlertField,
+    pub(crate) report_format_id: SensitiveAlertField,
+    #[serde(default)]
+    pub(crate) report_config_id: Option<SensitiveAlertField>,
+    #[serde(default)]
+    pub(crate) smb_max_protocol: AlertSmbMaxProtocol,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "method")]
+pub(crate) enum AlertCreateRequest {
+    #[serde(rename = "EMAIL")]
+    Email(AlertEmailCreateRequest),
+    #[serde(rename = "SMB")]
+    Smb(AlertSmbCreateRequest),
+}
+
 pub(crate) struct ValidatedAlertEmailCreate {
     pub(crate) name: String,
     pub(crate) comment: String,
@@ -139,6 +187,37 @@ pub(crate) struct ValidatedAlertEmailCreate {
     pub(crate) report_format_id: SensitiveAlertField,
     pub(crate) report_config_id: SensitiveAlertField,
     pub(crate) message: SensitiveAlertField,
+}
+
+pub(crate) struct ValidatedAlertSmbCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) smb_credential_id: SensitiveAlertField,
+    pub(crate) smb_share_path: SensitiveAlertField,
+    pub(crate) smb_file_path: SensitiveAlertField,
+    pub(crate) report_format_id: SensitiveAlertField,
+    pub(crate) report_config_id: SensitiveAlertField,
+    pub(crate) smb_max_protocol: AlertSmbMaxProtocol,
+}
+
+pub(crate) enum ValidatedAlertCreate {
+    Email(ValidatedAlertEmailCreate),
+    Smb(ValidatedAlertSmbCreate),
+}
+
+pub(crate) fn validate_alert_create_request(
+    request: AlertCreateRequest,
+) -> Result<ValidatedAlertCreate, ApiError> {
+    match request {
+        AlertCreateRequest::Email(request) => {
+            validate_alert_email_create_request(request).map(ValidatedAlertCreate::Email)
+        }
+        AlertCreateRequest::Smb(request) => {
+            validate_alert_smb_create_request(request).map(ValidatedAlertCreate::Smb)
+        }
+    }
 }
 
 pub(crate) fn validate_alert_email_create_request(
@@ -219,6 +298,49 @@ pub(crate) fn validate_alert_email_create_request(
     })
 }
 
+pub(crate) fn validate_alert_smb_create_request(
+    request: AlertSmbCreateRequest,
+) -> Result<ValidatedAlertSmbCreate, ApiError> {
+    let name = normalize_alert_create_text(request.name, "name", true)?;
+    let comment = request
+        .comment
+        .map(|value| normalize_alert_create_text(value, "comment", false))
+        .transpose()?
+        .unwrap_or_default();
+    debug_assert!(request.status.as_str().len() <= MAX_ALERT_STATUS_BYTES);
+    let smb_credential_id =
+        validate_required_alert_uuid(request.smb_credential_id, "smb_credential_id")?;
+    let smb_share_path = validate_sensitive_alert_text(
+        request.smb_share_path,
+        "smb_share_path",
+        true,
+        MAX_ALERT_TEXT_BYTES,
+    )?;
+    let smb_file_path = validate_sensitive_alert_text(
+        request.smb_file_path,
+        "smb_file_path",
+        true,
+        MAX_ALERT_TEXT_BYTES,
+    )?;
+    let report_format_id =
+        validate_required_alert_uuid(request.report_format_id, "report_format_id")?;
+    let report_config_id =
+        validate_optional_alert_uuid(request.report_config_id, "report_config_id")?;
+
+    Ok(ValidatedAlertSmbCreate {
+        name,
+        comment,
+        active: request.active,
+        status: request.status,
+        smb_credential_id,
+        smb_share_path,
+        smb_file_path,
+        report_format_id,
+        report_config_id,
+        smb_max_protocol: request.smb_max_protocol,
+    })
+}
+
 fn validate_sensitive_alert_message(
     value: SensitiveAlertField,
     field_name: &str,
@@ -292,6 +414,17 @@ fn validate_optional_alert_uuid(
     let uuid = Uuid::parse_str(text)
         .map_err(|_| ApiError::BadRequest(format!("{field_name} must be a UUID")))?;
     Ok(SensitiveAlertField(uuid.to_string().into_bytes()))
+}
+
+fn validate_required_alert_uuid(
+    value: SensitiveAlertField,
+    field_name: &str,
+) -> Result<SensitiveAlertField, ApiError> {
+    let value = validate_optional_alert_uuid(Some(value), field_name)?;
+    if value.as_bytes().is_empty() {
+        return Err(ApiError::BadRequest(format!("{field_name} must be a UUID")));
+    }
+    Ok(value)
 }
 
 #[derive(Debug, Deserialize)]

@@ -85,6 +85,32 @@ export interface NativeAlertCloneArgs {
   comment?: string;
 }
 
+export interface NativeAlertCreateArgs {
+  method: 'EMAIL' | 'SMB';
+  [key: string]: unknown;
+}
+
+interface NativeApiErrorPayload {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+  };
+}
+
+class NativeAlertRequestError extends Error {
+  readonly code?: string;
+
+  constructor(status: number, code?: string, message?: string) {
+    super(
+      [`Native API request failed with status ${status}`, code, message]
+        .filter(value => value !== undefined && value !== '')
+        .join(': '),
+    );
+    this.name = 'NativeAlertRequestError';
+    this.code = code;
+  }
+}
+
 const ALERT_SORT_FIELDS: Record<string, string> = {
   active: 'active',
   condition: 'condition',
@@ -105,6 +131,24 @@ const stringValue = (value: unknown, fallback = ''): string =>
 const integerValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const errorString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value !== '' ? value : undefined;
+
+const nativeAlertRequestError = async (response: globalThis.Response) => {
+  let payload: NativeApiErrorPayload | undefined;
+  try {
+    payload = (await response.json()) as NativeApiErrorPayload;
+  } catch {
+    // Errors may not have a JSON body; retain only the status in that case.
+  }
+
+  return new NativeAlertRequestError(
+    response.status,
+    errorString(payload?.error?.code),
+    errorString(payload?.error?.message),
+  );
 };
 
 const yesNoValue = (value?: boolean): 0 | 1 => (value === true ? 1 : 0);
@@ -162,7 +206,7 @@ const fetchNativeJson = async <T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeAlertRequestError(response);
   }
 
   return (await response.json()) as T;
@@ -180,7 +224,7 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
   });
 
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeAlertRequestError(response);
   }
 };
 
@@ -203,7 +247,7 @@ const writeNativeJson = async <T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeAlertRequestError(response);
   }
 
   return (await response.json()) as T;
@@ -372,7 +416,21 @@ export const cloneNativeAlert = async (
   return new Response({id: stringValue(payload.id)});
 };
 
+export const createNativeAlert = async (
+  gmp: NativeApiGmp,
+  request: NativeAlertCreateArgs,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeAlertPayload>(
+    gmp,
+    'api/v1/alerts',
+    request,
+    'POST',
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
 export const deleteNativeAlert = async (
   gmp: NativeApiGmp,
   id: string,
-): Promise<void> => deleteNative(gmp, `api/v1/alerts/${encodeURIComponent(id)}`);
+): Promise<void> =>
+  deleteNative(gmp, `api/v1/alerts/${encodeURIComponent(id)}`);

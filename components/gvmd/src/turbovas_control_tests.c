@@ -55,6 +55,10 @@ static gchar *received_atomic_report_config;
 static gchar *received_atomic_report_format;
 static gchar *received_subject;
 static gchar *received_to_address;
+static gchar *received_smb_credential;
+static gchar *received_smb_file_path;
+static gchar *received_smb_max_protocol;
+static gchar *received_smb_share_path;
 static gchar *received_audit_uuid;
 static gchar *received_credential_type;
 static gchar *received_comment;
@@ -236,6 +240,53 @@ __wrap_create_alert_email_with_report_refs
     recipient_credential_id,
     is_equal_to_string (received_recipient_credential
                           ? received_recipient_credential : ""));
+  assert_that (condition_data->len, is_equal_to (1));
+  assert_that (g_ptr_array_index (condition_data, 0), is_null);
+  *alert = 9;
+  return create_alert_result;
+}
+
+int
+__wrap_create_alert_smb_with_report_refs (
+  const char *name, const char *comment, const char *active,
+  GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
+  const char *smb_credential_id, const char *report_format_id,
+  const char *report_config_id, alert_t *alert)
+{
+  (void) name;
+  (void) comment;
+  create_alert_calls++;
+  received_alert_event = EVENT_TASK_RUN_STATUS_CHANGED;
+  received_alert_condition = ALERT_CONDITION_ALWAYS;
+  received_alert_method = ALERT_METHOD_SMB;
+  g_free (received_active);
+  g_free (received_event_status);
+  g_free (received_smb_credential);
+  g_free (received_smb_share_path);
+  g_free (received_smb_file_path);
+  g_free (received_report_format);
+  g_free (received_report_config);
+  g_free (received_atomic_report_format);
+  g_free (received_atomic_report_config);
+  g_free (received_smb_max_protocol);
+  received_active = g_strdup (active);
+  received_event_status =
+    g_strdup (test_alert_data_value (event_data, "status"));
+  received_smb_credential =
+    g_strdup (test_alert_data_value (method_data, "smb_credential"));
+  received_smb_share_path =
+    g_strdup (test_alert_data_value (method_data, "smb_share_path"));
+  received_smb_file_path =
+    g_strdup (test_alert_data_value (method_data, "smb_file_path"));
+  received_report_format =
+    g_strdup (test_alert_data_value (method_data, "smb_report_format"));
+  received_report_config =
+    g_strdup (test_alert_data_value (method_data, "smb_report_config"));
+  received_smb_max_protocol =
+    g_strdup (test_alert_data_value (method_data, "smb_max_protocol"));
+  received_atomic_report_format = g_strdup (report_format_id);
+  received_atomic_report_config = g_strdup (report_config_id);
+  assert_that (smb_credential_id, is_equal_to_string (received_smb_credential));
   assert_that (condition_data->len, is_equal_to (1));
   assert_that (g_ptr_array_index (condition_data, 0), is_null);
   *alert = 9;
@@ -431,6 +482,72 @@ static long long int trash_empty_db_count;
 static int trash_empty_db_acl;
 static const char *trash_empty_count_sql;
 
+enum alert_smb_db_event
+{
+  ALERT_SMB_DB_BEGIN,
+  ALERT_SMB_DB_ACL,
+  ALERT_SMB_DB_OWNER_LOCK,
+  ALERT_SMB_DB_CREDENTIAL_RESOLVE,
+  ALERT_SMB_DB_CREDENTIAL_LOCK,
+  ALERT_SMB_DB_CREDENTIAL_TYPE,
+  ALERT_SMB_DB_FORMAT_RESOLVE,
+  ALERT_SMB_DB_FORMAT_LOCK,
+  ALERT_SMB_DB_CONFIG_RESOLVE,
+  ALERT_SMB_DB_CONFIG_LOCK,
+  ALERT_SMB_DB_CONFIG_MATCH,
+  ALERT_SMB_DB_BODY_INSERT,
+  ALERT_SMB_DB_METHOD_INSERT,
+  ALERT_SMB_DB_ROLLBACK,
+  ALERT_SMB_DB_COMMIT,
+};
+
+static enum alert_smb_db_event alert_smb_db_events[32];
+static size_t alert_smb_db_event_count;
+static gboolean alert_smb_db_active;
+static gboolean alert_smb_db_acl;
+static gboolean alert_smb_db_owner_exists;
+static gboolean alert_smb_db_credential_readable;
+static gboolean alert_smb_db_credential_owned;
+static const char *alert_smb_db_credential_type;
+static const char *alert_smb_db_credential_username;
+static gboolean alert_smb_db_format_readable;
+static gboolean alert_smb_db_format_lock_exists;
+static gboolean alert_smb_db_config_readable;
+static gboolean alert_smb_db_config_lock_exists;
+static gboolean alert_smb_db_config_matches;
+static const char *alert_smb_db_report_format_uuid;
+static unsigned int alert_smb_db_method_inserts;
+static unsigned int alert_smb_db_credential_resolves;
+
+static void
+alert_smb_record_db_event (enum alert_smb_db_event event)
+{
+  assert_that (alert_smb_db_event_count < G_N_ELEMENTS (alert_smb_db_events),
+               is_true);
+  alert_smb_db_events[alert_smb_db_event_count++] = event;
+}
+
+static void
+reset_alert_smb_db (void)
+{
+  alert_smb_db_event_count = 0;
+  alert_smb_db_active = TRUE;
+  alert_smb_db_acl = TRUE;
+  alert_smb_db_owner_exists = TRUE;
+  alert_smb_db_credential_readable = TRUE;
+  alert_smb_db_credential_owned = TRUE;
+  alert_smb_db_credential_type = "up";
+  alert_smb_db_credential_username = "operator";
+  alert_smb_db_format_readable = TRUE;
+  alert_smb_db_format_lock_exists = TRUE;
+  alert_smb_db_config_readable = TRUE;
+  alert_smb_db_config_lock_exists = TRUE;
+  alert_smb_db_config_matches = TRUE;
+  alert_smb_db_report_format_uuid = "123e4567-e89b-12d3-a456-426614174011";
+  alert_smb_db_method_inserts = 0;
+  alert_smb_db_credential_resolves = 0;
+}
+
 static void
 trash_empty_record_db_event (enum trash_empty_db_event event)
 {
@@ -443,12 +560,59 @@ trash_empty_record_db_event (enum trash_empty_db_event event)
 void
 __wrap_sql_begin_immediate (void)
 {
-  trash_empty_record_db_event (TRASH_EMPTY_DB_BEGIN);
+  if (alert_smb_db_active)
+    alert_smb_record_db_event (ALERT_SMB_DB_BEGIN);
+  else
+    trash_empty_record_db_event (TRASH_EMPTY_DB_BEGIN);
 }
 
 int
 __wrap_sql_int64 (long long int *value, const char *statement, ...)
 {
+  if (alert_smb_db_active)
+    {
+      if (strstr (statement, "SELECT id FROM users") != NULL)
+        {
+          alert_smb_record_db_event (ALERT_SMB_DB_OWNER_LOCK);
+          if (!alert_smb_db_owner_exists)
+            return 1;
+          *value = 42;
+          return 0;
+        }
+      if (strstr (statement, "SELECT credentials.id") != NULL)
+        {
+          alert_smb_record_db_event (ALERT_SMB_DB_CREDENTIAL_LOCK);
+          if (!alert_smb_db_credential_owned)
+            return 1;
+          *value = 51;
+          return 0;
+        }
+      if (strstr (statement, "FROM report_configs") != NULL
+          && strstr (statement, "FOR SHARE") != NULL)
+        {
+          alert_smb_record_db_event (ALERT_SMB_DB_CONFIG_LOCK);
+          if (!alert_smb_db_config_lock_exists)
+            return 1;
+          *value = 71;
+          return 0;
+        }
+      if (strstr (statement, "FROM report_configs") != NULL)
+        {
+          alert_smb_record_db_event (ALERT_SMB_DB_CONFIG_MATCH);
+          *value = alert_smb_db_config_matches ? 61 : 62;
+          return 0;
+        }
+      if (strstr (statement, "FROM report_formats") != NULL)
+        {
+          alert_smb_record_db_event (ALERT_SMB_DB_FORMAT_LOCK);
+          if (!alert_smb_db_format_lock_exists)
+            return 1;
+          *value = 61;
+          return 0;
+        }
+      return -1;
+    }
+
   if (strstr (statement, "SELECT id FROM users") != NULL)
     {
       trash_empty_record_db_event (TRASH_EMPTY_DB_USER_LOCK);
@@ -469,6 +633,13 @@ __wrap_sql_int64 (long long int *value, const char *statement, ...)
 void
 __wrap_sql (const char *statement, ...)
 {
+  if (alert_smb_db_active)
+    {
+      if (strstr (statement, "INSERT INTO alerts") != NULL)
+        alert_smb_record_db_event (ALERT_SMB_DB_BODY_INSERT);
+      return;
+    }
+
   if (strcmp (statement, "LOCK TABLE users IN EXCLUSIVE MODE;") == 0)
     trash_empty_record_db_event (TRASH_EMPTY_DB_USERS_LOCK);
   else if (g_str_has_prefix (statement, "DELETE FROM")
@@ -477,27 +648,137 @@ __wrap_sql (const char *statement, ...)
 }
 
 void
+__wrap_sql_ps_sensitive (const char *statement, ...)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (strstr (statement, "INSERT INTO alert_method_data"),
+               is_not_null);
+  assert_that (strstr (statement, "fileserver"), is_null);
+  assert_that (strstr (statement, "report.pdf"), is_null);
+  alert_smb_db_method_inserts++;
+  alert_smb_record_db_event (ALERT_SMB_DB_METHOD_INSERT);
+}
+
+resource_t
+__wrap_sql_last_insert_id (void)
+{
+  assert_that (alert_smb_db_active, is_true);
+  return 9;
+}
+
+void
 __wrap_sql_rollback (void)
 {
-  trash_empty_record_db_event (TRASH_EMPTY_DB_ROLLBACK);
+  if (alert_smb_db_active)
+    alert_smb_record_db_event (ALERT_SMB_DB_ROLLBACK);
+  else
+    trash_empty_record_db_event (TRASH_EMPTY_DB_ROLLBACK);
 }
 
 void
 __wrap_sql_commit (void)
 {
-  trash_empty_record_db_event (TRASH_EMPTY_DB_COMMIT);
+  if (alert_smb_db_active)
+    alert_smb_record_db_event (ALERT_SMB_DB_COMMIT);
+  else
+    trash_empty_record_db_event (TRASH_EMPTY_DB_COMMIT);
 }
 
 int
 __wrap_acl_user_may (const char *operation)
 {
+  if (alert_smb_db_active)
+    {
+      assert_that (operation, is_equal_to_string ("create_alert"));
+      alert_smb_record_db_event (ALERT_SMB_DB_ACL);
+      return alert_smb_db_acl;
+    }
+
   assert_that (operation, is_equal_to_string ("empty_trashcan"));
   trash_empty_record_db_event (TRASH_EMPTY_DB_ACL);
   return trash_empty_db_acl;
 }
 
+gboolean
+__wrap_find_credential_with_permission (const char *uuid,
+                                        credential_t *credential,
+                                        const char *permission)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174010"));
+  assert_that (permission, is_equal_to_string ("get_credentials"));
+  if (alert_smb_db_credential_resolves++ == 0)
+    alert_smb_record_db_event (ALERT_SMB_DB_CREDENTIAL_RESOLVE);
+  *credential = alert_smb_db_credential_readable ? 51 : 0;
+  return FALSE;
+}
+
+char *
+__wrap_credential_type (credential_t credential)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (credential, is_equal_to (51));
+  alert_smb_record_db_event (ALERT_SMB_DB_CREDENTIAL_TYPE);
+  return strdup (alert_smb_db_credential_type);
+}
+
+gchar *
+__wrap_credential_value (credential_t credential, const char *name)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (credential, is_equal_to (51));
+  assert_that (name, is_equal_to_string ("username"));
+  return g_strdup (alert_smb_db_credential_username);
+}
+
+gboolean
+__wrap_find_report_format_with_permission (const char *uuid,
+                                           report_format_t *report_format,
+                                           const char *permission)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (uuid, is_equal_to_string (alert_smb_db_report_format_uuid));
+  assert_that (permission, is_equal_to_string ("get_report_formats"));
+  alert_smb_record_db_event (ALERT_SMB_DB_FORMAT_RESOLVE);
+  *report_format = alert_smb_db_format_readable ? 61 : 0;
+  return FALSE;
+}
+
+gboolean
+__wrap_find_report_config_with_permission (const char *uuid,
+                                           report_config_t *report_config,
+                                           const char *permission)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174012"));
+  assert_that (permission, is_equal_to_string ("get_report_configs"));
+  alert_smb_record_db_event (ALERT_SMB_DB_CONFIG_RESOLVE);
+  *report_config = alert_smb_db_config_readable ? 71 : 0;
+  return FALSE;
+}
+
+int
+__wrap_resource_with_name_exists (const char *name, const char *type,
+                                  resource_t exclude)
+{
+  assert_that (alert_smb_db_active, is_true);
+  assert_that (name, is_equal_to_string ("SMB alert"));
+  assert_that (type, is_equal_to_string ("alert"));
+  assert_that (exclude, is_equal_to (0));
+  return 0;
+}
+
 int
 __real_manage_empty_trashcan_confirmed (long long int, long long int *);
+
+int
+__real_create_alert_smb_with_report_refs (const char *, const char *,
+                                          const char *, GPtrArray *,
+                                          GPtrArray *, GPtrArray *,
+                                          const char *, const char *,
+                                          const char *, alert_t *);
 
 static ssize_t
 dispatch_trash_empty_request (const char *request,
@@ -1019,6 +1300,43 @@ test_alert_email_create_request (const char *active, const char *name,
     "%s\n",
     active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
     notice, fields[6], fields[7], fields[8], fields[9]);
+  for (index = 0; index < G_N_ELEMENTS (fields); index++)
+    g_free (fields[index]);
+  return request;
+}
+
+static gchar *
+test_alert_smb_create_request (const char *active, const char *name,
+                               const char *comment, const char *status,
+                               const char *credential_uuid,
+                               const char *share_path, const char *file_path,
+                               const char *report_format_uuid,
+                               const char *report_config_uuid,
+                               const char *max_protocol)
+{
+  const char *values[] = {
+    name,
+    comment,
+    status,
+    credential_uuid,
+    share_path,
+    file_path,
+    report_format_uuid,
+    report_config_uuid,
+    max_protocol,
+  };
+  gchar *fields[G_N_ELEMENTS (values)];
+  gchar *request;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (values); index++)
+    fields[index] =
+      g_base64_encode ((const guchar *) values[index], strlen (values[index]));
+  request = g_strdup_printf (
+    "alert-smb-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s %s\n",
+    active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
+    fields[6], fields[7], fields[8]);
   for (index = 0; index < G_N_ELEMENTS (fields); index++)
     g_free (fields[index]);
   return request;
@@ -1549,6 +1867,41 @@ Ensure (turbovas_control, reports_postcommit_alert_uuid_failure_without_failed_a
   alert_uuid_lookup_fails = FALSE;
 }
 
+Ensure (turbovas_control, rejects_missing_alert_smb_operator_before_authority)
+{
+  const turbovas_control_alert_smb_create_request_t request = {
+    .name = "SMB alert",
+    .comment = "",
+    .status = "Done",
+    .credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
+    .share_path = "\\\\fileserver\\reports",
+    .file_path = "scan/report.pdf",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "",
+    .max_protocol = "",
+    .active = TRUE,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  audit_fail_calls = 0;
+  mock_operator_name = NULL;
+  assert_that (
+    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+                                       &request, created_uuid),
+    is_equal_to (99));
+  assert_that (create_alert_calls, is_equal_to (0));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (0));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
 Ensure (turbovas_control, maps_every_alert_create_response)
 {
   static const struct
@@ -1587,19 +1940,18 @@ Ensure (turbovas_control, maps_every_alert_create_response)
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
   size_t index;
 
-  assert_that (turbovas_control_alert_email_create_response (
-                 0, "123e4567-e89b-12d3-a456-426614174004", response),
-               is_equal_to_string
-                 ("0 created 123e4567-e89b-12d3-a456-426614174004\n"));
-  assert_that (turbovas_control_alert_email_create_response (
-                 0, NULL, response),
+  assert_that (
+    turbovas_control_alert_create_response (
+      0, "123e4567-e89b-12d3-a456-426614174004", response),
+    is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174004\n"));
+  assert_that (turbovas_control_alert_create_response (0, NULL, response),
                is_equal_to_string ("-1 internal\n"));
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
     {
       assert_that (strlen (cases[index].response),
                    is_less_than (TURBOVAS_CONTROL_MAX_RESPONSE_BYTES));
-      assert_that (turbovas_control_alert_email_create_response (
-                     cases[index].result, NULL, response),
+      assert_that (turbovas_control_alert_create_response (cases[index].result,
+                                                           NULL, response),
                    is_equal_to_string (cases[index].response));
     }
 }
@@ -2246,6 +2598,406 @@ Ensure (turbovas_control, maps_only_protocol_responses)
                is_equal_to_string ("-5 scanner_verify\n"));
 }
 
+Ensure (turbovas_control, parses_canonical_bounded_alert_smb_requests)
+{
+  static const char *protocols[] = {"", "NT1", "SMB2", "SMB3"};
+  char operator_uuid[37];
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (protocols); index++)
+    {
+      gchar *request = test_alert_smb_create_request (
+        "1", "SMB alert", "private delivery", "Done",
+        "123e4567-e89b-12d3-a456-426614174010", "\\\\fileserver\\reports",
+        "scan/report.pdf", "123e4567-e89b-12d3-a456-426614174011",
+        index ? "123e4567-e89b-12d3-a456-426614174012" : "", protocols[index]);
+      turbovas_control_alert_smb_create_request_t alert = {0};
+
+      assert_that (turbovas_control_parse_alert_smb_create_request (
+                     request, strlen (request), TEST_CONTROL_SECRET,
+                     strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+                   is_true);
+      assert_that (operator_uuid,
+                   is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+      assert_that (alert.name, is_equal_to_string ("SMB alert"));
+      assert_that (alert.comment, is_equal_to_string ("private delivery"));
+      assert_that (alert.status, is_equal_to_string ("Done"));
+      assert_that (alert.credential_uuid,
+                   is_equal_to_string ("123e4567-e89b-12d3-a456-426614174010"));
+      assert_that (alert.share_path,
+                   is_equal_to_string ("\\\\fileserver\\reports"));
+      assert_that (alert.file_path, is_equal_to_string ("scan/report.pdf"));
+      assert_that (alert.max_protocol, is_equal_to_string (protocols[index]));
+      assert_that (alert.active, is_true);
+      turbovas_control_alert_smb_create_request_clear (&alert);
+      g_free (request);
+    }
+}
+
+Ensure (turbovas_control, rejects_malformed_or_oversized_alert_smb_requests)
+{
+  gchar *oversized_path =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES + 1, 'x');
+  gchar *requests[8];
+  char operator_uuid[37];
+  size_t index;
+  turbovas_control_alert_smb_create_request_t alert = {0};
+
+  requests[0] = test_alert_smb_create_request (
+    "2", "SMB alert", "", "Done", "123e4567-e89b-12d3-a456-426614174010",
+    "\\\\fileserver\\reports", "scan/report.pdf",
+    "123e4567-e89b-12d3-a456-426614174011", "", "SMB3");
+  requests[1] = test_alert_smb_create_request (
+    "1", "SMB alert", "", "Invalid", "123e4567-e89b-12d3-a456-426614174010",
+    "\\\\fileserver\\reports", "scan/report.pdf",
+    "123e4567-e89b-12d3-a456-426614174011", "", "SMB3");
+  requests[2] = test_alert_smb_create_request (
+    "1", "SMB alert", "", "Done", "not-a-uuid", "\\\\fileserver\\reports",
+    "scan/report.pdf", "123e4567-e89b-12d3-a456-426614174011", "", "SMB3");
+  requests[3] = test_alert_smb_create_request (
+    "1", "SMB alert", "", "Done", "123e4567-e89b-12d3-a456-426614174010",
+    "\\\\fileserver\\reports", "scan/report.pdf", "not-a-uuid", "", "SMB3");
+  requests[4] = test_alert_smb_create_request (
+    "1", "SMB alert", "", "Done", "123e4567-e89b-12d3-a456-426614174010",
+    oversized_path, "scan/report.pdf", "123e4567-e89b-12d3-a456-426614174011",
+    "", "SMB3");
+  requests[5] = test_alert_smb_create_request (
+    "1", "SMB alert", "", "Done", "123e4567-e89b-12d3-a456-426614174010",
+    "\\\\fileserver\\reports", "scan/report.pdf",
+    "123e4567-e89b-12d3-a456-426614174011", "", "SMB1");
+  requests[6] =
+    g_strdup ("alert-smb-create " TEST_CONTROL_SECRET " "
+              "123e4567-e89b-12d3-a456-426614174000 1 QQ== extra\n");
+  requests[7] = test_alert_smb_create_request (
+    "1", "SMB\nalert", "", "Done", "123e4567-e89b-12d3-a456-426614174010",
+    "\\\\fileserver\\reports", "scan/report.pdf",
+    "123e4567-e89b-12d3-a456-426614174011", "", "");
+
+  for (index = 0; index < G_N_ELEMENTS (requests); index++)
+    {
+      assert_that (turbovas_control_parse_alert_smb_create_request (
+                     requests[index], strlen (requests[index]),
+                     TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                     operator_uuid, &alert),
+                   is_false);
+      g_free (requests[index]);
+    }
+  g_free (oversized_path);
+}
+
+Ensure (turbovas_control, maps_alert_smb_arrays_session_and_success_audit)
+{
+  const turbovas_control_alert_smb_create_request_t request = {
+    .name = "SMB alert",
+    .comment = "private delivery",
+    .status = "Done",
+    .credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
+    .share_path = "\\\\fileserver\\reports",
+    .file_path = "scan/report.pdf",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
+    .max_protocol = "SMB3",
+    .active = TRUE,
+  };
+  char created_uuid[37];
+
+  alert_uuid_lookup_fails = FALSE;
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (
+    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+                                       &request, created_uuid),
+    is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174004"));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (received_alert_event,
+               is_equal_to (EVENT_TASK_RUN_STATUS_CHANGED));
+  assert_that (received_alert_condition, is_equal_to (ALERT_CONDITION_ALWAYS));
+  assert_that (received_alert_method, is_equal_to (ALERT_METHOD_SMB));
+  assert_that (received_active, is_equal_to_string ("1"));
+  assert_that (received_event_status, is_equal_to_string (request.status));
+  assert_that (received_smb_credential,
+               is_equal_to_string (request.credential_uuid));
+  assert_that (received_smb_share_path,
+               is_equal_to_string (request.share_path));
+  assert_that (received_smb_file_path, is_equal_to_string (request.file_path));
+  assert_that (received_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_report_config,
+               is_equal_to_string (request.report_config_uuid));
+  assert_that (received_smb_max_protocol,
+               is_equal_to_string (request.max_protocol));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, audits_alert_smb_failure_and_cleans_session)
+{
+  const turbovas_control_alert_smb_create_request_t request = {
+    .name = "SMB alert",
+    .comment = "",
+    .status = "Done",
+    .credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
+    .share_path = "invalid",
+    .file_path = "scan/report.pdf",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "",
+    .max_protocol = "",
+    .active = FALSE,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 41;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (
+    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+                                       &request, created_uuid),
+    is_equal_to (41));
+  assert_that (received_report_config, is_null);
+  assert_that (received_smb_max_protocol, is_null);
+  assert_that (audit_success_calls, is_equal_to (0));
+  assert_that (audit_fail_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, preserves_alert_smb_postcommit_indeterminate_audit)
+{
+  const turbovas_control_alert_smb_create_request_t request = {
+    .name = "SMB alert",
+    .comment = "",
+    .status = "Done",
+    .credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
+    .share_path = "\\\\fileserver\\reports",
+    .file_path = "scan/report.pdf",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .report_config_uuid = "",
+    .max_protocol = "SMB2",
+    .active = TRUE,
+  };
+  char created_uuid[37];
+
+  alert_uuid_lookup_fails = TRUE;
+  cleanup_calls = 0;
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (
+    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+                                       &request, created_uuid),
+    is_equal_to (-3));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (received_audit_uuid, is_null);
+  assert_that (cleanup_calls, is_equal_to (1));
+  alert_uuid_lookup_fails = FALSE;
+}
+
+static int
+call_real_alert_smb_create (const char *share_path, const char *file_path,
+                            const char *report_config_uuid)
+{
+  array_t *condition_data = make_array ();
+  array_t *event_data = make_array ();
+  array_t *method_data = make_array ();
+  alert_t alert = 0;
+  int result;
+
+  current_credentials.uuid = g_strdup ("123e4567-e89b-12d3-a456-426614174000");
+  current_credentials.username = g_strdup ("operator");
+  turbovas_control_array_add_data (event_data, "status", "Done");
+  turbovas_control_array_add_data (method_data, "smb_credential",
+                                   "123e4567-e89b-12d3-a456-426614174010");
+  turbovas_control_array_add_data (method_data, "smb_share_path", share_path);
+  turbovas_control_array_add_data (method_data, "smb_file_path", file_path);
+  turbovas_control_array_add_data (method_data, "smb_report_format",
+                                   "123e4567-e89b-12d3-a456-426614174011");
+  if (report_config_uuid[0])
+    turbovas_control_array_add_data (method_data, "smb_report_config",
+                                     report_config_uuid);
+  turbovas_control_array_add_data (method_data, "smb_max_protocol", "SMB3");
+  array_terminate (condition_data);
+  array_terminate (event_data);
+  array_terminate (method_data);
+
+  result = __real_create_alert_smb_with_report_refs (
+    "SMB alert", "private delivery", "1", event_data, condition_data,
+    method_data, "123e4567-e89b-12d3-a456-426614174010",
+    alert_smb_db_report_format_uuid, report_config_uuid, &alert);
+  turbovas_control_secure_array_free (condition_data);
+  turbovas_control_secure_array_free (event_data);
+  turbovas_control_secure_array_free (method_data);
+  g_clear_pointer (&current_credentials.uuid, g_free);
+  g_clear_pointer (&current_credentials.username, g_free);
+  alert_smb_db_active = FALSE;
+  return result;
+}
+
+Ensure (turbovas_control, locks_alert_smb_references_and_commits_atomically)
+{
+  reset_alert_smb_db ();
+  assert_that (
+    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
+                                "123e4567-e89b-12d3-a456-426614174012"),
+    is_equal_to (0));
+  assert_that (alert_smb_db_events[0], is_equal_to (ALERT_SMB_DB_BEGIN));
+  assert_that (alert_smb_db_events[1], is_equal_to (ALERT_SMB_DB_ACL));
+  assert_that (alert_smb_db_events[2], is_equal_to (ALERT_SMB_DB_OWNER_LOCK));
+  assert_that (alert_smb_db_events[3],
+               is_equal_to (ALERT_SMB_DB_CREDENTIAL_RESOLVE));
+  assert_that (alert_smb_db_events[4],
+               is_equal_to (ALERT_SMB_DB_CREDENTIAL_LOCK));
+  assert_that (alert_smb_db_events[5],
+               is_equal_to (ALERT_SMB_DB_CREDENTIAL_TYPE));
+  assert_that (alert_smb_db_events[6],
+               is_equal_to (ALERT_SMB_DB_FORMAT_RESOLVE));
+  assert_that (alert_smb_db_events[7], is_equal_to (ALERT_SMB_DB_FORMAT_LOCK));
+  assert_that (alert_smb_db_events[8],
+               is_equal_to (ALERT_SMB_DB_CONFIG_RESOLVE));
+  assert_that (alert_smb_db_events[9], is_equal_to (ALERT_SMB_DB_CONFIG_LOCK));
+  assert_that (alert_smb_db_events[10],
+               is_equal_to (ALERT_SMB_DB_CONFIG_MATCH));
+  assert_that (alert_smb_db_events[11], is_equal_to (ALERT_SMB_DB_BODY_INSERT));
+  assert_that (alert_smb_db_events[alert_smb_db_event_count - 1],
+               is_equal_to (ALERT_SMB_DB_COMMIT));
+  assert_that (alert_smb_db_method_inserts, is_equal_to (6));
+}
+
+Ensure (turbovas_control, rejects_alert_smb_reference_failures_atomically)
+{
+  reset_alert_smb_db ();
+  alert_smb_db_acl = FALSE;
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (99));
+  assert_that (alert_smb_db_events[2], is_equal_to (ALERT_SMB_DB_ROLLBACK));
+
+  reset_alert_smb_db ();
+  alert_smb_db_owner_exists = FALSE;
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (99));
+
+  reset_alert_smb_db ();
+  alert_smb_db_credential_readable = FALSE;
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (40));
+
+  reset_alert_smb_db ();
+  alert_smb_db_credential_owned = FALSE;
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (40));
+  assert_that (alert_smb_db_events[alert_smb_db_event_count - 1],
+               is_equal_to (ALERT_SMB_DB_ROLLBACK));
+
+  reset_alert_smb_db ();
+  alert_smb_db_credential_type = "usk";
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (40));
+
+  reset_alert_smb_db ();
+  alert_smb_db_report_format_uuid = "";
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (90));
+
+  reset_alert_smb_db ();
+  alert_smb_db_format_readable = FALSE;
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (90));
+
+  reset_alert_smb_db ();
+  alert_smb_db_format_lock_exists = FALSE;
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (90));
+
+  reset_alert_smb_db ();
+  alert_smb_db_config_readable = FALSE;
+  assert_that (
+    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
+                                "123e4567-e89b-12d3-a456-426614174012"),
+    is_equal_to (91));
+
+  reset_alert_smb_db ();
+  alert_smb_db_config_lock_exists = FALSE;
+  assert_that (
+    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
+                                "123e4567-e89b-12d3-a456-426614174012"),
+    is_equal_to (91));
+
+  reset_alert_smb_db ();
+  alert_smb_db_config_matches = FALSE;
+  assert_that (
+    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
+                                "123e4567-e89b-12d3-a456-426614174012"),
+    is_equal_to (92));
+}
+
+Ensure (turbovas_control, preserves_authoritative_alert_smb_validation)
+{
+  reset_alert_smb_db ();
+  alert_smb_db_credential_username = "bad@name";
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "scan/report.pdf", ""),
+               is_equal_to (40));
+
+  reset_alert_smb_db ();
+  assert_that (
+    call_real_alert_smb_create ("not-a-share", "scan/report.pdf", ""),
+    is_equal_to (41));
+
+  reset_alert_smb_db ();
+  assert_that (
+    call_real_alert_smb_create ("\\\\fileserver\\reports", "bad:path", ""),
+    is_equal_to (42));
+
+  reset_alert_smb_db ();
+  assert_that (call_real_alert_smb_create ("\\\\fileserver\\reports",
+                                           "folder./report.pdf", ""),
+               is_equal_to (43));
+  assert_that (alert_smb_db_events[alert_smb_db_event_count - 1],
+               is_equal_to (ALERT_SMB_DB_ROLLBACK));
+}
+
+Ensure (turbovas_control, dispatches_malformed_alert_smb_without_payload)
+{
+  const char *request = "alert-smb-create " TEST_CONTROL_SECRET " "
+                        "123e4567-e89b-12d3-a456-426614174000 private-path\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (strstr (response, "private-path"), is_null);
+}
+
 Ensure (turbovas_control, rejects_nonexistent_operator_before_session_setup)
 {
   cleanup_calls = 0;
@@ -2365,6 +3117,26 @@ main (int argc, char **argv)
                          maps_every_alert_create_response);
   add_test_with_context (suite, turbovas_control,
                          returns_malformed_for_truncated_alert_frame);
+  add_test_with_context (suite, turbovas_control,
+                         parses_canonical_bounded_alert_smb_requests);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_or_oversized_alert_smb_requests);
+  add_test_with_context (suite, turbovas_control,
+                         maps_alert_smb_arrays_session_and_success_audit);
+  add_test_with_context (suite, turbovas_control,
+                         audits_alert_smb_failure_and_cleans_session);
+  add_test_with_context (suite, turbovas_control,
+                         preserves_alert_smb_postcommit_indeterminate_audit);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_missing_alert_smb_operator_before_authority);
+  add_test_with_context (suite, turbovas_control,
+                         locks_alert_smb_references_and_commits_atomically);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_alert_smb_reference_failures_atomically);
+  add_test_with_context (suite, turbovas_control,
+                         preserves_authoritative_alert_smb_validation);
+  add_test_with_context (suite, turbovas_control,
+                         dispatches_malformed_alert_smb_without_payload);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

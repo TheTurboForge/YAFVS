@@ -338,7 +338,7 @@ fn python_gvm_still_exposes_alert_mutation_and_test_requests() {
 }
 
 #[test]
-fn native_email_alert_create_is_guarded_and_broad_mutation_routes_remain_closed() {
+fn native_email_and_smb_alert_create_are_guarded_and_broad_mutation_routes_remain_closed() {
     for path in [
         "/api/v1/alerts",
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc",
@@ -360,11 +360,11 @@ fn native_email_alert_create_is_guarded_and_broad_mutation_routes_remain_closed(
     }
     assert!(
         !direct_api_v1_method_is_allowed(&Method::POST, "/api/v1/alerts", false),
-        "EMAIL alert create must require direct write-control"
+        "EMAIL and SMB alert create must require direct write-control"
     );
     assert!(
         direct_api_v1_method_is_allowed(&Method::POST, "/api/v1/alerts", true),
-        "EMAIL alert create must be enabled by direct write-control"
+        "EMAIL and SMB alert create must be enabled by direct write-control"
     );
     assert!(
         !direct_api_v1_method_is_allowed(

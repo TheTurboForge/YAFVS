@@ -7,11 +7,15 @@ use crate::{
     alert_write_db::ensure_alert_owner_matches_operator,
     alert_write_sql::*,
     alert_write_validation::{
-        AlertCloneRequest, AlertEmailCreateRequest, AlertPatchRequest, MAX_ALERT_MESSAGE_BYTES,
-        MAX_ALERT_SUBJECT_BYTES, MAX_ALERT_TEXT_BYTES, validate_alert_clone_request,
-        validate_alert_email_create_request, validate_alert_patch_request,
+        AlertCloneRequest, AlertCreateRequest, AlertEmailCreateRequest, AlertPatchRequest,
+        MAX_ALERT_MESSAGE_BYTES, MAX_ALERT_SUBJECT_BYTES, MAX_ALERT_TEXT_BYTES,
+        ValidatedAlertCreate, ValidatedAlertSmbCreate, validate_alert_clone_request,
+        validate_alert_create_request, validate_alert_email_create_request,
+        validate_alert_patch_request,
     },
-    alert_writes::{alert_email_create_command, parse_alert_email_create_response},
+    alert_writes::{
+        alert_email_create_command, alert_smb_create_command, parse_alert_create_response,
+    },
     errors::ApiError,
     gvmd_control::{
         ControlSocketError, MAX_CONTROL_REQUEST_BYTES, request_gvmd_control_response_bytes,
@@ -33,8 +37,41 @@ fn email_create_json(notice: &str) -> serde_json::Value {
     })
 }
 
+fn tagged_email_create_json(notice: &str) -> serde_json::Value {
+    let mut value = email_create_json(notice);
+    value["method"] = serde_json::json!("EMAIL");
+    value
+}
+
+fn smb_create_json() -> serde_json::Value {
+    serde_json::json!({
+        "method": "SMB",
+        "name": "Daily findings",
+        "comment": "Operator delivery",
+        "active": true,
+        "status": "Done",
+        "smb_credential_id": TEST_UUID,
+        "smb_share_path": "reports",
+        "smb_file_path": "daily-%Y%m%d.pdf",
+        "report_format_id": TEST_UUID
+    })
+}
+
+fn validated_smb_create(protocol: Option<&str>) -> ValidatedAlertSmbCreate {
+    let mut value = smb_create_json();
+    if let Some(protocol) = protocol {
+        value["smb_max_protocol"] = serde_json::json!(protocol);
+    }
+    let request =
+        serde_json::from_value::<AlertCreateRequest>(value).expect("valid SMB alert request shape");
+    match validate_alert_create_request(request).expect("valid SMB alert request") {
+        ValidatedAlertCreate::Smb(request) => request,
+        ValidatedAlertCreate::Email(_) => panic!("SMB method must select SMB request"),
+    }
+}
+
 #[test]
-fn email_alert_report_references_are_locked_inside_the_create_transaction() {
+fn email_and_smb_alert_references_are_locked_inside_create_transactions() {
     let manager = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
     let function = manager
         .split_once("create_alert_email_with_report_refs")
@@ -50,6 +87,9 @@ fn email_alert_report_references_are_locked_inside_the_create_transaction() {
         "lock_alert_report_format",
         "lock_alert_report_config",
         "lock_alert_recipient_credential",
+        "EVENT_TASK_RUN_STATUS_CHANGED",
+        "ALERT_CONDITION_ALWAYS",
+        "ALERT_METHOD_EMAIL",
         "create_alert_body",
         "sql_rollback ();",
         "sql_commit ();",
@@ -63,7 +103,7 @@ fn email_alert_report_references_are_locked_inside_the_create_transaction() {
     assert!(manager.contains("SELECT id FROM users WHERE uuid = '%s' FOR UPDATE;"));
     assert_eq!(
         manager.matches("ret = lock_alert_create_owner ();").count(),
-        2
+        3
     );
     assert!(
         function.find("acl_user_may").unwrap() < function.find("lock_alert_report_format").unwrap()
@@ -73,6 +113,48 @@ fn email_alert_report_references_are_locked_inside_the_create_transaction() {
             < function.find("create_alert_body").unwrap()
     );
     assert!(function.find("create_alert_body").unwrap() < function.rfind("sql_commit").unwrap());
+
+    let smb_function = manager
+        .split_once("create_alert_smb_with_report_refs")
+        .unwrap()
+        .1
+        .split_once("/**\n * @brief Modify an alert.")
+        .unwrap()
+        .0;
+    for required in [
+        "sql_begin_immediate ();",
+        "acl_user_may (\"create_alert\")",
+        "lock_alert_create_owner",
+        "lock_alert_smb_credential",
+        "lock_alert_report_format",
+        "lock_alert_report_config",
+        "EVENT_TASK_RUN_STATUS_CHANGED",
+        "ALERT_CONDITION_ALWAYS",
+        "ALERT_METHOD_SMB",
+        "create_alert_body",
+        "sql_rollback ();",
+        "sql_commit ();",
+    ] {
+        assert!(
+            smb_function.contains(required),
+            "atomic SMB create missing {required}"
+        );
+    }
+    assert!(
+        smb_function.find("acl_user_may").unwrap()
+            < smb_function.find("lock_alert_smb_credential").unwrap()
+    );
+    assert!(
+        smb_function.find("lock_alert_smb_credential").unwrap()
+            < smb_function.find("lock_alert_report_format").unwrap()
+    );
+    assert!(
+        smb_function.find("lock_alert_report_format").unwrap()
+            < smb_function.find("create_alert_body").unwrap()
+    );
+    assert!(
+        smb_function.find("create_alert_body").unwrap() < smb_function.rfind("sql_commit").unwrap()
+    );
 
     let user_manager = include_str!("../../../components/gvmd/src/manage_sql_users.c");
     let delete_user = user_manager
@@ -101,7 +183,7 @@ fn email_alert_report_references_are_locked_inside_the_create_transaction() {
 }
 
 #[test]
-fn alert_email_create_openapi_metadata_is_direct_guarded_and_redacted() {
+fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
     let openapi = include_str!("../../../api/openapi/turbovas-v1.yaml");
     let block = openapi
         .split_once("  /alerts:\n")
@@ -114,12 +196,12 @@ fn alert_email_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "operationId: postAlerts",
         "x-turbovas-direct: true",
         "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: alert-email-create",
+        "x-turbovas-replaces: alert-email-smb-create",
         "x-turbovas-operator-identity: direct-token-operator",
         "x-turbovas-owner-semantics: request-operator-owner",
         "x-turbovas-safety-contract: write-control-v1",
         "x-turbovas-side-effect: alert-delivery-control",
-        "$ref: '#/components/schemas/AlertEmailCreateRequest'",
+        "$ref: '#/components/schemas/AlertCreateRequest'",
         "$ref: '#/components/schemas/AlertAsset'",
         "response contains redacted metadata only",
         "'502':",
@@ -136,14 +218,18 @@ fn alert_email_create_openapi_metadata_is_direct_guarded_and_redacted() {
         serde_json::from_value::<AlertEmailCreateRequest>(simple_with_empty_message).unwrap();
     assert!(validate_alert_email_create_request(request).is_ok());
     let schema = openapi
-        .split_once("    AlertEmailCreateRequest:\n")
+        .split_once("    AlertCreateRequest:\n")
         .unwrap()
         .1
         .split_once("    AlertPatchRequest:\n")
         .unwrap()
         .0;
     assert!(schema.contains("additionalProperties: false"));
+    assert!(schema.contains("propertyName: method"));
+    assert!(schema.contains("EMAIL: '#/components/schemas/AlertEmailCreateRequest'"));
+    assert!(schema.contains("SMB: '#/components/schemas/AlertSmbCreateRequest'"));
     assert!(schema.contains("enum: [simple, include, attach]"));
+    assert!(schema.contains("enum: [default, NT1, SMB2, SMB3]"));
     assert!(schema.contains("writeOnly: true"));
     for field in [
         "to_address",
@@ -153,6 +239,10 @@ fn alert_email_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "report_format_id",
         "report_config_id",
         "message",
+        "smb_credential_id",
+        "smb_share_path",
+        "smb_file_path",
+        "smb_max_protocol",
     ] {
         assert!(schema.contains(&format!("{field}:")));
     }
@@ -165,6 +255,119 @@ fn alert_email_create_openapi_metadata_is_direct_guarded_and_redacted() {
     ));
 }
 
+#[test]
+fn alert_create_requires_exact_method_and_rejects_cross_method_fields() {
+    assert!(
+        serde_json::from_value::<AlertCreateRequest>(tagged_email_create_json("simple")).is_ok()
+    );
+    assert!(serde_json::from_value::<AlertCreateRequest>(smb_create_json()).is_ok());
+
+    for method in [None, Some("email"), Some("smb"), Some("SCP"), Some("")] {
+        let mut value = tagged_email_create_json("simple");
+        match method {
+            Some(method) => value["method"] = serde_json::json!(method),
+            None => {
+                value.as_object_mut().unwrap().remove("method");
+            }
+        }
+        assert!(serde_json::from_value::<AlertCreateRequest>(value).is_err());
+    }
+
+    let mut email_with_smb_field = tagged_email_create_json("simple");
+    email_with_smb_field["smb_share_path"] = serde_json::json!("reports");
+    assert!(serde_json::from_value::<AlertCreateRequest>(email_with_smb_field).is_err());
+
+    let mut smb_with_email_field = smb_create_json();
+    smb_with_email_field["to_address"] = serde_json::json!("security@example.invalid");
+    assert!(serde_json::from_value::<AlertCreateRequest>(smb_with_email_field).is_err());
+}
+
+#[test]
+fn alert_smb_create_requires_fixed_fields_and_rejects_unknown_fields() {
+    for field in [
+        "method",
+        "name",
+        "active",
+        "status",
+        "smb_credential_id",
+        "smb_share_path",
+        "smb_file_path",
+        "report_format_id",
+    ] {
+        let mut value = smb_create_json();
+        value.as_object_mut().unwrap().remove(field);
+        assert!(
+            serde_json::from_value::<AlertCreateRequest>(value).is_err(),
+            "{field} must be required"
+        );
+    }
+    let mut unknown = smb_create_json();
+    unknown["unexpected"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<AlertCreateRequest>(unknown).is_err());
+}
+
+#[test]
+fn alert_smb_create_validates_uuids_paths_caps_and_protocols() {
+    for field in ["smb_credential_id", "report_format_id", "report_config_id"] {
+        for invalid in [
+            "not-a-uuid".to_string(),
+            format!(" {TEST_UUID} "),
+            TEST_UUID.replace('-', ""),
+        ] {
+            let mut value = smb_create_json();
+            value[field] = serde_json::json!(invalid);
+            let request = serde_json::from_value::<AlertCreateRequest>(value).unwrap();
+            assert!(matches!(
+                validate_alert_create_request(request),
+                Err(ApiError::BadRequest(_))
+            ));
+        }
+    }
+    for (field, value) in [
+        ("name", ""),
+        ("smb_share_path", ""),
+        ("smb_share_path", "bad\nshare"),
+        ("smb_file_path", "bad\0path"),
+    ] {
+        let mut request = smb_create_json();
+        request[field] = serde_json::json!(value);
+        let request = serde_json::from_value::<AlertCreateRequest>(request).unwrap();
+        assert!(matches!(
+            validate_alert_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    for field in ["name", "comment", "smb_share_path", "smb_file_path"] {
+        let mut value = smb_create_json();
+        value[field] = serde_json::json!("x".repeat(MAX_ALERT_TEXT_BYTES + 1));
+        let request = serde_json::from_value::<AlertCreateRequest>(value).unwrap();
+        assert!(matches!(
+            validate_alert_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+
+    assert_eq!(validated_smb_create(None).smb_max_protocol.as_bytes(), b"");
+    for (protocol, expected) in [
+        ("default", b"".as_slice()),
+        ("NT1", b"NT1".as_slice()),
+        ("SMB2", b"SMB2".as_slice()),
+        ("SMB3", b"SMB3".as_slice()),
+    ] {
+        assert_eq!(
+            validated_smb_create(Some(protocol))
+                .smb_max_protocol
+                .as_bytes(),
+            expected
+        );
+    }
+    for protocol in ["", "nt1", "SMB1", "SMB 3"] {
+        let mut value = smb_create_json();
+        value["smb_max_protocol"] = serde_json::json!(protocol);
+        assert!(serde_json::from_value::<AlertCreateRequest>(value).is_err());
+    }
+}
+
 fn validated_email_create(
     notice: &str,
 ) -> crate::alert_write_validation::ValidatedAlertEmailCreate {
@@ -175,6 +378,41 @@ fn validated_email_create(
     let request = serde_json::from_value::<AlertEmailCreateRequest>(value)
         .expect("valid email alert request shape");
     validate_alert_email_create_request(request).expect("valid email alert request")
+}
+
+#[test]
+fn alert_smb_create_frame_is_exact_bounded_and_scrubbable() {
+    let request = validated_smb_create(Some("SMB3"));
+    let mut frame =
+        alert_smb_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &request);
+    assert_eq!(
+        frame.as_bytes(),
+        concat!(
+            "alert-smb-create 0123456789abcdef0123456789abcdef ",
+            "12345678-1234-4234-8234-123456789abc 1 ",
+            "RGFpbHkgZmluZGluZ3M= T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj ",
+            "cmVwb3J0cw== ZGFpbHktJVklbSVkLnBkZg== ",
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj  U01CMw==\n"
+        )
+        .as_bytes()
+    );
+    assert!(frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    frame.scrub();
+    assert!(frame.as_bytes().iter().all(|byte| *byte == 0));
+
+    let mut maximum = smb_create_json();
+    for field in ["name", "comment", "smb_share_path", "smb_file_path"] {
+        maximum[field] = serde_json::json!("x".repeat(MAX_ALERT_TEXT_BYTES));
+    }
+    let maximum = serde_json::from_value::<AlertCreateRequest>(maximum).unwrap();
+    let maximum = match validate_alert_create_request(maximum).unwrap() {
+        ValidatedAlertCreate::Smb(request) => request,
+        ValidatedAlertCreate::Email(_) => unreachable!(),
+    };
+    let maximum_frame =
+        alert_smb_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &maximum);
+    assert!(maximum_frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
 }
 
 #[test]
@@ -394,7 +632,7 @@ async fn alert_email_create_control_frame_cap_is_enforced_before_socket_io() {
 }
 
 #[test]
-fn alert_email_create_maps_explicit_control_responses() {
+fn alert_create_maps_explicit_control_responses() {
     for response in [
         b"2 invalid_email".as_slice(),
         b"4 invalid_filter_type",
@@ -426,12 +664,12 @@ fn alert_email_create_maps_explicit_control_responses() {
         b"-2 malformed",
     ] {
         assert!(matches!(
-            parse_alert_email_create_response(response),
+            parse_alert_create_response(response),
             Err(ApiError::BadRequest(_))
         ));
     }
     assert!(matches!(
-        parse_alert_email_create_response(b"99 forbidden"),
+        parse_alert_create_response(b"99 forbidden"),
         Err(ApiError::Forbidden)
     ));
     for response in [
@@ -446,38 +684,37 @@ fn alert_email_create_maps_explicit_control_responses() {
         b"91 report_config_not_found",
     ] {
         assert!(matches!(
-            parse_alert_email_create_response(response),
+            parse_alert_create_response(response),
             Err(ApiError::NotFound)
         ));
     }
     assert!(matches!(
-        parse_alert_email_create_response(b"1 exists"),
+        parse_alert_create_response(b"1 exists"),
         Err(ApiError::Conflict(_))
     ));
     assert!(matches!(
-        parse_alert_email_create_response(b"92 report_config_mismatch"),
+        parse_alert_create_response(b"92 report_config_mismatch"),
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
-        parse_alert_email_create_response(b"-3 committed_indeterminate"),
+        parse_alert_create_response(b"-3 committed_indeterminate"),
         Err(ApiError::MutationCommittedResponseUnavailable)
     ));
-    let internal = parse_alert_email_create_response(b"-1 internal").unwrap_err();
+    let internal = parse_alert_create_response(b"-1 internal").unwrap_err();
     assert_eq!(
         internal.status_code(),
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     );
     assert_eq!(
-        parse_alert_email_create_response(b"0 created 12345678-1234-4234-8234-123456789abc")
-            .unwrap(),
+        parse_alert_create_response(b"0 created 12345678-1234-4234-8234-123456789abc").unwrap(),
         TEST_UUID
     );
     assert!(matches!(
-        parse_alert_email_create_response(b"0 created not-a-uuid"),
+        parse_alert_create_response(b"0 created not-a-uuid"),
         Err(ApiError::MutationCommittedResponseUnavailable)
     ));
     assert!(matches!(
-        parse_alert_email_create_response(b"unexpected-response"),
+        parse_alert_create_response(b"unexpected-response"),
         Err(ApiError::MutationOutcomeIndeterminate)
     ));
 
@@ -488,16 +725,20 @@ fn alert_email_create_maps_explicit_control_responses() {
 }
 
 #[test]
-fn alert_email_create_handler_returns_only_existing_redacted_asset_shape() {
+fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape() {
     let handler = include_str!("alert_writes.rs")
-        .split_once("pub(crate) async fn create_email_alert")
+        .split_once("pub(crate) async fn create_alert")
         .unwrap()
         .1
-        .split_once("pub(crate) async fn request_alert_email_create")
+        .split_once("pub(crate) fn parse_alert_create_payload")
         .unwrap()
         .0;
     assert!(handler.contains("StatusCode::CREATED"));
-    assert!(handler.contains("parse_alert_email_create_payload(payload)?"));
+    assert!(handler.contains("parse_alert_create_payload(payload)?"));
+    assert!(handler.contains("ValidatedAlertCreate::Email(request)"));
+    assert!(handler.contains("ValidatedAlertCreate::Smb(request)"));
+    assert!(handler.contains("request_alert_email_create"));
+    assert!(handler.contains("request_alert_smb_create"));
     assert!(handler.contains("load_alert_asset_detail"));
     assert!(handler.contains("JOIN users u ON u.id = a.owner"));
     assert!(handler.contains("u.uuid = $2"));
@@ -511,6 +752,9 @@ fn alert_email_create_handler_returns_only_existing_redacted_asset_shape() {
         "recipient_credential_id",
         "report_format_id",
         "report_config_id",
+        "smb_credential_id",
+        "smb_share_path",
+        "smb_file_path",
     ] {
         assert!(
             !handler.contains(forbidden),
@@ -527,15 +771,51 @@ fn alert_email_create_handler_returns_only_existing_redacted_asset_shape() {
 }
 
 #[test]
-fn alert_email_create_maps_json_extractor_rejections_before_mutation() {
+fn alert_create_maps_json_extractor_rejections_before_mutation() {
     let direct = include_str!("alert_writes.rs");
     let browser = include_str!("browser_proxy_metadata_patch.rs");
-    assert!(direct.contains("Result<Json<AlertEmailCreateRequest>, JsonRejection>"));
-    assert!(
-        direct.contains("request body must be application/json matching AlertEmailCreateRequest")
-    );
-    assert!(browser.contains("Result<Json<AlertEmailCreateRequest>, JsonRejection>"));
-    assert!(browser.contains("parse_alert_email_create_payload(payload)?"));
+    assert!(direct.contains("Result<Json<AlertCreateRequest>, JsonRejection>"));
+    assert!(direct.contains("request body must be application/json matching AlertCreateRequest"));
+    assert!(browser.contains("Result<Json<AlertCreateRequest>, JsonRejection>"));
+    assert!(browser.contains("parse_alert_create_payload(payload)?"));
+}
+
+#[test]
+fn alert_smb_sensitive_fields_are_byte_backed_and_drop_scrubbed() {
+    let validation = include_str!("alert_write_validation.rs");
+    for field in [
+        "smb_credential_id: SensitiveAlertField",
+        "smb_share_path: SensitiveAlertField",
+        "smb_file_path: SensitiveAlertField",
+        "report_format_id: SensitiveAlertField",
+        "report_config_id: SensitiveAlertField",
+    ] {
+        assert!(
+            validation.contains(field),
+            "missing sensitive field {field}"
+        );
+    }
+    assert!(validation.contains("impl Drop for SensitiveAlertField"));
+    assert!(validation.contains("self.0.fill(0)"));
+}
+
+#[test]
+fn alert_smb_delivery_logs_do_not_include_destination_values() {
+    let delivery = include_str!("../../../components/gvmd/src/manage_alerts.c");
+    for forbidden in [
+        "smb as %s",
+        "smb_credential: %s",
+        "smb_share_path: %s",
+        "smb_file_path: %s",
+        "g_debug (\"report: %s\"",
+        "Could not find credential %s",
+    ] {
+        assert!(!delivery.contains(forbidden), "SMB log leaks {forbidden}");
+    }
+    assert!(delivery.contains("Sending report through SMB alert delivery"));
+    assert!(delivery.contains("Preparing SMB alert delivery destination"));
+    assert!(delivery.contains("alert_secure_gfree (password)"));
+    assert!(delivery.contains("alert_secure_gfree_bytes (report_content, content_length)"));
 }
 
 #[test]

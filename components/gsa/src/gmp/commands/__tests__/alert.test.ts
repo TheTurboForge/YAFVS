@@ -14,8 +14,12 @@ import {
 } from 'gmp/commands/testing';
 import {
   CONDITION_TYPE_ALWAYS,
+  CONDITION_TYPE_SEVERITY_AT_LEAST,
   EVENT_TYPE_NEW_SECINFO,
+  EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
   METHOD_TYPE_EMAIL,
+  METHOD_TYPE_SCP,
+  METHOD_TYPE_SMB,
 } from 'gmp/models/alert';
 import {YES_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
@@ -347,6 +351,450 @@ describe('AlertCommand tests', () => {
       },
     });
     expect(resp.data.id).toEqual('foo');
+  });
+
+  test('should create a simple EMAIL alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new AlertCommand(fakeHttp);
+
+    const result = await cmd.create({
+      active: '1',
+      name: 'Simple email',
+      comment: 'delivery details remain write-only',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      filter_id: 0,
+      method: METHOD_TYPE_EMAIL,
+      event_data_status: 'Done',
+      method_data_to_address: '[REDACTED TO]',
+      method_data_from_address: '[REDACTED FROM]',
+      method_data_subject: '[REDACTED SUBJECT]',
+      method_data_notice: '1',
+      method_data_recipient_credential: '0',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          method: 'EMAIL',
+          name: 'Simple email',
+          comment: 'delivery details remain write-only',
+          active: true,
+          status: 'Done',
+          to_address: '[REDACTED TO]',
+          from_address: '[REDACTED FROM]',
+          subject: '[REDACTED SUBJECT]',
+          notice: 'simple',
+        }),
+      },
+    );
+    expect(result.data).toEqual({id: 'native-alert-id'});
+  });
+
+  test('should create an include EMAIL alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: false,
+      name: 'Include email',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_EMAIL,
+      event_data_status: 'Stopped',
+      method_data_to_address: '[REDACTED TO]',
+      method_data_subject: '[REDACTED SUBJECT]',
+      method_data_notice: '0',
+      method_data_recipient_credential: 'recipient-id',
+      method_data_notice_report_format: 'format-id',
+      method_data_notice_report_config: 0,
+      method_data_message: '[REDACTED MESSAGE]',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      expect.objectContaining({
+        body: JSON.stringify({
+          method: 'EMAIL',
+          name: 'Include email',
+          comment: '',
+          active: false,
+          status: 'Stopped',
+          to_address: '[REDACTED TO]',
+          subject: '[REDACTED SUBJECT]',
+          recipient_credential_id: 'recipient-id',
+          notice: 'include',
+          report_format_id: 'format-id',
+          message: '[REDACTED MESSAGE]',
+        }),
+      }),
+    );
+  });
+
+  test('should create an attach EMAIL alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: true,
+      name: 'Attach email',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_EMAIL,
+      event_data_status: 'Interrupted',
+      method_data_to_address: '[REDACTED TO]',
+      method_data_subject: '[REDACTED SUBJECT]',
+      method_data_notice: '2',
+      method_data_notice_attach_format: 'format-id',
+      method_data_notice_attach_config: 'config-id',
+      method_data_message_attach: '[REDACTED MESSAGE]',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      expect.objectContaining({
+        body: JSON.stringify({
+          method: 'EMAIL',
+          name: 'Attach email',
+          comment: '',
+          active: true,
+          status: 'Interrupted',
+          to_address: '[REDACTED TO]',
+          subject: '[REDACTED SUBJECT]',
+          notice: 'attach',
+          report_format_id: 'format-id',
+          report_config_id: 'config-id',
+          message: '[REDACTED MESSAGE]',
+        }),
+      }),
+    );
+  });
+
+  test('should create an SMB alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: '0',
+      name: 'SMB alert',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      filter_id: '0',
+      method: METHOD_TYPE_SMB,
+      event_data_status: 'Done',
+      method_data_smb_credential: 'credential-id',
+      method_data_smb_share_path: '[REDACTED SHARE]',
+      method_data_smb_file_path: '[REDACTED FILE]',
+      method_data_smb_report_format: 'format-id',
+      method_data_smb_report_config: 0,
+      method_data_smb_max_protocol: '',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      expect.objectContaining({
+        body: JSON.stringify({
+          method: 'SMB',
+          name: 'SMB alert',
+          comment: '',
+          active: false,
+          status: 'Done',
+          smb_credential_id: 'credential-id',
+          smb_share_path: '[REDACTED SHARE]',
+          smb_file_path: '[REDACTED FILE]',
+          report_format_id: 'format-id',
+          smb_max_protocol: 'default',
+        }),
+      }),
+    );
+  });
+
+  test.each([
+    ['empty filter id', ''],
+    ['missing filter id', undefined],
+  ])(
+    'should treat %s as no filter for native alert creation',
+    async (_label, filterId) => {
+      const fetchMock = testing
+        .fn()
+        .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(undefined) as ReturnType<
+        typeof createHttp
+      > & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      const cmd = new AlertCommand(fakeHttp);
+
+      await cmd.create({
+        active: '1',
+        name: 'No filter email',
+        event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+        condition: CONDITION_TYPE_ALWAYS,
+        filter_id: filterId,
+        method: METHOD_TYPE_EMAIL,
+        event_data_status: 'Done',
+        method_data_to_address: '[REDACTED TO]',
+        method_data_subject: '[REDACTED SUBJECT]',
+        method_data_notice: '1',
+      });
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test('should keep unsupported alert create semantics on GMP', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: true,
+      name: 'Unsupported event',
+      event: EVENT_TYPE_NEW_SECINFO,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_EMAIL,
+    });
+    await cmd.create({
+      active: true,
+      name: 'Unsupported condition',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_SEVERITY_AT_LEAST,
+      method: METHOD_TYPE_EMAIL,
+    });
+    await cmd.create({
+      active: true,
+      name: 'Unsupported method',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_SCP,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledTimes(3);
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'create_alert',
+        event: EVENT_TYPE_NEW_SECINFO,
+        condition: CONDITION_TYPE_ALWAYS,
+      }),
+    });
+  });
+
+  test('should not fall back to GMP after native alert create errors', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(
+        nativeJsonResponse({error: {message: 'rejected'}}, 422),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        active: true,
+        name: 'Rejected alert',
+        event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+        condition: CONDITION_TYPE_ALWAYS,
+        method: METHOD_TYPE_EMAIL,
+        event_data_status: 'Done',
+        method_data_to_address: '[REDACTED TO]',
+        method_data_subject: '[REDACTED SUBJECT]',
+        method_data_notice: '1',
+      }),
+    ).rejects.toThrow('Native API request failed with status 422');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [
+      'committed_response_unavailable',
+      'The mutation committed, but its response could not be completed; verify current state before retrying.',
+    ],
+    [
+      'mutation_outcome_indeterminate',
+      'The mutation may have committed, but no authoritative response was received; verify current state before retrying.',
+    ],
+  ])(
+    'preserves redacted native alert error code %s without payload',
+    async (code, apiMessage) => {
+      const response = createActionResultResponse();
+      const fetchMock = testing.fn().mockResolvedValue(
+        nativeJsonResponse(
+          {
+            error: {
+              code,
+              message: apiMessage,
+              delivery_payload: '[REDACTED DELIVERY PAYLOAD]',
+            },
+          },
+          502,
+        ),
+      );
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      const cmd = new AlertCommand(fakeHttp);
+
+      let caught: unknown;
+      try {
+        await cmd.create({
+          active: '1',
+          name: 'Indeterminate alert',
+          event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+          condition: CONDITION_TYPE_ALWAYS,
+          filter_id: 0,
+          method: METHOD_TYPE_EMAIL,
+          event_data_status: 'Done',
+          method_data_to_address: '[REDACTED TO]',
+          method_data_subject: '[REDACTED SUBJECT]',
+          method_data_notice: '1',
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toMatchObject({
+        code,
+        message: `Native API request failed with status 502: ${code}: ${apiMessage}`,
+      });
+      expect(caught).not.toHaveProperty('payload');
+      expect((caught as Error).message).not.toContain('DELIVERY PAYLOAD');
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test('should send missing and invalid native alert delivery fields for typed rejection', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(
+        nativeJsonResponse({error: {message: 'rejected'}}, 400),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        active: true,
+        name: 'Invalid native alert',
+        event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+        condition: CONDITION_TYPE_ALWAYS,
+        method: METHOD_TYPE_EMAIL,
+        event_data_status: 'Done',
+        method_data_subject: '[REDACTED SUBJECT]',
+        method_data_notice: 'unexpected-notice',
+      }),
+    ).rejects.toThrow('Native API request failed with status 400');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      expect.objectContaining({
+        body: JSON.stringify({
+          method: 'EMAIL',
+          name: 'Invalid native alert',
+          comment: '',
+          active: true,
+          status: 'Done',
+          subject: '[REDACTED SUBJECT]',
+          notice: 'unexpected-notice',
+        }),
+      }),
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should save alert', async () => {

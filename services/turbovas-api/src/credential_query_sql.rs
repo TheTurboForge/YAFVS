@@ -8,8 +8,23 @@ pub(crate) fn credential_assets_sql(sort_sql: &str) -> String {
              SELECT c.uuid AS id,
                     coalesce(c.name, '') AS name,
                     coalesce(c.comment, '') AS comment,
+                    u.uuid AS owner_id,
                     coalesce(u.name, '') AS owner_name,
                     coalesce(c.type, '') AS credential_type,
+                    (coalesce(c.type, '') = 'up'
+                     AND (SELECT count(*)
+                            FROM credentials_data cd
+                           WHERE cd.credential = c.id
+                             AND cd.type = 'username') = 1
+                     AND EXISTS (
+                         SELECT 1
+                           FROM credentials_data cd
+                          WHERE cd.credential = c.id
+                            AND cd.type = 'username'
+                            AND cd.value <> ''
+                            AND strpos(cd.value, '@') = 0
+                            AND strpos(cd.value, ':') = 0
+                     )) AS smb_compatible,
                     coalesce(c.allow_insecure, 0)::integer AS allow_insecure_int,
                     coalesce((SELECT count(DISTINCT tld.target)::bigint
                                 FROM targets_login_data tld
@@ -41,8 +56,23 @@ pub(crate) fn credential_asset_detail_sql() -> &'static str {
     r#"SELECT c.uuid AS id,
               coalesce(c.name, '') AS name,
               coalesce(c.comment, '') AS comment,
+              u.uuid AS owner_id,
               coalesce(u.name, '') AS owner_name,
               coalesce(c.type, '') AS credential_type,
+              (coalesce(c.type, '') = 'up'
+               AND (SELECT count(*)
+                      FROM credentials_data cd
+                     WHERE cd.credential = c.id
+                       AND cd.type = 'username') = 1
+               AND EXISTS (
+                   SELECT 1
+                     FROM credentials_data cd
+                    WHERE cd.credential = c.id
+                      AND cd.type = 'username'
+                      AND cd.value <> ''
+                      AND strpos(cd.value, '@') = 0
+                      AND strpos(cd.value, ':') = 0
+               )) AS smb_compatible,
               coalesce(c.allow_insecure, 0)::integer AS allow_insecure_int,
               coalesce((SELECT count(DISTINCT tld.target)::bigint
                           FROM targets_login_data tld

@@ -10,6 +10,14 @@
 
 #include "turbovas_control.h"
 
+#include "gmp_base.h"
+#include "manage.h"
+#include "manage_alerts.h"
+#include "manage_schedules.h"
+#include "manage_sql.h"
+#include "manage_sql_alerts.h"
+#include "manage_users.h"
+
 #include <errno.h>
 #include <glib.h>
 #include <pthread.h>
@@ -19,13 +27,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#include "manage.h"
-#include "manage_alerts.h"
-#include "manage_sql.h"
-#include "manage_schedules.h"
-#include "manage_users.h"
-#include "gmp_base.h"
 
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "md   control"
@@ -70,6 +71,11 @@
 #define TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES 80
 #define TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES 2000
 #define TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES 36
+#define TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND "alert-smb-create "
+#define TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES 4
 
 typedef struct
 {
@@ -113,6 +119,20 @@ typedef struct
   unsigned int notice;
 } turbovas_control_alert_email_create_request_t;
 
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *status;
+  gchar *credential_uuid;
+  gchar *share_path;
+  gchar *file_path;
+  gchar *report_format_uuid;
+  gchar *report_config_uuid;
+  gchar *max_protocol;
+  gboolean active;
+} turbovas_control_alert_smb_create_request_t;
+
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -123,6 +143,18 @@ turbovas_control_next_field (const char **, const char *, const char **,
 
 static void
 turbovas_control_secure_free (gchar *);
+
+static gboolean
+turbovas_control_alert_status_is_valid (const char *);
+
+static gboolean
+turbovas_control_optional_uuid_is_valid (const char *);
+
+static void
+turbovas_control_array_add_data (array_t *, const char *, const char *);
+
+static void
+turbovas_control_secure_array_free (array_t *);
 
 static gboolean
 turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
@@ -393,6 +425,22 @@ turbovas_control_schedule_create_request_clear
   memset (request, 0, sizeof (*request));
 }
 
+static void
+turbovas_control_alert_smb_create_request_clear (
+  turbovas_control_alert_smb_create_request_t *request)
+{
+  turbovas_control_secure_free (request->name);
+  turbovas_control_secure_free (request->comment);
+  turbovas_control_secure_free (request->status);
+  turbovas_control_secure_free (request->credential_uuid);
+  turbovas_control_secure_free (request->share_path);
+  turbovas_control_secure_free (request->file_path);
+  turbovas_control_secure_free (request->report_format_uuid);
+  turbovas_control_secure_free (request->report_config_uuid);
+  turbovas_control_secure_free (request->max_protocol);
+  memset (request, 0, sizeof (*request));
+}
+
 static const char *
 turbovas_control_trash_empty_response
   (int result, gint64 actual,
@@ -562,6 +610,125 @@ turbovas_control_decode_base64_field (const char *value, size_t value_len,
   g_free (canonical);
   g_free (decoded);
   g_free (encoded);
+  return valid;
+}
+
+static gboolean
+turbovas_control_smb_max_protocol_is_valid (const char *max_protocol)
+{
+  return max_protocol[0] == '\0' || strcmp (max_protocol, "NT1") == 0
+         || strcmp (max_protocol, "SMB2") == 0
+         || strcmp (max_protocol, "SMB3") == 0;
+}
+
+static gboolean
+turbovas_control_parse_alert_smb_create_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_alert_smb_create_request_t *alert)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  const char *operator_start;
+  const char *secret;
+  const char *secret_end;
+  size_t field_len;
+  size_t secret_len;
+  gboolean valid;
+
+  memset (alert, 0, sizeof (*alert));
+  if (request == NULL || request_len >= TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
+                         + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
+      || memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
+                 TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len, expected_secret,
+                                           expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if ((size_t) (end - operator_start) < 37 || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  cursor = operator_start + 37;
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && field_len == 1 && (field[0] == '0' || field[0] == '1');
+  if (!valid)
+    return FALSE;
+  alert->active = field[0] == '1';
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+            &alert->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+            &alert->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+            &alert->status)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
+            &alert->credential_uuid)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES, TRUE,
+            &alert->share_path)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES, TRUE,
+            &alert->file_path)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
+            &alert->report_format_uuid)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
+            &alert->report_config_uuid)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES,
+            FALSE, &alert->max_protocol)
+          && cursor == end;
+  if (valid)
+    valid =
+      turbovas_control_alert_status_is_valid (alert->status)
+      && turbovas_control_uuid_is_valid (alert->credential_uuid)
+      && turbovas_control_uuid_is_valid (alert->report_format_uuid)
+      && turbovas_control_optional_uuid_is_valid (alert->report_config_uuid)
+      && turbovas_control_smb_max_protocol_is_valid (alert->max_protocol)
+      && turbovas_control_text_has_allowed_controls (
+        alert->name, strlen (alert->name), FALSE)
+      && turbovas_control_text_has_allowed_controls (
+        alert->comment, strlen (alert->comment), FALSE)
+      && turbovas_control_text_has_allowed_controls (
+        alert->share_path, strlen (alert->share_path), FALSE)
+      && turbovas_control_text_has_allowed_controls (
+        alert->file_path, strlen (alert->file_path), FALSE);
+  if (!valid)
+    turbovas_control_alert_smb_create_request_clear (alert);
+
   return valid;
 }
 
@@ -1087,9 +1254,9 @@ turbovas_control_schedule_create_response
 }
 
 static const char *
-turbovas_control_alert_email_create_response
-  (int result, const char *uuid,
-   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+turbovas_control_alert_create_response (
+  int result, const char *uuid,
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
@@ -1362,6 +1529,80 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
 }
 
 static int
+turbovas_control_create_alert_smb (
+  const char *operator_uuid,
+  const turbovas_control_alert_smb_create_request_t *request,
+  char created_uuid[37])
+{
+  array_t *condition_data = NULL;
+  array_t *event_data = NULL;
+  array_t *method_data = NULL;
+  alert_t alert = 0;
+  char active[2] = {request->active ? '1' : '0', '\0'};
+  char *uuid = NULL;
+  gboolean committed = FALSE;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  condition_data = make_array ();
+  event_data = make_array ();
+  method_data = make_array ();
+  turbovas_control_array_add_data (event_data, "status", request->status);
+  turbovas_control_array_add_data (method_data, "smb_credential",
+                                   request->credential_uuid);
+  turbovas_control_array_add_data (method_data, "smb_share_path",
+                                   request->share_path);
+  turbovas_control_array_add_data (method_data, "smb_file_path",
+                                   request->file_path);
+  turbovas_control_array_add_data (method_data, "smb_report_format",
+                                   request->report_format_uuid);
+  if (request->report_config_uuid[0])
+    turbovas_control_array_add_data (method_data, "smb_report_config",
+                                     request->report_config_uuid);
+  if (request->max_protocol[0])
+    turbovas_control_array_add_data (method_data, "smb_max_protocol",
+                                     request->max_protocol);
+  array_terminate (condition_data);
+  array_terminate (event_data);
+  array_terminate (method_data);
+
+  result = create_alert_smb_with_report_refs (
+    request->name, request->comment, active, event_data, condition_data,
+    method_data, request->credential_uuid, request->report_format_uuid,
+    request->report_config_uuid, &alert);
+  if (result == 0)
+    {
+      committed = TRUE;
+      uuid = alert_uuid (alert);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        {
+          g_warning ("%s: alert creation committed but UUID lookup failed",
+                     __func__);
+          log_event ("alert", "Alert", NULL, "created");
+          result = -3;
+        }
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+          log_event ("alert", "Alert", created_uuid, "created");
+        }
+    }
+
+  if (result != 0 && !committed)
+    log_event_fail ("alert", "Alert", NULL, "created");
+
+  free (uuid);
+  turbovas_control_secure_array_free (condition_data);
+  turbovas_control_secure_array_free (event_data);
+  turbovas_control_secure_array_free (method_data);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_empty_trash (const char *operator_uuid, gint64 expected_total,
                               gint64 *actual_total)
 {
@@ -1620,6 +1861,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_schedule_modify_request_t schedule_modify_request = {0};
   turbovas_control_credential_create_request_t credential_request = {0};
   turbovas_control_alert_email_create_request_t alert_request = {0};
+  turbovas_control_alert_smb_create_request_t smb_alert_request = {0};
   memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
@@ -1687,8 +1929,8 @@ turbovas_control_serve_client (int client_socket)
           result = turbovas_control_create_alert_email (operator_uuid,
                                                         &alert_request,
                                                         created_uuid);
-          result_response = turbovas_control_alert_email_create_response
-                              (result, created_uuid, response);
+          result_response = turbovas_control_alert_create_response (
+            result, created_uuid, response);
         }
       else if (request_len
                  >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
@@ -1696,8 +1938,23 @@ turbovas_control_serve_client (int client_socket)
                           TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
                           TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
                     == 0)
-        result_response = turbovas_control_alert_email_create_response
-                            (-2, NULL, response);
+        result_response =
+          turbovas_control_alert_create_response (-2, NULL, response);
+      else if (turbovas_control_parse_alert_smb_create_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &smb_alert_request))
+        {
+          result = turbovas_control_create_alert_smb (
+            operator_uuid, &smb_alert_request, created_uuid);
+          result_response = turbovas_control_alert_create_response (
+            result, created_uuid, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
+                    == 0)
+        result_response =
+          turbovas_control_alert_create_response (-2, NULL, response);
       else if (request_len >= TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
                && memcmp (request, TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND,
                           TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
@@ -1722,8 +1979,14 @@ turbovas_control_serve_client (int client_socket)
            && memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
                       TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
                 == 0)
-    result_response = turbovas_control_alert_email_create_response (-2, NULL,
-                                                                    response);
+    result_response =
+      turbovas_control_alert_create_response (-2, NULL, response);
+  else if (request_len >= TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
+                      TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
+                == 0)
+    result_response =
+      turbovas_control_alert_create_response (-2, NULL, response);
   else
     result_response = turbovas_control_response (result);
 
@@ -1733,6 +1996,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_schedule_modify_request_clear (&schedule_modify_request);
   turbovas_control_credential_create_request_clear (&credential_request);
   turbovas_control_alert_email_create_request_clear (&alert_request);
+  turbovas_control_alert_smb_create_request_clear (&smb_alert_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
       turbovas_control_secure_clear (request, request_len);

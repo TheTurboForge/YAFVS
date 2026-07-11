@@ -516,6 +516,9 @@ fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
         direct_api_route_registration_block(direct_routes_source)
             .contains("if write_control_enabled")
     );
+    assert!(
+        direct_api_route_registration_block(direct_routes_source).contains("post(create_alert)")
+    );
 }
 
 #[test]
@@ -630,6 +633,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/restore"));
     assert!(browser_routes.contains("/api/v1/targets/:target_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/resources"));
+    assert!(browser_routes.contains("post(browser_proxy_create_alert)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_alert)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_alert)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_credential)"));

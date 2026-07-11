@@ -34,19 +34,75 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn credential_list_supports_exact_type_filter_without_secret_tables() {
+fn credential_list_supports_exact_type_filter_and_redacted_smb_proof() {
     let sql = credential_assets_sql("name ASC");
     assert!(sql.contains("credential_type = $4"));
     assert!(sql.contains("AND ($4 = '' OR credential_type = $4)"));
-    assert!(!sql.to_ascii_lowercase().contains("credentials_data"));
+    assert!(sql.contains("u.uuid AS owner_id"));
+    assert!(sql.contains("AS smb_compatible"));
+    assert!(sql.contains("SELECT count(*)"));
+    assert!(sql.contains("cd.type = 'username') = 1"));
+    assert!(sql.contains("cd.type = 'username'"));
+    assert!(sql.contains("cd.value <> ''"));
+    assert!(sql.contains("strpos(cd.value, '@') = 0"));
+    assert!(sql.contains("strpos(cd.value, ':') = 0"));
 }
 
 #[test]
-fn credential_native_reads_do_not_select_secret_data_tables_or_values() {
+fn credential_openapi_documents_redacted_smb_preflight_proof() {
+    let schema = OPENAPI
+        .split_once("    CredentialAsset:")
+        .expect("credential asset schema")
+        .1
+        .split_once("    UserAccountCollection:")
+        .expect("next schema")
+        .0;
+    for required in [
+        "required: [id, name, owner_id, owner, credential_type, smb_compatible",
+        "owner_id:",
+        "format: uuid",
+        "nullable: true",
+        "smb_compatible:",
+        "The login and all other secret material remain write-only.",
+    ] {
+        assert!(
+            schema.contains(required),
+            "credential schema missing {required}"
+        );
+    }
+    for forbidden in ["username:", "password:", "private_key:"] {
+        assert!(
+            !schema.contains(forbidden),
+            "credential read schema must not expose {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn credential_native_reads_do_not_return_secret_data_or_values() {
     let list_sql = credential_assets_sql("name ASC");
+    for sql in [list_sql.as_str(), credential_asset_detail_sql()] {
+        let lowered = sql.to_ascii_lowercase();
+        assert!(lowered.contains("from credentials_data cd"));
+        assert!(lowered.contains("as smb_compatible"));
+        for forbidden in [
+            "cd.value as",
+            "select cd.value",
+            "password",
+            "private_key",
+            "community",
+            "secret",
+            "vault_id",
+            "host_identifier",
+        ] {
+            assert!(
+                !lowered.contains(forbidden),
+                "credential native read SQL must derive compatibility without returning secret-bearing data: {forbidden} in {sql}"
+            );
+        }
+    }
+
     for sql in [
-        list_sql.as_str(),
-        credential_asset_detail_sql(),
         credential_target_references_sql(),
         credential_scanner_references_sql(),
     ] {
@@ -70,6 +126,20 @@ fn credential_native_reads_do_not_select_secret_data_tables_or_values() {
                 "credential native read SQL must not expose or select secret-bearing data: {forbidden} in {sql}"
             );
         }
+    }
+}
+
+#[test]
+fn credential_payload_exposes_only_redacted_smb_preflight_fields() {
+    let payloads = include_str!("credential_payloads.rs");
+    for required in ["owner_id: Option<String>", "smb_compatible: bool"] {
+        assert!(payloads.contains(required), "missing {required}");
+    }
+    for forbidden in ["username:", "password:", "secret:"] {
+        assert!(
+            !payloads.contains(forbidden),
+            "credential payload must not expose {forbidden}"
+        );
     }
 }
 

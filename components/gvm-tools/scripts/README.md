@@ -128,25 +128,20 @@ This script creates a new task (if the target is not existing) with specific hos
 
 ---
 
-## `create-alerts-from-csv.gmp.py`
+## Native alert CSV import
 
-Creates alerts as specified in a csv-file. See alerts.csv for file format/contents.
+The inherited `create-alerts-from-csv.gmp.py` script has been retired. Use
+`just native-alerts-from-csv -- --csv-file alerts.csv` for the retained EMAIL
+and SMB nine-column positional rows. The command defaults to a local-only dry
+run. Writes require `--allow-write-control`; it resolves alert, report-format,
+and SMB credential references through the native API before creating anything.
+Created alerts are active, matching the inherited creation default.
 
-### Example
-
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket create-alerts-from-csv.gmp.py alerts.csv `
-
-- For SMB Alerts use something like %N_%CT%z in the naming of the report, as shown in the example alerts.csv
-- %N is the name for the object or the associated task for reports, %C is the creation date in the format YYYYMMDD, and %c is the creation time in the format HHMMSS.
-- The script only support EMAIL and SMB Alerts, please note that the fields are quite different between the two alert types, but refer to the sample alerts.csv
-- The CSV must starts with name, type (EMAIL or SMB). The remaining fields then depend on the type chosen, specifically:
-- EMAIL; *senders email*, *recipients email*, *mail subject*, *message body*, *notice type* (0=Report in message 1=Simple Notice or 2=Attach Report), *Report Type* (e.g. CSV Results), *Status* (Done, Requested)
-- SMB; *SMB Credentials*,*SMB Share Path*,*Report Name*, *Report Folder* (if not stored in the root of the share), *Not used*, *Report Type* (e.g. CSV Results), *Status* (Done, Requested)
-- A simple example below with 1 EMAIL alert and 1 SMB Alert.
-Alert_EMAIL_Stop,EMAIL,"martin@example.org","noc@example.org","Message Subject","Message Body",1,"CSV Results","Stop Requested"
-Alert_SMB_Done,SMB,"Cred_Storage_SMB","\\smbserver\share","%N_%CT%cZ","Reports",,"CSV Results","Done"
-
-**Note**: This script relies on credentials as/if specified in alerts.csv as well as a working SMTP server on the Greenbone primary server. If you're using SMB, create the required credentials first with the guarded native helper described below.
+Only EMAIL and SMB rows are retained. EMAIL notice values map as `0=include`,
+`1=simple`, and `2=attach`. SMB uses the resolved UP credential and the native
+default maximum protocol. Command output is deliberately redacted and does not
+show delivery addresses, SMB locations, credential references, request bodies,
+or local input paths.
 
 ## Native CSV schedule creation
 

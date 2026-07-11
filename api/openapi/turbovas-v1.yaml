@@ -1992,23 +1992,23 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: alert-email-create
-      x-turbovas-inherited-still-owns: alert-smb-create-gsa-ui-authoring-test-and-delivery-payload-mutations
+      x-turbovas-replaces: alert-email-smb-create
+      x-turbovas-inherited-still-owns: alert-other-methods-test-actions-and-delivery-payload-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: alert-delivery-control
-      summary: Create a task-status EMAIL alert
-      description: Creates one operator-owned EMAIL alert through gvmd's authoritative ACL, transactionally locked reference validation, transaction, and audit path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Recipient addresses, sender address, subject, credential and report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. SMB alert creation, GSA authoring UI, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
+      summary: Create a task-status EMAIL or SMB alert
+      description: Creates one operator-owned EMAIL or SMB alert through gvmd's authoritative ACL, transactionally locked reference validation, transaction, and audit path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, SMB paths, subjects, credential/report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Other alert methods, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AlertEmailCreateRequest'
+              $ref: '#/components/schemas/AlertCreateRequest'
       responses:
         '201':
-          description: EMAIL alert created; response contains redacted metadata only
+          description: EMAIL or SMB alert created; response contains redacted metadata only
           content:
             application/json:
               schema:
@@ -7598,7 +7598,7 @@ components:
           description: Non-secret credential-use port where the relationship records one.
     CredentialAsset:
       type: object
-      required: [id, name, owner, credential_type, allow_insecure, target_count, scanner_count, targets, scanners]
+      required: [id, name, owner_id, owner, credential_type, smb_compatible, allow_insecure, target_count, scanner_count, targets, scanners]
       properties:
         id:
           type: string
@@ -7607,11 +7607,19 @@ components:
           type: string
         comment:
           type: string
+        owner_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Owner identity used for exact operator-ownership preflight.
         owner:
           type: string
         credential_type:
           type: string
           description: Internal credential kind only; secret material is never returned by this native endpoint.
+        smb_compatible:
+          type: boolean
+          description: True only when this is a username/password credential whose stored login is non-empty and valid for inherited SMB delivery. The login and all other secret material remain write-only.
         allow_insecure:
           type: boolean
         target_count:
@@ -9722,12 +9730,24 @@ components:
         modified_at:
           type: string
           format: date-time
+    AlertCreateRequest:
+      oneOf:
+        - $ref: '#/components/schemas/AlertEmailCreateRequest'
+        - $ref: '#/components/schemas/AlertSmbCreateRequest'
+      discriminator:
+        propertyName: method
+        mapping:
+          EMAIL: '#/components/schemas/AlertEmailCreateRequest'
+          SMB: '#/components/schemas/AlertSmbCreateRequest'
     AlertEmailCreateRequest:
       type: object
       additionalProperties: false
-      required: [name, active, status, to_address, subject, notice]
+      required: [method, name, active, status, to_address, subject, notice]
       description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + EMAIL alert creation. Simple notices forbid report format and report config fields but may carry a plain-text message. Include and attach notices require a report format and may include a matching report config and message.
       properties:
+        method:
+          type: string
+          const: EMAIL
         name:
           type: string
           minLength: 1
@@ -9800,6 +9820,66 @@ components:
             notice:
               enum: [include, attach]
           required: [report_format_id]
+    AlertSmbCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [method, name, active, status, smb_credential_id, smb_share_path, smb_file_path, report_format_id]
+      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + SMB alert creation. The SMB credential, share path, file path, report format, optional matching report config, and optional maximum protocol are validated and persisted by gvmd; none is returned in native alert metadata.
+      properties:
+        method:
+          type: string
+          const: SMB
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+        smb_credential_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        smb_share_path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        smb_file_path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        report_format_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        report_config_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        smb_max_protocol:
+          type: string
+          enum: [default, NT1, SMB2, SMB3]
+          default: default
+          writeOnly: true
     AlertPatchRequest:
       type: object
       additionalProperties: false

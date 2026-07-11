@@ -146,7 +146,7 @@ Creates alerts as specified in a csv-file. See alerts.csv for file format/conten
 Alert_EMAIL_Stop,EMAIL,"martin@example.org","noc@example.org","Message Subject","Message Body",1,"CSV Results","Stop Requested"
 Alert_SMB_Done,SMB,"Cred_Storage_SMB","\\smbserver\share","%N_%CT%cZ","Reports",,"CSV Results","Done"
 
-**Note**: This script relies on credentials as/if specified in alerts.csv as well as a working SMTP server on the Greenbone primary server. If you're using SMB add the required credentials first using [create-credentials-from-csv.gmp.py](#create-credentials-from-csvgmppy).
+**Note**: This script relies on credentials as/if specified in alerts.csv as well as a working SMTP server on the Greenbone primary server. If you're using SMB, create the required credentials first with the guarded native helper described below.
 
 ## Native CSV schedule creation
 
@@ -177,16 +177,35 @@ iCalendar SHA-256 without printing calendar content. The command stops on the
 first failed PATCH; prior successes remain committed and it does not claim a
 rollback.
 
-## `create-credentials-from-csv.gmp.py`
+## Native CSV credential creation
 
-Creates credentials as specified in a csv-file. See credentials.csv for file format/contents.
+TurboVAS retired the inherited `create-credentials-from-csv.gmp.py` GMP
+script. Use `tools/turbovasctl native-credentials-from-csv --csv-file
+./credentials.csv` or `just native-credentials-from-csv -- --csv-file
+./credentials.csv`.
 
-### Example
+The default is an offline dry run: it structurally preflights the complete
+bounded document, including local SSH key files, and contacts no runtime. Add
+`--allow-write-control` to resolve all existing credential names and issue
+sequential native writes. The helper stops after the first failed write and
+does not attempt a rollback.
 
-`$ gvm-script --gmp-username *admin-user* --gmp-password *password* socket create-credentials-from-csv.gmp.py ./credentials.csv`
+The CSV is positional and has **no header row**. Because it contains secrets,
+it must be a private regular file with no group or world permissions. Retained
+rows are exactly:
 
-**Note**: create schedules, then credentials, then targets, then tasks and make sure to use the same names between the input csv-files.
-The sample files should serve as an example.
+```text
+name,UP,login,password
+name,SSH,login,passphrase,key-path
+```
+
+Only the exact `UP` and `SSH` labels are supported. Broken inherited
+`SNMP`/`ESX` branches and unknown labels are rejected. Relative key paths
+must stay within the CSV directory; keys must be private regular UTF-8 files.
+The helper never emits passwords, passphrases, private-key content, or local
+key paths in its findings. Authoritative SSH-key/passphrase validation still
+occurs inside `gvmd`; if a later row fails there, earlier successful rows remain
+committed and later rows are not attempted.
 
 ## CSV tag creation
 

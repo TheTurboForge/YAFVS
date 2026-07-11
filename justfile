@@ -69,6 +69,9 @@ native-targets-from-xml *args:
 native-tags-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tags-from-csv "$@"
 
+native-credentials-from-csv *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-credentials-from-csv "$@"
+
 native-api-migration-matrix *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-migration-matrix "$@"
 

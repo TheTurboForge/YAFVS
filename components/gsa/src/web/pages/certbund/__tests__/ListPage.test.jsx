@@ -117,7 +117,7 @@ afterEach(() => {
 });
 
 describe('CertBundPage tests', () => {
-  test('should render full CertBundPage without dashboard controls', async () => {
+  test('should render full CertBundPage', async () => {
     const gmp = createGmp();
     const {render, store} = rendererWith({
       gmp,
@@ -166,12 +166,6 @@ describe('CertBundPage tests', () => {
     expect(screen.getAllByTitle('Edit Filter')[0]).toBeInTheDocument();
     expect(select).toHaveAttribute('title', 'Loaded filter');
     expect(select).toHaveValue('--');
-    expect(
-      screen.queryByTitle('Add new Dashboard Display'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Reset to Defaults')).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
-
     const header = baseElement.querySelectorAll('th');
     expect(header[0]).toHaveTextContent('Name');
     expect(header[1]).toHaveTextContent('Title');

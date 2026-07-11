@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -63,8 +64,6 @@ interface EntitiesPageState {
 
 export interface EntitiesPageProps<TModel extends Model = Model, TProps = {}> {
   createFilterType: string;
-  dashboard?: () => React.ReactNode;
-  dashboardControls?: () => React.ReactNode;
   entities?: TModel[];
   entitiesCounts?: CollectionCounts;
   entitiesError?: Error;
@@ -100,8 +99,6 @@ interface EntitiesPagePropsWithHOCs<
 
 const excludeProps = [
   'children',
-  'dashboard',
-  'dashboardControls',
   'filterEditDialog',
   'filters',
   'powerfilter',
@@ -159,8 +156,7 @@ class EntitiesPage<
   }
 
   renderSection() {
-    const {entities, isLoading, sectionIcon, dashboard, dashboardControls} =
-      this.props;
+    const {entities, isLoading, sectionIcon} = this.props;
 
     let {section: SectionComponent = Section} = this.props;
 
@@ -168,18 +164,13 @@ class EntitiesPage<
       return null;
     }
 
-    const extra = isDefined(dashboardControls)
-      ? dashboardControls()
-      : undefined;
     return (
       <SectionComponent
         className="entities-section"
-        extra={extra}
         img={sectionIcon}
         title={this.getSectionTitle()}
       >
         <Layout flex="column" grow="1">
-          {isDefined(dashboard) && dashboard()}
           {isLoading && !isDefined(entities) ? <Loading /> : this.renderTable()}
         </Layout>
       </SectionComponent>

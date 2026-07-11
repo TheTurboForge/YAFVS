@@ -10,15 +10,12 @@ import FeedStatusCommand, {
   FEED_COMMUNITY,
   feedStatusRejection,
   FEED_ENTERPRISE,
-  type FeedStatusElement,
 } from 'gmp/commands/feed-status';
 import {
   createPlainResponse,
-  createResponse,
   createHttp,
   createHttpError,
 } from 'gmp/commands/testing';
-import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
 import logger from 'gmp/log';
 
@@ -156,32 +153,6 @@ describe('FeedStatusCommand tests', () => {
     await expect(cmd.checkFeedSync()).rejects.toThrow('Network error');
   });
 
-  test('should return feed owner and permissions when checking feed', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed_owner_set: 0,
-          feed_resources_access: 1,
-          feed: [],
-        },
-      },
-    });
-
-    const fakeHttp = createHttp(response);
-    const cmd = new FeedStatusCommand(fakeHttp);
-
-    const result = await cmd.checkFeedOwnerAndPermissions();
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_feeds',
-      },
-    });
-
-    expect(result.isFeedOwnerSet).toBe(false);
-    expect(result.isFeedResourcesAccess).toBe(true);
-  });
-
   test('should log an error when checkFeedSync fails', async () => {
     const log = logger.getLogger('gmp.commands.feedstatus');
     log.error = testing.fn();
@@ -261,62 +232,15 @@ describe('FeedStatusCommand tests', () => {
 
 describe('feedStatusRejection tests', () => {
   test('should pass rejection for non 404 errors', async () => {
-    const gmpHttp = {} as Http;
     const xhr = {
       status: 500,
     } as XMLHttpRequest;
     const rejection = new ResponseRejection(xhr, 'Internal Server Error');
-    await expect(feedStatusRejection(gmpHttp, rejection)).rejects.toThrow();
+    await expect(feedStatusRejection(rejection)).rejects.toThrow();
     expect(rejection.message).toEqual('Internal Server Error');
   });
 
-  test('should detect feed owner not set', async () => {
-    const response = createResponse({
-      get_feeds: {
-        get_feeds_response: {},
-      },
-    });
-    const gmpHttp = createHttp(response);
-    const xhr = {
-      status: 404,
-    } as XMLHttpRequest;
-    const rejection = new ResponseRejection(xhr, 'Some Message');
-
-    await expect(feedStatusRejection(gmpHttp, rejection)).rejects.toThrow();
-    expect(rejection.message).toEqual(
-      'The feed owner is currently not set. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    );
-  });
-
-  test('should detect feed resources access restricted', async () => {
-    const response = createResponse({
-      get_feeds: {
-        get_feeds_response: {feed_owner_set: 1},
-      },
-    });
-    const gmpHttp = createHttp(response);
-    const xhr = {
-      status: 404,
-    } as XMLHttpRequest;
-    const rejection = new ResponseRejection(xhr, 'Some Message');
-
-    await expect(feedStatusRejection(gmpHttp, rejection)).rejects.toThrow();
-    expect(rejection.message).toEqual(
-      'Access to the feed resources is currently restricted. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    );
-  });
-
   test('should detect missing port list', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed_owner_set: 1,
-          feed_resources_access: 1,
-          feed: [],
-        },
-      },
-    });
-    const gmpHttp = createHttp(response);
     const xhr = {
       status: 404,
     } as XMLHttpRequest;
@@ -325,29 +249,19 @@ describe('feedStatusRejection tests', () => {
       'Failed to find port_list XYZ',
     );
 
-    await expect(feedStatusRejection(gmpHttp, rejection)).rejects.toThrow();
+    await expect(feedStatusRejection(rejection)).rejects.toThrow();
     expect(rejection.message).toEqual(
       'Failed to create a new Target because the default Port List is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     );
   });
 
   test('should detect missing scan config', async () => {
-    const response = createResponse<FeedStatusElement>({
-      get_feeds: {
-        get_feeds_response: {
-          feed_owner_set: 1,
-          feed_resources_access: 1,
-          feed: [],
-        },
-      },
-    });
-    const gmpHttp = createHttp(response);
     const xhr = {
       status: 404,
     } as XMLHttpRequest;
     const rejection = new ResponseRejection(xhr, 'Failed to find config XYZ');
 
-    await expect(feedStatusRejection(gmpHttp, rejection)).rejects.toThrow();
+    await expect(feedStatusRejection(rejection)).rejects.toThrow();
     expect(rejection.message).toEqual(
       'Failed to create a new Task because the default Scan Config is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     );

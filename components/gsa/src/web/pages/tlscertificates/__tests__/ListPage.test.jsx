@@ -182,11 +182,6 @@ describe('TlsCertificatePage tests', () => {
     expect(select).toHaveAttribute('title', 'Loaded filter');
     expect(select).toHaveValue('--');
 
-    // Dashboard
-    expect(screen.queryByTitle('Add new Dashboard Display')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Reset to Defaults')).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
-
     // Table
     expect(header[0]).toHaveTextContent('Subject DN');
     expect(header[1]).toHaveTextContent('Serial');

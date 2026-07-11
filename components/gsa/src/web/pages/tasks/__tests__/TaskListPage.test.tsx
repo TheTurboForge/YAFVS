@@ -240,13 +240,6 @@ describe('TaskListPage tests', () => {
     expect(select).toHaveAttribute('title', 'Loaded filter');
     expect(select).toHaveValue('--');
 
-    // Dashboard
-    expect(
-      screen.queryByTestId('add-dashboard-display'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTestId('reset-dashboard')).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
-
     // Table
     const table = screen.getByTestId('entities-table');
     const header = within(table).getAllByRole('columnheader');

@@ -83,13 +83,6 @@ const createGmp = ({
       },
     }),
   ),
-  getDashboardSetting = testing.fn().mockResolvedValue({
-    data: [],
-    meta: {
-      filter: Filter.fromString(),
-      counts: new CollectionCounts(),
-    },
-  }),
   getAggregates = testing.fn().mockResolvedValue({
     data: [],
     meta: {
@@ -148,9 +141,6 @@ const createGmp = ({
   }
   return {
     buildUrl: resolvedBuildUrl,
-    dashboard: {
-      getSetting: getDashboardSetting,
-    },
     cpes: {
       get: getCpes,
       getSeverityAggregates: getAggregates,
@@ -230,12 +220,6 @@ describe('CpesPage tests', () => {
     expect(screen.getAllByTitle('Edit Filter')[0]).toBeInTheDocument();
     expect(select).toHaveValue('--');
     expect(select).toHaveAttribute('title', 'Loaded filter');
-    expect(
-      screen.queryByTitle('Add new Dashboard Display'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Reset to Defaults')).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
-
     // Table
     const table = screen.queryTable();
     const header = table.querySelectorAll('th');

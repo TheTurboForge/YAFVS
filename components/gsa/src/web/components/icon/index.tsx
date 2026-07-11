@@ -10,7 +10,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  BarChart3,
   Calendar,
   ChevronFirst,
   ChevronLast,
@@ -197,7 +196,6 @@ const getIcons = (): Record<string, IconComponent> => {
     ArrowUp: createIcon(ArrowUp, 'arrow-up-icon', 'Arrow Up Icon'),
     Calendar: createIcon(Calendar, 'calendar-icon', 'Calendar Icon'),
     KeyRound: createIcon(KeyRound, 'credential-icon', 'Credential Icon'),
-    BarChart3: createIcon(BarChart3, 'dashboard-icon', 'Dashboard Icon'),
     Trash2: createIcon(Trash2, 'trashcan-icon', 'Delete Icon'),
     Disabled: createIcon(PowerOff, 'disable-icon', 'Disable Icon'),
     ZoomIn: createIcon(ZoomIn, 'details-icon', 'Details Icon'),
@@ -413,7 +411,6 @@ export const AlterableIcon = getIcons().Alterable;
 export const ArrowDownIcon = getIcons().ArrowDown;
 export const ArrowUpIcon = getIcons().ArrowUp;
 export const ArrowUpDownIcon = getIcons().ArrowUpDown;
-export const DashboardIcon = getIcons().BarChart3;
 export const CalendarIcon = getIcons().Calendar;
 export const CertBundAdvIcon = getIcons().CertBundAdv;
 export const FirstIcon = getIcons().ChevronFirst;

@@ -27,7 +27,6 @@ import CredentialStoresCommand from 'gmp/commands/credential-stores';
 import CredentialsCommand from 'gmp/commands/credentials';
 import CveCommand from 'gmp/commands/cve';
 import CvesCommand from 'gmp/commands/cves';
-import DashboardCommand from 'gmp/commands/dashboards';
 import DfnCertAdvisoriesCommand from 'gmp/commands/dfn-cert-advisories';
 import DfnCertAdvisoryCommand from 'gmp/commands/dfn-cert-advisory';
 import FeedStatusCommand from 'gmp/commands/feed-status';
@@ -94,7 +93,6 @@ class Gmp {
   public readonly credentialstores: CredentialStoresCommand;
   public readonly cve: CveCommand;
   public readonly cves: CvesCommand;
-  public readonly dashboard: DashboardCommand;
   public readonly dfncert: DfnCertAdvisoryCommand;
   public readonly dfncerts: DfnCertAdvisoriesCommand;
   public readonly feedstatus: FeedStatusCommand;
@@ -166,7 +164,6 @@ class Gmp {
     this.credentialstores = new CredentialStoresCommand(this.http);
     this.cve = new CveCommand(this.http);
     this.cves = new CvesCommand(this.http);
-    this.dashboard = new DashboardCommand(this.http);
     this.dfncert = new DfnCertAdvisoryCommand(this.http);
     this.dfncerts = new DfnCertAdvisoriesCommand(this.http);
     this.feedstatus = new FeedStatusCommand(this.http);

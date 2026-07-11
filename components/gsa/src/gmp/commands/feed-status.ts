@@ -7,12 +7,11 @@
 import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
-import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import {buildServerUrl} from 'gmp/http/utils';
 import _ from 'gmp/locale';
 import logger from 'gmp/log';
 import date from 'gmp/models/date';
-import {parseBoolean, parseDate, type YesNo} from 'gmp/parser';
+import {parseDate} from 'gmp/parser';
 import {map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
 
@@ -45,16 +44,6 @@ interface NativeFeedInventory {
   items?: FeedElement[];
 }
 
-export interface FeedStatusElement extends XmlResponseData {
-  get_feeds: {
-    get_feeds_response: {
-      feed: FeedElement | FeedElement[];
-      feed_owner_set?: YesNo;
-      feed_resources_access?: YesNo;
-    };
-  };
-}
-
 const log = logger.getLogger('gmp.commands.feedstatus');
 
 export const NVT_FEED = 'NVT';
@@ -84,26 +73,12 @@ export function createFeed(feed: FeedElement): Feed {
   };
 }
 
-export const feedStatusRejection = async (
-  http: Http,
-  rejection: Error,
-): Promise<never> => {
+export const feedStatusRejection = async (rejection: Error): Promise<never> => {
   if (rejection instanceof ResponseRejection && rejection.status === 404) {
-    const feedStatus = new FeedStatusCommand(http);
-    const {isFeedOwnerSet, isFeedResourcesAccess} =
-      await feedStatus.checkFeedOwnerAndPermissions();
     const syncMessage = _(
       'This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     );
-    if (!isFeedOwnerSet) {
-      rejection.setMessage(
-        `${_('The feed owner is currently not set.')} ${syncMessage}`,
-      );
-    } else if (!isFeedResourcesAccess) {
-      rejection.setMessage(
-        `${_('Access to the feed resources is currently restricted.')} ${syncMessage}`,
-      );
-    } else if (rejection.message.includes('Failed to find port_list')) {
+    if (rejection.message.includes('Failed to find port_list')) {
       rejection.setMessage(
         `${_('Failed to create a new Target because the default Port List is not available.')} ${syncMessage}`,
       );
@@ -118,7 +93,7 @@ export const feedStatusRejection = async (
 
 class FeedStatusCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, {cmd: 'get_feeds'});
+    super(http);
   }
 
   async readFeedInformation() {
@@ -138,12 +113,6 @@ class FeedStatusCommand extends HttpCommand {
     const payload = JSON.parse(response.data) as NativeFeedInventory;
     const feeds = map(payload.items ?? [], feed => createFeed(feed));
     return response.setData(feeds);
-  }
-
-  private readInheritedFeedOwnerAndPermissions() {
-    // Feed owner/resource-access flags are still inherited GMP compatibility
-    // data used only to improve target/task creation rejection messages.
-    return this.httpGetWithTransform();
   }
 
   /**
@@ -166,40 +135,6 @@ class FeedStatusCommand extends HttpCommand {
       };
     } catch (error) {
       log.error('Error checking if feed is syncing:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Checks if the current user is the owner of the feed and if they have access to feed resources.
-   *
-   * @async
-   * @returns An object containing two boolean properties:
-   * - `isFeedOwner`: Indicates if the user is the owner of the feed.
-   * - `isFeedResourcesAccess`: Indicates if the user has access to feed resources.
-   * @throws Will throw an error if the HTTP request fails.
-   */
-  async checkFeedOwnerAndPermissions() {
-    try {
-      const response = await this.readInheritedFeedOwnerAndPermissions();
-      const data = response.data as FeedStatusElement;
-      const isFeedOwnerSet = parseBoolean(
-        data.get_feeds.get_feeds_response.feed_owner_set,
-      );
-      const isFeedResourcesAccess = parseBoolean(
-        data.get_feeds.get_feeds_response.feed_resources_access,
-      );
-
-      log.debug('Checking feed owner and permissions...', {
-        isFeedOwnerSet,
-        isFeedResourcesAccess,
-      });
-      return {
-        isFeedOwnerSet,
-        isFeedResourcesAccess,
-      };
-    } catch (error) {
-      log.error('Error checking feed owner and permissions:', error);
       throw error;
     }
   }

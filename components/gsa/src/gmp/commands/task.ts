@@ -225,7 +225,7 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     try {
       return await this.entityAction(data);
     } catch (error_) {
-      await feedStatusRejection(this.http, error_ as ResponseRejection);
+      await feedStatusRejection(error_ as ResponseRejection);
       throw error_;
     }
   }
@@ -284,7 +284,7 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
     try {
       await this.httpPostWithTransform(data);
     } catch (rejection) {
-      await feedStatusRejection(this.http, rejection as ResponseRejection);
+      await feedStatusRejection(rejection as ResponseRejection);
     }
   }
 

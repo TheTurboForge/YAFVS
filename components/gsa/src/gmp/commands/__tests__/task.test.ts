@@ -504,56 +504,27 @@ describe('TaskCommand tests', () => {
 
   test.each([
     {
-      name: 'resource restricted',
-      feedsResponse: {feed_owner_set: 1},
-      message: 'Some Error',
-      expectedMessage:
-        'Access to the feed resources is currently restricted. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-    {
-      name: 'feed owner not set',
-      feedsResponse: {feed_owner_set: 0},
-      message: 'Some Error',
-      expectedMessage:
-        'The feed owner is currently not set. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-    {
       name: 'missing port list',
       message: 'Failed to find port_list XYZ',
-      feedsResponse: {
-        feed_owner_set: 1,
-        feed_resources_access: 1,
-      },
       expectedMessage:
         'Failed to create a new Target because the default Port List is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     },
     {
       name: 'missing scan config',
       message: 'Failed to find config XYZ',
-      feedsResponse: {
-        feed_owner_set: 1,
-        feed_resources_access: 1,
-      },
       expectedMessage:
         'Failed to create a new Task because the default Scan Config is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     },
   ])(
     'should not create new task while feed is not available: $name',
-    async ({feedsResponse, message, expectedMessage}) => {
+    async ({message, expectedMessage}) => {
       const xhr = {
         status: 404,
       } as XMLHttpRequest;
       const rejection = new ResponseRejection(xhr, message);
-      const feedStatusResponse = createResponse({
-        get_feeds: {
-          get_feeds_response: feedsResponse,
-        },
-      });
+      const request = testing.fn().mockRejectedValue(rejection);
       const fakeHttp = {
-        request: testing
-          .fn()
-          .mockRejectedValueOnce(rejection)
-          .mockResolvedValueOnce(feedStatusResponse),
+        request,
       } as unknown as Http;
 
       const cmd = new TaskCommand(fakeHttp);
@@ -572,6 +543,7 @@ describe('TaskCommand tests', () => {
           csAllowFailedRetrieval: true,
         }),
       ).rejects.toThrow(expectedMessage);
+      expect(request).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -701,56 +673,27 @@ describe('TaskCommand tests', () => {
 
   test.each([
     {
-      name: 'resource restricted',
-      feedsResponse: {feed_owner_set: 1},
-      message: 'Some Error',
-      expectedMessage:
-        'Access to the feed resources is currently restricted. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-    {
-      name: 'feed owner not set',
-      feedsResponse: {feed_owner_set: 0},
-      message: 'Some Error',
-      expectedMessage:
-        'The feed owner is currently not set. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-    {
       name: 'missing port list',
       message: 'Failed to find port_list XYZ',
-      feedsResponse: {
-        feed_owner_set: 1,
-        feed_resources_access: 1,
-      },
       expectedMessage:
         'Failed to create a new Target because the default Port List is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     },
     {
       name: 'missing scan config',
       message: 'Failed to find config XYZ',
-      feedsResponse: {
-        feed_owner_set: 1,
-        feed_resources_access: 1,
-      },
       expectedMessage:
         'Failed to create a new Task because the default Scan Config is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
     },
   ])(
     'should not save task while feed is not available: $name',
-    async ({feedsResponse, message, expectedMessage}) => {
+    async ({message, expectedMessage}) => {
       const xhr = {
         status: 404,
       };
       const rejection = new ResponseRejection(xhr as XMLHttpRequest, message);
-      const feedStatusResponse = createResponse({
-        get_feeds: {
-          get_feeds_response: feedsResponse,
-        },
-      });
+      const request = testing.fn().mockRejectedValue(rejection);
       const fakeHttp = {
-        request: testing
-          .fn()
-          .mockRejectedValueOnce(rejection)
-          .mockResolvedValueOnce(feedStatusResponse),
+        request,
       } as unknown as Http;
 
       const cmd = new TaskCommand(fakeHttp);
@@ -766,6 +709,7 @@ describe('TaskCommand tests', () => {
           csAllowFailedRetrieval: true,
         }),
       ).rejects.toThrow(expectedMessage);
+      expect(request).toHaveBeenCalledTimes(1);
     },
   );
 

@@ -578,7 +578,7 @@ class TargetCommand extends EntityCommand<Target> {
         hosts_filter: filterString(hostsFilter),
       });
     } catch (rejection) {
-      await feedStatusRejection(this.http, rejection as Error);
+      await feedStatusRejection(rejection as Error);
       // never reached because feedStatusRejection always throws. just to satisfy TS
       throw rejection;
     }
@@ -647,7 +647,7 @@ class TargetCommand extends EntityCommand<Target> {
         target_exclude_source: targetExcludeSource,
       });
     } catch (rejection) {
-      await feedStatusRejection(this.http, rejection as Error);
+      await feedStatusRejection(rejection as Error);
       // never reached because feedStatusRejection always throws. just to satisfy TS
       throw rejection;
     }

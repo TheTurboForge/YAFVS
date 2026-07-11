@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -7,7 +8,6 @@ import {useState} from 'react';
 import {PointerActivationConstraints} from '@dnd-kit/dom';
 import {DragDropProvider, KeyboardSensor, PointerSensor} from '@dnd-kit/react';
 import {v4 as uuid} from 'uuid';
-import {DEFAULT_ROW_HEIGHT} from 'gmp/commands/dashboards';
 import {isDefined} from 'gmp/utils/identity';
 import AutoSize from 'web/components/layout/AutoSize';
 import Layout from 'web/components/layout/Layout';
@@ -15,6 +15,8 @@ import EmptyRow from 'web/components/sortable/EmptyRow';
 import Item, {GRID_ITEM_MARGIN} from 'web/components/sortable/Item';
 import Row from 'web/components/sortable/Row';
 import PropTypes from 'web/utils/PropTypes';
+
+const DEFAULT_ROW_HEIGHT = 250;
 
 const createNewRow = item => ({
   id: uuid(),

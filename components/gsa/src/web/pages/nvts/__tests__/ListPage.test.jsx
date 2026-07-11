@@ -102,13 +102,6 @@ const createGmp = ({
   getSetting = testing.fn().mockResolvedValue({
     filter: null,
   }),
-  getDashboardSetting = testing.fn().mockResolvedValue({
-    data: [],
-    meta: {
-      filter: Filter.fromString(),
-      counts: new CollectionCounts(),
-    },
-  }),
   getAggregates = testing.fn().mockResolvedValue({
     data: [],
     meta: {
@@ -175,9 +168,6 @@ const createGmp = ({
   }
   return {
     buildUrl: resolvedBuildUrl,
-    dashboard: {
-      getSetting: getDashboardSetting,
-    },
     nvts: {
       get: getNvts,
       getFamilyAggregates: getAggregates,
@@ -261,12 +251,6 @@ describe('NvtsPage tests', () => {
     expect(screen.getAllByTitle('Edit Filter')[0]).toBeInTheDocument();
     expect(select).toHaveAttribute('title', 'Loaded filter');
     expect(select).toHaveValue('--');
-    expect(
-      screen.queryByTitle('Add new Dashboard Display'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Reset to Defaults')).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId('grid-item')).toHaveLength(0);
-
     // Table
     const header = baseElement.querySelectorAll('th');
 

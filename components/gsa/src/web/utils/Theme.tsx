@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -71,7 +72,7 @@ const Theme: ThemeInterface = {
 
   /* source own */
   white: '#fff',
-  dialogGray: '#f3f3f3', // used by: dialog and dashboard display backgrounds
+  dialogGray: '#f3f3f3', // used by: dialog backgrounds
   inputBorderGray: '#bfbfbf', // used by: form field, (Multi-)Select, ProgressBar
   black: '#000',
   loginButtonGray: '#4c4c4d', // used by: login button
@@ -88,7 +89,7 @@ const Theme: ThemeInterface = {
   complianceIncomplete: 'orange',
   complianceUndefined: 'silver',
 
-  lightBlue: '#d6e6fd', // used by InfoPanel and dashboard hovering
+  lightBlue: '#d6e6fd', // used by InfoPanel hovering
   mediumBlue: '#77acf7', // used by active/hovered items in Select
   blue: '#0a53b8', // used by: links
   severityLowBlue: '#4f91c7', // used by: progressbar

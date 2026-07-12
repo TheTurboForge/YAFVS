@@ -2307,7 +2307,11 @@ class TurboVASCtlTests(unittest.TestCase):
         product_residue = details["product_workflow_residue"]
         residue_count = sum(item["count"] for item in product_residue.values())
         self.assertEqual(residue_count, details["by_category"]["product_workflow"]["count"])
-        self.assertGreater(product_residue["compatibility-parser-model-or-test"]["count"], 0)
+        self.assertNotIn("compatibility-parser-model-or-test", product_residue)
+        self.assertIn(
+            "components/gsa/src/gmp/locale/date.ts",
+            details["by_category"]["compatibility_bridge"]["paths"],
+        )
         self.assertGreater(product_residue["alert-delivery-and-credentials"]["count"], 0)
         self.assertGreater(product_residue["task-target-scan-control-or-credential"]["count"], 0)
         self.assertNotIn("scope-report-generation", product_residue)
@@ -10266,6 +10270,9 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_browser_smoke.py")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("tools/tests/test_turbovasctl.py")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/scopes.ts")[0], "product_workflow")
+        self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/locale/date.ts")[0], "compatibility_bridge")
+        self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/http/transform/xml.ts")[0], "compatibility_bridge")
+        self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/__tests__/scanner.test.ts")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/__tests__/gmp.test.ts")[0], "compatibility_bridge")
         self.assertIsNone(turbovasctl.native_tooling_category("components/gsa/src/gmp/native-api/tags.ts"))
         self.assertFalse(turbovasctl.native_tooling_scan_candidate("components/gsa/src/gmp/native-api/tags.ts"))

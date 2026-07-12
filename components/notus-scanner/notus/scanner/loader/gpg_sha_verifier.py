@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import hashlib
@@ -62,10 +63,8 @@ def reload_sha256sums(
         config.gpg = __default_gpg_home()
 
     def create_hash(file: Path) -> str:
-        # we just use the hash to identify we have to reload the sha256sums
-        # therefore a collision is not the end of the world and sha1 is more
-        # than sufficient
-        hasher = hashlib.sha1()
+        # Align cache identity with the signed manifest's payload digest.
+        hasher = hashlib.sha256()
         with file.open(mode="rb") as f:
             for hash_file_bytes in iter(lambda: f.read(1024), b""):
                 hasher.update(hash_file_bytes)

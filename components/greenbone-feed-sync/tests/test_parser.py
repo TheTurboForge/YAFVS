@@ -196,6 +196,8 @@ class CliParserTestCase(unittest.TestCase):
             args.compression_level, DEFAULT_RSYNC_COMPRESSION_LEVEL
         )
         self.assertIsNone(args.private_directory)
+        self.assertIsNone(args.ssh_key)
+        self.assertIsNone(args.ssh_known_hosts)
         self.assertIsNone(args.verbose)
         self.assertFalse(args.fail_fast)
         self.assertIsNone(args.rsync_timeout)
@@ -258,6 +260,21 @@ class CliParserTestCase(unittest.TestCase):
         parser = CliParser()
         args = parser.parse_arguments(["--private-directory", "foobar"])
         self.assertEqual(args.private_directory, Path("foobar"))
+
+    def test_ssh_trust_paths(self):
+        parser = CliParser()
+        args = parser.parse_arguments(
+            [
+                "--ssh-key",
+                "/run/secrets/feed-key",
+                "--ssh-known-hosts",
+                "/etc/turbovas/feed-known-hosts",
+            ]
+        )
+        self.assertEqual(args.ssh_key, Path("/run/secrets/feed-key"))
+        self.assertEqual(
+            args.ssh_known_hosts, Path("/etc/turbovas/feed-known-hosts")
+        )
 
     def test_compression_level(self):
         parser = CliParser()
@@ -465,6 +482,8 @@ class CliParserTestCase(unittest.TestCase):
 verbose = 3
 feed-url = "rsync://foo.bar"
 destination-prefix = "/usr/lib"
+ssh-key = "/run/secrets/feed-key"
+ssh-known-hosts = "/etc/turbovas/feed-known-hosts"
 """
         path_mock_instance = path_mock.return_value
         path_mock_instance.absolute.return_value = "/foo/bar/foo.toml"
@@ -479,6 +498,10 @@ destination-prefix = "/usr/lib"
         self.assertEqual(args.verbose, 3)
         self.assertEqual(args.feed_url, "rsync://foo.bar")
         self.assertEqual(args.destination_prefix, Path("/usr/lib"))
+        self.assertEqual(args.ssh_key, Path("/run/secrets/feed-key"))
+        self.assertEqual(
+            args.ssh_known_hosts, Path("/etc/turbovas/feed-known-hosts")
+        )
 
     @patch("greenbone.feed.sync.parser.Path")
     def test_load_from_default_config(self, path_mock: MagicMock):
@@ -509,6 +532,8 @@ destination-prefix = "/usr/lib"
             "GREENBONE_FEED_SYNC_DESTINATION_PREFIX": "/usr/lib",
             "GREENBONE_FEED_SYNC_URL": "rsync://foo.bar",
             "GREENBONE_FEED_SYNC_VERBOSE": "3",
+            "GREENBONE_FEED_SYNC_SSH_KEY": "/run/secrets/feed-key",
+            "GREENBONE_FEED_SYNC_SSH_KNOWN_HOSTS": "/etc/turbovas/feed-known-hosts",
         },
     )
     def test_from_environment(self):
@@ -518,6 +543,10 @@ destination-prefix = "/usr/lib"
         self.assertEqual(args.verbose, 3)
         self.assertEqual(args.feed_url, "rsync://foo.bar")
         self.assertEqual(args.destination_prefix, Path("/usr/lib"))
+        self.assertEqual(args.ssh_key, Path("/run/secrets/feed-key"))
+        self.assertEqual(
+            args.ssh_known_hosts, Path("/etc/turbovas/feed-known-hosts")
+        )
 
     @patch.dict(
         "os.environ",

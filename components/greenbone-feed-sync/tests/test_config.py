@@ -31,7 +31,7 @@ class ConfigTestCase(unittest.TestCase):
     def test_defaults(self):
         values = Config.load()
 
-        self.assertEqual(len(values), 30)
+        self.assertEqual(len(values), 32)
         self.assertEqual(
             values["destination-prefix"], Path(DEFAULT_DESTINATION_PREFIX)
         )
@@ -126,6 +126,8 @@ class ConfigTestCase(unittest.TestCase):
             values["compression-level"], DEFAULT_RSYNC_COMPRESSION_LEVEL
         )
         self.assertIsNone(values["private-directory"])
+        self.assertIsNone(values["ssh-key"])
+        self.assertIsNone(values["ssh-known-hosts"])
         self.assertIsNone(values["verbose"])
         self.assertFalse(values["fail-fast"])
         self.assertIsNone(values["rsync-timeout"])

@@ -101,6 +101,17 @@ class CliParser:
             choices=range(0, 10),
             help="Rsync compression level (0-9). (Default: %(default)s)",
         )
+        ssh_group = parser.add_argument_group("private SSH transport")
+        ssh_group.add_argument(
+            "--ssh-key",
+            type=Path,
+            help="Absolute path to the private key required by explicit SSH feed URLs.",
+        )
+        ssh_group.add_argument(
+            "--ssh-known-hosts",
+            type=Path,
+            help="Absolute path to pinned known-hosts data required by explicit SSH feed URLs. SSH URLs without a port use compatibility port 24.",
+        )
         parser.add_argument(
             "--type",
             choices=[
@@ -266,8 +277,9 @@ class CliParser:
             "--rsync-timeout",
             type=int,
             help="Maximum I/O timeout in seconds used for rsync. If no data is "
-            "transferred for the specified time then rsync will exit. By "
-            "default no timeout is set and the rsync default will be used.",
+            "transferred for the specified time then rsync will exit. Valid "
+            "values are 0 through 86400; 0 disables the timeout. By default "
+            "the rsync default is used.",
         )
 
         permissions_group = parser.add_argument_group()

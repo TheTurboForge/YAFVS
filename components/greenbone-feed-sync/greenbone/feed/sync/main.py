@@ -99,13 +99,24 @@ async def feed_sync(console: Console, error_console: Console) -> int:
                 f"Running as root. Switching to user '{args.user}' and "
                 f"group '{args.group}'."
             )
-            change_user_and_group(args.user, args.group)
+        change_user_and_group(args.user, args.group)
 
-    rsync = Rsync(
-        private_subdir=args.private_directory,
-        verbose=verbose >= 3,
-        compression_level=args.compression_level,
-    )
+    if args.ssh_key is None and args.ssh_known_hosts is None:
+        rsync = Rsync(
+            private_subdir=args.private_directory,
+            verbose=verbose >= 3,
+            compression_level=args.compression_level,
+            timeout=args.rsync_timeout,
+        )
+    else:
+        rsync = Rsync(
+            private_subdir=args.private_directory,
+            verbose=verbose >= 3,
+            compression_level=args.compression_level,
+            timeout=args.rsync_timeout,
+            ssh_key=args.ssh_key,
+            ssh_known_hosts=args.ssh_known_hosts,
+        )
 
     openvas_syncs = filter_syncs(
         args.openvas_lock_file,
@@ -167,48 +178,55 @@ async def feed_sync(console: Console, error_console: Console) -> int:
     has_error = False
     wait_interval = None if args.no_wait else args.wait_interval
 
-    for sync_list in (openvas_syncs, gvmd_syncs):
-        if not sync_list.syncs:
-            continue
-
-        async with flock_wait(
-            sync_list.lock_file,
-            console=console if verbose else None,
-            wait_interval=wait_interval,
-        ):
+    try:
+        for sync_list in (openvas_syncs, gvmd_syncs):
             for sync in sync_list.syncs:
-                try:
-                    rsync_coro = rsync.sync(
-                        url=sync.url, destination=sync.destination
-                    )
-                    if verbose >= 3:
-                        console.print(
-                            f"Downloading {sync.name} from {sync.url} to "
-                            f"{sync.destination}"
+                rsync.validate_url(sync.url)
+
+        for sync_list in (openvas_syncs, gvmd_syncs):
+            if not sync_list.syncs:
+                continue
+
+            async with flock_wait(
+                sync_list.lock_file,
+                console=console if verbose else None,
+                wait_interval=wait_interval,
+            ):
+                for sync in sync_list.syncs:
+                    try:
+                        rsync_coro = rsync.sync(
+                            url=sync.url, destination=sync.destination
                         )
-                        await rsync_coro
-                        # add newline after rsync
-                        console.print()
-                    elif verbose >= 1:
-                        with Spinner(
-                            console,
-                            f"Downloading {sync.name} from {sync.url} to "
-                            f"{sync.destination}",
-                        ):
+                        if verbose >= 3:
+                            console.print(
+                                f"Downloading {sync.name} from {sync.url} to "
+                                f"{sync.destination}"
+                            )
                             await rsync_coro
-                    else:
-                        await rsync_coro
-                except RsyncError as e:
-                    has_error = True
-                    error_console.print(e.stderr)
-                    if args.fail_fast:
-                        return 1
+                            # add newline after rsync
+                            console.print()
+                        elif verbose >= 1:
+                            with Spinner(
+                                console,
+                                f"Downloading {sync.name} from {sync.url} to "
+                                f"{sync.destination}",
+                            ):
+                                await rsync_coro
+                        else:
+                            await rsync_coro
+                    except RsyncError as e:
+                        has_error = True
+                        error_console.print(e.stderr)
+                        if args.fail_fast:
+                            return 1
 
-        if verbose >= 2:
-            # add newline for grouping lock
-            console.print()
+            if verbose >= 2:
+                # add newline for grouping lock
+                console.print()
 
-    return 1 if has_error else 0
+        return 1 if has_error else 0
+    finally:
+        rsync.close()
 
 
 def main() -> NoReturn:

@@ -143,6 +143,10 @@ _SETTINGS = (
     Setting(
         "private-directory", "GREENBONE_FEED_SYNC_PRIVATE_DIRECTORY", None, Path
     ),
+    Setting("ssh-key", "GREENBONE_FEED_SYNC_SSH_KEY", None, Path),
+    Setting(
+        "ssh-known-hosts", "GREENBONE_FEED_SYNC_SSH_KNOWN_HOSTS", None, Path
+    ),
     Setting("verbose", "GREENBONE_FEED_SYNC_VERBOSE", None, int),
     Setting("fail-fast", "GREENBONE_FEED_SYNC_FAIL_FAST", False, bool),
     Setting("rsync-timeout", "GREENBONE_FEED_SYNC_RSYNC_TIMEOUT", None, int),

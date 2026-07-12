@@ -28,6 +28,8 @@ and types.
   - [config](#config)
   - [private-directory](#private-directory)
   - [compression-level](#compression-level)
+  - [ssh-key](#ssh-key)
+  - [ssh-known-hosts](#ssh-known-hosts)
   - [type](#type)
   - [feed-url](#feed-url)
   - [feed-release](#feed-release)
@@ -268,6 +270,51 @@ is only required for experts and testing purposes.
 | Default Value        | 9                                                                       |
 | Description          | rsync compression level 0-9. (0 - no compression, 9 - high compression) |
 
+### ssh-key
+
+| Name                 | Value                                                        |
+| -------------------- | ------------------------------------------------------------ |
+| CLI Argument         | `--ssh-key`                                                  |
+| Config Variable      | ssh-key                                                      |
+| Environment Variable | `GREENBONE_FEED_SYNC_SSH_KEY`                                |
+| Default Value        |                                                              |
+| Description          | Absolute path to the private key required by SSH feed URLs.  |
+
+### ssh-known-hosts
+
+| Name                 | Value                                                                  |
+| -------------------- | ---------------------------------------------------------------------- |
+| CLI Argument         | `--ssh-known-hosts`                                                    |
+| Config Variable      | ssh-known-hosts                                                        |
+| Environment Variable | `GREENBONE_FEED_SYNC_SSH_KNOWN_HOSTS`                                  |
+| Default Value        |                                                                        |
+| Description          | Absolute path to pinned known-hosts data required by SSH feed URLs.    |
+
+SSH feed transport accepts explicit `ssh://user@host/path` URLs only when both
+files are configured. If the URL omits a port, the inherited compatibility
+default is port 24.
+
+Trust files must be non-empty regular files owned by root or the effective
+user. Their full parent chain must have a safe owner and no group/world write
+permissions. The one exception is a root-owned sticky directory such as
+`/tmp`, where sticky-bit ownership rules prevent another user from replacing
+an effective-user-owned entry. Files are opened with no-follow,
+descriptor-relative traversal and copied into a process-private stable
+snapshot before rsync starts. SSH uses only that snapshot, strict host-key
+checking, and no ambient user configuration or global known-hosts file.
+
+Plain rsync transport is limited to
+`rsync://feed.community.greenbone.net/community` and its descendants; it does
+not require SSH trust settings. Synchronization still updates destination
+trees in place. This transport hardening does not provide generation-level
+atomic activation, verification, or rollback.
+
+Cancelled synchronization retains the rsync session's original process-group
+ID, terminates the group, and boundedly verifies that the group no longer
+exists. POSIX does not provide a generation-bound process-group handle, so the
+implementation places its final existence probe immediately before SIGKILL to
+minimize, but cannot completely eliminate, a theoretical PGID-reuse race.
+
 ### type
 
 | Name                 | Value                                                                                                                                                                                                                              |
@@ -286,7 +333,7 @@ is only required for experts and testing purposes.
 | Config Variable      | feed-url                                                                                                                                                                                                                                 |
 | Environment Variable | `GREENBONE_FEED_SYNC_URL`                                                                                                                                                                                                                |
 | Default Value        | `rsync://feed.community.greenbone.net/community`                                                                                                                                                                                         |
-| Description          | URL to download the feed data from. Other URLs will be relative to this URL by default. For example using `rsync://example.com` as feed url the notus url will be `rsync://example.com/vulnerability-feed/$FEED_VERSION/vt-data/notus/`. |
+| Description          | Base URL used to derive feed URLs. Supported values are the Greenbone Community rsync endpoint and an explicit `ssh://user@host/path` base with configured SSH trust files. |
 
 ### feed-release
 
@@ -526,7 +573,7 @@ is only required for experts and testing purposes.
 | Config Variable      | rsync-timeout                                                                                                                                                                          |
 | Environment Variable | `GREENBONE_FEED_SYNC_RSYNC_TIMEOUT`                                                                                                                                                    |
 | Default Value        |                                                                                                                                                                                        |
-| Description          | Maximum I/O timeout in seconds used for rsync. If no data is transferred for the specified time then rsync will exit. By default no timeout is set and the rsync default will be used. |
+| Description          | Maximum I/O timeout in seconds used for rsync, from 0 through 86400. Zero disables the timeout. By default the rsync default is used. |
 
 ### group
 

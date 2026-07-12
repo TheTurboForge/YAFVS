@@ -1,6 +1,10 @@
 /* SPDX-FileCopyrightText: 2020-2023 Greenbone AG
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  */
 
 #include "passwordbasedauthentication.h"
@@ -15,11 +19,20 @@
 // this shouldn't affect other implementations
 #define __USE_GNU
 #include <crypt.h>
-// INVALID_HASH is used on verify when the given hash is a NULL pointer.
-// This is done to not directly jump to exit with a INVALID_HASH result
-// but rather keep calculating to make it a little bit harder to guess
-// if a user exists or not based on timing.
-#define INVALID_HASH "1234567890$"
+// INVALID_HASH is used on verify when the given hash is a NULL pointer, so an
+// unknown user still follows a valid SHA-512 crypt verification path.
+#define INVALID_HASH                                                   \
+  "$6$rounds=20000$0000000000000000$"                                  \
+  "aXUKPpjT3S5Gf.ERRGmKouM2gJaivVrpYQlMGM9W1nwHUSZyJV1/qPQtKEo0DltLAc" \
+  "ey62mY/XeNMqR6fKloA/"
+#define SHA512_CRYPT_DIGEST_LENGTH 86
+#define SHA512_CRYPT_MAX_LENGTH 123
+#define SHA512_CRYPT_SPEC_MAX_ROUNDS 999999999UL
+#define SHA512_CRYPT_MIN_ROUNDS 1000UL
+#define SHA512_CRYPT_DEFAULT_ROUNDS 5000UL
+// Keep attacker-controlled verification cost within 50 times TurboVAS's
+// 20,000-round generation default while retaining a generous upgrade range.
+#define PBA_MAX_ROUNDS 1000000UL
 #ifndef CRYPT_GENSALT_OUTPUT_SIZE
 #define CRYPT_GENSALT_OUTPUT_SIZE 192
 #endif
@@ -38,7 +51,145 @@
 static int
 is_prefix_supported (const char *id)
 {
-  return strcmp (PREFIX_DEFAULT, id) == 0;
+  return id != NULL && strcmp (PREFIX_DEFAULT, id) == 0;
+}
+
+struct sha512_crypt_parts
+{
+  size_t salt_offset;
+  size_t salt_length;
+  unsigned long rounds;
+  int rounds_explicit;
+};
+
+static int
+is_crypt_base64_digest_char (char value)
+{
+  return (value >= '0' && value <= '9') || (value >= 'A' && value <= 'Z')
+         || (value >= 'a' && value <= 'z') || value == '.' || value == '/';
+}
+
+/**
+ * @brief Check the libxcrypt SHA-512 salt grammar used by this host.
+ *
+ * crypt(5) requires printable non-whitespace hash characters and excludes
+ * ':', ';', '*', '!', and '\\'. SHA-512 crypt additionally uses '$' as its
+ * field delimiter. Host probes confirm all remaining ASCII punctuation,
+ * including '-', '_', and '@', round-trips unchanged.
+ */
+static int
+is_sha512_salt_char (char value)
+{
+  unsigned char byte = (unsigned char) value;
+
+  return byte >= 0x21 && byte <= 0x7e && strchr ("$:;*!\\", (int) byte) == NULL;
+}
+
+static int
+is_round_count_supported (unsigned long count)
+{
+  return count >= SHA512_CRYPT_MIN_ROUNDS && count <= PBA_MAX_ROUNDS;
+}
+
+/**
+ * @brief Parse a supported SHA-512 crypt setting or complete hash.
+ *
+ * @param[in]  value          Setting or hash to parse.
+ * @param[in]  require_hash   Whether an 86-character digest is required.
+ * @param[out] parts          Validated salt location.
+ *
+ * @return 1 when valid, else 0.
+ */
+static int
+parse_sha512_crypt (const char *value, int require_hash,
+                    struct sha512_crypt_parts *parts)
+{
+  size_t length, position;
+  unsigned long rounds = 0;
+
+  if (value == NULL || parts == NULL)
+    return 0;
+
+  length = strnlen (value, SHA512_CRYPT_MAX_LENGTH + 1);
+  if (length == 0 || length > SHA512_CRYPT_MAX_LENGTH
+      || strncmp (value, PREFIX_DEFAULT, strlen (PREFIX_DEFAULT)) != 0)
+    return 0;
+
+  position = strlen (PREFIX_DEFAULT);
+  parts->rounds = SHA512_CRYPT_DEFAULT_ROUNDS;
+  parts->rounds_explicit = 0;
+  if (strncmp (value + position, "rounds=", strlen ("rounds=")) == 0)
+    {
+      position += strlen ("rounds=");
+      if (position >= length || value[position] < '1' || value[position] > '9')
+        return 0;
+      while (position < length && value[position] >= '0'
+             && value[position] <= '9')
+        {
+          unsigned long digit = (unsigned long) (value[position] - '0');
+          if (rounds > (SHA512_CRYPT_SPEC_MAX_ROUNDS - digit) / 10)
+            return 0;
+          rounds = rounds * 10 + digit;
+          position++;
+        }
+      if (!is_round_count_supported (rounds) || position >= length
+          || value[position] != '$')
+        return 0;
+      parts->rounds = rounds;
+      parts->rounds_explicit = 1;
+      position++;
+    }
+
+  parts->salt_offset = position;
+  while (position < length && is_sha512_salt_char (value[position]))
+    position++;
+  parts->salt_length = position - parts->salt_offset;
+  if (parts->salt_length == 0 || parts->salt_length > 16)
+    return 0;
+
+  if (!require_hash)
+    return position == length;
+
+  if (position >= length || value[position] != '$')
+    return 0;
+  position++;
+  if (length - position != SHA512_CRYPT_DIGEST_LENGTH)
+    return 0;
+  while (position < length)
+    if (!is_crypt_base64_digest_char (value[position++]))
+      return 0;
+
+  return 1;
+}
+
+static int
+apply_pepper (char *value, const struct sha512_crypt_parts *parts,
+              const struct PBASettings *setting)
+{
+  int i;
+
+  for (i = 0; i < MAX_PEPPER_SIZE; i++)
+    if (setting->pepper[i] != 0)
+      {
+        if (!is_sha512_salt_char (setting->pepper[i]))
+          return 0;
+        if (parts->salt_length < MAX_PEPPER_SIZE)
+          return 0;
+        value[parts->salt_offset + parts->salt_length - MAX_PEPPER_SIZE + i] =
+          setting->pepper[i];
+      }
+  return 1;
+}
+
+static int
+constant_time_equal (const char *left, const char *right, size_t length)
+{
+  size_t i;
+  volatile unsigned char difference = 0;
+
+  for (i = 0; i < length; i++)
+    difference |= (unsigned char) left[i] ^ (unsigned char) right[i];
+  return difference == 0;
 }
 
 // we assume something else than libxcrypt > 3.1; like UFC-crypt
@@ -62,8 +213,12 @@ const char ascii64[] =
 static int
 get_random (char *buf, size_t buflen)
 {
-  FILE *fp = fopen ("/dev/urandom", "r");
+  FILE *fp;
   int result = 0;
+
+  if (buf == NULL)
+    return -1;
+  fp = fopen ("/dev/urandom", "r");
   if (fp == NULL)
     {
       result = -1;
@@ -107,8 +262,10 @@ crypt_gensalt_r (const char *prefix, unsigned long count, const char *rbytes,
   char *internal_rbytes = NULL;
   unsigned int written = 0, used = 0;
   unsigned long value = 0;
+  if (output == NULL)
+    goto exit;
   if ((rbytes != NULL && nrbytes < 3) || output_size < 16
-      || !is_prefix_supported (prefix))
+      || (prefix != NULL && !is_prefix_supported (prefix)))
     {
       output[0] = '*';
       goto exit;
@@ -116,6 +273,11 @@ crypt_gensalt_r (const char *prefix, unsigned long count, const char *rbytes,
   if (rbytes == NULL)
     {
       internal_rbytes = malloc (16);
+      if (internal_rbytes == NULL)
+        {
+          output[0] = '*';
+          goto exit;
+        }
       if (get_random (internal_rbytes, 16) != 0)
         {
           output[0] = '*';
@@ -143,7 +305,7 @@ crypt_gensalt_r (const char *prefix, unsigned long count, const char *rbytes,
 exit:
   if (internal_rbytes != NULL)
     free (internal_rbytes);
-  return output[0] == '*' ? 0 : output;
+  return output == NULL || output[0] == '*' ? 0 : output;
 }
 
 #endif
@@ -171,7 +333,15 @@ pba_init (const char *pepper, unsigned int pepper_size, unsigned int count,
     goto exit;
   if (prefix != NULL && !is_prefix_supported (prefix))
     goto exit;
+  if (count != 0 && !is_round_count_supported (count))
+    goto exit;
+  if (pepper != NULL)
+    for (i = 0; i < pepper_size; i++)
+      if (!is_sha512_salt_char (pepper[i]))
+        goto exit;
   result = malloc (sizeof (struct PBASettings));
+  if (result == NULL)
+    goto exit;
   for (i = 0; i < MAX_PEPPER_SIZE; i++)
     result->pepper[i] = pepper != NULL && i < pepper_size ? pepper[i] : 0;
   result->count = count == 0 ? COUNT_DEFAULT : count;
@@ -201,11 +371,7 @@ pba_finalize (struct PBASettings *settings)
 static int
 pba_is_phc_compliant (const char *setting)
 {
-  if (setting == NULL)
-    {
-      return 1;
-    }
-  return strlen (setting) > 1 && setting[0] == '$';
+  return setting == NULL || setting[0] == '$';
 }
 
 /**
@@ -219,42 +385,46 @@ pba_is_phc_compliant (const char *setting)
 char *
 pba_hash (struct PBASettings *setting, const char *password)
 {
-  char *result = NULL, *settings = NULL, *tmp, *rslt;
+  char *result = NULL, *settings = NULL, *rslt;
+  size_t result_length;
   int i;
   struct crypt_data *data = NULL;
+  struct sha512_crypt_parts parts;
 
   if (!setting || !password)
     goto exit;
   if (!is_prefix_supported (setting->prefix))
     goto exit;
+  if (!is_round_count_supported (setting->count))
+    goto exit;
   settings = malloc (CRYPT_GENSALT_OUTPUT_SIZE);
+  if (settings == NULL)
+    goto exit;
   if (crypt_gensalt_r (setting->prefix, setting->count, NULL, 0, settings,
                        CRYPT_GENSALT_OUTPUT_SIZE)
       == NULL)
     goto exit;
-  tmp = settings + strlen (settings) - 1;
-  for (i = MAX_PEPPER_SIZE - 1; i > -1; i--)
-    {
-      if (setting->pepper[i] != 0)
-        tmp[0] = setting->pepper[i];
-      tmp--;
-    }
+  if (!parse_sha512_crypt (settings, 0, &parts)
+      || !apply_pepper (settings, &parts, setting))
+    goto exit;
 
   data = calloc (1, sizeof (struct crypt_data));
+  if (data == NULL)
+    goto exit;
   rslt = crypt_r (password, settings, data);
   if (rslt == NULL)
     goto exit;
-  result = calloc (1, CRYPT_OUTPUT_SIZE);
-  memcpy (result, rslt, CRYPT_OUTPUT_SIZE);
-  // remove pepper, by jumping to begin of applied pepper within result
-  // and overriding it.
-  tmp = result + (tmp - settings);
+  if (!parse_sha512_crypt (rslt, 1, &parts))
+    goto exit;
+  result_length = strlen (rslt);
+  result = malloc (result_length + 1);
+  if (result == NULL)
+    goto exit;
+  memcpy (result, rslt, result_length + 1);
+  // Remove the pepper from the persisted salt at its validated positions.
   for (i = 0; i < MAX_PEPPER_SIZE; i++)
-    {
-      tmp++;
-      if (setting->pepper[i] != 0)
-        tmp[0] = '0';
-    }
+    if (setting->pepper[i] != 0)
+      result[parts.salt_offset + parts.salt_length - MAX_PEPPER_SIZE + i] = '0';
 exit:
   if (data != NULL)
     free (data);
@@ -277,13 +447,13 @@ pba_verify_hash (const struct PBASettings *setting, const char *hash,
                  const char *password)
 {
   char *cmp, *tmp = NULL;
+  const char *candidate;
   struct crypt_data *data = NULL;
+  struct sha512_crypt_parts cmp_parts, parts;
+  size_t cmp_size, hash_size;
+  int matches;
   int i = 0;
   enum pba_rc result = ERR;
-
-  char *invalid_hash = calloc (1, CRYPT_OUTPUT_SIZE);
-  memset (invalid_hash, 0, CRYPT_OUTPUT_SIZE);
-  memcpy (invalid_hash, INVALID_HASH, strlen (INVALID_HASH));
 
   if (!setting)
     goto exit;
@@ -291,29 +461,43 @@ pba_verify_hash (const struct PBASettings *setting, const char *hash,
     goto exit;
   if (pba_is_phc_compliant (hash) != 0)
     {
-      int hash_size;
-      hash_size = hash ? strlen (hash) : strlen (invalid_hash);
+      candidate = hash ? hash : INVALID_HASH;
+      if (!parse_sha512_crypt (candidate, 1, &parts))
+        {
+          result = INVALID;
+          goto exit;
+        }
+      hash_size = strlen (candidate);
 
       data = calloc (1, sizeof (struct crypt_data));
-      // manipulate hash to reapply pepper
-      tmp = calloc (1, CRYPT_OUTPUT_SIZE);
-
-      memset (tmp, 0, CRYPT_OUTPUT_SIZE);
-      memcpy (tmp, hash ? hash : invalid_hash,
-              (hash_size < CRYPT_OUTPUT_SIZE) ? hash_size
-                                              : CRYPT_OUTPUT_SIZE - 1);
-      cmp = strrchr (tmp, '$');
-      for (i = MAX_PEPPER_SIZE - 1; i > -1; i--)
+      if (data == NULL)
+        goto exit;
+      tmp = malloc (hash_size + 1);
+      if (tmp == NULL)
+        goto exit;
+      memcpy (tmp, candidate, hash_size + 1);
+      if (!apply_pepper (tmp, &parts, setting))
         {
-          cmp--;
-          if (setting->pepper[i] != 0)
-            cmp[0] = setting->pepper[i];
+          result = INVALID;
+          goto exit;
         }
       // some crypt_r implementations cannot handle if password is a
       // NULL pointer and run into SEGMENTATION faults.
       // Therefore we set it to ""
       cmp = crypt_r (password ? password : "", tmp, data);
-      if (strcmp (tmp, cmp) == 0)
+      if (cmp == NULL)
+        {
+          result = INVALID;
+          goto exit;
+        }
+      cmp_size = strnlen (cmp, SHA512_CRYPT_MAX_LENGTH + 1);
+      if (cmp_size != hash_size || !parse_sha512_crypt (cmp, 1, &cmp_parts))
+        {
+          result = INVALID;
+          goto exit;
+        }
+      matches = constant_time_equal (tmp, cmp, hash_size);
+      if (hash != NULL && password != NULL && matches)
         result = VALID;
       else
         result = INVALID;
@@ -327,14 +511,13 @@ pba_verify_hash (const struct PBASettings *setting, const char *hash,
           goto exit;
         }
       // verify result of gvm_authenticate_classic
-      i = gvm_authenticate_classic (NULL, password, hash);
-      if (i == 0)
+      i = gvm_authenticate_classic (NULL, password ? password : "", hash);
+      if (i == 0 && password != NULL)
         result = UPDATE_RECOMMENDED;
-      else if (i == 1)
+      else if (i == 0 || i == 1)
         result = INVALID;
     }
 exit:
-  free (invalid_hash);
   if (data != NULL)
     free (data);
   if (tmp != NULL)

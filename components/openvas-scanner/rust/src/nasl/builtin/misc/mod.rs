@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 #[cfg(test)]
 mod tests;
 
@@ -24,8 +26,14 @@ use crate::nasl::{
     utils::{DefineGlobalVars, function::Maybe},
 };
 use flate2::{
-    Compression, read::GzDecoder, read::ZlibDecoder, write::GzEncoder, write::ZlibEncoder,
+    Compression, Decompress, FlushDecompress, Status,
+    bufread::GzDecoder,
+    write::{GzEncoder, ZlibEncoder},
 };
+
+const MAX_DECOMPRESSED_SIZE: usize = 16 * 1024 * 1024;
+const MAX_COMPRESSED_SIZE: usize = 16 * 1024 * 1024;
+const DECOMPRESSION_CHUNK_SIZE: usize = 64 * 1024;
 
 pub const NASL_ERR_NOERR: i64 = 0;
 pub const NASL_ERR_ETIMEDOUT: i64 = 1;
@@ -149,24 +157,93 @@ fn gzip(data: NaslValue, headformat: Option<&str>) -> Option<Vec<u8>> {
     }
 }
 
-/// uncompress given data with gzip, when headformat is set to 'gzip' it uses gzipheader.
-#[nasl_function(named(data))]
-fn gunzip(data: NaslValue) -> Option<String> {
-    let data = to_bytes(data);
-    let mut uncompress = ZlibDecoder::new(&data[..]);
-    let mut uncompressed = String::new();
-    match uncompress.read_to_string(&mut uncompressed) {
-        Ok(_) => Some(uncompressed),
-        Err(_) => {
-            let mut uncompress = GzDecoder::new(&data[..]);
-            let mut uncompressed = String::new();
-            if uncompress.read_to_string(&mut uncompressed).is_ok() {
-                Some(uncompressed)
-            } else {
-                None
-            }
+fn read_bounded<R: Read>(reader: &mut R) -> Option<Vec<u8>> {
+    let mut uncompressed = Vec::new();
+    let mut chunk = [0u8; DECOMPRESSION_CHUNK_SIZE];
+
+    loop {
+        let bytes_read = reader.read(&mut chunk).ok()?;
+        if bytes_read == 0 {
+            return Some(uncompressed);
+        }
+
+        let new_len = uncompressed.len().checked_add(bytes_read)?;
+        if new_len > MAX_DECOMPRESSED_SIZE {
+            return None;
+        }
+        uncompressed.try_reserve(bytes_read).ok()?;
+        uncompressed.extend_from_slice(&chunk[..bytes_read]);
+    }
+}
+
+fn has_zlib_header(data: &[u8]) -> bool {
+    if data.len() < 2 {
+        return false;
+    }
+
+    let compression_method = data[0] & 0x0f;
+    let window_size = data[0] >> 4;
+    let header = u16::from_be_bytes([data[0], data[1]]);
+    compression_method == 8 && window_size <= 7 && header % 31 == 0
+}
+
+fn decompress_zlib(data: &[u8]) -> Option<Vec<u8>> {
+    let mut decompressor = Decompress::new(true);
+    let mut uncompressed = Vec::new();
+    let mut chunk = [0u8; DECOMPRESSION_CHUNK_SIZE];
+    let mut input_offset = 0usize;
+
+    loop {
+        let input_before = decompressor.total_in();
+        let output_before = decompressor.total_out();
+        let status = decompressor
+            .decompress(&data[input_offset..], &mut chunk, FlushDecompress::None)
+            .ok()?;
+        let consumed = usize::try_from(decompressor.total_in().checked_sub(input_before)?).ok()?;
+        let produced =
+            usize::try_from(decompressor.total_out().checked_sub(output_before)?).ok()?;
+        if consumed > data.len().checked_sub(input_offset)? || produced > chunk.len() {
+            return None;
+        }
+        input_offset = input_offset.checked_add(consumed)?;
+
+        let new_len = uncompressed.len().checked_add(produced)?;
+        if new_len > MAX_DECOMPRESSED_SIZE {
+            return None;
+        }
+        uncompressed.try_reserve(produced).ok()?;
+        uncompressed.extend_from_slice(&chunk[..produced]);
+
+        match status {
+            Status::StreamEnd if input_offset == data.len() => return Some(uncompressed),
+            Status::StreamEnd | Status::BufError => return None,
+            Status::Ok if consumed == 0 && produced == 0 => return None,
+            Status::Ok => {}
         }
     }
+}
+
+fn gunzip_bytes(data: &[u8]) -> Option<Vec<u8>> {
+    if data.len() > MAX_COMPRESSED_SIZE {
+        return None;
+    }
+
+    if data.starts_with(&[0x1f, 0x8b]) {
+        let mut decoder = GzDecoder::new(data);
+        let uncompressed = read_bounded(&mut decoder)?;
+        decoder.get_ref().is_empty().then_some(uncompressed)
+    } else if has_zlib_header(data) {
+        decompress_zlib(data)
+    } else {
+        None
+    }
+}
+
+/// Uncompress zlib or gzip data, rejecting input or output larger than 16 MiB.
+#[nasl_function(named(data))]
+fn gunzip(data: NaslValue) -> Option<Vec<u8>> {
+    let data = to_bytes(data);
+    gunzip_bytes(&data)
 }
 
 /// Takes seven named arguments sec, min, hour, mday, mon, year, isdst and returns the Unix time.

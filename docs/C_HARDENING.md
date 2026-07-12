@@ -12,6 +12,12 @@ safer. C that remains must be defended and tested deliberately.
 Compiler flags, analysis tools, and sanitizers reduce risk; they do not make C
 memory-safe and do not prove that TurboVAS is secure.
 
+This strategy is guided by OpenSSF compiler-hardening guidance; official GCC,
+Clang, CMake, and GitHub CodeQL documentation; the SEI CERT C Coding Standard;
+NIST's Secure Software Development Framework; and NSA/CISA memory-safe-language
+guidance. These sources inform TurboVAS engineering choices but do not imply
+endorsement, certification, or complete compliance with any standard.
+
 ## Commitments
 
 TurboVAS will:
@@ -108,6 +114,8 @@ for current change-class gates.
 
 ## References
 
+### Technical Implementation Guidance
+
 - [OpenSSF Compiler Options Hardening Guide for C and C++](https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C%2B%2B.html)
 - [GCC instrumentation and hardening options](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html)
 - [Clang AddressSanitizer](https://clang.llvm.org/docs/AddressSanitizer.html)
@@ -116,6 +124,9 @@ for current change-class gates.
 - [Clang-Tidy](https://clang.llvm.org/extra/clang-tidy/)
 - [CMake compilation database support](https://cmake.org/cmake/help/latest/variable/CMAKE_EXPORT_COMPILE_COMMANDS.html)
 - [GitHub CodeQL for compiled languages](https://docs.github.com/en/code-security/concepts/code-scanning/codeql/codeql-for-compiled-languages)
+
+### Secure Development Strategy
+
 - [NIST Secure Software Development Framework](https://csrc.nist.gov/pubs/sp/800/218/final)
 - [SEI CERT C Coding Standard](https://www.sei.cmu.edu/library/sei-cert-c-coding-standard-rules-for-developing-safe-reliable-and-secure-systems-2016-edition/)
 - [NSA/CISA memory-safe-languages guidance](https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4223298/nsa-and-cisa-release-csi-highlighting-importance-of-memory-safe-languages-in-so/)

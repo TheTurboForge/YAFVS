@@ -1217,7 +1217,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scanner-metadata-list-read
       summary: List scanner metadata
-      description: Read-only scanner list metadata backed by gvmd/PostgreSQL. Credential secrets, scanner CA material, and control operations are intentionally excluded.
+      description: Scanner list metadata backed by gvmd/PostgreSQL. Native scanner creation is exposed separately on this collection path. Credential secrets, scanner CA material, and control operations are intentionally excluded from list reads.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1242,6 +1242,53 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postScanners
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scanner-create
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scanner-configuration-write
+      summary: Create an operator-owned scanner
+      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and operator-owned certificate credential. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is initialized empty. Clone, delete, remote verification, and relay mutation remain inherited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScannerConfigurationRequest'
+      responses:
+        '201':
+          description: Scanner created; Location identifies the scanner detail resource
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scanners/{scanner_id}:
     get:
       operationId: getScannersByScannerId
@@ -1250,7 +1297,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       summary: Read one scanner metadata record with safe backlinks
-      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control can patch scanner name/comment metadata and verify bounded local scanner availability. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, host/port/type/relay mutation, export/download behavior, create, clone, restore, and delete remain inherited.
+      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control can create scanners, replace complete retained editor configuration, patch name/comment metadata, and verify bounded local scanner availability. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, relay mutation, inherited export/download formats, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1285,7 +1332,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update scanner metadata
-      description: Direct write-control endpoint for updating scanner name and comment only on operator-owned non-built-in scanners. Scanner verify is exposed through the separate bounded verify endpoint. Scanner host, port, type, relay, CA material, credential links, live status beyond verify, remote/TLS/relay verification, export/download formats, create, clone, restore, and delete remain inherited.
+      description: Direct write-control endpoint for updating scanner name and comment only on operator-owned non-built-in scanners. Complete retained editor configuration uses the separate replace-configuration endpoint. Scanner verify is exposed through the separate bounded verify endpoint. Relay mutation, live status beyond verify, remote/TLS/relay verification, inherited export/download formats, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1297,6 +1344,52 @@ paths:
       responses:
         '200':
           description: Scanner metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scanners/{scanner_id}/replace-configuration:
+    post:
+      operationId: postScannersByScannerIdReplaceConfiguration
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scanner-complete-retained-editor-configuration-modify
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scanner-configuration-write
+      summary: Replace complete retained scanner editor configuration
+      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, and optional certificate credential for an operator-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Existing relay host and relay port are preserved because the retained editor has no relay controls. Clone, delete, remote verification, and relay mutation remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScannerConfigurationRequest'
+      responses:
+        '200':
+          description: Scanner configuration replaced
           content:
             application/json:
               schema:
@@ -1332,7 +1425,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: scanner-control
       summary: Verify a scanner through a bounded native control probe
-      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, scanner create/delete, scanner host mutation, credential-secret, scan stop, and live status streaming remain inherited while their safety contracts are designed. Task start is provided separately through the gvmd scan queue.
+      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, scanner clone/delete, credential-secret, scan stop, and live status streaming remain inherited while their safety contracts are designed. Task start is provided separately through the gvmd scan queue.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -8429,6 +8522,41 @@ components:
           type: string
           maxLength: 4096
           description: New scanner comment. Blank comments clear the comment after trimming.
+    ScannerConfigurationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, comment, host, port, scanner_type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        host:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: IPv4 address, IPv6 address, DNS name, or normalized absolute Unix socket path.
+        port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Port 1 through 65535 for network scanners, or 0 for Unix socket scanners.
+        scanner_type:
+          type: integer
+          enum: [2, 5, 6, 8]
+        ca_pub:
+          type: string
+          nullable: true
+          maxLength: 65536
+          description: Optional bounded PEM CA certificate bundle containing one or more CERTIFICATE blocks. Stored as null for Unix socket scanners.
+        credential_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional operator-owned certificate credential of type cc. Stored as null for Unix socket scanners.
     SchedulePatchRequest:
       type: object
       minProperties: 1

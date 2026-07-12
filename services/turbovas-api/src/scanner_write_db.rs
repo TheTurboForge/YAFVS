@@ -106,6 +106,62 @@ pub(crate) async fn ensure_unique_scanner_name(
     }
 }
 
+pub(crate) async fn load_owned_scanner_credential(
+    tx: &Transaction<'_>,
+    credential_id: &str,
+    operator_owner_id: i32,
+) -> Result<i32, ApiError> {
+    let credential_id = parse_uuid(credential_id)?.to_string();
+    let Some(row) = tx
+        .query_opt(scanner_credential_state_sql(), &[&credential_id])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "load scanner credential"))?
+    else {
+        return Err(ApiError::NotFound);
+    };
+    let owner_id: Option<i32> = row.get(1);
+    if owner_id != Some(operator_owner_id) {
+        tracing::warn!(
+            credential_owner_id = ?owner_id,
+            operator_owner_id,
+            "direct API scanner write operator cannot assign credential"
+        );
+        return Err(ApiError::Forbidden);
+    }
+    let credential_type: String = row.get(2);
+    if credential_type != "cc" {
+        return Err(ApiError::BadRequest(
+            "credential_id must reference a certificate credential of type cc".to_string(),
+        ));
+    }
+    Ok(row.get(0))
+}
+
+pub(crate) async fn ensure_scanner_not_in_use_for_configuration_replace(
+    tx: &Transaction<'_>,
+    scanner_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(scanner_live_task_count_sql(), &[&scanner_internal_id])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "check scanner task references"))?
+        .get(0);
+    ensure_scanner_live_task_count_allows_replace(count)
+}
+
+pub(crate) fn ensure_scanner_live_task_count_allows_replace(
+    live_task_count: i64,
+) -> Result<(), ApiError> {
+    if live_task_count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scanner configuration cannot be replaced while the scanner is used by a task"
+                .to_string(),
+        ))
+    }
+}
+
 pub(crate) async fn query_scanner_write_record(
     tx: &Transaction<'_>,
     sql: &str,

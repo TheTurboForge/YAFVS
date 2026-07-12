@@ -4,17 +4,157 @@
 
 use crate::{
     errors::ApiError,
-    scanner_write_db::{ScannerWriteState, ensure_scanner_metadata_patch_allowed},
-    scanner_write_sql::{scanner_update_metadata_sql, scanner_write_state_sql},
+    scanner_write_db::{
+        ScannerWriteState, ensure_scanner_live_task_count_allows_replace,
+        ensure_scanner_metadata_patch_allowed,
+    },
+    scanner_write_sql::{
+        scanner_create_configuration_sql, scanner_credential_state_sql,
+        scanner_live_task_count_sql, scanner_replace_configuration_sql,
+        scanner_update_metadata_sql, scanner_write_state_sql,
+    },
     scanner_write_validation::{
-        MAX_SCANNER_TEXT_BYTES, ScannerPatchRequest, validate_scanner_patch_request,
+        MAX_SCANNER_CA_PUB_BYTES, MAX_SCANNER_TEXT_BYTES, ScannerConfigurationRequest,
+        ScannerPatchRequest, validate_scanner_configuration_request,
+        validate_scanner_patch_request,
     },
 };
+
+const CREDENTIAL_ID: &str = "12345678-1234-1234-1234-123456789abc";
+const CERTIFICATE_SHAPED_PEM: &str =
+    "-----BEGIN CERTIFICATE-----\nMAgwADAAAwIAAA==\n-----END CERTIFICATE-----";
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> ScannerPatchRequest {
     ScannerPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+    }
+}
+
+fn configuration_request(host: &str, port: i64) -> ScannerConfigurationRequest {
+    ScannerConfigurationRequest {
+        name: " scanner ".to_string(),
+        comment: " comment ".to_string(),
+        host: host.to_string(),
+        port,
+        scanner_type: 2,
+        ca_pub: Some(CERTIFICATE_SHAPED_PEM.to_string()),
+        credential_id: Some(CREDENTIAL_ID.to_string()),
+    }
+}
+
+#[test]
+fn scanner_configuration_validates_network_and_unix_socket_shapes() {
+    for host in ["127.0.0.1", "2001:db8::1", "scanner.example.test"] {
+        let validated = validate_scanner_configuration_request(configuration_request(host, 9390))
+            .expect("network scanner configuration");
+        assert_eq!(validated.name, "scanner");
+        assert_eq!(validated.comment, "comment");
+        assert_eq!(validated.port, 9390);
+        assert_eq!(validated.scanner_type, 2);
+        assert_eq!(validated.ca_pub.as_deref(), Some(CERTIFICATE_SHAPED_PEM));
+        assert_eq!(validated.credential_id.as_deref(), Some(CREDENTIAL_ID));
+        assert!(!validated.unix_socket);
+    }
+
+    let unix = validate_scanner_configuration_request(configuration_request(
+        "/run/ospd/ospd-openvas.sock",
+        0,
+    ))
+    .expect("Unix socket scanner configuration");
+    assert!(unix.unix_socket);
+    assert_eq!(unix.port, 0);
+    assert_eq!(unix.ca_pub, None);
+    assert_eq!(unix.credential_id, None);
+}
+
+#[test]
+fn scanner_configuration_rejects_bad_hosts_ports_types_and_unknown_fields() {
+    for (host, port) in [
+        ("bad host", 9390),
+        ("-scanner.example", 9390),
+        ("scanner..example", 9390),
+        ("/", 0),
+        ("/run//unsafe.sock", 0),
+        ("/run/./unsafe.sock", 0),
+        ("/run/../unsafe.sock", 0),
+        ("scanner.example", 0),
+        ("scanner.example", 65_536),
+        ("/run/ospd.sock", 9390),
+    ] {
+        assert!(matches!(
+            validate_scanner_configuration_request(configuration_request(host, port)),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    for scanner_type in [0, 1, 3, 4, 7, 9] {
+        assert!(matches!(
+            validate_scanner_configuration_request(ScannerConfigurationRequest {
+                scanner_type,
+                ..configuration_request("scanner.example", 9390)
+            }),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    assert!(
+        serde_json::from_value::<ScannerConfigurationRequest>(serde_json::json!({
+            "name": "Scanner",
+            "comment": "",
+            "host": "scanner.example",
+            "port": 9390,
+            "scanner_type": 2,
+            "relay_host": "relay.example"
+        }))
+        .is_err()
+    );
+}
+
+#[test]
+fn scanner_configuration_requires_bounded_certificate_shaped_pem() {
+    for ca_pub in [
+        "",
+        "not a certificate",
+        "-----BEGIN PRIVATE KEY-----\nMAA=\n-----END PRIVATE KEY-----",
+        "-----BEGIN CERTIFICATE-----\nMAA=\n-----END CERTIFICATE-----",
+        "-----BEGIN CERTIFICATE-----\n!!!!\n-----END CERTIFICATE-----",
+    ] {
+        assert!(matches!(
+            validate_scanner_configuration_request(ScannerConfigurationRequest {
+                ca_pub: Some(ca_pub.to_string()),
+                ..configuration_request("scanner.example", 9390)
+            }),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    assert!(matches!(
+        validate_scanner_configuration_request(ScannerConfigurationRequest {
+            ca_pub: Some("x".repeat(MAX_SCANNER_CA_PUB_BYTES + 1)),
+            ..configuration_request("scanner.example", 9390)
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let bundle = format!("{CERTIFICATE_SHAPED_PEM}\n{CERTIFICATE_SHAPED_PEM}");
+    let validated = validate_scanner_configuration_request(ScannerConfigurationRequest {
+        ca_pub: Some(bundle.clone()),
+        ..configuration_request("scanner.example", 9390)
+    })
+    .expect("certificate bundle");
+    assert_eq!(validated.ca_pub.as_deref(), Some(bundle.as_str()));
+
+    for trailing in [
+        format!("{CERTIFICATE_SHAPED_PEM}\ntrailing junk"),
+        format!(
+            "{CERTIFICATE_SHAPED_PEM}\n-----BEGIN PRIVATE KEY-----\nMAA=\n-----END PRIVATE KEY-----"
+        ),
+    ] {
+        assert!(matches!(
+            validate_scanner_configuration_request(ScannerConfigurationRequest {
+                ca_pub: Some(trailing),
+                ..configuration_request("scanner.example", 9390)
+            }),
+            Err(ApiError::BadRequest(_))
+        ));
     }
 }
 
@@ -150,5 +290,165 @@ fn scanner_patch_sql_is_metadata_only_and_preserves_secret_control_fields() {
                 .contains(&forbidden.to_ascii_lowercase()),
             "scanner metadata patch must not touch {forbidden}"
         );
+    }
+}
+
+#[test]
+fn scanner_configuration_sql_has_bounded_complete_shape_and_preserves_relays() {
+    let credential = scanner_credential_state_sql();
+    for required in ["owner::integer", "type::text", "WHERE uuid = $1"] {
+        assert!(credential.contains(required));
+    }
+
+    let create = scanner_create_configuration_sql();
+    for required in [
+        "make_uuid()",
+        "uuid, owner, name, comment, host, port, type, ca_pub, credential",
+        "relay_host, relay_port",
+        "$1, $2, $3, $4, $5, $6, $7, $8, NULL, 0",
+        "m_now(), m_now()",
+        "RETURNING uuid::text",
+    ] {
+        assert!(
+            create.contains(required),
+            "scanner create SQL missing {required}"
+        );
+    }
+
+    let replace = scanner_replace_configuration_sql();
+    for required in [
+        "name = $2",
+        "comment = $3",
+        "host = $4",
+        "port = $5",
+        "type = $6",
+        "ca_pub = $7",
+        "credential = $8",
+        "modification_time = m_now()",
+        "WHERE id = $1",
+        "RETURNING uuid::text",
+    ] {
+        assert!(
+            replace.contains(required),
+            "scanner replace SQL missing {required}"
+        );
+    }
+    for preserved in ["relay_host", "relay_port"] {
+        assert!(
+            !replace.contains(preserved),
+            "scanner replacement must preserve {preserved}"
+        );
+    }
+}
+
+#[test]
+fn scanner_configuration_replace_rejects_live_non_hidden_task_references() {
+    assert!(ensure_scanner_live_task_count_allows_replace(0).is_ok());
+    assert!(matches!(
+        ensure_scanner_live_task_count_allows_replace(1),
+        Err(ApiError::Conflict(_))
+    ));
+
+    let in_use = scanner_live_task_count_sql();
+    for required in ["FROM tasks", "scanner = $1", "coalesce(hidden, 0) = 0"] {
+        assert!(
+            in_use.contains(required),
+            "scanner in-use SQL missing {required}"
+        );
+    }
+}
+
+#[test]
+fn scanner_create_and_replace_are_guarded_before_atomic_mutation() {
+    let source = include_str!("scanner_writes.rs");
+    let create = source
+        .split_once("pub(crate) async fn create_scanner")
+        .expect("create scanner handler")
+        .1
+        .split_once("pub(crate) async fn replace_scanner_configuration")
+        .expect("create scanner handler end")
+        .0;
+    for required in [
+        "require_scanner_write_operator(operator)?",
+        "validate_scanner_configuration_request(request)?",
+        "LOCK TABLE users, credentials, scanners IN SHARE ROW EXCLUSIVE MODE",
+        "resolve_scanner_write_operator_owner",
+        "ensure_unique_scanner_name",
+        "resolve_scanner_credential",
+        "execute_scanner_create_transaction",
+        "tx.commit()",
+        "StatusCode::CREATED",
+        "scanner_write_location_headers",
+    ] {
+        assert!(
+            create.contains(required),
+            "scanner create handler missing {required}"
+        );
+    }
+
+    let replace = source
+        .split_once("pub(crate) async fn replace_scanner_configuration")
+        .expect("replace scanner handler")
+        .1
+        .split_once("pub(crate) async fn patch_scanner")
+        .expect("replace scanner handler end")
+        .0;
+    for required in [
+        "require_scanner_write_operator(operator)?",
+        "validate_scanner_configuration_request(request)?",
+        "LOCK TABLE users, credentials, scanners, tasks IN SHARE ROW EXCLUSIVE MODE",
+        "load_scanner_write_state",
+        "ensure_scanner_metadata_patch_allowed",
+        "ensure_scanner_not_in_use_for_configuration_replace",
+        "ensure_unique_scanner_name",
+        "resolve_scanner_credential",
+        "execute_scanner_replace_transaction",
+        "tx.commit()",
+    ] {
+        assert!(
+            replace.contains(required),
+            "scanner replace handler missing {required}"
+        );
+    }
+    assert!(
+        replace
+            .find("ensure_scanner_metadata_patch_allowed")
+            .unwrap()
+            < replace
+                .find("ensure_scanner_not_in_use_for_configuration_replace")
+                .unwrap()
+    );
+    assert!(
+        replace
+            .find("ensure_scanner_not_in_use_for_configuration_replace")
+            .unwrap()
+            < replace.find("execute_scanner_replace_transaction").unwrap()
+    );
+}
+
+#[test]
+fn scanner_credential_resolution_is_owner_and_cc_constrained_without_secret_reads() {
+    let db = include_str!("scanner_write_db.rs");
+    let loader = db
+        .split_once("pub(crate) async fn load_owned_scanner_credential")
+        .expect("scanner credential loader")
+        .1
+        .split_once("pub(crate) async fn query_scanner_write_record")
+        .expect("scanner credential loader end")
+        .0;
+    for required in [
+        "parse_uuid(credential_id)?",
+        "owner_id != Some(operator_owner_id)",
+        "credential_type != \"cc\"",
+        "ApiError::Forbidden",
+        "ApiError::BadRequest",
+    ] {
+        assert!(
+            loader.contains(required),
+            "credential loader missing {required}"
+        );
+    }
+    for forbidden in ["credentials_data", "password", "private_key", "secret"] {
+        assert!(!scanner_credential_state_sql().contains(forbidden));
     }
 }

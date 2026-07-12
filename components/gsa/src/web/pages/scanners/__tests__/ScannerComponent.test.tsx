@@ -97,7 +97,9 @@ describe('ScannerComponent tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const gmp = createGmp({
-      buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+      buildUrl: testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      ),
       scanner: {
         get: testing.fn().mockResolvedValue({data: scanner}),
         save: testing.fn().mockResolvedValue(scanner),
@@ -296,6 +298,47 @@ describe('ScannerComponent tests', () => {
 
     expect(handleEdited).toHaveBeenCalledWith(scanner);
     expect(handleEditError).not.toHaveBeenCalled();
+  });
+
+  test('should save only metadata for a scanner used by a task', async () => {
+    const scanner = new Scanner({
+      id: '1234',
+      name: 'Used Scanner',
+      comment: 'Existing comment',
+      host: 'scanner.example.test',
+      port: 443,
+      scannerType: OPENVASD_SCANNER_TYPE,
+      inUse: true,
+    });
+    const save = testing.fn().mockResolvedValue(scanner);
+    const gmp = createGmp({
+      scanner: {
+        get: testing.fn().mockResolvedValue({data: scanner}),
+        save,
+      },
+      credentials: {
+        getAll: testing.fn().mockResolvedValue([]),
+      },
+    });
+    const {render} = rendererWith({capabilities: true, gmp, store: true});
+    render(
+      <ScannerComponent>
+        {({edit}) => (
+          <button aria-label="edit" onClick={() => edit(scanner)}></button>
+        )}
+      </ScannerComponent>,
+    );
+
+    fireEvent.click(screen.getByRole('button', {name: 'edit'}));
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(save).toHaveBeenCalledWith({
+      id: '1234',
+      name: 'Used Scanner',
+      comment: 'Existing comment',
+    });
   });
 
   test('should allow to create a new scanner', async () => {

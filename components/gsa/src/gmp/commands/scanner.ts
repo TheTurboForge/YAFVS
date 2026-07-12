@@ -9,7 +9,6 @@ import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta} from 'gmp/http/transform/fast-xml';
-import logger from 'gmp/log';
 import {filterString} from 'gmp/models/filter/utils';
 import {type Element} from 'gmp/models/model';
 import Scanner, {
@@ -19,7 +18,9 @@ import Scanner, {
 import {
   exportNativeScannerMetadata,
   fetchNativeScanner,
+  createNativeScanner,
   patchNativeScanner,
+  replaceNativeScannerConfiguration,
   verifyNativeScanner,
 } from 'gmp/native-api/scanners';
 
@@ -43,15 +44,13 @@ export interface ScannerCommandMetadataSaveParams {
   comment?: string;
 }
 
-type ScannerCommandSaveArgs =
+export type ScannerCommandSaveArgs =
   | ScannerCommandSaveParams
   | ScannerCommandMetadataSaveParams;
 
 interface ScannerCommandVerifyParams {
   id: string;
 }
-
-const log = logger.getLogger('gmp.commands.scanner');
 
 const nativeScannerDetailSupportsFilter = (filter?: string): boolean => {
   const value = filterString(filter);
@@ -106,7 +105,7 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     return await exportNativeScannerMetadata(this.http, id);
   }
 
-  create({
+  async create({
     name,
     caCertificate,
     comment = '',
@@ -115,21 +114,18 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     port,
     type,
   }: ScannerCommandCreateParams) {
-    const data = {
-      cmd: 'create_scanner',
-      ca_pub: caCertificate,
+    return createNativeScanner(this.http, {
       comment,
-      credential_id: credentialId,
+      credentialId,
+      caPub: await caCertificate?.text(),
+      host,
       name,
       port,
-      scanner_host: host,
-      scanner_type: type,
-    };
-    log.debug('Creating new scanner', data);
-    return this.entityAction(data);
+      scannerType: Number(type),
+    });
   }
 
-  save(args: ScannerCommandSaveArgs) {
+  async save(args: ScannerCommandSaveArgs) {
     if (canUseNativeApi(this.http) && isScannerMetadataOnlySave(args)) {
       return patchNativeScanner(this.http, {
         id: args.id,
@@ -148,21 +144,15 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
       port,
       type,
     } = args as ScannerCommandSaveParams;
-    const data = {
-      cmd: 'save_scanner',
-      // send empty string if caCertificate is undefined to remove existing CA cert
-      ca_pub: caCertificate ?? '',
+    return replaceNativeScannerConfiguration(this.http, id, {
       comment,
-      // send empty string if credentialId is undefined to remove existing credential
-      credential_id: credentialId ?? '',
-      id,
+      credentialId,
+      caPub: await caCertificate?.text(),
+      host,
       name,
       port,
-      scanner_host: host,
-      scanner_type: type,
-    };
-    log.debug('Saving scanner', data);
-    return this.action(data);
+      scannerType: Number(type),
+    });
   }
 
   verify({id}: ScannerCommandVerifyParams) {

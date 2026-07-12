@@ -10,7 +10,6 @@ import {
   createHttp,
   createActionResultResponse,
   createEntityResponse,
-  createPlainResponse,
 } from 'gmp/commands/testing';
 import Scanner, {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
 import {createSession} from 'gmp/testing';
@@ -74,13 +73,17 @@ describe('ScannerCommand tests', () => {
     });
   });
 
-  test('should send the correct data to create a scanner', async () => {
-    const response = createActionResultResponse({
-      action: 'create_scanner',
-      id: '123',
-      message: 'Scanner created successfully',
+  test('should create a scanner through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: '123', name: 'Test Scanner'}),
+      ok: true,
+      status: 201,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const caCertificate = {
+      text: testing.fn().mockResolvedValue('test-ca-pub'),
+    } as unknown as File;
     const cmd = new ScannerCommand(fakeHttp);
     const result = await cmd.create({
       name: 'Test Scanner',
@@ -88,60 +91,90 @@ describe('ScannerCommand tests', () => {
       port: 9390,
       type: OPENVASD_SCANNER_TYPE,
       comment: 'Test comment',
-      caCertificate: 'test-ca-pub' as unknown as File,
+      caCertificate,
       credentialId: 'test-credential-id',
     });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_scanner',
-        name: 'Test Scanner',
-        comment: 'Test comment',
-        credential_id: 'test-credential-id',
-        scanner_host: '127.0.0.1',
-        scanner_type: OPENVASD_SCANNER_TYPE,
-        port: 9390,
-        ca_pub: 'test-ca-pub',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'Test Scanner',
+          comment: 'Test comment',
+          host: '127.0.0.1',
+          port: 9390,
+          scanner_type: Number(OPENVASD_SCANNER_TYPE),
+          ca_pub: 'test-ca-pub',
+          credential_id: 'test-credential-id',
+        }),
       },
-    });
+    );
     expect(result.data.id).toEqual('123');
   });
 
-  test('should save a scanner', async () => {
-    const response = createActionResultResponse({
-      action: 'save_scanner',
-      id: '123',
-      message: 'Scanner updated successfully',
+  test('should replace scanner configuration through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing
+        .fn()
+        .mockResolvedValue({id: '123', name: 'Updated Scanner'}),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const caCertificate = {
+      text: testing.fn().mockResolvedValue('updated-ca-pub'),
+    } as unknown as File;
     const cmd = new ScannerCommand(fakeHttp);
-    await cmd.save({
+    const result = await cmd.save({
       id: '123',
       name: 'Updated Scanner',
       host: '127.0.0.1',
       port: 9390,
       type: OPENVASD_SCANNER_TYPE,
       comment: 'Updated comment',
-      caCertificate: 'updated-ca-pub' as unknown as File,
+      caCertificate,
       credentialId: 'updated-credential-id',
     });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_scanner',
-        scanner_id: '123',
-        name: 'Updated Scanner',
-        comment: 'Updated comment',
-        credential_id: 'updated-credential-id',
-        scanner_host: '127.0.0.1',
-        scanner_type: OPENVASD_SCANNER_TYPE,
-        port: 9390,
-        ca_pub: 'updated-ca-pub',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scanners/123/replace-configuration',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'Updated Scanner',
+          comment: 'Updated comment',
+          host: '127.0.0.1',
+          port: 9390,
+          scanner_type: Number(OPENVASD_SCANNER_TYPE),
+          ca_pub: 'updated-ca-pub',
+          credential_id: 'updated-credential-id',
+        }),
       },
-    });
+    );
+    expect(result.data.id).toEqual('123');
   });
 
   test('should save scanner metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({id: '123', name: 'Updated Scanner'}),
+      json: testing
+        .fn()
+        .mockResolvedValue({id: '123', name: 'Updated Scanner'}),
       ok: true,
       status: 200,
     });
@@ -186,114 +219,82 @@ describe('ScannerCommand tests', () => {
     expect(result.data.id).toEqual('123');
   });
 
-  test('should keep scanner control saves on GMP when native API is available', async () => {
-    const response = createActionResultResponse({
-      action: 'save_scanner',
-      id: '123',
-      message: 'Scanner updated successfully',
+  test('should clear optional scanner credential and CA fields explicitly', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: '123'}),
+      ok: true,
+      status: 200,
     });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+    await cmd.save({
+      id: '123',
+      name: 'Updated Scanner',
+      host: '127.0.0.1',
+      port: 9390,
+      type: OPENVASD_SCANNER_TYPE,
+      comment: 'Updated comment',
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      name: 'Updated Scanner',
+      comment: 'Updated comment',
+      host: '127.0.0.1',
+      port: 9390,
+      scanner_type: Number(OPENVASD_SCANNER_TYPE),
+      ca_pub: null,
+      credential_id: null,
+    });
+  });
+
+  test('should serialize an empty Unix socket port as zero', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: '123'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+
+    await cmd.create({
+      name: 'Local scanner',
+      host: '/run/ospd/ospd-openvas.sock',
+      port: '',
+      type: OPENVASD_SCANNER_TYPE,
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      name: 'Local scanner',
+      comment: '',
+      host: '/run/ospd/ospd-openvas.sock',
+      port: 0,
+      scanner_type: Number(OPENVASD_SCANNER_TYPE),
+      ca_pub: null,
+      credential_id: null,
+    });
+  });
+
+  test('should not send scanner configuration when certificate reading fails', async () => {
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-
+    const fakeHttp = createNativeHttp();
+    const readError = new Error('certificate read failed');
+    const caCertificate = {
+      text: testing.fn().mockRejectedValue(readError),
+    } as unknown as File;
     const cmd = new ScannerCommand(fakeHttp);
-    await cmd.save({
-      id: '123',
-      name: 'Updated Scanner',
-      host: '127.0.0.1',
-      port: 9390,
-      type: OPENVASD_SCANNER_TYPE,
-      comment: 'Updated comment',
-      caCertificate: 'updated-ca-pub' as unknown as File,
-      credentialId: 'updated-credential-id',
-    });
 
+    await expect(
+      cmd.create({
+        name: 'Remote scanner',
+        host: 'scanner.example.test',
+        port: 9390,
+        type: OPENVASD_SCANNER_TYPE,
+        caCertificate,
+      }),
+    ).rejects.toThrow(readError);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_scanner',
-        scanner_id: '123',
-        name: 'Updated Scanner',
-        comment: 'Updated comment',
-        credential_id: 'updated-credential-id',
-        scanner_host: '127.0.0.1',
-        scanner_type: OPENVASD_SCANNER_TYPE,
-        port: 9390,
-        ca_pub: 'updated-ca-pub',
-      },
-    });
-  });
-
-  test('should remove a credential when saving a scanner', async () => {
-    const response = createActionResultResponse({
-      action: 'save_scanner',
-      id: '123',
-      message: 'Scanner updated successfully',
-    });
-    const fakeHttp = createHttp(response);
-    const cmd = new ScannerCommand(fakeHttp);
-    await cmd.save({
-      id: '123',
-      name: 'Updated Scanner',
-      host: '127.0.0.1',
-      port: 9390,
-      type: OPENVASD_SCANNER_TYPE,
-      comment: 'Updated comment',
-      caCertificate: 'updated-ca-pub' as unknown as File,
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_scanner',
-        ca_pub: 'updated-ca-pub',
-        credential_id: '',
-        scanner_id: '123',
-        name: 'Updated Scanner',
-        comment: 'Updated comment',
-        scanner_host: '127.0.0.1',
-        scanner_type: OPENVASD_SCANNER_TYPE,
-        port: 9390,
-      },
-    });
-  });
-
-  test('should remove ca cert when saving a scanner', async () => {
-    const response = createActionResultResponse({
-      action: 'save_scanner',
-      id: '123',
-      message: 'Scanner updated successfully',
-    });
-    const fakeHttp = createHttp(response);
-    const cmd = new ScannerCommand(fakeHttp);
-    await cmd.save({
-      id: '123',
-      name: 'Updated Scanner',
-      host: '127.0.0.1',
-      port: 9390,
-      type: OPENVASD_SCANNER_TYPE,
-      comment: 'Updated comment',
-      credentialId: '123',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_scanner',
-        ca_pub: '',
-        credential_id: '123',
-        scanner_id: '123',
-        name: 'Updated Scanner',
-        comment: 'Updated comment',
-        scanner_host: '127.0.0.1',
-        scanner_type: OPENVASD_SCANNER_TYPE,
-        port: 9390,
-      },
-    });
   });
 
   test('should verify a scanner through native API', async () => {
@@ -518,5 +519,4 @@ describe('ScannerCommand tests', () => {
       }),
     );
   });
-
 });

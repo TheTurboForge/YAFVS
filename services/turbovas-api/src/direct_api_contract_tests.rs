@@ -211,8 +211,18 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/scanners",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/scanners/:scanner_id",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/scanners/:scanner_id/replace-configuration",
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
@@ -658,6 +668,8 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_clone_alert)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_credential)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scanner)"));
+    assert!(browser_routes.contains("post(browser_proxy_create_scanner)"));
+    assert!(browser_routes.contains("post(browser_proxy_replace_scanner_configuration)"));
     assert!(browser_routes.contains("post(browser_proxy_verify_scanner)"));
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_filter)"));

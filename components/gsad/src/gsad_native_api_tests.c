@@ -99,6 +99,37 @@ Ensure (gsad_native_api,
                  is_false);
 }
 
+Ensure (gsad_native_api, should_allow_scanner_create_post)
+{
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed ("/api/v1/scanners"), is_true);
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed ("/api/v1/scanners/"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed (
+      "/api/v1/scanners?unexpected=query"),
+    is_false);
+}
+
+Ensure (gsad_native_api,
+        should_only_allow_canonical_scanner_configuration_replacement_posts)
+{
+  const gchar *valid =
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/replace-configuration";
+  const gchar *rejected[] = {
+    "/api/v1/scanners/not-a-uuid/replace-configuration",
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/replace-configuration/extra",
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/replace-configuration?unexpected=query",
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/replace-configuration/",
+  };
+
+  assert_that (gsad_native_api_test_post_path_is_allowed (valid), is_true);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (gsad_native_api_test_post_path_is_allowed (rejected[index]),
+                 is_false);
+}
+
 const gchar *
 params_value (params_t *params, const gchar *name)
 {

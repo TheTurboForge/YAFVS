@@ -26,8 +26,8 @@ use crate::{
     report_format_writes::patch_report_format,
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_verify::{ScannerVerifyResult, verify_scanner},
-    scanner_write_validation::ScannerPatchRequest,
-    scanner_writes::patch_scanner,
+    scanner_write_validation::{ScannerConfigurationRequest, ScannerPatchRequest},
+    scanner_writes::{create_scanner, patch_scanner, replace_scanner_configuration},
     task_control::{TaskStartResult, start_task},
     task_stop::{TaskStopResult, stop_task},
     task_target_payloads::TaskItem,
@@ -58,6 +58,33 @@ pub(crate) async fn browser_proxy_patch_scanner(
 ) -> Result<Json<ScannerAssetDetail>, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     patch_scanner(
+        State(state),
+        Path(scanner_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_create_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<ScannerConfigurationRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ScannerAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_scanner(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_replace_scanner_configuration(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ScannerConfigurationRequest>,
+) -> Result<Json<ScannerAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    replace_scanner_configuration(
         State(state),
         Path(scanner_id),
         Some(Extension(operator)),

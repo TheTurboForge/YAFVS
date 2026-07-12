@@ -8,7 +8,7 @@ import {useState} from 'react';
 import {type EntityCommandParams} from 'gmp/commands/entity';
 import {
   type ScannerCommandCreateParams,
-  type ScannerCommandSaveParams,
+  type ScannerCommandSaveArgs,
 } from 'gmp/commands/scanner';
 import {
   type default as Credential,
@@ -111,7 +111,10 @@ const fetchScannerCredentials = async (
           });
           typeCredentials.push(...response.credentials);
           const total = response.page?.total ?? typeCredentials.length;
-          if (response.credentials.length === 0 || typeCredentials.length >= total) {
+          if (
+            response.credentials.length === 0 ||
+            typeCredentials.length >= total
+          ) {
             break;
           }
         }
@@ -355,7 +358,7 @@ const ScannerComponent = ({
       onDownloaded,
     },
   );
-  const handleScannerSave = useEntitySave<ScannerCommandSaveParams>(
+  const handleScannerSave = useEntitySave<ScannerCommandSaveArgs>(
     entity => gmp.scanner.save(entity),
     {
       onSaveError,
@@ -389,7 +392,8 @@ const ScannerComponent = ({
         clone: handleEntityClone as (scanner: Scanner) => Promise<void>,
         create: openScannerDialog,
         delete: handleScannerDelete,
-        download: scanner => handleScannerDownload(scanner, {extension: 'json'}),
+        download: scanner =>
+          handleScannerDownload(scanner, {extension: 'json'}),
         downloadCertificate: handleDownloadCertificate,
         downloadCredential: handleDownloadCredential,
         edit: openScannerDialog,
@@ -413,11 +417,19 @@ const ScannerComponent = ({
           onNewCredentialClick={openCredentialsDialog}
           onSave={async d => {
             const promise = isDefined(d.id)
-              ? handleScannerSave({
-                  ...d,
-                  id: d.id as string,
-                  type: d.type as ScannerType,
-                })
+              ? handleScannerSave(
+                  scanner?.isInUse()
+                    ? {
+                        id: d.id as string,
+                        name: d.name,
+                        comment: d.comment,
+                      }
+                    : {
+                        ...d,
+                        id: d.id as string,
+                        type: d.type as ScannerType,
+                      },
+                )
               : handleScannerCreate({
                   ...d,
                   type: d.type as ScannerType,

@@ -201,7 +201,7 @@ fn inherited_gsad_and_gmp_layers_proxy_scanner_control_and_secret_fields() {
 }
 
 #[test]
-fn native_direct_api_gates_scanner_metadata_and_verify_controls() {
+fn native_direct_api_gates_scanner_configuration_metadata_and_verify_controls() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/scanners",
@@ -217,7 +217,17 @@ fn native_direct_api_gates_scanner_metadata_and_verify_controls() {
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/export",
         false,
     ));
-    for method in [Method::POST, Method::DELETE, Method::PUT] {
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scanners",
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/scanners",
+        false
+    ));
+    for method in [Method::DELETE, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, "/api/v1/scanners", true),
             "{method} /api/v1/scanners must remain closed"
@@ -251,6 +261,19 @@ fn native_direct_api_gates_scanner_metadata_and_verify_controls() {
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
         false,
     ));
+    let replace_configuration =
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/replace-configuration";
+    assert!(!direct_api_v1_path_is_allowed(replace_configuration));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        replace_configuration,
+        true,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        replace_configuration,
+        false,
+    ));
     assert!(!direct_api_v1_path_is_allowed(
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/verify"
     ));
@@ -274,15 +297,30 @@ fn native_direct_api_gates_scanner_metadata_and_verify_controls() {
 }
 
 #[test]
-fn openapi_documents_scanner_metadata_and_verify_control_boundary() {
+fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary() {
     let list = openapi_path_block("/scanners");
     assert!(list.contains("get:"));
-    assert!(!list.contains("post:"));
+    assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
+    assert!(list.contains("x-turbovas-exposure: direct-write"));
     assert!(!list.contains("x-turbovas-inherited-still-owns:"));
-    assert!(list.contains(
-        "Credential secrets, scanner CA material, and control operations are intentionally excluded"
-    ));
+    for required in [
+        "operationId: postScanners",
+        "x-turbovas-replaces: scanner-create",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-owner-semantics: request-operator-owner",
+        "x-turbovas-safety-contract: write-control-v1",
+        "$ref: '#/components/schemas/ScannerConfigurationRequest'",
+        "'201':",
+        "Location:",
+        "without contacting or verifying the scanner",
+        "Relay configuration is initialized empty",
+    ] {
+        assert!(
+            list.contains(required),
+            "scanner create docs missing {required}"
+        );
+    }
 
     let detail = openapi_path_block("/scanners/{scanner_id}");
     assert!(detail.contains("get:"));
@@ -292,15 +330,43 @@ fn openapi_documents_scanner_metadata_and_verify_control_boundary() {
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
     assert!(!detail.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
     assert!(
-        detail.contains("Native direct write-control can patch scanner name/comment metadata and verify bounded local scanner availability")
+        detail.contains("Native direct write-control can create scanners, replace complete retained editor configuration, patch name/comment metadata, and verify bounded local scanner availability")
     );
     for residual in [
         "Credential secrets, credential certificate metadata",
         "remote/TLS/relay verification",
-        "host/port/type/relay mutation",
-        "export/download behavior, create, clone, restore, and delete remain inherited",
+        "relay mutation",
+        "inherited export/download formats, clone, restore, and delete remain inherited",
     ] {
         assert!(detail.contains(residual), "detail docs missing {residual}");
+    }
+
+    let replace = openapi_path_block("/scanners/{scanner_id}/replace-configuration");
+    for required in [
+        "post:",
+        "operationId: postScannersByScannerIdReplaceConfiguration",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: scanner-complete-retained-editor-configuration-modify",
+        "x-turbovas-operator-identity: direct-token-operator",
+        "x-turbovas-owner-semantics: preserve-existing-owner",
+        "x-turbovas-safety-contract: write-control-v1",
+        "$ref: '#/components/schemas/ScannerConfigurationRequest'",
+        "$ref: '#/components/schemas/ScannerAssetDetail'",
+        "without contacting or verifying it",
+        "not referenced by a live non-hidden task",
+        "In-use scanners return conflict",
+        "Existing relay host and relay port are preserved",
+    ] {
+        assert!(
+            replace.contains(required),
+            "scanner replace docs missing {required}"
+        );
+    }
+    for forbidden in ["\n    get:", "\n    patch:", "\n    delete:"] {
+        assert!(
+            !replace.contains(forbidden),
+            "scanner replace must not expose extra methods: {forbidden}"
+        );
     }
 
     let verify = openapi_path_block("/scanners/{scanner_id}/verify");

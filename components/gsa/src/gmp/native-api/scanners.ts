@@ -1,5 +1,4 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
- * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -10,6 +9,7 @@ import type {UrlParams} from 'gmp/http/utils';
 import ActionResult from 'gmp/models/action-result';
 import type Filter from 'gmp/models/filter';
 import Scanner from 'gmp/models/scanner';
+import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -75,6 +75,16 @@ interface NativeScannerPatchArgs {
   comment?: string;
 }
 
+export interface NativeScannerConfigurationArgs {
+  name: string;
+  comment?: string;
+  host: string;
+  port: number | '';
+  scannerType: number;
+  caPub?: string;
+  credentialId?: string;
+}
+
 export interface NativeScannersQuery {
   page: number;
   pageSize: number;
@@ -96,10 +106,7 @@ export interface NativeScannerVerifyResult {
   scanner_id: string;
   scanner_type: number;
   verified: boolean;
-  verification_mode:
-    | 'osp-unix-socket'
-    | 'openvasd-no-contact'
-    | 'cve-builtin';
+  verification_mode: 'osp-unix-socket' | 'openvasd-no-contact' | 'cve-builtin';
   name?: string;
   version?: string;
   scanner_name?: string;
@@ -248,6 +255,8 @@ const nativeScannerToModel = (
       : undefined,
     relay_host: stringValue(item.relay_host),
     relay_port: integerValue(item.relay_port),
+    in_use:
+      detail && (item.tasks?.length ?? 0) > 0 ? YES_VALUE : NO_VALUE,
     tasks: detail
       ? {task: (item.tasks ?? []).map(nativeTaskToElement)}
       : undefined,
@@ -276,7 +285,9 @@ export const fetchNativeScanners = async (
     sort: stringValue(payload.page?.sort),
     filter: stringValue(payload.page?.filter),
   };
-  const scanners = (payload.items ?? []).map(item => nativeScannerToModel(item));
+  const scanners = (payload.items ?? []).map(item =>
+    nativeScannerToModel(item),
+  );
   return {
     scanners,
     counts: nativeCounts(page, scanners.length),
@@ -350,6 +361,57 @@ export const patchNativeScanner = async (
       },
     }),
   );
+};
+
+const nativeScannerConfigurationBody = (
+  args: NativeScannerConfigurationArgs,
+) => ({
+  name: args.name,
+  comment: args.comment ?? '',
+  host: args.host,
+  port: args.port === '' ? 0 : args.port,
+  scanner_type: Number(args.scannerType),
+  ca_pub: args.caPub ?? null,
+  credential_id: args.credentialId ?? null,
+});
+
+const scannerActionResponse = (
+  payload: NativeScannerPayload,
+  action: 'create_scanner' | 'save_scanner',
+): Response<ActionResult> =>
+  new Response(
+    new ActionResult({
+      action_result: {
+        action,
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+
+export const createNativeScanner = async (
+  gmp: NativeApiGmp,
+  args: NativeScannerConfigurationArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeScannerPayload>(
+    gmp,
+    'api/v1/scanners',
+    nativeScannerConfigurationBody(args),
+  );
+  return scannerActionResponse(payload, 'create_scanner');
+};
+
+export const replaceNativeScannerConfiguration = async (
+  gmp: NativeApiGmp,
+  id: string,
+  args: NativeScannerConfigurationArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeScannerPayload>(
+    gmp,
+    `api/v1/scanners/${encodeURIComponent(id)}/replace-configuration`,
+    nativeScannerConfigurationBody(args),
+  );
+  return scannerActionResponse(payload, 'save_scanner');
 };
 
 export const verifyNativeScanner = async (

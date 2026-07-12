@@ -74,6 +74,23 @@ or vendor support should contact Greenbone directly.
 OpenVAS, OSPD, and Notus use runtime feed data and a persistent feed-signature
 keyring. TurboVAS does not disable feed signature verification.
 
+`just feed-generation-stage --json` can copy all five retained feed classes
+into one immutable, content-addressed generation. It rejects links, special
+files, multiply linked files, missing class markers, size/count limit breaches,
+and sources that change during copying. It fsyncs and verifies the complete
+generation before atomically installing it in the local generation store. This
+staging command deliberately does not activate the generation or alter the
+currently consumed runtime feed; activation remains a separate guarded step.
+`just feed-generation-state --status-only --json` rehashes staged content and
+reports tampering or interrupted staging directories.
+
+The generation boundary verifies Greenbone signatures and exact signed
+checksum coverage for NASL, Notus advisories/products, and CERT data. The
+upstream SCAP and GVMD data-object trees do not currently provide corresponding
+signed checksum manifests in the Community Feed cache; TurboVAS relies on the
+hardened transport boundary and records their complete local hashes, but does
+not describe that as independent publisher authentication.
+
 Useful development checks include:
 
 - `just runtime-status`
@@ -97,6 +114,7 @@ Useful development checks include:
 - `just runtime-scanner-capability-check --json`
 - `just runtime-nmap-capability-check --json`
 - `just feed-state --json`
+- `just feed-generation-state --status-only --json`
 - `just runtime-scope-smoke --json`
 - `just runtime-scope-report-summary --json`
 - `just runtime-certbund-report --json`

@@ -132,6 +132,8 @@ browser, direct API, production-posture, or release-readiness question.
 - `just feed-state`: show persistent feed cache and runtime-copy state.
 - `just feed-cache-sync`: start a full Community Feed cache sync in `tmux`.
 - `just feed-copy-to-runtime`: copy cached feed data into the runtime feed tree.
+- `just feed-generation-stage`: create and verify a sealed, content-addressed feed generation without activating it.
+- `just feed-generation-state --status-only --json`: verify staged feed generations and report orphan or tampered state.
 - `just runtime-status`: show Docker runtime status.
 - `just runtime-smoke`: run infrastructure smoke checks.
 - `just runtime-log-review`: review recent full-stack runtime logs for high-signal regressions.

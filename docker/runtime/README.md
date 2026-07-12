@@ -74,6 +74,8 @@ Use the root `justfile` command surface:
 - `just runtime-nmap-capability-check`
 - `just runtime-feed-keyring-init`
 - `just runtime-feed-import-init`
+- `just feed-generation-stage`
+- `just feed-generation-state --status-only`
 - `just runtime-app-smoke`
 - `just runtime-native-api-smoke`
 - `just runtime-native-api-direct-smoke`
@@ -101,6 +103,21 @@ The GitHub Actions quality-gate workflow is deliberately source-only. It shares
 the same `tools/turbovasctl quality-gate --json` contract, but does not start
 Docker runtime services, scans, feed sync/copy commands, or public-release
 gates. Runtime-aware continuous checking belongs to the server-side timer.
+
+`feed-generation-stage` builds a sealed generation from all retained Community
+Feed cache classes under the private runtime `feed-store/generations` directory.
+Its identifier covers the sorted class layout, every file length and SHA-256
+digest, and the feed release. Staging rejects unsafe filesystem entries and
+source mutation, fsyncs the completed tree, and uses atomic no-replace
+installation. It does not create or change the `feed-store/current` pointer and
+therefore does not activate content. `feed-generation-state` performs a full
+manifest, layout, permission, size, and digest verification of installed
+generations and reports orphan staging directories.
+Available Greenbone signatures and exact signed checksum coverage are required
+for NASL, Notus, and CERT content. SCAP and GVMD data objects are fully hashed
+and generation-bound, but the upstream cache currently supplies no equivalent
+signed checksum manifests for those two classes; this residual authenticity
+limit is kept explicit.
 
 `runtime-certs-init` uses inherited `gvm-manage-certs` with persistent runtime
 certificate directories and does not rotate existing certificates.

@@ -254,6 +254,12 @@ feed-cache-sync *args:
 feed-copy-to-runtime *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-copy-to-runtime "$@"
 
+feed-generation-stage *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-generation-stage "$@"
+
+feed-generation-state *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-generation-state "$@"
+
 runtime-status *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-status "$@"
 

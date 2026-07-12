@@ -102,6 +102,7 @@ def metric_contract(scope_hosts=None):
                 nvt,
                 {"nvt": nvt, "name": item["name"], "cvss_score": item["severity"], "hosts": set(), "source_reports": set()},
             )
+
             entry["cvss_score"] = max(entry["cvss_score"], item["severity"])
             entry["hosts"].add(host_key)
             entry["source_reports"].update(item["source_reports"])
@@ -11413,6 +11414,7 @@ db2:keys=5,expires=0,avg_ttl=0
             "runtime-full-test-scan-start",
             "feed-cache-sync",
             "feed-copy-to-runtime",
+            "feed-generation-stage",
             "docker compose up",
             "license-public-release-gate",
             "pull_request_target",
@@ -11454,6 +11456,7 @@ db2:keys=5,expires=0,avg_ttl=0
             "runtime-full-test-scan-start",
             "feed-cache-sync",
             "feed-copy-to-runtime",
+            "feed-generation-stage",
             "docker compose up",
             "github/codeql-action/autobuild",
         ]
@@ -14534,6 +14537,28 @@ db2:keys=5,expires=0,avg_ttl=0
                     ("gvmd", Path("gvm/data-objects/gvmd/22.04"), Path("gvm/data-objects/gvmd/22.04")),
                 ],
             )
+
+    def test_feed_generation_specs_cover_all_feed_classes(self):
+        specs = turbovasctl.feed_generation_specs()
+        self.assertEqual([spec.key for spec in specs], [feed_class.key for feed_class in turbovasctl.FEED_CLASSES])
+        self.assertEqual(len(specs), 5)
+        notus = next(spec for spec in specs if spec.key == "notus")
+        self.assertEqual(
+            notus.markers,
+            ("advisories/sha256sums", "advisories/sha256sums.asc", "products/sha256sums", "products/sha256sums.asc"),
+        )
+        self.assertEqual(notus.unsigned_metadata, ("LICENSE", "LICENSE.GPLv2", "LICENSE.ODbLv1", "timestamp"))
+
+    def test_feed_generation_parser_and_just_contracts_are_wired(self):
+        parser = turbovasctl.build_parser()
+        state = parser.parse_args(["feed-generation-state", "--status-only", "--json"])
+        stage = parser.parse_args(["feed-generation-stage", "--json"])
+        self.assertEqual((state.command, state.status_only, state.json), ("feed-generation-state", True, True))
+        self.assertEqual((stage.command, stage.json), ("feed-generation-stage", True))
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        for command in ("feed-generation-stage", "feed-generation-state"):
+            self.assertIn(f"{command} *args:", justfile)
+            self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
 
     def test_runtime_feed_mappings_point_to_runtime_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -241,8 +241,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(row["properties"]["pie"]["status"], "present")
         self.assertEqual(row["properties"]["nx_stack"]["status"], "present")
         self.assertEqual(row["properties"]["full_relro"]["status"], "present")
-        self.assertEqual(row["properties"]["stack_protector"]["status"], "present")
-        self.assertEqual(row["properties"]["fortify"]["status"], "present")
+        self.assertEqual(row["properties"]["stack_protector"]["status"], "unknown")
+        self.assertEqual(row["properties"]["fortify"]["status"], "unknown")
         self.assertEqual(row["properties"]["control_flow_protection"]["status"], "present")
         self.assertEqual(row["properties"]["no_text_relocations"]["status"], "present")
 
@@ -262,6 +262,18 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(weak["properties"]["fortify"]["status"], "unknown")
         self.assertEqual(weak["properties"]["no_text_relocations"]["status"], "missing")
 
+        static = turbovasctl.c_hardening_elf_properties(
+            component="gsad",
+            relative_path="build/gsad/src/gsad",
+            header="  Type: EXEC (Executable file)\n  Machine: Advanced Micro Devices X86-64\n",
+            program_headers="  GNU_STACK 0 0 0 0 0 RW 0x10\n",
+            dynamic="There is no dynamic section in this file.\n",
+            symbols="",
+            notes="",
+        )
+        self.assertEqual(static["kind"], "executable")
+        self.assertEqual(static["properties"]["pie"]["status"], "missing")
+
     def test_c_hardening_artifact_paths_use_declared_final_artifacts_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -277,6 +289,26 @@ class TurboVASCtlTests(unittest.TestCase):
             matches = turbovasctl.c_hardening_artifact_spec_matches(root)
             self.assertEqual(matches["gvmd"]["build/gvmd/src/gvmd"], 1)
             self.assertEqual(matches["gvmd"]["build/gvmd/src/libgvm-pg-server.so.*"], 0)
+        self.assertEqual(set(turbovasctl.C_HARDENING_ARTIFACT_SPECS), set(turbovasctl.C_SERVICES_CHAIN))
+
+    def test_c_hardening_inspection_does_not_treat_failed_dynamic_read_as_clean(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "build" / "gvmd" / "src" / "gvmd"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_bytes(b"\x7fELFpayload")
+            outputs = [
+                (True, "  Type: DYN\n  Machine: Advanced Micro Devices X86-64\n"),
+                (True, "  INTERP 0 0 0\n  GNU_STACK 0 0 0 0 0 RW 0x10\n"),
+                (False, "readelf error"),
+                (True, ""),
+                (True, ""),
+            ]
+            with unittest.mock.patch.object(turbovasctl, "c_hardening_readelf", side_effect=outputs):
+                row = turbovasctl.inspect_c_hardening_artifact(root, "gvmd", artifact)
+        self.assertEqual(row["properties"]["full_relro"]["status"], "unknown")
+        self.assertEqual(row["properties"]["no_text_relocations"]["status"], "unknown")
+        self.assertEqual(row["file_evidence"]["size_bytes"], len(b"\x7fELFpayload"))
 
     def test_c_hardening_check_fails_cleanly_without_readelf(self):
         with tempfile.TemporaryDirectory() as tmp:

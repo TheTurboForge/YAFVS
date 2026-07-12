@@ -107,9 +107,12 @@ apply some hardening, but coverage varies by component and build type.
 final C ELF artifacts. The check records current PIE, non-executable-stack,
 RELRO, stack-protector, fortified-call, control-flow, and text-relocation
 evidence without changing build flags. Missing, unsupported, inapplicable, and
-unknown results remain explicit. Dedicated hardened, sanitizer, and analysis
-profiles are still planned work; this baseline is evidence, not a claim that
-those profiles have landed.
+unknown results remain explicit; missing or unknown required evidence makes the
+command fail. Each result includes the artifact digest, size, modification
+time, source head, and dirty-worktree state so stale or locally modified output
+is visible rather than silently treated as current proof. Dedicated hardened,
+sanitizer, and analysis profiles are still planned work; this baseline is
+evidence, not a claim that those profiles have landed.
 
 See [Memory Safety Direction](MEMORY_SAFETY.md) for the broader remove, retain,
 or replace policy and [Minimum Validation Standards](VALIDATION_STANDARDS.md)

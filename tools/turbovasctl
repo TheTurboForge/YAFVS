@@ -12931,8 +12931,9 @@ def c_hardening_elf_properties(
         re.search(r"^\s*INTERP\s", program_headers, re.MULTILINE)
     )
     file_name = Path(relative_path).name.lower()
+    looks_like_shared_library = ".so" in file_name
     is_test = any(part.lower() in {"test", "tests"} for part in Path(relative_path).parts) or "test" in file_name
-    if has_interpreter:
+    if has_interpreter or (elf_type in {"DYN", "EXEC"} and not looks_like_shared_library and component != "pg-gvm"):
         kind = "test-executable" if is_test else "executable"
     elif component == "pg-gvm":
         kind = "module"
@@ -12970,14 +12971,19 @@ def c_hardening_elf_properties(
         "missing" if has_textrel else "present",
         "dynamic section declares TEXTREL" if has_textrel else "dynamic section has no TEXTREL marker",
     )
+    stack_symbol = "__stack_chk_fail" in symbols
     stack_protector = c_hardening_property(
-        "present" if "__stack_chk_fail" in symbols else "unknown",
-        "__stack_chk_fail symbol reference found" if "__stack_chk_fail" in symbols else "no stack-check symbol reference; compile flags are not proven",
+        "unknown",
+        "__stack_chk_fail symbol reference found, but whole-artifact compiler coverage is not proven"
+        if stack_symbol
+        else "no stack-check symbol reference; compile flags and applicability are not proven",
     )
     fortify_match = re.search(r"\b__[A-Za-z0-9_]+_chk(?:@|\b)", symbols)
     fortify = c_hardening_property(
-        "present" if fortify_match else "unknown",
-        f"fortified symbol {fortify_match.group(0)} found" if fortify_match else "no fortified libc symbol reference; applicability and compile flags are not proven",
+        "unknown",
+        f"fortified symbol {fortify_match.group(0)} found, but whole-artifact compiler coverage is not proven"
+        if fortify_match
+        else "no fortified libc symbol reference; applicability and compile flags are not proven",
     )
     if "X86-64" in machine.upper():
         ibt = "IBT" in notes
@@ -13013,7 +13019,7 @@ def c_hardening_elf_properties(
     }
 
 
-def c_hardening_readelf(path: Path, *args: str) -> str:
+def c_hardening_readelf(path: Path, *args: str) -> tuple[bool, str]:
     result = subprocess.run(
         ["readelf", "-W", *args, str(path)],
         text=True,
@@ -13021,14 +13027,28 @@ def c_hardening_readelf(path: Path, *args: str) -> str:
         stderr=subprocess.STDOUT,
         check=False,
     )
-    return result.stdout if result.returncode == 0 else ""
+    return result.returncode == 0, result.stdout
+
+
+def c_hardening_artifact_file_evidence(path: Path) -> dict[str, Any]:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    stat = path.stat()
+    return {
+        "sha256": digest.hexdigest(),
+        "size_bytes": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
 
 
 def inspect_c_hardening_artifact(repo_root: Path, component: str, path: Path) -> dict[str, Any]:
     relative_path = str(path.relative_to(repo_root))
-    header = c_hardening_readelf(path, "-h")
-    program_headers = c_hardening_readelf(path, "-l")
-    if not header or not program_headers:
+    header_ok, header = c_hardening_readelf(path, "-h")
+    program_headers_ok, program_headers = c_hardening_readelf(path, "-l")
+    file_evidence = c_hardening_artifact_file_evidence(path)
+    if not header_ok or not program_headers_ok:
         unknown = c_hardening_property("unknown", "readelf could not inspect the ELF header and program headers")
         return {
             "component": component,
@@ -13036,6 +13056,7 @@ def inspect_c_hardening_artifact(repo_root: Path, component: str, path: Path) ->
             "kind": "unknown",
             "elf_type": "unknown",
             "machine": "unknown",
+            "file_evidence": file_evidence,
             "properties": {
                 "pie": unknown,
                 "nx_stack": unknown,
@@ -13046,15 +13067,35 @@ def inspect_c_hardening_artifact(repo_root: Path, component: str, path: Path) ->
                 "no_text_relocations": unknown,
             },
         }
-    return c_hardening_elf_properties(
+    dynamic_ok, dynamic = c_hardening_readelf(path, "-d")
+    symbols_ok, symbols = c_hardening_readelf(path, "-s")
+    notes_ok, notes = c_hardening_readelf(path, "-n")
+    result = c_hardening_elf_properties(
         component=component,
         relative_path=relative_path,
         header=header,
         program_headers=program_headers,
-        dynamic=c_hardening_readelf(path, "-d"),
-        symbols=c_hardening_readelf(path, "-s"),
-        notes=c_hardening_readelf(path, "-n"),
+        dynamic=dynamic,
+        symbols=symbols,
+        notes=notes,
     )
+    result["file_evidence"] = file_evidence
+    if not dynamic_ok:
+        evidence = c_hardening_property("unknown", "readelf could not inspect the dynamic section")
+        result["properties"]["full_relro"] = evidence
+        result["properties"]["no_text_relocations"] = evidence
+    if not symbols_ok:
+        result["properties"]["stack_protector"] = c_hardening_property(
+            "unknown", "readelf could not inspect symbols"
+        )
+        result["properties"]["fortify"] = c_hardening_property(
+            "unknown", "readelf could not inspect symbols"
+        )
+    if not notes_ok:
+        result["properties"]["control_flow_protection"] = c_hardening_property(
+            "unknown", "readelf could not inspect ELF notes"
+        )
+    return result
 
 
 def c_hardening_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -13067,11 +13108,10 @@ def c_hardening_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
         "metadata": result.get("metadata", {}),
         "details": {
             "profile": details.get("profile"),
+            "source_state": details.get("source_state", {}),
             "artifact_count": details.get("artifact_count", 0),
             "component_artifact_counts": details.get("component_artifact_counts", {}),
-            "artifact_spec_matches": details.get("artifact_spec_matches", {}),
             "property_status_counts": details.get("property_status_counts", {}),
-            "build_state": details.get("build_state", {}),
         },
     }
 
@@ -13095,11 +13135,11 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
     for component, state in build_state.items():
         missing_patterns = [pattern for pattern, count in artifact_spec_matches[component].items() if count == 0]
         if not state["build_present"]:
-            findings.append(finding("warn", "c-hardening.build", f"{component} has no current build directory.", state["build_dir"]))
+            findings.append(finding("fail", "c-hardening.build", f"{component} has no current build directory.", state["build_dir"]))
         elif missing_patterns:
             findings.append(
                 finding(
-                    "warn",
+                    "fail",
                     "c-hardening.artifact-spec",
                     f"{component} is missing {len(missing_patterns)} declared final artifact pattern(s).",
                     state["build_dir"],
@@ -13107,7 +13147,7 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
                 )
             )
         elif component_counts[component] == 0:
-            findings.append(finding("warn", "c-hardening.artifacts", f"{component} has no final ELF artifact outside CMake internals.", state["build_dir"]))
+            findings.append(finding("fail", "c-hardening.artifacts", f"{component} has no declared final ELF artifact.", state["build_dir"]))
         else:
             findings.append(finding("pass", "c-hardening.artifacts", f"{component} has {component_counts[component]} final ELF artifact(s).", state["build_dir"]))
 
@@ -13124,7 +13164,7 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
                 runtime_missing.append(row)
             elif runtime_scope and value["status"] == "unknown":
                 runtime_unknown.append(row)
-    baseline_status = "warn" if runtime_missing or runtime_unknown or not artifacts else "pass"
+    baseline_status = "fail" if runtime_missing or runtime_unknown or not artifacts else "pass"
     findings.append(
         finding(
             baseline_status,
@@ -13133,13 +13173,24 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
             details={
                 "missing_count": len(runtime_missing),
                 "unknown_count": len(runtime_unknown),
-                "missing_examples": runtime_missing[:12],
-                "unknown_examples": runtime_unknown[:12],
+                "missing_examples": runtime_missing[:5],
+                "unknown_examples": runtime_unknown[:5],
             },
         )
     )
     artifact_dir = runtime_path(repo_root, "artifacts", "c-hardening")
     latest_path, timestamped_path = retained_json_artifact_paths(artifact_dir, "c-hardening", "c-hardening.json")
+    source_status = run_git(repo_root, ["status", "--porcelain=v1", "--untracked-files=no"])
+    if source_status is None:
+        findings.append(finding("fail", "c-hardening.source-state", "Git source state could not be determined."))
+    elif source_status:
+        findings.append(
+            finding(
+                "fail",
+                "c-hardening.source-state",
+                "Tracked source changes are present; hardening evidence cannot be attributed to a clean source state.",
+            )
+        )
     result = make_result(
         "c-hardening-check",
         repo_root,
@@ -13150,6 +13201,10 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
     result["details"] = {
         "schema_version": 1,
         "profile": "current",
+        "source_state": {
+            "head": run_git(repo_root, ["rev-parse", "HEAD"]),
+            "dirty": None if source_status is None else bool(source_status),
+        },
         "toolchain": {
             "architecture": os.uname().machine,
             "gcc": tool_version("gcc"),

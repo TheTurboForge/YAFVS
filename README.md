@@ -101,6 +101,7 @@ browser, direct API, production-posture, or release-readiness question.
 - `just build <component>`: build a supported component with local artifacts under ignored paths.
 - `just build-core-c`: build the initial core C chain.
 - `just build-c-services`: build the current C service baseline.
+- `just c-hardening-check --status-only --json`: inspect current final C ELF artifacts and report missing, unsupported, inapplicable, or unknown hardening evidence without changing build flags.
 - `just build-ui`: install and build the web UI.
 - `just build-python`: build/import-check all Python components, including inherited compatibility clients.
 - `just build-baseline`: run the current required build baseline without `python-gvm` or `gvm-tools`.

@@ -33,11 +33,13 @@ Validation should scale with the change class. These are minimums, not a ceiling
 
 - focused parser/command tests or C/Python unit tests
 - `just build-c-services` for gvmd/gsad/gvm-libs/openvas C changes
+- `just c-hardening-check --status-only --json` after C builds to inspect the
+  declared final ELF artifacts without changing build policy
 - `just build-python` for python-gvm/gvm-tools/runtime Python changes
 - runtime smoke only when the change affects runtime command behavior
 - for retained C hardening direction and planned profiles, see
-  `docs/C_HARDENING.md`; until those profiles land, do not claim
-  `just build-c-services` proves final binary hardening
+  `docs/C_HARDENING.md`; do not claim `just build-c-services` alone proves
+  final binary hardening
 
 ## Database Or Migration
 

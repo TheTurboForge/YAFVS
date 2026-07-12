@@ -227,6 +227,74 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("python-gvm", turbovasctl.BASELINE_CHAIN)
         self.assertNotIn("gvm-tools", turbovasctl.BASELINE_CHAIN)
 
+    def test_c_hardening_elf_properties_distinguish_present_missing_and_unknown(self):
+        row = turbovasctl.c_hardening_elf_properties(
+            component="gvmd",
+            relative_path="build/gvmd/src/gvmd",
+            header="  Type: DYN (Position-Independent Executable file)\n  Machine: Advanced Micro Devices X86-64\n",
+            program_headers="  INTERP 0 0 0\n  GNU_STACK 0 0 0 0 0 RW 0x10\n  GNU_RELRO 0 0 0\n",
+            dynamic=" 0x000000000000001e (FLAGS) BIND_NOW\n",
+            symbols="  1: 0 FUNC GLOBAL DEFAULT UND __stack_chk_fail@GLIBC_2.4\n  2: 0 FUNC GLOBAL DEFAULT UND __snprintf_chk@GLIBC_2.3.4\n",
+            notes="x86 feature: IBT, SHSTK\n",
+        )
+        self.assertEqual(row["kind"], "executable")
+        self.assertEqual(row["properties"]["pie"]["status"], "present")
+        self.assertEqual(row["properties"]["nx_stack"]["status"], "present")
+        self.assertEqual(row["properties"]["full_relro"]["status"], "present")
+        self.assertEqual(row["properties"]["stack_protector"]["status"], "present")
+        self.assertEqual(row["properties"]["fortify"]["status"], "present")
+        self.assertEqual(row["properties"]["control_flow_protection"]["status"], "present")
+        self.assertEqual(row["properties"]["no_text_relocations"]["status"], "present")
+
+        weak = turbovasctl.c_hardening_elf_properties(
+            component="gvmd",
+            relative_path="build/gvmd/src/gvmd",
+            header="  Type: EXEC (Executable file)\n  Machine: Advanced Micro Devices X86-64\n",
+            program_headers="  INTERP 0 0 0\n  GNU_STACK 0 0 0 0 0 RWE 0x10\n",
+            dynamic=" 0x0000000000000016 (TEXTREL) 0x0\n",
+            symbols="",
+            notes="",
+        )
+        self.assertEqual(weak["properties"]["pie"]["status"], "missing")
+        self.assertEqual(weak["properties"]["nx_stack"]["status"], "missing")
+        self.assertEqual(weak["properties"]["full_relro"]["status"], "missing")
+        self.assertEqual(weak["properties"]["stack_protector"]["status"], "unknown")
+        self.assertEqual(weak["properties"]["fortify"]["status"], "unknown")
+        self.assertEqual(weak["properties"]["no_text_relocations"]["status"], "missing")
+
+    def test_c_hardening_artifact_paths_use_declared_final_artifacts_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "build" / "gvmd" / "src" / "gvmd"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_bytes(b"\x7fELFpayload")
+            internal = root / "build" / "gvmd" / "CMakeFiles" / "probe"
+            internal.parent.mkdir(parents=True)
+            internal.write_bytes(b"\x7fELFinternal")
+            (artifact.parent / "gvmd-link").symlink_to(artifact.name)
+            rows = turbovasctl.c_hardening_artifact_paths(root)
+            self.assertEqual(rows, [("gvmd", artifact.resolve())])
+            matches = turbovasctl.c_hardening_artifact_spec_matches(root)
+            self.assertEqual(matches["gvmd"]["build/gvmd/src/gvmd"], 1)
+            self.assertEqual(matches["gvmd"]["build/gvmd/src/libgvm-pg-server.so.*"], 0)
+
+    def test_c_hardening_check_fails_cleanly_without_readelf(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None), unittest.mock.patch.object(
+                turbovasctl, "write_retained_json_artifact"
+            ):
+                result = turbovasctl.command_c_hardening_check(root, status_only=True)
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["details"]["artifact_count"], 0)
+        self.assertEqual(result["findings"][0]["check"], "c-hardening.readelf")
+
+    def test_c_hardening_parser_accepts_compact_mode(self):
+        args = turbovasctl.build_parser().parse_args(["c-hardening-check", "--status-only", "--json"])
+        self.assertEqual(args.command, "c-hardening-check")
+        self.assertTrue(args.status_only)
+        self.assertTrue(args.json)
+
     def test_aggregate_status_prefers_highest_severity(self):
         findings = [
             {"status": "pass"},

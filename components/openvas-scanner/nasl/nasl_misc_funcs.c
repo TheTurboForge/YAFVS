@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2002-2004 Tenable Network Security
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -23,6 +24,7 @@
 #include "nasl_global_ctxt.h"
 #include "nasl_lex_ctxt.h"
 #include "nasl_packet_forgery.h"
+#include "nasl_telnet_copy.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
 
@@ -185,7 +187,7 @@ nasl_telnet_init (lex_ctxt *lexic)
   retc = alloc_typed_cell (CONST_DATA);
   retc->size = n;
   retc->x.str_val = g_malloc0 (n + 1);
-  memcpy (retc->x.str_val, buffer, n + 1);
+  nasl_telnet_copy_response ((unsigned char *) retc->x.str_val, buffer, n);
 #undef iac
 #undef data
 #undef option

@@ -220,4 +220,20 @@ set_tests_properties (nasl-http2-test PROPERTIES
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1")
 add_custom_target (tests-http2 DEPENDS nasl-http2-test)
 
+option (ENABLE_NASL_SECURITY_TESTS
+        "Build focused sanitizer-backed NASL security regression tests" OFF)
+if (ENABLE_NASL_SECURITY_TESTS)
+  add_executable (nasl-telnet-test nasl_telnet_tests.c)
+  add_test (nasl-telnet-test nasl-telnet-test)
+  target_compile_options (nasl-telnet-test PRIVATE
+                          -Wall -Wextra -Werror
+                          -fsanitize=address,undefined
+                          -fno-omit-frame-pointer)
+  target_link_options (nasl-telnet-test PRIVATE
+                       -fsanitize=address,undefined)
+  target_link_libraries (nasl-telnet-test ${GLIB_LDFLAGS})
+  set_tests_properties (nasl-telnet-test PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1")
+endif (ENABLE_NASL_SECURITY_TESTS)
+
 ## End

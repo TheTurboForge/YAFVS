@@ -45,6 +45,14 @@ controls as the scanner administration boundary.
 
 ## Development Checks
 
+The application profile mounts source and build outputs read-only for `gvmd`,
+`ospd-openvas`, `notus-scanner`, and `gsad`; runtime logs and manager state use
+separate runtime mounts. The `dev-shell` profile remains writable for rebuilds.
+The manager semaphore bind file uses a private runtime directory that is not
+mounted into application containers. `runtime-app-up` validates the rendered
+mount graph before startup; this detects drift but does not eliminate a
+privileged host-side race before Docker performs the mounts.
+
 Useful non-destructive checks:
 
 - `just doctor --status-only --json`

@@ -172,9 +172,11 @@ services:
       - type: bind
         source: ..
         target: /workspace
+        read_only: true
       - type: bind
         source: ..
         target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
+        read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds
         target: /runtime/feeds
@@ -189,6 +191,9 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd-control
         target: /runtime/run/gvmd-control
       - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}/build/run/gvmd
+      - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
         target: /runtime/run/ospd
         read_only: true
@@ -196,8 +201,18 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gvmd
         target: /runtime/logs/gvmd
       - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gvmd
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}/build/logs
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/gvmd
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}/build/var/lib/gvm/gvmd
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/gvmd-bind-files/gvmd.sem
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}/build/var/lib/gvm/gvmd.sem
+      - type: bind
         source: ../build
         target: /workspace/build
+        read_only: true
     command:
       - sh
       - -lc
@@ -247,9 +262,11 @@ services:
       - type: bind
         source: ..
         target: /workspace
+        read_only: true
       - type: bind
         source: ..
         target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
+        read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
         target: /runtime/run/ospd
@@ -277,6 +294,7 @@ services:
       - type: bind
         source: ../build
         target: /workspace/build
+        read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/ospd/openvas.conf
         target: /workspace/build/prefix/etc/openvas/openvas.conf
@@ -339,9 +357,11 @@ services:
       - type: bind
         source: ..
         target: /workspace
+        read_only: true
       - type: bind
         source: ..
         target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
+        read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/notus
         target: /runtime/run/notus
@@ -358,6 +378,7 @@ services:
       - type: bind
         source: ../build
         target: /workspace/build
+        read_only: true
     command:
       - sh
       - -lc
@@ -395,9 +416,11 @@ services:
       - type: bind
         source: ..
         target: /workspace
+        read_only: true
       - type: bind
         source: ..
         target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
+        read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd-gmp
         target: /runtime/run/gvmd
@@ -410,8 +433,15 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gsad
         target: /runtime/logs/gsad
       - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gsad
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}/build/logs
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gsad
+        target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}/build/run/gsad
+      - type: bind
         source: ../build
         target: /workspace/build
+        read_only: true
     command:
       - sh
       - -lc

@@ -1028,6 +1028,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertTrue(turbovasctl.compose_app_up_transient_error("removal of container abc123 is already in progress"))
         self.assertFalse(turbovasctl.compose_app_up_transient_error("database migration failed"))
 
+    def test_runtime_app_up_validates_mount_graph_before_infrastructure(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        function = source[source.index("def command_runtime_app_up"):source.index("def command_runtime_native_api_rebuild")]
+
+        self.assertLess(function.index("rendered_app_execution_mount_finding"), function.index("command_up(repo_root)"))
+        self.assertIn('"Application runtime startup stopped at mount prerequisites."', function)
+
     def test_runtime_app_up_status_only_omits_pass_output_tails(self):
         result = {
             "status": "pass",
@@ -11925,6 +11932,132 @@ db2:keys=5,expires=0,avg_ttl=0
 
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(turbovasctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api"))
+        self.assertEqual(turbovasctl.APP_EXECUTION_MOUNT_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad"))
+
+    def make_app_execution_mount_fixture(self, tmp):
+        root = Path(tmp) / "TurboVAS"
+        runtime = Path(tmp) / "TurboVAS-runtime"
+        (root / "build").mkdir(parents=True)
+        for directory in (
+            runtime,
+            runtime / "logs" / "gvmd",
+            runtime / "logs" / "gsad",
+            runtime / "run" / "gvmd",
+            runtime / "run" / "gsad",
+            runtime / "state" / "gvmd",
+            runtime / "state" / "gvmd-bind-files",
+            runtime / "state" / "ospd",
+        ):
+            directory.mkdir(parents=True, exist_ok=True)
+        (runtime / "state" / "gvmd-bind-files" / "gvmd.sem").write_text("", encoding="utf-8")
+        (runtime / "state" / "ospd" / "openvas.conf").write_text("db_address = /runtime/run/redis-openvas/redis.sock\n", encoding="utf-8")
+        services = {}
+        for service in turbovasctl.APP_EXECUTION_MOUNT_SERVICES:
+            volumes = [
+                {"type": "bind", "source": str(root), "target": "/workspace", "read_only": True},
+                {"type": "bind", "source": str(root / "build"), "target": "/workspace/build", "read_only": True},
+                {"type": "bind", "source": str(root), "target": str(root), "read_only": True},
+            ]
+            for target, (source, read_only) in turbovasctl.app_execution_overlay_contract(root, service).items():
+                volumes.append({"type": "bind", "source": str(source), "target": target, "read_only": read_only})
+            services[service] = {"volumes": volumes}
+        return root, runtime, {"services": services}
+
+    def app_mount_violations(self, root, payload):
+        finding = turbovasctl.app_execution_mount_finding(root, payload)
+        self.assertEqual(finding["status"], "fail")
+        return finding["details"]["violations"]
+
+    def test_app_execution_mount_posture_accepts_exact_graph(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            finding = turbovasctl.app_execution_mount_finding(root, payload)
+
+        self.assertEqual(finding["status"], "pass")
+        self.assertEqual(finding["details"]["violations"], [])
+        self.assertEqual(len(finding["details"]["validated_mounts"]), 19)
+
+    def test_app_execution_mount_posture_rejects_writable_build_mount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["ospd-openvas"]["volumes"][1]["read_only"] = False
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("target") == "/workspace/build" and "read_only" in item["reason"] for item in violations))
+
+    def test_app_execution_mount_posture_rejects_named_volume_build_bypass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["gvmd"]["volumes"][1] = {"type": "volume", "source": "build-bypass", "target": "/workspace/build"}
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("type") == "volume" and item.get("target") == "/workspace/build" for item in violations))
+
+    def test_app_execution_mount_posture_rejects_alias_source_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["notus-scanner"]["volumes"][2]["source"] = "/tmp"
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("source") == "/tmp" and "bind source must be" in item["reason"] for item in violations))
+
+    def test_app_execution_mount_posture_rejects_tmpfs_protected_mount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["gsad"]["volumes"][0] = {"type": "tmpfs", "target": "/workspace"}
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("type") == "tmpfs" and item.get("target") == "/workspace" for item in violations))
+
+    def test_app_execution_mount_posture_rejects_symlink_runtime_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            logs = runtime / "logs" / "gvmd"
+            logs.rmdir()
+            logs.symlink_to(runtime / "logs" / "gsad", target_is_directory=True)
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any("symlink" in item["reason"] and item.get("target") == str(root / "build" / "logs") for item in violations))
+
+    def test_app_execution_mount_posture_rejects_dotdot_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["ospd-openvas"]["volumes"][1]["target"] = "/workspace/../workspace/build"
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any("dot path components" in item["reason"] for item in violations))
+
+    def test_app_execution_mount_posture_rejects_nonallowlisted_nested_mount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["gvmd"]["volumes"].append(
+                {"type": "bind", "source": str(runtime / "logs" / "gvmd"), "target": "/workspace/build/extra", "read_only": True}
+            )
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("target") == "/workspace/build/extra" and "non-allowlisted" in item["reason"] for item in violations))
+
+    def test_app_execution_mount_posture_rejects_missing_required_mount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["notus-scanner"]["volumes"].pop(2)
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("target") == str(root) and item.get("count") == 0 for item in violations))
+
+    def test_app_execution_mount_posture_rejects_duplicate_required_mount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
+            payload["services"]["gvmd"]["volumes"].append(dict(payload["services"]["gvmd"]["volumes"][0]))
+            violations = self.app_mount_violations(root, payload)
+
+        self.assertTrue(any(item.get("target") == "/workspace" and item.get("count") == 2 for item in violations))
+
+    def test_dev_shell_source_and_build_mounts_remain_writable(self):
+        compose = (Path(__file__).resolve().parents[2] / "compose" / "dev.yaml").read_text(encoding="utf-8")
+        dev_shell = compose.split("  dev-shell:", 1)[1].split("  gvmd:", 1)[0]
+
+        self.assertNotIn("read_only: true", dev_shell)
 
     def test_gsad_port_defaults_loopback_and_can_be_overridden(self):
         self.assertEqual(turbovasctl.DEFAULT_GSAD_HOST, "127.0.0.1")
@@ -12087,15 +12220,171 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("secrets", turbovasctl.RUNTIME_DIRS)
         self.assertIn("mosquitto/secrets", turbovasctl.RUNTIME_DIRS)
         self.assertIn("state/feed-gnupg", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("state/gvmd-bind-files", turbovasctl.RUNTIME_DIRS)
+        self.assertNotIn("state/gvmd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("state/ospd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("redis-openvas", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/gvmd-gmp", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/gvmd-control", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("run/gvmd", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("run/gsad", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/ospd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/notus", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/redis-openvas", turbovasctl.RUNTIME_DIRS)
         self.assertIn("logs/notus", turbovasctl.RUNTIME_DIRS)
         self.assertIn("feeds/notus/products", turbovasctl.RUNTIME_DIRS)
+
+    def test_gvmd_runtime_state_seed_copies_persistent_files_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
+            runtime_state = Path(tmp) / "TurboVAS-runtime" / "state"
+            (source / "gnupg").mkdir(parents=True)
+            runtime_state.mkdir(parents=True, mode=0o700)
+            (runtime_state / "gvmd-bind-files").mkdir(mode=0o700)
+            (source / "gnupg" / "private.key").write_text("key", encoding="utf-8")
+            (source / "gvm-serving").write_text("", encoding="utf-8")
+
+            with unittest.mock.patch.object(turbovasctl, "container_running", return_value=False):
+                finding = turbovasctl.seed_gvmd_runtime_state(root)
+            destination = Path(tmp) / "TurboVAS-runtime" / "state" / "gvmd"
+            key_text = (destination / "gnupg" / "private.key").read_text(encoding="utf-8")
+            transient_exists = (destination / "gvm-serving").exists()
+            semaphore_exists = (runtime_state / "gvmd-bind-files" / "gvmd.sem").is_file()
+
+        self.assertEqual(finding["status"], "pass")
+        self.assertIn("gnupg/private.key", finding["details"]["copied"])
+        self.assertIn("gvm-serving", finding["details"]["skipped_transient"])
+        self.assertEqual(key_text, "key")
+        self.assertFalse(transient_exists)
+        self.assertTrue(semaphore_exists)
+
+    def test_gvmd_runtime_state_seed_missing_build_state_is_noop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state.mkdir(parents=True, mode=0o700)
+            (state / "gvmd-bind-files").mkdir(mode=0o700)
+
+            finding = turbovasctl.seed_gvmd_runtime_state(root)
+
+        self.assertEqual(finding["status"], "pass")
+        self.assertEqual(finding["check"], "runtime.gvmd-state-seed")
+        self.assertIn("no runtime-state seed was needed", finding["message"])
+
+    def test_gvmd_runtime_state_seed_rejects_symlink_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            external = Path(tmp) / "external-state"
+            root.mkdir()
+            state.mkdir(parents=True, mode=0o700)
+            (state / "gvmd-bind-files").mkdir(mode=0o700)
+            external.mkdir()
+            (state / "gvmd").symlink_to(external, target_is_directory=True)
+
+            finding = turbovasctl.seed_gvmd_runtime_state(root)
+
+        self.assertEqual(finding["status"], "fail")
+        self.assertIn("symlink or special file", finding["message"])
+
+    def test_gvmd_runtime_state_seed_rejects_symlink_semaphore_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            bind_parent = state / "gvmd-bind-files"
+            external = Path(tmp) / "external-sem"
+            root.mkdir()
+            (state / "gvmd").mkdir(parents=True, mode=0o700)
+            bind_parent.mkdir(mode=0o700)
+            external.write_text("external", encoding="utf-8")
+            (bind_parent / "gvmd.sem").symlink_to(external)
+
+            finding = turbovasctl.seed_gvmd_runtime_state(root)
+            external_text = external.read_text(encoding="utf-8")
+
+        self.assertEqual(finding["status"], "fail")
+        self.assertIn("bind file is a symlink or special file", finding["message"])
+        self.assertEqual(external_text, "external")
+
+    def test_gvmd_runtime_state_seed_rejects_bind_parent_nested_under_app_writable_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            root.mkdir()
+            (state / "gvmd-bind-files").mkdir(parents=True, mode=0o700)
+
+            with unittest.mock.patch.object(turbovasctl, "app_writable_runtime_sources", return_value=(state,)):
+                finding = turbovasctl.seed_gvmd_runtime_state(root)
+
+        self.assertEqual(finding["status"], "fail")
+        self.assertIn("nested under app-writable source", finding["message"])
+
+    def test_gvmd_runtime_state_seed_rejects_live_gvmd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
+            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            source.mkdir(parents=True)
+            state.mkdir(parents=True, mode=0o700)
+            (state / "gvmd-bind-files").mkdir(mode=0o700)
+            (source / "persistent-state").write_text("state", encoding="utf-8")
+
+            with unittest.mock.patch.object(turbovasctl, "container_running", return_value=True):
+                finding = turbovasctl.seed_gvmd_runtime_state(root)
+
+            destination_exists = (state / "gvmd").exists()
+            temporary_entries = list(state.glob(".gvmd-seed-*"))
+
+        self.assertEqual(finding["status"], "fail")
+        self.assertIn("must be stopped", finding["message"])
+        self.assertFalse(destination_exists)
+        self.assertEqual(temporary_entries, [])
+
+    def test_gvmd_runtime_state_seed_rejects_special_source_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
+            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            source.mkdir(parents=True)
+            state.mkdir(parents=True, mode=0o700)
+            (state / "gvmd-bind-files").mkdir(mode=0o700)
+            os.mkfifo(source / "unexpected-fifo")
+
+            with unittest.mock.patch.object(turbovasctl, "container_running", return_value=False):
+                finding = turbovasctl.seed_gvmd_runtime_state(root)
+
+            destination_exists = (state / "gvmd").exists()
+            temporary_entries = list(state.glob(".gvmd-seed-*"))
+
+        self.assertEqual(finding["status"], "fail")
+        self.assertIn("symlink or special file", finding["message"])
+        self.assertFalse(destination_exists)
+        self.assertEqual(temporary_entries, [])
+
+    def test_gvmd_runtime_state_seed_existing_directory_is_noop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
+            destination = Path(tmp) / "TurboVAS-runtime" / "state" / "gvmd"
+            source.mkdir(parents=True)
+            destination.mkdir(parents=True, mode=0o700)
+            (destination.parent / "gvmd-bind-files").mkdir(mode=0o700)
+            (source / "new-state").write_text("new", encoding="utf-8")
+            (destination / "legacy-state").write_text("legacy", encoding="utf-8")
+
+            with unittest.mock.patch.object(turbovasctl, "container_running") as running:
+                finding = turbovasctl.seed_gvmd_runtime_state(root)
+
+            legacy = (destination / "legacy-state").read_text(encoding="utf-8")
+            new_exists = (destination / "new-state").exists()
+
+        self.assertEqual(finding["status"], "pass")
+        self.assertIn("left unchanged", finding["message"])
+        self.assertEqual(legacy, "legacy")
+        self.assertFalse(new_exists)
+        running.assert_not_called()
 
     def test_cert_files_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

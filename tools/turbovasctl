@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import ctypes
 import csv
 import errno
 import fcntl
@@ -30,7 +31,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Sequence
 
 try:
@@ -238,6 +239,7 @@ PYTHON_CHAIN = (*LEGACY_GMP_PYTHON_CHAIN, *RUNTIME_PYTHON_CHAIN)
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *RUNTIME_PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
+APP_EXECUTION_MOUNT_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad")
 FULL_TEST_TARGET_CIDR = "192.168.178.0/24"
 FULL_TEST_TASK_NAME = f"TurboVAS full test scan {FULL_TEST_TARGET_CIDR}"
 COMPLETED_SCAN_RUN_STATUS = 1
@@ -253,11 +255,14 @@ RUNTIME_DIRS = (
     "certs/private/CA",
     "secrets",
     "state",
+    "state/gvmd-bind-files",
     "state/ospd",
     "state/feed-gnupg",
     "redis-openvas",
     "run/gvmd-gmp",
     "run/gvmd-control",
+    "run/gvmd",
+    "run/gsad",
     "run/ospd",
     "run/notus",
     "run/redis-openvas",
@@ -4901,6 +4906,310 @@ def compose_command(repo_root: Path, *args: str, env: dict[str, str] | None = No
     return command
 
 
+def path_is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def open_absolute_directory_nofollow(path: Path) -> tuple[int, Path]:
+    absolute = Path(os.path.abspath(path))
+    if not absolute.is_absolute():
+        raise OSError(errno.EINVAL, f"path is not absolute: {path}")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    current_fd = os.open("/", flags)
+    try:
+        for part in absolute.parts[1:]:
+            before = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+            if stat.S_ISLNK(before.st_mode) or not stat.S_ISDIR(before.st_mode):
+                raise OSError(errno.ELOOP, f"directory path component is not a real directory: {absolute}")
+            next_fd = os.open(part, flags, dir_fd=current_fd)
+            after = os.fstat(next_fd)
+            if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                os.close(next_fd)
+                raise OSError(errno.ESTALE, f"directory path changed while opening: {absolute}")
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd, absolute
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def open_directory_beneath(parent_fd: int, parts: Sequence[str]) -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    current_fd = os.dup(parent_fd)
+    try:
+        for part in parts:
+            if not part or part in {".", ".."} or "/" in part:
+                raise OSError(errno.EINVAL, f"unsafe relative path component: {part!r}")
+            before = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+            if stat.S_ISLNK(before.st_mode) or not stat.S_ISDIR(before.st_mode):
+                raise OSError(errno.ELOOP, f"relative path component is not a real directory: {part}")
+            next_fd = os.open(part, flags, dir_fd=current_fd)
+            after = os.fstat(next_fd)
+            if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                os.close(next_fd)
+                raise OSError(errno.ESTALE, f"relative directory changed while opening: {part}")
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def copy_regular_file_at(source_fd: int, destination_fd: int, name: str, mode: int) -> None:
+    source_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+    destination_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW
+    before = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+    input_fd = os.open(name, source_flags, dir_fd=source_fd)
+    output_fd = -1
+    try:
+        after = os.fstat(input_fd)
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or not stat.S_ISREG(after.st_mode):
+            raise OSError(errno.ESTALE, f"source file changed while opening: {name}")
+        output_fd = os.open(name, destination_flags, mode or 0o600, dir_fd=destination_fd)
+        while True:
+            chunk = os.read(input_fd, 1024 * 1024)
+            if not chunk:
+                break
+            view = memoryview(chunk)
+            while view:
+                written = os.write(output_fd, view)
+                view = view[written:]
+        os.fsync(output_fd)
+    finally:
+        os.close(input_fd)
+        if output_fd >= 0:
+            os.close(output_fd)
+
+
+def copy_gvmd_state_tree(source_fd: int, destination_fd: int, relative: tuple[str, ...] = ()) -> tuple[list[str], list[str]]:
+    copied: list[str] = []
+    skipped: list[str] = []
+    for name in sorted(os.listdir(source_fd)):
+        if not name or name in {".", ".."} or "/" in name:
+            raise OSError(errno.EINVAL, f"unsafe source entry: {name!r}")
+        source_stat = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        relative_name = "/".join((*relative, name))
+        if stat.S_ISLNK(source_stat.st_mode) or not (stat.S_ISDIR(source_stat.st_mode) or stat.S_ISREG(source_stat.st_mode)):
+            raise OSError(errno.EINVAL, f"gvmd seed source contains a symlink or special file: {relative_name}")
+        if stat.S_ISREG(source_stat.st_mode) and (name.startswith("gvm-") or name.startswith("turbovas-task-control-")):
+            skipped.append(relative_name)
+            continue
+        mode = stat.S_IMODE(source_stat.st_mode)
+        if stat.S_ISREG(source_stat.st_mode):
+            copy_regular_file_at(source_fd, destination_fd, name, mode)
+            copied.append(relative_name)
+            continue
+        os.mkdir(name, mode=mode or 0o700, dir_fd=destination_fd)
+        source_child = open_directory_beneath(source_fd, (name,))
+        destination_child = open_directory_beneath(destination_fd, (name,))
+        try:
+            child_copied, child_skipped = copy_gvmd_state_tree(source_child, destination_child, (*relative, name))
+            copied.extend(child_copied)
+            skipped.extend(child_skipped)
+            os.fsync(destination_child)
+        finally:
+            os.close(source_child)
+            os.close(destination_child)
+    return copied, skipped
+
+
+def remove_tree_at(parent_fd: int, name: str) -> None:
+    entry = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if not stat.S_ISDIR(entry.st_mode) or stat.S_ISLNK(entry.st_mode):
+        os.unlink(name, dir_fd=parent_fd)
+        return
+    child_fd = open_directory_beneath(parent_fd, (name,))
+    try:
+        for child in os.listdir(child_fd):
+            remove_tree_at(child_fd, child)
+    finally:
+        os.close(child_fd)
+    os.rmdir(name, dir_fd=parent_fd)
+
+
+def renameat2_noreplace(source_fd: int, source_name: str, destination_fd: int, destination_name: str) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise OSError(errno.ENOSYS, "renameat2 is unavailable")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    if renameat2(source_fd, os.fsencode(source_name), destination_fd, os.fsencode(destination_name), 1) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), destination_name)
+
+
+def app_writable_runtime_sources(repo_root: Path) -> tuple[Path, ...]:
+    root = runtime_dir(repo_root)
+    return (
+        root / "run" / "feed-update.lock",
+        root / "run" / "gvmd-gmp",
+        root / "run" / "gvmd-control",
+        root / "run" / "gvmd",
+        root / "run" / "ospd",
+        root / "run" / "redis-openvas",
+        root / "run" / "notus",
+        root / "run" / "gsad",
+        root / "logs" / "gvmd",
+        root / "logs" / "ospd",
+        root / "logs" / "notus",
+        root / "logs" / "gsad",
+        root / "state" / "gvmd",
+        root / "state" / "feed-gnupg",
+    )
+
+
+def open_or_create_regular_file_at(parent_fd: int, name: str, mode: int = 0o600) -> int:
+    try:
+        before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        try:
+            descriptor = os.open(
+                name,
+                os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+                mode,
+                dir_fd=parent_fd,
+            )
+            created = os.fstat(descriptor)
+            if not stat.S_ISREG(created.st_mode):
+                os.close(descriptor)
+                raise OSError(errno.EINVAL, f"created bind file is not regular: {name}")
+            os.fchmod(descriptor, mode)
+            return descriptor
+        except FileExistsError:
+            before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise OSError(errno.EINVAL, f"bind file is a symlink or special file: {name}")
+    descriptor = os.open(name, os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
+    after = os.fstat(descriptor)
+    if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino) or not stat.S_ISREG(after.st_mode):
+        os.close(descriptor)
+        raise OSError(errno.ESTALE, f"bind file changed while opening: {name}")
+    os.fchmod(descriptor, mode)
+    return descriptor
+
+
+def ensure_gvmd_semaphore_bind_file(
+    repo_root: Path,
+    state_fd: int,
+    canonical_repo: Path,
+    canonical_runtime: Path,
+) -> Path:
+    bind_parent = canonical_runtime / "state" / "gvmd-bind-files"
+    if path_is_within(bind_parent, canonical_repo):
+        raise OSError(errno.EINVAL, "gvmd bind-file parent must be outside the repository")
+    for writable_source in app_writable_runtime_sources(repo_root):
+        try:
+            writable, _kind = canonical_nofollow_mount_source(writable_source)
+        except FileNotFoundError:
+            writable = Path(os.path.abspath(writable_source))
+        if path_is_within(bind_parent, writable):
+            raise OSError(errno.EINVAL, f"gvmd bind-file parent is nested under app-writable source {writable}")
+
+    bind_parent_fd = open_directory_beneath(state_fd, ("gvmd-bind-files",))
+    semaphore_fd = -1
+    try:
+        parent_stat = os.fstat(bind_parent_fd)
+        if parent_stat.st_uid != os.getuid():
+            raise OSError(errno.EPERM, "gvmd bind-file parent is not owned by the current user")
+        os.fchmod(bind_parent_fd, 0o700)
+        if stat.S_IMODE(os.fstat(bind_parent_fd).st_mode) & 0o077:
+            raise OSError(errno.EPERM, "gvmd bind-file parent is not private")
+        semaphore_fd = open_or_create_regular_file_at(bind_parent_fd, "gvmd.sem")
+        os.fsync(semaphore_fd)
+        os.fsync(bind_parent_fd)
+    finally:
+        if semaphore_fd >= 0:
+            os.close(semaphore_fd)
+        os.close(bind_parent_fd)
+    return bind_parent / "gvmd.sem"
+
+
+def seed_gvmd_runtime_state(repo_root: Path) -> dict[str, Any]:
+    destination = runtime_path(repo_root, "state", "gvmd")
+    repo_fd = runtime_fd = state_fd = source_fd = temporary_fd = -1
+    temporary_name: str | None = None
+    try:
+        repo_fd, canonical_repo = open_absolute_directory_nofollow(repo_root)
+        runtime_fd, canonical_runtime = open_absolute_directory_nofollow(runtime_dir(repo_root))
+        if path_is_within(canonical_runtime, canonical_repo):
+            raise OSError(errno.EINVAL, "runtime directory must be outside the repository")
+        state_fd = open_directory_beneath(runtime_fd, ("state",))
+        state_stat = os.fstat(state_fd)
+        if state_stat.st_uid != os.getuid():
+            raise OSError(errno.EPERM, "runtime state directory is not owned by the current user")
+        os.fchmod(state_fd, 0o700)
+        if stat.S_IMODE(os.fstat(state_fd).st_mode) & 0o077:
+            raise OSError(errno.EPERM, "runtime state directory is not private")
+        semaphore_path = ensure_gvmd_semaphore_bind_file(repo_root, state_fd, canonical_repo, canonical_runtime)
+
+        try:
+            destination_stat = os.stat("gvmd", dir_fd=state_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            destination_stat = None
+        if destination_stat is not None:
+            if stat.S_ISLNK(destination_stat.st_mode) or not stat.S_ISDIR(destination_stat.st_mode):
+                raise OSError(errno.EINVAL, "gvmd runtime-state destination is a symlink or special file")
+            return finding("pass", "runtime.gvmd-state-seed", "Existing gvmd runtime state was left unchanged.", str(destination))
+
+        try:
+            source_fd = open_directory_beneath(repo_fd, ("build", "var", "lib", "gvm", "gvmd"))
+        except FileNotFoundError:
+            return finding(
+                "pass",
+                "runtime.gvmd-state-seed",
+                "Built gvmd state is not available yet; no runtime-state seed was needed.",
+                str(destination),
+            )
+        if container_running(repo_root, "gvmd"):
+            raise OSError(errno.EBUSY, "gvmd must be stopped before initial runtime-state seeding")
+
+        temporary_name = f".gvmd-seed-{os.getpid()}-{secrets.token_hex(8)}"
+        os.mkdir(temporary_name, mode=0o700, dir_fd=state_fd)
+        temporary_fd = open_directory_beneath(state_fd, (temporary_name,))
+        copied, skipped = copy_gvmd_state_tree(source_fd, temporary_fd)
+        os.fsync(temporary_fd)
+        os.close(temporary_fd)
+        temporary_fd = -1
+        try:
+            renameat2_noreplace(state_fd, temporary_name, state_fd, "gvmd")
+        except FileExistsError:
+            destination_stat = os.stat("gvmd", dir_fd=state_fd, follow_symlinks=False)
+            if stat.S_ISLNK(destination_stat.st_mode) or not stat.S_ISDIR(destination_stat.st_mode):
+                raise OSError(errno.EINVAL, "concurrent gvmd runtime-state destination is unsafe")
+            remove_tree_at(state_fd, temporary_name)
+            temporary_name = None
+            return finding("pass", "runtime.gvmd-state-seed", "Existing gvmd runtime state was left unchanged.", str(destination))
+        temporary_name = None
+        os.fsync(state_fd)
+        return finding(
+            "pass",
+            "runtime.gvmd-state-seed",
+            "gvmd persistent state was installed atomically outside the build tree.",
+            str(destination),
+            {"copied": copied, "skipped_transient": skipped, "semaphore_bind_file": str(semaphore_path)},
+        )
+    except OSError as error:
+        return finding("fail", "runtime.gvmd-state-seed", f"gvmd runtime state could not be prepared: {error}", str(destination))
+    finally:
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
+        if temporary_name is not None and state_fd >= 0:
+            try:
+                remove_tree_at(state_fd, temporary_name)
+            except OSError:
+                pass
+        for descriptor in (source_fd, state_fd, runtime_fd, repo_fd):
+            if descriptor >= 0:
+                os.close(descriptor)
+
+
 def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     root = runtime_dir(repo_root)
@@ -4917,6 +5226,7 @@ def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
             status = "fail"
             message = f"Runtime directory is not writable: {path}: {error}"
         findings.append(finding(status, "runtime.dir", message, str(path)))
+    findings.append(seed_gvmd_runtime_state(repo_root))
     for lock_rel in ("run/feed-update.lock", "run/ospd/feed-update.lock"):
         path = root / lock_rel
         try:
@@ -14247,6 +14557,199 @@ def command_osv_lockfile_audit(repo_root: Path, status_only: bool = False) -> di
     return result
 
 
+def posix_path_within(path: str, parent: str) -> bool:
+    candidate = PurePosixPath(path)
+    root = PurePosixPath(parent)
+    return candidate == root or root in candidate.parents
+
+
+def normalize_compose_mount_target(target: Any) -> str:
+    value = str(target or "")
+    if not value.startswith("/") or value.startswith("//"):
+        raise ValueError("mount target must be a normalized absolute path")
+    if any(part in {".", ".."} for part in value.split("/")):
+        raise ValueError("mount target contains dot path components")
+    return str(PurePosixPath(value))
+
+
+def canonical_nofollow_mount_source(source: Any) -> tuple[Path, str]:
+    path = Path(str(source or ""))
+    if not path.is_absolute():
+        raise OSError(errno.EINVAL, "bind source must be absolute")
+    parent_fd, canonical_parent = open_absolute_directory_nofollow(path.parent)
+    descriptor = -1
+    try:
+        before = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        if stat.S_ISLNK(before.st_mode) or not (stat.S_ISDIR(before.st_mode) or stat.S_ISREG(before.st_mode)):
+            raise OSError(errno.EINVAL, "bind source is a symlink or special file")
+        descriptor = os.open(path.name, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
+        after = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise OSError(errno.ESTALE, "bind source changed while inspecting it")
+        return canonical_parent / path.name, "directory" if stat.S_ISDIR(after.st_mode) else "file"
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent_fd)
+
+
+def app_execution_overlay_contract(repo_root: Path, service_name: str) -> dict[str, tuple[Path, bool]]:
+    alias = PurePosixPath(str(repo_root))
+    root = runtime_dir(repo_root)
+    overlays: dict[str, tuple[Path, bool]] = {}
+    if service_name == "gvmd":
+        overlays = {
+            str(alias / "build" / "run" / "gvmd"): (root / "run" / "gvmd", False),
+            str(alias / "build" / "logs"): (root / "logs" / "gvmd", False),
+            str(alias / "build" / "var" / "lib" / "gvm" / "gvmd"): (root / "state" / "gvmd", False),
+            str(alias / "build" / "var" / "lib" / "gvm" / "gvmd.sem"): (root / "state" / "gvmd-bind-files" / "gvmd.sem", False),
+        }
+    elif service_name == "ospd-openvas":
+        overlays = {
+            "/workspace/build/prefix/etc/openvas/openvas.conf": (root / "state" / "ospd" / "openvas.conf", True),
+        }
+    elif service_name == "gsad":
+        overlays = {
+            str(alias / "build" / "logs"): (root / "logs" / "gsad", False),
+            str(alias / "build" / "run" / "gsad"): (root / "run" / "gsad", False),
+        }
+    return overlays
+
+
+def app_execution_mount_finding(repo_root: Path, compose_config: dict[str, Any]) -> dict[str, Any]:
+    services = compose_config.get("services", {}) if isinstance(compose_config, dict) else {}
+    missing_services: list[str] = []
+    violations: list[dict[str, Any]] = []
+    validated_mounts: list[dict[str, Any]] = []
+    try:
+        repo_fd, canonical_repo = open_absolute_directory_nofollow(repo_root)
+        os.close(repo_fd)
+        runtime_fd, canonical_runtime = open_absolute_directory_nofollow(runtime_dir(repo_root))
+        os.close(runtime_fd)
+    except OSError as error:
+        return finding(
+            "fail",
+            "production.app-execution-mounts",
+            "Canonical repository or runtime mount roots could not be validated.",
+            str(compose_file(repo_root).relative_to(repo_root)),
+            {"services": list(APP_EXECUTION_MOUNT_SERVICES), "violations": [{"reason": str(error)}]},
+        )
+    if path_is_within(canonical_runtime, canonical_repo):
+        violations.append({"reason": "runtime root is inside the repository", "source": str(canonical_runtime)})
+
+    alias_target = str(PurePosixPath(str(canonical_repo)))
+    required_mounts = {
+        "/workspace": (canonical_repo, True),
+        "/workspace/build": (canonical_repo / "build", True),
+        alias_target: (canonical_repo, True),
+    }
+
+    for service_name in APP_EXECUTION_MOUNT_SERVICES:
+        service = services.get(service_name) if isinstance(services, dict) else None
+        if not isinstance(service, dict):
+            missing_services.append(service_name)
+            continue
+        volumes = service.get("volumes", [])
+        if not isinstance(volumes, list):
+            violations.append({"service": service_name, "reason": "service volumes are not a list"})
+            volumes = []
+        overlays = app_execution_overlay_contract(canonical_repo, service_name)
+        expected_mounts = {**required_mounts, **overlays}
+        target_counts: dict[str, int] = {}
+        for index, volume in enumerate(volumes):
+            if not isinstance(volume, dict):
+                violations.append({"service": service_name, "index": index, "reason": "mount entry is not an object"})
+                continue
+            try:
+                target = normalize_compose_mount_target(volume.get("target"))
+            except ValueError as error:
+                violations.append({"service": service_name, "index": index, "target": str(volume.get("target") or ""), "reason": str(error)})
+                continue
+            target_counts[target] = target_counts.get(target, 0) + 1
+            protected = posix_path_within(target, "/workspace") or posix_path_within(target, alias_target)
+            if target not in expected_mounts:
+                if protected:
+                    violations.append({"service": service_name, "index": index, "target": target, "reason": "non-allowlisted mount is nested under a protected target"})
+                elif volume.get("type") == "bind":
+                    try:
+                        source, _kind = canonical_nofollow_mount_source(volume.get("source"))
+                    except OSError:
+                        source = None
+                    if source is not None and path_is_within(source, canonical_repo):
+                        violations.append({"service": service_name, "index": index, "target": target, "reason": "repository source is mounted outside the exact execution-mount contract"})
+                continue
+            expected_source, expected_read_only = expected_mounts[target]
+            if volume.get("type") != "bind":
+                violations.append({"service": service_name, "index": index, "target": target, "reason": "protected mount must be a bind mount", "type": volume.get("type")})
+                continue
+            try:
+                source, _kind = canonical_nofollow_mount_source(volume.get("source"))
+            except OSError as error:
+                violations.append({"service": service_name, "index": index, "target": target, "reason": f"bind source is unsafe: {error}"})
+                continue
+            if source != Path(os.path.abspath(expected_source)):
+                violations.append({"service": service_name, "index": index, "target": target, "source": str(source), "reason": f"bind source must be {expected_source}"})
+                continue
+            if target in overlays:
+                if not path_is_within(source, canonical_runtime) or path_is_within(source, canonical_repo):
+                    violations.append({"service": service_name, "index": index, "target": target, "source": str(source), "reason": "runtime overlay source is not canonically outside the repository"})
+                    continue
+            if bool(volume.get("read_only")) != expected_read_only:
+                violations.append({"service": service_name, "index": index, "target": target, "reason": f"read_only must be {str(expected_read_only).lower()}"})
+                continue
+            validated_mounts.append({"service": service_name, "source": str(source), "target": target, "read_only": expected_read_only})
+
+        for target in expected_mounts:
+            count = target_counts.get(target, 0)
+            if count != 1:
+                violations.append({"service": service_name, "target": target, "count": count, "reason": "required mount must appear exactly once"})
+
+    status = "pass" if not missing_services and not violations else "fail"
+    message = (
+        "Target-facing application services match the exact source/build mount graph."
+        if status == "pass"
+        else "One or more target-facing application services violate the exact source/build mount graph."
+    )
+    return finding(
+        status,
+        "production.app-execution-mounts",
+        message,
+        str(compose_file(repo_root).relative_to(repo_root)),
+        {
+            "services": list(APP_EXECUTION_MOUNT_SERVICES),
+            "missing_services": missing_services,
+            "violations": violations,
+            "validated_mounts": validated_mounts,
+        },
+    )
+
+
+def rendered_app_execution_mount_finding(repo_root: Path, env: dict[str, str]) -> dict[str, Any]:
+    rendered = run_command(
+        compose_command(repo_root, "--profile", "app", "config", "--format", "json", env=env),
+        repo_root,
+        env=env,
+    )
+    path = str(compose_file(repo_root).relative_to(repo_root))
+    if rendered.returncode != 0:
+        return finding(
+            "fail",
+            "production.app-execution-mounts",
+            "Rendered Compose configuration could not be inspected for the exact source/build mount graph.",
+            path,
+        )
+    try:
+        payload = json.loads(rendered.stdout)
+    except json.JSONDecodeError:
+        return finding(
+            "fail",
+            "production.app-execution-mounts",
+            "Rendered Compose configuration was not valid JSON.",
+            path,
+        )
+    return app_execution_mount_finding(repo_root, payload)
+
+
 def command_production_posture_check(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     details: dict[str, Any] = {}
@@ -14306,6 +14809,7 @@ def command_production_posture_check(repo_root: Path, status_only: bool = False)
 
     compose = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
     findings.append(finding("pass" if compose.returncode == 0 else "fail", "production.compose-config", f"Compose config validation exit code {compose.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": compose.stdout.splitlines()[-40:]}))
+    findings.append(rendered_app_execution_mount_finding(repo_root, runtime_env(repo_root)))
 
     cert_findings = cert_file_findings(repo_root)
     if certs_complete(repo_root):
@@ -16180,6 +16684,7 @@ def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
         check: checks[check]
         for check in (
             "compose.config",
+            "production.app-execution-mounts",
             "runtime.infrastructure",
             "runtime.database-init",
             "runtime.scanner-redis",
@@ -16208,8 +16713,13 @@ def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
 def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_app_env(repo_root))
+    app_env = runtime_app_env(repo_root)
+    config = run_command(compose_command(repo_root, "config", "--quiet", env=app_env), repo_root, env=app_env)
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
+    findings.append(rendered_app_execution_mount_finding(repo_root, app_env))
+    if aggregate_status(findings) == "fail":
+        result = make_result("runtime-app-up", repo_root, "Application runtime startup stopped at mount prerequisites.", findings, [str(runtime_dir(repo_root))])
+        return runtime_app_up_status_only_result(result) if status_only else result
     infra = command_up(repo_root)
     findings.append(finding(infra["status"], "runtime.infrastructure", infra["summary"], details={"status": infra["status"]}))
     db_init = command_runtime_init(repo_root)

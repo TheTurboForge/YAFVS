@@ -158,8 +158,20 @@ RUST_MIGRATION_FIRST_CANDIDATE = {
 }
 CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
+C_BUILD_PROFILES = ("hardened",)
 C_HARDENING_ARTIFACT_SPECS = {
-    "gvm-libs": ("build/gvm-libs/*/libgvm_*.so.*",),
+    "gvm-libs": (
+        "build/gvm-libs/base/libgvm_base.so.*",
+        "build/gvm-libs/boreas/libgvm_boreas.so.*",
+        "build/gvm-libs/cyberark/libgvm_cyberark.so.*",
+        "build/gvm-libs/gmp/libgvm_gmp.so.*",
+        "build/gvm-libs/http/libgvm_http.so.*",
+        "build/gvm-libs/http_scanner/libgvm_http_scanner.so.*",
+        "build/gvm-libs/openvasd/libgvm_openvasd.so.*",
+        "build/gvm-libs/osp/libgvm_osp.so.*",
+        "build/gvm-libs/security_intelligence/libgvm_security_intelligence.so.*",
+        "build/gvm-libs/util/libgvm_util.so.*",
+    ),
     "openvas-smb": (
         "build/openvas-smb/wmi/wmic",
         "build/openvas-smb/wmi/libopenvas_wmiclient.so.*",
@@ -178,6 +190,29 @@ C_HARDENING_ARTIFACT_SPECS = {
     ),
     "gsad": ("build/gsad/src/gsad",),
 }
+C_HARDENING_EXPECTED_ARTIFACT_COUNT = 21
+C_HARDENING_RETIRED_PREFIX_ARTIFACTS = (
+    "include/gvm/agent_controller",
+    "include/gvm/container_image_scanner",
+    "lib/libgvm_agent_controller.so*",
+    "lib/libgvm_container_image_scanner.so*",
+    "lib/pkgconfig/libgvm_agent_controller.pc",
+    "lib/pkgconfig/libgvm_container_image_scanner.pc",
+)
+HARDENED_REQUIRED_FEATURES = (
+    "format_security",
+    "fortify",
+    "stack_protector",
+    "stack_clash",
+    "relro",
+    "now",
+    "noexecstack",
+    "pie",
+)
+HARDENED_CONTROL_FLOW_ARCHITECTURES = ("x86_64", "amd64", "aarch64", "arm64")
+HARDENED_CMAKE_INJECTION = Path("build/hardened/turbovas-hardening.cmake")
+HARDENED_CONFIGURATION = Path("build/hardened/hardening-configuration.json")
+HARDENED_BUILD_MANIFEST = Path("build/hardened/hardening-manifest.json")
 NATIVE_RUST_SERVICES = ("turbovas-api",)
 NATIVE_API_CRATE = Path("services/turbovas-api")
 NATIVE_API_CARGO_LOCK = NATIVE_API_CRATE / "Cargo.lock"
@@ -2595,9 +2630,9 @@ def finding(status: str, check: str, message: str, path: str | None = None, deta
     return item
 
 
-def build_env(repo_root: Path) -> dict[str, str]:
+def build_env(repo_root: Path, profile: str | None = None) -> dict[str, str]:
     env = dict(os.environ)
-    prefix = repo_root / "build" / "prefix"
+    prefix = repo_root / "build" / "prefix" if profile is None else repo_root / "build" / profile / "prefix"
     pkg_paths = [str(prefix / "lib" / "pkgconfig"), str(prefix / "lib64" / "pkgconfig")]
     current_pkg = env.get("PKG_CONFIG_PATH")
     if current_pkg:
@@ -12694,15 +12729,141 @@ def command_deps(repo_root: Path, component: str | None = None) -> dict[str, Any
     return make_result("deps", repo_root, "Dependency readiness checked.", findings)
 
 
-def cmake_paths(repo_root: Path, component: str) -> tuple[Path, Path, Path]:
+def cmake_paths(repo_root: Path, component: str, profile: str | None = None) -> tuple[Path, Path, Path]:
     source = repo_root / COMPONENT_BY_NAME[component].path
-    build = repo_root / "build" / component
-    prefix = repo_root / "build" / "prefix"
+    build_root = repo_root / "build" if profile is None else repo_root / "build" / profile
+    build = build_root / component
+    prefix = build_root / "prefix"
     return source, build, prefix
 
 
-def cmake_configure(repo_root: Path, meta: BuildMeta) -> subprocess.CompletedProcess[str]:
-    source, build, prefix = cmake_paths(repo_root, meta.name)
+def hardened_flag_probe(repo_root: Path, flags: Sequence[str], *, link: bool = False) -> bool:
+    compiler = shlex.split(os.environ.get("CC", "cc"))
+    if not compiler or not shutil.which(compiler[0]):
+        return False
+    probe_root = repo_root / "build" / "hardened" / ".feature-probes"
+    probe_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=probe_root) as temporary:
+        output = Path(temporary) / "probe"
+        command = [*compiler, "-Werror", *flags, "-x", "c", "-"]
+        if link:
+            command.extend(["-o", str(output)])
+        else:
+            command.extend(["-c", "-o", str(output)])
+        result = run_command(command, repo_root, env=build_env(repo_root, "hardened"), input_text="int main(void) { return 0; }\n")
+    return result.returncode == 0
+
+
+def cmake_fresh_support(repo_root: Path) -> tuple[bool, str]:
+    cmake = shutil.which("cmake")
+    if not cmake:
+        return False, "cmake is unavailable; hardened profiles require cmake with --fresh support"
+    result = run_command([cmake, "--help"], repo_root)
+    if result.returncode != 0 or "--fresh" not in result.stdout:
+        return False, "installed cmake does not advertise --fresh; cmake >= 3.24 is required for hardened profiles"
+    return True, ""
+
+
+def hardened_control_flow_required(machine: str | None = None) -> bool:
+    return (machine or os.uname().machine).lower() in HARDENED_CONTROL_FLOW_ARCHITECTURES
+
+
+def hardened_required_features(machine: str | None = None) -> tuple[str, ...]:
+    required = list(HARDENED_REQUIRED_FEATURES)
+    if hardened_control_flow_required(machine):
+        required.append("control_flow_protection")
+    return tuple(required)
+
+
+def hardened_profile_configuration(repo_root: Path) -> tuple[list[str], dict[str, dict[str, Any]]]:
+    compiler_flags = ["-O2", "-g", "-DNDEBUG", "-Wall", "-Wextra", "-Wformat", "-Wformat=2"]
+    linker_flags: list[str] = []
+    evidence: dict[str, dict[str, Any]] = {}
+
+    def compiler_feature(name: str, flags: list[str]) -> None:
+        supported = hardened_flag_probe(repo_root, flags)
+        evidence[name] = {"status": "present" if supported else "unsupported", "flags": flags}
+        if supported:
+            compiler_flags.extend(flags)
+
+    def linker_feature(name: str, flags: list[str]) -> None:
+        supported = hardened_flag_probe(repo_root, flags, link=True)
+        evidence[name] = {"status": "present" if supported else "unsupported", "flags": flags}
+        if supported:
+            linker_flags.extend(flags)
+
+    compiler_feature("format_security", ["-Werror=format-security"])
+    compiler_feature("format_nonliteral_compat", ["-Wno-error=format-nonliteral"])
+    fortify_level_three_supported = hardened_flag_probe(
+        repo_root, ["-O2", "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=3"]
+    )
+    # Retained CMake roots append their inherited Fortify level after user C flags.
+    # Level 2 is the highest effective cross-component contract without editing them.
+    fortify_level = 3 if fortify_level_three_supported else 2
+    fortify_flags = ["-U_FORTIFY_SOURCE", f"-D_FORTIFY_SOURCE={fortify_level}"]
+    compiler_feature("fortify", fortify_flags)
+    evidence["fortify"]["level_three_supported"] = fortify_level_three_supported
+    evidence["fortify"]["selected_level"] = fortify_level
+    compiler_feature("stack_protector", ["-fstack-protector-strong"])
+    compiler_feature("stack_clash", ["-fstack-clash-protection"])
+    machine = os.uname().machine.lower()
+    if machine in {"x86_64", "amd64"}:
+        compiler_feature("control_flow_protection", ["-fcf-protection=full"])
+    elif machine in {"aarch64", "arm64"}:
+        compiler_feature("control_flow_protection", ["-mbranch-protection=standard"])
+    else:
+        evidence["control_flow_protection"] = {"status": "unsupported", "flags": [], "reason": f"no profile flag for {machine}"}
+
+    linker_feature("relro", ["-Wl,-z,relro"])
+    linker_feature("now", ["-Wl,-z,now"])
+    linker_feature("noexecstack", ["-Wl,-z,noexecstack"])
+    pie_supported = hardened_flag_probe(repo_root, ["-fPIE", "-pie"], link=True)
+    evidence["pie"] = {
+        "status": "present" if pie_supported else "unsupported",
+        "flags": ["CMAKE_POSITION_INDEPENDENT_CODE=ON", "-pie"],
+    }
+
+    injection_path = repo_root / HARDENED_CMAKE_INJECTION
+    injection_path.parent.mkdir(parents=True, exist_ok=True)
+    injection_path.write_text(
+        "# Generated by tools/turbovasctl; do not edit.\n"
+        "if(NOT TURBOVAS_HARDENING_OPTIONS_APPLIED)\n"
+        "  set(TURBOVAS_HARDENING_OPTIONS_APPLIED TRUE)\n"
+        "  add_compile_options(\n"
+        + "".join(f"    {flag}\n" for flag in compiler_flags)
+        + "  )\n"
+        "endif()\n",
+        encoding="utf-8",
+    )
+    configuration = {
+        "schema_version": 1,
+        "architecture": os.uname().machine,
+        "compile_options": compiler_flags,
+        "linker_options": linker_flags,
+        "features": evidence,
+        "cmake_injection": str(HARDENED_CMAKE_INJECTION),
+    }
+    write_json_artifact((repo_root / HARDENED_CONFIGURATION).parent, HARDENED_CONFIGURATION.name, configuration)
+
+    cmake_args = [
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+        f"-DCMAKE_PROJECT_INCLUDE={injection_path}",
+        "-DCMAKE_SHARED_LINKER_FLAGS=" + " ".join(linker_flags),
+        "-DCMAKE_MODULE_LINKER_FLAGS=" + " ".join(linker_flags),
+    ]
+    executable_linker_flags = [*linker_flags, "-pie"] if pie_supported else linker_flags
+    cmake_args.append("-DCMAKE_EXE_LINKER_FLAGS=" + " ".join(executable_linker_flags))
+    return cmake_args, evidence
+
+
+def cmake_configure(repo_root: Path, meta: BuildMeta, profile: str | None = None) -> subprocess.CompletedProcess[str]:
+    if profile == "hardened":
+        fresh_supported, fresh_error = cmake_fresh_support(repo_root)
+        if not fresh_supported:
+            return subprocess.CompletedProcess(["cmake", "--fresh"], 2, fresh_error)
+    source, build, prefix = cmake_paths(repo_root, meta.name, profile)
     build.mkdir(parents=True, exist_ok=True)
     prefix.mkdir(parents=True, exist_ok=True)
     run_dir = repo_root / "build" / "run" / "gvm"
@@ -12713,6 +12874,7 @@ def cmake_configure(repo_root: Path, meta: BuildMeta) -> subprocess.CompletedPro
     sysconf_dir = prefix / "etc"
     command = [
         "cmake",
+        *(["--fresh"] if profile == "hardened" else []),
         "-S",
         str(source),
         "-B",
@@ -12731,27 +12893,45 @@ def cmake_configure(repo_root: Path, meta: BuildMeta) -> subprocess.CompletedPro
         f"-DGVM_LOG_DIR={log_dir}",
         *meta.cmake_args,
     ]
+    if profile == "hardened":
+        profile_args, evidence = hardened_profile_configuration(repo_root)
+        failed_features = [
+            name
+            for name in hardened_required_features()
+            if evidence.get(name, {}).get("status") != "present"
+        ]
+        if failed_features:
+            return subprocess.CompletedProcess(
+                ["cmake", "hardened-profile-probes"],
+                2,
+                "Required hardened profile feature probe(s) failed: " + ", ".join(failed_features),
+            )
+        command.extend(profile_args)
     if meta.name == "pg-gvm":
         command.append(f"-DCMAKE_INSTALL_DEV_PREFIX={prefix}")
-    return run_command(command, repo_root, env=build_env(repo_root))
+    return run_command(command, repo_root, env=build_env(repo_root, profile))
 
 
-def command_configure(repo_root: Path, component: str) -> dict[str, Any]:
+def command_configure(repo_root: Path, component: str, profile: str | None = None) -> dict[str, Any]:
     meta = BUILD_META.get(component)
     if not meta:
         return make_result("configure", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
     if meta.build_system != "cmake":
+        if profile is not None:
+            return make_result("configure", repo_root, f"Configure profile {profile} only supports CMake components.", [finding("fail", "build.profile-unsupported", f"{component} uses {meta.build_system}, not cmake.")])
         return make_result("configure", repo_root, f"{component} is not a CMake component.", [finding("warn", "build.unsupported", f"{component} uses {meta.build_system}, not cmake.")])
-    result = cmake_configure(repo_root, meta)
-    _, build, _ = cmake_paths(repo_root, component)
+    result = cmake_configure(repo_root, meta, profile)
+    _, build, _ = cmake_paths(repo_root, component, profile)
     status = "pass" if result.returncode == 0 else "fail"
     return make_result("configure", repo_root, f"Configure {component} completed with exit code {result.returncode}.", [finding(status, "cmake.configure", f"{component} configure {'succeeded' if status == 'pass' else 'failed'}.", str(build.relative_to(repo_root)), {"output_tail": result.stdout.splitlines()[-80:]})], [str(build.relative_to(repo_root))])
 
 
-def command_build(repo_root: Path, component: str, install: bool = False, configure_first: bool = True) -> dict[str, Any]:
+def command_build(repo_root: Path, component: str, install: bool = False, configure_first: bool = True, profile: str | None = None) -> dict[str, Any]:
     meta = BUILD_META.get(component)
     if not meta:
         return make_result("build", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
+    if profile is not None and meta.build_system != "cmake":
+        return make_result("build", repo_root, f"Build profile {profile} only supports CMake components.", [finding("fail", "build.profile-unsupported", f"{component} uses {meta.build_system}, not cmake.")])
     if meta.build_system == "node-npm":
         return command_build_node(repo_root, meta)
     if meta.build_system in ("python-uv", "python-poetry-core"):
@@ -12759,16 +12939,16 @@ def command_build(repo_root: Path, component: str, install: bool = False, config
     if meta.build_system != "cmake":
         return make_result("build", repo_root, f"{component} is not a CMake component.", [finding("warn", "build.unsupported", f"{component} uses {meta.build_system}, not cmake.")])
     findings: list[dict[str, Any]] = []
-    _, build, prefix = cmake_paths(repo_root, component)
+    _, build, prefix = cmake_paths(repo_root, component, profile)
     if configure_first:
-        configure = cmake_configure(repo_root, meta)
+        configure = cmake_configure(repo_root, meta, profile)
         findings.append(finding("pass" if configure.returncode == 0 else "fail", "cmake.configure", f"{component} configure exit code {configure.returncode}.", str(build.relative_to(repo_root)), {"output_tail": configure.stdout.splitlines()[-60:]}))
         if configure.returncode != 0:
             return make_result("build", repo_root, f"Build {component} stopped at configure.", findings, [str(build.relative_to(repo_root))])
-    build_result = run_command(["cmake", "--build", str(build), "--parallel"], repo_root, env=build_env(repo_root))
+    build_result = run_command(["cmake", "--build", str(build), "--parallel"], repo_root, env=build_env(repo_root, profile))
     findings.append(finding("pass" if build_result.returncode == 0 else "fail", "cmake.build", f"{component} build exit code {build_result.returncode}.", str(build.relative_to(repo_root)), {"output_tail": build_result.stdout.splitlines()[-80:]}))
     if build_result.returncode == 0 and (install or meta.install_for_dependents):
-        install_result = run_command(["cmake", "--install", str(build)], repo_root, env=build_env(repo_root))
+        install_result = run_command(["cmake", "--install", str(build)], repo_root, env=build_env(repo_root, profile))
         findings.append(finding("pass" if install_result.returncode == 0 else "fail", "cmake.install", f"{component} install exit code {install_result.returncode}.", str(prefix.relative_to(repo_root)), {"output_tail": install_result.stdout.splitlines()[-60:]}))
     return make_result("build", repo_root, f"Build {component} completed.", findings, [str(build.relative_to(repo_root)), str(prefix.relative_to(repo_root))])
 
@@ -12831,11 +13011,11 @@ def command_build_python(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
     return make_result("build", repo_root, f"Build {meta.name} completed.", findings, [str(venv.relative_to(repo_root))])
 
 
-def command_build_chain(repo_root: Path, command: str, chain: tuple[str, ...]) -> dict[str, Any]:
+def command_build_chain(repo_root: Path, command: str, chain: tuple[str, ...], profile: str | None = None) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     artifacts: list[str] = []
     for component in chain:
-        result = command_build(repo_root, component, install=BUILD_META[component].install_for_dependents)
+        result = command_build(repo_root, component, install=BUILD_META[component].install_for_dependents, profile=profile)
         artifacts.extend(result["artifacts"])
         findings.append(finding(result["status"], f"{command}.component", f"{component}: {result['summary']}", details={"component": component}))
         for item in result["findings"]:
@@ -12847,19 +13027,98 @@ def command_build_chain(repo_root: Path, command: str, chain: tuple[str, ...]) -
     return make_result(command, repo_root, f"{command} attempted.", findings, sorted(set(artifacts)))
 
 
-def command_build_core_c(repo_root: Path) -> dict[str, Any]:
-    return command_build_chain(repo_root, "build-core-c", CORE_C_CHAIN)
+def command_build_core_c(repo_root: Path, profile: str | None = None) -> dict[str, Any]:
+    return command_build_chain(repo_root, "build-core-c", CORE_C_CHAIN, profile)
 
 
-def command_build_c_services(repo_root: Path) -> dict[str, Any]:
-    return command_build_chain(repo_root, "build-c-services", C_SERVICES_CHAIN)
+def hardened_build_preflight_cleanup(repo_root: Path) -> dict[str, Any]:
+    build_root = repo_root / "build" / "hardened"
+    paths = [*(build_root / component for component in C_SERVICES_CHAIN), build_root / "prefix"]
+    removed: list[str] = []
+    errors: list[dict[str, str]] = []
+    unsafe_parent = next(
+        (path for path in (repo_root / "build", build_root) if path.is_symlink()),
+        None,
+    )
+    if unsafe_parent is not None:
+        return finding(
+            "fail",
+            "build-c-services.hardened-preflight",
+            "Hardened generated-tree cleanup refused a symlinked build parent.",
+            str(unsafe_parent.relative_to(repo_root)),
+            {
+                "requested_paths": [str(path.relative_to(repo_root)) for path in paths],
+                "removed_paths": removed,
+                "errors": [{"path": str(unsafe_parent.relative_to(repo_root)), "error": "symlinked build parent"}],
+            },
+        )
+    for path in paths:
+        relative_path = str(path.relative_to(repo_root))
+        try:
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+                removed.append(relative_path)
+            elif path.is_dir():
+                shutil.rmtree(path)
+                removed.append(relative_path)
+        except OSError as exc:
+            errors.append({"path": relative_path, "error": str(exc)})
+    return finding(
+        "fail" if errors else "pass",
+        "build-c-services.hardened-preflight",
+        "Hardened generated component trees and dependency prefix could not be fully reset."
+        if errors
+        else "Hardened generated component trees and dependency prefix were reset before the build chain.",
+        "build/hardened",
+        {
+            "requested_paths": [str(path.relative_to(repo_root)) for path in paths],
+            "removed_paths": removed,
+            "errors": errors,
+        },
+    )
 
 
-def c_hardening_artifact_paths(repo_root: Path) -> list[tuple[str, Path]]:
+def command_build_c_services(repo_root: Path, profile: str | None = None) -> dict[str, Any]:
+    manifest_path = repo_root / HARDENED_BUILD_MANIFEST
+    if profile == "hardened":
+        cleanup_finding = hardened_build_preflight_cleanup(repo_root)
+        if cleanup_finding["status"] == "fail":
+            return make_result("build-c-services", repo_root, "Hardened build stopped during generated-tree cleanup.", [cleanup_finding])
+        try:
+            manifest_path.unlink(missing_ok=True)
+        except OSError as exc:
+            return make_result(
+                "build-c-services",
+                repo_root,
+                "Hardened build stopped while invalidating prior evidence.",
+                [finding("fail", "build-c-services.hardening-manifest", f"Prior hardened manifest could not be removed: {exc}.", str(HARDENED_BUILD_MANIFEST))],
+            )
+    result = command_build_chain(repo_root, "build-c-services", C_SERVICES_CHAIN, profile)
+    if profile == "hardened":
+        result["findings"].insert(0, cleanup_finding)
+        result["status"] = aggregate_status(result["findings"])
+    if profile == "hardened" and result["status"] == "pass":
+        manifest_finding = write_hardened_build_manifest(repo_root)
+        result["findings"].append(manifest_finding)
+        result["artifacts"] = sorted(set([*result["artifacts"], str(HARDENED_BUILD_MANIFEST)]))
+        result["status"] = aggregate_status(result["findings"])
+    return result
+
+
+def c_hardening_artifact_specs(profile: str | None = None) -> dict[str, tuple[str, ...]]:
+    if profile is None:
+        return C_HARDENING_ARTIFACT_SPECS
+    return {
+        component: tuple(pattern.replace("build/", f"build/{profile}/", 1) for pattern in patterns)
+        for component, patterns in C_HARDENING_ARTIFACT_SPECS.items()
+    }
+
+
+def c_hardening_artifact_paths(repo_root: Path, profile: str | None = None) -> list[tuple[str, Path]]:
     artifacts: list[tuple[str, Path]] = []
     seen: set[Path] = set()
     resolved_root = repo_root.resolve()
-    for component, patterns in C_HARDENING_ARTIFACT_SPECS.items():
+    for component, patterns in c_hardening_artifact_specs(profile).items():
         for pattern in patterns:
             for path in sorted(repo_root.glob(pattern)):
                 if not path.is_file():
@@ -12878,18 +13137,18 @@ def c_hardening_artifact_paths(repo_root: Path) -> list[tuple[str, Path]]:
     return artifacts
 
 
-def c_hardening_artifact_spec_matches(repo_root: Path) -> dict[str, dict[str, int]]:
+def c_hardening_artifact_spec_matches(repo_root: Path, profile: str | None = None) -> dict[str, dict[str, int]]:
     return {
         component: {
             pattern: sum(1 for path in repo_root.glob(pattern) if path.is_file())
             for pattern in patterns
         }
-        for component, patterns in C_HARDENING_ARTIFACT_SPECS.items()
+        for component, patterns in c_hardening_artifact_specs(profile).items()
     }
 
 
-def c_hardening_cmake_state(repo_root: Path, component: str) -> dict[str, Any]:
-    build_root = repo_root / "build" / component
+def c_hardening_cmake_state(repo_root: Path, component: str, profile: str | None = None) -> dict[str, Any]:
+    _, build_root, _ = cmake_paths(repo_root, component, profile)
     cache = build_root / "CMakeCache.txt"
     build_type: str | None = None
     if cache.is_file():
@@ -12907,6 +13166,127 @@ def c_hardening_cmake_state(repo_root: Path, component: str) -> dict[str, Any]:
         "compile_commands": str((build_root / "compile_commands.json").relative_to(repo_root)),
         "compile_commands_present": (build_root / "compile_commands.json").is_file(),
     }
+
+
+def c_hardening_retired_prefix_artifacts(repo_root: Path, profile: str | None = None) -> list[str]:
+    _, _, prefix = cmake_paths(repo_root, "gvm-libs", profile)
+    artifacts = {
+        str(path.relative_to(repo_root))
+        for pattern in C_HARDENING_RETIRED_PREFIX_ARTIFACTS
+        for path in prefix.glob(pattern)
+        if path.exists() or path.is_symlink()
+    }
+    return sorted(artifacts)
+
+
+def c_hardening_file_record(repo_root: Path, path: Path) -> dict[str, Any]:
+    evidence = c_hardening_artifact_file_evidence(path)
+    try:
+        display_path = str(path.relative_to(repo_root))
+    except ValueError:
+        display_path = str(path)
+    return {"path": display_path, **evidence}
+
+
+def c_hardening_git_source_state(repo_root: Path) -> str | None:
+    result = run_command(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        repo_root,
+    )
+    return result.stdout.rstrip("\n") if result.returncode == 0 else None
+
+
+def c_hardening_cmake_cache(repo_root: Path, component: str, profile: str) -> dict[str, str]:
+    _, build, _ = cmake_paths(repo_root, component, profile)
+    cache_path = build / "CMakeCache.txt"
+    values: dict[str, str] = {}
+    try:
+        lines = cache_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return values
+    for line in lines:
+        if line.startswith("//") or line.startswith("#") or ":" not in line or "=" not in line:
+            continue
+        key = line.split(":", 1)[0]
+        values[key] = line.partition("=")[2]
+    return values
+
+
+def c_hardening_configured_toolchain(repo_root: Path, component: str, profile: str) -> dict[str, Any] | None:
+    _, build, _ = cmake_paths(repo_root, component, profile)
+    cache = c_hardening_cmake_cache(repo_root, component, profile)
+    compiler_value = cache.get("CMAKE_C_COMPILER")
+    if not compiler_value:
+        return None
+    compiler = Path(compiler_value)
+    if not compiler.is_absolute():
+        compiler = (build / compiler).resolve()
+    try:
+        compiler_record = c_hardening_file_record(repo_root, compiler.resolve())
+    except OSError:
+        return None
+    compiler_config = next(iter(sorted((build / "CMakeFiles").glob("*/CMakeCCompiler.cmake"))), None)
+    if compiler_config is None:
+        return None
+    try:
+        compiler_text = compiler_config.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+    def cmake_set(name: str) -> str | None:
+        match = re.search(rf"^set\({re.escape(name)} \"([^\"]*)\"\)", compiler_text, re.MULTILINE)
+        return match.group(1) if match else None
+
+    return {
+        "compiler": compiler_record,
+        "compiler_id": cmake_set("CMAKE_C_COMPILER_ID"),
+        "compiler_version": cmake_set("CMAKE_C_COMPILER_VERSION"),
+        "build_type": cache.get("CMAKE_BUILD_TYPE"),
+        "generator": cache.get("CMAKE_GENERATOR"),
+    }
+
+
+def hardened_build_manifest_payload(repo_root: Path) -> tuple[dict[str, Any] | None, str | None]:
+    head = run_git(repo_root, ["rev-parse", "HEAD"])
+    source_status = c_hardening_git_source_state(repo_root)
+    configuration_path = repo_root / HARDENED_CONFIGURATION
+    injection_path = repo_root / HARDENED_CMAKE_INJECTION
+    if head is None or source_status is None or not configuration_path.is_file() or not injection_path.is_file():
+        return None, "source state or hardened configuration artifacts are unavailable"
+    compile_databases: dict[str, Any] = {}
+    toolchains: dict[str, Any] = {}
+    for component in C_SERVICES_CHAIN:
+        _, build, _ = cmake_paths(repo_root, component, "hardened")
+        database = build / "compile_commands.json"
+        toolchain = c_hardening_configured_toolchain(repo_root, component, "hardened")
+        if not database.is_file() or toolchain is None:
+            return None, f"{component} compile database or configured toolchain is unavailable"
+        compile_databases[component] = c_hardening_file_record(repo_root, database)
+        toolchains[component] = toolchain
+    artifact_pairs = c_hardening_artifact_paths(repo_root, "hardened")
+    matches = c_hardening_artifact_spec_matches(repo_root, "hardened")
+    if len(artifact_pairs) != C_HARDENING_EXPECTED_ARTIFACT_COUNT or any(count == 0 for patterns in matches.values() for count in patterns.values()):
+        return None, "the exact hardened ELF registry is incomplete or has unexpected cardinality"
+    return {
+        "schema_version": 1,
+        "profile": "hardened",
+        "head": head,
+        "source_status": source_status,
+        "configuration": c_hardening_file_record(repo_root, configuration_path),
+        "cmake_injection": c_hardening_file_record(repo_root, injection_path),
+        "toolchains": toolchains,
+        "compile_databases": compile_databases,
+        "artifacts": [c_hardening_file_record(repo_root, path) for _component, path in artifact_pairs],
+    }, None
+
+
+def write_hardened_build_manifest(repo_root: Path) -> dict[str, Any]:
+    payload, error = hardened_build_manifest_payload(repo_root)
+    if payload is None:
+        return finding("fail", "build-c-services.hardening-manifest", f"Hardened build manifest was not written: {error}.")
+    path = repo_root / HARDENED_BUILD_MANIFEST
+    write_json_artifact(path.parent, path.name, payload)
+    return finding("pass", "build-c-services.hardening-manifest", "Hardened build manifest recorded source, toolchain, compile database, and exact ELF identities.", str(HARDENED_BUILD_MANIFEST))
 
 
 def c_hardening_property(status: str, evidence: str) -> dict[str, str]:
@@ -13098,6 +13478,179 @@ def inspect_c_hardening_artifact(repo_root: Path, component: str, path: Path) ->
     return result
 
 
+def c_hardening_compile_evidence(
+    repo_root: Path,
+    component: str,
+    profile: str,
+    configuration: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    _, build, _ = cmake_paths(repo_root, component, profile)
+    database = build / "compile_commands.json"
+    database_path = str(database.relative_to(repo_root))
+    try:
+        entries = json.loads(database.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"status": "fail", "path": database_path, "properties": {}, "entry_count": 0, "c_entry_count": 0, "validated_command_count": 0, "malformed_entry_count": 1}
+    if not isinstance(entries, list) or not entries:
+        return {"status": "fail", "path": database_path, "properties": {}, "entry_count": 0, "c_entry_count": 0, "validated_command_count": 0, "malformed_entry_count": 1}
+
+    commands: list[list[str]] = []
+    c_entry_count = 0
+    malformed_entry_count = 0
+    for entry in entries:
+        if not isinstance(entry, dict):
+            malformed_entry_count += 1
+            continue
+        source_file = entry.get("file")
+        if not isinstance(source_file, str):
+            malformed_entry_count += 1
+            continue
+        if Path(source_file).suffix.lower() != ".c":
+            continue
+        c_entry_count += 1
+        arguments = entry.get("arguments")
+        command = entry.get("command")
+        if isinstance(arguments, list) and all(isinstance(value, str) for value in arguments):
+            commands.append(arguments)
+        elif isinstance(command, str):
+            try:
+                commands.append(shlex.split(command))
+            except ValueError:
+                malformed_entry_count += 1
+        else:
+            malformed_entry_count += 1
+    if not commands or c_entry_count != len(commands):
+        return {
+            "status": "fail",
+            "path": database_path,
+            "properties": {},
+            "entry_count": len(entries),
+            "c_entry_count": c_entry_count,
+            "validated_command_count": len(commands),
+            "malformed_entry_count": malformed_entry_count,
+        }
+
+    configuration = configuration or read_json_artifact(repo_root / HARDENED_CONFIGURATION)
+    feature_evidence = configuration.get("features") if isinstance(configuration, dict) else None
+    if not isinstance(feature_evidence, dict):
+        return {
+            "status": "fail",
+            "path": database_path,
+            "properties": {},
+            "entry_count": len(entries),
+            "c_entry_count": c_entry_count,
+            "validated_command_count": len(commands),
+            "malformed_entry_count": malformed_entry_count,
+        }
+
+    def last_matching_option(command: list[str], predicate: Callable[[str], bool]) -> str | None:
+        return next((option for option in reversed(command) if predicate(option)), None)
+
+    def effective_property_evidence(
+        name: str,
+        predicate: Callable[[str], bool],
+        accepted: set[str],
+        *,
+        required: bool = True,
+    ) -> dict[str, str]:
+        feature = feature_evidence.get(name)
+        if not isinstance(feature, dict) or feature.get("status") != "present":
+            if not required and isinstance(feature, dict) and feature.get("status") == "unsupported":
+                return c_hardening_property(
+                    "unsupported",
+                    f"optional configured {name} feature is unsupported on this architecture",
+                )
+            return c_hardening_property("missing", f"required configured {name} feature is absent or unsupported")
+        effective = [last_matching_option(command, predicate) for command in commands]
+        present = all(option in accepted for option in effective)
+        observed = sorted({option or "absent" for option in effective})
+        return c_hardening_property(
+            "present" if present else "missing",
+            ("all" if present else "not all")
+            + f" {len(commands)} compilation command(s) have an accepted effective {name} option; observed: "
+            + ", ".join(observed),
+        )
+
+    optimization_options = [
+        last_matching_option(command, lambda option: bool(re.fullmatch(r"-O(?:[0-9]+|fast|g|s|z)?", option)))
+        for command in commands
+    ]
+    optimization_present = all(option == "-O2" for option in optimization_options)
+    optimization = c_hardening_property(
+        "present" if optimization_present else "missing",
+        ("all" if optimization_present else "not all")
+        + f" {len(commands)} compilation command(s) have effective -O2; observed: "
+        + ", ".join(sorted({option or "absent" for option in optimization_options})),
+    )
+    fortify_flags = feature_evidence.get("fortify", {}).get("flags", [])
+    fortify_define = next(
+        (flag for flag in reversed(fortify_flags) if isinstance(flag, str) and flag.startswith("-D_FORTIFY_SOURCE=")),
+        "",
+    )
+    fortify = effective_property_evidence(
+        "fortify",
+        lambda option: option == "-U_FORTIFY_SOURCE" or option.startswith("-D_FORTIFY_SOURCE="),
+        {fortify_define},
+    )
+    if optimization["status"] != "present" and fortify["status"] == "present":
+        fortify = c_hardening_property("missing", "Fortify define is effective, but required optimization is not effective")
+
+    architecture = configuration.get("architecture") if isinstance(configuration.get("architecture"), str) else ""
+    control_flow_required = not architecture or hardened_control_flow_required(architecture)
+    properties = {
+        "optimization": optimization,
+        "fortify": fortify,
+        "stack_protector": effective_property_evidence(
+            "stack_protector",
+            lambda option: option in {
+                "-fno-stack-protector",
+                "-fstack-protector",
+                "-fstack-protector-all",
+                "-fstack-protector-explicit",
+                "-fstack-protector-strong",
+            },
+            {"-fstack-protector-strong", "-fstack-protector-all"},
+        ),
+        "stack_clash": effective_property_evidence(
+            "stack_clash",
+            lambda option: option in {"-fstack-clash-protection", "-fno-stack-clash-protection"},
+            {"-fstack-clash-protection"},
+        ),
+        "format_security": effective_property_evidence(
+            "format_security",
+            lambda option: option in {
+                "-Werror=format-security",
+                "-Wno-error=format-security",
+                "-Wformat-security",
+                "-Wno-format-security",
+            },
+            {"-Werror=format-security"},
+        ),
+        "control_flow_protection": effective_property_evidence(
+            "control_flow_protection",
+            lambda option: option.startswith("-fcf-protection=") or option.startswith("-mbranch-protection="),
+            set(feature_evidence.get("control_flow_protection", {}).get("flags", [])),
+            required=control_flow_required,
+        ),
+    }
+    complete = malformed_entry_count == 0 and c_entry_count == len(commands)
+    accepted_statuses = {
+        name: value["status"] == "present"
+        or (name == "control_flow_protection" and not control_flow_required and value["status"] == "unsupported")
+        for name, value in properties.items()
+    }
+    return {
+        "status": "pass" if complete and all(accepted_statuses.values()) else "fail",
+        "path": database_path,
+        "command_count": len(commands),
+        "entry_count": len(entries),
+        "c_entry_count": c_entry_count,
+        "validated_command_count": len(commands),
+        "malformed_entry_count": malformed_entry_count,
+        "properties": properties,
+    }
+
+
 def c_hardening_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     return {
@@ -13112,11 +13665,46 @@ def c_hardening_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "artifact_count": details.get("artifact_count", 0),
             "component_artifact_counts": details.get("component_artifact_counts", {}),
             "property_status_counts": details.get("property_status_counts", {}),
+            "compile_evidence": details.get("compile_evidence", {}),
         },
     }
 
 
-def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+def c_hardening_manifest_finding(repo_root: Path, manifest: dict[str, Any] | None) -> dict[str, Any]:
+    current, error = hardened_build_manifest_payload(repo_root)
+    if manifest is None or current is None:
+        return finding(
+            "fail",
+            "c-hardening.build-manifest",
+            "Hardened build manifest is missing or current build identity cannot be collected.",
+            str(HARDENED_BUILD_MANIFEST),
+            {"error": error, "manifest_present": manifest is not None},
+        )
+    identity_keys = ("configuration", "cmake_injection", "toolchains", "compile_databases", "artifacts")
+    mismatches = [key for key in identity_keys if manifest.get(key) != current.get(key)]
+    head_matches = manifest.get("head") == current.get("head")
+    status_matches = manifest.get("source_status") == current.get("source_status")
+    source_clean = current.get("source_status") == ""
+    schema_matches = manifest.get("schema_version") == 1 and manifest.get("profile") == "hardened"
+    passed = schema_matches and head_matches and status_matches and source_clean and not mismatches
+    return finding(
+        "pass" if passed else "fail",
+        "c-hardening.build-manifest",
+        "Hardened build manifest matches the clean current source, configured toolchains, compile databases, and exact ELF artifacts."
+        if passed
+        else "Hardened build manifest does not match a clean current build identity.",
+        str(HARDENED_BUILD_MANIFEST),
+        {
+            "schema_matches": schema_matches,
+            "head_matches": head_matches,
+            "source_status_matches": status_matches,
+            "source_clean": source_clean,
+            "identity_mismatches": mismatches,
+        },
+    )
+
+
+def command_c_hardening_check(repo_root: Path, status_only: bool = False, profile: str | None = None) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     readelf = shutil.which("readelf")
     findings.append(
@@ -13126,9 +13714,24 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
             f"readelf is available at {readelf}." if readelf else "readelf is required to inspect ELF hardening properties.",
         )
     )
-    build_state = {component: c_hardening_cmake_state(repo_root, component) for component in C_SERVICES_CHAIN}
-    artifact_spec_matches = c_hardening_artifact_spec_matches(repo_root)
-    artifact_pairs = c_hardening_artifact_paths(repo_root) if readelf else []
+    retired_prefix_artifacts = c_hardening_retired_prefix_artifacts(repo_root, profile)
+    findings.append(
+        finding(
+            "fail" if retired_prefix_artifacts else "pass",
+            "c-hardening.retired-prefix-artifacts",
+            f"Found {len(retired_prefix_artifacts)} known retired C build-prefix artifact(s)."
+            if retired_prefix_artifacts
+            else "No known retired C build-prefix artifacts are present.",
+            details={"artifacts": retired_prefix_artifacts},
+        )
+    )
+    configuration = read_json_artifact(repo_root / HARDENED_CONFIGURATION) if profile == "hardened" else None
+    manifest = read_json_artifact(repo_root / HARDENED_BUILD_MANIFEST) if profile == "hardened" else None
+    if profile == "hardened":
+        findings.append(c_hardening_manifest_finding(repo_root, manifest))
+    build_state = {component: c_hardening_cmake_state(repo_root, component, profile) for component in C_SERVICES_CHAIN}
+    artifact_spec_matches = c_hardening_artifact_spec_matches(repo_root, profile)
+    artifact_pairs = c_hardening_artifact_paths(repo_root, profile) if readelf else []
     component_counts = {component: 0 for component in C_SERVICES_CHAIN}
     for component, _path in artifact_pairs:
         component_counts[component] += 1
@@ -13152,6 +13755,35 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
             findings.append(finding("pass", "c-hardening.artifacts", f"{component} has {component_counts[component]} final ELF artifact(s).", state["build_dir"]))
 
     artifacts = [inspect_c_hardening_artifact(repo_root, component, path) for component, path in artifact_pairs]
+    artifact_count_status = "pass" if len(artifacts) == C_HARDENING_EXPECTED_ARTIFACT_COUNT else "fail"
+    findings.append(
+        finding(
+            artifact_count_status,
+            "c-hardening.artifact-count",
+            f"Hardening registry resolved {len(artifacts)} unique final ELF artifact(s); expected {C_HARDENING_EXPECTED_ARTIFACT_COUNT}.",
+            details={"actual": len(artifacts), "expected": C_HARDENING_EXPECTED_ARTIFACT_COUNT},
+        )
+    )
+    compile_evidence = {
+        component: c_hardening_compile_evidence(repo_root, component, profile, configuration)
+        for component in C_SERVICES_CHAIN
+    } if profile == "hardened" else {}
+    for component, evidence in compile_evidence.items():
+        findings.append(
+            finding(
+                evidence["status"],
+                "c-hardening.compile-commands",
+                component + " hardened compilation evidence is " + str(evidence["status"]) + ".",
+                evidence.get("path"),
+                {
+                    "properties": evidence.get("properties", {}),
+                    "entry_count": evidence.get("entry_count", 0),
+                    "c_entry_count": evidence.get("c_entry_count", 0),
+                    "validated_command_count": evidence.get("validated_command_count", 0),
+                    "malformed_entry_count": evidence.get("malformed_entry_count", 0),
+                },
+            )
+        )
     property_counts = {status: 0 for status in ("present", "missing", "unsupported", "not_applicable", "unknown")}
     runtime_missing: list[dict[str, str]] = []
     runtime_unknown: list[dict[str, str]] = []
@@ -13162,9 +13794,12 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
             row = {"path": artifact["path"], "property": property_name, "evidence": value["evidence"]}
             if runtime_scope and value["status"] == "missing":
                 runtime_missing.append(row)
-            elif runtime_scope and value["status"] == "unknown":
+            elif runtime_scope and value["status"] == "unknown" and not (
+                profile == "hardened" and property_name in {"stack_protector", "fortify"}
+            ):
                 runtime_unknown.append(row)
-    baseline_status = "fail" if runtime_missing or runtime_unknown or not artifacts else "pass"
+    compile_failed = any(evidence["status"] != "pass" for evidence in compile_evidence.values())
+    baseline_status = "fail" if runtime_missing or runtime_unknown or not artifacts or compile_failed else "pass"
     findings.append(
         finding(
             baseline_status,
@@ -13178,9 +13813,9 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
             },
         )
     )
-    artifact_dir = runtime_path(repo_root, "artifacts", "c-hardening")
+    artifact_dir = runtime_path(repo_root, "artifacts", "c-hardening") if profile is None else runtime_path(repo_root, "artifacts", "c-hardening", profile)
     latest_path, timestamped_path = retained_json_artifact_paths(artifact_dir, "c-hardening", "c-hardening.json")
-    source_status = run_git(repo_root, ["status", "--porcelain=v1", "--untracked-files=no"])
+    source_status = c_hardening_git_source_state(repo_root)
     if source_status is None:
         findings.append(finding("fail", "c-hardening.source-state", "Git source state could not be determined."))
     elif source_status:
@@ -13188,19 +13823,20 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
             finding(
                 "fail",
                 "c-hardening.source-state",
-                "Tracked source changes are present; hardening evidence cannot be attributed to a clean source state.",
+                "Tracked or untracked nonignored source changes are present; hardening evidence cannot be attributed to a clean source state.",
             )
         )
     result = make_result(
         "c-hardening-check",
         repo_root,
-        f"Current C hardening baseline inspected {len(artifacts)} final ELF artifact(s); {len(runtime_missing)} missing and {len(runtime_unknown)} unknown runtime protection result(s).",
+        (profile or "current")
+        + f" C hardening baseline inspected {len(artifacts)} final ELF artifact(s); {len(runtime_missing)} missing and {len(runtime_unknown)} unknown runtime protection result(s).",
         findings,
         [str(latest_path), str(timestamped_path)],
     )
     result["details"] = {
         "schema_version": 1,
-        "profile": "current",
+        "profile": profile or "current",
         "source_state": {
             "head": run_git(repo_root, ["rev-parse", "HEAD"]),
             "dirty": None if source_status is None else bool(source_status),
@@ -13219,6 +13855,7 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False) -> dic
         "artifact_spec_matches": artifact_spec_matches,
         "property_status_counts": property_counts,
         "artifacts": artifacts,
+        "compile_evidence": compile_evidence,
     }
     write_retained_json_artifact(latest_path, timestamped_path, result, "c-hardening", RETAINED_C_HARDENING_ARTIFACTS)
     return c_hardening_status_only_result(result) if status_only else result
@@ -30583,13 +31220,18 @@ def build_parser() -> argparse.ArgumentParser:
     deps.add_argument("component", nargs="?", help="component name")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
     configure.add_argument("component", help="component name")
+    configure.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
     build = subparsers.add_parser("build", parents=[common], help="build a CMake component")
     build.add_argument("component", help="component name")
     build.add_argument("--install", action="store_true", help="install into build/prefix after successful build")
-    subparsers.add_parser("build-core-c", parents=[common], help="build gvm-libs, openvas-smb, and openvas-scanner")
-    subparsers.add_parser("build-c-services", parents=[common], help="build current C service baseline")
+    build.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
+    build_core_c = subparsers.add_parser("build-core-c", parents=[common], help="build gvm-libs, openvas-smb, and openvas-scanner")
+    build_core_c.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
+    build_c_services = subparsers.add_parser("build-c-services", parents=[common], help="build current C service baseline")
+    build_c_services.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
     c_hardening = subparsers.add_parser("c-hardening-check", parents=[common], help="inspect current final C ELF artifact hardening properties")
     c_hardening.add_argument("--status-only", action="store_true", help="emit compact counts and only non-pass findings")
+    c_hardening.add_argument("--profile", choices=C_BUILD_PROFILES, help="inspect an isolated C build profile")
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
@@ -30964,15 +31606,15 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "deps":
         result = command_deps(repo_root, args.component)
     elif args.command == "configure":
-        result = command_configure(repo_root, args.component)
+        result = command_configure(repo_root, args.component, args.profile)
     elif args.command == "build":
-        result = command_build(repo_root, args.component, install=args.install)
+        result = command_build(repo_root, args.component, install=args.install, profile=args.profile)
     elif args.command == "build-core-c":
-        result = command_build_core_c(repo_root)
+        result = command_build_core_c(repo_root, args.profile)
     elif args.command == "build-c-services":
-        result = command_build_c_services(repo_root)
+        result = command_build_c_services(repo_root, args.profile)
     elif args.command == "c-hardening-check":
-        result = command_c_hardening_check(repo_root, status_only=args.status_only)
+        result = command_c_hardening_check(repo_root, status_only=args.status_only, profile=args.profile)
     elif args.command == "build-ui":
         result = command_build_ui(repo_root)
     elif args.command == "build-python":

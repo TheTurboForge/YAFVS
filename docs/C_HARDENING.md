@@ -109,10 +109,46 @@ RELRO, stack-protector, fortified-call, control-flow, and text-relocation
 evidence without changing build flags. Missing, unsupported, inapplicable, and
 unknown results remain explicit; missing or unknown required evidence makes the
 command fail. Each result includes the artifact digest, size, modification
-time, source head, and dirty-worktree state so stale or locally modified output
-is visible rather than silently treated as current proof. Dedicated hardened,
-sanitizer, and analysis profiles are still planned work; this baseline is
-evidence, not a claim that those profiles have landed.
+time, source head, and dirty-worktree metadata. This ordinary output is
+observational and is not manifest-attested or bound to the current HEAD; only
+the hardened profile provides that stale-build identity guarantee.
+
+The isolated hardened profile is available through
+`just build-c-services --profile hardened` and
+`just c-hardening-check --profile hardened --status-only --json`. It uses
+`build/hardened/` and a separate dependency prefix, feature-probed compiler and
+linker flags, and a compilation database for every component. Every hardened
+configure uses CMake `--fresh` (CMake 3.24 or newer), so an earlier cache cannot
+retain removed profile flags; ordinary configure behavior is unchanged.
+Before the complete six-component hardened chain, it removes only those six
+hardened component build trees and the hardened dependency prefix, then
+reconfigures, builds, and installs dependencies sequentially. Required probes
+fail configuration when unsupported; the checker does not compile or rerun
+feature probes, although toolchain version metadata may execute commands such
+as `gcc --version`. Fortify, strong stack protection, stack-clash protection,
+format security, RELRO/NOW, non-executable stack, and PIE/PIC are mandatory
+profile properties. Control-flow protection is also mandatory on the defined
+x86_64 and AArch64 architecture families; on other architectures with no
+defined profile flag it is recorded as optional and `unsupported`, not
+silently reported as present. The checker evaluates the last effective
+overriding compiler option for optimization, Fortify, stack protection,
+stack-clash protection, format security, and architecture control-flow
+protection.
+
+A successful complete hardened build writes
+`build/hardened/hardening-manifest.json`. The manifest binds evidence to the
+full Git HEAD/status, configured CMake compiler identities, compilation-database
+hashes, and exact final-ELF paths and hashes. The checker requires it to match a
+clean current source tree and combines it with final ELF evidence for PIE,
+non-executable stack, RELRO/NOW, control-flow notes, and text relocations.
+Missing, malformed, unsupported, stale, or unknown required evidence fails.
+
+The explicit registry covers 21 retained final artifacts, including ten named
+`gvm-libs` libraries. It does not claim coverage for undeclared CMake targets;
+CMake file-api target discovery remains a later enhancement. The ordinary
+build-prefix check also reports exact known remnants from retired
+agent-controller and container-image-scanner libraries without deleting them.
+Sanitizer and analysis profiles remain planned work.
 
 See [Memory Safety Direction](MEMORY_SAFETY.md) for the broader remove, retain,
 or replace policy and [Minimum Validation Standards](VALIDATION_STANDARDS.md)

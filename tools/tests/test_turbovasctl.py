@@ -227,6 +227,492 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("python-gvm", turbovasctl.BASELINE_CHAIN)
         self.assertNotIn("gvm-tools", turbovasctl.BASELINE_CHAIN)
 
+    def test_hardened_profile_uses_isolated_build_and_prefix_paths(self):
+        root = Path("/tmp/turbovas-test")
+        source, build, prefix = turbovasctl.cmake_paths(root, "gvmd", "hardened")
+        self.assertEqual(source, root / "components" / "gvmd")
+        self.assertEqual(build, root / "build" / "hardened" / "gvmd")
+        self.assertEqual(prefix, root / "build" / "hardened" / "prefix")
+        _, ordinary_build, ordinary_prefix = turbovasctl.cmake_paths(root, "gvmd")
+        self.assertEqual(ordinary_build, root / "build" / "gvmd")
+        self.assertEqual(ordinary_prefix, root / "build" / "prefix")
+
+    def test_hardened_profile_parser_accepts_explicit_profile(self):
+        parser = turbovasctl.build_parser()
+        for command in (
+            ["configure", "gvmd", "--profile", "hardened"],
+            ["build", "gvmd", "--profile", "hardened"],
+            ["build-c-services", "--profile", "hardened"],
+            ["c-hardening-check", "--profile", "hardened"],
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(parser.parse_args(command).profile, "hardened")
+
+    def test_hardened_configure_is_fresh_and_has_no_removed_profile_c_flags(self):
+        evidence = {name: {"status": "present", "flags": []} for name in turbovasctl.hardened_required_features()}
+        completed = subprocess.CompletedProcess([], 0, "ok")
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "cmake_fresh_support", return_value=(True, "")
+        ), unittest.mock.patch.object(
+            turbovasctl, "hardened_profile_configuration", return_value=(["-DCMAKE_PROJECT_INCLUDE=/tmp/hardening.cmake"], evidence)
+        ), unittest.mock.patch.object(turbovasctl, "run_command", return_value=completed) as run:
+            turbovasctl.cmake_configure(Path(tmp), turbovasctl.BUILD_META["gvm-libs"], "hardened")
+        command = run.call_args.args[0]
+        self.assertEqual(command[:2], ["cmake", "--fresh"])
+        self.assertFalse(any(argument.startswith("-DCMAKE_C_FLAGS=") for argument in command))
+
+    def test_ordinary_configure_does_not_request_fresh_cache(self):
+        completed = subprocess.CompletedProcess([], 0, "ok")
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "run_command", return_value=completed
+        ) as run:
+            turbovasctl.cmake_configure(Path(tmp), turbovasctl.BUILD_META["gvm-libs"])
+        self.assertNotIn("--fresh", run.call_args.args[0])
+
+    def test_hardened_configure_fails_clearly_without_cmake_fresh_support(self):
+        message = "installed cmake does not advertise --fresh; cmake >= 3.24 is required for hardened profiles"
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "cmake_fresh_support", return_value=(False, message)
+        ), unittest.mock.patch.object(turbovasctl, "run_command") as run:
+            result = turbovasctl.cmake_configure(Path(tmp), turbovasctl.BUILD_META["gvm-libs"], "hardened")
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, message)
+        run.assert_not_called()
+
+    def test_cmake_fresh_support_reports_missing_cmake(self):
+        with unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None):
+            supported, message = turbovasctl.cmake_fresh_support(Path("/tmp/turbovas-test"))
+        self.assertFalse(supported)
+        self.assertIn("cmake is unavailable", message)
+
+    def test_cmake_fresh_support_rejects_cmake_without_fresh_option(self):
+        completed = subprocess.CompletedProcess([], 0, "CMake usage without the required option")
+        with unittest.mock.patch.object(
+            turbovasctl.shutil, "which", return_value="/usr/bin/cmake"
+        ), unittest.mock.patch.object(turbovasctl, "run_command", return_value=completed):
+            supported, message = turbovasctl.cmake_fresh_support(Path("/tmp/turbovas-test"))
+        self.assertFalse(supported)
+        self.assertIn("cmake >= 3.24", message)
+
+    def test_hardened_profile_uses_fortify_level_two_for_retained_cmake_roots(self):
+        root = Path("/tmp/turbovas-test")
+
+        def probe(_root, flags, **_kwargs):
+            return "-D_FORTIFY_SOURCE=3" not in flags
+
+        with unittest.mock.patch.object(turbovasctl, "hardened_flag_probe", side_effect=probe):
+            args, evidence = turbovasctl.hardened_profile_configuration(root)
+        self.assertEqual(evidence["fortify"]["status"], "present")
+        self.assertIn("-D_FORTIFY_SOURCE=2", evidence["fortify"]["flags"])
+        self.assertFalse(evidence["fortify"]["level_three_supported"])
+        self.assertIn("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", args)
+        self.assertFalse(any("-fPIE" in argument for argument in args))
+        self.assertFalse(any(argument.startswith("-DCMAKE_C_FLAGS=") for argument in args))
+        self.assertTrue(any(argument.startswith("-DCMAKE_PROJECT_INCLUDE=") for argument in args))
+        self.assertTrue(any(argument.startswith("-DCMAKE_MODULE_LINKER_FLAGS=") for argument in args))
+
+    def test_hardened_compile_evidence_requires_flags_for_every_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            database = root / "build" / "hardened" / "gvmd" / "compile_commands.json"
+            database.parent.mkdir(parents=True)
+            database.write_text(
+                json.dumps(
+                    [
+                        {"file": "one.c", "command": "cc -O2 -D_FORTIFY_SOURCE=3 -fstack-protector -fstack-protector-strong -fstack-clash-protection -Werror=format-security -fcf-protection=full -c one.c"},
+                        {"file": "two.c", "command": "cc -O3 -D_FORTIFY_SOURCE=2 -fstack-protector -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fstack-clash-protection -Werror=format-security -fcf-protection=full -c two.c"},
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            feature_evidence = {
+                name: {"status": "present", "flags": flags}
+                for name, flags in {
+                    "fortify": ["-D_FORTIFY_SOURCE=3"],
+                    "stack_protector": ["-fstack-protector-strong"],
+                    "stack_clash": ["-fstack-clash-protection"],
+                    "format_security": ["-Werror=format-security"],
+                    "control_flow_protection": ["-fcf-protection=full"],
+                }.items()
+            }
+            evidence = turbovasctl.c_hardening_compile_evidence(root, "gvmd", "hardened", {"features": feature_evidence})
+        self.assertEqual(evidence["status"], "pass")
+        self.assertEqual(evidence["properties"]["fortify"]["status"], "present")
+        self.assertEqual(evidence["properties"]["stack_protector"]["status"], "present")
+        self.assertEqual(evidence["properties"]["optimization"]["status"], "present")
+
+    def test_hardened_compile_evidence_rejects_later_weakening_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            database = root / "build" / "hardened" / "gvmd" / "compile_commands.json"
+            database.parent.mkdir(parents=True)
+            database.write_text(
+                json.dumps(
+                    [
+                        {
+                            "file": "weak.c",
+                            "command": "cc -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fstack-clash-protection -Werror=format-security -fcf-protection=full -fstack-protector -O0 -U_FORTIFY_SOURCE -fcf-protection=none -c weak.c",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            features = {
+                name: {"status": "present", "flags": flags}
+                for name, flags in {
+                    "fortify": ["-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=2"],
+                    "stack_protector": ["-fstack-protector-strong"],
+                    "stack_clash": ["-fstack-clash-protection"],
+                    "format_security": ["-Werror=format-security"],
+                    "control_flow_protection": ["-fcf-protection=full"],
+                }.items()
+            }
+            evidence = turbovasctl.c_hardening_compile_evidence(root, "gvmd", "hardened", {"features": features})
+        self.assertEqual(evidence["status"], "fail")
+        self.assertEqual(evidence["properties"]["stack_protector"]["status"], "missing")
+        self.assertEqual(evidence["properties"]["optimization"]["status"], "missing")
+        self.assertEqual(evidence["properties"]["fortify"]["status"], "missing")
+        self.assertEqual(evidence["properties"]["control_flow_protection"]["status"], "missing")
+
+    def test_hardened_compile_evidence_allows_optional_unsupported_cfi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            database = root / "build" / "hardened" / "gvmd" / "compile_commands.json"
+            database.parent.mkdir(parents=True)
+            database.write_text(
+                json.dumps(
+                    [
+                        {
+                            "file": "portable.c",
+                            "command": "cc -O2 -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fstack-clash-protection -Werror=format-security -c portable.c",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            features = {
+                "fortify": {"status": "present", "flags": ["-D_FORTIFY_SOURCE=3"]},
+                "stack_protector": {"status": "present", "flags": ["-fstack-protector-strong"]},
+                "stack_clash": {"status": "present", "flags": ["-fstack-clash-protection"]},
+                "format_security": {"status": "present", "flags": ["-Werror=format-security"]},
+                "control_flow_protection": {"status": "unsupported", "flags": []},
+            }
+            configuration = {"architecture": "riscv64", "features": features}
+            evidence = turbovasctl.c_hardening_compile_evidence(root, "gvmd", "hardened", configuration)
+        self.assertEqual(evidence["status"], "pass")
+        self.assertEqual(evidence["properties"]["control_flow_protection"]["status"], "unsupported")
+
+    def test_hardened_compile_evidence_rejects_required_unsupported_cfi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            database = root / "build" / "hardened" / "gvmd" / "compile_commands.json"
+            database.parent.mkdir(parents=True)
+            database.write_text(
+                json.dumps(
+                    [
+                        {
+                            "file": "x86.c",
+                            "command": "cc -O2 -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fstack-clash-protection -Werror=format-security -c x86.c",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            features = {
+                "fortify": {"status": "present", "flags": ["-D_FORTIFY_SOURCE=3"]},
+                "stack_protector": {"status": "present", "flags": ["-fstack-protector-strong"]},
+                "stack_clash": {"status": "present", "flags": ["-fstack-clash-protection"]},
+                "format_security": {"status": "present", "flags": ["-Werror=format-security"]},
+                "control_flow_protection": {"status": "unsupported", "flags": []},
+            }
+            configuration = {"architecture": "x86_64", "features": features}
+            evidence = turbovasctl.c_hardening_compile_evidence(root, "gvmd", "hardened", configuration)
+        self.assertEqual(evidence["status"], "fail")
+        self.assertEqual(evidence["properties"]["control_flow_protection"]["status"], "missing")
+
+    def test_hardened_command_check_does_not_run_feature_probes(self):
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "hardened_flag_probe", side_effect=AssertionError("live probe must not run")
+        ), unittest.mock.patch.object(turbovasctl, "write_retained_json_artifact"):
+            result = turbovasctl.command_c_hardening_check(Path(tmp), profile="hardened", status_only=True)
+        self.assertEqual(result["status"], "fail")
+
+    def test_hardened_compile_evidence_fails_on_malformed_c_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            database = root / "build" / "hardened" / "gvmd" / "compile_commands.json"
+            database.parent.mkdir(parents=True)
+            database.write_text(json.dumps([{"file": "broken.c", "command": "cc \"unterminated"}]), encoding="utf-8")
+            evidence = turbovasctl.c_hardening_compile_evidence(root, "gvmd", "hardened", {"features": {}})
+        self.assertEqual(evidence["status"], "fail")
+        self.assertEqual(evidence["entry_count"], 1)
+        self.assertEqual(evidence["c_entry_count"], 1)
+        self.assertEqual(evidence["validated_command_count"], 0)
+        self.assertEqual(evidence["malformed_entry_count"], 1)
+
+    def test_hardened_compile_check_does_not_run_feature_probes(self):
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "hardened_flag_probe", side_effect=AssertionError("live probe must not run")
+        ):
+            evidence = turbovasctl.c_hardening_compile_evidence(Path(tmp), "gvmd", "hardened", {"features": {}})
+        self.assertEqual(evidence["status"], "fail")
+
+    def test_profile_rejects_non_cmake_components(self):
+        root = Path("/tmp/turbovas-test")
+        build = turbovasctl.command_build(root, "gsa", profile="hardened")
+        configure = turbovasctl.command_configure(root, "gsa", profile="hardened")
+        self.assertEqual(build["status"], "fail")
+        self.assertEqual(configure["status"], "fail")
+        self.assertEqual(build["findings"][0]["check"], "build.profile-unsupported")
+        self.assertEqual(configure["findings"][0]["check"], "build.profile-unsupported")
+
+    def test_configure_without_profile_preserves_non_cmake_warning(self):
+        result = turbovasctl.command_configure(Path("/tmp/turbovas-test"), "gsa")
+        self.assertNotEqual(result["status"], "fail")
+        self.assertEqual(result["findings"][0]["status"], "warn")
+        self.assertEqual(result["findings"][0]["check"], "build.unsupported")
+
+    def test_required_hardened_probe_failure_stops_cmake_configuration(self):
+        evidence = {name: {"status": "present", "flags": []} for name in turbovasctl.hardened_required_features()}
+        evidence["stack_protector"]["status"] = "unsupported"
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "hardened_profile_configuration", return_value=([], evidence)
+        ), unittest.mock.patch.object(
+            turbovasctl, "cmake_fresh_support", return_value=(True, "")
+        ), unittest.mock.patch.object(turbovasctl, "run_command") as run:
+            result = turbovasctl.cmake_configure(Path(tmp), turbovasctl.BUILD_META["gvm-libs"], "hardened")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("stack_protector", result.stdout)
+        run.assert_not_called()
+
+    def test_hardened_configuration_preserves_component_c_flags_metadata(self):
+        evidence = {name: {"status": "present", "flags": []} for name in turbovasctl.hardened_required_features()}
+        completed = subprocess.CompletedProcess([], 0, "ok")
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            turbovasctl, "hardened_profile_configuration", return_value=(["-DCMAKE_PROJECT_INCLUDE=/tmp/hardening.cmake"], evidence)
+        ), unittest.mock.patch.object(
+            turbovasctl, "cmake_fresh_support", return_value=(True, "")
+        ), unittest.mock.patch.object(turbovasctl, "run_command", return_value=completed) as run:
+            turbovasctl.cmake_configure(Path(tmp), turbovasctl.BUILD_META["openvas-scanner"], "hardened")
+        command = run.call_args.args[0]
+        self.assertEqual(command[:2], ["cmake", "--fresh"])
+        self.assertIn("-DCMAKE_C_FLAGS=-isystem /usr/include/mit-krb5", command)
+        self.assertEqual(sum(argument.startswith("-DCMAKE_C_FLAGS=") for argument in command), 1)
+
+    def test_hardened_manifest_requires_clean_matching_build_identity(self):
+        current = {
+            "schema_version": 1,
+            "profile": "hardened",
+            "head": "abc123",
+            "source_status": "",
+            "configuration": {"sha256": "config"},
+            "cmake_injection": {"sha256": "injection"},
+            "toolchains": {"gvm-libs": {"compiler_version": "1"}},
+            "compile_databases": {"gvm-libs": {"sha256": "commands"}},
+            "artifacts": [{"path": "build/hardened/a", "sha256": "elf"}],
+        }
+        with unittest.mock.patch.object(turbovasctl, "hardened_build_manifest_payload", return_value=(current, None)):
+            passed = turbovasctl.c_hardening_manifest_finding(Path("/tmp/turbovas-test"), dict(current))
+            dirty = dict(current, source_status=" M tools/turbovasctl")
+            dirty_result = turbovasctl.c_hardening_manifest_finding(Path("/tmp/turbovas-test"), dirty)
+            wrong_head = dict(current, head="other")
+            head_result = turbovasctl.c_hardening_manifest_finding(Path("/tmp/turbovas-test"), wrong_head)
+            wrong_artifacts = dict(current, artifacts=[])
+            artifact_result = turbovasctl.c_hardening_manifest_finding(Path("/tmp/turbovas-test"), wrong_artifacts)
+        current_dirty = dict(current, source_status=" M tools/turbovasctl")
+        with unittest.mock.patch.object(turbovasctl, "hardened_build_manifest_payload", return_value=(current_dirty, None)):
+            matching_dirty_result = turbovasctl.c_hardening_manifest_finding(Path("/tmp/turbovas-test"), dict(current_dirty))
+        self.assertEqual(passed["status"], "pass")
+        self.assertEqual(dirty_result["status"], "fail")
+        self.assertEqual(matching_dirty_result["status"], "fail")
+        self.assertEqual(head_result["status"], "fail")
+        self.assertEqual(artifact_result["status"], "fail")
+
+    def test_hardened_build_invalidates_old_manifest_before_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / turbovasctl.HARDENED_BUILD_MANIFEST
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text("stale", encoding="utf-8")
+            chain = {"status": "pass", "summary": "ok", "findings": [], "artifacts": [], "metadata": {}}
+            manifest_finding = {"status": "pass", "check": "manifest", "message": "ok"}
+            with unittest.mock.patch.object(turbovasctl, "command_build_chain", return_value=chain), unittest.mock.patch.object(
+                turbovasctl, "write_hardened_build_manifest", return_value=manifest_finding
+            ):
+                result = turbovasctl.command_build_c_services(root, "hardened")
+        self.assertFalse(manifest.exists())
+        self.assertEqual(result["status"], "pass")
+
+    def test_hardened_build_preflight_removes_stale_registered_artifact_and_prefix_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stale_artifact = root / "build" / "hardened" / "gvm-libs" / "base" / "libgvm_base.so.stale"
+            stale_artifact.parent.mkdir(parents=True)
+            stale_artifact.write_bytes(b"stale ELF")
+            for component in turbovasctl.C_SERVICES_CHAIN[1:]:
+                marker = root / "build" / "hardened" / component / "stale"
+                marker.parent.mkdir(parents=True)
+                marker.write_text("stale", encoding="utf-8")
+            stale_prefix = root / "build" / "hardened" / "prefix" / "lib" / "stale.so"
+            stale_prefix.parent.mkdir(parents=True)
+            stale_prefix.write_text("stale", encoding="utf-8")
+            ordinary = root / "build" / "gvm-libs" / "keep"
+            ordinary.parent.mkdir(parents=True)
+            ordinary.write_text("ordinary", encoding="utf-8")
+            source = root / "components" / "gvm-libs" / "keep"
+            source.parent.mkdir(parents=True)
+            source.write_text("source", encoding="utf-8")
+            chain = {"status": "fail", "summary": "stop after preflight", "findings": [], "artifacts": [], "metadata": {}}
+
+            def inspect_clean_chain(*_args, **_kwargs):
+                self.assertFalse(stale_artifact.exists())
+                self.assertFalse((root / "build" / "hardened" / "prefix").exists())
+                self.assertTrue(ordinary.is_file())
+                self.assertTrue(source.is_file())
+                for component in turbovasctl.C_SERVICES_CHAIN:
+                    self.assertFalse((root / "build" / "hardened" / component).exists())
+                return chain
+
+            with unittest.mock.patch.object(turbovasctl, "command_build_chain", side_effect=inspect_clean_chain):
+                result = turbovasctl.command_build_c_services(root, "hardened")
+        self.assertEqual(result["status"], "fail")
+        cleanup = next(item for item in result["findings"] if item["check"] == "build-c-services.hardened-preflight")
+        self.assertEqual(cleanup["status"], "pass")
+        self.assertEqual(len(cleanup["details"]["requested_paths"]), 7)
+
+    def test_hardened_build_preflight_refuses_symlinked_build_parent(self):
+        for symlink_parent in ("build", "hardened"):
+            with self.subTest(symlink_parent=symlink_parent), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                root = base / "repo"
+                root.mkdir()
+                external_hardened = base / "external" / "hardened"
+                external_hardened.mkdir(parents=True)
+                artifact_sentinel = external_hardened / "gvm-libs" / "keep"
+                artifact_sentinel.parent.mkdir(parents=True)
+                artifact_sentinel.write_text("outside artifact", encoding="utf-8")
+                manifest_sentinel = external_hardened / "hardening-manifest.json"
+                manifest_sentinel.write_text("outside manifest", encoding="utf-8")
+                if symlink_parent == "build":
+                    (root / "build").symlink_to(external_hardened.parent, target_is_directory=True)
+                else:
+                    (root / "build").mkdir()
+                    (root / "build" / "hardened").symlink_to(external_hardened, target_is_directory=True)
+                with unittest.mock.patch.object(turbovasctl, "command_build_chain") as chain:
+                    result = turbovasctl.command_build_c_services(root, "hardened")
+                self.assertEqual(result["status"], "fail")
+                self.assertEqual(result["findings"][0]["check"], "build-c-services.hardened-preflight")
+                self.assertTrue(artifact_sentinel.is_file())
+                self.assertEqual(manifest_sentinel.read_text(encoding="utf-8"), "outside manifest")
+                self.assertEqual(result["findings"][0]["details"]["removed_paths"], [])
+                chain.assert_not_called()
+
+    def test_hardened_artifact_specs_do_not_read_ordinary_builds(self):
+        specs = turbovasctl.c_hardening_artifact_specs("hardened")
+        self.assertTrue(all(pattern.startswith("build/hardened/") for patterns in specs.values() for pattern in patterns))
+
+    def test_gvm_libs_hardening_registry_is_explicit_and_stable(self):
+        expected = (
+            "build/gvm-libs/base/libgvm_base.so.*",
+            "build/gvm-libs/boreas/libgvm_boreas.so.*",
+            "build/gvm-libs/cyberark/libgvm_cyberark.so.*",
+            "build/gvm-libs/gmp/libgvm_gmp.so.*",
+            "build/gvm-libs/http/libgvm_http.so.*",
+            "build/gvm-libs/http_scanner/libgvm_http_scanner.so.*",
+            "build/gvm-libs/openvasd/libgvm_openvasd.so.*",
+            "build/gvm-libs/osp/libgvm_osp.so.*",
+            "build/gvm-libs/security_intelligence/libgvm_security_intelligence.so.*",
+            "build/gvm-libs/util/libgvm_util.so.*",
+        )
+        self.assertEqual(turbovasctl.C_HARDENING_ARTIFACT_SPECS["gvm-libs"], expected)
+        self.assertEqual(sum(len(patterns) for patterns in turbovasctl.C_HARDENING_ARTIFACT_SPECS.values()), 21)
+        self.assertEqual(turbovasctl.C_HARDENING_EXPECTED_ARTIFACT_COUNT, 21)
+
+    def test_every_retained_gvm_library_pattern_is_required_without_version_assumptions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            patterns = turbovasctl.c_hardening_artifact_specs("hardened")["gvm-libs"]
+            paths = []
+            for pattern in patterns:
+                path = root / pattern.replace("*", "arbitrary-version")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"\x7fELFretained")
+                paths.append(path)
+            matches = turbovasctl.c_hardening_artifact_spec_matches(root, "hardened")["gvm-libs"]
+            self.assertTrue(all(matches[pattern] == 1 for pattern in patterns))
+            paths[4].unlink()
+            matches = turbovasctl.c_hardening_artifact_spec_matches(root, "hardened")["gvm-libs"]
+            self.assertEqual(matches[patterns[4]], 0)
+            self.assertTrue(all(matches[pattern] == 1 for pattern in patterns if pattern != patterns[4]))
+
+    def test_deleted_gvm_libraries_are_ignored_by_hardened_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for pattern in turbovasctl.c_hardening_artifact_specs("hardened")["gvm-libs"]:
+                path = root / pattern.replace("*", "arbitrary-version")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"\x7fELFretained")
+            for stale in (
+                "build/hardened/gvm-libs/agent_controller/libgvm_agent_controller.so.stale-version",
+                "build/hardened/gvm-libs/container_image_scanner/libgvm_container_image_scanner.so.stale-version",
+            ):
+                path = root / stale
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"\x7fELFretired")
+            artifacts = [path for component, path in turbovasctl.c_hardening_artifact_paths(root, "hardened") if component == "gvm-libs"]
+        self.assertEqual(len(artifacts), 10)
+        self.assertFalse(any("agent_controller" in str(path) or "container_image_scanner" in str(path) for path in artifacts))
+
+    def test_retired_prefix_artifact_registry_is_version_robust_and_profile_aware(self):
+        expected = (
+            "include/gvm/agent_controller",
+            "include/gvm/container_image_scanner",
+            "lib/libgvm_agent_controller.so*",
+            "lib/libgvm_container_image_scanner.so*",
+            "lib/pkgconfig/libgvm_agent_controller.pc",
+            "lib/pkgconfig/libgvm_container_image_scanner.pc",
+        )
+        self.assertEqual(turbovasctl.C_HARDENING_RETIRED_PREFIX_ARTIFACTS, expected)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ordinary = root / "build" / "prefix" / expected[0]
+            ordinary.mkdir(parents=True)
+            versioned = root / "build" / "prefix" / "lib" / "libgvm_agent_controller.so.99.42"
+            versioned.parent.mkdir(parents=True)
+            versioned.write_text("stale", encoding="utf-8")
+            unrelated = root / "build" / "prefix" / "lib" / "libgvm_agent_controller.a"
+            unrelated.write_text("unrelated", encoding="utf-8")
+            hardened = root / "build" / "hardened" / "prefix" / expected[1]
+            hardened.mkdir(parents=True)
+            self.assertEqual(
+                turbovasctl.c_hardening_retired_prefix_artifacts(root),
+                sorted([str(ordinary.relative_to(root)), str(versioned.relative_to(root))]),
+            )
+            self.assertEqual(turbovasctl.c_hardening_retired_prefix_artifacts(root, "hardened"), [str(hardened.relative_to(root))])
+
+    def test_c_hardening_check_reports_known_retired_prefix_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stale = root / "build" / "prefix" / turbovasctl.C_HARDENING_RETIRED_PREFIX_ARTIFACTS[0]
+            stale.mkdir(parents=True)
+            with unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None), unittest.mock.patch.object(
+                turbovasctl, "write_retained_json_artifact"
+            ):
+                result = turbovasctl.command_c_hardening_check(root, status_only=True)
+        finding = next(item for item in result["findings"] if item["check"] == "c-hardening.retired-prefix-artifacts")
+        self.assertEqual(finding["status"], "fail")
+        self.assertEqual(finding["details"]["artifacts"], [str(stale.relative_to(root))])
+
+    def test_hardened_check_reports_compile_evidence_failures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/readelf"), unittest.mock.patch.object(
+                turbovasctl, "c_hardening_compile_evidence", return_value={"status": "fail", "path": "build/hardened/gvmd/compile_commands.json", "properties": {}, "command_count": 0}
+            ), unittest.mock.patch.object(turbovasctl, "write_retained_json_artifact"):
+                result = turbovasctl.command_c_hardening_check(root, profile="hardened", status_only=True)
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(any(item["check"] == "c-hardening.compile-commands" for item in result["findings"]))
+
     def test_c_hardening_elf_properties_distinguish_present_missing_and_unknown(self):
         row = turbovasctl.c_hardening_elf_properties(
             component="gvmd",

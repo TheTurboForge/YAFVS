@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2019-2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -36,6 +37,15 @@
 #include <curl/easy.h>
 #include <curl/multi.h>
 #include <glib.h>
+
+#define GVM_HTTP_CONNECT_TIMEOUT_SECONDS 10L
+#define GVM_HTTP_TOTAL_TIMEOUT_SECONDS 60L
+#define GVM_HTTP_LOW_SPEED_LIMIT_BYTES 1024L
+#define GVM_HTTP_LOW_SPEED_TIME_SECONDS 30L
+#define GVM_HTTP_MAX_BODY_SIZE ((gsize) 8 * 1024 * 1024)
+#define GVM_HTTP_MAX_HEADER_SIZE ((gsize) 64 * 1024)
+#define GVM_HTTP_STREAM_TOTAL_TIMEOUT_SECONDS 900L
+#define GVM_HTTP_MAX_STREAM_SIZE ((gsize) 512 * 1024 * 1024)
 
 /**
  * @brief Request methods
@@ -101,9 +111,9 @@ typedef struct
  */
 typedef struct
 {
-  gchar *data; ///< The actual response content as a string.
+  gchar *data; ///< Exact response bytes followed by a trailing NUL sentinel.
 
-  gsize size; ///< Size of the response content.
+  gsize size; ///< Authoritative response body size, excluding the sentinel.
 
   glong http_status; ///< HTTP status code returned by the server.
 
@@ -118,6 +128,13 @@ gvm_http_new (const gchar *url, gvm_http_method_t method, const gchar *payload,
               gvm_http_headers_t *headers, const gchar *ca_cert,
               const gchar *client_cert, const gchar *client_key,
               gvm_http_response_stream_t res);
+
+gvm_http_t *
+gvm_http_new_streaming (const gchar *url, gvm_http_method_t method,
+                        const gchar *payload, gvm_http_headers_t *headers,
+                        const gchar *ca_cert, const gchar *client_cert,
+                        const gchar *client_key,
+                        gvm_http_response_stream_t res);
 
 gvm_http_t *
 gvm_http_new_unix (const gchar *url, gvm_http_method_t method,

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -13,18 +14,27 @@
 
 static gchar *last_sent_url = NULL;
 static gchar *last_sent_socket_path = NULL;
+static gchar *last_streaming_url = NULL;
+static gvm_http_multi_result_t mock_multi_perform_result = GVM_HTTP_OK;
+static gvm_http_multi_result_t mock_multi_poll_result = GVM_HTTP_OK;
+static int mock_running_handles = 0;
 
 Describe (http_scanner);
 BeforeEach (http_scanner)
 {
   g_clear_pointer (&last_sent_url, g_free);
   g_clear_pointer (&last_sent_socket_path, g_free);
+  g_clear_pointer (&last_streaming_url, g_free);
+  mock_multi_perform_result = GVM_HTTP_OK;
+  mock_multi_poll_result = GVM_HTTP_OK;
+  mock_running_handles = 0;
 }
 
 AfterEach (http_scanner)
 {
   g_clear_pointer (&last_sent_url, g_free);
   g_clear_pointer (&last_sent_socket_path, g_free);
+  g_clear_pointer (&last_streaming_url, g_free);
 }
 
 /* Mocks */
@@ -54,6 +64,50 @@ gvm_http_request_unix (const gchar *url, gvm_http_method_t method,
   return response;
 }
 
+gvm_http_t *
+gvm_http_new_streaming (const gchar *url, gvm_http_method_t method,
+                        const gchar *payload, gvm_http_headers_t *headers,
+                        const gchar *ca_cert, const gchar *client_cert,
+                        const gchar *client_key,
+                        gvm_http_response_stream_t stream)
+{
+  (void) method;
+  (void) payload;
+  (void) headers;
+  (void) ca_cert;
+  (void) client_cert;
+  (void) client_key;
+  (void) stream;
+  last_streaming_url = g_strdup (url);
+  return NULL;
+}
+
+gvm_http_multi_result_t
+gvm_http_multi_perform (gvm_http_multi_t *multi, int *running_handles)
+{
+  (void) multi;
+  *running_handles = mock_running_handles;
+  return mock_multi_perform_result;
+}
+
+gvm_http_multi_result_t
+gvm_http_multi_poll (gvm_http_multi_t *multi, int timeout)
+{
+  (void) multi;
+  (void) timeout;
+  return mock_multi_poll_result;
+}
+
+static http_scanner_connector_t
+connector_with_multi_stream (void)
+{
+  http_scanner_connector_t conn = http_scanner_connector_new ();
+  conn->stream_resp = gvm_http_response_stream_new ();
+  gvm_http_multi_free (conn->stream_resp->multi_handler);
+  conn->stream_resp->multi_handler = gvm_http_multi_new ();
+  return conn;
+}
+
 /* http_scanner_delete_scan */
 
 Ensure (http_scanner, http_scanner_delete_scan_handles_missing_id)
@@ -68,6 +122,54 @@ Ensure (http_scanner, http_scanner_delete_scan_handles_missing_id)
   assert_that (resp->body,
                is_equal_to_string ("{\"error\": \"Missing scan ID\"}"));
   http_scanner_response_cleanup (resp);
+  http_scanner_connector_free (conn);
+}
+
+Ensure (http_scanner, init_multi_uses_streaming_transport)
+{
+  http_scanner_connector_t conn = http_scanner_connector_new ();
+  conn->protocol = g_strdup ("http");
+  conn->host = g_strdup ("localhost");
+  conn->port = 3000;
+
+  http_scanner_resp_t response =
+    http_scanner_init_request_multi (conn, "/vts?information=1");
+
+  assert_that (last_streaming_url,
+               is_equal_to_string ("http://localhost:3000/vts?information=1"));
+  assert_that (response->code, is_equal_to (RESP_CODE_ERR));
+
+  http_scanner_response_cleanup (response);
+  http_scanner_connector_free (conn);
+}
+
+Ensure (http_scanner, process_multi_propagates_terminal_transfer_error)
+{
+  http_scanner_connector_t conn = connector_with_multi_stream ();
+  mock_multi_perform_result = GVM_HTTP_MULTI_FAILED;
+
+  assert_that (http_scanner_process_request_multi (conn, 10), is_equal_to (-1));
+
+  http_scanner_connector_free (conn);
+}
+
+Ensure (http_scanner, process_multi_propagates_poll_error)
+{
+  http_scanner_connector_t conn = connector_with_multi_stream ();
+  mock_running_handles = 1;
+  mock_multi_poll_result = GVM_HTTP_MULTI_FAILED;
+
+  assert_that (http_scanner_process_request_multi (conn, 10), is_equal_to (-1));
+
+  http_scanner_connector_free (conn);
+}
+
+Ensure (http_scanner, process_multi_returns_zero_after_successful_completion)
+{
+  http_scanner_connector_t conn = connector_with_multi_stream ();
+
+  assert_that (http_scanner_process_request_multi (conn, 10), is_equal_to (0));
+
   http_scanner_connector_free (conn);
 }
 
@@ -614,6 +716,15 @@ main (int argc, char **argv)
 
   add_test_with_context (suite, http_scanner,
                          send_request_builds_url_with_socket_path);
+  add_test_with_context (suite, http_scanner,
+                         init_multi_uses_streaming_transport);
+  add_test_with_context (suite, http_scanner,
+                         process_multi_propagates_terminal_transfer_error);
+  add_test_with_context (suite, http_scanner,
+                         process_multi_propagates_poll_error);
+  add_test_with_context (
+    suite, http_scanner,
+    process_multi_returns_zero_after_successful_completion);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

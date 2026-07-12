@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -252,8 +253,9 @@ http_scanner_init_request_multi (http_scanner_connector_t conn,
     }
 
   // Initialize request using curlutils
-  gvm_http_t *http = gvm_http_new (url, GET, NULL, customheader, conn->ca_cert,
-                                   conn->cert, conn->key, conn->stream_resp);
+  gvm_http_t *http =
+    gvm_http_new_streaming (url, GET, NULL, customheader, conn->ca_cert,
+                            conn->cert, conn->key, conn->stream_resp);
 
   g_free (url);
 
@@ -284,6 +286,7 @@ http_scanner_init_request_multi (http_scanner_connector_t conn,
     }
 
   conn->stream_resp->multi_handler = multi_handle;
+  gvm_http_headers_free (conn->stream_resp->multi_handler->headers);
   conn->stream_resp->multi_handler->headers = customheader;
 
   g_debug ("%s: Multi handle initialized successfully", __func__);
@@ -307,7 +310,7 @@ http_scanner_init_request_multi (http_scanner_connector_t conn,
 int
 http_scanner_process_request_multi (http_scanner_connector_t conn, int timeout)
 {
-  static int running = 0;
+  int running = 0;
 
   if (!conn || !conn->stream_resp)
     {
@@ -324,7 +327,13 @@ http_scanner_process_request_multi (http_scanner_connector_t conn, int timeout)
 
   gvm_http_multi_result_t mc = gvm_http_multi_perform (multi, &running);
 
-  if (mc == GVM_HTTP_OK && running)
+  if (mc != GVM_HTTP_OK)
+    {
+      g_warning ("%s: HTTP transfer failed", __func__);
+      return -1;
+    }
+
+  if (running)
     {
       /* wait for activity, timeout, or "nothing" */
       if (gvm_http_multi_poll (multi, timeout) != GVM_HTTP_OK)

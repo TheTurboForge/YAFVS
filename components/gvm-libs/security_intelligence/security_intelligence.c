@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -20,6 +21,16 @@
 
 static const gchar *CONTENT_TYPE_JSON = "application/json";
 static const gchar *CONTENT_TYPE_XML = "application/xml";
+
+static gboolean
+is_https_url (const gchar *url)
+{
+  gchar *scheme = g_uri_parse_scheme (url);
+  gboolean is_https = scheme && g_ascii_strcasecmp (scheme, "https") == 0;
+
+  g_free (scheme);
+  return is_https;
+}
 
 /**
  * @brief Connector data for the Security Intelligence service.
@@ -102,9 +113,10 @@ security_intelligence_send_request (security_intelligence_connector_t conn,
       return NULL;
     }
 
-  if (!conn->protocol || !conn->host)
+  if (!conn->protocol || !conn->host || g_strcmp0 (conn->protocol, "https") != 0
+      || (conn->url && !is_https_url (conn->url)))
     {
-      g_warning ("%s: Missing URL components", __func__);
+      g_warning ("%s: Missing or insecure URL components", __func__);
       return NULL;
     }
 
@@ -492,8 +504,7 @@ security_intelligence_connector_builder (
       break;
 
     case SECURITY_INTELLIGENCE_PROTOCOL:
-      if (g_strcmp0 ((const gchar *) val, "http") != 0
-          && g_strcmp0 ((const gchar *) val, "https") != 0)
+      if (g_strcmp0 ((const gchar *) val, "https") != 0)
         return SECURITY_INTELLIGENCE_INVALID_VALUE;
 
       g_free (conn->protocol);
@@ -510,6 +521,8 @@ security_intelligence_connector_builder (
       break;
 
     case SECURITY_INTELLIGENCE_URL:
+      if (!is_https_url ((const gchar *) val))
+        return SECURITY_INTELLIGENCE_INVALID_VALUE;
       g_free (conn->url);
       conn->url = g_strdup ((const gchar *) val);
       break;

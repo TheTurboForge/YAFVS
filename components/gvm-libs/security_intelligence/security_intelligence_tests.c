@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -269,15 +270,28 @@ Ensure (security_intelligence, connector_builder_rejects_null_value)
   security_intelligence_connector_free (conn);
 }
 
-Ensure (security_intelligence, connector_builder_accepts_http_protocol)
+Ensure (security_intelligence, connector_builder_rejects_http_protocol)
 {
   security_intelligence_connector_t conn =
     security_intelligence_connector_new ();
 
   assert_that (security_intelligence_connector_builder (
                  conn, SECURITY_INTELLIGENCE_PROTOCOL, "http"),
-               is_equal_to (SECURITY_INTELLIGENCE_OK));
-  assert_that (conn->protocol, is_equal_to_string ("http"));
+               is_equal_to (SECURITY_INTELLIGENCE_INVALID_VALUE));
+  assert_that (conn->protocol, is_null);
+
+  security_intelligence_connector_free (conn);
+}
+
+Ensure (security_intelligence, connector_builder_rejects_http_base_url)
+{
+  security_intelligence_connector_t conn =
+    security_intelligence_connector_new ();
+
+  assert_that (security_intelligence_connector_builder (
+                 conn, SECURITY_INTELLIGENCE_URL, "http://example.test"),
+               is_equal_to (SECURITY_INTELLIGENCE_INVALID_VALUE));
+  assert_that (conn->url, is_null);
 
   security_intelligence_connector_free (conn);
 }
@@ -292,6 +306,32 @@ Ensure (security_intelligence, connector_builder_accepts_https_protocol)
                is_equal_to (SECURITY_INTELLIGENCE_OK));
   assert_that (conn->protocol, is_equal_to_string ("https"));
 
+  security_intelligence_connector_free (conn);
+}
+
+Ensure (security_intelligence, send_request_rejects_http_protocol)
+{
+  security_intelligence_connector_t conn = make_conn ();
+  g_free (conn->protocol);
+  conn->protocol = g_strdup ("http");
+
+  gvm_http_response_t *resp = security_intelligence_send_request (
+    conn, GET, "/x", NULL, CONTENT_TYPE_JSON);
+
+  assert_that (resp, is_null);
+  security_intelligence_connector_free (conn);
+}
+
+Ensure (security_intelligence, send_request_rejects_http_base_url)
+{
+  security_intelligence_connector_t conn = make_conn ();
+  g_free (conn->url);
+  conn->url = g_strdup ("http://example.test/base");
+
+  gvm_http_response_t *resp = security_intelligence_send_request (
+    conn, GET, "/x", NULL, CONTENT_TYPE_JSON);
+
+  assert_that (resp, is_null);
   security_intelligence_connector_free (conn);
 }
 
@@ -3459,11 +3499,13 @@ main (int argc, char **argv)
   add_test_with_context (suite, security_intelligence,
                          connector_builder_rejects_null_value);
   add_test_with_context (suite, security_intelligence,
-                         connector_builder_accepts_http_protocol);
+                         connector_builder_rejects_http_protocol);
   add_test_with_context (suite, security_intelligence,
                          connector_builder_accepts_https_protocol);
   add_test_with_context (suite, security_intelligence,
                          connector_builder_rejects_invalid_protocol);
+  add_test_with_context (suite, security_intelligence,
+                         connector_builder_rejects_http_base_url);
   add_test_with_context (suite, security_intelligence,
                          connector_builder_rejects_invalid_opt);
 
@@ -3530,6 +3572,10 @@ main (int argc, char **argv)
                          send_request_returns_null_if_protocol_missing);
   add_test_with_context (suite, security_intelligence,
                          send_request_returns_null_if_host_missing);
+  add_test_with_context (suite, security_intelligence,
+                         send_request_rejects_http_protocol);
+  add_test_with_context (suite, security_intelligence,
+                         send_request_rejects_http_base_url);
   add_test_with_context (
     suite, security_intelligence,
     send_request_builds_url_from_protocol_host_port_and_path);

@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2023 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -15,7 +16,7 @@ pub use error::HttpError;
 use h2::client;
 
 use core::convert::AsRef;
-use http::{Method, Request, response::Parts};
+use http::{Method, Request};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use std::sync::Arc;
 
@@ -33,6 +34,43 @@ use super::{
         socket::{close_shared, open_sock_tcp_shared},
     },
 };
+
+const MAX_HTTP_RESPONSE_SIZE: usize = 16 * 1024 * 1024;
+const HTTP_RESPONSE_TOO_LARGE: &str = "HTTP response exceeds the 16 MiB limit";
+
+fn append_response_chunk_with_limit(
+    response: &mut Vec<u8>,
+    chunk: &[u8],
+    limit: usize,
+) -> Result<(), HttpError> {
+    let response_len = response
+        .len()
+        .checked_add(chunk.len())
+        .filter(|len| *len <= limit)
+        .ok_or_else(|| HttpError::Custom(HTTP_RESPONSE_TOO_LARGE.to_string()))?;
+
+    if response_len > response.capacity() {
+        response
+            .try_reserve_exact(response_len - response.len())
+            .map_err(|error| {
+                HttpError::Custom(format!("Unable to allocate HTTP response: {error}"))
+            })?;
+    }
+    response.extend_from_slice(chunk);
+    Ok(())
+}
+
+fn append_response_chunk(response: &mut Vec<u8>, chunk: &[u8]) -> Result<(), HttpError> {
+    append_response_chunk_with_limit(response, chunk, MAX_HTTP_RESPONSE_SIZE)
+}
+
+fn split_custom_header(header_item: &str) -> Result<(&str, &str), ArgumentError> {
+    header_item.split_once(": ").ok_or_else(|| {
+        ArgumentError::WrongArgument(
+            "header_item must contain a name and value separated by ': '".to_string(),
+        )
+    })
+}
 
 async fn get_user_agent(context: &ScanCtx<'_>) -> Result<String, FnError> {
     match context
@@ -175,7 +213,7 @@ impl NaslHttp2 {
         data: String,
         method: Method,
         handle: &mut Handle,
-    ) -> Result<(Parts, String), HttpError> {
+    ) -> Result<(u16, Vec<u8>), HttpError> {
         // Establish TCP connection to the server.
 
         let mut config = ClientConfig::builder()
@@ -186,7 +224,10 @@ impl NaslHttp2 {
         // For HTTP/2. For older HTTP versions should not be set,
         config.alpn_protocols = vec![b"h2".to_vec()];
 
-        let server_name = ip_str.to_owned().try_into().unwrap();
+        let server_name = ip_str
+            .to_owned()
+            .try_into()
+            .map_err(|error| HttpError::Custom(format!("Invalid HTTP server name: {error}")))?;
 
         let connector = TlsConnector::from(Arc::new(config));
         let stream = TcpStream::connect(format!("{ip_str}:{port}"))
@@ -196,10 +237,15 @@ impl NaslHttp2 {
             .connect(server_name, stream)
             .await
             .map_err(HttpError::from)?;
-        let (h2, connection) = client::handshake(stream).await.map_err(HttpError::from)?;
+        let mut builder = client::Builder::new();
+        builder.max_header_list_size(MAX_HTTP_RESPONSE_SIZE as u32);
+        let (h2, connection) = builder
+            .handshake::<_, std::io::Cursor<Vec<u8>>>(stream)
+            .await
+            .map_err(HttpError::from)?;
 
         tokio::spawn(async move {
-            connection.await.unwrap();
+            let _ = connection.await;
         });
 
         let mut h2 = h2.ready().await.map_err(HttpError::from)?;
@@ -214,13 +260,30 @@ impl NaslHttp2 {
         for (k, v) in handle.header_items.iter() {
             request = request.header(k, v);
         }
-        let request = request.method(method).uri(uri).body(()).unwrap();
+        let request = request
+            .method(method)
+            .uri(uri)
+            .body(())
+            .map_err(|error| HttpError::Custom(format!("Invalid HTTP request: {error}")))?;
 
         // Send the request. The second tuple item allows the caller
         // to stream a request body.
-        let (response, mut send_stream) = h2.send_request(request, false).unwrap();
-        send_stream.send_data(data.into(), true).unwrap();
-        let (head, mut body) = response.await.expect("some response").into_parts();
+        let (response, mut send_stream) = h2.send_request(request, false)?;
+        send_stream.send_data(std::io::Cursor::new(data.into_bytes()), true)?;
+        let (head, mut body) = response.await?.into_parts();
+        let response_code = head.status.as_u16();
+        let mut retained = Vec::new();
+        append_response_chunk(
+            &mut retained,
+            format!("{:?} {:?}\n", head.version, head.status).as_bytes(),
+        )?;
+        for (name, value) in &head.headers {
+            append_response_chunk(&mut retained, name.as_str().as_bytes())?;
+            append_response_chunk(&mut retained, b": ")?;
+            append_response_chunk(&mut retained, value.as_bytes())?;
+            append_response_chunk(&mut retained, b"\n")?;
+        }
+        drop(head);
 
         // The `flow_control` handle allows the caller to manage
         // flow control.
@@ -230,16 +293,15 @@ impl NaslHttp2 {
         // the data from memory.
         let mut flow_control = body.flow_control().clone();
 
-        let mut resp = String::new();
         while let Some(chunk) = body.data().await {
             let chunk = chunk.map_err(HttpError::from)?;
 
-            resp.push_str(&String::from_utf8_lossy(&chunk));
+            append_response_chunk(&mut retained, &chunk)?;
             // Let the server send more data.
             let _ = flow_control.release_capacity(chunk.len());
         }
 
-        Ok((head, resp))
+        Ok((response_code, retained))
     }
 
     /// Perform request with the given method.
@@ -298,25 +360,14 @@ impl NaslHttp2 {
         }
 
         uri = format!("{uri}{item}");
+        handle.http_code = 0;
 
-        let (head, body) = self
+        let (response_code, response) = self
             .request(ctx, target_str, port, uri, data, method, handle)
             .await?;
 
-        handle.http_code = head.status.as_u16();
-        let mut header_str = String::new();
-        header_str.push_str(format!("{:?} ", head.version).as_str());
-        header_str.push_str(format!("{:?}\n", head.status).as_str());
-        for (k, v) in head.headers.iter() {
-            header_str.push_str(&format!(
-                "{}: {}\n",
-                k.as_str(),
-                String::from_utf8_lossy(v.as_bytes())
-            ))
-        }
-
-        header_str.push_str(&body);
-        Ok(NaslValue::String(header_str))
+        handle.http_code = response_code;
+        Ok(NaslValue::Data(response))
     }
 
     /// Wrapper function for GET request. See http2_req
@@ -430,7 +481,7 @@ impl NaslHttp2 {
             _ => return Err(FnError::missing_argument("No command passed")),
         };
 
-        let (key, val) = header_item.split_once(": ").expect("Missing header_item");
+        let (key, val) = split_custom_header(header_item)?;
 
         let handle_id = match register.local_nasl_value("handle") {
             Ok(NaslValue::Number(x)) => *x as i32,
@@ -467,6 +518,65 @@ function_set! {
         (NaslHttp2::delete, "http2_delete"),
         (NaslHttp2::put, "http2_put"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_accepts_exact_limit() {
+        let chunk = vec![b'a'; MAX_HTTP_RESPONSE_SIZE];
+        let mut response = Vec::new();
+
+        append_response_chunk(&mut response, &chunk).unwrap();
+
+        assert_eq!(response.len(), MAX_HTTP_RESPONSE_SIZE);
+        assert!(response.iter().all(|byte| *byte == b'a'));
+    }
+
+    #[test]
+    fn response_rejects_data_over_limit() {
+        let chunk = vec![b'a'; MAX_HTTP_RESPONSE_SIZE];
+        let mut response = Vec::new();
+        append_response_chunk(&mut response, &chunk).unwrap();
+
+        let error = append_response_chunk(&mut response, b"b").unwrap_err();
+
+        assert_eq!(error.to_string(), HTTP_RESPONSE_TOO_LARGE);
+        assert_eq!(response.len(), MAX_HTTP_RESPONSE_SIZE);
+    }
+
+    #[test]
+    fn response_preserves_binary_data_within_limit() {
+        let mut response = Vec::new();
+
+        append_response_chunk_with_limit(&mut response, &[0xff, 0x00], 2).unwrap();
+        let error = append_response_chunk_with_limit(&mut response, &[0xfe], 2).unwrap_err();
+
+        assert_eq!(response, vec![0xff, 0x00]);
+        assert_eq!(error.to_string(), HTTP_RESPONSE_TOO_LARGE);
+    }
+
+    #[test]
+    fn response_limit_is_shared_across_appended_fragments() {
+        let mut response = Vec::new();
+        append_response_chunk_with_limit(&mut response, b"head", 6).unwrap();
+
+        let error = append_response_chunk_with_limit(&mut response, b"body", 6).unwrap_err();
+
+        assert_eq!(response, b"head");
+        assert_eq!(error.to_string(), HTTP_RESPONSE_TOO_LARGE);
+    }
+
+    #[test]
+    fn malformed_custom_header_is_rejected() {
+        assert!(split_custom_header("Missing separator").is_err());
+        assert_eq!(
+            split_custom_header("X-Test: value").unwrap(),
+            ("X-Test", "value")
+        );
+    }
 }
 
 // ####### HTTP ##########

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -17,7 +18,6 @@ pkg_check_modules (GIO REQUIRED gio-2.0)
 pkg_check_modules (GNUTLS REQUIRED gnutls>=3.2.15)
 pkg_check_modules (LIBGVM_BASE REQUIRED libgvm_base>=22.4)
 pkg_check_modules (LIBGVM_UTIL REQUIRED libgvm_util>=22.4)
-
 pkg_check_modules (OPENVAS_WMICLIENT libopenvas_wmiclient>=1.0.5)
 
 # for 'nasl' binary
@@ -202,4 +202,22 @@ install (FILES ${CMAKE_SOURCE_DIR}/doc/man/openvas-nasl.1
 
 install (FILES ${CMAKE_SOURCE_DIR}/doc/man/openvas-nasl-lint.1
          DESTINATION ${DATADIR}/man/man1 )
+
+## Tests
+
+add_executable (nasl-http2-test EXCLUDE_FROM_ALL nasl_http2_tests.c)
+add_test (nasl-http2-test nasl-http2-test)
+target_compile_options (nasl-http2-test PRIVATE
+                        -Wall -Wextra -Werror
+                        -fsanitize=address,undefined
+                        -fno-omit-frame-pointer
+                        -ffunction-sections -fdata-sections)
+target_link_options (nasl-http2-test PRIVATE
+                     -fsanitize=address,undefined
+                     -Wl,--gc-sections)
+target_link_libraries (nasl-http2-test curl ${GLIB_LDFLAGS})
+set_tests_properties (nasl-http2-test PROPERTIES
+  ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1")
+add_custom_target (tests-http2 DEPENDS nasl-http2-test)
+
 ## End

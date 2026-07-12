@@ -7,9 +7,11 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {useDispatch} from 'react-redux';
 import {type EntityCommandParams} from 'gmp/commands/entity';
-import {isTaskStartManagerResponseFailure} from 'gmp/commands/task';
 import type Rejection from 'gmp/http/rejection';
-import {exportNativeTaskMetadata} from 'gmp/native-api/tasks';
+import {
+  exportNativeTaskMetadata,
+  isNativeTaskMutationOutcomeUncertain,
+} from 'gmp/native-api/tasks';
 import {ALL_FILTER} from 'gmp/models/filter';
 import {FULL_AND_FAST_SCAN_CONFIG_ID} from 'gmp/models/scan-config';
 import {OPENVAS_DEFAULT_SCANNER_ID} from 'gmp/models/scanner';
@@ -331,7 +333,7 @@ const TaskComponent = ({
 
   const handleTaskStart = (task: Task) => {
     const handleStartError = (error: Rejection) => {
-      if (isTaskStartManagerResponseFailure(error)) {
+      if (isNativeTaskMutationOutcomeUncertain(error)) {
         onStarted?.();
       }
       onStartError?.(error);

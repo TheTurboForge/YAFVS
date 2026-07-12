@@ -108,6 +108,35 @@ describe('TaskComponent tests', () => {
     expect(screen.getByTestId('button')).toBeInTheDocument();
   });
 
+  test('should refresh after an indeterminate native task start', async () => {
+    const error = Object.assign(
+      new Error('verify task state before retrying'),
+      {
+        code: 'mutation_outcome_indeterminate',
+      },
+    );
+    const gmp = createGmp();
+    gmp.task.start.mockRejectedValue(error);
+    const onStarted = testing.fn();
+    const onStartError = testing.fn();
+    const task = Task.fromElement({_id: 'task-id', name: 'Task'});
+    const {render} = rendererWith({gmp});
+
+    render(
+      <TaskComponent onStarted={onStarted} onStartError={onStartError}>
+        {({start}) => (
+          <Button data-testid="start-task" onClick={() => start(task)} />
+        )}
+      </TaskComponent>,
+    );
+
+    fireEvent.click(screen.getByTestId('start-task'));
+    await wait();
+
+    expect(onStarted).toHaveBeenCalledTimes(1);
+    expect(onStartError).toHaveBeenCalledWith(error);
+  });
+
   test('should open correct dialog on edit for standard task', async () => {
     const gmp = createGmp();
     const {render} = rendererWith({gmp, capabilities: true});

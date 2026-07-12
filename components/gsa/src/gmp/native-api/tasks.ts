@@ -154,6 +154,16 @@ class NativeTaskRequestError extends Error {
   }
 }
 
+export const isNativeTaskMutationOutcomeUncertain = (
+  error: unknown,
+): boolean => {
+  const code = (error as {code?: unknown} | undefined)?.code;
+  return (
+    code === 'committed_response_unavailable' ||
+    code === 'mutation_outcome_indeterminate'
+  );
+};
+
 const TASK_SORT_FIELDS: Record<string, string> = {
   config: 'config',
   created: 'creation_time',

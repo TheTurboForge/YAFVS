@@ -2313,7 +2313,7 @@ class TurboVASCtlTests(unittest.TestCase):
             details["by_category"]["compatibility_bridge"]["paths"],
         )
         self.assertGreater(product_residue["alert-delivery-and-credentials"]["count"], 0)
-        self.assertGreater(product_residue["task-target-scan-control-or-credential"]["count"], 0)
+        self.assertNotIn("task-target-scan-control-or-credential", product_residue)
         self.assertNotIn("scope-report-generation", product_residue)
         endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/cert-bund-advisories", endpoints)
@@ -10408,7 +10408,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_native_tooling_residue_classifies_remaining_product_workflow(self):
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/alert.ts", "product_workflow")[0], "alert-delivery-and-credentials")
-        self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/commands/task.ts", "product_workflow")[0], "task-target-scan-control-or-credential")
+        self.assertIsNone(turbovasctl.native_tooling_category("components/gsa/src/gmp/native-api/task-command.ts"))
         self.assertEqual(turbovasctl.native_tooling_residue("components/gsa/src/gmp/collection/parser.ts", "product_workflow")[0], "compatibility-parser-model-or-test")
         self.assertIsNone(turbovasctl.native_tooling_residue("components/python-gvm/gvm/__init__.py", "compatibility_bridge"))
 

@@ -47,7 +47,7 @@ import ScannersCommand from 'gmp/commands/scanners';
 import {ScopeReportsCommand, ScopesCommand} from 'gmp/commands/scopes';
 import TargetCommand from 'gmp/commands/target';
 import TargetsCommand from 'gmp/commands/targets';
-import TaskCommand from 'gmp/commands/task';
+import TaskCommand from 'gmp/native-api/task-command';
 import TasksCommand from 'gmp/commands/tasks';
 import TimezonesCommand from 'gmp/commands/timezones';
 import TrashCanCommand from 'gmp/commands/trashcan';

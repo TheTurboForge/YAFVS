@@ -393,7 +393,6 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "scanner-control-or-credential",
     "schedule-calendar-edit-and-task-recalculation",
     "tag-write-or-resource-actions",
-    "task-target-scan-control-or-credential",
     "trashcan-row-or-mutation",
     "user-account-or-session",
     "retained-gmp-product-residue",
@@ -3561,8 +3560,6 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
         return "alert-delivery-and-credentials", "Alert delivery payloads, tests, credentials, and broad alert control remain inherited; native direct write-control covers name/comment metadata only."
     if name in {"credential-store.ts", "scanner.ts"}:
         return "scanner-control-or-credential", "Scanner and credential surfaces remain inherited until control/secret handling is designed."
-    if name == "task.ts":
-        return "task-target-scan-control-or-credential", "Task clone, resume, import, broad reference/preference mutation, and remaining scanner-control or credential-linked behavior remains inherited."
     if name == "hosts.js":
         return "asset-action-or-rich-context", "Host actions and richer inherited context remain outside the current native read contract."
     if name == "overrides.js":

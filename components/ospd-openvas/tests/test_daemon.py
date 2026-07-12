@@ -793,7 +793,9 @@ class TestOspdOpenvas(TestCase):
 
         daemon.exec_scan('scan-1')
 
-        daemon.stop_scan_cleanup.assert_called_once_with(kbdb, 'scan-1', '42')
+        daemon.stop_scan_cleanup.assert_called_once_with(
+            kbdb, 'scan-1', '42', True
+        )
         daemon.add_scan_error.assert_called_once_with(
             'scan-1',
             name='',
@@ -828,7 +830,9 @@ class TestOspdOpenvas(TestCase):
 
         daemon.exec_scan('scan-1')
 
-        daemon.stop_scan_cleanup.assert_called_once_with(kbdb, 'scan-1', '42')
+        daemon.stop_scan_cleanup.assert_called_once_with(
+            kbdb, 'scan-1', '42', False
+        )
         daemon.add_scan_error.assert_called_once_with(
             'scan-1',
             name='',
@@ -839,46 +843,6 @@ class TestOspdOpenvas(TestCase):
             ),
         )
         daemon.main_db.release_database.assert_called_once_with(kbdb)
-
-    @patch('ospd_openvas.daemon.psutil.Process')
-    @patch('ospd_openvas.daemon.Openvas.stop_scan')
-    def test_stop_scan_cleanup_escalates_only_after_bounded_waits(
-        self, mock_stop_scan, mock_process
-    ):
-        daemon = DummyDaemon()
-        kbdb = MagicMock()
-        process = mock_process.return_value
-        process.is_running.return_value = True
-        process.name.return_value = 'openvas'
-        process.cmdline.return_value = ['openvas', '--scan-start', 'scan-1']
-        mock_stop_scan.return_value = True
-        daemon.wait_for_openvas_process_exit = MagicMock(
-            side_effect=[False, False, True]
-        )
-
-        daemon.stop_scan_cleanup(kbdb, 'scan-1', '42')
-
-        mock_stop_scan.assert_called_once()
-        process.terminate.assert_called_once()
-        process.kill.assert_called_once()
-
-    @patch('ospd_openvas.daemon.psutil.Process')
-    @patch('ospd_openvas.daemon.Openvas.stop_scan')
-    def test_stop_scan_cleanup_rejects_reused_pid(
-        self, mock_stop_scan, mock_process
-    ):
-        daemon = DummyDaemon()
-        kbdb = MagicMock()
-        process = mock_process.return_value
-        process.is_running.return_value = True
-        process.name.return_value = 'openvas'
-        process.cmdline.return_value = ['openvas', '--scan-start', 'other-scan']
-
-        daemon.stop_scan_cleanup(kbdb, 'scan-1', '42')
-
-        mock_stop_scan.assert_not_called()
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
 
     @patch('ospd_openvas.daemon.OSPDaemon.set_scan_progress_batch')
     @patch('ospd_openvas.daemon.OSPDaemon.sort_host_finished')

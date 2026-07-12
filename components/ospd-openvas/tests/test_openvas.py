@@ -16,6 +16,25 @@ from ospd_openvas.openvas import Openvas, STOP_SCAN_COMMAND_TIMEOUT_SECONDS
 
 
 class OpenvasCommandTestCase(TestCase):
+    @patch('ospd_openvas.openvas.subprocess.run')
+    def test_stop_scan_as_root_uses_bounded_hardened_helper(self, mock_run):
+        success = Openvas.stop_scan_as_root('scan_1')
+
+        mock_run.assert_called_once_with(
+            ['sudo', '-n', 'openvas', '--scan-stop', 'scan_1'],
+            check=True,
+            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
+        )
+        self.assertTrue(success)
+
+    @patch('ospd_openvas.openvas.subprocess.run')
+    def test_stop_scan_as_root_reports_timeout(self, mock_run):
+        mock_run.side_effect = subprocess.TimeoutExpired(
+            'openvas', STOP_SCAN_COMMAND_TIMEOUT_SECONDS
+        )
+
+        self.assertFalse(Openvas.stop_scan_as_root('scan_1'))
+
     @patch('ospd_openvas.openvas.subprocess.check_output')
     def test_get_version(self, mock_check_output: MagicMock):
         mock_check_output.return_value = b"OpenVAS 20.08"
@@ -252,7 +271,6 @@ class OpenvasCommandTestCase(TestCase):
         self.assertIsNone(proc)
 
         self.assertEqual(mock_logger.warning.call_count, 1)
-
         mock_popen.reset_mock()
         mock_logger.reset_mock()
 
@@ -267,84 +285,3 @@ class OpenvasCommandTestCase(TestCase):
         self.assertIsNone(proc)
 
         self.assertEqual(mock_logger.warning.call_count, 1)
-
-    @patch('ospd_openvas.openvas.logger')
-    @patch('ospd_openvas.openvas.subprocess.run')
-    def test_stop_scan(self, mock_run: MagicMock, _mock_logger: MagicMock):
-        success = Openvas.stop_scan('scan_1')
-
-        mock_run.assert_called_with(
-            ['openvas', '--scan-stop', 'scan_1'],
-            check=True,
-            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
-        )
-
-        self.assertTrue(success)
-
-    @patch('ospd_openvas.openvas.logger')
-    @patch('ospd_openvas.openvas.subprocess.run')
-    def test_stop_scan_with_sudo(
-        self, mock_run: MagicMock, _mock_logger: MagicMock
-    ):
-        success = Openvas.stop_scan('scan_1', sudo=True)
-
-        mock_run.assert_called_with(
-            ['sudo', '-n', 'openvas', '--scan-stop', 'scan_1'],
-            check=True,
-            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
-        )
-
-        self.assertTrue(success)
-
-    @patch('ospd_openvas.openvas.logger')
-    @patch('ospd_openvas.openvas.subprocess.run')
-    def test_stop_scan_with_error(
-        self, mock_run: MagicMock, mock_logger: MagicMock
-    ):
-        mock_run.side_effect = subprocess.SubprocessError('foo')
-
-        success = Openvas.stop_scan('scan_1')
-
-        mock_run.assert_called_with(
-            ['openvas', '--scan-stop', 'scan_1'],
-            check=True,
-            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
-        )
-
-        self.assertFalse(success)
-
-        self.assertEqual(mock_logger.warning.call_count, 1)
-
-        mock_run.reset_mock()
-        mock_logger.reset_mock()
-
-        mock_run.side_effect = OSError('foo')
-
-        success = Openvas.stop_scan('scan_1')
-
-        mock_run.assert_called_with(
-            ['openvas', '--scan-stop', 'scan_1'],
-            check=True,
-            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
-        )
-
-        self.assertFalse(success)
-
-        self.assertEqual(mock_logger.warning.call_count, 1)
-
-    @patch('ospd_openvas.openvas.logger')
-    @patch('ospd_openvas.openvas.subprocess.run')
-    def test_stop_scan_timeout(
-        self, mock_run: MagicMock, mock_logger: MagicMock
-    ):
-        mock_run.side_effect = subprocess.TimeoutExpired('openvas', 10)
-
-        success = Openvas.stop_scan('scan_1')
-
-        self.assertFalse(success)
-        mock_run.assert_called_once_with(
-            ['openvas', '--scan-stop', 'scan_1'],
-            check=True,
-            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
-        )
-        mock_logger.error.assert_called_once()

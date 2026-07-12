@@ -13,7 +13,7 @@ import psutil
 logger = logging.getLogger(__name__)
 
 _BOOL_DICT = {'no': 0, 'yes': 1}
-STOP_SCAN_COMMAND_TIMEOUT_SECONDS = 10
+STOP_SCAN_COMMAND_TIMEOUT_SECONDS = 30
 
 
 class NASLCli:
@@ -173,32 +173,24 @@ class Openvas:
             return None
 
     @staticmethod
-    def stop_scan(
+    def stop_scan_as_root(
         scan_id: str,
-        sudo: bool = False,
         timeout: float = STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
     ) -> bool:
-        """Calls openvas to stop a scan process"""
-        cmd = []
-
-        if sudo:
-            cmd += ['sudo', '-n']
-
-        cmd += ['openvas', '--scan-stop', scan_id]
-
+        """Run the pidfd-hardened scanner stop helper through sudo."""
         try:
-            subprocess.run(cmd, check=True, timeout=timeout)
+            subprocess.run(
+                ['sudo', '-n', 'openvas', '--scan-stop', scan_id],
+                check=True,
+                timeout=timeout,
+            )
             return True
         except subprocess.TimeoutExpired:
             logger.error(
                 'Timed out stopping scan %s after %s seconds.', scan_id, timeout
             )
-            return False
-        except (subprocess.SubprocessError, OSError) as e:
-            # the command is not available
+        except (subprocess.SubprocessError, OSError) as error:
             logger.warning(
-                'Not possible to stop scan: %s. Reason %s',
-                scan_id,
-                e,
+                'Could not stop privileged scan %s: %s', scan_id, error
             )
-            return False
+        return False

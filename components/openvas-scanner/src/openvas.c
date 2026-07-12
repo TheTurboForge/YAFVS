@@ -1,6 +1,10 @@
+#define _GNU_SOURCE
+
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2006 Software in the Public Interest, Inc.
  * SPDX-FileCopyrightText: 1998-2006 Tenable Network Security, Inc.
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -49,11 +53,14 @@
 #include <gvm/util/nvticache.h> /* nvticache_free */
 #include <gvm/util/uuidutils.h> /* gvm_uuid_make */
 #include <netdb.h>              /* for addrinfo */
+#include <poll.h>               /* for poll() */
 #include <pwd.h>
 #include <signal.h> /* for SIGTERM */
 #include <stdio.h>  /* for fflush() */
 #include <stdlib.h> /* for atoi() */
+#include <string.h> /* for memchr() */
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/un.h>
 #include <sys/wait.h> /* for waitpid */
 #include <unistd.h>   /* for close() */
@@ -122,6 +129,47 @@ set_default_openvas_prefs ()
 {
   for (int i = 0; openvas_defaults[i].option != NULL; i++)
     prefs_set (openvas_defaults[i].option, openvas_defaults[i].value);
+}
+
+static int
+open_process_handle (int pid)
+{
+#ifdef SYS_pidfd_open
+  return syscall (SYS_pidfd_open, pid, 0);
+#else
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+static int
+signal_process_handle (int process_handle, int signal_number)
+{
+#ifdef SYS_pidfd_send_signal
+  return syscall (SYS_pidfd_send_signal, process_handle, signal_number, NULL,
+                  0);
+#else
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+static gboolean
+wait_for_process_exit (int process_handle, int timeout_seconds)
+{
+  struct pollfd poll_descriptor = {
+    .fd = process_handle,
+    .events = POLLIN,
+    .revents = 0,
+  };
+  int poll_result;
+
+  do
+    poll_result = poll (&poll_descriptor, 1, timeout_seconds * 1000);
+  while (poll_result < 0 && errno == EINTR);
+
+  return poll_result > 0
+         && (poll_descriptor.revents & (POLLIN | POLLHUP | POLLERR));
 }
 
 static void
@@ -340,11 +388,112 @@ openvas_print_start_msg ()
 #endif
 }
 
+static gboolean
+cmdline_token_equals (const char *token, gsize token_length,
+                      const char *expected)
+{
+  return strlen (expected) == token_length
+         && memcmp (token, expected, token_length) == 0;
+}
+
 /**
- * @brief Search in redis the process ID of a running scan and
- * sends it the kill signal SIGUSR1, which will stop the scan.
- * To find the process ID, it uses the scan_id passed with the
- * --scan-stop option.
+ * @brief Verify that a process is the OpenVAS scanner for a specific scan.
+ *
+ * The caller must acquire a pidfd before this check. PID reuse after the
+ * handle is opened can therefore only make the check fail; it cannot redirect
+ * a later signal to a replacement process.
+ */
+static gboolean
+process_matches_scan (int pid, const char *scan_id)
+{
+  gchar *cmdline = NULL;
+  gchar *executable = NULL;
+  gchar *executable_basename = NULL;
+  gchar *path;
+  gsize cmdline_length = 0;
+  const char *argument;
+  const char *cmdline_end;
+  const char *token_end;
+  gboolean matches = FALSE;
+
+  path = g_strdup_printf ("/proc/%d/cmdline", pid);
+  if (!g_file_get_contents (path, &cmdline, &cmdline_length, NULL)
+      || cmdline_length == 0)
+    goto cleanup;
+
+  cmdline_end = cmdline + cmdline_length;
+  token_end = memchr (cmdline, '\0', cmdline_length);
+  if (!token_end)
+    goto cleanup;
+
+  executable = g_strndup (cmdline, token_end - cmdline);
+  executable_basename = g_path_get_basename (executable);
+  if (g_strcmp0 (executable_basename, "openvas") != 0)
+    goto cleanup;
+
+  argument = token_end + 1;
+  while (argument < cmdline_end)
+    {
+      gsize remaining = cmdline_end - argument;
+      gsize token_length;
+
+      token_end = memchr (argument, '\0', remaining);
+      if (!token_end)
+        break;
+      token_length = token_end - argument;
+
+      if (cmdline_token_equals (argument, token_length, "--scan-start"))
+        {
+          const char *id_argument = token_end + 1;
+          const char *id_end;
+
+          if (id_argument >= cmdline_end)
+            break;
+          id_end = memchr (id_argument, '\0', cmdline_end - id_argument);
+          if (id_end
+              && cmdline_token_equals (id_argument, id_end - id_argument,
+                                       scan_id))
+            matches = TRUE;
+          break;
+        }
+
+      if (token_length > strlen ("--scan-start=")
+          && memcmp (argument, "--scan-start=", strlen ("--scan-start=")) == 0
+          && cmdline_token_equals (argument + strlen ("--scan-start="),
+                                   token_length - strlen ("--scan-start="),
+                                   scan_id))
+        {
+          matches = TRUE;
+          break;
+        }
+
+      argument = token_end + 1;
+    }
+
+cleanup:
+  g_free (executable_basename);
+  g_free (executable);
+  g_free (cmdline);
+  g_free (path);
+  return matches;
+}
+
+static gboolean
+scan_finished_cleanly (kb_t kb, const char *scan_id)
+{
+  char key[1024];
+  char *status;
+  gboolean finished;
+
+  snprintf (key, sizeof (key), "internal/%s", scan_id);
+  status = kb_item_get_str (kb, key);
+  finished = g_strcmp0 (status, "finished") == 0;
+  g_free (status);
+  return finished;
+}
+
+/**
+ * @brief Stop the exact OpenVAS process recorded for a running scan.
  *
  * @return 0 on success, 1 otherwise.
  */
@@ -354,6 +503,8 @@ stop_single_task_scan (void)
   char key[1024];
   kb_t kb;
   int pid;
+  int process_handle;
+  int signal_result;
 
   if (!get_scan_id ())
     return 1;
@@ -373,9 +524,86 @@ stop_single_task_scan (void)
   if (pid <= 0)
     return 1;
 
-  /* Send the signal to the process group. */
-  killpg (pid, SIGUSR1);
-  return 0;
+  process_handle = open_process_handle (pid);
+  if (process_handle < 0)
+    {
+      g_warning ("Could not acquire process handle for scan %s: %s",
+                 get_scan_id (), g_strerror (errno));
+      return 1;
+    }
+
+  if (!process_matches_scan (pid, get_scan_id ()))
+    {
+      g_warning ("Refusing to signal PID %d because it does not match scan %s",
+                 pid, get_scan_id ());
+      close (process_handle);
+      return 1;
+    }
+
+  signal_result = signal_process_handle (process_handle, SIGUSR1);
+  if (signal_result < 0)
+    {
+      if (errno == ESRCH)
+        {
+          close (process_handle);
+          return 1;
+        }
+      g_warning ("Could not signal process for scan %s: %s", get_scan_id (),
+                 g_strerror (errno));
+      close (process_handle);
+      return 1;
+    }
+
+  if (wait_for_process_exit (process_handle, 15))
+    {
+      if (!scan_finished_cleanly (kb, get_scan_id ()))
+        {
+          g_warning ("Scanner for scan %s exited without a clean completion "
+                     "marker",
+                     get_scan_id ());
+          close (process_handle);
+          return 1;
+        }
+      close (process_handle);
+      return 0;
+    }
+
+  g_warning ("Scanner for scan %s did not exit after SIGUSR1; sending SIGTERM",
+             get_scan_id ());
+  signal_result = signal_process_handle (process_handle, SIGTERM);
+  if (signal_result < 0 && errno != ESRCH)
+    {
+      g_warning ("Could not send SIGTERM to scan %s: %s", get_scan_id (),
+                 g_strerror (errno));
+      close (process_handle);
+      return 1;
+    }
+  if (signal_result < 0 || wait_for_process_exit (process_handle, 5))
+    {
+      close (process_handle);
+      return 1;
+    }
+
+  g_warning ("Scanner for scan %s did not exit after SIGTERM; sending SIGKILL",
+             get_scan_id ());
+  signal_result = signal_process_handle (process_handle, SIGKILL);
+  if (signal_result < 0 && errno != ESRCH)
+    {
+      g_warning ("Could not send SIGKILL to scan %s: %s", get_scan_id (),
+                 g_strerror (errno));
+      close (process_handle);
+      return 1;
+    }
+  if (signal_result == 0 && !wait_for_process_exit (process_handle, 5))
+    {
+      g_warning ("Scanner for scan %s remained alive after SIGKILL",
+                 get_scan_id ());
+      close (process_handle);
+      return 1;
+    }
+
+  close (process_handle);
+  return 1;
 }
 
 /**

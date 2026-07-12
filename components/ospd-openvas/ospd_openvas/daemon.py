@@ -10,6 +10,9 @@
 
 import logging
 import math
+import os
+import select
+import signal
 import time
 import copy
 
@@ -53,7 +56,6 @@ OPENVAS_STARTUP_TIMEOUT_SECONDS = TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS
 OPENVAS_STOP_GRACE_PERIOD_SECONDS = 15
 OPENVAS_STOP_TERMINATE_GRACE_PERIOD_SECONDS = 5
 OPENVAS_STOP_KILL_GRACE_PERIOD_SECONDS = 5
-OPENVAS_PROCESS_POLL_INTERVAL_SECONDS = 0.1
 
 
 OSPD_DESC = """
@@ -1162,146 +1164,194 @@ class OSPDopenvas(OSPDaemon):
             return False
 
     @staticmethod
+    def open_openvas_process_handle(pid: int) -> int:
+        """Acquire an immutable Linux process handle before validation."""
+        if not hasattr(os, 'pidfd_open') or not hasattr(
+            signal, 'pidfd_send_signal'
+        ):
+            raise OSError('Linux pidfd process control is unavailable')
+        return os.pidfd_open(pid)
+
+    @staticmethod
     def wait_for_openvas_process_exit(
-        openvas_process: psutil.Process, timeout: float
+        process_handle: int, timeout: float
     ) -> bool:
-        """Wait for a process exit without allowing cleanup to block forever."""
-        deadline = time.monotonic() + timeout
-        while True:
+        """Wait for the exact process represented by a pidfd to exit."""
+        poller = select.poll()
+        poller.register(process_handle, select.POLLIN)
+        timeout_ms = max(0, math.ceil(timeout * 1000))
+        return any(
+            events & (select.POLLIN | select.POLLHUP | select.POLLERR)
+            for _, events in poller.poll(timeout_ms)
+        )
+
+    @staticmethod
+    def signal_openvas_process(process_handle: int, signal_number: int) -> None:
+        """Signal only the process pinned by a pidfd."""
+        signal.pidfd_send_signal(process_handle, signal_number)
+
+    def stop_openvas_process(
+        self,
+        process_handle: int,
+        openvas_process: psutil.Process,
+        scan_id: str,
+    ) -> bool:
+        """Stop one pinned scanner process with bounded escalation."""
+        stages = (
+            (
+                signal.SIGUSR1,
+                OPENVAS_STOP_GRACE_PERIOD_SECONDS,
+                logging.WARNING,
+                'OpenVAS did not exit after the graceful stop; '
+                'sending SIGTERM.',
+            ),
+            (
+                signal.SIGTERM,
+                OPENVAS_STOP_TERMINATE_GRACE_PERIOD_SECONDS,
+                logging.ERROR,
+                'OpenVAS did not exit after SIGTERM; sending SIGKILL.',
+            ),
+            (
+                signal.SIGKILL,
+                OPENVAS_STOP_KILL_GRACE_PERIOD_SECONDS,
+                logging.ERROR,
+                'OpenVAS remained running after SIGKILL.',
+            ),
+        )
+
+        for stage, (
+            signal_number,
+            timeout,
+            log_level,
+            timeout_message,
+        ) in enumerate(stages):
             try:
-                if not openvas_process.is_running():
-                    return True
-                if openvas_process.status() == psutil.STATUS_ZOMBIE:
-                    openvas_process.wait(
-                        timeout=max(0, deadline - time.monotonic())
-                    )
-                    return True
-            except psutil.NoSuchProcess:
-                return True
-            except (psutil.AccessDenied, psutil.TimeoutExpired):
+                self.signal_openvas_process(process_handle, signal_number)
+            except ProcessLookupError:
+                return False
+            except (PermissionError, OSError) as error:
+                logger.error(
+                    '%s: Could not send %s to the OpenVAS process handle: %s',
+                    scan_id,
+                    signal.Signals(signal_number).name,
+                    error,
+                )
                 return False
 
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
+            if self.wait_for_openvas_process_exit(process_handle, timeout):
+                logger.debug('Stopped process: %s', openvas_process)
+                return stage == 0
+            logger.log(log_level, '%s: %s', scan_id, timeout_message)
+        return False
+
+    def stop_openvas_process_by_pid(
+        self, scan_id: str, recorded_pid: str
+    ) -> bool:
+        """Validate and stop a same-user scanner through a pinned pidfd."""
+        try:
+            pid = int(recorded_pid)
+            if pid <= 0:
+                raise ValueError('PID must be positive')
+            process_handle = self.open_openvas_process_handle(pid)
+        except (OSError, TypeError, ValueError) as error:
+            logger.warning(
+                '%s: Refusing to signal recorded OpenVAS PID %s because an '
+                'immutable process handle could not be acquired: %s',
+                scan_id,
+                recorded_pid,
+                error,
+            )
+            return False
+
+        try:
+            if self.wait_for_openvas_process_exit(process_handle, 0):
+                logger.warning(
+                    '%s: Process with PID %s exited before its stop path could '
+                    'be verified.',
+                    scan_id,
+                    recorded_pid,
+                )
                 return False
-            time.sleep(min(OPENVAS_PROCESS_POLL_INTERVAL_SECONDS, remaining))
+
+            try:
+                openvas_process = psutil.Process(pid)
+            except psutil.NoSuchProcess:
+                openvas_process = None
+
+            if (
+                not openvas_process
+                or not self.is_matching_openvas_scan_process(
+                    openvas_process, scan_id
+                )
+            ):
+                logger.warning(
+                    '%s: Refusing to signal PID %s because it does not match '
+                    'the recorded OpenVAS scan command.',
+                    scan_id,
+                    recorded_pid,
+                )
+                return False
+
+            return self.stop_openvas_process(
+                process_handle, openvas_process, scan_id
+            )
+        finally:
+            os.close(process_handle)
 
     def abort_scan_startup(
-        self, kbdb: BaseDB, scan_id: str, error: str
+        self,
+        kbdb: BaseDB,
+        scan_id: str,
+        error: str,
+        process_already_exited: bool = False,
     ) -> None:
         """Record a startup failure and release the allocated scanner state."""
         self.add_scan_error(scan_id, name='', host='', value=error)
         logger.error('%s: %s', scan_id, error)
-        self.stop_scan_cleanup(kbdb, scan_id, kbdb.get_scan_process_id())
-        self.main_db.release_database(kbdb)
+        if self.stop_scan_cleanup(
+            kbdb,
+            scan_id,
+            kbdb.get_scan_process_id(),
+            process_already_exited,
+        ):
+            self.main_db.release_database(kbdb)
 
     def stop_scan_cleanup(
         self,
         kbdb: BaseDB,
         scan_id: str,
         ovas_pid: str,  # pylint: disable=arguments-differ
-    ):
-        """Set a key in redis to indicate the wrapper is stopped.
-        It is done through redis because it is a new multiprocess
-        instance and it is not possible to reach the variables
-        of the grandchild process.
-        Indirectly sends SIGUSR1 to the running openvas scan process
-        via an invocation of openvas with the --scan-stop option to
-        stop it."""
+        process_already_exited: bool = False,
+    ) -> bool:
+        """Mark the scan stopped and signal its immutable process handle."""
 
-        if kbdb:
-            # Set stop flag in redis
-            kbdb.stop_scan(scan_id)
+        if not kbdb:
+            return False
 
-            try:
-                ovas_process = psutil.Process(int(ovas_pid))
-            except (psutil.NoSuchProcess, TypeError, ValueError):
-                ovas_process = None
+        kbdb.stop_scan(scan_id)
+        if process_already_exited:
+            process_stopped = True
+        elif not self.is_running_as_root and self.sudo_available:
+            process_stopped = Openvas.stop_scan_as_root(scan_id)
+        else:
+            process_stopped = self.stop_openvas_process_by_pid(
+                scan_id, ovas_pid
+            )
 
-            if ovas_process:
-                try:
-                    process_status = ovas_process.status()
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    process_status = None
+        clean_completion = (
+            process_already_exited or kbdb.get_status(scan_id) == 'finished'
+        )
+        if not process_stopped or not clean_completion:
+            logger.error(
+                '%s: Clean OpenVAS process-tree completion is unconfirmed; '
+                'retaining its Redis databases.',
+                scan_id,
+            )
+            return False
 
-                # Cleaning in case of Zombie Process
-                if process_status == psutil.STATUS_ZOMBIE:
-                    logger.debug(
-                        '%s: Process with PID %s is a Zombie process.'
-                        ' Cleaning up...',
-                        scan_id,
-                        ovas_process.pid,
-                    )
-                    self.wait_for_openvas_process_exit(
-                        ovas_process, OPENVAS_STOP_GRACE_PERIOD_SECONDS
-                    )
-                elif not self.is_matching_openvas_scan_process(
-                    ovas_process, scan_id
-                ):
-                    logger.warning(
-                        '%s: Refusing to signal PID %s because it does not '
-                        'match the recorded OpenVAS scan command.',
-                        scan_id,
-                        ovas_pid,
-                    )
-                else:
-                    can_stop_scan = Openvas.stop_scan(
-                        scan_id,
-                        not self.is_running_as_root and self.sudo_available,
-                    )
-                    if not can_stop_scan:
-                        logger.warning(
-                            '%s: Graceful OpenVAS stop command failed for %s.',
-                            scan_id,
-                            ovas_process,
-                        )
-                    if self.wait_for_openvas_process_exit(
-                        ovas_process, OPENVAS_STOP_GRACE_PERIOD_SECONDS
-                    ):
-                        logger.debug('Stopped process: %s', ovas_process)
-                    else:
-                        logger.warning(
-                            '%s: OpenVAS did not exit after the graceful stop; '
-                            'sending SIGTERM.',
-                            scan_id,
-                        )
-                        try:
-                            ovas_process.terminate()
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            pass
-
-                        if not self.wait_for_openvas_process_exit(
-                            ovas_process,
-                            OPENVAS_STOP_TERMINATE_GRACE_PERIOD_SECONDS,
-                        ):
-                            logger.error(
-                                '%s: OpenVAS did not exit after SIGTERM; '
-                                'sending SIGKILL.',
-                                scan_id,
-                            )
-                            try:
-                                ovas_process.kill()
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                pass
-                            if not self.wait_for_openvas_process_exit(
-                                ovas_process,
-                                OPENVAS_STOP_KILL_GRACE_PERIOD_SECONDS,
-                            ):
-                                logger.error(
-                                    '%s: OpenVAS remained running after '
-                                    'SIGKILL.',
-                                    scan_id,
-                                )
-            else:
-                logger.debug(
-                    "%s: Process with PID %s already stopped",
-                    scan_id,
-                    ovas_pid,
-                )
-
-            # Clean redis db
-            for scan_db in kbdb.get_scan_databases():
-                self.main_db.release_database(scan_db)
+        for scan_db in kbdb.get_scan_databases():
+            self.main_db.release_database(scan_db)
+        return True
 
     def exec_scan(self, scan_id: str):
         """Starts the OpenVAS scanner for scan_id scan."""
@@ -1317,7 +1367,10 @@ class OSPDopenvas(OSPDaemon):
                 "An old scan with the same scanID was found in the kb. "
                 "Waiting for the kb clean up to finish."
             )
-            self.stop_scan_cleanup(kbdb, scan_id, kbdb.get_scan_process_id())
+            if not self.stop_scan_cleanup(
+                kbdb, scan_id, kbdb.get_scan_process_id()
+            ):
+                return
             self.main_db.release_database(kbdb)
 
         do_not_launch = False
@@ -1407,6 +1460,7 @@ class OSPDopenvas(OSPDaemon):
                     scan_id,
                     'OpenVAS scanner exited before reporting startup readiness '
                     f'(exit code {exit_code}).',
+                    process_already_exited=True,
                 )
                 return
 
@@ -1437,16 +1491,10 @@ class OSPDopenvas(OSPDaemon):
             if scan_stopped:
                 logger.debug('%s: Scan stopped by the client', scan_id)
 
-                self.stop_scan_cleanup(
+                if not self.stop_scan_cleanup(
                     kbdb, scan_id, kbdb.get_scan_process_id()
-                )
-
-                # clean main_db, but wait for scanner to finish.
-                while not kbdb.target_is_finished(scan_id):
-                    if not self.is_openvas_process_alive(openvas_process):
-                        break
-                    logger.debug('%s: Waiting for openvas to finish', scan_id)
-                    time.sleep(1)
+                ):
+                    return
                 self.main_db.release_database(kbdb)
                 return
 
@@ -1471,10 +1519,11 @@ class OSPDopenvas(OSPDaemon):
                 self.report_openvas_results(kbdb, scan_id)
 
                 kbdb.stop_scan(scan_id)
-
-                for scan_db in kbdb.get_scan_databases():
-                    self.main_db.release_database(scan_db)
-                self.main_db.release_database(kbdb)
+                logger.error(
+                    '%s: Retaining Redis databases after an unexpected scanner '
+                    'exit because descendant cleanup is unconfirmed.',
+                    scan_id,
+                )
                 return
 
             # Wait a second before trying to get result from redis if there

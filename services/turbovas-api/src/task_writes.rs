@@ -12,7 +12,9 @@ use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     errors::ApiError,
-    task_handlers::load_task_detail,
+    gvmd_control::{gvmd_control_secret, gvmd_control_socket_path},
+    task_clone_control::request_task_clone,
+    task_handlers::{load_task_detail, load_task_detail_for_operator},
     task_target_payloads::TaskItem,
     task_write_db::*,
     task_write_transactions::{
@@ -24,6 +26,29 @@ use crate::{
         validate_task_patch_request,
     },
 };
+
+pub(crate) async fn clone_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<(StatusCode, HeaderMap, Json<TaskItem>), ApiError> {
+    let operator = require_task_write_operator(operator)?;
+    let control_secret = gvmd_control_secret()?;
+    let cloned_task_id = request_task_clone(
+        &gvmd_control_socket_path(),
+        &control_secret,
+        operator.user_uuid(),
+        &task_id,
+    )
+    .await?;
+    let task = load_committed_task_detail_for_operator(&state, &cloned_task_id, &operator).await?;
+
+    Ok((
+        StatusCode::CREATED,
+        task_write_location_headers(&cloned_task_id)?,
+        Json(task),
+    ))
+}
 
 pub(crate) async fn create_task(
     State(state): State<AppState>,
@@ -147,4 +172,19 @@ fn task_write_location_headers(task_id: &str) -> Result<HeaderMap, ApiError> {
         HeaderValue::from_str(&format!("/api/v1/tasks/{task_id}")).map_err(|_| ApiError::Config)?;
     headers.insert(header::LOCATION, location);
     Ok(headers)
+}
+
+async fn load_committed_task_detail_for_operator(
+    state: &AppState,
+    task_id: &str,
+    operator: &DirectApiOperator,
+) -> Result<TaskItem, ApiError> {
+    let client = state
+        .pool
+        .get()
+        .await
+        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?;
+    load_task_detail_for_operator(&client, task_id, operator.user_uuid())
+        .await
+        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)
 }

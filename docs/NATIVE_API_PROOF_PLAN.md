@@ -225,8 +225,12 @@ also browser-proxied through the authenticated `gsad` same-origin boundary,
 including credential metadata that the inherited UI already displayed. Task
 list/detail reads are also browser-proxied with the read-only metadata required
 by the current operator view. Direct task metadata export reuses the task detail
-JSON for scriptable operator reads. Task clone/hard-delete, resume, task
-file export, credential secret material, and remaining scanner-control
+JSON for scriptable operator reads. Task clone uses gvmd's authoritative copy
+transaction through the private authenticated control socket and returns the
+committed native task detail without directly starting a scan. The source
+schedule and next-run state are retained, so a copied schedule can start the
+clone later when due. Task hard-delete, resume,
+task file export, credential secret material, and remaining scanner-control
 semantics remain inherited. Scanner metadata list
 and safe socket/builtin detail page-load reads are browser-proxied, including
 active User Tags and non-hidden task backlinks. Direct scanner metadata export

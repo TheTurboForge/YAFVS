@@ -611,9 +611,9 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
         )
     );
     assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
-    assert!(
-        list.contains("x-turbovas-inherited-still-owns: task-resume-clone-file-hard-delete-and-other-scanner-control")
-    );
+    assert!(list.contains(
+        "x-turbovas-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control"
+    ));
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
@@ -623,7 +623,7 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(
         list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
     );
-    assert!(list.contains("Resume, clone, hard-delete, file export, config/scanner mutation"));
+    assert!(list.contains("Resume, hard-delete, file export, config/scanner mutation"));
 
     let detail = openapi_path_block("/tasks/{task_id}");
     assert!(detail.contains("get:"));
@@ -637,11 +637,64 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(
         detail.contains("Direct write-control endpoint for updating task name and comment only")
     );
-    assert!(detail.contains("Task start and stop have separate guarded control routes"));
+    assert!(detail.contains("Task clone, start, and stop have separate guarded control routes"));
     assert!(detail.contains("operationId: deleteTasksByTaskId"));
     assert!(detail.contains("x-turbovas-replaces: task-trash-move"));
     assert!(detail.contains("safe non-running live-task trash moves"));
     assert!(detail.contains("Running, queued, requested, stop/delete-waiting, processing"));
+
+    let clone = openapi_path_block("/tasks/{task_id}/clone");
+    for required in [
+        "post:",
+        "operationId: postTasksByTaskIdClone",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-maturity: live-write",
+        "x-turbovas-replaces: task-clone",
+        "x-turbovas-side-effect: scanner-control",
+        "x-turbovas-safety-contract: write-control-v1",
+        "x-turbovas-owner-semantics: request-operator-owner",
+        "$ref: '#/components/schemas/Task'",
+        "Location:",
+        "committed_response_unavailable",
+        "$ref: '#/components/responses/BadGateway'",
+        "$ref: '#/components/responses/ServiceUnavailable'",
+        "authenticated same-origin browser proxy",
+        "does not directly start a scan",
+        "a due copied schedule can start the clone later",
+    ] {
+        assert!(
+            clone.contains(required),
+            "task clone OpenAPI block missing {required}"
+        );
+    }
+    assert!(
+        !clone.contains("requestBody:"),
+        "task clone must not accept a request body"
+    );
+
+    let copy_task = inherited_function(MANAGE_SQL_C, "copy_task");
+    for required in [
+        "copy_resource_lock (\"task\"",
+        "schedule_next_time",
+        "set_task_run_status (new, TASK_STATUS_NEW)",
+        "INSERT INTO task_preferences",
+        "enforce_task_defaults (new)",
+        "INSERT INTO task_alerts",
+        "sql_commit ()",
+    ] {
+        assert!(copy_task.contains(required), "copy_task missing {required}");
+    }
+    for retired_rbac_reference in [
+        "INSERT INTO permissions",
+        "permissions_trash",
+        "cache_permissions_for_resource",
+    ] {
+        assert!(
+            !copy_task.contains(retired_rbac_reference),
+            "operator-only task clone still references {retired_rbac_reference}"
+        );
+    }
 
     let start = openapi_path_block("/tasks/{task_id}/start");
     for required in [

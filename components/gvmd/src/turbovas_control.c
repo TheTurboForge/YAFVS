@@ -97,6 +97,9 @@
 #define TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES 32768
 #define TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX 200
 #define TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES 16384
+#define TURBOVAS_CONTROL_TASK_CLONE_COMMAND "task-clone "
+#define TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_TASK_CLONE_COMMAND) - 1)
 
 typedef struct
 {
@@ -1391,6 +1394,26 @@ turbovas_control_next_field (const char **cursor, const char *end,
 }
 
 static gboolean
+turbovas_control_parse_task_clone_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char task_uuid[37])
+{
+  const char *cursor;
+  const char *end;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_TASK_CLONE_COMMAND,
+        TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end)
+      || (size_t) (end - cursor) != 36)
+    return FALSE;
+
+  memcpy (task_uuid, cursor, 36);
+  task_uuid[36] = '\0';
+  return turbovas_control_uuid_is_valid (task_uuid);
+}
+
+static gboolean
 turbovas_control_parse_tag_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
@@ -1998,6 +2021,46 @@ turbovas_control_scan_config_nvt_diagnostic_response (int result)
     }
 }
 
+static const char *
+turbovas_control_task_clone_response (
+  int result, const char *uuid,
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+    case 1:
+      status = "1 duplicate\n";
+      break;
+    case 2:
+      status = "2 not_found\n";
+      break;
+    case 99:
+      status = "99 forbidden\n";
+      break;
+    case -3:
+      status = "-3 committed_indeterminate\n";
+      break;
+    case -2:
+      status = "-2 malformed\n";
+      break;
+    default:
+      status = "-1 internal\n";
+      break;
+    }
+
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
 static gboolean
 turbovas_control_write_all (int socket, const char *response)
 {
@@ -2115,6 +2178,47 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
 
   turbovas_control_finish_operator_session ();
 
+  return result;
+}
+
+static int
+turbovas_control_clone_task (const char *operator_uuid,
+                             const char *source_task_uuid,
+                             char created_uuid[37])
+{
+  task_t new_task = 0;
+  char *uuid = NULL;
+  gboolean committed = FALSE;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = copy_task (NULL, NULL, source_task_uuid, -1, &new_task);
+  if (result == 0)
+    {
+      committed = TRUE;
+      task_uuid (new_task, &uuid);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        {
+          g_warning ("%s: task clone committed but UUID lookup failed",
+                     __func__);
+          log_event ("task", "Task", NULL, "created");
+          result = -3;
+        }
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+          log_event ("task", "Task", created_uuid, "created");
+        }
+    }
+
+  if (result != 0 && !committed)
+    log_event_fail ("task", "Task", source_task_uuid, "created");
+
+  free (uuid);
+  turbovas_control_finish_operator_session ();
   return result;
 }
 
@@ -2619,6 +2723,21 @@ turbovas_control_serve_client (int client_socket)
                && memcmp (request, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
                           TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
         result_response = turbovas_control_tag_modify_response (-2, response);
+      else if (turbovas_control_parse_task_clone_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, task_uuid))
+        {
+          result = turbovas_control_clone_task (operator_uuid, task_uuid,
+                                                created_uuid);
+          result_response = turbovas_control_task_clone_response (
+            result, created_uuid, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_TASK_CLONE_COMMAND,
+                          TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
+                    == 0)
+        result_response =
+          turbovas_control_task_clone_response (-2, NULL, response);
       else if (turbovas_control_parse_request (request, request_len,
                                           expected_secret,
                                           expected_secret_len,
@@ -2726,6 +2845,11 @@ turbovas_control_serve_client (int client_socket)
            && memcmp (request, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
                       TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
     result_response = turbovas_control_tag_modify_response (-2, response);
+  else if (request_len >= TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_TASK_CLONE_COMMAND,
+                      TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
+                == 0)
+    result_response = turbovas_control_task_clone_response (-2, NULL, response);
   else if (request_len >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
            && memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
                       TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)

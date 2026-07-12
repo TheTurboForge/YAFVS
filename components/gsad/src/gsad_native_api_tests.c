@@ -25,6 +25,8 @@ gsad_native_api_test_parse_pdf_response (const guint8 *data, gsize length,
 extern gboolean
 gsad_native_api_test_browser_credentials_are_session_bound (
   gsad_credentials_t *credentials);
+extern gboolean
+gsad_native_api_test_post_path_is_allowed (const gchar *path);
 
 /* Handler dependencies are not part of this parser-focused unit target. */
 gsad_user_t *
@@ -47,6 +49,8 @@ gsad_user_get_username (gsad_user_t *user)
   return user == (gsad_user_t *) GINT_TO_POINTER (1) ? "operator" : NULL;
 }
 
+Describe (gsad_native_api);
+
 Ensure (gsad_native_api, should_require_a_session_user_for_browser_reads)
 {
   assert_that (
@@ -58,6 +62,23 @@ Ensure (gsad_native_api, should_require_a_session_user_for_browser_reads)
   assert_that (gsad_native_api_test_browser_credentials_are_session_bound (
                  (gsad_credentials_t *) GINT_TO_POINTER (1)),
                is_true);
+}
+
+Ensure (gsad_native_api, should_only_allow_canonical_task_clone_posts)
+{
+  const gchar *valid =
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/clone";
+  const gchar *rejected[] = {
+    "/api/v1/tasks/not-a-uuid/clone",
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/clone/extra",
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/clone?unexpected=query",
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/clone/",
+  };
+
+  assert_that (gsad_native_api_test_post_path_is_allowed (valid), is_true);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (gsad_native_api_test_post_path_is_allowed (rejected[index]),
+                 is_false);
 }
 
 const gchar *
@@ -108,8 +129,6 @@ gsad_http_send_response_for_content (gsad_http_connection_t *connection,
   (void) content_length;
   return MHD_NO;
 }
-
-Describe (gsad_native_api);
 
 BeforeEach (gsad_native_api)
 {
@@ -224,6 +243,8 @@ main (int argc, char **argv)
                          should_only_forward_the_canonical_pdf_format);
   add_test_with_context (suite, gsad_native_api,
                          should_require_a_session_user_for_browser_reads);
+  add_test_with_context (suite, gsad_native_api,
+                         should_only_allow_canonical_task_clone_posts);
   add_test_with_context (suite, gsad_native_api,
                          should_preserve_embedded_nul_in_pdf_response);
   add_test_with_context (suite, gsad_native_api,

@@ -5809,7 +5809,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-list-read
       summary: List scan tasks
-      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links, metadata-only task updates, strict New-task target replacement, metadata export, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, file export, config/scanner mutation, preferences, and other scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
+      description: Native direct API exposes task reads, bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links, metadata-only task updates, strict New-task target replacement, metadata export, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, hard-delete, file export, config/scanner mutation, preferences, and other scanner-control semantics remain inherited until their scanner, report, permission, and rejection-path contracts are characterized.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -5845,7 +5845,7 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: task-create-with-target-config-scanner-schedule-alerts
-      x-turbovas-inherited-still-owns: task-resume-clone-file-hard-delete-and-other-scanner-control
+      x-turbovas-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
@@ -5891,7 +5891,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: task-detail-summary-read
       summary: Read one scan task summary
-      description: Native direct API exposes task summary reads, bounded task creation with optional schedule and alert links, metadata-only task updates, strict New-task target replacement, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, clone, hard-delete, inherited file-export formats, config/scanner mutation, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
+      description: Native direct API exposes task summary reads, bounded task creation with optional schedule and alert links, metadata-only task updates, guarded task clone through the private gvmd control socket, strict New-task target replacement, safe non-running live-task trash moves, guarded task start through the gvmd scan queue, and guarded task stop through the private gvmd control socket. Resume, hard-delete, inherited file-export formats, config/scanner mutation, and preferences remain inherited until their scanner-control and full task-mutation contracts define scanner side effects, audit behavior, and failure mapping.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -5926,7 +5926,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update task metadata
-      description: Direct write-control endpoint for updating task name and comment only. Task start and stop have separate guarded control routes. Resume, clone, file export, hard-delete, target/config/schedule/scanner changes, alert links, preferences, and other scanner side effects remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating task name and comment only. Task clone, start, and stop have separate guarded control routes. Resume, file export, hard-delete, target/config/schedule/scanner changes, alert links, preferences, and other scanner side effects remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -5969,7 +5969,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Move a non-running scan task to trash
-      description: Direct write-control endpoint for moving an operator-owned, live, non-running scan task to the trashcan by setting the inherited task trash marker and moving task/report/result tag/result evidence locations consistently. Running, queued, requested, stop/delete-waiting, processing, hard-delete, clone, file export, target/config/schedule/scanner mutation, alert links, preferences, and other scanner side effects remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving an operator-owned, live, non-running scan task to the trashcan by setting the inherited task trash marker and moving task/report/result tag/result evidence locations consistently. Running, queued, requested, stop/delete-waiting, processing, hard-delete, file export, target/config/schedule/scanner mutation, alert links, preferences, and other scanner side effects remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -5991,6 +5991,55 @@ paths:
           $ref: '#/components/responses/RequestTooLarge'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /tasks/{task_id}/clone:
+    post:
+      operationId: postTasksByTaskIdClone
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: task-clone
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scanner-control
+      summary: Clone an existing scan task through bounded gvmd control
+      description: Guarded direct write-control endpoint with no request body that sends one shared-secret-authenticated task-clone command containing the authenticated operator UUID and source task UUID to TURBOVAS_API_GVMD_CONTROL_SOCKET. gvmd remains authoritative for task ACL and clone semantics. The operation does not directly start a scan, but it preserves the source task schedule and next-run state, so a due copied schedule can start the clone later. After a successful control response, the API reloads the cloned task representation and verifies that it belongs to the authenticated operator before returning its Location. The same route is exposed through the authenticated same-origin browser proxy. A 502 committed_response_unavailable response means the clone committed but the authoritative cloned task response could not be completed; inspect current state before retrying.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '201':
+          description: Task cloned
+          headers:
+            Location:
+              description: Path of the cloned task resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalError'
   /tasks/{task_id}/replace-target:

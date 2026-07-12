@@ -159,3 +159,26 @@ pub(crate) async fn load_task_detail(
         .ok_or(ApiError::NotFound)?;
     Ok(task_from_row(&row))
 }
+
+pub(crate) async fn load_task_detail_for_operator(
+    client: &tokio_postgres::Client,
+    task_id: &str,
+    operator_uuid: &str,
+) -> Result<TaskItem, ApiError> {
+    parse_uuid(task_id)?;
+    parse_uuid(operator_uuid)?;
+    let sql = task_sql(
+        "lower(uuid) = lower($1) AND lower(owner_id) = lower($2)",
+        "name ASC",
+        "",
+    );
+    let row = client
+        .query_opt(&sql, &[&task_id, &operator_uuid])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "operator-owned task detail query failed");
+            ApiError::Database
+        })?
+        .ok_or(ApiError::NotFound)?;
+    Ok(task_from_row(&row))
+}

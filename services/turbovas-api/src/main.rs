@@ -232,6 +232,7 @@ mod target_write_validation;
 mod target_writes;
 #[cfg(test)]
 mod target_writes_tests;
+mod task_clone_control;
 mod task_control;
 mod task_control_sql;
 mod task_handlers;

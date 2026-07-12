@@ -14796,33 +14796,8 @@ copy_task (const char* name, const char* comment, const char *task_id,
        new,
        old);
 
-  sql ("INSERT INTO permissions"
-       " (uuid, owner, name, comment, resource_type, resource, resource_uuid,"
-       "  resource_location, subject_type, subject, subject_location,"
-       "  creation_time, modification_time)"
-       " SELECT make_uuid (), (SELECT owner FROM tasks WHERE id = %llu),"
-       "        name, comment, resource_type, %llu,"
-       "        (SELECT uuid FROM tasks WHERE id = %llu),"
-       "        resource_location, subject_type, subject, subject_location,"
-       "        m_now (), m_now ()"
-       " FROM permissions"
-       " WHERE owner = (SELECT owner FROM tasks WHERE id = %llu)"
-       " AND resource_type = 'task'"
-       " AND resource_location = " G_STRINGIFY (LOCATION_TABLE)
-       " AND resource = %llu;",
-       new,
-       new,
-       new,
-       old,
-       old);
-
-  if (ret)
-    {
-      sql_rollback ();
-      return ret;
-    }
-
-  cache_permissions_for_resource ("task", new, NULL);
+  /* TurboVAS uses an operator-only schema.  The retired RBAC permission
+   * tables must not be referenced while copying the owner-scoped task. */
 
   sql_commit ();
   if (new_task) *new_task = new;

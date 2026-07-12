@@ -265,6 +265,55 @@ fn task_create_handler_requires_operator_references_and_uniqueness_before_insert
 }
 
 #[test]
+fn task_clone_uses_authoritative_control_and_verifies_committed_owner() {
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn clone_task")
+        .expect("clone task handler must exist")
+        .1
+        .split_once("pub(crate) async fn create_task")
+        .expect("clone task handler boundary")
+        .0;
+
+    for required in [
+        "let operator = require_task_write_operator(operator)?;",
+        "request_task_clone(",
+        "operator.user_uuid()",
+        "load_committed_task_detail_for_operator(&state, &cloned_task_id, &operator).await?",
+        "StatusCode::CREATED",
+        "task_write_location_headers(&cloned_task_id)?",
+    ] {
+        assert!(
+            handler.contains(required),
+            "clone task handler missing {required}"
+        );
+    }
+
+    let committed_loader = source
+        .split_once("async fn load_committed_task_detail_for_operator")
+        .expect("committed task detail loader")
+        .1;
+    for required in [
+        "load_task_detail_for_operator(&client, task_id, operator.user_uuid())",
+        "ApiError::MutationCommittedResponseUnavailable",
+    ] {
+        assert!(
+            committed_loader.contains(required),
+            "committed task owner check missing {required}"
+        );
+    }
+    assert!(!committed_loader.contains("SELECT 1 FROM tasks"));
+
+    let task_handlers = include_str!("task_handlers.rs");
+    let owner_loader = task_handlers
+        .split_once("pub(crate) async fn load_task_detail_for_operator")
+        .expect("operator-owned task detail loader")
+        .1;
+    assert!(owner_loader.contains("lower(uuid) = lower($1) AND lower(owner_id) = lower($2)"));
+    assert!(owner_loader.contains("query_opt(&sql, &[&task_id, &operator_uuid])"));
+}
+
+#[test]
 fn task_create_schedule_and_alert_loaders_require_operator_ownership() {
     let source = include_str!("task_write_db.rs");
 

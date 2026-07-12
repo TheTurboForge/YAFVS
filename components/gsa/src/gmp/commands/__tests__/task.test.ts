@@ -37,6 +37,12 @@ import {createSession} from 'gmp/testing';
 
 let logLevel: LogLevel;
 
+const nativeJsonResponse = (payload: unknown, status = 200) => ({
+  json: testing.fn().mockResolvedValue(payload),
+  ok: status >= 200 && status < 300,
+  status,
+});
+
 beforeAll(() => {
   logLevel = logger.level;
   logger.setDefaultLevel('silent');
@@ -69,7 +75,9 @@ describe('TaskCommand tests', () => {
 
     await new TaskCommand(fakeHttp).start({id: 'task/id'});
 
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tasks/task%2Fid/start');
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tasks/task%2Fid/start',
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/tasks/task%2Fid/start',
       {
@@ -103,9 +111,9 @@ describe('TaskCommand tests', () => {
     );
     fakeHttp.session = createSession();
 
-    await expect(new TaskCommand(fakeHttp).start({id: 'task-id'})).rejects.toThrow(
-      'Native API request failed with status 409',
-    );
+    await expect(
+      new TaskCommand(fakeHttp).start({id: 'task-id'}),
+    ).rejects.toThrow('Native API request failed with status 409');
   });
 
   test('should short-circuit native task start while feed is syncing', async () => {
@@ -128,9 +136,9 @@ describe('TaskCommand tests', () => {
     );
     fakeHttp.session = createSession();
 
-    await expect(new TaskCommand(fakeHttp).start({id: 'task-id'})).rejects.toThrow(
-      'Feed is currently syncing. Please try again later.',
-    );
+    await expect(
+      new TaskCommand(fakeHttp).start({id: 'task-id'}),
+    ).rejects.toThrow('Feed is currently syncing. Please try again later.');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -140,9 +148,7 @@ describe('TaskCommand tests', () => {
       typeof testing.fn
     >;
     requestMock
-      .mockResolvedValueOnce(
-        createPlainResponse(JSON.stringify({items: []})),
-      )
+      .mockResolvedValueOnce(createPlainResponse(JSON.stringify({items: []})))
       .mockResolvedValueOnce(createActionResultResponse());
 
     await new TaskCommand(fakeHttp).start({id: 'task-id'});
@@ -180,9 +186,7 @@ describe('TaskCommand tests', () => {
     await cmd.stop({id: 'task-id'});
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/tasks/task-id/stop',
-    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tasks/task-id/stop');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/tasks/task-id/stop',
       {
@@ -246,9 +250,9 @@ describe('TaskCommand tests', () => {
     );
     fakeHttp.session = createSession();
 
-    await expect(new TaskCommand(fakeHttp).stop({id: 'task-id'})).rejects.toThrow(
-      'Native API request failed with status 409',
-    );
+    await expect(
+      new TaskCommand(fakeHttp).stop({id: 'task-id'}),
+    ).rejects.toThrow('Native API request failed with status 409');
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
@@ -376,6 +380,151 @@ describe('TaskCommand tests', () => {
       target: {id: 'target-id', name: 'Target'},
       current_report: {id: 'report-id', timestamp: '2026-07-02T17:00:00Z'},
     });
+  });
+
+  test('should clone a task through native API with the returned task detail', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'cloned-task-id',
+        name: 'Cloned task',
+        comment: 'native clone',
+        status: 'New',
+        target: {id: 'target-id', name: 'Target'},
+        config: {id: 'config-id', name: 'Config'},
+      }),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TaskCommand(fakeHttp);
+
+    const result = await cmd.clone({id: 'task/id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tasks/task%2Fid/clone',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks/task%2Fid/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data.id).toEqual('cloned-task-id');
+  });
+
+  test('should not fall back to GMP when native task clone fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(
+      createActionResultResponse({id: 'fallback-task-id'}),
+    ) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    await expect(
+      new TaskCommand(fakeHttp).clone({id: 'task-id'}),
+    ).rejects.toThrow('Native API request failed with status 409');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [
+      'committed_response_unavailable',
+      'The mutation committed, but its response could not be completed; verify current state before retrying.',
+    ],
+    [
+      'mutation_outcome_indeterminate',
+      'The mutation may have committed, but no authoritative response was received; verify current state before retrying.',
+    ],
+  ])(
+    'should surface structured native task clone error %s without payload or GMP fallback',
+    async (code, apiMessage) => {
+      const payload = 'TASK CLONE PAYLOAD MUST NOT LEAK';
+      const fetchMock = testing.fn().mockResolvedValue(
+        nativeJsonResponse(
+          {
+            error: {
+              code,
+              message: apiMessage,
+              payload,
+            },
+          },
+          502,
+        ),
+      );
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(
+        createActionResultResponse({id: 'fallback-task-id'}),
+      ) as ReturnType<typeof createHttp> & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      const cmd = new TaskCommand(fakeHttp);
+
+      let caught: unknown;
+      try {
+        await cmd.clone({id: 'task-id'});
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toMatchObject({
+        code,
+        message: `Native API request failed with status 502: ${code}: ${apiMessage}`,
+      });
+      expect(caught).not.toHaveProperty('payload');
+      expect((caught as Error).message).not.toContain(payload);
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test('should retain inherited task clone when native API is unavailable', async () => {
+    const fakeHttp = createHttp(
+      createActionResultResponse({id: 'cloned-task-id'}),
+    );
+
+    const result = await new TaskCommand(fakeHttp).clone({id: 'task-id'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'clone',
+        id: 'task-id',
+        resource_type: 'task',
+      },
+    });
+    expect(result.data.id).toEqual('cloned-task-id');
   });
 
   test('should enrich manager response failures while starting a task', async () => {
@@ -638,7 +787,9 @@ describe('TaskCommand tests', () => {
     const mockResponse = createActionResultResponse();
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(mockResponse) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(mockResponse) as ReturnType<
+      typeof createHttp
+    > & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -792,8 +943,4 @@ describe('TaskCommand tests', () => {
       'Feed is currently syncing. Please try again later.',
     );
   });
-
-
-
-
 });

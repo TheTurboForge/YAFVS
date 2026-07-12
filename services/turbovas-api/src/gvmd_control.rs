@@ -70,10 +70,16 @@ pub(crate) fn gvmd_control_secret() -> Result<String, ApiError> {
 
 pub(crate) fn gvmd_control_secret_from_source(secret: Option<String>) -> Result<String, ApiError> {
     let secret = secret.ok_or(ApiError::Config)?;
-    if !control_secret_is_acceptable(&secret) {
-        return Err(ApiError::Config);
-    }
+    validate_gvmd_control_secret(&secret)?;
     Ok(secret)
+}
+
+pub(crate) fn validate_gvmd_control_secret(secret: &str) -> Result<(), ApiError> {
+    if control_secret_is_acceptable(secret) {
+        Ok(())
+    } else {
+        Err(ApiError::Config)
+    }
 }
 
 pub(crate) async fn request_gvmd_control_response(

@@ -849,7 +849,8 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, task_prefix))
     {
       const gchar *id = path + strlen (task_prefix);
-      return is_uuid_segment_with_suffix (id, start_suffix)
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, start_suffix)
              || is_uuid_segment_with_suffix (id, stop_suffix)
              || is_uuid_segment_with_suffix (id, replace_target_suffix);
     }
@@ -2358,5 +2359,11 @@ gsad_native_api_test_browser_credentials_are_session_bound (
   gsad_credentials_t *credentials)
 {
   return browser_proxy_operator_name (credentials) != NULL;
+}
+
+gboolean
+gsad_native_api_test_post_path_is_allowed (const gchar *path)
+{
+  return native_api_post_path_is_allowed (path);
 }
 #endif

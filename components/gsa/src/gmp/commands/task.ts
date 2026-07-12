@@ -21,6 +21,7 @@ import Task, {
   type TaskElement,
 } from 'gmp/models/task';
 import {
+  cloneNativeTask,
   deleteNativeTask,
   exportNativeTaskMetadata,
   patchNativeTask,
@@ -118,6 +119,13 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
 
   async export({id}: EntityCommandParams) {
     return await exportNativeTaskMetadata(this.http, id);
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return await cloneNativeTask(this.http, id);
+    }
+    return super.clone({id});
   }
 
   async delete({id}: EntityCommandParams) {
@@ -287,7 +295,6 @@ class TaskCommand extends EntityCommand<Task, TaskElement> {
       await feedStatusRejection(rejection as ResponseRejection);
     }
   }
-
 
   getElementFromRoot(root: Element): TaskElement {
     // @ts-expect-error

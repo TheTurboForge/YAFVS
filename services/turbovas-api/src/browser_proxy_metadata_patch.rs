@@ -34,7 +34,7 @@ use crate::{
     task_target_replace::{TaskTargetReplaceResponse, replace_task_target},
     task_target_replace_validation::TaskTargetReplaceRequest,
     task_write_validation::{TaskCreateRequest, TaskPatchRequest},
-    task_writes::{create_task, delete_task, patch_task},
+    task_writes::{clone_task, create_task, delete_task, patch_task},
     tls_certificate_writes::delete_tls_certificate,
 };
 
@@ -121,6 +121,16 @@ pub(crate) async fn browser_proxy_delete_task(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     delete_task(State(state), Path(task_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_clone_task(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, HeaderMap, Json<TaskItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_task(State(state), Path(task_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_create_task(

@@ -77,6 +77,13 @@ The first API phase is read-only and report-focused:
   absence is verified. A scanner-verification failure is `502`; an
   asynchronous-only inherited stop is `409`, never false success. No GMP/XML
   or DB fallback exists.
+- authoritative task clone through `POST /api/v1/tasks/{task_id}/clone`. The
+  HTTP service sends one bounded, shared-secret-authenticated operator command
+  over the private gvmd control socket. gvmd preserves its ACL checks,
+  transaction, generated name, task preferences and defaults, alert links,
+  schedule state, and New-task state. The endpoint does not directly start a
+  scan, but a copied schedule that becomes due can start the cloned task later.
+  The endpoint returns the committed native task detail.
 - strict New-task target replacement through
   `POST /api/v1/tasks/{task_id}/replace-target`. The endpoint requires an
   operator-owned live scan task with no reports, atomically clones the retained
@@ -84,7 +91,7 @@ The first API phase is read-only and report-focused:
   that task, and trashes the source target only when no other live task or
   scope references it. It never starts a scan.
 
-Task start, stop, and strict target replacement are guarded native
+Task start, stop, clone, and strict target replacement are guarded native
 direct-write/browser-proxied controls and
 operator tooling requires explicit write-control consent. Resume and other
 task/scanner controls remain inherited. Credential secret management, feed

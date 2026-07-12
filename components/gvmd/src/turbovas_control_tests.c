@@ -47,6 +47,11 @@ static int tag_audit_success_calls;
 static int reinit_calls;
 static int session_init_calls;
 static int stop_task_calls;
+static int clone_task_calls;
+static int clone_task_result;
+static gboolean task_uuid_lookup_fails;
+static int task_audit_fail_calls;
+static int task_audit_success_calls;
 static int trash_empty_calls;
 static int trash_empty_result;
 static gint64 trash_empty_actual;
@@ -357,6 +362,14 @@ __wrap_log_event (const char *resource, const char *resource_name,
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
     }
+  else if (strcmp (resource, "task") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Task"));
+      assert_that (action, is_equal_to_string ("created"));
+      task_audit_success_calls++;
+      g_free (received_audit_uuid);
+      received_audit_uuid = g_strdup (uuid);
+    }
   else
     {
       assert_trash_empty_audit_operator_session ();
@@ -395,6 +408,14 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
                      || strcmp (action, "modified") == 0,
                    is_true);
       tag_audit_fail_calls++;
+      g_free (received_audit_uuid);
+      received_audit_uuid = g_strdup (uuid);
+    }
+  else if (strcmp (resource, "task") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Task"));
+      assert_that (action, is_equal_to_string ("created"));
+      task_audit_fail_calls++;
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
     }
@@ -2851,6 +2872,134 @@ __wrap_stop_task (const char *task_uuid)
   return 0;
 }
 
+int
+__wrap_copy_task (const char *name, const char *comment,
+                  const char *source_task_uuid, int alterable, task_t *new_task)
+{
+  assert_that (name, is_null);
+  assert_that (comment, is_null);
+  assert_that (source_task_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (alterable, is_equal_to (-1));
+  clone_task_calls++;
+  *new_task = 11;
+  return clone_task_result;
+}
+
+int
+__wrap_task_uuid (task_t task, char **uuid)
+{
+  *uuid = task == 11 && !task_uuid_lookup_fails
+            ? g_strdup ("123e4567-e89b-12d3-a456-426614174006")
+            : NULL;
+  return 0;
+}
+
+Ensure (turbovas_control, parses_canonical_task_clone_request)
+{
+  const char *request = "task-clone " TEST_CONTROL_SECRET " "
+                        "123e4567-e89b-12d3-a456-426614174000 "
+                        "123e4567-e89b-12d3-a456-426614174001\n";
+  char operator_uuid[37];
+  char task_uuid[37];
+
+  assert_that (turbovas_control_parse_task_clone_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (task_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+}
+
+Ensure (turbovas_control, rejects_malformed_task_clone_requests)
+{
+  const char *extra = "task-clone " TEST_CONTROL_SECRET " "
+                      "123e4567-e89b-12d3-a456-426614174000 "
+                      "123e4567-e89b-12d3-a456-426614174001 extra\n";
+  const char *wrong_secret = "task-clone fedcba9876543210fedcba9876543210 "
+                             "123e4567-e89b-12d3-a456-426614174000 "
+                             "123e4567-e89b-12d3-a456-426614174001\n";
+  char operator_uuid[37];
+  char task_uuid[37];
+
+  assert_that (turbovas_control_parse_task_clone_request (
+                 extra, strlen (extra), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_false);
+  assert_that (turbovas_control_parse_task_clone_request (
+                 wrong_secret, strlen (wrong_secret), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_false);
+}
+
+Ensure (turbovas_control, clones_task_in_operator_session_and_audits)
+{
+  char created_uuid[37] = {0};
+
+  mock_operator_name = "operator";
+  clone_task_calls = 0;
+  clone_task_result = 0;
+  task_uuid_lookup_fails = FALSE;
+  task_audit_success_calls = 0;
+  task_audit_fail_calls = 0;
+  cleanup_calls = 0;
+  session_init_calls = 0;
+  reinit_calls = 0;
+  g_clear_pointer (&received_audit_uuid, g_free);
+
+  assert_that (turbovas_control_clone_task (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174001", created_uuid),
+               is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174006"));
+  assert_that (clone_task_calls, is_equal_to (1));
+  assert_that (task_audit_success_calls, is_equal_to (1));
+  assert_that (task_audit_fail_calls, is_equal_to (0));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+
+  clone_task_result = 2;
+  assert_that (turbovas_control_clone_task (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174001", created_uuid),
+               is_equal_to (2));
+  assert_that (task_audit_fail_calls, is_equal_to (1));
+
+  clone_task_result = 0;
+  task_uuid_lookup_fails = TRUE;
+  assert_that (turbovas_control_clone_task (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174001", created_uuid),
+               is_equal_to (-3));
+  assert_that (task_audit_success_calls, is_equal_to (2));
+  assert_that (task_audit_fail_calls, is_equal_to (1));
+}
+
+Ensure (turbovas_control, maps_task_clone_responses)
+{
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+
+  assert_that (
+    turbovas_control_task_clone_response (
+      0, "123e4567-e89b-12d3-a456-426614174006", response),
+    is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174006\n"));
+  assert_that (turbovas_control_task_clone_response (1, NULL, response),
+               is_equal_to_string ("1 duplicate\n"));
+  assert_that (turbovas_control_task_clone_response (2, NULL, response),
+               is_equal_to_string ("2 not_found\n"));
+  assert_that (turbovas_control_task_clone_response (99, NULL, response),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (turbovas_control_task_clone_response (-3, NULL, response),
+               is_equal_to_string ("-3 committed_indeterminate\n"));
+  assert_that (turbovas_control_task_clone_response (-2, NULL, response),
+               is_equal_to_string ("-2 malformed\n"));
+}
+
 void
 __wrap_cleanup_manage_process (gboolean full)
 {
@@ -4029,6 +4178,13 @@ main (int argc, char **argv)
                          rejects_missing_weak_or_incorrect_secrets);
   add_test_with_context (suite, turbovas_control,
                          maps_only_protocol_responses);
+  add_test_with_context (suite, turbovas_control,
+                         parses_canonical_task_clone_request);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_task_clone_requests);
+  add_test_with_context (suite, turbovas_control,
+                         clones_task_in_operator_session_and_audits);
+  add_test_with_context (suite, turbovas_control, maps_task_clone_responses);
   add_test_with_context (suite, turbovas_control,
                          accepts_strict_bounded_trash_empty_request);
   add_test_with_context (suite, turbovas_control,

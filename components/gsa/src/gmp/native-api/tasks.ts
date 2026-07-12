@@ -107,6 +107,27 @@ interface NativeTaskStopPayload {
   status?: unknown;
 }
 
+interface NativeApiErrorPayload {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+  };
+}
+
+class NativeTaskRequestError extends Error {
+  readonly code?: string;
+
+  constructor(status: number, code?: string, message?: string) {
+    super(
+      [`Native API request failed with status ${status}`, code, message]
+        .filter(value => value !== undefined && value !== '')
+        .join(': '),
+    );
+    this.name = 'NativeTaskRequestError';
+    this.code = code;
+  }
+}
+
 const TASK_SORT_FIELDS: Record<string, string> = {
   config: 'config',
   created: 'creation_time',
@@ -138,6 +159,24 @@ const numberValue = (value: unknown, fallback = 0): number => {
 
 const stringValue = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
+
+const errorString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value !== '' ? value : undefined;
+
+const nativeTaskRequestError = async (response: globalThis.Response) => {
+  let payload: NativeApiErrorPayload | undefined;
+  try {
+    payload = (await response.json()) as NativeApiErrorPayload;
+  } catch {
+    // Errors may not have a JSON body; retain only the status in that case.
+  }
+
+  return new NativeTaskRequestError(
+    response.status,
+    errorString(payload?.error?.code),
+    errorString(payload?.error?.message),
+  );
+};
 
 const nativeSortFromFilter = (filter?: Filter): string => {
   const reverse = filter?.get('sort-reverse');
@@ -292,30 +331,31 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
   });
 
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeTaskRequestError(response);
   }
 };
 
 const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
-  body: unknown,
+  body?: unknown,
   method = 'POST',
 ): Promise<T> => {
+  const headers: HeadersInit = {
+    Accept: 'application/json',
+    ...(body !== undefined ? {'Content-Type': 'application/json'} : {}),
+    ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+    ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+  };
   const response = await fetch(gmp.buildUrl(path), {
     method,
     credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
-      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
-    },
-    body: JSON.stringify(body),
+    headers,
+    ...(body !== undefined ? {body: JSON.stringify(body)} : {}),
   });
 
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeTaskRequestError(response);
   }
 
   return (await response.json()) as T;
@@ -416,6 +456,17 @@ export const patchNativeTask = async (
       },
     }),
   );
+};
+
+export const cloneNativeTask = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeTaskItem>(
+    gmp,
+    `api/v1/tasks/${encodeURIComponent(id)}/clone`,
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const startNativeTask = async (

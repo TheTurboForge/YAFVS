@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2019-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -25,6 +26,112 @@ write_temp_xml (const char *xml)
       return NULL;
     }
   return path;
+}
+
+typedef struct
+{
+  int init_result;
+  int rewind_result;
+  gboolean first_element_returned;
+  gboolean rewind_element_returned;
+  gchar *first_error;
+  gchar *rewind_error;
+  int file_attempts_after_first;
+  int network_attempts_after_first;
+  int file_attempts_after_rewind;
+  int network_attempts_after_rewind;
+} external_entity_test_result_t;
+
+static int external_file_attempts;
+static int external_network_attempts;
+static int end_document_calls;
+
+static xmlParserInputPtr
+counting_external_entity_loader (const char *URL, const char *ID,
+                                 xmlParserCtxtPtr ctxt)
+{
+  (void) ID;
+  (void) ctxt;
+
+  if (URL && g_str_has_prefix (URL, "file://"))
+    external_file_attempts++;
+  else if (URL
+           && (g_str_has_prefix (URL, "http://")
+               || g_str_has_prefix (URL, "https://")))
+    external_network_attempts++;
+
+  return NULL;
+}
+
+static void
+counting_end_document (void *ctx)
+{
+  end_document_calls++;
+  xml_file_iterator_end_document (ctx);
+}
+
+static external_entity_test_result_t
+run_external_entity_test (const char *xml)
+{
+  external_entity_test_result_t result = {0};
+  xmlExternalEntityLoader previous_loader;
+  xml_file_iterator_t iterator;
+  element_t element;
+  gchar *path;
+  int previous_load_ext_dtd;
+  int previous_substitute_entities;
+
+  result.init_result = -1;
+  result.rewind_result = -1;
+  path = write_temp_xml (xml);
+  if (path == NULL)
+    return result;
+
+  previous_load_ext_dtd = xmlLoadExtDtdDefaultValue;
+  previous_substitute_entities = xmlSubstituteEntitiesDefault (1);
+  previous_loader = xmlGetExternalEntityLoader ();
+  xmlLoadExtDtdDefaultValue = 1;
+  xmlSetExternalEntityLoader (counting_external_entity_loader);
+  external_file_attempts = 0;
+  external_network_attempts = 0;
+
+  iterator = xml_file_iterator_new ();
+  result.init_result =
+    xml_file_iterator_init_from_file_path (iterator, path, 1);
+  if (result.init_result == 0)
+    {
+      element = xml_file_iterator_next (iterator, &result.first_error);
+      result.first_element_returned = element != NULL;
+      element_free (element);
+      result.file_attempts_after_first = external_file_attempts;
+      result.network_attempts_after_first = external_network_attempts;
+
+      result.rewind_result = xml_file_iterator_rewind (iterator);
+      if (result.rewind_result == 0)
+        {
+          element = xml_file_iterator_next (iterator, &result.rewind_error);
+          result.rewind_element_returned = element != NULL;
+          element_free (element);
+        }
+      result.file_attempts_after_rewind = external_file_attempts;
+      result.network_attempts_after_rewind = external_network_attempts;
+    }
+  xml_file_iterator_free (iterator);
+
+  xmlSetExternalEntityLoader (previous_loader);
+  xmlLoadExtDtdDefaultValue = previous_load_ext_dtd;
+  xmlSubstituteEntitiesDefault (previous_substitute_entities);
+  g_unlink (path);
+  g_free (path);
+
+  return result;
+}
+
+static void
+external_entity_test_result_cleanup (external_entity_test_result_t *result)
+{
+  g_free (result->first_error);
+  g_free (result->rewind_error);
 }
 
 Describe (xmlutils);
@@ -714,6 +821,243 @@ Ensure (xmlutils, rewind_resets_state)
   g_free (path);
 }
 
+Ensure (xmlutils, file_iterator_blocks_file_entity_with_global_defaults)
+{
+  external_entity_test_result_t result;
+  gchar *marker_path = write_temp_xml ("TVSEC_READABLE_MARKER");
+  gchar *marker_uri;
+  gchar *xml;
+
+  assert_that (marker_path, is_not_null);
+  assert_that (g_access (marker_path, R_OK), is_equal_to (0));
+  marker_uri = g_filename_to_uri (marker_path, NULL, NULL);
+  assert_that (marker_uri, is_not_null);
+  xml = g_strdup_printf ("<!DOCTYPE root [<!ENTITY xxe SYSTEM '%s'>]>"
+                         "<root><item>&xxe;</item></root>",
+                         marker_uri);
+
+  result = run_external_entity_test (xml);
+
+  assert_that (result.init_result, is_equal_to (0));
+  assert_that (result.rewind_result, is_equal_to (0));
+  assert_that (result.first_element_returned, is_false);
+  assert_that (result.rewind_element_returned, is_false);
+  assert_that (result.first_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.rewind_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.file_attempts_after_first, is_equal_to (0));
+  assert_that (result.network_attempts_after_first, is_equal_to (0));
+  assert_that (result.file_attempts_after_rewind, is_equal_to (0));
+  assert_that (result.network_attempts_after_rewind, is_equal_to (0));
+
+  external_entity_test_result_cleanup (&result);
+  g_free (xml);
+  g_free (marker_uri);
+  g_unlink (marker_path);
+  g_free (marker_path);
+}
+
+Ensure (xmlutils, file_iterator_blocks_network_entity_with_global_defaults)
+{
+  const char *xml = "<!DOCTYPE root SYSTEM "
+                    "'http://127.0.0.1:9/tvsec-external.dtd'>"
+                    "<root><item>safe</item></root>";
+  external_entity_test_result_t result;
+
+  result = run_external_entity_test (xml);
+
+  assert_that (result.init_result, is_equal_to (0));
+  assert_that (result.rewind_result, is_equal_to (0));
+  assert_that (result.first_element_returned, is_false);
+  assert_that (result.rewind_element_returned, is_false);
+  assert_that (result.first_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.rewind_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.file_attempts_after_first, is_equal_to (0));
+  assert_that (result.network_attempts_after_first, is_equal_to (0));
+  assert_that (result.file_attempts_after_rewind, is_equal_to (0));
+  assert_that (result.network_attempts_after_rewind, is_equal_to (0));
+
+  external_entity_test_result_cleanup (&result);
+}
+
+Ensure (xmlutils, file_iterator_blocks_parameter_entity_with_global_defaults)
+{
+  external_entity_test_result_t result;
+  gchar *marker_path = write_temp_xml ("<!ENTITY injected 'parameter'>");
+  gchar *marker_uri;
+  gchar *xml;
+
+  assert_that (marker_path, is_not_null);
+  assert_that (g_access (marker_path, R_OK), is_equal_to (0));
+  marker_uri = g_filename_to_uri (marker_path, NULL, NULL);
+  assert_that (marker_uri, is_not_null);
+  xml = g_strdup_printf ("<!DOCTYPE root ["
+                         "<!ENTITY %% pe SYSTEM '%s'>%%pe;]>"
+                         "<root><item>&injected;</item></root>",
+                         marker_uri);
+
+  result = run_external_entity_test (xml);
+
+  assert_that (result.init_result, is_equal_to (0));
+  assert_that (result.rewind_result, is_equal_to (0));
+  assert_that (result.first_element_returned, is_false);
+  assert_that (result.rewind_element_returned, is_false);
+  assert_that (result.first_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.rewind_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.file_attempts_after_first, is_equal_to (0));
+  assert_that (result.network_attempts_after_first, is_equal_to (0));
+  assert_that (result.file_attempts_after_rewind, is_equal_to (0));
+  assert_that (result.network_attempts_after_rewind, is_equal_to (0));
+
+  external_entity_test_result_cleanup (&result);
+  g_free (xml);
+  g_free (marker_uri);
+  g_unlink (marker_path);
+  g_free (marker_path);
+}
+
+Ensure (xmlutils, file_iterator_rejects_doctype_split_across_buffer)
+{
+  external_entity_test_result_t result;
+  gchar *marker_path = write_temp_xml ("TVSEC_SPLIT_MARKER");
+  gchar *marker_uri;
+  gchar *padding;
+  gchar *xml;
+
+  assert_that (marker_path, is_not_null);
+  assert_that (g_access (marker_path, R_OK), is_equal_to (0));
+  marker_uri = g_filename_to_uri (marker_path, NULL, NULL);
+  assert_that (marker_uri, is_not_null);
+  padding = g_strnfill (XML_FILE_ITERATOR_BUFFER_SIZE - 4, ' ');
+  xml = g_strdup_printf ("%s<!DOCTYPE root [<!ENTITY xxe SYSTEM '%s'>]>"
+                         "<root><item>&xxe;</item></root>",
+                         padding, marker_uri);
+  assert_that ((int) (strstr (xml, "<!DOCTYPE") - xml),
+               is_equal_to (XML_FILE_ITERATOR_BUFFER_SIZE - 4));
+
+  result = run_external_entity_test (xml);
+
+  assert_that (result.init_result, is_equal_to (0));
+  assert_that (result.rewind_result, is_equal_to (0));
+  assert_that (result.first_element_returned, is_false);
+  assert_that (result.rewind_element_returned, is_false);
+  assert_that (result.first_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.rewind_error,
+               is_equal_to_string ("DOCTYPE declarations are not allowed"));
+  assert_that (result.file_attempts_after_first, is_equal_to (0));
+  assert_that (result.network_attempts_after_first, is_equal_to (0));
+  assert_that (result.file_attempts_after_rewind, is_equal_to (0));
+  assert_that (result.network_attempts_after_rewind, is_equal_to (0));
+
+  external_entity_test_result_cleanup (&result);
+  g_free (xml);
+  g_free (padding);
+  g_free (marker_uri);
+  g_unlink (marker_path);
+  g_free (marker_path);
+}
+
+Ensure (xmlutils, file_iterator_reports_truncated_xml_at_eof_and_rewind)
+{
+  const char *xml = "<root><item>complete</item><item>truncated";
+  gchar *path = write_temp_xml (xml);
+  xml_file_iterator_t iterator = xml_file_iterator_new ();
+  gchar *error = NULL;
+  element_t element;
+
+  assert_that (path, is_not_null);
+  assert_that (xml_file_iterator_init_from_file_path (iterator, path, 1),
+               is_equal_to (0));
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_not_null);
+  assert_that (error, is_null);
+  assert_that (element_name (element), is_equal_to_string ("item"));
+  element_free (element);
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_null);
+  assert_that (error, is_not_null);
+  assert_that (error ? strstr (error, "error parsing XML") : NULL, is_not_null);
+  g_free (error);
+  error = NULL;
+
+  assert_that (xml_file_iterator_rewind (iterator), is_equal_to (0));
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_not_null);
+  assert_that (error, is_null);
+  element_free (element);
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_null);
+  assert_that (error, is_not_null);
+  assert_that (error ? strstr (error, "error parsing XML") : NULL, is_not_null);
+
+  g_free (error);
+  xml_file_iterator_free (iterator);
+  g_unlink (path);
+  g_free (path);
+}
+
+Ensure (xmlutils, file_iterator_finalizes_once_at_eof_and_rewind)
+{
+  const char *xml = "<root><item>complete</item></root>";
+  gchar *path = write_temp_xml (xml);
+  xml_file_iterator_t iterator = xml_file_iterator_new ();
+  gchar *error = NULL;
+  element_t element;
+
+  assert_that (path, is_not_null);
+  assert_that (xml_file_iterator_init_from_file_path (iterator, path, 1),
+               is_equal_to (0));
+  iterator->parser_ctxt->sax->endDocument = counting_end_document;
+  end_document_calls = 0;
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_not_null);
+  assert_that (error, is_null);
+  element_free (element);
+  assert_that (end_document_calls, is_equal_to (0));
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_null);
+  assert_that (error, is_null);
+  assert_that (end_document_calls, is_equal_to (1));
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_null);
+  assert_that (error, is_null);
+  assert_that (end_document_calls, is_equal_to (1));
+
+  assert_that (xml_file_iterator_rewind (iterator), is_equal_to (0));
+  iterator->parser_ctxt->sax->endDocument = counting_end_document;
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_not_null);
+  assert_that (error, is_null);
+  element_free (element);
+  assert_that (end_document_calls, is_equal_to (1));
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_null);
+  assert_that (error, is_null);
+  assert_that (end_document_calls, is_equal_to (2));
+
+  element = xml_file_iterator_next (iterator, &error);
+  assert_that (element, is_null);
+  assert_that (error, is_null);
+  assert_that (end_document_calls, is_equal_to (2));
+
+  xml_file_iterator_free (iterator);
+  g_unlink (path);
+  g_free (path);
+}
+
 /* Test suite. */
 
 int
@@ -757,6 +1101,19 @@ main (int argc, char **argv)
   add_test_with_context (suite, xmlutils, depth2_returns_grandchildren);
 
   add_test_with_context (suite, xmlutils, rewind_resets_state);
+  add_test_with_context (suite, xmlutils,
+                         file_iterator_blocks_file_entity_with_global_defaults);
+  add_test_with_context (
+    suite, xmlutils, file_iterator_blocks_network_entity_with_global_defaults);
+  add_test_with_context (
+    suite, xmlutils,
+    file_iterator_blocks_parameter_entity_with_global_defaults);
+  add_test_with_context (suite, xmlutils,
+                         file_iterator_rejects_doctype_split_across_buffer);
+  add_test_with_context (suite, xmlutils,
+                         file_iterator_reports_truncated_xml_at_eof_and_rewind);
+  add_test_with_context (suite, xmlutils,
+                         file_iterator_finalizes_once_at_eof_and_rewind);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

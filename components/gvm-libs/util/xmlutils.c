@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -2337,6 +2338,9 @@ struct xml_file_iterator_struct
   gchar *file_path;             //< Path to the XML file being processed
   FILE *file;                   //< Stream pointer for the XML file
   int stack_depth;              // track depth (replaces nodeNr)
+  int doctype_seen;             //< Whether a forbidden DOCTYPE was found
+  int element_copy_failed;      //< Whether copying an output element failed
+  int parsing_finalized;        //< Whether EOF was sent to the push parser
 };
 
 /**
@@ -2405,13 +2409,25 @@ xml_file_iterator_end_element_ns (void *ctx, const xmlChar *localname,
             {
               xmlDocPtr new_doc = xmlNewDoc ((const xmlChar *) "1.0");
               element_t child_copy;
-              child_copy = xmlCopyNode (child, 1);
-              xmlDocSetRootElement (new_doc, child_copy);
 
-              if (child_copy)
+              if (new_doc == NULL)
                 {
-                  g_queue_push_tail (iterator->element_queue, child_copy);
+                  iterator->element_copy_failed = 1;
+                  xmlStopParser (iterator->parser_ctxt);
+                  break;
                 }
+
+              child_copy = xmlDocCopyNode (child, new_doc, 1);
+              if (child_copy == NULL)
+                {
+                  xmlFreeDoc (new_doc);
+                  iterator->element_copy_failed = 1;
+                  xmlStopParser (iterator->parser_ctxt);
+                  break;
+                }
+
+              xmlDocSetRootElement (new_doc, child_copy);
+              g_queue_push_tail (iterator->element_queue, child_copy);
             }
 
           xmlUnlinkNode (child);
@@ -2425,8 +2441,9 @@ xml_file_iterator_end_element_ns (void *ctx, const xmlChar *localname,
 /**
  * @brief XML file iterator parser callback for internal subset declaration.
  *
- * This is just a wrapper for the libXML xmlSAX2InternalSubset getting the
- * libXML parser context from the iterator struct passed as user data.
+ * DOCTYPE declarations are not valid in feed XML and may enable entity
+ * expansion or external resource access depending on process-wide parser
+ * settings.  Stop parsing as soon as one is encountered.
  *
  * @param[in] ctx           parser context data / iterator data structure
  * @param[in] name          the root element name
@@ -2439,14 +2456,18 @@ xml_file_iterator_internal_subset (void *ctx, const xmlChar *name,
                                    const xmlChar *SystemID)
 {
   xml_file_iterator_t iterator = (xml_file_iterator_t) ctx;
-  xmlSAX2InternalSubset (iterator->parser_ctxt, name, ExternalID, SystemID);
+  (void) name;
+  (void) ExternalID;
+  (void) SystemID;
+  iterator->doctype_seen = 1;
+  xmlStopParser (iterator->parser_ctxt);
 }
 
 /**
  * @brief XML file iterator parser callback for external subset declaration.
  *
- * This is just a wrapper for the libXML xmlSAX2ExternalSubset getting the
- * libXML parser context from the iterator struct passed as user data.
+ * This is a defensive fallback for parser configurations that report an
+ * external subset without first calling the internal subset callback.
  *
  * @param[in] ctx           parser context data / iterator data structure
  * @param[in] name          the root element name
@@ -2459,7 +2480,11 @@ xml_file_iterator_external_subset (void *ctx, const xmlChar *name,
                                    const xmlChar *SystemID)
 {
   xml_file_iterator_t iterator = (xml_file_iterator_t) ctx;
-  xmlSAX2ExternalSubset (iterator->parser_ctxt, name, ExternalID, SystemID);
+  (void) name;
+  (void) ExternalID;
+  (void) SystemID;
+  iterator->doctype_seen = 1;
+  xmlStopParser (iterator->parser_ctxt);
 }
 
 /**
@@ -2518,8 +2543,7 @@ xml_file_iterator_has_external_subset (void *ctx)
 /**
  * @brief XML file iterator parser callback for resolving an entity.
  *
- * This is just a wrapper for the libXML xmlSAX2ResolveEntity getting the
- * libXML parser context from the iterator struct passed as user data.
+ * External entity resolution is never valid for feed XML.
  *
  * @param[in] ctx           parser context data / iterator data structure
  * @param[in] publicId      The public ID of the entity
@@ -2531,8 +2555,10 @@ static xmlParserInputPtr
 xml_file_iterator_resolve_entity (void *ctx, const xmlChar *publicId,
                                   const xmlChar *systemId)
 {
-  xml_file_iterator_t iterator = (xml_file_iterator_t) ctx;
-  return xmlSAX2ResolveEntity (iterator->parser_ctxt, publicId, systemId);
+  (void) ctx;
+  (void) publicId;
+  (void) systemId;
+  return NULL;
 }
 
 /**
@@ -2847,6 +2873,32 @@ xml_file_iterator_init_sax_handler (xmlSAXHandlerPtr hdlr)
 }
 
 /**
+ * @brief Creates a non-networked push parser context for an iterator.
+ *
+ * @param[in] iterator  XML file iterator using the parser context.
+ *
+ * @return A configured parser context, or NULL on error.
+ */
+static xmlParserCtxtPtr
+xml_file_iterator_create_parser_context (xml_file_iterator_t iterator)
+{
+  xmlParserCtxtPtr parser_ctxt;
+
+  parser_ctxt = xmlCreatePushParserCtxt (&(iterator->sax_handler), iterator,
+                                         NULL, 0, iterator->file_path);
+  if (parser_ctxt == NULL)
+    return NULL;
+
+  if (xmlCtxtUseOptions (parser_ctxt, XML_PARSE_NONET))
+    {
+      xmlFreeParserCtxt (parser_ctxt);
+      return NULL;
+    }
+
+  return parser_ctxt;
+}
+
+/**
  * @brief Allocates a new, uninitialized XML file iterator.
  *
  * Free with xml_file_iterator_free.
@@ -2897,8 +2949,7 @@ xml_file_iterator_init_from_file_path (xml_file_iterator_t iterator,
   iterator->file_path = g_strdup (file_path);
 
   xml_file_iterator_init_sax_handler (&(iterator->sax_handler));
-  iterator->parser_ctxt = xmlCreatePushParserCtxt (
-    &(iterator->sax_handler), iterator, NULL, 0, iterator->file_path);
+  iterator->parser_ctxt = xml_file_iterator_create_parser_context (iterator);
   if (iterator->parser_ctxt == NULL)
     return 3;
 
@@ -2972,12 +3023,15 @@ xml_file_iterator_rewind (xml_file_iterator_t iterator)
       if (iterator->parser_ctxt->myDoc)
         xmlFreeDoc (iterator->parser_ctxt->myDoc);
       xmlFreeParserCtxt (iterator->parser_ctxt);
-      iterator->parser_ctxt = xmlCreatePushParserCtxt (
-        &(iterator->sax_handler), iterator, NULL, 0, iterator->file_path);
+      iterator->parser_ctxt =
+        xml_file_iterator_create_parser_context (iterator);
       if (iterator->parser_ctxt == NULL)
         return 1;
     }
   iterator->stack_depth = 0;
+  iterator->doctype_seen = 0;
+  iterator->element_copy_failed = 0;
+  iterator->parsing_finalized = 0;
 
   return 0;
 }
@@ -2986,6 +3040,53 @@ xml_file_iterator_rewind (xml_file_iterator_t iterator)
  * @brief File read buffer size for an XML file iterator.
  */
 #define XML_FILE_ITERATOR_BUFFER_SIZE 8192
+
+/**
+ * @brief Handles security and parse errors after a push parser call.
+ *
+ * @param[in]  iterator  XML file iterator being parsed.
+ * @param[in]  ret       Return value from xmlParseChunk.
+ * @param[out] error     Error message output.
+ *
+ * @return TRUE if parsing failed, FALSE otherwise.
+ */
+static gboolean
+xml_file_iterator_handle_parse_result (xml_file_iterator_t iterator, int ret,
+                                       gchar **error)
+{
+  const xmlError *xml_error;
+
+  if (iterator->doctype_seen)
+    {
+      if (error)
+        *error = g_strdup ("DOCTYPE declarations are not allowed");
+      return TRUE;
+    }
+
+  if (iterator->element_copy_failed)
+    {
+      if (error)
+        *error = g_strdup ("error copying XML element");
+      return TRUE;
+    }
+
+  if (ret == 0)
+    return FALSE;
+
+  if (error == NULL)
+    return TRUE;
+
+  xml_error = xmlCtxtGetLastError (iterator->parser_ctxt);
+  if (xml_error && xml_error->message)
+    *error =
+      g_strdup_printf ("error parsing XML"
+                       " (line %d column %d): %s",
+                       xml_error->line, xml_error->int2, xml_error->message);
+  else
+    *error = g_strdup ("error parsing XML");
+
+  return TRUE;
+}
 
 /**
  * @brief Get the next subelement from a XML file iterator
@@ -3022,6 +3123,16 @@ xml_file_iterator_next (xml_file_iterator_t iterator, gchar **error)
         {
           if (feof (iterator->file))
             {
+              if (!iterator->parsing_finalized)
+                {
+                  int ret;
+
+                  iterator->parsing_finalized = 1;
+                  ret = xmlParseChunk (iterator->parser_ctxt, NULL, 0, 1);
+                  if (xml_file_iterator_handle_parse_result (iterator, ret,
+                                                             error))
+                    return NULL;
+                }
               continue_read = FALSE;
             }
           else if (ferror (iterator->file))
@@ -3034,22 +3145,9 @@ xml_file_iterator_next (xml_file_iterator_t iterator, gchar **error)
       else
         {
           int ret;
-          ret = xmlParseChunk (iterator->parser_ctxt, buffer, chars_read,
-                               continue_read == 0);
-          if (ret)
-            {
-              if (error)
-                {
-                  const xmlError *xml_error;
-                  xml_error = xmlCtxtGetLastError (iterator->parser_ctxt);
-                  *error = g_strdup_printf ("error parsing XML"
-                                            " (line %d column %d): %s",
-                                            xml_error->line, xml_error->int2,
-                                            xml_error->message);
-                }
-
-              return NULL;
-            }
+          ret = xmlParseChunk (iterator->parser_ctxt, buffer, chars_read, 0);
+          if (xml_file_iterator_handle_parse_result (iterator, ret, error))
+            return NULL;
         }
     }
 

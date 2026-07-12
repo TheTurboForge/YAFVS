@@ -73,6 +73,9 @@ Until removal or replacement, relevant controls include:
 - explicit review of temporary files, subprocesses, credentials, and network
   exposure.
 
+The durable commitments and staged evidence model for those controls are
+defined in [Retained C Hardening Strategy](C_HARDENING.md).
+
 Suppressing a warning or excluding a deliberately retained compatibility path
 from a generic query is not the same as removing the underlying risk. The
 reason for retention must remain visible.

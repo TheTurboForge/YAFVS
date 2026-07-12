@@ -79,6 +79,16 @@ systemd timer and retained runtime artifacts.
 It is expected to fail or warn while TurboVAS is still using development
 credentials, development TLS material, and a development-only Docker runtime.
 
+## Retained C Hardening
+
+The current required C compile check is `just build-c-services`. Existing
+components apply some hardening, but coverage varies by component and build
+type; this command alone does not prove final binary protections.
+
+The planned hardened, sanitizer, analysis, and ELF-verification profiles are
+defined in `docs/C_HARDENING.md`. Do not treat those profiles as available
+until their command surfaces and machine-readable evidence have landed.
+
 ## Notes
 
 The server baseline uses the Ubuntu `libcurl4-gnutls-dev` package because the scanner build expects the GnuTLS curl variant. The C service documentation build also expects `xmltoman` and `xmlmantohtml`; `just deps gvmd`, `just deps gsad`, and `just deps openvas-smb` check those tools explicitly so missing manpage-generation dependencies show up before a build.

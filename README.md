@@ -61,7 +61,8 @@ exposed and high-consequence boundaries are prioritized, and retained C is
 hardened and tested until a validated replacement is appropriate.
 
 See `docs/MEMORY_SAFETY.md` for the rationale, migration policy, limitations,
-and validation expectations.
+and validation expectations. See `docs/C_HARDENING.md` for the concrete public
+commitments governing C that remains.
 
 For current implementation flow maps and data-placement rules, see
 `docs/ARCHITECTURE_FLOWS.md` and `docs/DATABASE_GRAVITY.md`.

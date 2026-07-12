@@ -43,7 +43,7 @@ inherited C according to exposure and consequence. Memory safety is one part of
 the security posture and does not substitute for authentication, authorization,
 input validation, scanner safety, dependency review, or deployment hardening.
 
-See `docs/MEMORY_SAFETY.md`.
+See `docs/MEMORY_SAFETY.md` and `docs/C_HARDENING.md`.
 
 ## Relationship To Greenbone
 

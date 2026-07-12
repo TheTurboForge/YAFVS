@@ -13,7 +13,7 @@ import {exportNativeTaskMetadata} from 'gmp/native-api/tasks';
 import {ALL_FILTER} from 'gmp/models/filter';
 import {FULL_AND_FAST_SCAN_CONFIG_ID} from 'gmp/models/scan-config';
 import {OPENVAS_DEFAULT_SCANNER_ID} from 'gmp/models/scanner';
-import {type default as Task, type TaskAutoDelete} from 'gmp/models/task';
+import type Task from 'gmp/models/task';
 import {NO_VALUE, YES_VALUE, type YesNo} from 'gmp/parser';
 import {map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
@@ -126,11 +126,11 @@ const alertIdsFromTask = (task: Task): string[] =>
   map(task.alerts, alert => alert.id as string);
 
 const alertIdsEqual = (left: string[] = [], right: string[] = []): boolean =>
-  left.length === right.length && left.every((id, index) => id === right[index]);
+  left.length === right.length &&
+  left.every((id, index) => id === right[index]);
 
 export const isTaskMetadataOnlyDialogSave = ({
   alert_ids: alertIds = [],
-  auto_delete_data: autoDeleteData,
   apply_overrides: applyOverrides,
   config_id: configId,
   csAllowFailedRetrieval,
@@ -154,13 +154,12 @@ export const isTaskMetadataOnlyDialogSave = ({
     idEquals(scannerId, task.scanner?.id) &&
     scalarEquals(scannerType, task.scanner?.scannerType) &&
     scheduleIdEquals(scheduleId, task.schedule?.id) &&
-    scalarEquals(
+    numericEquals(
       schedulePeriods ?? NO_VALUE,
-      task.schedule_periods === YES_VALUE ? YES_VALUE : NO_VALUE,
+      task.schedule_periods ?? NO_VALUE,
     ) &&
     idEquals(targetId, task.target?.id) &&
     scalarEquals(applyOverrides, task.apply_overrides) &&
-    numericEquals(autoDeleteData, task.auto_delete_data) &&
     numericEquals(maxChecks, task.max_checks) &&
     numericEquals(maxHosts, task.max_hosts) &&
     numericEquals(minQod, task.min_qod) &&
@@ -197,8 +196,6 @@ const TaskComponent = ({
 
   const [alertIds, setAlertIds] = useState<string[]>([]);
   const [applyOverrides, setApplyOverrides] = useState<YesNo | undefined>();
-  const [autoDelete, setAutoDelete] = useState<TaskAutoDelete | undefined>();
-  const [autoDeleteData, setAutoDeleteData] = useState<number | undefined>();
   const [comment, setComment] = useState<string | undefined>();
   const [csAllowFailedRetrieval, setCsAllowFailedRetrieval] = useState<
     boolean | undefined
@@ -210,7 +207,7 @@ const TaskComponent = ({
   const [name, setName] = useState<string | undefined>();
   const [scannerId, setScannerId] = useState<string | undefined>();
   const [scheduleId, setScheduleId] = useState<string | undefined>();
-  const [schedulePeriods, setSchedulePeriods] = useState<YesNo | undefined>();
+  const [schedulePeriods, setSchedulePeriods] = useState<number | undefined>();
   const [targetId, setTargetId] = useState<string | undefined>();
   const [task, setTask] = useState<Task | undefined>();
   const [title, setTitle] = useState<string>('');
@@ -392,24 +389,23 @@ const TaskComponent = ({
 
   const handleSaveTask = (data: TaskDialogData) => {
     const {
-    add_tag: addTag,
-    alert_ids: alertIds,
-    auto_delete_data: autoDeleteData,
-    apply_overrides: applyOverrides,
-    comment,
-    config_id: configId,
-    csAllowFailedRetrieval,
-    min_qod: minQod,
-    max_checks: maxChecks,
-    max_hosts: maxHosts,
-    name,
-    scanner_id: scannerId,
-    scanner_type: scannerType,
-    schedule_id: scheduleId,
-    schedule_periods: schedulePeriods,
-    tag_id: tagId,
-    target_id: targetId,
-    task,
+      add_tag: addTag,
+      alert_ids: alertIds,
+      apply_overrides: applyOverrides,
+      comment,
+      config_id: configId,
+      csAllowFailedRetrieval,
+      min_qod: minQod,
+      max_checks: maxChecks,
+      max_hosts: maxHosts,
+      name,
+      scanner_id: scannerId,
+      scanner_type: scannerType,
+      schedule_id: scheduleId,
+      schedule_periods: schedulePeriods,
+      tag_id: tagId,
+      target_id: targetId,
+      task,
     } = data;
     if (isDefined(task)) {
       if (canUseNativeApi(gmp) && isTaskMetadataOnlyDialogSave(data)) {
@@ -425,12 +421,12 @@ const TaskComponent = ({
       return gmp.task
         .save({
           alert_ids: alertIds,
-          auto_delete_data: autoDeleteData,
           apply_overrides: applyOverrides,
           comment,
           config_id: configId,
           csAllowFailedRetrieval,
           id: task.id as string,
+          hosts_ordering: task.hosts_ordering,
           max_checks: maxChecks,
           max_hosts: maxHosts,
           min_qod: minQod,
@@ -449,7 +445,6 @@ const TaskComponent = ({
         add_tag: addTag,
         alert_ids: alertIds,
         apply_overrides: applyOverrides,
-        auto_delete_data: autoDeleteData,
         comment,
         config_id: configId,
         csAllowFailedRetrieval,
@@ -489,17 +484,13 @@ const TaskComponent = ({
       setComment(task.comment);
       setApplyOverrides(task.apply_overrides);
       setMinQod(task.min_qod);
-      setAutoDelete(task.auto_delete);
-      setAutoDeleteData(task.auto_delete_data);
       setMaxChecks(task.max_checks);
       setMaxHosts(task.max_hosts);
       setCsAllowFailedRetrieval(task.csAllowFailedRetrieval);
       setScanConfigId(task.config?.id);
       setScannerId(task.scanner?.id);
       setScheduleId(task.schedule?.id ?? UNSET_VALUE);
-      setSchedulePeriods(
-        task.schedule_periods === YES_VALUE ? YES_VALUE : NO_VALUE,
-      );
+      setSchedulePeriods(task.schedule_periods ?? NO_VALUE);
       setTargetId(task.target?.id);
 
       setAlertIds(map(task.alerts, alert => alert.id as string));
@@ -511,8 +502,6 @@ const TaskComponent = ({
       setComment(undefined);
       setApplyOverrides(undefined);
       setMinQod(undefined);
-      setAutoDelete(undefined);
-      setAutoDeleteData(undefined);
       setMaxChecks(undefined);
       setMaxHosts(undefined);
       setCsAllowFailedRetrieval(undefined);
@@ -594,8 +583,6 @@ const TaskComponent = ({
                       alert_ids={alertIds}
                       alerts={alerts}
                       apply_overrides={applyOverrides}
-                      auto_delete={autoDelete}
-                      auto_delete_data={autoDeleteData}
                       comment={comment}
                       config_id={scanConfigId}
                       csAllowFailedRetrieval={csAllowFailedRetrieval}
@@ -638,7 +625,6 @@ const TaskComponent = ({
           )}
         </TargetComponent>
       )}
-
     </>
   );
 };

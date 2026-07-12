@@ -19,11 +19,11 @@ use crate::{
     task_write_db::*,
     task_write_transactions::{
         execute_task_create_transaction, execute_task_patch_transaction,
-        execute_task_trash_transaction,
+        execute_task_replace_transaction, execute_task_trash_transaction,
     },
     task_write_validation::{
-        TaskCreateRequest, TaskPatchRequest, validate_task_create_request,
-        validate_task_patch_request,
+        TaskCreateRequest, TaskPatchRequest, TaskReplaceRequest, validate_task_create_request,
+        validate_task_patch_request, validate_task_replace_request,
     },
 };
 
@@ -64,7 +64,7 @@ pub(crate) async fn create_task(
         .map_err(|error| map_task_write_db_error(error, "begin create task transaction"))?;
     let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
-        "LOCK TABLE targets, configs, scanners, schedules, alerts, task_alerts, tasks, task_preferences IN SHARE ROW EXCLUSIVE MODE;",
+        "LOCK TABLE targets, configs, scanners, schedules, alerts, tags, tag_resources, task_alerts, tasks, task_preferences IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_task_write_db_error(error, "lock task create tables"))?;
@@ -85,6 +85,15 @@ pub(crate) async fn create_task(
         let alert = load_assignable_task_alert(&tx, alert_id, operator_owner_id).await?;
         alert_internal_ids.push(alert.internal_id);
     }
+    let tag_internal_id = if let Some(tag_id) = request.tag_id.as_deref() {
+        Some(
+            load_assignable_task_tag(&tx, tag_id, operator_owner_id)
+                .await?
+                .internal_id,
+        )
+    } else {
+        None
+    };
     let record = execute_task_create_transaction(
         &tx,
         operator_owner_id,
@@ -94,6 +103,7 @@ pub(crate) async fn create_task(
         schedule_internal_id,
         schedule_next_time,
         &alert_internal_ids,
+        tag_internal_id,
         &request,
     )
     .await?;
@@ -134,6 +144,73 @@ pub(crate) async fn patch_task(
     tx.commit()
         .await
         .map_err(|error| map_task_write_db_error(error, "commit patch task transaction"))?;
+
+    Ok(Json(load_task_detail(&client, &record.uuid).await?))
+}
+
+pub(crate) async fn replace_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+    Json(request): Json<TaskReplaceRequest>,
+) -> Result<Json<TaskItem>, ApiError> {
+    let operator = require_task_write_operator(operator)?;
+    let request = validate_task_replace_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_task_write_db_error(error, "begin replace task transaction"))?;
+    let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE targets, configs, scanners, schedules, alerts, task_alerts, tasks, task_preferences IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_task_write_db_error(error, "lock task replacement tables"))?;
+    let task_state = load_task_write_state(&tx, &task_id).await?;
+    ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;
+    ensure_task_configuration_mutable(task_state.run_status, task_state.alterable)?;
+    ensure_unique_task_name(
+        &tx,
+        &request.name,
+        task_state.internal_id,
+        operator_owner_id,
+    )
+    .await?;
+    let target = load_assignable_task_target(&tx, &request.target_id, operator_owner_id).await?;
+    let config = load_assignable_task_config(&tx, &request.config_id, operator_owner_id).await?;
+    let scanner = load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?;
+    let (schedule_internal_id, schedule_next_time) = if let Some(schedule_id) =
+        request.schedule_id.as_deref()
+    {
+        let schedule = load_assignable_task_schedule(&tx, schedule_id, operator_owner_id).await?;
+        (schedule.internal_id, schedule.next_time)
+    } else {
+        (0, 0)
+    };
+    let mut alert_internal_ids = Vec::with_capacity(request.alert_ids.len());
+    for alert_id in &request.alert_ids {
+        alert_internal_ids.push(
+            load_assignable_task_alert(&tx, alert_id, operator_owner_id)
+                .await?
+                .internal_id,
+        );
+    }
+    let record = execute_task_replace_transaction(
+        &tx,
+        task_state.internal_id,
+        target.internal_id,
+        config.internal_id,
+        scanner.internal_id,
+        schedule_internal_id,
+        schedule_next_time,
+        &alert_internal_ids,
+        &request,
+    )
+    .await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_task_write_db_error(error, "commit replace task transaction"))?;
 
     Ok(Json(load_task_detail(&client, &record.uuid).await?))
 }

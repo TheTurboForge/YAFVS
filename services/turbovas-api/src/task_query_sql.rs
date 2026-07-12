@@ -46,6 +46,27 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
          second_latest_finished_report AS (
              SELECT * FROM finished_report_rows WHERE finished_rank = 2
          ),
+         task_alert_rollup AS (
+             SELECT ta.task,
+                    array_agg(a.uuid::text ORDER BY lower(a.name), a.id) AS alert_ids,
+                    array_agg(a.name::text ORDER BY lower(a.name), a.id) AS alert_names
+               FROM task_alerts ta
+               JOIN alerts a ON a.id = ta.alert
+              WHERE coalesce(ta.alert_location, 0) = 0
+              GROUP BY ta.task
+         ),
+         task_preference_rollup AS (
+             SELECT task,
+                    max(value) FILTER (WHERE name = 'assets_apply_overrides') AS apply_overrides,
+                    max(value) FILTER (WHERE name = 'auto_delete_data') AS auto_delete_data,
+                    max(value) FILTER (WHERE name = 'max_checks') AS max_checks,
+                    max(value) FILTER (WHERE name = 'max_hosts') AS max_hosts,
+                    max(value) FILTER (WHERE name = 'assets_min_qod') AS min_qod,
+                    max(value) FILTER (WHERE name = 'cs_allow_failed_retrieval') AS cs_allow_failed_retrieval,
+                    max(value) FILTER (WHERE name = 'hosts_ordering') AS hosts_ordering
+               FROM task_preferences
+              GROUP BY task
+         ),
          base AS (
              SELECT task.id AS task_pk,
                     task.uuid,
@@ -113,6 +134,15 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     coalesce(task.end_time, 0)::bigint AS end_time,
                     coalesce(task.schedule_next_time, 0)::bigint AS schedule_next_time,
                     task.schedule_periods::bigint AS schedule_periods,
+                    coalesce(task_alert_rollup.alert_ids, ARRAY[]::text[]) AS alert_ids,
+                    coalesce(task_alert_rollup.alert_names, ARRAY[]::text[]) AS alert_names,
+                    lower(coalesce(task_preference_rollup.apply_overrides, 'yes')) IN ('1', 'yes', 'true') AS apply_overrides,
+                    coalesce(task_preference_rollup.auto_delete_data, '10') AS auto_delete_data,
+                    coalesce(task_preference_rollup.max_checks, '4') AS max_checks,
+                    coalesce(task_preference_rollup.max_hosts, '20') AS max_hosts,
+                    coalesce(task_preference_rollup.min_qod, '70') AS min_qod,
+                    lower(coalesce(task_preference_rollup.cs_allow_failed_retrieval, 'no')) IN ('1', 'yes', 'true') AS cs_allow_failed_retrieval,
+                    coalesce(task_preference_rollup.hosts_ordering, 'random') AS hosts_ordering,
                     CASE WHEN task.alterable IS NULL THEN NULL
                          ELSE coalesce(task.alterable, 0) <> 0 END AS alterable,
                     coalesce(report_rollup.report_count_total, 0)::bigint AS report_count_total,
@@ -140,6 +170,8 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                LEFT JOIN latest_report ON latest_report.task = task.id
                LEFT JOIN latest_finished_report ON latest_finished_report.task = task.id
                LEFT JOIN second_latest_finished_report ON second_latest_finished_report.task = task.id
+               LEFT JOIN task_alert_rollup ON task_alert_rollup.task = task.id
+               LEFT JOIN task_preference_rollup ON task_preference_rollup.task = task.id
               WHERE coalesce(task.hidden, 0) = 0
                 AND coalesce(task.usage_type, 'scan') = 'scan'
          ),

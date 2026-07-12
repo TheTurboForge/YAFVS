@@ -46,6 +46,15 @@ pub(crate) fn task_assignable_scanner_state_sql() -> &'static str {
       WHERE uuid = $1;"
 }
 
+pub(crate) fn task_assignable_tag_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer
+       FROM tags
+      WHERE uuid = $1
+        AND resource_type = 'task'
+        AND coalesce(active, 0) <> 0;"
+}
+
 pub(crate) fn task_create_metadata_sql() -> &'static str {
     "INSERT INTO tasks
         (uuid, owner, name, hidden, comment, run_status, config, target,
@@ -53,7 +62,7 @@ pub(crate) fn task_create_metadata_sql() -> &'static str {
          target_location, schedule_location, scanner_location, alterable,
          creation_time, modification_time, usage_type)
      VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5,
-             $7, $8, 0, $6, 0, 0, 0, 0, 1, m_now(), m_now(), 'scan')
+             $7, $8, $9, $6, 0, 0, 0, 0, 1, m_now(), m_now(), 'scan')
      RETURNING id::integer, uuid::text;"
 }
 
@@ -67,10 +76,17 @@ pub(crate) fn task_insert_alert_sql() -> &'static str {
      VALUES ($1, $2, 0);"
 }
 
+pub(crate) fn task_insert_tag_resource_sql() -> &'static str {
+    "INSERT INTO tag_resources
+        (tag, resource_type, resource, resource_uuid, resource_location)
+     VALUES ($1, 'task', $2, $3, 0);"
+}
+
 pub(crate) fn task_write_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer,
-            coalesce(run_status, 1)::integer
+            coalesce(run_status, 1)::integer,
+            coalesce(alterable, 0) <> 0
        FROM tasks
       WHERE uuid = $1
         AND coalesce(hidden, 0) = 0
@@ -96,6 +112,35 @@ pub(crate) fn task_update_metadata_sql() -> &'static str {
         AND coalesce(hidden, 0) = 0
         AND coalesce(usage_type, 'scan') = 'scan'
       RETURNING uuid::text;"
+}
+
+pub(crate) fn task_replace_configuration_sql() -> &'static str {
+    "UPDATE tasks
+        SET name = $2,
+            comment = coalesce($3, ''),
+            target = $4,
+            config = $5,
+            scanner = $6,
+            schedule = $7,
+            schedule_next_time = $8,
+            schedule_periods = $9,
+            modification_time = m_now()
+      WHERE id = $1
+        AND coalesce(hidden, 0) = 0
+        AND coalesce(usage_type, 'scan') = 'scan'
+      RETURNING uuid::text;"
+}
+
+pub(crate) fn task_delete_alerts_sql() -> &'static str {
+    "DELETE FROM task_alerts WHERE task = $1;"
+}
+
+pub(crate) fn task_delete_managed_preferences_sql() -> &'static str {
+    "DELETE FROM task_preferences
+      WHERE task = $1
+        AND name IN ('assets_apply_overrides', 'assets_min_qod',
+                     'max_checks', 'max_hosts',
+                     'cs_allow_failed_retrieval', 'hosts_ordering');"
 }
 
 pub(crate) fn task_trash_result_tag_locations_sql() -> &'static str {

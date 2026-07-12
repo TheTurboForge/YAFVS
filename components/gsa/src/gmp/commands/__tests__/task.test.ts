@@ -29,10 +29,7 @@ import {
   OPENVAS_SCANNER_TYPE,
   OPENVAS_DEFAULT_SCANNER_ID,
 } from 'gmp/models/scanner';
-import {
-  HOSTS_ORDERING_RANDOM,
-  AUTO_DELETE_KEEP_DEFAULT_VALUE,
-} from 'gmp/models/task';
+import {HOSTS_ORDERING_RANDOM} from 'gmp/models/task';
 import {createSession} from 'gmp/testing';
 
 let logLevel: LogLevel;
@@ -577,7 +574,6 @@ describe('TaskCommand tests', () => {
         add_tag: undefined,
         'alert_ids:': [],
         apply_overrides: 0,
-        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'create_task',
         comment: 'comment',
         config_id: 'c1',
@@ -608,7 +604,6 @@ describe('TaskCommand tests', () => {
       add_tag: 1,
       alert_ids: ['a1', 'a2'],
       apply_overrides: 0,
-      auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
       comment: 'comment',
       config_id: 'c1',
       max_checks: 10,
@@ -628,7 +623,6 @@ describe('TaskCommand tests', () => {
         add_tag: 1,
         'alert_ids:': ['a1', 'a2'],
         apply_overrides: 0,
-        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'create_task',
         comment: 'comment',
         config_id: 'c1',
@@ -649,6 +643,103 @@ describe('TaskCommand tests', () => {
     });
     const {data} = resp;
     expect(data.id).toEqual('foo');
+  });
+
+  test('should create a task through native API with retained editor fields', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'task1', name: 'foo'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TaskCommand(fakeHttp);
+    const response = await cmd.create({
+      add_tag: 1,
+      alert_ids: ['alert1'],
+      apply_overrides: 0,
+      comment: 'comment',
+      config_id: 'config1',
+      csAllowFailedRetrieval: true,
+      max_checks: 10,
+      max_hosts: 11,
+      min_qod: 65,
+      name: 'foo',
+      scanner_id: 'scanner1',
+      schedule_id: 'schedule1',
+      schedule_periods: 1,
+      tag_id: 'tag1',
+      target_id: 'target1',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+        },
+        body: JSON.stringify({
+          name: 'foo',
+          comment: 'comment',
+          target_id: 'target1',
+          config_id: 'config1',
+          scanner_id: 'scanner1',
+          schedule_id: 'schedule1',
+          schedule_periods: 1,
+          alert_ids: ['alert1'],
+          hosts_ordering: 'random',
+          apply_overrides: false,
+          max_checks: 10,
+          max_hosts: 11,
+          min_qod: 65,
+          cs_allow_failed_retrieval: true,
+          tag_id: 'tag1',
+        }),
+      },
+    );
+    expect(response?.data.id).toEqual('task1');
+  });
+
+  test('should not retry native task create through GMP after failure', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockRejectedValue(new Error('native task create failed'));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TaskCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        config_id: 'config1',
+        name: 'foo',
+        scanner_id: 'scanner1',
+        target_id: 'target1',
+      }),
+    ).rejects.toThrow('native task create failed');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -704,6 +795,7 @@ describe('TaskCommand tests', () => {
       apply_overrides: 0,
       comment: 'comment',
       id: 'task1',
+      hosts_ordering: 'reverse',
       max_checks: 10,
       max_hosts: 10,
       min_qod: 70,
@@ -714,11 +806,10 @@ describe('TaskCommand tests', () => {
       data: {
         'alert_ids:': [],
         apply_overrides: 0,
-        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'save_task',
         comment: 'comment',
         config_id: '0',
-        hosts_ordering: HOSTS_ORDERING_RANDOM,
+        hosts_ordering: 'reverse',
         max_checks: 10,
         max_hosts: 10,
         min_qod: 70,
@@ -783,13 +874,14 @@ describe('TaskCommand tests', () => {
     expect(response?.data.id).toEqual('task1');
   });
 
-  test('should keep operational task save on GMP when native API is available', async () => {
-    const mockResponse = createActionResultResponse();
-    const fetchMock = testing.fn();
+  test('should replace operational task configuration through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'task1', name: 'foo'}),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(mockResponse) as ReturnType<
-      typeof createHttp
-    > & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -803,23 +895,82 @@ describe('TaskCommand tests', () => {
     const response = await cmd.save({
       apply_overrides: 0,
       comment: 'comment',
+      config_id: 'config1',
+      hosts_ordering: 'reverse',
       id: 'task1',
       max_checks: 10,
       max_hosts: 10,
       min_qod: 70,
       name: 'foo',
+      scanner_id: 'scanner1',
+      schedule_id: 'schedule1',
+      schedule_periods: 3,
+      target_id: 'target1',
       csAllowFailedRetrieval: true,
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'save_task',
-        task_id: 'task1',
-        max_checks: 10,
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tasks/task1/replace-configuration',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tasks/task1/replace-configuration',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+        },
+        body: JSON.stringify({
+          name: 'foo',
+          comment: 'comment',
+          target_id: 'target1',
+          config_id: 'config1',
+          scanner_id: 'scanner1',
+          schedule_id: 'schedule1',
+          schedule_periods: 3,
+          alert_ids: [],
+          hosts_ordering: 'reverse',
+          apply_overrides: false,
+          max_checks: 10,
+          max_hosts: 10,
+          min_qod: 70,
+          cs_allow_failed_retrieval: true,
+        }),
+      },
+    );
+    expect(response?.data.id).toEqual('task1');
+  });
+
+  test('should not retry native task replacement through GMP after failure', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockRejectedValue(new Error('native task replacement failed'));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new TaskCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        config_id: 'config1',
+        id: 'task1',
+        name: 'foo',
+        scanner_id: 'scanner1',
+        target_id: 'target1',
       }),
-    });
-    expect(response).toBeUndefined();
+    ).rejects.toThrow('native task replacement failed');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -871,7 +1022,6 @@ describe('TaskCommand tests', () => {
     const response = await cmd.save({
       alert_ids: ['a1', 'a2'],
       apply_overrides: 0,
-      auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
       comment: 'comment',
       config_id: 'c1',
       id: 'task1',
@@ -890,7 +1040,6 @@ describe('TaskCommand tests', () => {
       data: {
         'alert_ids:': ['a1', 'a2'],
         apply_overrides: 0,
-        auto_delete_data: AUTO_DELETE_KEEP_DEFAULT_VALUE,
         cmd: 'save_task',
         comment: 'comment',
         config_id: 'c1',

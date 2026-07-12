@@ -4,11 +4,15 @@
 
 use crate::{
     errors::ApiError,
-    task_write_db::{ensure_task_not_in_use_for_native_trash, ensure_task_owner_matches_operator},
+    task_write_db::{
+        ensure_task_configuration_mutable, ensure_task_not_in_use_for_native_trash,
+        ensure_task_owner_matches_operator,
+    },
     task_write_sql::*,
     task_write_validation::{
         MAX_TASK_ALERTS, MAX_TASK_TEXT_BYTES, TaskCreateRequest, TaskHostsOrdering,
-        TaskPatchRequest, validate_task_create_request, validate_task_patch_request,
+        TaskPatchRequest, TaskReplaceRequest, validate_task_create_request,
+        validate_task_patch_request, validate_task_replace_request,
     },
 };
 
@@ -20,6 +24,7 @@ const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
 const VALID_SCANNER_ID: &str = "33333333-3333-4333-8333-333333333333";
 const VALID_SCHEDULE_ID: &str = "44444444-4444-4444-8444-444444444444";
 const VALID_ALERT_ID: &str = "55555555-5555-4555-8555-555555555555";
+const VALID_TAG_ID: &str = "66666666-6666-4666-8666-666666666666";
 
 fn create_request(name: &str) -> TaskCreateRequest {
     TaskCreateRequest {
@@ -31,6 +36,13 @@ fn create_request(name: &str) -> TaskCreateRequest {
         schedule_id: None,
         alert_ids: Vec::new(),
         hosts_ordering: None,
+        schedule_periods: 0,
+        apply_overrides: true,
+        max_checks: 4,
+        max_hosts: 20,
+        min_qod: 70,
+        cs_allow_failed_retrieval: false,
+        tag_id: None,
     }
 }
 
@@ -38,6 +50,25 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> TaskPatchRequest 
     TaskPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+    }
+}
+
+fn replace_request(name: &str) -> TaskReplaceRequest {
+    TaskReplaceRequest {
+        name: name.to_string(),
+        comment: Some("comment".to_string()),
+        target_id: VALID_TARGET_ID.to_string(),
+        config_id: VALID_CONFIG_ID.to_string(),
+        scanner_id: VALID_SCANNER_ID.to_string(),
+        schedule_id: Some(VALID_SCHEDULE_ID.to_string()),
+        alert_ids: vec![VALID_ALERT_ID.to_string()],
+        hosts_ordering: TaskHostsOrdering::Random,
+        schedule_periods: 1,
+        apply_overrides: false,
+        max_checks: 8,
+        max_hosts: 12,
+        min_qod: 65,
+        cs_allow_failed_retrieval: true,
     }
 }
 
@@ -55,7 +86,7 @@ fn task_create_request_trims_metadata_and_normalizes_references() {
     assert_eq!(validated.scanner_id, VALID_SCANNER_ID);
     assert_eq!(validated.schedule_id, None);
     assert!(validated.alert_ids.is_empty());
-    assert_eq!(validated.hosts_ordering, None);
+    assert_eq!(validated.hosts_ordering, "random");
 }
 
 #[test]
@@ -110,7 +141,7 @@ fn task_create_request_accepts_optional_schedule_and_alerts() {
 
     assert_eq!(validated.schedule_id.as_deref(), Some(VALID_SCHEDULE_ID));
     assert_eq!(validated.alert_ids, [VALID_ALERT_ID]);
-    assert_eq!(validated.hosts_ordering.as_deref(), Some("reverse"));
+    assert_eq!(validated.hosts_ordering, "reverse");
 }
 
 #[test]
@@ -126,6 +157,85 @@ fn task_create_request_defaults_optional_references_to_empty() {
     assert!(request.schedule_id.is_none());
     assert!(request.alert_ids.is_empty());
     assert!(request.hosts_ordering.is_none());
+    assert_eq!(request.schedule_periods, 0);
+    assert!(request.apply_overrides);
+    assert_eq!(request.max_checks, 4);
+    assert_eq!(request.max_hosts, 20);
+    assert_eq!(request.min_qod, 70);
+    assert!(!request.cs_allow_failed_retrieval);
+    assert!(request.tag_id.is_none());
+}
+
+#[test]
+fn task_create_request_accepts_retained_preferences_and_task_tag() {
+    let validated = validate_task_create_request(TaskCreateRequest {
+        schedule_periods: 2,
+        apply_overrides: false,
+        max_checks: 8,
+        max_hosts: 12,
+        min_qod: 65,
+        cs_allow_failed_retrieval: true,
+        tag_id: Some(VALID_TAG_ID.to_string()),
+        ..create_request("task")
+    })
+    .expect("retained task configuration");
+    assert_eq!(validated.schedule_periods, 2);
+    assert!(!validated.apply_overrides);
+    assert_eq!(validated.max_checks, 8);
+    assert_eq!(validated.max_hosts, 12);
+    assert_eq!(validated.min_qod, 65);
+    assert!(validated.cs_allow_failed_retrieval);
+    assert_eq!(validated.tag_id.as_deref(), Some(VALID_TAG_ID));
+}
+
+#[test]
+fn task_create_request_rejects_invalid_retained_preferences() {
+    for request in [
+        TaskCreateRequest {
+            schedule_periods: -1,
+            ..create_request("task")
+        },
+        TaskCreateRequest {
+            max_checks: -1,
+            ..create_request("task")
+        },
+        TaskCreateRequest {
+            max_hosts: -1,
+            ..create_request("task")
+        },
+        TaskCreateRequest {
+            min_qod: 101,
+            ..create_request("task")
+        },
+    ] {
+        assert!(matches!(
+            validate_task_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+}
+
+#[test]
+fn task_replace_request_validates_complete_configuration() {
+    let validated = validate_task_replace_request(replace_request(" task "))
+        .expect("complete task replacement");
+    assert_eq!(validated.name, "task");
+    assert_eq!(validated.schedule_id.as_deref(), Some(VALID_SCHEDULE_ID));
+    assert_eq!(validated.alert_ids, [VALID_ALERT_ID]);
+    assert_eq!(validated.hosts_ordering, "random");
+    assert!(!validated.apply_overrides);
+    assert_eq!(validated.max_checks, 8);
+    assert_eq!(validated.max_hosts, 12);
+    assert_eq!(validated.min_qod, 65);
+    assert!(validated.cs_allow_failed_retrieval);
+
+    assert!(matches!(
+        validate_task_replace_request(TaskReplaceRequest {
+            min_qod: 101,
+            ..replace_request("task")
+        }),
+        Err(ApiError::BadRequest(_))
+    ));
 }
 
 #[test]
@@ -145,7 +255,7 @@ fn task_create_request_accepts_only_typed_host_ordering_values() {
         let request =
             serde_json::from_value::<TaskCreateRequest>(request).expect("typed host ordering");
         let validated = validate_task_create_request(request).expect("valid host ordering");
-        assert_eq!(validated.hosts_ordering.as_deref(), Some(expected));
+        assert_eq!(validated.hosts_ordering, expected);
     }
 
     for invalid in ["RANDOM", "randomized", ""] {
@@ -203,10 +313,46 @@ fn task_create_openapi_contract_covers_optional_schedule_alerts_and_ordering() {
         "hosts_ordering:",
         "enum: [random, sequential, reverse]",
         "forwarded to OSP/OpenVASD",
+        "schedule_periods:",
+        "apply_overrides:",
+        "max_checks:",
+        "max_hosts:",
+        "min_qod:",
+        "cs_allow_failed_retrieval:",
+        "tag_id:",
     ] {
         assert!(
             schema.contains(required),
             "task create OpenAPI schema missing {required}"
+        );
+    }
+}
+
+#[test]
+fn task_replace_openapi_contract_is_complete_and_scanner_control_classified() {
+    let schema = OPENAPI
+        .split_once("    TaskReplaceRequest:")
+        .expect("task replace schema")
+        .1
+        .split_once("    TaskTargetReplaceRequest:")
+        .expect("task target replacement schema boundary")
+        .0;
+    for required in [
+        "required: [name, target_id, config_id, scanner_id",
+        "schedule_id:",
+        "nullable: true",
+        "alert_ids:",
+        "hosts_ordering:",
+        "schedule_periods:",
+        "apply_overrides:",
+        "max_checks:",
+        "max_hosts:",
+        "min_qod:",
+        "cs_allow_failed_retrieval:",
+    ] {
+        assert!(
+            schema.contains(required),
+            "task replace schema missing {required}"
         );
     }
 }
@@ -363,7 +509,7 @@ fn task_create_sql_writes_schedule_alerts_and_inherited_defaults() {
     assert!(create.contains("INSERT INTO tasks"));
     assert!(create.contains("run_status"));
     assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5"));
-    assert!(create.contains("$7, $8, 0, $6, 0, 0, 0, 0, 1"));
+    assert!(create.contains("$7, $8, $9, $6, 0, 0, 0, 0, 1"));
     assert!(create.contains("schedule_periods"));
     assert!(create.contains("schedule_location"));
     assert!(create.contains("alterable"));
@@ -404,12 +550,70 @@ fn task_create_transaction_attaches_alerts_after_task_insert() {
 
     assert!(transaction.contains("alert_internal_ids: &[i32]"));
     assert!(transaction.contains("for alert_internal_id in alert_internal_ids"));
-    assert!(transaction.contains("request.hosts_ordering.as_deref()"));
-    assert!(transaction.contains(r#"&"hosts_ordering""#));
+    assert!(transaction.contains("task_mutable_preference_values("));
+    assert!(transaction.contains("&request.hosts_ordering"));
+    assert!(transaction.contains(r#"("hosts_ordering", hosts_ordering.to_string())"#));
+    assert!(transaction.contains("tag_internal_id: Option<i32>"));
+    assert!(transaction.contains("task_insert_tag_resource_sql()"));
     assert!(
         transaction.find("task_create_metadata_sql()").unwrap()
             < transaction.find("task_insert_alert_sql()").unwrap()
     );
+}
+
+#[test]
+fn task_replace_is_state_guarded_and_transactional() {
+    assert!(ensure_task_configuration_mutable(1, false).is_ok());
+    assert!(ensure_task_configuration_mutable(2, true).is_ok());
+    assert!(matches!(
+        ensure_task_configuration_mutable(2, false),
+        Err(ApiError::Conflict(_))
+    ));
+
+    let update = task_replace_configuration_sql();
+    for required in [
+        "target = $4",
+        "config = $5",
+        "scanner = $6",
+        "schedule = $7",
+        "schedule_next_time = $8",
+        "schedule_periods = $9",
+        "RETURNING uuid::text",
+    ] {
+        assert!(
+            update.contains(required),
+            "task replacement SQL missing {required}"
+        );
+    }
+    assert!(task_delete_alerts_sql().contains("DELETE FROM task_alerts"));
+    assert!(task_delete_managed_preferences_sql().contains("assets_apply_overrides"));
+
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn replace_task")
+        .expect("task replacement handler")
+        .1
+        .split_once("pub(crate) async fn delete_task")
+        .expect("task replacement handler end")
+        .0;
+    for required in [
+        "require_task_write_operator(operator)?",
+        "ensure_task_owner_matches_operator",
+        "ensure_task_configuration_mutable",
+        "ensure_unique_task_name",
+        "load_assignable_task_target",
+        "load_assignable_task_config",
+        "load_assignable_task_scanner",
+        "load_assignable_task_schedule",
+        "load_assignable_task_alert",
+        "execute_task_replace_transaction",
+        "tx.commit()",
+    ] {
+        assert!(
+            handler.contains(required),
+            "task replacement handler missing {required}"
+        );
+    }
 }
 
 #[test]

@@ -11,7 +11,7 @@ use crate::{
         query_task_write_record, query_task_write_record_with_internal_id,
     },
     task_write_sql::*,
-    task_write_validation::{ValidatedTaskCreate, ValidatedTaskPatch},
+    task_write_validation::{ValidatedTaskCreate, ValidatedTaskPatch, ValidatedTaskReplace},
 };
 
 pub(crate) async fn execute_task_create_transaction(
@@ -23,6 +23,7 @@ pub(crate) async fn execute_task_create_transaction(
     schedule_internal_id: i32,
     schedule_next_time: i32,
     alert_internal_ids: &[i32],
+    tag_internal_id: Option<i32>,
     request: &ValidatedTaskCreate,
 ) -> Result<TaskWriteRecordWithInternalId, ApiError> {
     let record = query_task_write_record_with_internal_id(
@@ -37,14 +38,13 @@ pub(crate) async fn execute_task_create_transaction(
             &scanner_internal_id,
             &schedule_internal_id,
             &schedule_next_time,
+            &request.schedule_periods,
         ],
         "create task metadata",
     )
     .await?;
     for (name, value) in [
         ("in_assets", "yes"),
-        ("assets_apply_overrides", "yes"),
-        ("assets_min_qod", "70"),
         ("auto_delete", "keep"),
         ("auto_delete_data", "10"),
     ] {
@@ -56,12 +56,19 @@ pub(crate) async fn execute_task_create_transaction(
         )
         .await?;
     }
-    if let Some(hosts_ordering) = request.hosts_ordering.as_deref() {
+    for (name, value) in task_mutable_preference_values(
+        request.apply_overrides,
+        request.max_checks,
+        request.max_hosts,
+        request.min_qod,
+        request.cs_allow_failed_retrieval,
+        &request.hosts_ordering,
+    ) {
         execute_task_write_sql(
             tx,
             task_insert_preference_sql(),
-            &[&record.internal_id, &"hosts_ordering", &hosts_ordering],
-            "create task host ordering preference",
+            &[&record.internal_id, &name, &value],
+            "create task preference",
         )
         .await?;
     }
@@ -74,7 +81,111 @@ pub(crate) async fn execute_task_create_transaction(
         )
         .await?;
     }
+    if let Some(tag_internal_id) = tag_internal_id {
+        execute_task_write_sql(
+            tx,
+            task_insert_tag_resource_sql(),
+            &[&tag_internal_id, &record.internal_id, &record.uuid],
+            "attach task tag",
+        )
+        .await?;
+    }
     Ok(record)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn execute_task_replace_transaction(
+    tx: &Transaction<'_>,
+    task_internal_id: i32,
+    target_internal_id: i32,
+    config_internal_id: i32,
+    scanner_internal_id: i32,
+    schedule_internal_id: i32,
+    schedule_next_time: i32,
+    alert_internal_ids: &[i32],
+    request: &ValidatedTaskReplace,
+) -> Result<TaskWriteRecord, ApiError> {
+    let record = query_task_write_record(
+        tx,
+        task_replace_configuration_sql(),
+        &[
+            &task_internal_id,
+            &request.name,
+            &request.comment,
+            &target_internal_id,
+            &config_internal_id,
+            &scanner_internal_id,
+            &schedule_internal_id,
+            &schedule_next_time,
+            &request.schedule_periods,
+        ],
+        "replace task configuration",
+    )
+    .await?;
+    execute_task_write_sql(
+        tx,
+        task_delete_alerts_sql(),
+        &[&task_internal_id],
+        "replace task alerts",
+    )
+    .await?;
+    for alert_internal_id in alert_internal_ids {
+        execute_task_write_sql(
+            tx,
+            task_insert_alert_sql(),
+            &[&task_internal_id, alert_internal_id],
+            "attach replacement task alert",
+        )
+        .await?;
+    }
+    execute_task_write_sql(
+        tx,
+        task_delete_managed_preferences_sql(),
+        &[&task_internal_id],
+        "replace task preferences",
+    )
+    .await?;
+    for (name, value) in task_mutable_preference_values(
+        request.apply_overrides,
+        request.max_checks,
+        request.max_hosts,
+        request.min_qod,
+        request.cs_allow_failed_retrieval,
+        &request.hosts_ordering,
+    ) {
+        execute_task_write_sql(
+            tx,
+            task_insert_preference_sql(),
+            &[&task_internal_id, &name, &value],
+            "write replacement task preference",
+        )
+        .await?;
+    }
+    Ok(record)
+}
+
+fn task_mutable_preference_values(
+    apply_overrides: bool,
+    max_checks: i32,
+    max_hosts: i32,
+    min_qod: i32,
+    cs_allow_failed_retrieval: bool,
+    hosts_ordering: &str,
+) -> [(&'static str, String); 6] {
+    [
+        (
+            "assets_apply_overrides",
+            if apply_overrides { "yes" } else { "no" }.to_string(),
+        ),
+        ("assets_min_qod", min_qod.to_string()),
+        ("max_checks", max_checks.to_string()),
+        ("max_hosts", max_hosts.to_string()),
+        (
+            "cs_allow_failed_retrieval",
+            if cs_allow_failed_retrieval { "1" } else { "0" }.to_string(),
+        ),
+        ("hosts_ordering", hosts_ordering.to_string()),
+    ]
 }
 
 pub(crate) async fn execute_task_patch_transaction(

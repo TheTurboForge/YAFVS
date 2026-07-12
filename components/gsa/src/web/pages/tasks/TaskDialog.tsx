@@ -16,9 +16,6 @@ import Scanner, {
 } from 'gmp/models/scanner';
 import {
   type default as Task,
-  type TaskAutoDelete,
-  AUTO_DELETE_KEEP,
-  AUTO_DELETE_KEEP_DEFAULT_VALUE,
   DEFAULT_MAX_CHECKS,
   DEFAULT_MAX_HOSTS,
   DEFAULT_MIN_QOD,
@@ -40,7 +37,6 @@ import Divider from 'web/components/layout/Divider';
 import useCapabilities from 'web/hooks/useCapabilities';
 import useFeatures from 'web/hooks/useFeatures';
 import useTranslation from 'web/hooks/useTranslation';
-import AutoDeleteReportsGroup from 'web/pages/tasks/AutoDeleteReportsGroup';
 import {
   type RenderSelectItemProps,
   renderSelectItems,
@@ -67,8 +63,6 @@ interface TaskDialogValues {
 interface TaskDialogDefaultValues {
   add_tag?: YesNo;
   apply_overrides?: YesNo;
-  auto_delete?: TaskAutoDelete;
-  auto_delete_data?: number;
   comment?: string;
   config_id?: string;
   csAllowFailedRetrieval?: boolean;
@@ -76,7 +70,7 @@ interface TaskDialogDefaultValues {
   max_hosts?: number;
   min_qod?: number;
   name: string;
-  schedule_periods?: YesNo;
+  schedule_periods?: number;
   tag_id?: string;
   tags?: RenderSelectItemProps[];
   task?: Task;
@@ -89,8 +83,6 @@ interface TaskDialogProps {
   alert_ids?: string[];
   alerts?: RenderSelectItemProps[];
   apply_overrides?: YesNo;
-  auto_delete?: TaskAutoDelete;
-  auto_delete_data?: number;
   comment?: string;
   config_id?: string;
   csAllowFailedRetrieval?: boolean;
@@ -108,7 +100,7 @@ interface TaskDialogProps {
   scanner_id?: string;
   scanners?: Scanner[];
   schedule_id?: string;
-  schedule_periods?: YesNo;
+  schedule_periods?: number;
   schedules?: RenderSelectItemProps[];
   tags?: RenderSelectItemProps[];
   target_id?: string;
@@ -176,10 +168,6 @@ const TaskDialog = ({
   alerts = [],
   // eslint-disable-next-line @typescript-eslint/naming-convention
   apply_overrides = YES_VALUE,
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  auto_delete = AUTO_DELETE_KEEP,
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  auto_delete_data = AUTO_DELETE_KEEP_DEFAULT_VALUE,
   comment = '',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   config_id,
@@ -262,8 +250,6 @@ const TaskDialog = ({
   const uncontrolledData: TaskDialogDefaultValues = {
     add_tag,
     apply_overrides,
-    auto_delete,
-    auto_delete_data,
     comment,
     config_id,
     csAllowFailedRetrieval,
@@ -368,7 +354,7 @@ const TaskDialog = ({
                   onChange={onScheduleChange}
                 />
                 <Checkbox
-                  checked={state.schedule_periods === YES_VALUE}
+                  checked={(state.schedule_periods ?? 0) > 0}
                   checkedValue={YES_VALUE}
                   name="schedule_periods"
                   title={_('Once')}
@@ -416,11 +402,6 @@ const TaskDialog = ({
               />
             </FormGroup>
 
-            <AutoDeleteReportsGroup
-              autoDeleteData={state.auto_delete_data}
-              onChange={onValueChange}
-            />
-
             <Title>
               <ScannerSelect
                 changeTask={changeTask}
@@ -433,9 +414,7 @@ const TaskDialog = ({
             {useOpenvasScanConfig && (
               <>
                 <FormGroup title={_('Scan Config')}>
-                  <Title
-                    title={undefined}
-                  >
+                  <Title title={undefined}>
                     <Select
                       disabled={!changeTask}
                       isLoading={isLoadingConfigs}

@@ -150,7 +150,6 @@ export interface TaskSlave {
   id?: string;
 }
 
-
 export interface TaskReport {
   entityType: 'report';
   id: string;
@@ -173,6 +172,7 @@ export interface TaskProperties extends ModelProperties {
   average_duration?: Duration;
   config?: Model;
   current_report?: TaskReport;
+  hosts_ordering?: TaskHostsOrdering;
   last_report?: TaskReport;
   preferences?: TaskPreferences;
   progress?: number;
@@ -270,6 +270,7 @@ class Task extends Model {
   readonly average_duration?: Duration;
   readonly config?: Model;
   readonly current_report?: TaskReport;
+  readonly hosts_ordering?: TaskHostsOrdering;
   readonly in_assets?: YesNo;
   readonly last_report?: TaskReport;
   readonly max_checks?: number;
@@ -305,6 +306,8 @@ class Task extends Model {
     config,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     current_report,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    hosts_ordering,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     in_assets,
     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -345,6 +348,7 @@ class Task extends Model {
     this.average_duration = average_duration;
     this.config = config;
     this.current_report = current_report;
+    this.hosts_ordering = hosts_ordering;
     this.in_assets = in_assets;
     this.last_report = last_report;
     this.max_checks = max_checks;
@@ -390,7 +394,6 @@ class Task extends Model {
         finished: parseInt(report_count.finished),
       };
     }
-
 
     copy.alterable = isDefined(element.alterable)
       ? parseYesNo(element.alterable)
@@ -450,6 +453,7 @@ class Task extends Model {
       ? undefined
       : Schedule.fromElement(element.schedule);
     copy.schedule_periods = parseInt(element.schedule_periods);
+    copy.hosts_ordering = element.hosts_ordering;
 
     // it seems element.progress is just a number now, but keep the element parsing as a fallback
     // maybe some other code path relies on the other format
@@ -540,7 +544,6 @@ class Task extends Model {
   isAlterable() {
     return true;
   }
-
 }
 
 export default Task;

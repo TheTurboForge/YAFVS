@@ -23,6 +23,7 @@ pub(crate) struct TaskWriteState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: i32,
     pub(crate) run_status: i32,
+    pub(crate) alterable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,6 +184,27 @@ pub(crate) async fn load_assignable_task_scanner(
     }
 }
 
+pub(crate) async fn load_assignable_task_tag(
+    tx: &Transaction<'_>,
+    tag_id: &str,
+    operator_owner_id: i32,
+) -> Result<AssignableTaskResource, ApiError> {
+    let row =
+        load_task_resource_row(tx, task_assignable_tag_state_sql(), tag_id, "task tag").await?;
+    let internal_id: i32 = row.get(0);
+    let owner_id: Option<i32> = row.get(1);
+    if owner_id == Some(operator_owner_id) {
+        Ok(AssignableTaskResource { internal_id })
+    } else {
+        tracing::warn!(
+            tag_owner_id = owner_id,
+            operator_owner_id,
+            "direct API task create operator cannot assign tag"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
 async fn load_task_resource_row(
     tx: &Transaction<'_>,
     sql: &str,
@@ -242,8 +264,24 @@ pub(crate) async fn load_task_write_state(
             internal_id: row.get(0),
             owner_id: row.get(1),
             run_status: row.get(2),
+            alterable: row.get(3),
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) fn ensure_task_configuration_mutable(
+    run_status: i32,
+    alterable: bool,
+) -> Result<(), ApiError> {
+    const TASK_STATUS_NEW: i32 = 1;
+    if run_status == TASK_STATUS_NEW || alterable {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "task configuration can only be replaced while the task is new or alterable"
+                .to_string(),
+        ))
+    }
 }
 
 pub(crate) fn ensure_task_not_in_use_for_native_trash(run_status: i32) -> Result<(), ApiError> {

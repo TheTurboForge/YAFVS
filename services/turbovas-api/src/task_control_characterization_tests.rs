@@ -573,6 +573,18 @@ fn native_direct_api_allows_guarded_task_controls_and_keeps_unmigrated_lifecycle
         replace_target_path,
         true
     ));
+    let replace_configuration_path =
+        "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/replace-configuration";
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::POST,
+        replace_configuration_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        replace_configuration_path,
+        true
+    ));
     for action in ["resume", "delete"] {
         let path = format!("/api/v1/tasks/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
@@ -605,11 +617,7 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
     assert!(list.contains("x-turbovas-exposure: direct-write"));
-    assert!(
-        list.contains(
-            "x-turbovas-replaces: task-create-with-target-config-scanner-schedule-alerts"
-        )
-    );
+    assert!(list.contains("x-turbovas-replaces: task-create-with-retained-editor-configuration"));
     assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
     assert!(list.contains(
         "x-turbovas-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control"
@@ -617,13 +625,11 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
-    assert!(list.contains(
-        "bounded task creation with explicit target/config/scanner references and optional operator-owned schedule/alert links"
-    ));
+    assert!(list.contains("task creation and complete retained editor configuration"));
     assert!(
         list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
     );
-    assert!(list.contains("Resume, hard-delete, file export, config/scanner mutation"));
+    assert!(list.contains("Resume, hard-delete, inherited file export"));
 
     let detail = openapi_path_block("/tasks/{task_id}");
     assert!(detail.contains("get:"));
@@ -642,6 +648,25 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(detail.contains("x-turbovas-replaces: task-trash-move"));
     assert!(detail.contains("safe non-running live-task trash moves"));
     assert!(detail.contains("Running, queued, requested, stop/delete-waiting, processing"));
+
+    let replace_configuration = openapi_path_block("/tasks/{task_id}/replace-configuration");
+    for required in [
+        "post:",
+        "operationId: postTasksByTaskIdReplaceConfiguration",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-write",
+        "x-turbovas-replaces: task-retained-editor-configuration-modify",
+        "x-turbovas-side-effect: scanner-control",
+        "$ref: '#/components/schemas/TaskReplaceRequest'",
+        "atomically replaces",
+        "fixed TurboVAS report-retention defaults remain unchanged",
+        "never starts a scan",
+    ] {
+        assert!(
+            replace_configuration.contains(required),
+            "task replacement OpenAPI block missing {required}"
+        );
+    }
 
     let clone = openapi_path_block("/tasks/{task_id}/clone");
     for required in [

@@ -56,6 +56,14 @@ interface NativeTaskItem {
   end_time?: string | null;
   schedule_next_time?: string | null;
   schedule_periods?: number | null;
+  alerts?: NativeReference[];
+  apply_overrides?: boolean;
+  auto_delete_data?: number;
+  max_checks?: number;
+  max_hosts?: number;
+  min_qod?: number;
+  cs_allow_failed_retrieval?: boolean;
+  hosts_ordering?: 'random' | 'sequential' | 'reverse';
   alterable?: boolean | null;
   report_count?: NativeTaskReportCount;
   current_report?: NativeTaskReportReference;
@@ -100,6 +108,24 @@ interface NativeTaskPatchArgs {
   id: string;
   name?: string;
   comment?: string;
+}
+
+export interface NativeTaskWriteArgs {
+  name: string;
+  comment?: string;
+  targetId: string;
+  configId: string;
+  scannerId: string;
+  scheduleId?: string;
+  schedulePeriods: number;
+  alertIds: string[];
+  applyOverrides: boolean;
+  maxChecks: number;
+  maxHosts: number;
+  minQod: number;
+  csAllowFailedRetrieval: boolean;
+  hostsOrdering?: 'random' | 'sequential' | 'reverse';
+  tagId?: string;
 }
 
 interface NativeTaskStopPayload {
@@ -266,6 +292,43 @@ export const nativeTaskToModel = (item: NativeTaskItem): Task => {
     config: referenceElement(item.config, 'scanconfig'),
     scanner,
     schedule: referenceElement(item.schedule, 'schedule'),
+    hosts_ordering: item.hosts_ordering,
+    alert: (item.alerts ?? []).flatMap(alert => {
+      const reference = referenceElement(alert, 'alert');
+      return reference === undefined ? [] : [reference];
+    }),
+    preferences: {
+      preference: [
+        {
+          scanner_name: 'assets_apply_overrides',
+          value: item.apply_overrides === false ? 'no' : 'yes',
+        },
+        {
+          scanner_name: 'assets_min_qod',
+          value: String(integerValue(item.min_qod, 70)),
+        },
+        {
+          scanner_name: 'auto_delete',
+          value: 'keep',
+        },
+        {
+          scanner_name: 'auto_delete_data',
+          value: String(integerValue(item.auto_delete_data, 10)),
+        },
+        {
+          scanner_name: 'max_checks',
+          value: String(integerValue(item.max_checks, 4)),
+        },
+        {
+          scanner_name: 'max_hosts',
+          value: String(integerValue(item.max_hosts, 20)),
+        },
+        {
+          scanner_name: 'cs_allow_failed_retrieval',
+          value: item.cs_allow_failed_retrieval ? '1' : '0',
+        },
+      ],
+    },
     alterable:
       item.alterable === undefined || item.alterable === null
         ? undefined
@@ -446,6 +509,63 @@ export const patchNativeTask = async (
     `api/v1/tasks/${encodeURIComponent(id)}`,
     body,
     'PATCH',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'save_task',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+};
+
+const nativeTaskWriteBody = (args: NativeTaskWriteArgs) => ({
+  name: args.name,
+  ...(args.comment !== undefined ? {comment: args.comment} : {}),
+  target_id: args.targetId,
+  config_id: args.configId,
+  scanner_id: args.scannerId,
+  schedule_id: args.scheduleId ?? null,
+  schedule_periods: args.schedulePeriods,
+  alert_ids: args.alertIds,
+  hosts_ordering: args.hostsOrdering ?? 'random',
+  apply_overrides: args.applyOverrides,
+  max_checks: args.maxChecks,
+  max_hosts: args.maxHosts,
+  min_qod: args.minQod,
+  cs_allow_failed_retrieval: args.csAllowFailedRetrieval,
+});
+
+export const createNativeTask = async (
+  gmp: NativeApiGmp,
+  args: NativeTaskWriteArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeTaskItem>(gmp, 'api/v1/tasks', {
+    ...nativeTaskWriteBody(args),
+    ...(args.tagId !== undefined ? {tag_id: args.tagId} : {}),
+  });
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'create_task',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+};
+
+export const replaceNativeTaskConfiguration = async (
+  gmp: NativeApiGmp,
+  id: string,
+  args: NativeTaskWriteArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeTaskItem>(
+    gmp,
+    `api/v1/tasks/${encodeURIComponent(id)}/replace-configuration`,
+    nativeTaskWriteBody(args),
   );
   return new Response(
     new ActionResult({

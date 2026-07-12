@@ -665,12 +665,13 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "target-metadata-simple-scan-inputs-and-credential-links-modify",
         "target-restore",
         "target-trash-move",
-        "task-create-with-target-config-scanner-schedule-alerts",
+        "task-create-with-retained-editor-configuration",
         "task-clone",
         "task-metadata-modify",
         "task-metadata-export-read",
         "task-detail-summary-read",
         "task-list-read",
+        "task-retained-editor-configuration-modify",
         "task-target-clone-rebind-delete",
         "task-trash-move",
         "task-start",
@@ -711,7 +712,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-file-input-task-control-and-credential-secret-workflows",
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
-        "task-config-scanner-schedule-alert-preference-mutation",
         "task-scan-control-writes-and-deletes",
         "task-resume-and-other-scanner-control",
         "task-resume-file-hard-delete-and-other-scanner-control",
@@ -788,6 +788,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/tasks"): "direct-write",
     ("post", "/tasks/{task_id}/clone"): "direct-write",
     ("post", "/tasks/{task_id}/replace-target"): "direct-write",
+    ("post", "/tasks/{task_id}/replace-configuration"): "direct-write",
     ("post", "/tasks/{task_id}/start"): "direct-write",
     ("post", "/tasks/{task_id}/stop"): "direct-write",
     ("patch", "/tasks/{task_id}"): "direct-write",
@@ -1717,7 +1718,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
-        "x-turbovas-replaces": "task-create-with-target-config-scanner-schedule-alerts",
+        "x-turbovas-replaces": "task-create-with-retained-editor-configuration",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "scanner-control",
     },
@@ -1730,11 +1731,18 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-side-effect": "scanner-control",
     },
     ("post", "/tasks/{task_id}/replace-target"): {
-        "x-turbovas-inherited-still-owns": "task-config-scanner-schedule-alert-preference-mutation",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
         "x-turbovas-replaces": "task-target-clone-rebind-delete",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scanner-control",
+    },
+    ("post", "/tasks/{task_id}/replace-configuration"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "task-retained-editor-configuration-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "scanner-control",
     },
@@ -7772,6 +7780,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         start_suffix = post_constants.get("start_suffix")
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
+        replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
         for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
@@ -7808,6 +7817,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 ("clone_suffix", clone_suffix),
                 ("start_suffix", start_suffix),
                 ("stop_suffix", stop_suffix),
+                ("replace_configuration_suffix", replace_configuration_suffix),
                 ("replace_target_suffix", replace_target_suffix),
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
@@ -7930,11 +7940,13 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         start_suffix = post_constants.get("start_suffix")
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
+        replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
         if task_prefix and "g_str_has_prefix (path, task_prefix)" in post_function_body:
             for suffix_variable, suffix in (
                 ("clone_suffix", clone_suffix),
                 ("start_suffix", start_suffix),
                 ("stop_suffix", stop_suffix),
+                ("replace_configuration_suffix", replace_configuration_suffix),
                 ("replace_target_suffix", replace_target_suffix),
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
@@ -9339,9 +9351,9 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/tasks",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["same-origin browser task create with explicit target/config/scanner references", "direct native task create with optional schedule, alerts, and host ordering without scanner lifecycle start"],
+                "replacement_candidates": ["same-origin browser task create with retained editor configuration", "direct native task create with optional schedule, alerts, host ordering, scanner preferences, and task tag without immediate scanner lifecycle start"],
                 "residual_inherited": [
-                    "Task resume, hard-delete, broad target/config/scanner mutation, preferences beyond host ordering, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
+                    "Task resume, hard-delete, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -9351,7 +9363,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser task clone through authoritative gvmd control", "guarded direct native task clone that does not directly start a scan"],
                 "residual_inherited": [
-                    "Task resume, hard-delete, broad target/config/scanner mutation, preferences beyond host ordering, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
+                    "Task resume, hard-delete, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -9370,8 +9382,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin and direct native strict New-task target replacement", "native-update-task-target helper"],
+                "residual_inherited": [],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/tasks/{task_id}/replace-configuration",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin task editor full save", "direct native retained task configuration replacement"],
                 "residual_inherited": [
-                    "Task config/scanner/schedule/alert/preference mutation remains inherited until separately migrated."
+                    "Task resume, hard-delete, and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -15570,6 +15590,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.task-relation-fixtures",
             "native-api-direct.task-write-create",
             "native-api-direct.task-write-update",
+            "native-api-direct.task-write-replace-configuration",
             "native-api-direct.task-write-clone",
             "native-api-direct.task-write-delete-clone",
             "native-api-direct.task-write-post-delete-clone",
@@ -16728,6 +16749,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     task_schedule_name = f"{task_name}-schedule"
     task_alert_id: str | None = None
     task_alert_name = f"{task_name}-alert"
+    task_tag_id: str | None = None
+    task_tag_name = f"{task_name}-tag"
     task_updated_comment = "TurboVAS direct write smoke updated task metadata"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
@@ -18612,23 +18635,30 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         "(uuid, owner, name, comment, event, condition, method, active, creation_time, modification_time) "
                         "SELECT make_uuid(), id, "
                         f"{sql_literal(task_alert_name)}, 'TurboVAS direct write smoke task alert', "
-                        "1, 1, 1, 1, m_now(), m_now() FROM owner_row RETURNING uuid) "
+                        "1, 1, 1, 1, m_now(), m_now() FROM owner_row RETURNING uuid), "
+                        "inserted_tag AS (INSERT INTO tags "
+                        "(uuid, owner, name, comment, value, resource_type, active, creation_time, modification_time) "
+                        "SELECT make_uuid(), id, "
+                        f"{sql_literal(task_tag_name)}, 'TurboVAS direct write smoke task tag', '', 'task', 1, m_now(), m_now() "
+                        "FROM owner_row RETURNING uuid) "
                         "SELECT (SELECT uuid::text FROM inserted_schedule) || '|' || "
-                        "(SELECT uuid::text FROM inserted_alert);"
+                        "(SELECT uuid::text FROM inserted_alert) || '|' || "
+                        "(SELECT uuid::text FROM inserted_tag);"
                     )
                     task_relation_fixture = psql(repo_root, task_relation_fixture_sql)
                     task_relation_fixture_value = psql_value(task_relation_fixture)
-                    if "|" in task_relation_fixture_value:
-                        task_schedule_id, task_alert_id = task_relation_fixture_value.split("|", 1)
+                    if task_relation_fixture_value.count("|") == 2:
+                        task_schedule_id, task_alert_id, task_tag_id = task_relation_fixture_value.split("|", 2)
                     task_relation_fixture_ok = (
                         task_relation_fixture.returncode == 0
                         and bool(task_schedule_id)
                         and bool(task_alert_id)
+                        and bool(task_tag_id)
                     )
                     task_relation_fixture_finding = process_step_finding(
                         "pass" if task_relation_fixture_ok else "fail",
                         "native-api-direct.task-relation-fixtures",
-                        "Direct write-control smoke created owned schedule and alert fixtures for native task creation."
+                        "Direct write-control smoke created owned schedule, alert, and task-tag fixtures for native task creation."
                         if task_relation_fixture_ok
                         else "Direct write-control smoke failed to create owned schedule and alert fixtures for native task creation.",
                         task_relation_fixture,
@@ -18640,6 +18670,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                             {
                                 "schedule_id": task_schedule_id,
                                 "alert_id": task_alert_id,
+                                "tag_id": task_tag_id,
                             }
                         )
                     findings.append(task_relation_fixture_finding)
@@ -18657,8 +18688,15 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                             "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
                             "scanner_id": task_scanner_id,
                             "schedule_id": task_schedule_id,
+                            "schedule_periods": 1,
                             "alert_ids": [task_alert_id],
                             "hosts_ordering": "reverse",
+                            "apply_overrides": False,
+                            "max_checks": 8,
+                            "max_hosts": 12,
+                            "min_qod": 65,
+                            "cs_allow_failed_retrieval": True,
+                            "tag_id": task_tag_id,
                         },
                         separators=(",", ":"),
                     )
@@ -18666,6 +18704,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     task_create_json, task_create_status = parse_json_output_with_http_status(task_create)
                     task_id = task_create_json.get("id") if isinstance(task_create_json, dict) and isinstance(task_create_json.get("id"), str) else None
                     task_relation_state = ""
+                    task_tag_link_state = ""
                     if task_id:
                         task_relation_state = psql_value(
                             psql(
@@ -18680,18 +18719,36 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                                 f"WHERE t.uuid = {sql_literal(task_id)};",
                             )
                         )
+                        task_tag_link_state = psql_value(
+                            psql(
+                                repo_root,
+                                "SELECT count(*)::text FROM tag_resources tr "
+                                "JOIN tags tag ON tag.id = tr.tag JOIN tasks t ON t.id = tr.resource "
+                                "WHERE tr.resource_type = 'task' AND coalesce(tr.resource_location, 0) = 0 "
+                                f"AND tag.uuid = {sql_literal(task_tag_id or '')} AND t.uuid = {sql_literal(task_id)};",
+                            )
+                        )
                     task_relation_fields = task_relation_state.split("|")
                     task_relation_ok = (
                         len(task_relation_fields) == 5
                         and task_relation_fields[0] == task_schedule_id
-                        and task_relation_fields[1] == "0"
+                        and task_relation_fields[1] == "1"
                         and task_relation_fields[2].isdigit()
                         and int(task_relation_fields[2]) > 0
                         and task_relation_fields[3] == "reverse"
                         and task_relation_fields[4] == "1"
                     )
-                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task" and task_relation_ok
-                    findings.append(native_api_probe_finding("pass" if task_create_ok else "fail", "native-api-direct.task-write-create", "Direct write-control created a scheduled, alerted, reverse-ordered temporary scan task without starting a scan." if task_create_ok else "Direct write-control failed to create or persist the scheduled, alerted, reverse-ordered temporary scan task.", task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type), task_create_json, {"http_status": task_create_status, "task_id": task_id, "target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID, "scanner_id": task_scanner_id, "schedule_id": task_schedule_id, "alert_id": task_alert_id, "relation_state": task_relation_state, **summarize_native_api_response(task_create_json)}))
+                    task_create_preferences_ok = (
+                        isinstance(task_create_json, dict)
+                        and task_create_json.get("apply_overrides") is False
+                        and task_create_json.get("max_checks") == 8
+                        and task_create_json.get("max_hosts") == 12
+                        and task_create_json.get("min_qod") == 65
+                        and task_create_json.get("cs_allow_failed_retrieval") is True
+                        and task_create_json.get("hosts_ordering") == "reverse"
+                    )
+                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task" and task_relation_ok and task_create_preferences_ok and task_tag_link_state == "1"
+                    findings.append(native_api_probe_finding("pass" if task_create_ok else "fail", "native-api-direct.task-write-create", "Direct write-control created a scheduled, alerted, tagged, preference-configured temporary scan task without starting a scan." if task_create_ok else "Direct write-control failed to create or persist the scheduled, alerted, tagged, preference-configured temporary scan task.", task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type), task_create_json, {"http_status": task_create_status, "task_id": task_id, "target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID, "scanner_id": task_scanner_id, "schedule_id": task_schedule_id, "alert_id": task_alert_id, "tag_id": task_tag_id, "tag_link_state": task_tag_link_state, "relation_state": task_relation_state, "preferences_ok": task_create_preferences_ok, **summarize_native_api_response(task_create_json)}))
                 else:
                     findings.append(finding("warn", "native-api-direct.task-write-create", "Direct write-control smoke skipped native task creation because no scanner fixture was available.", details={"target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID}))
 
@@ -18750,6 +18807,75 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     task_state_after = psql_value(psql(repo_root, task_state_sql))
                     task_patch_ok = task_patch.returncode == 0 and task_patch_status == 200 and isinstance(task_patch_json, dict) and task_patch_json.get("id") == task_id and task_patch_json.get("comment") == task_updated_comment and task_state_before and task_state_before == task_state_after
                     findings.append(native_api_probe_finding("pass" if task_patch_ok else "fail", "native-api-direct.task-write-update", "Direct write-control patched task metadata without changing target/config/schedule/scanner/status lifecycle state." if task_patch_ok else "Direct write-control failed to patch task metadata or changed adjacent task lifecycle state.", task_patch, direct_native_api_display_command(f"/api/v1/tasks/{urllib.parse.quote(task_id)}", token=token, env=env, method="PATCH", body=task_patch_body, extra_headers=content_type), task_patch_json, {"http_status": task_patch_status, "task_id": task_id, "state_checksum_before": task_state_before, "state_checksum_after": task_state_after, **summarize_native_api_response(task_patch_json)}))
+
+                    task_replace_body = json.dumps(
+                        {
+                            "name": task_name,
+                            "comment": task_updated_comment,
+                            "target_id": target_id,
+                            "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
+                            "scanner_id": task_scanner_id,
+                            "schedule_id": task_schedule_id,
+                            "schedule_periods": 2,
+                            "alert_ids": [task_alert_id],
+                            "hosts_ordering": "sequential",
+                            "apply_overrides": True,
+                            "max_checks": 6,
+                            "max_hosts": 10,
+                            "min_qod": 60,
+                            "cs_allow_failed_retrieval": False,
+                        },
+                        separators=(",", ":"),
+                    )
+                    task_replace_path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/replace-configuration"
+                    task_replace = direct_native_api_curl(repo_root, task_replace_path, token=token, env=env, method="POST", body=task_replace_body, extra_headers=content_type)
+                    task_replace_json, task_replace_status = parse_json_output_with_http_status(task_replace)
+                    task_replace_state = psql_value(
+                        psql(
+                            repo_root,
+                            "SELECT coalesce(s.uuid::text, '') || '|' || coalesce(t.schedule_periods::text, '') || '|' || "
+                            "coalesce(t.schedule_next_time::text, '') || '|' || "
+                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'hosts_ordering'), '') || '|' || "
+                            "(SELECT count(*)::text FROM task_alerts ta JOIN alerts a ON a.id = ta.alert "
+                            f"WHERE ta.task = t.id AND a.uuid = {sql_literal(task_alert_id or '')}) || '|' || "
+                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'assets_apply_overrides'), '') || '|' || "
+                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'max_checks'), '') || '|' || "
+                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'max_hosts'), '') || '|' || "
+                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'assets_min_qod'), '') || '|' || "
+                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'cs_allow_failed_retrieval'), '') || '|' || "
+                            "(SELECT count(*)::text FROM reports WHERE task = t.id) || '|' || "
+                            "(SELECT count(*)::text FROM scan_queue q JOIN reports r ON r.id = q.report WHERE r.task = t.id) "
+                            "FROM tasks t LEFT JOIN schedules s ON s.id = t.schedule "
+                            f"WHERE t.uuid = {sql_literal(task_id)};",
+                        )
+                    )
+                    task_replace_fields = task_replace_state.split("|")
+                    task_replace_response_ok = (
+                        isinstance(task_replace_json, dict)
+                        and task_replace_json.get("id") == task_id
+                        and task_replace_json.get("schedule_periods") == 2
+                        and task_replace_json.get("apply_overrides") is True
+                        and task_replace_json.get("max_checks") == 6
+                        and task_replace_json.get("max_hosts") == 10
+                        and task_replace_json.get("min_qod") == 60
+                        and task_replace_json.get("cs_allow_failed_retrieval") is False
+                        and task_replace_json.get("hosts_ordering") == "sequential"
+                        and any(isinstance(alert, dict) and alert.get("id") == task_alert_id for alert in task_replace_json.get("alerts", []))
+                    )
+                    task_replace_ok = (
+                        task_replace.returncode == 0
+                        and task_replace_status == 200
+                        and len(task_replace_fields) == 12
+                        and task_replace_fields[0] == task_schedule_id
+                        and task_replace_fields[1] == "2"
+                        and task_replace_fields[2].isdigit()
+                        and int(task_replace_fields[2]) > 0
+                        and task_replace_fields[3:] == ["sequential", "1", "yes", "6", "10", "60", "0", "0", "0"]
+                        and task_replace_response_ok
+                    )
+                    if task_replace_ok:
+                        task_relation_state = "|".join(task_replace_fields[:5])
+                    findings.append(native_api_probe_finding("pass" if task_replace_ok else "fail", "native-api-direct.task-write-replace-configuration", "Direct write-control atomically replaced retained task editor configuration without starting a scan." if task_replace_ok else "Direct write-control failed to replace retained task editor configuration or created an execution side effect.", task_replace, direct_native_api_display_command(task_replace_path, token=token, env=env, method="POST", body=task_replace_body, extra_headers=content_type), task_replace_json, {"http_status": task_replace_status, "task_id": task_id, "state": task_replace_state, "response_ok": task_replace_response_ok, **summarize_native_api_response(task_replace_json)}))
 
                     task_clone = direct_native_api_curl(repo_root, f"/api/v1/tasks/{urllib.parse.quote(task_id)}/clone", token=token, env=env, method="POST", include_response_headers=True)
                     task_clone_json, task_clone_status, task_clone_headers = parse_json_output_with_headers_and_http_status(task_clone)
@@ -18861,22 +18987,25 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                         task_cleanup_details.update({"task_id": task_id, "task_clone_id": task_clone_id, "task_name": task_name, "task_clone_name": task_clone_name, "deleted_count": task_cleanup_deleted, "remaining_count": task_cleanup_remaining})
                     findings.append(task_cleanup_finding)
 
-                if task_schedule_id or task_alert_id:
+                if task_schedule_id or task_alert_id or task_tag_id:
                     task_relation_cleanup_sql = (
                         "WITH deleted_alert AS (DELETE FROM alerts "
                         f"WHERE uuid = {sql_literal(task_alert_id or '')} AND name = {sql_literal(task_alert_name)} RETURNING id), "
                         "deleted_schedule AS (DELETE FROM schedules "
-                        f"WHERE uuid = {sql_literal(task_schedule_id or '')} AND name = {sql_literal(task_schedule_name)} RETURNING id) "
+                        f"WHERE uuid = {sql_literal(task_schedule_id or '')} AND name = {sql_literal(task_schedule_name)} RETURNING id), "
+                        "deleted_tag AS (DELETE FROM tags "
+                        f"WHERE uuid = {sql_literal(task_tag_id or '')} AND name = {sql_literal(task_tag_name)} RETURNING id) "
                         "SELECT (SELECT count(*) FROM deleted_alert) || '|' || "
-                        "(SELECT count(*) FROM deleted_schedule);"
+                        "(SELECT count(*) FROM deleted_schedule) || '|' || "
+                        "(SELECT count(*) FROM deleted_tag);"
                     )
                     task_relation_cleanup = psql(repo_root, task_relation_cleanup_sql)
                     task_relation_cleanup_deleted = psql_value(task_relation_cleanup)
-                    task_relation_cleanup_ok = task_relation_cleanup.returncode == 0 and task_relation_cleanup_deleted == "1|1"
+                    task_relation_cleanup_ok = task_relation_cleanup.returncode == 0 and task_relation_cleanup_deleted == "1|1|1"
                     task_relation_cleanup_finding = process_step_finding(
                         "pass" if task_relation_cleanup_ok else "fail",
                         "native-api-direct.task-relation-fixture-cleanup",
-                        "Direct write-control smoke removed the temporary task schedule and alert fixtures."
+                        "Direct write-control smoke removed the temporary task schedule, alert, and tag fixtures."
                         if task_relation_cleanup_ok
                         else "Direct write-control smoke failed to remove the temporary task schedule or alert fixture.",
                         task_relation_cleanup,

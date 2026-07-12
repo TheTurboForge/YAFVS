@@ -267,6 +267,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::POST, ["", "api", "v1", "tasks", task_id, "replace-target"]) => {
             direct_api_write_id_segment_is_allowed(task_id)
         }
+        (&Method::POST, ["", "api", "v1", "tasks", task_id, "replace-configuration"]) => {
+            direct_api_write_id_segment_is_allowed(task_id)
+        }
         (&Method::POST, ["", "api", "v1", "tasks", task_id, "start"]) => {
             direct_api_write_id_segment_is_allowed(task_id)
         }

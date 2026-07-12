@@ -108,7 +108,6 @@ describe('TaskComponent tests', () => {
     expect(screen.getByTestId('button')).toBeInTheDocument();
   });
 
-
   test('should open correct dialog on edit for standard task', async () => {
     const gmp = createGmp();
     const {render} = rendererWith({gmp, capabilities: true});
@@ -174,7 +173,7 @@ describe('TaskComponent tests', () => {
       config: {_id: 'config-id', name: 'Full and fast'},
       scanner: {_id: 'scanner-id', name: 'OpenVAS', type: '2'},
       schedule: {_id: 'schedule-id', name: 'Daily'},
-      schedule_periods: 1,
+      schedule_periods: 3,
       alert: [{_id: 'alert-id', name: 'Alert'}],
       preferences: {
         preference: [
@@ -192,7 +191,6 @@ describe('TaskComponent tests', () => {
       isTaskMetadataOnlyDialogSave({
         alert_ids: ['alert-id'],
         apply_overrides: 0,
-        auto_delete_data: 5,
         comment: 'New comment',
         config_id: 'config-id',
         csAllowFailedRetrieval: false,
@@ -203,7 +201,7 @@ describe('TaskComponent tests', () => {
         scanner_id: 'scanner-id',
         scanner_type: '2',
         schedule_id: 'schedule-id',
-        schedule_periods: 1,
+        schedule_periods: 3,
         target_id: 'target-id',
         task: standardTask,
       }),
@@ -234,7 +232,6 @@ describe('TaskComponent tests', () => {
       isTaskMetadataOnlyDialogSave({
         alert_ids: [],
         apply_overrides: 0,
-        auto_delete_data: 5,
         comment: 'New comment',
         config_id: 'different-config-id',
         csAllowFailedRetrieval: false,
@@ -250,5 +247,4 @@ describe('TaskComponent tests', () => {
       }),
     ).toEqual(false);
   });
-
 });

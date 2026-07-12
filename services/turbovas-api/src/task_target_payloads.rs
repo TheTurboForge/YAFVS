@@ -79,6 +79,12 @@ struct TaskReportReference {
 }
 
 #[derive(Debug, Serialize)]
+struct TaskAlertReference {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Serialize)]
 pub(crate) struct TaskItem {
     id: String,
     name: String,
@@ -97,6 +103,14 @@ pub(crate) struct TaskItem {
     end_time: Option<String>,
     schedule_next_time: Option<String>,
     schedule_periods: Option<i64>,
+    alerts: Vec<TaskAlertReference>,
+    apply_overrides: bool,
+    auto_delete_data: i32,
+    max_checks: i32,
+    max_hosts: i32,
+    min_qod: i32,
+    cs_allow_failed_retrieval: bool,
+    hosts_ordering: String,
     alterable: Option<bool>,
     report_count: TaskReportCount,
     current_report: Option<TaskReportReference>,
@@ -278,6 +292,22 @@ pub(crate) fn task_from_row(row: &Row) -> TaskItem {
         end_time: unix_ts_to_rfc3339(row.get("end_time")),
         schedule_next_time: unix_ts_to_rfc3339(row.get("schedule_next_time")),
         schedule_periods: row.get("schedule_periods"),
+        alerts: row
+            .get::<_, Vec<String>>("alert_ids")
+            .into_iter()
+            .zip(row.get::<_, Vec<String>>("alert_names"))
+            .map(|(id, name)| TaskAlertReference { id, name })
+            .collect(),
+        apply_overrides: row.get("apply_overrides"),
+        auto_delete_data: row
+            .get::<_, String>("auto_delete_data")
+            .parse()
+            .unwrap_or(10),
+        max_checks: row.get::<_, String>("max_checks").parse().unwrap_or(4),
+        max_hosts: row.get::<_, String>("max_hosts").parse().unwrap_or(20),
+        min_qod: row.get::<_, String>("min_qod").parse().unwrap_or(70),
+        cs_allow_failed_retrieval: row.get("cs_allow_failed_retrieval"),
+        hosts_ordering: row.get("hosts_ordering"),
         alterable: row.get("alterable"),
         report_count: TaskReportCount {
             total: row.get("report_count_total"),

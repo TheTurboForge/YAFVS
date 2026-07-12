@@ -33,8 +33,8 @@ use crate::{
     task_target_payloads::TaskItem,
     task_target_replace::{TaskTargetReplaceResponse, replace_task_target},
     task_target_replace_validation::TaskTargetReplaceRequest,
-    task_write_validation::{TaskCreateRequest, TaskPatchRequest},
-    task_writes::{clone_task, create_task, delete_task, patch_task},
+    task_write_validation::{TaskCreateRequest, TaskPatchRequest, TaskReplaceRequest},
+    task_writes::{clone_task, create_task, delete_task, patch_task, replace_task},
     tls_certificate_writes::delete_tls_certificate,
 };
 
@@ -265,6 +265,23 @@ pub(crate) async fn browser_proxy_patch_task(
 ) -> Result<Json<TaskItem>, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     patch_task(
+        State(state),
+        Path(task_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_replace_task(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<TaskReplaceRequest>,
+) -> Result<Json<TaskItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    replace_task(
         State(state),
         Path(task_id),
         Some(Extension(operator)),

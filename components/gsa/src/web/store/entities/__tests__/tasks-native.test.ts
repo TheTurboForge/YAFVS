@@ -44,6 +44,7 @@ describe('native API task list', () => {
             scanner_type: 2,
             schedule: {id: 'schedule-1', name: 'Weekly'},
             schedule_periods: 3,
+            hosts_ordering: 'sequential',
             alterable: true,
             report_count: {total: 3, finished: 2},
             last_report: {
@@ -85,6 +86,7 @@ describe('native API task list', () => {
     expect(task.scanner?.scannerType).toEqual('2');
     expect(task.schedule?.id).toEqual('schedule-1');
     expect(task.schedule_periods).toEqual(3);
+    expect(task.hosts_ordering).toEqual('sequential');
     expect(task.alterable).toEqual(1);
     expect(task.isWritable()).toEqual(true);
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tasks', {
@@ -120,6 +122,14 @@ describe('native API task list', () => {
         config: {id: 'config-1', name: 'Full and fast'},
         scanner: {id: 'scanner-1', name: 'Default scanner'},
         scanner_type: 2,
+        alerts: [{id: 'alert-1', name: 'Email operator'}],
+        apply_overrides: false,
+        auto_delete_data: 10,
+        max_checks: 8,
+        max_hosts: 12,
+        min_qod: 65,
+        cs_allow_failed_retrieval: true,
+        hosts_ordering: 'reverse',
         report_count: {total: 1, finished: 1},
         last_report: {id: 'report-1', severity: 7.5},
       }),
@@ -135,6 +145,14 @@ describe('native API task list', () => {
     expect(response.task.name).toEqual('Full and fast');
     expect(response.task.report_count?.total).toEqual(1);
     expect(response.task.scanner?.scannerType).toEqual('2');
+    expect(response.task.alerts[0]?.id).toEqual('alert-1');
+    expect(response.task.apply_overrides).toEqual(0);
+    expect(response.task.auto_delete_data).toEqual(10);
+    expect(response.task.max_checks).toEqual(8);
+    expect(response.task.max_hosts).toEqual(12);
+    expect(response.task.min_qod).toEqual(65);
+    expect(response.task.csAllowFailedRetrieval).toEqual(true);
+    expect(response.task.hosts_ordering).toEqual('reverse');
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tasks/task-1', {
       token: 'test-token',
     });
@@ -181,7 +199,9 @@ describe('native API task list', () => {
     const gmp = {
       ...createGmp(),
       tasks: {
-        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        get: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 
@@ -214,7 +234,9 @@ describe('native API task list', () => {
     const dispatch = testing.fn();
     const gmp = {
       task: {
-        get: testing.fn().mockResolvedValue({data: {id, name: 'Inherited detail'}}),
+        get: testing
+          .fn()
+          .mockResolvedValue({data: {id, name: 'Inherited detail'}}),
       },
     };
 

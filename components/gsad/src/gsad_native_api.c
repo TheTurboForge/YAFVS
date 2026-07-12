@@ -719,6 +719,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *resources_suffix = "/resources";
   const gchar *ranges_suffix = "/ranges";
   const gchar *replace_target_suffix = "/replace-target";
+  const gchar *replace_configuration_suffix = "/replace-configuration";
   const gchar *start_suffix = "/start";
   const gchar *stop_suffix = "/stop";
   const gchar *verify_suffix = "/verify";
@@ -852,6 +853,7 @@ native_api_post_path_is_allowed (const gchar *path)
       return is_uuid_segment_with_suffix (id, clone_suffix)
              || is_uuid_segment_with_suffix (id, start_suffix)
              || is_uuid_segment_with_suffix (id, stop_suffix)
+             || is_uuid_segment_with_suffix (id, replace_configuration_suffix)
              || is_uuid_segment_with_suffix (id, replace_target_suffix);
     }
 

@@ -824,7 +824,7 @@ Ensure (xmlutils, rewind_resets_state)
 Ensure (xmlutils, file_iterator_blocks_file_entity_with_global_defaults)
 {
   external_entity_test_result_t result;
-  gchar *marker_path = write_temp_xml ("TVSEC_READABLE_MARKER");
+  gchar *marker_path = write_temp_xml ("XML_READABLE_MARKER");
   gchar *marker_uri;
   gchar *xml;
 
@@ -861,7 +861,7 @@ Ensure (xmlutils, file_iterator_blocks_file_entity_with_global_defaults)
 Ensure (xmlutils, file_iterator_blocks_network_entity_with_global_defaults)
 {
   const char *xml = "<!DOCTYPE root SYSTEM "
-                    "'http://127.0.0.1:9/tvsec-external.dtd'>"
+                    "'http://127.0.0.1:9/external.dtd'>"
                     "<root><item>safe</item></root>";
   external_entity_test_result_t result;
 
@@ -924,7 +924,7 @@ Ensure (xmlutils, file_iterator_blocks_parameter_entity_with_global_defaults)
 Ensure (xmlutils, file_iterator_rejects_doctype_split_across_buffer)
 {
   external_entity_test_result_t result;
-  gchar *marker_path = write_temp_xml ("TVSEC_SPLIT_MARKER");
+  gchar *marker_path = write_temp_xml ("XML_SPLIT_MARKER");
   gchar *marker_uri;
   gchar *padding;
   gchar *xml;

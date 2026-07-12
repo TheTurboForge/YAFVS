@@ -52,6 +52,17 @@ For production posture and public-release gating, see
 For minimum validation expectations by change class, see
 `docs/VALIDATION_STANDARDS.md`.
 
+## Memory Safety Direction
+
+TurboVAS is incrementally reducing reliance on memory-unsafe implementation.
+New security-sensitive backend functionality is Rust-first. Existing C is not
+being mechanically rewritten wholesale: unnecessary components are removed,
+exposed and high-consequence boundaries are prioritized, and retained C is
+hardened and tested until a validated replacement is appropriate.
+
+See `docs/MEMORY_SAFETY.md` for the rationale, migration policy, limitations,
+and validation expectations.
+
 For current implementation flow maps and data-placement rules, see
 `docs/ARCHITECTURE_FLOWS.md` and `docs/DATABASE_GRAVITY.md`.
 For the native HTTP/JSON API direction and GMP/XML retirement map, see

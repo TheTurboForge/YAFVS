@@ -35,6 +35,16 @@ just security-policy-check --json
 `production-posture-check` is expected to fail until production authentication,
 trusted TLS, password rotation, and deployment controls are implemented.
 
+## Memory Safety
+
+TurboVAS uses an incremental Rust-first direction for new security-sensitive
+backend functionality while retaining, hardening, removing, or replacing
+inherited C according to exposure and consequence. Memory safety is one part of
+the security posture and does not substitute for authentication, authorization,
+input validation, scanner safety, dependency review, or deployment hardening.
+
+See `docs/MEMORY_SAFETY.md`.
+
 ## Relationship To Greenbone
 
 TurboVAS is independent and is not affiliated with, sponsored by, or endorsed by

@@ -37,6 +37,15 @@ Useful ideas are welcome as design signal, but maintainers may choose a
 different implementation to preserve TurboVAS direction, security boundaries,
 license/provenance obligations, and validation standards.
 
+## Memory Safety
+
+New security-sensitive backend functionality should use Rust unless a narrow
+change to an existing C subsystem is demonstrably the safer coherent option.
+Do not introduce a broad rewrite, new FFI boundary, or mechanically translated
+C-shaped Rust without characterization and focused validation.
+
+See `docs/MEMORY_SAFETY.md` for the project direction and review criteria.
+
 ## Project Direction
 
 TurboVAS intentionally diverges from upstream behavior. See

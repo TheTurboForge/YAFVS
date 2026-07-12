@@ -37,6 +37,13 @@ static gboolean diagnostic_control_changed;
 static gboolean diagnostic_control_committed;
 static int modify_schedule_calls;
 static int modify_schedule_result;
+static int create_tag_calls;
+static int create_tag_result;
+static int modify_tag_calls;
+static int modify_tag_result;
+static gboolean tag_uuid_lookup_fails;
+static int tag_audit_fail_calls;
+static int tag_audit_success_calls;
 static int reinit_calls;
 static int session_init_calls;
 static int stop_task_calls;
@@ -79,6 +86,12 @@ static gchar *received_login;
 static gchar *received_name;
 static gchar *received_secret;
 static gchar *received_schedule_uuid;
+static gchar *received_tag_uuid;
+static gchar *received_tag_resource_type;
+static gchar *received_tag_resource_filter;
+static gchar *received_tag_resources_action;
+static gchar *received_tag_active;
+static gchar *received_tag_first_resource_id;
 static gchar *received_timezone;
 static gchar *received_diagnostic_config_uuid;
 static gchar *received_diagnostic_nvt_oid;
@@ -334,6 +347,16 @@ __wrap_log_event (const char *resource, const char *resource_name,
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
     }
+  else if (strcmp (resource, "tag") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Tag"));
+      assert_that (strcmp (action, "created") == 0
+                     || strcmp (action, "modified") == 0,
+                   is_true);
+      tag_audit_success_calls++;
+      g_free (received_audit_uuid);
+      received_audit_uuid = g_strdup (uuid);
+    }
   else
     {
       assert_trash_empty_audit_operator_session ();
@@ -364,6 +387,16 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
       assert_that (uuid, is_null);
       assert_that (action, is_equal_to_string ("created"));
       audit_fail_calls++;
+    }
+  else if (strcmp (resource, "tag") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("Tag"));
+      assert_that (strcmp (action, "created") == 0
+                     || strcmp (action, "modified") == 0,
+                   is_true);
+      tag_audit_fail_calls++;
+      g_free (received_audit_uuid);
+      received_audit_uuid = g_strdup (uuid);
     }
   else
     {
@@ -426,6 +459,74 @@ __wrap_modify_schedule (const char *schedule_uuid, const char *name,
   received_icalendar = g_strdup (icalendar);
   *error_out = NULL;
   return modify_schedule_result;
+}
+
+int
+__wrap_create_tag (const char *name, const char *comment, const char *value,
+                   const char *resource_type, array_t *resource_ids,
+                   const char *resources_filter, const char *active,
+                   tag_t *tag, gchar **error_extra)
+{
+  create_tag_calls++;
+  g_free (received_name);
+  g_free (received_comment);
+  g_free (received_tag_resource_type);
+  g_free (received_tag_resource_filter);
+  g_free (received_tag_active);
+  g_free (received_tag_first_resource_id);
+  received_name = g_strdup (name);
+  received_comment = g_strdup (comment);
+  received_tag_resource_type = g_strdup (resource_type);
+  received_tag_resource_filter = g_strdup (resources_filter);
+  received_tag_active = g_strdup (active);
+  received_tag_first_resource_id =
+    resource_ids && g_ptr_array_index (resource_ids, 0)
+      ? g_strdup (g_ptr_array_index (resource_ids, 0)) : NULL;
+  g_free (received_secret);
+  received_secret = g_strdup (value);
+  *tag = 10;
+  *error_extra = NULL;
+  return create_tag_result;
+}
+
+char *
+__wrap_tag_uuid (tag_t tag)
+{
+  return tag == 10 && !tag_uuid_lookup_fails
+           ? g_strdup ("123e4567-e89b-12d3-a456-426614174005") : NULL;
+}
+
+int
+__wrap_modify_tag (const char *tag_uuid, const char *name,
+                   const char *comment, const char *value,
+                   const char *resource_type, array_t *resource_ids,
+                   const char *resources_filter,
+                   const char *resources_action, const char *active,
+                   gchar **error_extra)
+{
+  modify_tag_calls++;
+  g_free (received_tag_uuid);
+  g_free (received_name);
+  g_free (received_comment);
+  g_free (received_secret);
+  g_free (received_tag_resource_type);
+  g_free (received_tag_resource_filter);
+  g_free (received_tag_resources_action);
+  g_free (received_tag_active);
+  g_free (received_tag_first_resource_id);
+  received_tag_uuid = g_strdup (tag_uuid);
+  received_name = g_strdup (name);
+  received_comment = g_strdup (comment);
+  received_secret = g_strdup (value);
+  received_tag_resource_type = g_strdup (resource_type);
+  received_tag_resource_filter = g_strdup (resources_filter);
+  received_tag_resources_action = g_strdup (resources_action);
+  received_tag_active = g_strdup (active);
+  received_tag_first_resource_id =
+    resource_ids && g_ptr_array_index (resource_ids, 0)
+      ? g_strdup (g_ptr_array_index (resource_ids, 0)) : NULL;
+  *error_extra = NULL;
+  return modify_tag_result;
 }
 
 int
@@ -3663,6 +3764,255 @@ Ensure (turbovas_control, reports_indeterminate_after_diagnostic_commit)
   diagnostic_db_active = FALSE;
 }
 
+static gchar *
+test_tag_base64 (const char *value)
+{
+  return g_base64_encode ((const guchar *) value, strlen (value));
+}
+
+Ensure (turbovas_control, parses_canonical_tag_create_requests)
+{
+  gchar *resource_type = test_tag_base64 ("task");
+  gchar *name = test_tag_base64 ("Critical systems");
+  gchar *comment = test_tag_base64 ("Owned by operations");
+  gchar *value = test_tag_base64 ("priority");
+  gchar *resource_ids = test_tag_base64 (
+    "123e4567-e89b-12d3-a456-426614174002");
+  gchar *filter = test_tag_base64 ("rows=-1 name~production");
+  gchar *explicit_request = g_strdup_printf (
+    "tag-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 %s %s %s %s %s \n",
+    resource_type, name, comment, value, resource_ids);
+  gchar *filter_request = g_strdup_printf (
+    "tag-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 %s %s %s %s  %s\n",
+    resource_type, name, comment, value, filter);
+  char operator_uuid[37];
+  turbovas_control_tag_create_request_t tag = {0};
+
+  assert_that (turbovas_control_parse_tag_create_request (
+                 explicit_request, strlen (explicit_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &tag),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string (
+                 "123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (tag.resource_type, is_equal_to_string ("task"));
+  assert_that (tag.name, is_equal_to_string ("Critical systems"));
+  assert_that (tag.comment, is_equal_to_string ("Owned by operations"));
+  assert_that (tag.value, is_equal_to_string ("priority"));
+  assert_that (g_ptr_array_index (tag.resource_ids, 0),
+               is_equal_to_string (
+                 "123e4567-e89b-12d3-a456-426614174002"));
+  assert_that (tag.resource_filter, is_equal_to_string (""));
+  turbovas_control_tag_create_request_clear (&tag);
+
+  assert_that (turbovas_control_parse_tag_create_request (
+                 filter_request, strlen (filter_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &tag),
+               is_true);
+  assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
+  assert_that (tag.resource_filter,
+               is_equal_to_string ("rows=-1 name~production"));
+  turbovas_control_tag_create_request_clear (&tag);
+
+  g_free (filter_request);
+  g_free (explicit_request);
+  g_free (filter);
+  g_free (resource_ids);
+  g_free (value);
+  g_free (comment);
+  g_free (name);
+  g_free (resource_type);
+}
+
+Ensure (turbovas_control, rejects_ambiguous_or_malformed_tag_create_requests)
+{
+  gchar *resource_type = test_tag_base64 ("task");
+  gchar *name = test_tag_base64 ("Critical systems");
+  gchar *resource_ids = test_tag_base64 (
+    "123e4567-e89b-12d3-a456-426614174002");
+  gchar *filter = test_tag_base64 ("rows=-1");
+  gchar *ambiguous = g_strdup_printf (
+    "tag-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 %s %s   %s %s\n",
+    resource_type, name, resource_ids, filter);
+  gchar *bad_secret = g_strdup_printf (
+    "tag-create wrong-secret "
+    "123e4567-e89b-12d3-a456-426614174000 1 %s %s    \n",
+    resource_type, name);
+  char operator_uuid[37];
+  turbovas_control_tag_create_request_t tag = {0};
+
+  assert_that (turbovas_control_parse_tag_create_request (
+                 ambiguous, strlen (ambiguous), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &tag),
+               is_false);
+  assert_that (turbovas_control_parse_tag_create_request (
+                 bad_secret, strlen (bad_secret), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &tag),
+               is_false);
+
+  g_free (bad_secret);
+  g_free (ambiguous);
+  g_free (filter);
+  g_free (resource_ids);
+  g_free (name);
+  g_free (resource_type);
+}
+
+Ensure (turbovas_control, parses_atomic_tag_modify_and_empty_set)
+{
+  gchar *name = test_tag_base64 ("Renamed");
+  gchar *resource_type = test_tag_base64 ("target");
+  gchar *filter = test_tag_base64 ("rows=-1 name~production");
+  gchar *request = g_strdup_printf (
+    "tag-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 +%s + - 0 +%s set + +%s\n",
+    name, resource_type, filter);
+  gchar *clear_request = g_strdup_printf (
+    "tag-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 - - - - - set + -\n");
+  char operator_uuid[37];
+  char tag_uuid[37];
+  turbovas_control_tag_modify_request_t tag = {0};
+
+  assert_that (turbovas_control_parse_tag_modify_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, tag_uuid,
+                 &tag),
+               is_true);
+  assert_that (tag_uuid,
+               is_equal_to_string (
+                 "123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (tag.name, is_equal_to_string ("Renamed"));
+  assert_that (tag.comment, is_equal_to_string (""));
+  assert_that (tag.value, is_null);
+  assert_that (tag.active, is_equal_to_string ("0"));
+  assert_that (tag.resource_type, is_equal_to_string ("target"));
+  assert_that (tag.resources_action, is_equal_to_string ("set"));
+  assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
+  assert_that (tag.resource_filter,
+               is_equal_to_string ("rows=-1 name~production"));
+  turbovas_control_tag_modify_request_clear (&tag);
+
+  assert_that (turbovas_control_parse_tag_modify_request (
+                 clear_request, strlen (clear_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, tag_uuid,
+                 &tag),
+               is_true);
+  assert_that (tag.resource_ids, is_not_null);
+  assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
+  assert_that (tag.resource_filter, is_null);
+  turbovas_control_tag_modify_request_clear (&tag);
+
+  g_free (clear_request);
+  g_free (request);
+  g_free (filter);
+  g_free (resource_type);
+  g_free (name);
+}
+
+Ensure (turbovas_control, rejects_unsafe_tag_resource_type_mutation)
+{
+  gchar *resource_type = test_tag_base64 ("target");
+  gchar *request = g_strdup_printf (
+    "tag-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 - - - - +%s - - -\n",
+    resource_type);
+  char operator_uuid[37];
+  char tag_uuid[37];
+  turbovas_control_tag_modify_request_t tag = {0};
+
+  assert_that (turbovas_control_parse_tag_modify_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, tag_uuid,
+                 &tag),
+               is_false);
+
+  g_free (request);
+  g_free (resource_type);
+}
+
+Ensure (turbovas_control, runs_tag_mutations_in_operator_session_and_audits)
+{
+  array_t *resource_ids = make_array ();
+  char created_uuid[37];
+  const turbovas_control_tag_create_request_t create_request = {
+    .name = "Critical systems",
+    .comment = "Owned by operations",
+    .value = "priority",
+    .resource_type = "task",
+    .resource_ids = resource_ids,
+    .resource_filter = "rows=-1 name~production",
+    .active = TRUE,
+  };
+  const turbovas_control_tag_modify_request_t modify_request = {
+    .name = "Renamed",
+    .resources_action = "set",
+    .resource_ids = resource_ids,
+    .resource_filter = "rows=-1 name~production",
+  };
+  array_terminate (resource_ids);
+  cleanup_calls = 0;
+  create_tag_calls = 0;
+  create_tag_result = 0;
+  modify_tag_calls = 0;
+  modify_tag_result = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  tag_audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_tag (
+                 "123e4567-e89b-12d3-a456-426614174000", &create_request,
+                 created_uuid),
+               is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string (
+                 "123e4567-e89b-12d3-a456-426614174005"));
+  assert_that (create_tag_calls, is_equal_to (1));
+  assert_that (tag_audit_success_calls, is_equal_to (1));
+  assert_that (received_tag_resource_filter,
+               is_equal_to_string (create_request.resource_filter));
+
+  assert_that (turbovas_control_modify_tag (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174001", &modify_request),
+               is_equal_to (0));
+  assert_that (modify_tag_calls, is_equal_to (1));
+  assert_that (tag_audit_success_calls, is_equal_to (2));
+  assert_that (cleanup_calls, is_equal_to (2));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  array_free (resource_ids);
+}
+
+Ensure (turbovas_control, maps_tag_control_responses)
+{
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+
+  assert_that (turbovas_control_tag_create_response (
+                 0, "123e4567-e89b-12d3-a456-426614174005", response),
+               is_equal_to_string (
+                 "0 created 123e4567-e89b-12d3-a456-426614174005\n"));
+  assert_that (turbovas_control_tag_create_response (2, NULL, response),
+               is_equal_to_string ("2 no_resources\n"));
+  assert_that (turbovas_control_tag_create_response (-3, NULL, response),
+               is_equal_to_string ("-3 committed_indeterminate\n"));
+  assert_that (turbovas_control_tag_modify_response (0, response),
+               is_equal_to_string ("0 modified\n"));
+  assert_that (turbovas_control_tag_modify_response (4, response),
+               is_equal_to_string ("4 resource_not_found\n"));
+  assert_that (turbovas_control_tag_modify_response (-2, response),
+               is_equal_to_string ("-2 malformed\n"));
+}
+
 int
 main (int argc, char **argv)
 {
@@ -3753,6 +4103,19 @@ main (int argc, char **argv)
                          rejects_unsafe_diagnostic_config_states);
   add_test_with_context (suite, turbovas_control,
                          reports_indeterminate_after_diagnostic_commit);
+  add_test_with_context (suite, turbovas_control,
+                         parses_canonical_tag_create_requests);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_ambiguous_or_malformed_tag_create_requests);
+  add_test_with_context (suite, turbovas_control,
+                         parses_atomic_tag_modify_and_empty_set);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_unsafe_tag_resource_type_mutation);
+  add_test_with_context (
+    suite, turbovas_control,
+    runs_tag_mutations_in_operator_session_and_audits);
+  add_test_with_context (suite, turbovas_control,
+                         maps_tag_control_responses);
   add_test_with_context (suite, turbovas_control,
                          parses_canonical_bounded_alert_email_request);
   add_test_with_context (suite, turbovas_control,

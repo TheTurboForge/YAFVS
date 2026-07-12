@@ -23,10 +23,7 @@ interface CreateGmpOptions {
   };
 }
 
-const createGmp = ({
-  buildUrl,
-  session,
-}: CreateGmpOptions = {}) => ({
+const createGmp = ({buildUrl, session}: CreateGmpOptions = {}) => ({
   settings: {},
   ...(buildUrl === undefined ? {} : {buildUrl}),
   ...(session === undefined ? {} : {session}),
@@ -268,16 +265,13 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(buildUrl).toHaveBeenCalledWith(
-      'api/v1/tags/resource-names/alert',
-      {
-        token: 'test-token',
-        page: 1,
-        page_size: SELECT_MAX_RESOURCES,
-        sort: 'name',
-        filter: '',
-      },
-    );
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/tags/resource-names/alert', {
+      token: 'test-token',
+      page: 1,
+      page_size: SELECT_MAX_RESOURCES,
+      sort: 'name',
+      filter: '',
+    });
   });
 
   test('should use native resource-name lookup for scanner and schedule names', async () => {
@@ -287,7 +281,11 @@ describe('TagDialog tests', () => {
           page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
           items: [
             url.includes('/schedule')
-              ? {id: 'schedule-native', type: 'schedule', name: 'Native Schedule'}
+              ? {
+                  id: 'schedule-native',
+                  type: 'schedule',
+                  name: 'Native Schedule',
+                }
               : {id: 'scanner-native', type: 'scanner', name: 'Native Scanner'},
           ],
         }),
@@ -367,19 +365,25 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(buildUrl).toHaveBeenCalledWith(
-      'api/v1/tags/resource-names/report',
-      {
-        token: 'test-token',
-        page: 1,
-        page_size: SELECT_MAX_RESOURCES,
-        sort: 'name',
-        filter: '',
-      },
-    );
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/tags/resource-names/report', {
+      token: 'test-token',
+      page: 1,
+      page_size: SELECT_MAX_RESOURCES,
+      sort: 'name',
+      filter: '',
+    });
   });
 
-  test('should not use inherited GMP for unsupported resource-name lookups', async () => {
+  test('should use native resource-name lookup for user tags', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
+        items: [{id: 'user-1', type: 'user', name: 'Operator'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
     const buildUrl = testing.fn(
       (path: string) => `https://turbovas.example/${path}`,
     );
@@ -394,7 +398,13 @@ describe('TagDialog tests', () => {
 
     await wait();
 
-    expect(buildUrl).not.toHaveBeenCalled();
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/tags/resource-names/user', {
+      token: 'test-token',
+      page: 1,
+      page_size: SELECT_MAX_RESOURCES,
+      sort: 'name',
+      filter: '',
+    });
   });
 
   test('should use native exact-id lookup when adding supported resources by id', async () => {
@@ -417,7 +427,13 @@ describe('TagDialog tests', () => {
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
-    render(<TagDialog resourceType="task" resourceTypes={['task']} onSave={onSave} />);
+    render(
+      <TagDialog
+        resourceType="task"
+        resourceTypes={['task']}
+        onSave={onSave}
+      />,
+    );
 
     const resourceIdTextField = screen.getByLabelText('Add Resource by ID');
     changeInputValue(resourceIdTextField, 'task-native');

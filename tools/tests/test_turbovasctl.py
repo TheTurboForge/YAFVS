@@ -3801,10 +3801,10 @@ class TurboVASCtlTests(unittest.TestCase):
          'tag-active-resource-assignment-write',
          'tag-clone',
          'tag-hard-delete',
-         'tag-metadata-and-explicit-resource-assignment-write',
+         'tag-metadata-explicit-and-filter-resource-assignment-write',
          'tag-metadata-export-read',
          'tag-metadata-read',
-         'tag-metadata-write',
+         'tag-metadata-resource-type-and-atomic-assignment-write',
          'tag-resource-name-read',
          'tag-resource-reference-read',
          'tag-restore',
@@ -3857,7 +3857,6 @@ class TurboVASCtlTests(unittest.TestCase):
          'saved-filter-alert-linkage',
          'scan-config-preference-selector-mutation-import-export-blank-create',
          'schedule-calendar-edit-and-task-recalculation',
-         'tag-filter-actions-and-resource-type-change-semantics',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
          'target-file-input-task-control-and-credential-secret-workflows',
@@ -4304,14 +4303,16 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(create_tag["direct_access"], "direct_write_control")
         self.assertEqual(create_tag["x_turbovas_maturity"], "live-write")
         self.assertEqual(create_tag["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(create_tag["x_turbovas_replaces"], "tag-metadata-and-explicit-resource-assignment-write")
+        self.assertEqual(create_tag["x_turbovas_replaces"], "tag-metadata-explicit-and-filter-resource-assignment-write")
+        self.assertIsNone(create_tag["x_turbovas_inherited_still_owns"])
 
         update_tag = rows[("patch", "/api/v1/tags/{tag_id}")]
         self.assertEqual(update_tag["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(update_tag["direct_access"], "direct_write_control")
         self.assertEqual(update_tag["x_turbovas_maturity"], "live-write")
         self.assertEqual(update_tag["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(update_tag["x_turbovas_replaces"], "tag-metadata-write")
+        self.assertEqual(update_tag["x_turbovas_replaces"], "tag-metadata-resource-type-and-atomic-assignment-write")
+        self.assertIsNone(update_tag["x_turbovas_inherited_still_owns"])
 
         delete_tag = rows[("delete", "/api/v1/tags/{tag_id}")]
         self.assertEqual(delete_tag["status"], "implemented_internal_and_browser_proxied")
@@ -9520,6 +9521,26 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(drift["schedule_create_schema_missing"], [])
         self.assertEqual(drift["schedule_create_schema_invalid"], [])
 
+    def test_native_tag_write_openapi_schemas_are_exact(self):
+        root = Path(__file__).resolve().parents[2]
+        drift = turbovasctl.openapi_tag_write_schema_contract_drift(root)
+        self.assertEqual(drift["tag_write_schema_missing"], [])
+        self.assertEqual(drift["tag_write_schema_invalid"], [])
+
+    def test_openapi_duplicate_field_paths_are_rejected(self):
+        block = [
+            "      type: object",
+            "      properties:",
+            "        resource_type:",
+            "          type: string",
+            "        resource_type:",
+            "          type: string",
+        ]
+        self.assertEqual(
+            turbovasctl.openapi_duplicate_field_paths(block),
+            ["properties.resource_type"],
+        )
+
     def test_native_targets_from_csv_parses_rows_and_dry_runs_payloads(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -10100,8 +10121,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("summary: List feed inventory metadata", openapi)
         self.assertIn("does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content", openapi)
         self.assertIn("summary: List tag-dialog resource names", openapi)
-        self.assertIn("enum: [cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, alert]", openapi)
-        self.assertIn("redacted id/name resource-name lookup", openapi)
+        self.assertIn("enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]", openapi)
+        self.assertIn("redacted id/name metadata", openapi)
         self.assertIn("/api/v1/feeds", contract)
         self.assertIn("tag-dialog resource-name lookups", contract)
         self.assertIn("including alert, credential, report, and result", contract)
@@ -12428,7 +12449,9 @@ db2:keys=5,expires=0,avg_ttl=0
                     if payload["resource_type"] == "alert":
                         return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": alert_tag_uuid, "name": payload["name"], "resource_type": "alert", "value": "initial", "active": True}) + "\n201", "")
                     self.assertEqual(payload["resource_type"], "cpe")
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "resource_type": "cpe", "value": "initial", "active": True}) + "\n201", "")
+                    self.assertEqual(payload["resource_filter"], "sort=name rows=1")
+                    tag_resource_count["value"] = 1
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "resource_type": "cpe", "resource_count": 1, "value": "initial", "active": True}) + "\n201", "")
                 if method == "POST" and path == "/api/v1/report-configs":
                     payload = json.loads(body)
                     self.assertEqual(payload["report_format_id"], report_format_uuid)
@@ -12637,7 +12660,11 @@ db2:keys=5,expires=0,avg_ttl=0
                 if method == "PATCH" and path.startswith("/api/v1/tags/"):
                     if "?" in path:
                         return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"request_too_large"}}\n413', "")
-                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "value": "updated", "active": False}) + "\n200", "")
+                    payload = json.loads(body)
+                    self.assertEqual(payload["resource_type"], "target")
+                    self.assertEqual(payload["resources"], {"action": "set", "resource_ids": []})
+                    tag_resource_count["value"] = 0
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "resource_type": "target", "resource_count": 0, "value": "updated", "active": False}) + "\n200", "")
                 if method == "DELETE" and path.startswith("/api/v1/tags/") and body is not None:
                     return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"request_too_large"}}\n413', "")
                 if method == "DELETE" and path.startswith("/api/v1/tags/"):

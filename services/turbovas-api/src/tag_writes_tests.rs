@@ -29,6 +29,7 @@ fn tag_create_request_normalizes_metadata_only_contract() {
         name: "owner:default".to_string(),
         resource_type: "target".to_string(),
         resource_ids: Vec::new(),
+        resource_filter: None,
         comment: None,
         value: None,
         active: default_tag_active(),
@@ -63,12 +64,14 @@ fn tag_create_request_accepts_explicit_resource_ids_only() {
         }
     );
 
-    assert!(
-        serde_json::from_str::<TagCreateRequest>(
-            r#"{"name":"x","resource_type":"task","resource_ids":["id"],"resource_filter":"name~x"}"#
-        )
-        .is_err()
-    );
+    let mixed: TagCreateRequest = serde_json::from_str(
+        r#"{"name":"x","resource_type":"task","resource_ids":["id"],"resource_filter":"name~x"}"#,
+    )
+    .expect("mixed selection shape deserializes before validation");
+    assert!(matches!(
+        validate_tag_create_request(mixed),
+        Err(ApiError::BadRequest(_))
+    ));
 }
 
 #[test]
@@ -247,7 +250,7 @@ fn tag_clone_request_rejects_unknown_fields_empty_name_and_bad_text() {
 fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
     assert!(
         serde_json::from_str::<TagCreateRequest>(
-            r#"{"name":"x","resource_type":"task","resource_filter":"name~x"}"#
+            r#"{"name":"x","resource_type":"task","resources_filter":"name~x"}"#
         )
         .is_err()
     );
@@ -275,6 +278,7 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
         name: " ".to_string(),
         resource_type: "task".to_string(),
         resource_ids: Vec::new(),
+        resource_filter: None,
         comment: None,
         value: None,
         active: true,
@@ -286,8 +290,9 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
 
     let bad_type = TagCreateRequest {
         name: "owner:x".to_string(),
-        resource_type: "user".to_string(),
+        resource_type: "tag".to_string(),
         resource_ids: Vec::new(),
+        resource_filter: None,
         comment: None,
         value: None,
         active: true,
@@ -299,7 +304,7 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
 }
 
 #[test]
-fn tag_patch_request_is_metadata_only_and_requires_a_field() {
+fn tag_patch_request_supports_atomic_resource_selection_and_requires_a_field() {
     let patch: TagPatchRequest = serde_json::from_str(
         r#"{"name":"  owner:patched ","comment":"","value":" v ","active":true}"#,
     )
@@ -310,12 +315,29 @@ fn tag_patch_request_is_metadata_only_and_requires_a_field() {
     assert_eq!(validated.value.as_deref(), Some("v"));
     assert_eq!(validated.active, Some(true));
 
-    assert!(serde_json::from_str::<TagPatchRequest>(r#"{"resource_type":"target"}"#).is_err());
+    let type_only: TagPatchRequest = serde_json::from_str(r#"{"resource_type":"target"}"#).unwrap();
+    assert!(matches!(
+        validate_tag_patch_request(type_only),
+        Err(ApiError::BadRequest(_))
+    ));
+    let type_and_set: TagPatchRequest = serde_json::from_str(
+        r#"{"name":"renamed","resource_type":"target","resources":{"action":"set","resource_ids":[]}}"#,
+    )
+    .unwrap();
+    let type_and_set =
+        validate_tag_patch_request(type_and_set).expect("type change with atomic set validates");
+    assert_eq!(type_and_set.resource_type.as_deref(), Some("target"));
+    assert_eq!(
+        type_and_set.resources.as_ref().map(|value| value.action),
+        Some(TagResourceUpdateAction::Set)
+    );
     let empty = TagPatchRequest {
         name: None,
         comment: None,
         value: None,
         active: None,
+        resource_type: None,
+        resources: None,
     };
     assert!(matches!(
         validate_tag_patch_request(empty),
@@ -327,6 +349,8 @@ fn tag_patch_request_is_metadata_only_and_requires_a_field() {
         comment: None,
         value: None,
         active: None,
+        resource_type: None,
+        resources: None,
     };
     assert!(matches!(
         validate_tag_patch_request(empty_name),
@@ -335,7 +359,7 @@ fn tag_patch_request_is_metadata_only_and_requires_a_field() {
 }
 
 #[test]
-fn tag_resource_update_request_is_explicit_ids_only() {
+fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
     let request: TagResourceUpdateRequest = serde_json::from_str(
         r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc","12345678-1234-1234-1234-123456789abc","cpe:/a:example:product:1"]}"#,
     )
@@ -362,31 +386,31 @@ fn tag_resource_update_request_is_explicit_ids_only() {
         vec!["12345678-1234-1234-1234-123456789abc".to_string()]
     );
 
-    assert!(matches!(
-        validate_tag_resource_update_request(
-            serde_json::from_str::<TagResourceUpdateRequest>(
-                r#"{"action":"set","resource_ids":[]}"#
-            )
-            .expect("set action with empty ids deserializes before validation")
-        ),
-        Err(ApiError::BadRequest(_))
-    ));
+    let clear = validate_tag_resource_update_request(
+        serde_json::from_str::<TagResourceUpdateRequest>(r#"{"action":"set","resource_ids":[]}"#)
+            .expect("set action with empty ids deserializes"),
+    )
+    .expect("empty set clears assignments");
+    assert!(clear.resource_ids.is_empty());
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"replace","resource_ids":["12345678-1234-1234-1234-123456789abc"]}"#,
         )
         .is_err()
     );
-    assert!(
+    let filtered = validate_tag_resource_update_request(
         serde_json::from_str::<TagResourceUpdateRequest>(
-            r#"{"action":"add","resource_ids":[],"resource_filter":"name~x"}"#,
+            r#"{"action":"add","resource_filter":"name~x"}"#,
         )
-        .is_err()
-    );
+        .expect("filter selection deserializes"),
+    )
+    .expect("filter selection validates");
+    assert_eq!(filtered.resource_filter.as_deref(), Some("name~x"));
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
             resource_ids: Vec::new(),
+            resource_filter: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -394,6 +418,7 @@ fn tag_resource_update_request_is_explicit_ids_only() {
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Remove,
             resource_ids: vec!["bad\nresource".to_string()],
+            resource_filter: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -404,26 +429,33 @@ fn tag_resource_update_request_is_explicit_ids_only() {
                 "12345678-1234-1234-1234-123456789abc".to_string();
                 MAX_TAG_RESOURCE_WRITE_IDS + 1
             ],
+            resource_filter: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
 }
 
 #[test]
-fn tag_resource_update_request_rejects_implicit_selection_and_bad_ids() {
-    assert!(serde_json::from_str::<TagResourceUpdateRequest>(r#"{"action":"add"}"#).is_err());
+fn tag_resource_update_request_rejects_ambiguous_selection_and_bad_ids() {
+    let implicit: TagResourceUpdateRequest = serde_json::from_str(r#"{"action":"add"}"#).unwrap();
+    assert!(matches!(
+        validate_tag_resource_update_request(implicit),
+        Err(ApiError::BadRequest(_))
+    ));
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"add","resource_type":"target","resource_ids":["12345678-1234-1234-1234-123456789abc"]}"#,
         )
         .is_err()
     );
-    assert!(
-        serde_json::from_str::<TagResourceUpdateRequest>(
-            r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resource_filter":"name~prod"}"#,
-        )
-        .is_err()
-    );
+    let mixed: TagResourceUpdateRequest = serde_json::from_str(
+        r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resource_filter":"name~prod"}"#,
+    )
+    .unwrap();
+    assert!(matches!(
+        validate_tag_resource_update_request(mixed),
+        Err(ApiError::BadRequest(_))
+    ));
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resources_filter":"name~prod"}"#,
@@ -440,6 +472,7 @@ fn tag_resource_update_request_rejects_implicit_selection_and_bad_ids() {
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
             resource_ids: vec![" ".to_string()],
+            resource_filter: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -447,6 +480,7 @@ fn tag_resource_update_request_rejects_implicit_selection_and_bad_ids() {
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
             resource_ids: vec!["x".repeat(MAX_TAG_RESOURCE_ID_BYTES + 1)],
+            resource_filter: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -471,6 +505,7 @@ fn tag_write_plans_are_metadata_only() {
         name: "owner:x".to_string(),
         resource_type: "task".to_string(),
         resource_ids: Vec::new(),
+        resource_filter: None,
         comment: None,
         value: None,
         active: true,
@@ -490,6 +525,7 @@ fn tag_write_plans_are_metadata_only() {
     let set_resource_update = ValidatedTagResourceUpdate {
         action: TagResourceUpdateAction::Set,
         resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
+        resource_filter: None,
     };
     assert_eq!(
         tag_resource_update_transaction_plan(&set_resource_update),
@@ -514,6 +550,8 @@ fn tag_write_plans_are_metadata_only() {
         comment: None,
         value: None,
         active: None,
+        resource_type: None,
+        resources: None,
     };
     assert_eq!(
         tag_patch_transaction_plan(&patch),
@@ -549,6 +587,7 @@ fn tag_write_plans_are_metadata_only() {
     let resource_update = ValidatedTagResourceUpdate {
         action: TagResourceUpdateAction::Remove,
         resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
+        resource_filter: None,
     };
     assert_eq!(
         tag_resource_update_transaction_plan(&resource_update),
@@ -652,4 +691,14 @@ fn tag_delete_rejects_assigned_tags() {
         ensure_tag_is_unassigned(1),
         Err(ApiError::Conflict(_))
     ));
+}
+
+#[test]
+fn tag_commit_failures_are_classified_as_indeterminate() {
+    let handler = include_str!("tag_writes.rs");
+    let database_helpers = include_str!("tag_write_db.rs");
+
+    assert_eq!(handler.matches("map_tag_commit_error(error,").count(), 7);
+    assert!(!handler.contains("map_tag_write_db_error(error, \"commit "));
+    assert!(database_helpers.contains("ApiError::MutationOutcomeIndeterminate"));
 }

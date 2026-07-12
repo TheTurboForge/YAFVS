@@ -53,25 +53,6 @@ import withUserName from 'web/utils/withUserName';
 
 type NavigateFunction = (args: {pathname: string; search?: string}) => void;
 
-const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
-  typeof gmp?.buildUrl === 'function';
-
-const tagIdFromResponse = (data: unknown): string =>
-  typeof data === 'string'
-    ? data
-    : String((data as {id?: string | number})?.id ?? '');
-
-const loadTag = (gmp: Gmp, data: unknown): Promise<Tag> => {
-  const id = tagIdFromResponse(data);
-  if (canUseNativeApi(gmp) && id.length > 0) {
-    return fetchNativeTag(gmp, id);
-  }
-  const params = (typeof data === 'string' ? {id: data} : data) as Parameters<
-    typeof gmp.tag.get
-  >[0];
-  return gmp.tag.get(params).then(response => response.data);
-};
-
 export interface EntitiesContainerRenderProps<TModel extends Model = Model> {
   createFilterType: EntityType;
   entities?: TModel[];
@@ -154,6 +135,25 @@ interface EntitiesContainerPropsWithHOCs<
   username: string;
   _: (message: string, options?: TranslateOptions) => string;
 }
+
+const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
+  typeof gmp?.buildUrl === 'function';
+
+const tagIdFromResponse = (data: unknown): string =>
+  typeof data === 'string'
+    ? data
+    : String((data as {id?: string | number})?.id ?? '');
+
+const loadTag = (gmp: Gmp, data: unknown): Promise<Tag> => {
+  const id = tagIdFromResponse(data);
+  if (canUseNativeApi(gmp) && id.length > 0) {
+    return fetchNativeTag(gmp, id);
+  }
+  const params = (typeof data === 'string' ? {id: data} : data) as Parameters<
+    typeof gmp.tag.get
+  >[0];
+  return gmp.tag.get(params).then(response => response.data);
+};
 
 const log = logger.getLogger('web.entities.container');
 
@@ -338,11 +338,17 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
 
   async handleDeleteBulk() {
     const {entitiesCommand} = this;
-    const {loadedFilter, selected, selectionType} = this.state;
+    const {gmpName} = this.props;
+    const {entities, loadedFilter, selected, selectionType} = this.state;
     let promise: Promise<Response<TModel[], XmlMeta>>;
 
     if (selectionType === SelectionType.SELECTION_USER) {
       promise = entitiesCommand.delete(Array.from(selected as Set<TModel>));
+    } else if (
+      selectionType === SelectionType.SELECTION_PAGE_CONTENTS &&
+      gmpName === 'tag'
+    ) {
+      promise = entitiesCommand.delete(entities as TModel[]);
     } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
       promise = entitiesCommand.deleteByFilter(loadedFilter as Filter);
     } else {
@@ -512,7 +518,8 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
       resourceIds = map(selected, res => res.id as string);
       filter = undefined;
     } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
-      filter = loadedFilter;
+      resourceIds = map(entities, entity => entity.id as string);
+      filter = undefined;
     } else {
       filter = (loadedFilter as Filter).all();
     }

@@ -2261,14 +2261,13 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: tag-metadata-and-explicit-resource-assignment-write
-      x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics
+      x-turbovas-replaces: tag-metadata-explicit-and-filter-resource-assignment-write
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-and-resource-assignment-write
-      summary: Create tag metadata and optional explicit assignments
-      description: Direct write-control endpoint for creating tag metadata and optional explicit resource-id assignments. Filter-based implicit resource selection and resource-type change semantics remain compatibility paths.
+      summary: Create tag metadata and optional resource assignments
+      description: Creates an operator-owned tag with either a bounded explicit resource-id set or one bounded gvmd filter. Explicit ids use the native database transaction; filter selection uses gvmd's authoritative filter, ACL, transaction, and audit path behind the private control socket. resource_ids and resource_filter are mutually exclusive.
       requestBody:
         required: true
         content:
@@ -2299,11 +2298,15 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /tags/resource-names/{resource_type}:
     get:
       operationId: getTagsResourceNamesByResourceType
       summary: List tag-dialog resource names
-      description: Read-only resource-name lookup for the Tag dialog, limited to native-safe asset, scanner/schedule/credential id-name, report/result UUID lookup, and security-information resource types used by tag assigned-resource expansion. Alerts are included here only as redacted id/name resource-name lookup; alert delivery, method/event/condition payloads remain on inherited compatibility paths. Users, filters, overrides, report/result actions, and all other write/control surfaces remain on inherited compatibility paths.
+      description: Read-only resource-name lookup for the Tag dialog across retained taggable resource types. Alerts and credentials expose only redacted id/name metadata; alert delivery, credential secrets, report/result actions, and all other control payloads are excluded.
       x-turbovas-direct: true
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
@@ -2314,7 +2317,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, alert]
+            enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
@@ -2376,13 +2379,13 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: tag-metadata-write
+      x-turbovas-replaces: tag-metadata-resource-type-and-atomic-assignment-write
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Update tag metadata
-      description: Direct write-control endpoint for updating tag name, comment, value, and active state only. Resource type changes and filter-based resource actions remain compatibility paths.
+      x-turbovas-side-effect: metadata-and-resource-assignment-write
+      summary: Atomically update tag metadata and optional resource assignments
+      description: Updates tag metadata directly when no resource selection is supplied. Composite metadata and resource assignment changes use gvmd's authoritative transaction and filter engine. A resource_type change is accepted only together with resources.action=set, so old-type assignments are cleared atomically before the new selection is applied.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -2412,6 +2415,10 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       operationId: deleteTagsByTagId
       x-turbovas-direct: true
@@ -2636,13 +2643,12 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: tag-active-resource-assignment-write
-      x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
-      description: Direct write-control endpoint for adding, removing, or replacing explicit resource assignments for the tag's existing resource type. UUID-backed resource types, including redacted alert metadata rows and report/result rows, use UUID ids and owner checks where applicable; catalog-backed security-information types use their exact public ids such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. It supports only native-safe active-table resource types and explicit resource_ids. Alert delivery, method/event/condition payloads, report/result actions or exports, filter-based bulk actions, resource-type changes, trash resources, users, and credentials remain inherited.
+      description: Adds, removes, or replaces assignments for the tag's existing resource type using either bounded explicit resource_ids or one bounded gvmd resource_filter. Explicit ids use the native database transaction; filters use gvmd's authoritative filter, ACL, transaction, and audit path. resource_ids and resource_filter are mutually exclusive. set with neither clears all current assignments.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -2672,6 +2678,10 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /overrides:
     get:
       operationId: getOverrides
@@ -7944,13 +7954,18 @@ components:
           maxLength: 4096
         resource_type:
           type: string
-          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, host, nvt, os, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate]
+          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
         resource_ids:
           type: array
-          maxItems: 100
-          description: Optional explicit resource ids to assign to the new tag. Filter-based implicit selection remains inherited.
+          maxItems: 200
+          description: Optional explicit resource ids to assign to the new tag. Mutually exclusive with resource_filter.
           items:
             type: string
+        resource_filter:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          description: Optional gvmd resource filter selecting assignments atomically. Mutually exclusive with resource_ids.
         comment:
           type: string
           maxLength: 4096
@@ -7976,9 +7991,15 @@ components:
           maxLength: 4096
         active:
           type: boolean
+        resource_type:
+          type: string
+          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
+          description: New resource type. Requires resources.action=set in the same request.
+        resources:
+          $ref: '#/components/schemas/TagResourceUpdateRequest'
     TagResourceUpdateRequest:
       type: object
-      required: [action, resource_ids]
+      required: [action]
       additionalProperties: false
       properties:
         action:
@@ -7986,11 +8007,15 @@ components:
           enum: [add, remove, set]
         resource_ids:
           type: array
-          minItems: 1
-          maxItems: 100
+          maxItems: 200
+          description: Explicit resource ids. Mutually exclusive with resource_filter. May be empty only for set, which clears all assignments.
           items:
             type: string
-            format: uuid
+        resource_filter:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          description: A gvmd resource filter. Mutually exclusive with resource_ids.
     TagResourceCollection:
       type: object
       required: [tag_id, resource_type, page, items]

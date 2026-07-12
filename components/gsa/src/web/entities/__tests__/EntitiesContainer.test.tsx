@@ -16,8 +16,20 @@ import {
 } from 'web/testing';
 import Filter from 'gmp/models/filter';
 import PortList from 'gmp/models/port-list';
+import Tag from 'gmp/models/tag';
 import {createSession} from 'gmp/testing';
 import EntitiesContainer from 'web/entities/EntitiesContainer';
+
+interface CreateGmpOptions {
+  deleteEntities?: ReturnType<typeof testing.fn>;
+  deleteByFilter?: ReturnType<typeof testing.fn>;
+  exportByFilter?: ReturnType<typeof testing.fn>;
+  currentSettings?: ReturnType<typeof testing.fn>;
+  getAllTags?: ReturnType<typeof testing.fn>;
+  getTag?: ReturnType<typeof testing.fn>;
+  buildUrl?: ReturnType<typeof testing.fn>;
+  session?: ReturnType<typeof createSession> & {token?: string};
+}
 
 const currentSettingsResponse = {
   data: {
@@ -66,15 +78,6 @@ const showErrorMessage = testing.fn();
 const showSuccessMessage = testing.fn();
 const onDownload = testing.fn();
 
-interface CreateGmpOptions {
-  exportByFilter?: ReturnType<typeof testing.fn>;
-  currentSettings?: ReturnType<typeof testing.fn>;
-  getAllTags?: ReturnType<typeof testing.fn>;
-  getTag?: ReturnType<typeof testing.fn>;
-  buildUrl?: ReturnType<typeof testing.fn>;
-  session?: ReturnType<typeof createSession> & {token?: string};
-}
-
 const setup = gmp => {
   const {render} = rendererWith({gmp, store: true, router: true});
   const initialFilter = new Filter();
@@ -103,7 +106,34 @@ const setup = gmp => {
   return screen.getByRole('button', {name: /Download Bulk/i});
 };
 
+const setupDeleteBulk = (gmp, entities) => {
+  const {render} = rendererWith({gmp, store: true, router: true});
+  render(
+    <EntitiesContainer
+      entities={entities}
+      filter={new Filter()}
+      gmp={gmp}
+      gmpName="tag"
+      isLoading={false}
+      notify={() => testing.fn()}
+      reload={reload}
+      showError={showError}
+      showErrorMessage={showErrorMessage}
+      showSuccessMessage={showSuccessMessage}
+      updateFilter={updateFilter}
+      onDownload={onDownload}
+    >
+      {({onDeleteBulk}) => (
+        <button onClick={() => onDeleteBulk()}>Delete page</button>
+      )}
+    </EntitiesContainer>,
+  );
+  return screen.getByRole('button', {name: 'Delete page'});
+};
+
 const createGmp = ({
+  deleteEntities = testing.fn().mockResolvedValue({data: []}),
+  deleteByFilter = testing.fn().mockResolvedValue({data: []}),
   exportByFilter = testing.fn().mockResolvedValue({data: {id: '123'}}),
   currentSettings = testing.fn().mockResolvedValue(currentSettingsResponse),
   getAllTags = testing.fn().mockResolvedValue({data: []}),
@@ -115,7 +145,7 @@ const createGmp = ({
   portlists: {
     exportByFilter,
   },
-  tags: {getAll: getAllTags},
+  tags: {delete: deleteEntities, deleteByFilter, getAll: getAllTags},
   tag: {get: getTag},
   user: {currentSettings},
   session,
@@ -126,6 +156,22 @@ afterEach(() => {
 });
 
 describe('EntitiesContainer', () => {
+  test('should delete the exact loaded page entities', async () => {
+    const deleteEntities = testing.fn().mockResolvedValue({data: []});
+    const deleteByFilter = testing.fn().mockResolvedValue({data: []});
+    const entities = [
+      Tag.fromElement({_id: 'page-1'}),
+      Tag.fromElement({_id: 'page-2'}),
+    ];
+    const gmp = createGmp({deleteEntities, deleteByFilter});
+
+    fireEvent.click(setupDeleteBulk(gmp, entities));
+    await wait();
+
+    expect(deleteEntities).toHaveBeenCalledWith(entities);
+    expect(deleteByFilter).not.toHaveBeenCalled();
+  });
+
   test('should allow downloading entities in bulk', async () => {
     const gmp = createGmp();
     const downloadButton = setup(gmp);
@@ -160,7 +206,9 @@ describe('EntitiesContainer', () => {
 
   test('should load tag-bulk choices through the native API when available', async () => {
     const getAllTags = testing.fn();
-    const buildUrl = testing.fn((path: string) => `https://turbovas.example/${path}`);
+    const buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: ''},
@@ -191,10 +239,13 @@ describe('EntitiesContainer', () => {
       resource_type: 'port_list',
       value: '',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/tags', {
-      credentials: 'include',
-      headers: {Accept: 'application/json'},
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/tags',
+      {
+        credentials: 'include',
+        headers: {Accept: 'application/json'},
+      },
+    );
   });
 
   test('should load selected tag detail through the native API when available', async () => {

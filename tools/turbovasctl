@@ -648,10 +648,10 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tag-active-resource-assignment-write",
         "tag-clone",
         "tag-hard-delete",
-        "tag-metadata-and-explicit-resource-assignment-write",
+        "tag-metadata-explicit-and-filter-resource-assignment-write",
         "tag-metadata-export-read",
         "tag-metadata-read",
-        "tag-metadata-write",
+        "tag-metadata-resource-type-and-atomic-assignment-write",
         "tag-restore",
         "tag-trash-move",
         "tag-resource-name-read",
@@ -707,7 +707,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "scan-config-preference-selector-mutation-import-export-blank-create",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
-        "tag-filter-actions-and-resource-type-change-semantics",
         "target-file-input-task-control-and-credential-secret-workflows",
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
@@ -1368,14 +1367,13 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tag-metadata-export-read",
     },
     ("post", "/tags"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "tag-metadata-and-explicit-resource-assignment-write",
+        "x-turbovas-replaces": "tag-metadata-explicit-and-filter-resource-assignment-write",
         "x-turbovas-side-effect": "metadata-and-resource-assignment-write",
     },
     ("patch", "/tags/{tag_id}"): {
         "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "tag-metadata-write",
+        "x-turbovas-replaces": "tag-metadata-resource-type-and-atomic-assignment-write",
     },
     ("delete", "/tags/{tag_id}"): {
         "x-turbovas-maturity": "live-write",
@@ -1386,7 +1384,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "tag-resource-reference-read",
     },
     ("post", "/tags/{tag_id}/resources"): {
-        "x-turbovas-inherited-still-owns": "tag-filter-actions-and-resource-type-change-semantics",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "tag-active-resource-assignment-write",
     },
@@ -6667,6 +6664,32 @@ def openapi_indented_scalar_fields(block: list[str]) -> dict[str, str]:
     return values
 
 
+def openapi_duplicate_field_paths(block: list[str]) -> list[str]:
+    stack: list[tuple[int, str]] = []
+    counts: dict[str, int] = {}
+    for line in block:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        text = line.strip()
+        if ":" not in text or text.startswith("-"):
+            continue
+        key, raw_value = text.split(":", 1)
+        key = key.strip().strip("'\"")
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+        path = ".".join([item[1] for item in stack] + [key])
+        counts[path] = counts.get(path, 0) + 1
+        if not raw_value.strip():
+            stack.append((indent, key))
+    duplicates = sorted(path for path, count in counts.items() if count > 1)
+    return [
+        path
+        for path in duplicates
+        if not any(path.startswith(f"{parent}.") for parent in duplicates if parent != path)
+    ]
+
+
 def openapi_error_schema_contract_drift(repo_root: Path | None) -> dict[str, Any]:
     block = openapi_component_schema_block(repo_root, "Error")
     values = openapi_indented_scalar_fields(block)
@@ -6725,6 +6748,16 @@ def openapi_request_body_schema_contract_drift(repo_root: Path | None, operation
             missing.append({"operation": label, "field": f"components.schemas.{schema_name}", "expected": "top-level schema"})
             continue
         values = openapi_indented_scalar_fields(block)
+        duplicate_paths = openapi_duplicate_field_paths(block)
+        if duplicate_paths:
+            invalid.append(
+                {
+                    "operation": label,
+                    "field": f"components.schemas.{schema_name}",
+                    "actual": duplicate_paths,
+                    "expected": "unique YAML field paths",
+                }
+            )
         top_level_keys = openapi_schema_top_level_keys(block)
         block_text = "\n".join(block)
         one_of_refs = re.findall(
@@ -6771,6 +6804,97 @@ OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_VALUES = {
     "properties.icalendar.maxLength": "32768",
 }
 OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_REQUIRED = ("name", "icalendar")
+
+OPENAPI_TAG_RESOURCE_TYPE_ENUM = "[alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]"
+OPENAPI_TAG_CREATE_SCHEMA_EXPECTED_VALUES = {
+    "type": "object",
+    "additionalProperties": "false",
+    "properties.name.type": "string",
+    "properties.name.minLength": "1",
+    "properties.name.maxLength": "4096",
+    "properties.resource_type.type": "string",
+    "properties.resource_type.enum": OPENAPI_TAG_RESOURCE_TYPE_ENUM,
+    "properties.resource_ids.type": "array",
+    "properties.resource_ids.maxItems": "200",
+    "properties.resource_ids.items.type": "string",
+    "properties.resource_filter.type": "string",
+    "properties.resource_filter.minLength": "1",
+    "properties.resource_filter.maxLength": "16384",
+    "properties.comment.type": "string",
+    "properties.comment.maxLength": "4096",
+    "properties.value.type": "string",
+    "properties.value.maxLength": "4096",
+    "properties.active.type": "boolean",
+    "properties.active.default": "true",
+}
+OPENAPI_TAG_PATCH_SCHEMA_EXPECTED_VALUES = {
+    "type": "object",
+    "additionalProperties": "false",
+    "properties.name.type": "string",
+    "properties.name.minLength": "1",
+    "properties.name.maxLength": "4096",
+    "properties.comment.type": "string",
+    "properties.comment.maxLength": "4096",
+    "properties.value.type": "string",
+    "properties.value.maxLength": "4096",
+    "properties.active.type": "boolean",
+    "properties.resource_type.type": "string",
+    "properties.resource_type.enum": OPENAPI_TAG_RESOURCE_TYPE_ENUM,
+    "properties.resources.$ref": "#/components/schemas/TagResourceUpdateRequest",
+}
+
+
+def openapi_tag_write_schema_contract_drift(repo_root: Path | None) -> dict[str, Any]:
+    missing: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    observed: dict[str, Any] = {}
+    contracts = {
+        "TagCreateRequest": (
+            OPENAPI_TAG_CREATE_SCHEMA_EXPECTED_VALUES,
+            "[name, resource_type]",
+            {"name", "resource_type", "resource_ids", "resource_filter", "comment", "value", "active"},
+        ),
+        "TagPatchRequest": (
+            OPENAPI_TAG_PATCH_SCHEMA_EXPECTED_VALUES,
+            None,
+            {"name", "comment", "value", "active", "resource_type", "resources"},
+        ),
+    }
+    for schema_name, (expected_values, expected_required, expected_properties) in contracts.items():
+        block = openapi_component_schema_block(repo_root, schema_name)
+        values = openapi_indented_scalar_fields(block)
+        required = values.get("required")
+        properties = {
+            match.group(1)
+            for line in block
+            if (match := re.match(r"^        ([A-Za-z][A-Za-z0-9_-]*):$", line))
+        }
+        duplicates = openapi_duplicate_field_paths(block)
+        observed[schema_name] = {
+            "required": required,
+            "properties": sorted(properties),
+            "duplicate_field_paths": duplicates,
+            "values": values,
+        }
+        if not block:
+            missing.append({"field": f"components.schemas.{schema_name}", "expected": "schema"})
+            continue
+        if required != expected_required:
+            invalid.append({"field": f"components.schemas.{schema_name}.required", "actual": required, "expected": expected_required})
+        if properties != expected_properties:
+            invalid.append({"field": f"components.schemas.{schema_name}.properties", "actual": sorted(properties), "expected": sorted(expected_properties)})
+        if duplicates:
+            invalid.append({"field": f"components.schemas.{schema_name}", "actual": duplicates, "expected": "unique YAML field paths"})
+        for field, expected in sorted(expected_values.items()):
+            if field not in values:
+                missing.append({"field": f"components.schemas.{schema_name}.{field}", "expected": expected})
+            elif values[field] != expected:
+                invalid.append({"field": f"components.schemas.{schema_name}.{field}", "actual": values[field], "expected": expected})
+    return {
+        "tag_write_schema_missing": missing,
+        "tag_write_schema_invalid": invalid,
+        "tag_write_schema_observed": observed,
+    }
 
 
 def openapi_schedule_create_schema_contract_drift(repo_root: Path | None, operations: list[dict[str, Any]]) -> dict[str, Any]:
@@ -7002,6 +7126,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
     error_schema_drift = openapi_error_schema_contract_drift(repo_root)
     request_body_schema_drift = openapi_request_body_schema_contract_drift(repo_root, operations)
     schedule_create_schema_drift = openapi_schedule_create_schema_contract_drift(repo_root, operations)
+    tag_write_schema_drift = openapi_tag_write_schema_contract_drift(repo_root)
     collection_query_contract = openapi_collection_query_contract_summary(repo_root, operations)
     auth_contract = openapi_auth_contract_summary(repo_root)
 
@@ -7048,6 +7173,8 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         or request_body_schema_drift["invalid_request_body_schema_refs"]
         or schedule_create_schema_drift["schedule_create_schema_missing"]
         or schedule_create_schema_drift["schedule_create_schema_invalid"]
+        or tag_write_schema_drift["tag_write_schema_missing"]
+        or tag_write_schema_drift["tag_write_schema_invalid"]
         or collection_query_contract["alignment_status"] != "pass"
         or auth_contract["alignment_status"] != "pass"
         or write_control_contract["alignment_status"] != "pass"
@@ -7077,6 +7204,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         **error_schema_drift,
         **request_body_schema_drift,
         **schedule_create_schema_drift,
+        **tag_write_schema_drift,
         "collection_query_contract": collection_query_contract,
         "auth_contract": auth_contract,
         "write_control_contract": write_control_contract,
@@ -16740,6 +16868,7 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
             {
                 "name": tag_name,
                 "resource_type": "cpe",
+                "resource_filter": "sort=name rows=1",
                 "comment": "TurboVAS direct write smoke temporary tag",
                 "value": "initial",
                 "active": True,
@@ -16749,8 +16878,8 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
         create = direct_native_api_curl(repo_root, "/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type)
         create_json, create_status = parse_json_output_with_http_status(create)
         tag_id = create_json.get("id") if isinstance(create_json, dict) and isinstance(create_json.get("id"), str) else None
-        create_ok = create.returncode == 0 and create_status == 201 and bool(tag_id) and create_json.get("name") == tag_name
-        findings.append(native_api_probe_finding("pass" if create_ok else "fail", "native-api-direct.tag-write-create", "Direct write-control created a temporary unassigned tag." if create_ok else "Direct write-control failed to create a temporary unassigned tag.", create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type), create_json, {"http_status": create_status, "tag_id": tag_id, **summarize_native_api_response(create_json)}))
+        create_ok = create.returncode == 0 and create_status == 201 and bool(tag_id) and create_json.get("name") == tag_name and create_json.get("resource_count") == 1
+        findings.append(native_api_probe_finding("pass" if create_ok else "fail", "native-api-direct.tag-write-create", "Direct write-control created a temporary tag from a bounded gvmd resource filter." if create_ok else "Direct write-control failed to create a temporary tag from a bounded gvmd resource filter.", create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type), create_json, {"http_status": create_status, "tag_id": tag_id, **summarize_native_api_response(create_json)}))
 
         report_config_fixture_sql = (
             "WITH owner_row AS (SELECT id FROM users "
@@ -17632,12 +17761,12 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                 )
                 tag_resource_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=tag_resource_add_body, extra_headers=content_type)
                 tag_resource_add_json, tag_resource_add_status = parse_json_output_with_http_status(tag_resource_add)
-                tag_resource_add_ok = tag_resource_add.returncode == 0 and tag_resource_add_status == 200 and isinstance(tag_resource_add_json, dict) and tag_resource_add_json.get("id") == tag_id and tag_resource_add_json.get("resource_count") == 1
+                tag_resource_add_ok = tag_resource_add.returncode == 0 and tag_resource_add_status == 200 and isinstance(tag_resource_add_json, dict) and tag_resource_add_json.get("id") == tag_id and isinstance(tag_resource_add_json.get("resource_count"), int) and tag_resource_add_json.get("resource_count") >= 1
                 findings.append(native_api_probe_finding("pass" if tag_resource_add_ok else "fail", "native-api-direct.tag-resource-add", "Direct write-control added an explicit temporary tag resource assignment." if tag_resource_add_ok else "Direct write-control failed to add an explicit temporary tag resource assignment.", tag_resource_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=tag_resource_add_body, extra_headers=content_type), tag_resource_add_json, {"http_status": tag_resource_add_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_resource_add_json)}))
 
                 tag_after_add = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env)
                 tag_after_add_json, tag_after_add_status = parse_json_output_with_http_status(tag_after_add)
-                tag_after_add_ok = tag_after_add.returncode == 0 and tag_after_add_status == 200 and isinstance(tag_after_add_json, dict) and tag_after_add_json.get("id") == tag_id and tag_after_add_json.get("resource_count") == 1 and tag_after_add_json.get("in_use") is True
+                tag_after_add_ok = tag_after_add.returncode == 0 and tag_after_add_status == 200 and isinstance(tag_after_add_json, dict) and tag_after_add_json.get("id") == tag_id and isinstance(tag_after_add_json.get("resource_count"), int) and tag_after_add_json.get("resource_count") >= 1 and tag_after_add_json.get("in_use") is True
                 findings.append(native_api_probe_finding("pass" if tag_after_add_ok else "fail", "native-api-direct.tag-resource-in-use-after-add", "Direct API reports the temporary tag in use after assigning a resource." if tag_after_add_ok else "Direct API did not report the temporary tag in use after assigning a resource.", tag_after_add, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env), tag_after_add_json, {"http_status": tag_after_add_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_after_add_json)}))
 
                 tag_resource_set_body = json.dumps(
@@ -18723,13 +18852,19 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
                     findings.append(target_credential_cleanup_finding)
 
             patch_body = json.dumps(
-                {"comment": "TurboVAS direct write smoke updated temporary tag", "value": "updated", "active": False},
+                {
+                    "comment": "TurboVAS direct write smoke updated temporary tag",
+                    "value": "updated",
+                    "active": False,
+                    "resource_type": "target",
+                    "resources": {"action": "set", "resource_ids": []},
+                },
                 separators=(",", ":"),
             )
             patch = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env, method="PATCH", body=patch_body, extra_headers=content_type)
             patch_json, patch_status = parse_json_output_with_http_status(patch)
-            patch_ok = patch.returncode == 0 and patch_status == 200 and isinstance(patch_json, dict) and patch_json.get("id") == tag_id and patch_json.get("value") == "updated" and patch_json.get("active") is False
-            findings.append(native_api_probe_finding("pass" if patch_ok else "fail", "native-api-direct.tag-write-update", "Direct write-control patched temporary tag metadata." if patch_ok else "Direct write-control failed to patch temporary tag metadata.", patch, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env, method="PATCH", body=patch_body, extra_headers=content_type), patch_json, {"http_status": patch_status, "tag_id": tag_id, **summarize_native_api_response(patch_json)}))
+            patch_ok = patch.returncode == 0 and patch_status == 200 and isinstance(patch_json, dict) and patch_json.get("id") == tag_id and patch_json.get("value") == "updated" and patch_json.get("active") is False and patch_json.get("resource_type") == "target" and patch_json.get("resource_count") == 0
+            findings.append(native_api_probe_finding("pass" if patch_ok else "fail", "native-api-direct.tag-write-update", "Direct write-control atomically patched tag metadata, changed resource type, and cleared assignments." if patch_ok else "Direct write-control failed to atomically patch tag metadata, change resource type, and clear assignments.", patch, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}", token=token, env=env, method="PATCH", body=patch_body, extra_headers=content_type), patch_json, {"http_status": patch_status, "tag_id": tag_id, **summarize_native_api_response(patch_json)}))
 
             query_patch_body = json.dumps(
                 {"value": "query-denied"},

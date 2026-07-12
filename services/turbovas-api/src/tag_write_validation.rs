@@ -9,7 +9,8 @@ use crate::{errors::ApiError, tag_resource_helpers::tag_resource_type_is_support
 
 pub(crate) const MAX_TAG_TEXT_BYTES: usize = 4096;
 pub(crate) const MAX_TAG_RESOURCE_ID_BYTES: usize = 4096;
-pub(crate) const MAX_TAG_RESOURCE_WRITE_IDS: usize = 100;
+pub(crate) const MAX_TAG_RESOURCE_WRITE_IDS: usize = 200;
+pub(crate) const MAX_TAG_RESOURCE_FILTER_BYTES: usize = 16_384;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +19,8 @@ pub(crate) struct TagCreateRequest {
     pub(crate) resource_type: String,
     #[serde(default)]
     pub(crate) resource_ids: Vec<String>,
+    #[serde(default)]
+    pub(crate) resource_filter: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
     #[serde(default)]
@@ -46,6 +49,10 @@ pub(crate) struct TagPatchRequest {
     pub(crate) value: Option<String>,
     #[serde(default)]
     pub(crate) active: Option<bool>,
+    #[serde(default)]
+    pub(crate) resource_type: Option<String>,
+    #[serde(default)]
+    pub(crate) resources: Option<TagResourceUpdateRequest>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -66,7 +73,10 @@ pub(crate) enum TagResourceUpdateAction {
 #[serde(deny_unknown_fields)]
 pub(crate) struct TagResourceUpdateRequest {
     pub(crate) action: TagResourceUpdateAction,
+    #[serde(default)]
     pub(crate) resource_ids: Vec<String>,
+    #[serde(default)]
+    pub(crate) resource_filter: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -74,6 +84,7 @@ pub(crate) struct ValidatedTagCreate {
     pub(crate) name: String,
     pub(crate) resource_type: String,
     pub(crate) resource_ids: Vec<String>,
+    pub(crate) resource_filter: Option<String>,
     pub(crate) comment: Option<String>,
     pub(crate) value: Option<String>,
     pub(crate) active: bool,
@@ -85,12 +96,15 @@ pub(crate) struct ValidatedTagPatch {
     pub(crate) comment: Option<String>,
     pub(crate) value: Option<String>,
     pub(crate) active: Option<bool>,
+    pub(crate) resource_type: Option<String>,
+    pub(crate) resources: Option<ValidatedTagResourceUpdate>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedTagResourceUpdate {
     pub(crate) action: TagResourceUpdateAction,
     pub(crate) resource_ids: Vec<String>,
+    pub(crate) resource_filter: Option<String>,
 }
 
 pub(crate) fn default_tag_active() -> bool {
@@ -100,11 +114,35 @@ pub(crate) fn default_tag_active() -> bool {
 pub(crate) fn validate_tag_resource_update_request(
     request: TagResourceUpdateRequest,
 ) -> Result<ValidatedTagResourceUpdate, ApiError> {
-    let resource_ids = validate_tag_resource_ids(request.resource_ids, false)?;
+    let resource_ids = validate_tag_resource_ids(request.resource_ids, true)?;
+    let resource_filter = normalize_tag_resource_filter(request.resource_filter)?;
+    validate_tag_resource_selection(request.action, &resource_ids, resource_filter.as_deref())?;
     Ok(ValidatedTagResourceUpdate {
         action: request.action,
         resource_ids,
+        resource_filter,
     })
+}
+
+fn validate_tag_resource_selection(
+    action: TagResourceUpdateAction,
+    resource_ids: &[String],
+    resource_filter: Option<&str>,
+) -> Result<(), ApiError> {
+    if !resource_ids.is_empty() && resource_filter.is_some() {
+        return Err(ApiError::BadRequest(
+            "resource_ids and resource_filter are mutually exclusive".to_string(),
+        ));
+    }
+    if action != TagResourceUpdateAction::Set
+        && resource_ids.is_empty()
+        && resource_filter.is_none()
+    {
+        return Err(ApiError::BadRequest(
+            "add and remove require resource_ids or resource_filter".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_tag_resource_ids(
@@ -149,10 +187,18 @@ fn normalize_tag_resource_id(value: String) -> Result<String, ApiError> {
 pub(crate) fn validate_tag_create_request(
     request: TagCreateRequest,
 ) -> Result<ValidatedTagCreate, ApiError> {
+    let resource_ids = validate_tag_resource_ids(request.resource_ids, true)?;
+    let resource_filter = normalize_tag_resource_filter(request.resource_filter)?;
+    if !resource_ids.is_empty() && resource_filter.is_some() {
+        return Err(ApiError::BadRequest(
+            "resource_ids and resource_filter are mutually exclusive".to_string(),
+        ));
+    }
     Ok(ValidatedTagCreate {
         name: normalize_required_tag_text(request.name, "name")?,
         resource_type: normalize_tag_write_resource_type(request.resource_type)?,
-        resource_ids: validate_tag_resource_ids(request.resource_ids, true)?,
+        resource_ids,
+        resource_filter,
         comment: normalize_optional_tag_text(request.comment, "comment")?,
         value: normalize_optional_tag_text(request.value, "value")?,
         active: request.active,
@@ -162,16 +208,35 @@ pub(crate) fn validate_tag_create_request(
 pub(crate) fn validate_tag_patch_request(
     request: TagPatchRequest,
 ) -> Result<ValidatedTagPatch, ApiError> {
+    let resource_type = request
+        .resource_type
+        .map(normalize_tag_write_resource_type)
+        .transpose()?;
+    let resources = request
+        .resources
+        .map(validate_tag_resource_update_request)
+        .transpose()?;
+    if resource_type.is_some()
+        && resources.as_ref().map(|value| value.action) != Some(TagResourceUpdateAction::Set)
+    {
+        return Err(ApiError::BadRequest(
+            "resource_type changes require an atomic resources set operation".to_string(),
+        ));
+    }
     let validated = ValidatedTagPatch {
         name: normalize_optional_required_tag_text(request.name, "name")?,
         comment: normalize_optional_tag_text(request.comment, "comment")?,
         value: normalize_optional_tag_text(request.value, "value")?,
         active: request.active,
+        resource_type,
+        resources,
     };
     if validated.name.is_none()
         && validated.comment.is_none()
         && validated.value.is_none()
         && validated.active.is_none()
+        && validated.resource_type.is_none()
+        && validated.resources.is_none()
     {
         Err(ApiError::BadRequest(
             "at least one tag metadata field must be provided".to_string(),
@@ -179,6 +244,25 @@ pub(crate) fn validate_tag_patch_request(
     } else {
         Ok(validated)
     }
+}
+
+fn normalize_tag_resource_filter(value: Option<String>) -> Result<Option<String>, ApiError> {
+    value
+        .map(|value| {
+            let value = value.trim().to_string();
+            if value.is_empty() {
+                return Err(ApiError::BadRequest(
+                    "resource_filter must not be empty when provided".to_string(),
+                ));
+            }
+            if value.len() > MAX_TAG_RESOURCE_FILTER_BYTES || value.chars().any(char::is_control) {
+                return Err(ApiError::BadRequest(format!(
+                    "resource_filter must be printable text up to {MAX_TAG_RESOURCE_FILTER_BYTES} bytes"
+                )));
+            }
+            Ok(value)
+        })
+        .transpose()
 }
 
 pub(crate) fn validate_tag_clone_request(

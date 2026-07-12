@@ -213,13 +213,16 @@ describe('TagComponent tests', () => {
       page_size: SELECT_MAX_RESOURCES,
       sort: 'name',
     });
-    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tags/resource-names/task', {
-      token: 'test-token',
-      page: 1,
-      page_size: SELECT_MAX_RESOURCES,
-      sort: 'name',
-      filter: '',
-    });
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/tags/resource-names/task',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: SELECT_MAX_RESOURCES,
+        sort: 'name',
+        filter: '',
+      },
+    );
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
     screen.getDialog();
@@ -232,7 +235,7 @@ describe('TagComponent tests', () => {
       comment: '',
       id: '1234',
       name: 'My Tag',
-      resourceIds: [],
+      resourceIds: ['1'],
       resourceType: 'task',
       value: 'Some Value',
     });
@@ -240,13 +243,18 @@ describe('TagComponent tests', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
-  test('should reject native tag resource type changes instead of ignoring them', async () => {
+  test('should atomically replace assignments when native resource type changes', async () => {
     const fetchMock = stubNativeFetch(
       nativeTagPayload,
       nativeTagResourcesPayload,
       nativeTagResourceNamesPayload,
       {
-        page: {page: 1, page_size: SELECT_MAX_RESOURCES, total: 1, sort: 'name'},
+        page: {
+          page: 1,
+          page_size: SELECT_MAX_RESOURCES,
+          total: 1,
+          sort: 'name',
+        },
         items: [{id: 'report-1', name: 'Report 1', type: 'report'}],
       },
     );
@@ -277,23 +285,27 @@ describe('TagComponent tests', () => {
     await wait();
 
     expect(fetchMock).toHaveBeenCalled();
-    expect(gmp.tag.save).not.toHaveBeenCalled();
-    expect(onSaved).not.toHaveBeenCalled();
-    expect(screen.getByText('Native tag edit cannot change resource type')).toBeInTheDocument();
+    expect(gmp.tag.save).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      id: '1234',
+      name: 'My Tag',
+      resourceIds: [],
+      resourceType: 'report',
+      resourcesAction: 'set',
+      value: 'Some Value',
+    });
+    expect(onSaved).toHaveBeenCalled();
   });
 
-  test('should reject mixed native tag metadata and resource assignment edits', async () => {
-    stubNativeFetch(
-      nativeTagPayload,
-      nativeTagResourcesPayload,
-      {
-        page: {page: 1, page_size: SELECT_MAX_RESOURCES, total: 2, sort: 'name'},
-        items: [
-          {id: '1', name: 'Task 1', type: 'task'},
-          {id: '2', name: 'Task 2', type: 'task'},
-        ],
-      },
-    );
+  test('should save native metadata and resource assignment edits atomically', async () => {
+    stubNativeFetch(nativeTagPayload, nativeTagResourcesPayload, {
+      page: {page: 1, page_size: SELECT_MAX_RESOURCES, total: 2, sort: 'name'},
+      items: [
+        {id: '1', name: 'Task 1', type: 'task'},
+        {id: '2', name: 'Task 2', type: 'task'},
+      ],
+    });
     const gmp = createGmp({native: true});
     const tag = new Tag({name: 'My Tag', id: '1234', resourceType: 'task'});
     const onSaved = testing.fn();
@@ -314,19 +326,24 @@ describe('TagComponent tests', () => {
     const resourceSelect = screen.getByRole<HTMLSelectElement>('textbox', {
       name: 'Select Resource',
     });
-    const resourceOptions = await getSelectItemElementsForSelect(resourceSelect);
+    const resourceOptions =
+      await getSelectItemElementsForSelect(resourceSelect);
     fireEvent.click(resourceOptions[1]);
     fireEvent.click(screen.getDialogSaveButton());
 
     await wait();
 
-    expect(gmp.tag.save).not.toHaveBeenCalled();
-    expect(onSaved).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(
-        'Native tag edit cannot change metadata and resource assignments in one save',
-      ),
-    ).toBeInTheDocument();
+    expect(gmp.tag.save).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      id: '1234',
+      name: 'Changed Tag',
+      resourceIds: ['1', '2'],
+      resourceType: 'task',
+      resourcesAction: 'set',
+      value: 'Some Value',
+    });
+    expect(onSaved).toHaveBeenCalled();
   });
 
   test('should create a tag with predefined resource type and ids', async () => {

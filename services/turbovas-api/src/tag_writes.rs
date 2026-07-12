@@ -12,6 +12,8 @@ use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     errors::ApiError,
+    gvmd_control::{gvmd_control_secret, gvmd_control_socket_path},
+    tag_control::{request_tag_create, request_tag_modify, request_tag_resource_update},
     tag_payloads::TagAssetItem,
     tag_write_db::*,
     tag_write_transactions::*,
@@ -29,6 +31,22 @@ pub(crate) async fn create_tag(
 ) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_create_request(request)?;
+    if request.resource_filter.is_some() {
+        let control_secret = gvmd_control_secret()?;
+        let tag_id = request_tag_create(
+            &gvmd_control_socket_path(),
+            &control_secret,
+            operator.user_uuid(),
+            &request,
+        )
+        .await?;
+        let tag = load_committed_tag_detail_for_operator(&state, &tag_id, &operator).await?;
+        return Ok((
+            StatusCode::CREATED,
+            tag_write_location_headers(&tag_id)?,
+            Json(tag),
+        ));
+    }
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client
         .transaction()
@@ -36,11 +54,10 @@ pub(crate) async fn create_tag(
         .map_err(|error| map_tag_write_db_error(error, "begin create tag transaction"))?;
     let owner_id = resolve_tag_write_operator_owner(&tx, &operator).await?;
     let record = execute_tag_create_transaction(&tx, owner_id, &request).await?;
+    let tag = load_tag_write_detail(&tx, &record.uuid).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit create tag transaction"))?;
-
-    let tag = load_tag_write_detail(&client, &record.uuid).await?;
+        .map_err(|error| map_tag_commit_error(error, "commit create tag transaction"))?;
     Ok((
         StatusCode::CREATED,
         tag_write_location_headers(&record.uuid)?,
@@ -70,11 +87,12 @@ pub(crate) async fn restore_tag(
     ensure_tag_resource_direct_write_type_is_supported(&trash.resource_type)?;
     ensure_tag_uuid_not_live(&tx, &trash.uuid).await?;
     let record = execute_tag_restore_transaction(&tx, trash.internal_id).await?;
+    let tag = load_tag_write_detail(&tx, &record.uuid).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit restore tag transaction"))?;
+        .map_err(|error| map_tag_commit_error(error, "commit restore tag transaction"))?;
 
-    Ok(Json(load_tag_write_detail(&client, &record.uuid).await?))
+    Ok(Json(tag))
 }
 
 pub(crate) async fn hard_delete_tag(
@@ -100,7 +118,7 @@ pub(crate) async fn hard_delete_tag(
     execute_tag_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit hard-delete tag transaction"))?;
+        .map_err(|error| map_tag_commit_error(error, "commit hard-delete tag transaction"))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -113,6 +131,20 @@ pub(crate) async fn patch_tag(
 ) -> Result<Json<TagAssetItem>, ApiError> {
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_patch_request(request)?;
+    if request.resource_type.is_some() || request.resources.is_some() {
+        let control_secret = gvmd_control_secret()?;
+        request_tag_modify(
+            &gvmd_control_socket_path(),
+            &control_secret,
+            operator.user_uuid(),
+            &tag_id,
+            &request,
+        )
+        .await?;
+        return Ok(Json(
+            load_committed_tag_detail_for_operator(&state, &tag_id, &operator).await?,
+        ));
+    }
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client
         .transaction()
@@ -123,11 +155,12 @@ pub(crate) async fn patch_tag(
     ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;
     ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;
     let record = execute_tag_patch_transaction(&tx, state.internal_id, &request).await?;
+    let tag = load_tag_write_detail(&tx, &record.uuid).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit patch tag transaction"))?;
+        .map_err(|error| map_tag_commit_error(error, "commit patch tag transaction"))?;
 
-    Ok(Json(load_tag_write_detail(&client, &record.uuid).await?))
+    Ok(Json(tag))
 }
 
 pub(crate) async fn clone_tag(
@@ -151,11 +184,10 @@ pub(crate) async fn clone_tag(
     ensure_tag_owner_matches_operator(source.owner_id, owner_id)?;
     ensure_tag_resource_direct_write_type_is_supported(&source.resource_type)?;
     let record = execute_tag_clone_transaction(&tx, source.internal_id, owner_id, &request).await?;
+    let tag = load_tag_write_detail(&tx, &record.uuid).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit clone tag transaction"))?;
-
-    let tag = load_tag_write_detail(&client, &record.uuid).await?;
+        .map_err(|error| map_tag_commit_error(error, "commit clone tag transaction"))?;
     Ok((
         StatusCode::CREATED,
         tag_write_location_headers(&record.uuid)?,
@@ -186,7 +218,7 @@ pub(crate) async fn delete_tag(
     execute_tag_trash_transaction(&tx, state.internal_id).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit delete tag transaction"))?;
+        .map_err(|error| map_tag_commit_error(error, "commit delete tag transaction"))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -199,21 +231,70 @@ pub(crate) async fn update_tag_resources(
 ) -> Result<Json<TagAssetItem>, ApiError> {
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_resource_update_request(request)?;
+    if request.resource_filter.is_some() {
+        let control_secret = gvmd_control_secret()?;
+        request_tag_resource_update(
+            &gvmd_control_socket_path(),
+            &control_secret,
+            operator.user_uuid(),
+            &tag_id,
+            &request,
+        )
+        .await?;
+        return Ok(Json(
+            load_committed_tag_detail_for_operator(&state, &tag_id, &operator).await?,
+        ));
+    }
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client
         .transaction()
         .await
         .map_err(|error| map_tag_write_db_error(error, "begin tag resource transaction"))?;
+    tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "lock tag resource tables"))?;
     let operator_owner_id = resolve_tag_write_operator_owner(&tx, &operator).await?;
     let state = load_tag_write_state(&tx, &tag_id).await?;
     ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;
     ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;
     execute_tag_resource_update_transaction(&tx, &state, operator_owner_id, &request).await?;
+    let tag = load_tag_write_detail(&tx, &state.uuid).await?;
     tx.commit()
         .await
-        .map_err(|error| map_tag_write_db_error(error, "commit tag resource transaction"))?;
+        .map_err(|error| map_tag_commit_error(error, "commit tag resource transaction"))?;
 
-    Ok(Json(load_tag_write_detail(&client, &state.uuid).await?))
+    Ok(Json(tag))
+}
+
+async fn load_committed_tag_detail_for_operator(
+    state: &AppState,
+    tag_id: &str,
+    operator: &DirectApiOperator,
+) -> Result<TagAssetItem, ApiError> {
+    let client = state
+        .pool
+        .get()
+        .await
+        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?;
+    let owner_matches = client
+        .query_opt(
+            concat!(
+                "SELECT 1 FROM tags t",
+                " JOIN users u ON u.id = t.owner",
+                " WHERE t.uuid = $1 AND u.uuid = $2;"
+            ),
+            &[&tag_id, &operator.user_uuid()],
+        )
+        .await
+        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?
+        .is_some();
+    if !owner_matches {
+        tracing::warn!("mutated tag does not resolve to the authenticated operator");
+        return Err(ApiError::MutationCommittedResponseUnavailable);
+    }
+    load_tag_write_detail(&client, tag_id)
+        .await
+        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)
 }
 
 fn tag_write_location_headers(tag_id: &str) -> Result<HeaderMap, ApiError> {

@@ -203,3 +203,8 @@ pub(crate) fn map_tag_write_db_error(
     tracing::warn!(%error, action, "tag write database operation failed");
     ApiError::Database
 }
+
+pub(crate) fn map_tag_commit_error(error: tokio_postgres::Error, action: &'static str) -> ApiError {
+    tracing::error!(%error, action, "tag transaction commit outcome is indeterminate");
+    ApiError::MutationOutcomeIndeterminate
+}

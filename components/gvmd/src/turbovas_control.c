@@ -17,6 +17,7 @@
 #include "manage_schedules.h"
 #include "manage_sql.h"
 #include "manage_sql_alerts.h"
+#include "manage_tags.h"
 #include "manage_users.h"
 
 #include <errno.h>
@@ -84,6 +85,18 @@
   (sizeof (TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND) - 1)
 #define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES 512
 #define TURBOVAS_CONTROL_NVT_OID_MAX_BYTES 128
+#define TURBOVAS_CONTROL_TAG_CREATE_COMMAND "tag-create "
+#define TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_TAG_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_TAG_MODIFY_COMMAND "tag-modify "
+#define TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_TAG_MODIFY_COMMAND) - 1)
+#define TURBOVAS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES 128
+#define TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_TAG_RESOURCE_ID_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES 32768
+#define TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX 200
+#define TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES 16384
 
 typedef struct
 {
@@ -141,6 +154,29 @@ typedef struct
   gboolean active;
 } turbovas_control_alert_smb_create_request_t;
 
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *value;
+  gchar *resource_type;
+  array_t *resource_ids;
+  gchar *resource_filter;
+  gboolean active;
+} turbovas_control_tag_create_request_t;
+
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *value;
+  gchar *resource_type;
+  array_t *resource_ids;
+  gchar *resource_filter;
+  gchar *resources_action;
+  gchar *active;
+} turbovas_control_tag_modify_request_t;
+
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -157,6 +193,12 @@ turbovas_control_alert_status_is_valid (const char *);
 
 static gboolean
 turbovas_control_optional_uuid_is_valid (const char *);
+
+static gboolean
+turbovas_control_secret_matches (const char *, size_t, const char *, size_t);
+
+static gboolean
+turbovas_control_uuid_is_valid (const char *);
 
 static void
 turbovas_control_array_add_data (array_t *, const char *, const char *);
@@ -231,6 +273,141 @@ turbovas_control_decode_schedule_modify_field (const char *value,
     }
 
   return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_authenticated_prefix (
+  const char *request, size_t request_len, const char *command,
+  size_t command_len, const char *expected_secret, size_t expected_secret_len,
+  char operator_uuid[37], const char **cursor_out, const char **end_out)
+{
+  const char *end;
+  const char *operator_start;
+  const char *secret;
+  const char *secret_end;
+  size_t secret_len;
+
+  if (request == NULL || request_len >= TURBOVAS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < command_len + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1
+                           + 37
+      || memcmp (request, command, command_len)
+      || request[request_len - 1] != '\n'
+      || !turbovas_control_secret_is_valid (expected_secret,
+                                             expected_secret_len))
+    return FALSE;
+
+  end = request + request_len - 1;
+  secret = request + command_len;
+  secret_end = memchr (secret, ' ', (size_t) (end - secret));
+  if (secret_end == NULL)
+    return FALSE;
+  secret_len = (size_t) (secret_end - secret);
+  if (!turbovas_control_secret_is_valid (secret, secret_len)
+      || !turbovas_control_secret_matches (secret, secret_len,
+                                            expected_secret,
+                                            expected_secret_len))
+    return FALSE;
+
+  operator_start = secret_end + 1;
+  if ((size_t) (end - operator_start) < 37 || operator_start[36] != ' ')
+    return FALSE;
+  memcpy (operator_uuid, operator_start, 36);
+  operator_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (operator_uuid))
+    return FALSE;
+
+  *cursor_out = operator_start + 37;
+  *end_out = end;
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_decode_tag_text_field (const char *value, size_t value_len,
+                                         size_t max_decoded_len,
+                                         gboolean required,
+                                         gchar **decoded_out)
+{
+  return turbovas_control_decode_base64_field (
+           value, value_len, max_decoded_len, required, decoded_out)
+         && turbovas_control_text_has_allowed_controls (
+              *decoded_out, strlen (*decoded_out), FALSE);
+}
+
+static gboolean
+turbovas_control_tag_resource_ids_from_field (const char *value,
+                                               size_t value_len,
+                                               array_t **resource_ids_out)
+{
+  array_t *resource_ids;
+  gchar *decoded = NULL;
+  gchar **parts = NULL;
+  guint count = 0;
+  gboolean valid = FALSE;
+
+  if (!turbovas_control_decode_base64_field (
+        value, value_len, TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES, FALSE,
+        &decoded))
+    return FALSE;
+
+  resource_ids = make_array ();
+  if (decoded[0] == '\0')
+    {
+      array_terminate (resource_ids);
+      *resource_ids_out = resource_ids;
+      g_free (decoded);
+      return TRUE;
+    }
+
+  parts = g_strsplit (decoded, "\n", -1);
+  for (guint index = 0; parts[index]; index++)
+    {
+      size_t length = strlen (parts[index]);
+      if (length == 0 || length > TURBOVAS_CONTROL_TAG_RESOURCE_ID_MAX_BYTES
+          || ++count > TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX
+          || !g_utf8_validate (parts[index], -1, NULL)
+          || !turbovas_control_text_has_allowed_controls (
+               parts[index], length, FALSE))
+        goto cleanup;
+      array_add (resource_ids, g_strdup (parts[index]));
+    }
+  array_terminate (resource_ids);
+  *resource_ids_out = resource_ids;
+  resource_ids = NULL;
+  valid = TRUE;
+
+cleanup:
+  array_free (resource_ids);
+  g_strfreev (parts);
+  g_free (decoded);
+  return valid;
+}
+
+static void
+turbovas_control_tag_create_request_clear (
+  turbovas_control_tag_create_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->value);
+  g_free (request->resource_type);
+  array_free (request->resource_ids);
+  g_free (request->resource_filter);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
+turbovas_control_tag_modify_request_clear (
+  turbovas_control_tag_modify_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->value);
+  g_free (request->resource_type);
+  array_free (request->resource_ids);
+  g_free (request->resource_filter);
+  g_free (request->resources_action);
+  g_free (request->active);
+  memset (request, 0, sizeof (*request));
 }
 
 static gboolean
@@ -595,6 +772,89 @@ turbovas_control_trash_empty_response
         break;
     }
 
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
+static const char *
+turbovas_control_tag_create_response (
+  int result, const char *created_uuid,
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  if (result == 0 && created_uuid
+      && turbovas_control_uuid_is_valid (created_uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", created_uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 1:
+        status = "1 resource_not_found\n";
+        break;
+      case 2:
+        status = "2 no_resources\n";
+        break;
+      case 3:
+        status = "3 too_many_resources\n";
+        break;
+      case 99:
+        status = "99 forbidden\n";
+        break;
+      case -2:
+        status = "-2 malformed\n";
+        break;
+      case -3:
+        status = "-3 committed_indeterminate\n";
+        break;
+      default:
+        status = "-1 internal\n";
+        break;
+    }
+  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  return response;
+}
+
+static const char *
+turbovas_control_tag_modify_response (
+  int result, char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  const char *status;
+
+  switch (result)
+    {
+      case 0:
+        status = "0 modified\n";
+        break;
+      case 1:
+        status = "1 tag_not_found\n";
+        break;
+      case 3:
+        status = "3 invalid_action\n";
+        break;
+      case 4:
+        status = "4 resource_not_found\n";
+        break;
+      case 5:
+        status = "5 no_resources\n";
+        break;
+      case 6:
+        status = "6 too_many_resources\n";
+        break;
+      case 99:
+        status = "99 forbidden\n";
+        break;
+      case -2:
+        status = "-2 malformed\n";
+        break;
+      default:
+        status = "-1 internal\n";
+        break;
+    }
   g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
@@ -1128,6 +1388,197 @@ turbovas_control_next_field (const char **cursor, const char *end,
     }
 
   return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_tag_create_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_tag_create_request_t *tag)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+  gboolean valid;
+
+  memset (tag, 0, sizeof (*tag));
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_TAG_CREATE_COMMAND,
+        TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && field_len == 1 && (field[0] == '0' || field[0] == '1');
+  if (!valid)
+    return FALSE;
+  tag->active = field[0] == '1';
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_text_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
+               TRUE, &tag->resource_type)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_text_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES, TRUE,
+               &tag->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_text_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
+               &tag->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_text_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
+               &tag->value)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_tag_resource_ids_from_field (
+               field, field_len, &tag->resource_ids)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_text_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES, FALSE,
+               &tag->resource_filter)
+          && cursor == end
+          && strcasecmp (tag->resource_type, "tag") != 0
+          && (valid_db_resource_type (tag->resource_type)
+              || valid_subtype (tag->resource_type))
+          && !(g_ptr_array_index (tag->resource_ids, 0) != NULL
+               && tag->resource_filter[0] != '\0');
+  if (!valid)
+    turbovas_control_tag_create_request_clear (tag);
+  return valid;
+}
+
+static gboolean
+turbovas_control_decode_tag_modify_field (const char *field,
+                                           size_t field_len,
+                                           size_t max_decoded_len,
+                                           gchar **decoded_out)
+{
+  return turbovas_control_decode_schedule_modify_field (
+    field, field_len, max_decoded_len, FALSE, decoded_out);
+}
+
+static gboolean
+turbovas_control_parse_tag_modify_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char tag_uuid[37],
+  turbovas_control_tag_modify_request_t *tag)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  const char *tag_start;
+  size_t field_len;
+  gboolean action_present;
+  gboolean filter_present;
+  gboolean ids_present;
+  gboolean valid;
+
+  memset (tag, 0, sizeof (*tag));
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
+        TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  tag_start = cursor;
+  if ((size_t) (end - tag_start) < 37 || tag_start[36] != ' ')
+    return FALSE;
+  memcpy (tag_uuid, tag_start, 36);
+  tag_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (tag_uuid))
+    return FALSE;
+  cursor = tag_start + 37;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_modify_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES,
+               &tag->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_modify_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES,
+               &tag->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_modify_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES,
+               &tag->value)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len);
+  if (!valid)
+    goto invalid;
+  if (field_len == 1 && field[0] == '-')
+    tag->active = NULL;
+  else if (field_len == 1 && (field[0] == '0' || field[0] == '1'))
+    tag->active = g_strndup (field, 1);
+  else
+    goto invalid;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_tag_modify_field (
+               field, field_len, TURBOVAS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
+               &tag->resource_type)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len);
+  if (!valid)
+    goto invalid;
+  if (field_len == 1 && field[0] == '-')
+    tag->resources_action = NULL;
+  else if ((field_len == 3 && memcmp (field, "add", 3) == 0)
+           || (field_len == 3 && memcmp (field, "set", 3) == 0)
+           || (field_len == 6 && memcmp (field, "remove", 6) == 0))
+    tag->resources_action = g_strndup (field, field_len);
+  else
+    goto invalid;
+
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len))
+    goto invalid;
+  if (!(field_len == 1 && field[0] == '-'))
+    {
+      if (field_len == 0 || field[0] != '+'
+          || !turbovas_control_tag_resource_ids_from_field (
+               field + 1, field_len - 1, &tag->resource_ids))
+        goto invalid;
+    }
+
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_decode_tag_modify_field (
+           field, field_len, TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES,
+           &tag->resource_filter)
+      || cursor != end)
+    goto invalid;
+
+  action_present = tag->resources_action != NULL;
+  ids_present = tag->resource_ids
+                && g_ptr_array_index (tag->resource_ids, 0) != NULL;
+  filter_present = tag->resource_filter && tag->resource_filter[0] != '\0';
+  valid = !(ids_present && filter_present)
+          && (!tag->name || tag->name[0] != '\0')
+          && (!tag->resource_type
+              || (strcasecmp (tag->resource_type, "tag") != 0
+                  && (valid_db_resource_type (tag->resource_type)
+                      || valid_subtype (tag->resource_type))))
+          && (!tag->resource_type
+              || (action_present
+                  && strcmp (tag->resources_action, "set") == 0))
+          && ((action_present
+               && (strcmp (tag->resources_action, "set") == 0 || ids_present
+                   || filter_present))
+              || (!action_present && !tag->resource_ids
+                  && !tag->resource_filter && !tag->resource_type))
+          && (tag->name || tag->comment || tag->value || tag->active
+              || action_present);
+  if (valid && action_present
+      && strcmp (tag->resources_action, "set") == 0
+      && tag->resource_ids == NULL && !filter_present)
+    {
+      tag->resource_ids = make_array ();
+      array_terminate (tag->resource_ids);
+    }
+  if (valid)
+    return TRUE;
+
+invalid:
+  turbovas_control_tag_modify_request_clear (tag);
+  return FALSE;
 }
 
 static gboolean
@@ -1982,6 +2433,75 @@ turbovas_control_modify_schedule
 }
 
 static int
+turbovas_control_create_tag (
+  const char *operator_uuid,
+  const turbovas_control_tag_create_request_t *request,
+  char created_uuid[37])
+{
+  gchar *error_extra = NULL;
+  char *uuid = NULL;
+  tag_t tag = 0;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = create_tag (
+    request->name, request->comment, request->value, request->resource_type,
+    request->resource_ids, request->resource_filter,
+    request->active ? "1" : "0", &tag, &error_extra);
+  if (result == 0)
+    {
+      uuid = tag_uuid (tag);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        {
+          g_warning ("%s: tag creation committed but UUID lookup failed",
+                     __func__);
+          log_event ("tag", "Tag", NULL, "created");
+          result = -3;
+        }
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+          log_event ("tag", "Tag", created_uuid, "created");
+        }
+    }
+  else
+    log_event_fail ("tag", "Tag", NULL, "created");
+
+  free (uuid);
+  g_free (error_extra);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
+turbovas_control_modify_tag (
+  const char *operator_uuid, const char *tag_uuid,
+  const turbovas_control_tag_modify_request_t *request)
+{
+  gchar *error_extra = NULL;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = modify_tag (
+    tag_uuid, request->name, request->comment, request->value,
+    request->resource_type, request->resource_ids, request->resource_filter,
+    request->resources_action, request->active, &error_extra);
+  if (result == 0)
+    log_event ("tag", "Tag", tag_uuid, "modified");
+  else
+    log_event_fail ("tag", "Tag", tag_uuid, "modified");
+
+  g_free (error_extra);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_configure_diagnostic_nvt (const char *operator_uuid,
                                            const char *config_uuid,
                                            const char *nvt_oid)
@@ -2013,6 +2533,7 @@ turbovas_control_serve_client (int client_socket)
   char created_uuid[37];
   char config_uuid[37];
   char schedule_uuid[37];
+  char tag_uuid[37];
   char task_uuid[37];
   char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
@@ -2028,6 +2549,8 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_credential_create_request_t credential_request = {0};
   turbovas_control_alert_email_create_request_t alert_request = {0};
   turbovas_control_alert_smb_create_request_t smb_alert_request = {0};
+  turbovas_control_tag_create_request_t tag_create_request = {0};
+  turbovas_control_tag_modify_request_t tag_modify_request = {0};
   memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
@@ -2069,6 +2592,33 @@ turbovas_control_serve_client (int client_socket)
                           TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
         result_response = turbovas_control_trash_empty_response (-1, 0,
                                                                   response);
+      else if (turbovas_control_parse_tag_create_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &tag_create_request))
+        {
+          result = turbovas_control_create_tag (
+            operator_uuid, &tag_create_request, created_uuid);
+          result_response = turbovas_control_tag_create_response (
+            result, created_uuid, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_TAG_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
+        result_response =
+          turbovas_control_tag_create_response (-2, NULL, response);
+      else if (turbovas_control_parse_tag_modify_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, tag_uuid, &tag_modify_request))
+        {
+          result = turbovas_control_modify_tag (
+            operator_uuid, tag_uuid, &tag_modify_request);
+          result_response =
+            turbovas_control_tag_modify_response (result, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
+                          TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_tag_modify_response (-2, response);
       else if (turbovas_control_parse_request (request, request_len,
                                           expected_secret,
                                           expected_secret_len,
@@ -2167,6 +2717,15 @@ turbovas_control_serve_client (int client_socket)
            && memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
                       TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
     result_response = turbovas_control_trash_empty_response (-1, 0, response);
+  else if (request_len >= TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_TAG_CREATE_COMMAND,
+                      TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
+    result_response =
+      turbovas_control_tag_create_response (-2, NULL, response);
+  else if (request_len >= TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
+                      TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_tag_modify_response (-2, response);
   else if (request_len >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
            && memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
                       TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
@@ -2189,6 +2748,8 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_credential_create_request_clear (&credential_request);
   turbovas_control_alert_email_create_request_clear (&alert_request);
   turbovas_control_alert_smb_create_request_clear (&smb_alert_request);
+  turbovas_control_tag_create_request_clear (&tag_create_request);
+  turbovas_control_tag_modify_request_clear (&tag_modify_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
       turbovas_control_secure_clear (request, request_len);

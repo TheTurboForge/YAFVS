@@ -56,6 +56,13 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
             extra_where: "",
         }),
+        "filter" => Ok(TagResourceSqlSpec {
+            table: "filters",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
         "target" => Ok(TagResourceSqlSpec {
             table: "targets",
             join_on: "r.id = tr.resource",
@@ -133,6 +140,13 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             name_expr: "coalesce(nullif(r.hostname, ''), nullif(r.host, ''), nullif(r.port, ''), r.uuid)",
             extra_where: "",
         }),
+        "override" => Ok(TagResourceSqlSpec {
+            table: "overrides",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.text, ''), nullif(r.nvt, ''), r.uuid)",
+            extra_where: "",
+        }),
         "scanner" => Ok(TagResourceSqlSpec {
             table: "scanners",
             join_on: "r.id = tr.resource",
@@ -142,6 +156,13 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
         }),
         "schedule" => Ok(TagResourceSqlSpec {
             table: "schedules",
+            join_on: "r.id = tr.resource",
+            id_expr: "r.uuid",
+            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
+            extra_where: "",
+        }),
+        "user" => Ok(TagResourceSqlSpec {
+            table: "users",
             join_on: "r.id = tr.resource",
             id_expr: "r.uuid",
             name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
@@ -197,6 +218,7 @@ pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -
         resource_type,
         "alert"
             | "credential"
+            | "filter"
             | "config"
             | "cert_bund_adv"
             | "cpe"
@@ -205,6 +227,7 @@ pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -
             | "host"
             | "nvt"
             | "os"
+            | "override"
             | "port_list"
             | "report"
             | "report_config"
@@ -215,6 +238,7 @@ pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -
             | "target"
             | "task"
             | "tls_certificate"
+            | "user"
     )
 }
 
@@ -231,8 +255,10 @@ pub(crate) fn tag_resource_direct_write_requires_owner_match(resource_type: &str
         "alert"
             | "credential"
             | "config"
+            | "filter"
             | "host"
             | "os"
+            | "override"
             | "port_list"
             | "report"
             | "report_config"
@@ -492,7 +518,12 @@ mod tests {
         assert!(report_sql.contains("FROM reports r"));
         let result_sql = tag_resource_name_collection_sql("result", &sort_sql).unwrap();
         assert!(result_sql.contains("FROM results r"));
-        assert!(tag_resource_name_collection_sql("user", &sort_sql).is_err());
+        let user_sql = tag_resource_name_collection_sql("user", &sort_sql).unwrap();
+        assert!(user_sql.contains("FROM users r"));
+        let filter_sql = tag_resource_name_collection_sql("filter", &sort_sql).unwrap();
+        assert!(filter_sql.contains("FROM filters r"));
+        let override_sql = tag_resource_name_collection_sql("override", &sort_sql).unwrap();
+        assert!(override_sql.contains("FROM overrides r"));
     }
 
     #[test]

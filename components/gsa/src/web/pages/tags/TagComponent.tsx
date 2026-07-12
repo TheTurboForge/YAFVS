@@ -373,38 +373,16 @@ const TagComponent = ({
   };
 
   const saveExistingNativeTag = async (state: TagDialogState) => {
-    if (state.resourceType !== resourceType) {
-      throw new Error('Native tag edit cannot change resource type');
-    }
     const nextResourceIds = state.resourceIds ?? [];
-    const resourcesChanged = !sameStringList(nextResourceIds, resourceIds);
-    const metadataChanged =
-      state.active !== active ||
-      state.comment !== comment ||
-      state.name !== name ||
-      state.value !== value;
-
-    if (resourcesChanged && metadataChanged) {
-      throw new Error(
-        'Native tag edit cannot change metadata and resource assignments in one save',
-      );
-    }
-
-    if (resourcesChanged) {
-      await saveMutation.mutateAsync({
-        ...state,
-        id: state.id as string,
-        resourceType: state.resourceType as EntityType,
-        resourcesAction: 'set',
-      });
-      return;
-    }
+    const resourcesChanged =
+      state.resourceType !== resourceType ||
+      !sameStringList(nextResourceIds, resourceIds);
 
     await saveMutation.mutateAsync({
       ...state,
       id: state.id as string,
-      resourceIds: [],
       resourceType: state.resourceType as EntityType,
+      ...(resourcesChanged ? {resourcesAction: 'set' as const} : {}),
     });
   };
 

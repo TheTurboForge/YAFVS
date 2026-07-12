@@ -5,9 +5,17 @@
  */
 
 import CollectionCounts from 'gmp/collection/collection-counts';
+import type {HttpCommandInputParams} from 'gmp/commands/http';
+import {
+  filterFromCommandParams,
+  nativeCollectionMeta,
+  NATIVE_COMMAND_PAGE_SIZE,
+} from 'gmp/commands/native';
+import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
-import type QueryFilter from 'gmp/models/filter';
+import type Filter from 'gmp/models/filter';
+import {filterString} from 'gmp/models/filter/utils';
 import Model from 'gmp/models/model';
 import ResourceName from 'gmp/models/resource-name';
 import Tag from 'gmp/models/tag';
@@ -104,16 +112,42 @@ export interface NativeTagsResponse {
   page: NativePage;
 }
 
-interface NativeTagPatchInput {
+export interface NativeTagPatchInput {
   active?: boolean;
   comment?: string;
   name?: string;
   value?: string;
+  resourceType?: EntityType;
+  resources?: NativeTagResourceUpdateInput;
 }
 
-interface NativeTagResourceUpdateInput {
+export interface NativeTagResourceUpdateInput {
   action: 'add' | 'remove' | 'set';
-  resourceIds: string[];
+  resourceIds?: string[];
+  filter?: Filter | string;
+}
+
+export interface TagCommandCreateParams {
+  active: boolean;
+  comment?: string;
+  filter?: Filter | string;
+  name: string;
+  resourceIds?: string[];
+  resourceType: EntityType;
+  value?: string;
+}
+
+export interface TagCommandSaveParams extends TagCommandCreateParams {
+  id: string;
+  resourcesAction?: 'add' | 'remove' | 'set';
+}
+
+interface TagCommandParams {
+  id: string;
+}
+
+interface TagCommandOptions {
+  filter?: Filter | string;
 }
 
 const TAG_SORT_FIELDS: Record<string, string> = {
@@ -131,12 +165,15 @@ const TAG_SORT_FIELDS: Record<string, string> = {
 const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([
   'alert',
   'cert_bund_adv',
+  'credential',
   'cpe',
   'cve',
   'dfn_cert_adv',
+  'filter',
   'host',
   'nvt',
   'os',
+  'override',
   'port_list',
   'report',
   'report_config',
@@ -148,6 +185,7 @@ const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([
   'target',
   'task',
   'tls_certificate',
+  'user',
 ]);
 
 const stringValue = (value: unknown): string =>
@@ -176,7 +214,7 @@ export const canUseNativeTagResourceNames = (
   typeof gmp?.buildUrl === 'function' &&
   nativeTagResourceNameType(resourceType) !== undefined;
 
-const nativeSortFromFilter = (filter?: QueryFilter): string => {
+const nativeSortFromFilter = (filter?: Filter): string => {
   const reverse = filter?.get('sort-reverse');
   const ascending = filter?.get('sort');
   const rawField = stringValue(reverse ?? ascending) || 'name';
@@ -184,7 +222,7 @@ const nativeSortFromFilter = (filter?: QueryFilter): string => {
   return reverse !== undefined ? `-${nativeField}` : nativeField;
 };
 
-const nativeSearchFromFilter = (filter?: QueryFilter): string => {
+const nativeSearchFromFilter = (filter?: Filter): string => {
   const search = filter?.get('search');
   if (search !== undefined) {
     return String(search);
@@ -193,7 +231,7 @@ const nativeSearchFromFilter = (filter?: QueryFilter): string => {
   return /[=<>:~]/.test(criteria) ? '' : criteria;
 };
 
-const nativeActiveFromFilter = (filter?: QueryFilter): string => {
+const nativeActiveFromFilter = (filter?: Filter): string => {
   const value = filter?.get('active');
   if (value === 1 || value === '1') {
     return '1';
@@ -204,9 +242,7 @@ const nativeActiveFromFilter = (filter?: QueryFilter): string => {
   return '';
 };
 
-export const nativeTagsQueryFromFilter = (
-  filter?: QueryFilter,
-): NativeTagsQuery => {
+export const nativeTagsQueryFromFilter = (filter?: Filter): NativeTagsQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
   return {
@@ -417,27 +453,27 @@ export const createNativeTag = async (
     name,
     resourceIds,
     resourceType,
+    filter,
     value,
-  }: {
-    active: boolean;
-    comment: string;
-    name: string;
-    resourceIds?: string[];
-    resourceType: EntityType;
-    value: string;
-  },
+  }: TagCommandCreateParams,
 ): Promise<Response<{id: string}>> => {
+  const resourceFilter = filterString(filter);
   const resourceIdsPayload =
     resourceIds !== undefined && resourceIds.length > 0
       ? {resource_ids: resourceIds}
       : {};
+  const resourceFilterPayload =
+    resourceFilter !== undefined && resourceFilter !== ''
+      ? {resource_filter: resourceFilter}
+      : {};
   const payload = await writeNativeJson<NativeTagPayload>(gmp, 'api/v1/tags', {
     active,
-    comment,
+    comment: comment ?? '',
     name,
     ...resourceIdsPayload,
+    ...resourceFilterPayload,
     resource_type: nativeResourceType(resourceType),
-    value,
+    value: value ?? '',
   });
   return new Response({id: stringValue(payload.id)});
 };
@@ -445,8 +481,20 @@ export const createNativeTag = async (
 export const patchNativeTag = async (
   gmp: NativeApiGmp,
   id: string,
-  {active, comment, name, value}: NativeTagPatchInput,
+  {active, comment, name, value, resourceType, resources}: NativeTagPatchInput,
 ): Promise<Response<{id: string}>> => {
+  const resourceFilter = filterString(resources?.filter);
+  const resourcesPayload =
+    resources === undefined
+      ? {}
+      : {
+          resources: {
+            action: resources.action,
+            ...(resourceFilter !== undefined && resourceFilter !== ''
+              ? {resource_filter: resourceFilter}
+              : {resource_ids: resources.resourceIds ?? []}),
+          },
+        };
   const payload = await writeNativeJson<NativeTagPayload>(
     gmp,
     `api/v1/tags/${encodeURIComponent(id)}`,
@@ -455,6 +503,10 @@ export const patchNativeTag = async (
       comment,
       name,
       value,
+      ...(resourceType === undefined
+        ? {}
+        : {resource_type: nativeResourceType(resourceType)}),
+      ...resourcesPayload,
     },
     'PATCH',
   );
@@ -464,14 +516,17 @@ export const patchNativeTag = async (
 export const updateNativeTagResources = async (
   gmp: NativeApiGmp,
   id: string,
-  {action, resourceIds}: NativeTagResourceUpdateInput,
+  {action, resourceIds, filter}: NativeTagResourceUpdateInput,
 ): Promise<Response<{id: string}>> => {
+  const resourceFilter = filterString(filter);
   const payload = await writeNativeJson<NativeTagPayload>(
     gmp,
     `api/v1/tags/${encodeURIComponent(id)}/resources`,
     {
       action,
-      resource_ids: resourceIds,
+      ...(resourceFilter !== undefined && resourceFilter !== ''
+        ? {resource_filter: resourceFilter}
+        : {resource_ids: resourceIds ?? []}),
     },
   );
   return new Response({id: stringValue(payload.id)});
@@ -537,3 +592,237 @@ export const fetchNativeTagResourceNames = async (
       }),
   );
 };
+
+const nativeTagDetailSupportsFilter = (filter?: Filter | string): boolean => {
+  const value = filterString(filter);
+  return (
+    filter === undefined || value === 'resources=1' || value === 'alerts=1'
+  );
+};
+
+const shouldApplyToAllFilteredTags = (filter: Filter): boolean => {
+  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+  return Number.isFinite(rows) && rows < 0;
+};
+
+const tagIds = (tags: Tag[]) =>
+  tags.flatMap(tag => (tag.id === undefined ? [] : [tag.id]));
+
+export class TagCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get({id}: TagCommandParams, {filter}: TagCommandOptions = {}) {
+    if (!nativeTagDetailSupportsFilter(filter)) {
+      throw new Error('Native tag detail filter is not supported');
+    }
+    return new Response(await fetchNativeTag(this.http, id));
+  }
+
+  create(args: TagCommandCreateParams) {
+    return createNativeTag(this.http, args);
+  }
+
+  save({
+    id,
+    name,
+    comment = '',
+    active,
+    filter,
+    resourceIds = [],
+    resourceType,
+    resourcesAction,
+    value = '',
+  }: TagCommandSaveParams) {
+    if (resourcesAction === undefined) {
+      if (filterString(filter)) {
+        throw new Error('Native tag save filter requires a resource action');
+      }
+      return patchNativeTag(this.http, id, {active, comment, name, value});
+    }
+    return patchNativeTag(this.http, id, {
+      active,
+      comment,
+      name,
+      value,
+      ...(resourcesAction === 'set' ? {resourceType} : {}),
+      resources: {
+        action: resourcesAction,
+        resourceIds,
+        filter,
+      },
+    });
+  }
+
+  export({id}: TagCommandParams) {
+    return exportNativeTagMetadata(this.http, id);
+  }
+
+  enable({id}: TagCommandParams) {
+    return patchNativeTag(this.http, id, {active: true});
+  }
+
+  disable({id}: TagCommandParams) {
+    return patchNativeTag(this.http, id, {active: false});
+  }
+
+  clone({id}: TagCommandParams) {
+    return cloneNativeTag(this.http, id);
+  }
+
+  async delete({id}: TagCommandParams) {
+    await deleteNativeTag(this.http, id);
+  }
+}
+
+export class NativeTagBulkDeleteError extends Error {
+  readonly deletedIds: string[];
+  readonly failedId: string;
+  readonly pendingIds: string[];
+
+  constructor(
+    deletedIds: string[],
+    failedId: string,
+    pendingIds: string[],
+    cause: unknown,
+  ) {
+    super(
+      `Native tag bulk delete stopped at ${failedId} after deleting ${deletedIds.length} tag(s).`,
+      {cause},
+    );
+    this.name = 'NativeTagBulkDeleteError';
+    this.deletedIds = deletedIds;
+    this.failedId = failedId;
+    this.pendingIds = pendingIds;
+  }
+}
+
+export class TagsCommand {
+  private readonly http: Http;
+
+  constructor(http: Http) {
+    this.http = http;
+  }
+
+  async get(params: HttpCommandInputParams = {}) {
+    const filter = filterFromCommandParams(params);
+    const nativeResponse = await fetchNativeTags(
+      this.http,
+      nativeTagsQueryFromFilter(filter),
+    );
+    return new Response(nativeResponse.tags, {
+      filter,
+      counts: nativeResponse.counts,
+    });
+  }
+
+  async getAll(params: HttpCommandInputParams = {}) {
+    const filter = filterFromCommandParams(params).all();
+    const tags: Tag[] = [];
+    let total = Number.POSITIVE_INFINITY;
+
+    for (let page = 1; tags.length < total; page += 1) {
+      const nativeResponse = await fetchNativeTags(this.http, {
+        ...nativeTagsQueryFromFilter(filter),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      tags.push(...nativeResponse.tags);
+      total = nativeResponse.page.total;
+      if (nativeResponse.tags.length === 0) {
+        break;
+      }
+    }
+
+    return new Response(
+      tags,
+      nativeCollectionMeta(filter, tags, Number.isFinite(total) ? total : 0),
+    );
+  }
+
+  export(tags: Tag[]) {
+    return this.exportByIds(tagIds(tags));
+  }
+
+  exportByIds(ids: string[]) {
+    return exportNativeTagsMetadata(this.http, ids);
+  }
+
+  async exportByFilter(filter: Filter) {
+    const tags: Tag[] = [];
+    if (shouldApplyToAllFilteredTags(filter)) {
+      let total = Number.POSITIVE_INFINITY;
+      for (let page = 1; tags.length < total; page += 1) {
+        const nativeResponse = await fetchNativeTags(this.http, {
+          ...nativeTagsQueryFromFilter(filter),
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        tags.push(...nativeResponse.tags);
+        total = nativeResponse.page.total;
+        if (nativeResponse.tags.length === 0) {
+          break;
+        }
+      }
+    } else {
+      const nativeResponse = await fetchNativeTags(
+        this.http,
+        nativeTagsQueryFromFilter(filter),
+      );
+      tags.push(...nativeResponse.tags);
+    }
+    return this.exportByIds(tagIds(tags));
+  }
+
+  async delete(tags: Tag[]) {
+    const response = await this.deleteByIds(tagIds(tags));
+    return response.setData(tags);
+  }
+
+  async deleteByIds(ids: string[]) {
+    const deletedIds: string[] = [];
+    await this.deleteIds(ids, deletedIds);
+    return new Response(deletedIds);
+  }
+
+  async deleteByFilter(filter: Filter) {
+    const deletedTags: Tag[] = [];
+    const deletedIds: string[] = [];
+    const query = nativeTagsQueryFromFilter(filter);
+    const deleteAll = shouldApplyToAllFilteredTags(filter);
+    let hasMore = true;
+
+    while (hasMore) {
+      const nativeResponse = await fetchNativeTags(this.http, {
+        ...query,
+        ...(deleteAll ? {page: 1, pageSize: NATIVE_COMMAND_PAGE_SIZE} : {}),
+      });
+      hasMore = deleteAll && nativeResponse.tags.length > 0;
+      if (nativeResponse.tags.length === 0) {
+        break;
+      }
+      await this.deleteIds(tagIds(nativeResponse.tags), deletedIds);
+      deletedTags.push(...nativeResponse.tags);
+    }
+    return new Response(deletedTags);
+  }
+
+  private async deleteIds(ids: string[], deletedIds: string[]) {
+    for (const [index, id] of ids.entries()) {
+      try {
+        await deleteNativeTag(this.http, id);
+        deletedIds.push(id);
+      } catch (cause) {
+        throw new NativeTagBulkDeleteError(
+          [...deletedIds],
+          id,
+          ids.slice(index + 1),
+          cause,
+        );
+      }
+    }
+  }
+}

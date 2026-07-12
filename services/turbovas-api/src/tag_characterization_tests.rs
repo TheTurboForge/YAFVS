@@ -206,7 +206,7 @@ fn inherited_tag_writability_helpers_are_currently_permissive_live_closed_trash(
 }
 
 #[test]
-fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_resources() {
+fn native_direct_api_exposes_bounded_tag_reads_and_writes() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/tags",
@@ -231,7 +231,7 @@ fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_res
     for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, export_path, true),
-            "{method} tag metadata export must stay closed; filter actions and resource-type changes remain inherited"
+            "{method} tag metadata export must stay read-only"
         );
     }
     assert!(direct_api_v1_method_is_allowed(
@@ -277,18 +277,19 @@ fn native_direct_api_still_limits_tag_write_control_to_metadata_and_explicit_res
 }
 
 #[test]
-fn openapi_tag_contract_records_remaining_inherited_tail() {
+fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
     for path in ["/tags", "/tags/{tag_id}/resources"] {
         let block = openapi_path_block(path);
-        assert!(block.contains(
-            "x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics"
-        ));
+        assert!(!block.contains("x-turbovas-inherited-still-owns"));
+        assert!(block.contains("resource_filter"));
     }
     let patch_block = openapi_path_block("/tags/{tag_id}");
-    assert!(patch_block.contains("x-turbovas-replaces: tag-metadata-write"));
-    assert!(!patch_block.contains(
-        "x-turbovas-inherited-still-owns: tag-filter-actions-and-resource-type-change-semantics"
-    ));
+    assert!(
+        patch_block.contains(
+            "x-turbovas-replaces: tag-metadata-resource-type-and-atomic-assignment-write"
+        )
+    );
+    assert!(patch_block.contains("resource_type change"));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-turbovas-replaces: tag-clone"));
     assert!(clone_block.contains("x-turbovas-safety-contract: write-control-v1"));

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -25,6 +26,7 @@ from .messaging.mqtt import (
     MQTTSubscriber,
 )
 from .scanner import NotusScanner
+from .secretfile import read_secret_file
 from .utils import (
     create_pid,
     go_to_background,
@@ -63,7 +65,7 @@ def run_daemon(
     mqtt_broker_address: str,
     mqtt_broker_port: int,
     mqtt_broker_username: str,
-    mqtt_broker_password: str,
+    mqtt_broker_password: Optional[str],
     products_directory_path: Path,
     disable_hashsum_verification: bool,
 ):
@@ -135,7 +137,11 @@ def main():
         args.mqtt_broker_address,
         args.mqtt_broker_port,
         args.mqtt_broker_username,
-        args.mqtt_broker_password,
+        (
+            read_secret_file(args.mqtt_broker_password_file)
+            if args.mqtt_broker_password_file
+            else None
+        ),
         args.products_directory,
         args.disable_hashsum_verification,
     )

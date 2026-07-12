@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -220,9 +221,15 @@ class CliParser:
             '--mqtt-broker-password',
             default=None,
             type=str,
+            help=argparse.SUPPRESS,
+        )
+        parser.add_argument(
+            '--mqtt-broker-password-file',
+            default=None,
+            type=str,
             help=(
-                'Password to connect to MQTT broker for MQTT communication.'
-                ' Default %(default)s'
+                'Owner-only file containing the password to connect to the '
+                'MQTT broker.'
             ),
         )
 
@@ -301,6 +308,11 @@ class CliParser:
         # This override also what it was passed as cmd option.
         self._set_defaults(_args.config)
         args, _ = self.parser.parse_known_args(args)
+        if args.mqtt_broker_password is not None:
+            self.parser.error(
+                'plaintext MQTT broker passwords are not supported; '
+                'use mqtt_broker_password_file'
+            )
 
         return args
 

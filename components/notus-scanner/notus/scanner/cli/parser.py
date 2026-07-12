@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -121,12 +122,12 @@ class CliParser:
             ),
         )
         parser.add_argument(
-            "--mqtt-broker-password",
+            "--mqtt-broker-password-file",
             default=None,
             type=str,
             help=(
-                "PASSWORD to connect to MQTT broker for MQTT communication."
-                "Default %(default)s"
+                "Owner-only file containing the password to connect to the "
+                "MQTT broker. Default %(default)s"
             ),
         )
 

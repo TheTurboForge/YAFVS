@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 import xml.etree.ElementTree as ET
@@ -12182,6 +12183,97 @@ db2:keys=5,expires=0,avg_ttl=0
             metadata = turbovasctl.runtime_secret_file_metadata(secret_path)
             self.assertEqual(metadata["mode"], "0600")
             self.assertTrue(metadata["permission_ok"])
+            self.assertEqual(secret_path.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_runtime_secret_reader_rejects_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            target = Path(tmp) / "target"
+            target.write_text("outside\n", encoding="utf-8")
+            target.chmod(0o600)
+            secret_path = turbovasctl.runtime_secret_path(root, "example")
+            secret_path.parent.mkdir(parents=True)
+            secret_path.parent.chmod(0o700)
+            secret_path.symlink_to(target)
+
+            metadata = turbovasctl.runtime_secret_file_metadata(secret_path)
+            self.assertTrue(metadata["symlink"])
+            self.assertFalse(metadata["permission_ok"])
+            with self.assertRaises(OSError):
+                turbovasctl.read_or_create_runtime_secret(root, "example")
+
+    def test_runtime_secret_reader_rejects_crlf_and_multiline_values(self):
+        for content in ("secret\r\n", "first\nsecond\n", "\n"):
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "TurboVAS"
+                root.mkdir()
+                path = turbovasctl.runtime_secret_path(root, "example")
+                turbovasctl.write_private_text(path, content)
+                with self.assertRaises(ValueError):
+                    turbovasctl.read_or_create_runtime_secret(root, "example")
+
+    def test_private_writer_atomically_replaces_symlink_without_touching_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            target = Path(tmp) / "target"
+            target.write_text("outside\n", encoding="utf-8")
+            target.chmod(0o600)
+            secret_path = turbovasctl.runtime_secret_path(root, "example")
+            secret_path.parent.mkdir(parents=True)
+            secret_path.parent.chmod(0o700)
+            secret_path.symlink_to(target)
+
+            turbovasctl.write_private_text(secret_path, "replacement\n")
+
+            self.assertFalse(secret_path.is_symlink())
+            self.assertEqual(
+                secret_path.read_text(encoding="utf-8"), "replacement\n"
+            )
+            self.assertEqual(target.read_text(encoding="utf-8"), "outside\n")
+            self.assertEqual(secret_path.stat().st_mode & 0o777, 0o600)
+
+    def test_private_writer_waits_for_cross_process_directory_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            secret_path = turbovasctl.runtime_secret_path(root, "example")
+            turbovasctl.write_private_text(secret_path, "before\n")
+            marker = Path(tmp) / "writer-ready"
+            script = (
+                "import sys;"
+                "from importlib.machinery import SourceFileLoader;"
+                "from pathlib import Path;"
+                "module=SourceFileLoader('turbovasctl',sys.argv[1]).load_module();"
+                "Path(sys.argv[3]).write_text('ready',encoding='utf-8');"
+                "module.write_private_text(Path(sys.argv[2]),'after\\n')"
+            )
+            process = None
+            with turbovasctl.locked_private_directory(secret_path.parent):
+                process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        script,
+                        str(TURBOVASCTL_PATH),
+                        str(secret_path),
+                        str(marker),
+                    ]
+                )
+                deadline = time.monotonic() + 5
+                while not marker.exists() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue(marker.exists())
+                time.sleep(0.1)
+                self.assertIsNone(process.poll())
+                self.assertEqual(
+                    secret_path.read_text(encoding="utf-8"), "before\n"
+                )
+            self.assertEqual(process.wait(timeout=5), 0)
+            self.assertEqual(
+                secret_path.read_text(encoding="utf-8"), "after\n"
+            )
 
     def test_short_secret_redaction_preserves_benign_identifier_names(self):
         text = '{"admin_uuid":"kept", "created_by":"admin", "check":"runtime.admin-secret", "flag":"admin-secret", "user":"admin"}'
@@ -12909,6 +13001,41 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertFalse(turbovasctl.env_values_have_nonempty_key(["TOKEN=   "], "TOKEN"))
         self.assertFalse(turbovasctl.env_values_have_nonempty_key(["OTHER=value"], "TOKEN"))
         self.assertTrue(turbovasctl.env_values_have_nonempty_key(["TOKEN=secret"], "TOKEN"))
+
+    @unittest.mock.patch.object(turbovasctl, "container_id", return_value="cid")
+    @unittest.mock.patch.object(turbovasctl, "run_command")
+    def test_running_service_env_secret_exposure_returns_booleans_only(
+        self, run_command, _container_id
+    ):
+        run_command.return_value = subprocess.CompletedProcess(
+            [],
+            0,
+            json.dumps(
+                [
+                    "PATH=/usr/bin",
+                    "TURBOVAS_MQTT_OSPD_PASSWORD=fixture-secret",
+                ]
+            ),
+            "",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            result = turbovasctl.running_service_env_secret_exposure(
+                root,
+                "ospd-openvas",
+                "TURBOVAS_MQTT_OSPD_PASSWORD",
+                "fixture-secret",
+            )
+        self.assertEqual(
+            result,
+            {
+                "inspected": True,
+                "key_present": True,
+                "secret_present": True,
+            },
+        )
+        self.assertNotIn("fixture-secret", json.dumps(result))
 
     def test_direct_native_api_write_smoke_status_only_preserves_fixture_warnings(self):
         result = {
@@ -14420,6 +14547,8 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(summary["zombie_count"], 2)
         self.assertEqual(summary["active_scanner_child_count"], 2)
         self.assertEqual([process["comm"] for process in summary["zombies"]], ["python3", "nmap"])
+        self.assertNotIn("args", summary["zombies"][0])
+        self.assertNotIn("args", summary["active_scanner_children"][0])
 
     def test_scanner_process_summary_ignores_zombies_as_active_children(self):
         output = """    PID    PPID STAT COMMAND         COMMAND
@@ -14438,6 +14567,202 @@ db2:keys=5,expires=0,avg_ttl=0
         summary = turbovasctl.summarize_scanner_processes(output)
         self.assertEqual(summary["zombie_count"], 0)
         self.assertEqual(summary["active_scanner_child_count"], 0)
+
+    def test_ospd_mqtt_secret_exposure_probe_reports_metadata_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            command = turbovasctl.ospd_mqtt_secret_exposure_probe_command(root)
+        self.assertEqual(command[0:2], ["setpriv", "--reuid"])
+        self.assertEqual(
+            command[-3],
+            "/workspace/build/venvs/ospd-openvas/bin/python",
+        )
+        self.assertEqual(command[-2], "-c")
+        self.assertIn(
+            turbovasctl.TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+            command[-1],
+        )
+        self.assertIn("cmdline_secret_pids", command[-1])
+        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD", command[-1])
+
+    def test_mqtt_auth_probe_supports_paho_one_and_two(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            command = turbovasctl.mqtt_authenticated_probe_command(
+                root,
+                "ospd",
+                turbovasctl.TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+                "/venv/bin/python",
+                False,
+            )
+        script = command[-1]
+        self.assertIn("hasattr(mqtt, 'CallbackAPIVersion')", script)
+        self.assertIn("else mqtt.Client()", script)
+        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD", script)
+
+    @unittest.mock.patch.object(turbovasctl, "container_running", return_value=True)
+    @unittest.mock.patch.object(
+        turbovasctl,
+        "mqtt_runtime_environment_evidence",
+        return_value={
+            "expected_pair_count": 12,
+            "inspected_pair_count": 12,
+            "unreadable_secret_names": [],
+            "uninspected_pairs": [],
+            "key_exposure_pairs": [],
+            "value_exposure_pairs": [],
+            "uninspected_config_services": [],
+            "config_secret_exposure_services": [],
+        },
+    )
+    @unittest.mock.patch.object(
+        turbovasctl,
+        "mqtt_runtime_mount_evidence",
+        return_value={
+            "expected_mount_count": 6,
+            "matched_mount_count": 6,
+            "uninspected_mounts": [],
+            "unmatched_mounts": [],
+            "stale_mounts": [],
+        },
+    )
+    @unittest.mock.patch.object(turbovasctl, "exec_in_service")
+    def test_runtime_scanner_process_check_accepts_file_backed_secret(
+        self,
+        exec_in_service,
+        _mount_evidence,
+        _env_evidence,
+        _container_running,
+    ):
+        process_output = """    PID    PPID STAT COMMAND
+      1       0 Ss   docker-init
+      7       1 Sl   ospd-openvas
+"""
+        exposure_output = json.dumps(
+            {
+                "cmdline_secret_pids": [],
+                "inline_password_option_pids": [],
+                "exact_password_file_option_pids": ["7"],
+                "unexpected_password_file_option_pids": [],
+                "cmdline_unreadable_pids": [],
+            }
+        )
+        notus_output = json.dumps(
+            {
+                "cmdline_secret_pids": [],
+                "inline_password_option_pids": [],
+                "exact_password_file_option_pids": ["9"],
+                "unexpected_password_file_option_pids": [],
+                "cmdline_unreadable_pids": [],
+            }
+        )
+        exec_in_service.side_effect = [
+            subprocess.CompletedProcess([], 0, process_output, ""),
+            subprocess.CompletedProcess([], 0, exposure_output, ""),
+            subprocess.CompletedProcess([], 0, notus_output, ""),
+            subprocess.CompletedProcess([], 0, "mqtt-auth-ok\n", ""),
+            subprocess.CompletedProcess([], 0, "mqtt-auth-ok\n", ""),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            turbovasctl.write_private_text(
+                turbovasctl.runtime_secret_path(
+                    root, turbovasctl.TURBOVAS_MQTT_OSPD_PASSWORD_SECRET
+                ),
+                "fixture-secret\n",
+            )
+            result = turbovasctl.command_runtime_scanner_process_check(root)
+        self.assertEqual(result["status"], "pass")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["ospd.mqtt-secret-exposure"]["status"], "pass")
+        self.assertEqual(
+            checks["ospd.mqtt-password-file-option"]["status"], "pass"
+        )
+        self.assertNotIn("fixture-secret", json.dumps(result))
+
+    @unittest.mock.patch.object(turbovasctl, "container_running", return_value=True)
+    @unittest.mock.patch.object(
+        turbovasctl,
+        "mqtt_runtime_environment_evidence",
+        return_value={
+            "expected_pair_count": 12,
+            "inspected_pair_count": 12,
+            "unreadable_secret_names": [],
+            "uninspected_pairs": [],
+            "key_exposure_pairs": ["ospd-openvas:password"],
+            "value_exposure_pairs": ["ospd-openvas:password"],
+            "uninspected_config_services": [],
+            "config_secret_exposure_services": ["ospd-openvas"],
+        },
+    )
+    @unittest.mock.patch.object(
+        turbovasctl,
+        "mqtt_runtime_mount_evidence",
+        return_value={
+            "expected_mount_count": 6,
+            "matched_mount_count": 5,
+            "uninspected_mounts": [],
+            "unmatched_mounts": ["ospd-openvas:mqtt-ospd-password"],
+            "stale_mounts": [],
+        },
+    )
+    @unittest.mock.patch.object(turbovasctl, "exec_in_service")
+    def test_runtime_scanner_process_check_rejects_secret_exposure(
+        self,
+        exec_in_service,
+        _mount_evidence,
+        _env_evidence,
+        _container_running,
+    ):
+        process_output = """    PID    PPID STAT COMMAND
+      1       0 Ss   docker-init
+      7       1 Sl   ospd-openvas
+"""
+        exposure_output = json.dumps(
+            {
+                "cmdline_secret_pids": ["7"],
+                "inline_password_option_pids": ["7"],
+                "exact_password_file_option_pids": [],
+                "unexpected_password_file_option_pids": ["7"],
+                "cmdline_unreadable_pids": [],
+            }
+        )
+        notus_output = json.dumps(
+            {
+                "cmdline_secret_pids": ["9"],
+                "inline_password_option_pids": ["9"],
+                "exact_password_file_option_pids": [],
+                "unexpected_password_file_option_pids": ["9"],
+                "cmdline_unreadable_pids": [],
+            }
+        )
+        exec_in_service.side_effect = [
+            subprocess.CompletedProcess([], 0, process_output, ""),
+            subprocess.CompletedProcess([], 0, exposure_output, ""),
+            subprocess.CompletedProcess([], 0, notus_output, ""),
+            subprocess.CompletedProcess([], 1, "", ""),
+            subprocess.CompletedProcess([], 1, "", ""),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            turbovasctl.write_private_text(
+                turbovasctl.runtime_secret_path(
+                    root, turbovasctl.TURBOVAS_MQTT_OSPD_PASSWORD_SECRET
+                ),
+                "fixture-secret\n",
+            )
+            result = turbovasctl.command_runtime_scanner_process_check(root)
+        self.assertEqual(result["status"], "fail")
+        checks = {item["check"]: item for item in result["findings"]}
+        self.assertEqual(checks["ospd.mqtt-secret-exposure"]["status"], "fail")
+        self.assertEqual(
+            checks["ospd.mqtt-password-file-option"]["status"], "fail"
+        )
+        self.assertNotIn("fixture-secret", json.dumps(result))
 
     def test_gsa_static_staging_writes_browser_relative_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -14718,7 +15043,7 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertIn("mqtt_pass = ", text)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
-    def test_runtime_app_env_separates_control_proxy_and_mqtt_secrets(self):
+    def test_runtime_app_env_keeps_mqtt_secrets_out_of_child_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
@@ -14729,11 +15054,40 @@ db2:keys=5,expires=0,avg_ttl=0
                 env[turbovasctl.TURBOVAS_GVMD_CONTROL_SECRET_ENV],
             )
             for env_name, secret_name in turbovasctl.TURBOVAS_MQTT_RUNTIME_SECRETS:
-                self.assertTrue(env[env_name])
+                self.assertNotIn(env_name, env)
                 self.assertEqual(
                     turbovasctl.runtime_secret_path(root, secret_name).stat().st_mode & 0o777,
                     0o600,
                 )
+
+    def test_runtime_env_ignores_legacy_mqtt_password_environment_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            env_name, secret_name = turbovasctl.TURBOVAS_MQTT_RUNTIME_SECRETS[0]
+            with unittest.mock.patch.dict(
+                os.environ, {env_name: "legacy-environment-secret"}
+            ):
+                env = turbovasctl.runtime_env(root)
+            self.assertNotIn(env_name, env)
+            stored = turbovasctl.read_private_text(
+                turbovasctl.runtime_secret_path(root, secret_name),
+                turbovasctl.MAX_RUNTIME_SECRET_BYTES,
+            )
+            self.assertNotIn("legacy-environment-secret", stored)
+
+    def test_runtime_app_up_refreshes_secret_file_bind_mounts(self):
+        source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
+        broker_helper = source.split("def refresh_mqtt_broker", 1)[1]
+        broker_helper = broker_helper.split("\ndef ", 1)[0]
+        app_helper = source.split("def compose_app_services_up_with_retry", 1)[
+            1
+        ]
+        app_helper = app_helper.split("\ndef ", 1)[0]
+
+        self.assertIn('"--force-recreate"', broker_helper)
+        self.assertIn('"--wait"', broker_helper)
+        self.assertIn('"--force-recreate"', app_helper)
 
     def test_runtime_scanner_config_artifact_is_runtime_relative(self):
         source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
@@ -14771,9 +15125,49 @@ db2:keys=5,expires=0,avg_ttl=0
         for service, block in app_services.items():
             self.assertNotIn(broad_runtime_mount, block, service)
             self.assertNotIn("/runtime/secrets", block, service)
+        ospd = app_services["ospd-openvas"]
+        self.assertIn(
+            "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password",
+            ospd,
+        )
+        self.assertIn(
+            "target: /run/secrets/turbovas-mqtt-ospd-password",
+            ospd,
+        )
+        self.assertIn(
+            "--mqtt-broker-password-file=/run/secrets/turbovas-mqtt-ospd-password",
+            ospd,
+        )
+        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD:", ospd)
+        self.assertNotIn("--mqtt-broker-password=", ospd)
         self.assertIn(broad_runtime_mount, dev_shell)
         self.assertIn("/mosquitto/secrets", mosquitto)
-        self.assertNotIn("${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets", mosquitto)
+        self.assertNotIn("TURBOVAS_MQTT_OPENVAS_PASSWORD:", mosquitto)
+        self.assertNotIn("TURBOVAS_MQTT_NOTUS_PASSWORD:", mosquitto)
+        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD:", mosquitto)
+        self.assertNotIn("TURBOVAS_MQTT_HEALTH_PASSWORD:", mosquitto)
+        self.assertNotIn("mosquitto_passwd -b", mosquitto)
+        self.assertIn("mosquitto_passwd -U", mosquitto)
+        self.assertIn(
+            '["CMD", "mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"]',
+            mosquitto,
+        )
+        for secret_name in (
+            "mqtt-openvas-password",
+            "mqtt-notus-password",
+            "mqtt-ospd-password",
+            "mqtt-health-password",
+        ):
+            self.assertIn(
+                f"source: ${{TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}}/secrets/{secret_name}",
+                mosquitto,
+            )
+        notus = app_services["notus-scanner"]
+        self.assertNotIn("NOTUS_SCANNER_MQTT_BROKER_PASSWORD:", notus)
+        self.assertIn(
+            "--mqtt-broker-password-file=/run/secrets/turbovas-mqtt-notus-password",
+            notus,
+        )
         self.assertIn("/run/gvmd-gmp", gsad)
         self.assertIn("/run/gvmd-control", turbovas_api)
         self.assertNotIn("/run/gvmd-gmp", turbovas_api)

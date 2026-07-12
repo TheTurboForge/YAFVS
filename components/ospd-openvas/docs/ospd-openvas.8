@@ -1,3 +1,6 @@
+.\" SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+.\" TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+.\" SPDX-License-Identifier: AGPL-3.0-or-later
 .TH OSPD-OpenVAS 8 "August 2019" "Greenbone Vulnerability Management" "User Manuals"
 .SH NAME
 ospd-openvas \- The OpenVAS Wrapper of the Greenbone Vulnerability Management
@@ -116,8 +119,9 @@ results from Notus-Scanner. Default: 1883
 Username to connect to MQTT broker for MQTT communication.
 
 .TP
-.BI "--mqtt-broker-password "PASSWORD
-Password to connect to MQTT broker for MQTT communication.
+.BI "--mqtt-broker-password-file "PATH
+Absolute path to an owner-only regular file containing the MQTT broker
+password.
 
 .TP
 .BI "--scaninfo-store-time "TIME
@@ -238,8 +242,9 @@ Broker port to connect to for MQTT communication.
 .IP mqtt_broker_username
 Username to connect to MQTT broker for MQTT communication.
 
-.IP mqtt_broker_password
-Password to connect to MQTT broker for MQTT communication.
+.IP mqtt_broker_password_file
+Absolute path to an owner-only regular file containing the MQTT broker
+password.
 
 .IP feed_updater
 Sets the method of updating the feed.

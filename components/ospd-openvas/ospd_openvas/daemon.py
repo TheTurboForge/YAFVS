@@ -44,6 +44,7 @@ from ospd_openvas.preferencehandler import PreferenceHandler
 from ospd_openvas.openvas import NASLCli, Openvas
 from ospd_openvas.vthelper import VtHelper
 from ospd_openvas.messaging.mqtt import MQTTClient, MQTTDaemon, MQTTSubscriber
+from ospd_openvas.secretfile import resolve_mqtt_broker_password
 
 logger = logging.getLogger(__name__)
 
@@ -507,6 +508,10 @@ class OSPDopenvas(OSPDaemon):
     ):
         """Initializes the ospd-openvas daemon's internal data."""
 
+        mqtt_broker_password = resolve_mqtt_broker_password(
+            kwargs.pop('mqtt_broker_password', None),
+            kwargs.pop('mqtt_broker_password_file', None),
+        )
         self.main_db = MainDB()
         notus_dir = kwargs.get('notus_feed_dir')
         self.notus = None
@@ -550,7 +555,7 @@ class OSPDopenvas(OSPDaemon):
         self._mqtt_broker_address = mqtt_broker_address
         self._mqtt_broker_port = mqtt_broker_port
         self._mqtt_broker_username = kwargs.get('mqtt_broker_username')
-        self._mqtt_broker_password = kwargs.get('mqtt_broker_password')
+        self._mqtt_broker_password = mqtt_broker_password
 
     def init(self, server: BaseServer) -> None:
         self.scan_collection.init()

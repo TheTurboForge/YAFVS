@@ -73,26 +73,34 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
-    environment:
-      TURBOVAS_MQTT_OPENVAS_PASSWORD: ${TURBOVAS_MQTT_OPENVAS_PASSWORD:-}
-      TURBOVAS_MQTT_NOTUS_PASSWORD: ${TURBOVAS_MQTT_NOTUS_PASSWORD:-}
-      TURBOVAS_MQTT_OSPD_PASSWORD: ${TURBOVAS_MQTT_OSPD_PASSWORD:-}
-      TURBOVAS_MQTT_HEALTH_PASSWORD: ${TURBOVAS_MQTT_HEALTH_PASSWORD:-}
     command:
       - sh
       - -ec
       - >
         umask 077 &&
-        test -n "$${TURBOVAS_MQTT_OPENVAS_PASSWORD}" &&
-        test -n "$${TURBOVAS_MQTT_NOTUS_PASSWORD}" &&
-        test -n "$${TURBOVAS_MQTT_OSPD_PASSWORD}" &&
-        test -n "$${TURBOVAS_MQTT_HEALTH_PASSWORD}" &&
+        test -s /run/secrets/turbovas-mqtt-openvas-password &&
+        test -s /run/secrets/turbovas-mqtt-notus-password &&
+        test -s /run/secrets/turbovas-mqtt-ospd-password &&
+        test -s /run/secrets/turbovas-mqtt-health-password &&
         cp /mosquitto/config-source/mosquitto.acl /mosquitto/config-secrets/mosquitto.acl &&
         chmod 600 /mosquitto/config-secrets/mosquitto.acl &&
-        mosquitto_passwd -b -c /mosquitto/config-secrets/passwords openvas "$${TURBOVAS_MQTT_OPENVAS_PASSWORD}" &&
-        mosquitto_passwd -b /mosquitto/config-secrets/passwords notus "$${TURBOVAS_MQTT_NOTUS_PASSWORD}" &&
-        mosquitto_passwd -b /mosquitto/config-secrets/passwords ospd "$${TURBOVAS_MQTT_OSPD_PASSWORD}" &&
-        mosquitto_passwd -b /mosquitto/config-secrets/passwords health "$${TURBOVAS_MQTT_HEALTH_PASSWORD}" &&
+        printf 'openvas:%s\nnotus:%s\nospd:%s\nhealth:%s\n'
+        "$(cat /run/secrets/turbovas-mqtt-openvas-password)"
+        "$(cat /run/secrets/turbovas-mqtt-notus-password)"
+        "$(cat /run/secrets/turbovas-mqtt-ospd-password)"
+        "$(cat /run/secrets/turbovas-mqtt-health-password)"
+        > /mosquitto/config-secrets/passwords &&
+        chmod 600 /mosquitto/config-secrets/passwords &&
+        mosquitto_passwd -U /mosquitto/config-secrets/passwords &&
+        printf '%s\n'
+        '-h 127.0.0.1'
+        '-p 1883'
+        '-u health'
+        "-P $(cat /run/secrets/turbovas-mqtt-health-password)"
+        '-t turbovas/health'
+        '-m ok'
+        > /tmp/turbovas-mqtt-health.options &&
+        chmod 600 /tmp/turbovas-mqtt-health.options &&
         exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
     ports:
       - "127.0.0.1:1883:1883"
@@ -109,13 +117,29 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/mosquitto/secrets
         target: /mosquitto/config-secrets
       - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-openvas-password
+        target: /run/secrets/turbovas-mqtt-openvas-password
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-notus-password
+        target: /run/secrets/turbovas-mqtt-notus-password
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password
+        target: /run/secrets/turbovas-mqtt-ospd-password
+        read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-health-password
+        target: /run/secrets/turbovas-mqtt-health-password
+        read_only: true
+      - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/mosquitto/data
         target: /mosquitto/data
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/mosquitto
         target: /mosquitto/log
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -u health -P \"$${TURBOVAS_MQTT_HEALTH_PASSWORD}\" -t turbovas/health -m ok"]
+      test: ["CMD", "mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -256,7 +280,6 @@ services:
       TURBOVAS_RUNTIME_DIR: /runtime
       TURBOVAS_UID: ${TURBOVAS_UID:-1000}
       TURBOVAS_GID: ${TURBOVAS_GID:-1000}
-      TURBOVAS_MQTT_OSPD_PASSWORD: ${TURBOVAS_MQTT_OSPD_PASSWORD:-}
       NMAP_PRIVILEGED: "1"
     volumes:
       - type: bind
@@ -299,6 +322,10 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/ospd/openvas.conf
         target: /workspace/build/prefix/etc/openvas/openvas.conf
         read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password
+        target: /run/secrets/turbovas-mqtt-ospd-password
+        read_only: true
     command:
       - sh
       - -lc
@@ -331,7 +358,7 @@ services:
         --mqtt-broker-address=mosquitto
         --mqtt-broker-port=1883
         --mqtt-broker-username=ospd
-        --mqtt-broker-password="$${TURBOVAS_MQTT_OSPD_PASSWORD}"
+        --mqtt-broker-password-file=/run/secrets/turbovas-mqtt-ospd-password
         --max-scans=0
         --notus-feed-dir=/runtime/feeds/notus/advisories
 
@@ -351,8 +378,6 @@ services:
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/venvs/notus-scanner/bin:/workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       TURBOVAS_RUNTIME_DIR: /runtime
-      NOTUS_SCANNER_MQTT_BROKER_USERNAME: notus
-      NOTUS_SCANNER_MQTT_BROKER_PASSWORD: ${TURBOVAS_MQTT_NOTUS_PASSWORD:-}
     volumes:
       - type: bind
         source: ..
@@ -379,6 +404,10 @@ services:
         source: ../build
         target: /workspace/build
         read_only: true
+      - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-notus-password
+        target: /run/secrets/turbovas-mqtt-notus-password
+        read_only: true
     command:
       - sh
       - -lc
@@ -390,6 +419,8 @@ services:
         --products-directory=/runtime/feeds/notus/products
         --mqtt-broker-address=mosquitto
         --mqtt-broker-port=1883
+        --mqtt-broker-username=notus
+        --mqtt-broker-password-file=/run/secrets/turbovas-mqtt-notus-password
         --pid-file=/runtime/run/notus/notus-scanner.pid
         --log-file=/runtime/logs/notus/notus-scanner.log
         --log-level=INFO

@@ -12,6 +12,7 @@ import csv
 import errno
 import fcntl
 import hashlib
+import hmac
 import ipaddress
 import io
 import json
@@ -29,6 +30,7 @@ import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -301,6 +303,16 @@ RUNTIME_DIRS = (
     "feeds/gvm/cert-data",
     "feeds/gvm/data-objects/gvmd/22.04",
 )
+PRIVATE_RUNTIME_DIRS = frozenset(
+    {
+        "mosquitto/secrets",
+        "certs/private/CA",
+        "secrets",
+        "state/ospd",
+        "state/feed-gnupg",
+    }
+)
+MAX_RUNTIME_SECRET_BYTES = 4096
 RUNTIME_PORTS = {
     "postgres": "127.0.0.1:15432:5432",
     "mosquitto": "127.0.0.1:1883:1883",
@@ -334,11 +346,35 @@ TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV = "TURBOVAS_MQTT_OPENVAS_PASSWORD"
 TURBOVAS_MQTT_NOTUS_PASSWORD_ENV = "TURBOVAS_MQTT_NOTUS_PASSWORD"
 TURBOVAS_MQTT_OSPD_PASSWORD_ENV = "TURBOVAS_MQTT_OSPD_PASSWORD"
 TURBOVAS_MQTT_HEALTH_PASSWORD_ENV = "TURBOVAS_MQTT_HEALTH_PASSWORD"
+TURBOVAS_MQTT_OSPD_PASSWORD_SECRET = "mqtt-ospd-password"
+TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/turbovas-mqtt-ospd-password"
+)
+TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/turbovas-mqtt-notus-password"
+)
+TURBOVAS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/turbovas-mqtt-openvas-password"
+)
+TURBOVAS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/turbovas-mqtt-health-password"
+)
 TURBOVAS_MQTT_RUNTIME_SECRETS = (
     (TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV, "mqtt-openvas-password"),
     (TURBOVAS_MQTT_NOTUS_PASSWORD_ENV, "mqtt-notus-password"),
     (TURBOVAS_MQTT_OSPD_PASSWORD_ENV, "mqtt-ospd-password"),
     (TURBOVAS_MQTT_HEALTH_PASSWORD_ENV, "mqtt-health-password"),
+)
+TURBOVAS_MQTT_CONTAINER_SECRET_FILES = {
+    "mqtt-openvas-password": TURBOVAS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE,
+    "mqtt-notus-password": TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+    "mqtt-ospd-password": TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+    "mqtt-health-password": TURBOVAS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE,
+}
+TURBOVAS_MQTT_ENVIRONMENT_SERVICES = (
+    "mosquitto",
+    "ospd-openvas",
+    "notus-scanner",
 )
 TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH = 32
 TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH = 1024
@@ -3757,6 +3793,275 @@ def running_service_env_value(repo_root: Path, service: str, key: str) -> str | 
     return None
 
 
+def running_service_env_secret_exposure(
+    repo_root: Path, service: str, key: str, secret: str
+) -> dict[str, bool]:
+    cid = container_id(repo_root, service)
+    if not cid:
+        return {
+            "inspected": False,
+            "key_present": False,
+            "secret_present": False,
+        }
+    result = run_command(
+        ["docker", "inspect", "-f", "{{json .Config.Env}}", cid],
+        repo_root,
+        env=runtime_env(repo_root),
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return {
+            "inspected": False,
+            "key_present": False,
+            "secret_present": False,
+        }
+    try:
+        values = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        values = None
+    if not isinstance(values, list):
+        return {
+            "inspected": False,
+            "key_present": False,
+            "secret_present": False,
+        }
+    prefix = f"{key}="
+    return {
+        "inspected": True,
+        "key_present": any(
+            isinstance(value, str) and value.startswith(prefix)
+            for value in values
+        ),
+        "secret_present": bool(secret)
+        and any(
+            isinstance(value, str) and secret in value for value in values
+        ),
+    }
+
+
+def running_service_read_only_mount_matches(
+    repo_root: Path, service: str, source: Path, destination: str
+) -> dict[str, bool]:
+    cid = container_id(repo_root, service)
+    if not cid:
+        return {
+            "inspected": False,
+            "matched": False,
+            "content_matched": False,
+        }
+    result = run_command(
+        ["docker", "inspect", "-f", "{{json .Mounts}}", cid],
+        repo_root,
+        env=runtime_env(repo_root),
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return {
+            "inspected": False,
+            "matched": False,
+            "content_matched": False,
+        }
+    try:
+        mounts = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        mounts = None
+    if not isinstance(mounts, list):
+        return {
+            "inspected": False,
+            "matched": False,
+            "content_matched": False,
+        }
+    expected_source = str(source.absolute())
+    matched = any(
+        isinstance(mount, dict)
+        and mount.get("Type") == "bind"
+        and mount.get("Source") == expected_source
+        and mount.get("Destination") == destination
+        and mount.get("RW") is False
+        for mount in mounts
+    )
+    content_matched = False
+    if matched:
+        with locked_private_directory(source.parent):
+            try:
+                before = source.lstat()
+                host_content = read_private_text(
+                    source, MAX_RUNTIME_SECRET_BYTES
+                ).encode("utf-8")
+                container_digest = exec_in_service(
+                    repo_root, service, ["sha256sum", destination]
+                )
+                after_content = read_private_text(
+                    source, MAX_RUNTIME_SECRET_BYTES
+                ).encode("utf-8")
+                after = source.lstat()
+            except (OSError, UnicodeDecodeError):
+                host_content = b""
+                after_content = b""
+                before = None
+                after = None
+                container_digest = subprocess.CompletedProcess(
+                    [], 1, "", ""
+                )
+        observed_digest = (
+            container_digest.stdout.strip().split()[0]
+            if container_digest.returncode == 0
+            and container_digest.stdout.strip()
+            else ""
+        )
+        expected_digest = (
+            hashlib.sha256(after_content).hexdigest()
+            if after_content
+            else ""
+        )
+        stable_snapshot = (
+            before is not None
+            and after is not None
+            and before.st_ino == after.st_ino
+            and before.st_mtime_ns == after.st_mtime_ns
+            and host_content == after_content
+        )
+        content_matched = (
+            stable_snapshot
+            and bool(expected_digest)
+            and hmac.compare_digest(expected_digest, observed_digest)
+        )
+    return {
+        "inspected": True,
+        "matched": matched,
+        "content_matched": content_matched,
+    }
+
+
+def running_service_config_secret_exposure(
+    repo_root: Path, service: str, secret_values: Iterable[str]
+) -> dict[str, bool]:
+    cid = container_id(repo_root, service)
+    if not cid:
+        return {"inspected": False, "secret_present": False}
+    result = run_command(
+        ["docker", "inspect", "-f", "{{json .Config}}", cid],
+        repo_root,
+        env=runtime_env(repo_root),
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return {"inspected": False, "secret_present": False}
+    try:
+        config = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"inspected": False, "secret_present": False}
+    rendered = json.dumps(config, sort_keys=True)
+    return {
+        "inspected": True,
+        "secret_present": any(
+            secret and secret in rendered for secret in secret_values
+        ),
+    }
+
+
+def mqtt_runtime_environment_evidence(repo_root: Path) -> dict[str, Any]:
+    expected_pair_count = (
+        len(TURBOVAS_MQTT_RUNTIME_SECRETS)
+        * len(TURBOVAS_MQTT_ENVIRONMENT_SERVICES)
+    )
+    inspected_pair_count = 0
+    unreadable_secret_names: list[str] = []
+    uninspected_pairs: list[str] = []
+    key_exposure_pairs: list[str] = []
+    value_exposure_pairs: list[str] = []
+    secret_values: list[str] = []
+    for env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS:
+        try:
+            secret = read_private_text(
+                runtime_secret_path(repo_root, secret_name),
+                MAX_RUNTIME_SECRET_BYTES,
+            ).strip()
+        except (OSError, UnicodeDecodeError):
+            unreadable_secret_names.append(secret_name)
+            continue
+        secret_values.append(secret)
+        for service in TURBOVAS_MQTT_ENVIRONMENT_SERVICES:
+            pair = f"{service}:{env_name}"
+            evidence = running_service_env_secret_exposure(
+                repo_root, service, env_name, secret
+            )
+            if not evidence["inspected"]:
+                uninspected_pairs.append(pair)
+                continue
+            inspected_pair_count += 1
+            if evidence["key_present"]:
+                key_exposure_pairs.append(pair)
+            if evidence["secret_present"]:
+                value_exposure_pairs.append(pair)
+    uninspected_config_services: list[str] = []
+    config_secret_exposure_services: list[str] = []
+    for service in TURBOVAS_MQTT_ENVIRONMENT_SERVICES:
+        config_evidence = running_service_config_secret_exposure(
+            repo_root, service, secret_values
+        )
+        if not config_evidence["inspected"]:
+            uninspected_config_services.append(service)
+        elif config_evidence["secret_present"]:
+            config_secret_exposure_services.append(service)
+    return {
+        "expected_pair_count": expected_pair_count,
+        "inspected_pair_count": inspected_pair_count,
+        "unreadable_secret_names": unreadable_secret_names,
+        "uninspected_pairs": uninspected_pairs,
+        "key_exposure_pairs": key_exposure_pairs,
+        "value_exposure_pairs": value_exposure_pairs,
+        "uninspected_config_services": uninspected_config_services,
+        "config_secret_exposure_services": config_secret_exposure_services,
+    }
+
+
+def mqtt_runtime_mount_evidence(repo_root: Path) -> dict[str, Any]:
+    specs = [
+        (
+            "ospd-openvas",
+            "mqtt-ospd-password",
+            TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+        ),
+        (
+            "notus-scanner",
+            "mqtt-notus-password",
+            TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+        ),
+    ]
+    specs.extend(
+        (
+            "mosquitto",
+            secret_name,
+            TURBOVAS_MQTT_CONTAINER_SECRET_FILES[secret_name],
+        )
+        for _env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS
+    )
+    uninspected: list[str] = []
+    unmatched: list[str] = []
+    stale: list[str] = []
+    for service, secret_name, destination in specs:
+        label = f"{service}:{secret_name}"
+        evidence = running_service_read_only_mount_matches(
+            repo_root,
+            service,
+            runtime_secret_path(repo_root, secret_name),
+            destination,
+        )
+        if not evidence["inspected"]:
+            uninspected.append(label)
+        elif not evidence["matched"]:
+            unmatched.append(label)
+        elif not evidence["content_matched"]:
+            stale.append(label)
+    return {
+        "expected_mount_count": len(specs),
+        "matched_mount_count": (
+            len(specs) - len(uninspected) - len(unmatched) - len(stale)
+        ),
+        "uninspected_mounts": uninspected,
+        "unmatched_mounts": unmatched,
+        "stale_mounts": stale,
+    }
+
+
 def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str] | None:
     if category != "product_workflow":
         return None
@@ -4488,56 +4793,205 @@ def runtime_secret_path(repo_root: Path, name: str) -> Path:
 
 
 def runtime_secret_file_metadata(path: Path) -> dict[str, Any]:
-    if not path.is_file():
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
         return {
             "exists": False,
             "mode": None,
             "permission_ok": False,
             "group_or_world_accessible": False,
+            "regular_file": False,
+            "symlink": False,
         }
-    mode = path.stat().st_mode & 0o777
+    mode = stat.S_IMODE(metadata.st_mode)
+    regular_file = stat.S_ISREG(metadata.st_mode)
+    symlink = stat.S_ISLNK(metadata.st_mode)
     group_or_world_accessible = bool(mode & 0o077)
     return {
         "exists": True,
         "mode": f"{mode:04o}",
-        "permission_ok": not group_or_world_accessible,
+        "permission_ok": regular_file and not group_or_world_accessible,
         "group_or_world_accessible": group_or_world_accessible,
+        "regular_file": regular_file,
+        "symlink": symlink,
     }
+
+
+def open_private_directory(path: Path) -> int:
+    path.mkdir(parents=True, mode=0o700, exist_ok=True)
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise OSError(
+            errno.EINVAL, f"Private path is not a real directory: {path}"
+        )
+    if metadata.st_uid != os.geteuid():
+        raise PermissionError(
+            f"Private directory is not owned by the current user: {path}"
+        )
+    path.chmod(0o700)
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+    )
+    descriptor_metadata = os.fstat(descriptor)
+    if (
+        not stat.S_ISDIR(descriptor_metadata.st_mode)
+        or descriptor_metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(descriptor_metadata.st_mode) != 0o700
+    ):
+        os.close(descriptor)
+        raise PermissionError(f"Private directory validation failed: {path}")
+    return descriptor
+
+
+@contextmanager
+def locked_private_directory(path: Path):
+    parent_fd = open_private_directory(path)
+    lock_fd = -1
+    try:
+        lock_fd = os.open(
+            ".turbovas-private.lock",
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_NOFOLLOW
+            | os.O_CLOEXEC,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        lock_metadata = os.fstat(lock_fd)
+        if (
+            not stat.S_ISREG(lock_metadata.st_mode)
+            or lock_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(lock_metadata.st_mode) & 0o077
+        ):
+            raise PermissionError(
+                f"Private directory lock is not owner-only: {path}"
+            )
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield parent_fd
+    finally:
+        if lock_fd >= 0:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
+        os.close(parent_fd)
+
+
+def read_private_text(path: Path, max_bytes: int) -> str:
+    parent_fd = open_private_directory(path.parent)
+    file_fd = -1
+    try:
+        file_fd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=parent_fd,
+        )
+        metadata = os.fstat(file_fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise OSError(
+                errno.EINVAL, f"Private path is not a file: {path}"
+            )
+        if metadata.st_uid != os.geteuid():
+            raise PermissionError(
+                f"Private file is not owned by the current user: {path}"
+            )
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise PermissionError(
+                f"Private file is accessible outside its owner: {path}"
+            )
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(file_fd, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content = b"".join(chunks)
+        if len(content) > max_bytes or os.read(file_fd, 1):
+            raise OSError(
+                errno.EFBIG, f"Private file is too large: {path}"
+            )
+        return content.decode("utf-8")
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
+        os.close(parent_fd)
 
 
 def read_or_create_runtime_secret(repo_root: Path, name: str, default: str | None = None) -> tuple[str, bool]:
     path = runtime_secret_path(repo_root, name)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_file():
-        return path.read_text(encoding="utf-8").strip(), False
+    try:
+        content = read_private_text(path, MAX_RUNTIME_SECRET_BYTES)
+    except FileNotFoundError:
+        found = False
+        content = ""
+    else:
+        found = True
+    if found:
+        if content.endswith("\n"):
+            content = content[:-1]
+        if (
+            not content
+            or "\x00" in content
+            or "\n" in content
+            or "\r" in content
+        ):
+            raise ValueError(
+                f"Runtime secret must contain one line with an optional terminal LF: {path}"
+            )
+        return content, False
     secret = default if default is not None else secrets.token_urlsafe(24)
     write_private_text(path, secret + "\n")
     return secret, True
 
 
 def write_private_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_CLOEXEC", 0), 0o600)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            fd = -1
-            # Runtime/dev service secrets are stored only in ignored,
-            # owner-readable local runtime files for container consumption.
-            # codeql[py/clear-text-storage-sensitive-data]
-            stream.write(text)
-    finally:
-        if fd >= 0:
-            os.close(fd)
-    path.chmod(0o600)
+    temporary_name = (
+        f".{path.name}.tmp-{os.getpid()}-{secrets.token_hex(8)}"
+    )
+    file_fd = -1
+    with locked_private_directory(path.parent) as parent_fd:
+        try:
+            file_fd = os.open(
+                temporary_name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | os.O_NOFOLLOW
+                | os.O_CLOEXEC,
+                0o600,
+                dir_fd=parent_fd,
+            )
+            with os.fdopen(file_fd, "w", encoding="utf-8") as stream:
+                file_fd = -1
+                # Runtime/dev service secrets are stored only in ignored,
+                # owner-readable local runtime files for container consumption.
+                # codeql[py/clear-text-storage-sensitive-data]
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(
+                temporary_name,
+                path.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+            )
+            temporary_name = ""
+            os.fsync(parent_fd)
+        finally:
+            if file_fd >= 0:
+                os.close(file_fd)
+            if temporary_name:
+                try:
+                    os.unlink(temporary_name, dir_fd=parent_fd)
+                except FileNotFoundError:
+                    pass
 
 
 def write_runtime_secret(repo_root: Path, name: str, secret: str) -> Path:
     path = runtime_secret_path(repo_root, name)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    write_private_text(tmp, secret + "\n")
-    tmp.replace(path)
-    path.chmod(0o600)
+    write_private_text(path, secret + "\n")
     return path
 
 
@@ -4919,9 +5373,8 @@ def runtime_env(repo_root: Path) -> dict[str, str]:
     env.setdefault("OPENVAS_CONFIG", str(openvas_runtime_config_path(repo_root)))
     env.setdefault(GSAD_HOST_ENV, DEFAULT_GSAD_HOST)
     for env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS:
-        if not env.get(env_name):
-            secret, _created = read_or_create_runtime_secret(repo_root, secret_name)
-            env[env_name] = secret
+        read_or_create_runtime_secret(repo_root, secret_name)
+        env.pop(env_name, None)
     return env
 
 
@@ -5355,6 +5808,9 @@ def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
         path = root / dirname
         try:
             path.mkdir(parents=True, exist_ok=True)
+            if dirname in PRIVATE_RUNTIME_DIRS:
+                private_fd = open_private_directory(path)
+                os.close(private_fd)
             probe = path / ".turbovas-write-test"
             probe.write_text("ok\n", encoding="utf-8")
             probe.unlink()
@@ -5605,13 +6061,177 @@ def summarize_scanner_processes(output: str) -> dict[str, Any]:
     processes = parse_process_table(output)
     zombies = [process for process in processes if process_is_zombie(process)]
     active_children = [process for process in processes if process_is_active_scanner_child(process)]
+
+    def bounded_metadata(process: dict[str, str]) -> dict[str, str]:
+        return {
+            key: process[key]
+            for key in ("pid", "ppid", "stat", "comm")
+            if key in process
+        }
+
     return {
         "process_count": len(processes),
         "zombie_count": len(zombies),
         "active_scanner_child_count": len(active_children),
-        "zombies": zombies[:50],
-        "active_scanner_children": active_children[:50],
+        "zombies": [bounded_metadata(process) for process in zombies[:50]],
+        "active_scanner_children": [
+            bounded_metadata(process) for process in active_children[:50]
+        ],
     }
+
+
+def mqtt_file_secret_exposure_probe_command(
+    repo_root: Path,
+    process_name: str,
+    secret_container_file: str,
+    python_executable: str,
+    drop_privileges: bool,
+) -> list[str]:
+    env = runtime_env(repo_root)
+    script = f"""import json
+from pathlib import Path
+
+process_name = {process_name!r}
+secret_path = Path({secret_container_file!r})
+secret = secret_path.read_bytes()
+if secret.endswith(b'\\n'):
+    secret = secret[:-1]
+    if secret.endswith(b'\\r'):
+        secret = secret[:-1]
+
+result = {{
+    'cmdline_secret_pids': [],
+    'inline_password_option_pids': [],
+    'exact_password_file_option_pids': [],
+    'unexpected_password_file_option_pids': [],
+    'cmdline_unreadable_pids': [],
+}}
+for process_dir in Path('/proc').iterdir():
+    if not process_dir.name.isdigit():
+        continue
+    try:
+        if (process_dir / 'comm').read_text().strip() != process_name:
+            continue
+    except (FileNotFoundError, PermissionError, ProcessLookupError):
+        continue
+    try:
+        cmdline = (process_dir / 'cmdline').read_bytes()
+    except (FileNotFoundError, PermissionError, ProcessLookupError):
+        result['cmdline_unreadable_pids'].append(process_dir.name)
+        cmdline = b''
+    arguments = [value for value in cmdline.split(b'\\0') if value]
+    if any(
+        value == b'--mqtt-broker-password'
+        or value.startswith(b'--mqtt-broker-password=')
+        for value in arguments
+    ):
+        result['inline_password_option_pids'].append(process_dir.name)
+    file_options = [
+        value
+        for value in arguments
+        if value == b'--mqtt-broker-password-file'
+        or value.startswith(b'--mqtt-broker-password-file=')
+    ]
+    expected_file_option = (
+        b'--mqtt-broker-password-file=' + str(secret_path).encode()
+    )
+    if expected_file_option in file_options:
+        result['exact_password_file_option_pids'].append(process_dir.name)
+    if any(value != expected_file_option for value in file_options):
+        result['unexpected_password_file_option_pids'].append(
+            process_dir.name
+        )
+    if secret and secret in cmdline:
+        result['cmdline_secret_pids'].append(process_dir.name)
+print(json.dumps(result, sort_keys=True))
+"""
+    command = [
+        python_executable,
+        "-c",
+        script,
+    ]
+    if drop_privileges:
+        command = [
+            "setpriv",
+            "--reuid",
+            env["TURBOVAS_UID"],
+            "--regid",
+            env["TURBOVAS_GID"],
+            "--clear-groups",
+            *command,
+        ]
+    return command
+
+
+def ospd_mqtt_secret_exposure_probe_command(
+    repo_root: Path,
+) -> list[str]:
+    return mqtt_file_secret_exposure_probe_command(
+        repo_root,
+        "ospd-openvas",
+        TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+        "/workspace/build/venvs/ospd-openvas/bin/python",
+        True,
+    )
+
+
+def notus_mqtt_secret_exposure_probe_command(
+    repo_root: Path,
+) -> list[str]:
+    return mqtt_file_secret_exposure_probe_command(
+        repo_root,
+        "notus-scanner",
+        TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+        "/workspace/build/venvs/notus-scanner/bin/python",
+        False,
+    )
+
+
+def mqtt_authenticated_probe_command(
+    repo_root: Path,
+    username: str,
+    secret_container_file: str,
+    python_executable: str,
+    drop_privileges: bool,
+) -> list[str]:
+    env = runtime_env(repo_root)
+    script = f"""import time
+from pathlib import Path
+import paho.mqtt.client as mqtt
+
+secret = Path({secret_container_file!r}).read_text(encoding='utf-8')
+if secret.endswith('\\n'):
+    secret = secret[:-1]
+if not secret or any(value in secret for value in ('\\x00', '\\n', '\\r')):
+    raise SystemExit('invalid-secret-file')
+client = (
+    mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    if hasattr(mqtt, 'CallbackAPIVersion')
+    else mqtt.Client()
+)
+client.username_pw_set({username!r}, secret)
+client.connect('mosquitto', 1883, 5)
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline and not client.is_connected():
+    client.loop(timeout=0.2)
+if not client.is_connected():
+    raise SystemExit('mqtt-authentication-failed')
+client.disconnect()
+client.loop(timeout=0.2)
+print('mqtt-auth-ok')
+"""
+    command = [python_executable, "-c", script]
+    if drop_privileges:
+        command = [
+            "setpriv",
+            "--reuid",
+            env["TURBOVAS_UID"],
+            "--regid",
+            env["TURBOVAS_GID"],
+            "--clear-groups",
+            *command,
+        ]
+    return command
 
 
 def output_tail(output: str, lines: int = 80, secrets_to_redact: Iterable[str] = ()) -> list[str]:
@@ -5841,7 +6461,17 @@ def app_services_running(repo_root: Path) -> bool:
 
 
 def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str, timeout: int = 900) -> list[dict[str, Any]]:
-    command = compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--build", *APP_SERVICES)
+    command = compose_command(
+        repo_root,
+        "--profile",
+        "app",
+        "up",
+        "-d",
+        "--no-deps",
+        "--build",
+        "--force-recreate",
+        *APP_SERVICES,
+    )
     result = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=timeout)
     if result.returncode == 0:
         return [process_step_finding("pass", check, f"{message} exit code 0.", result, command)]
@@ -5858,7 +6488,16 @@ def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str
             command,
         )
     ]
-    retry_command = compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", *APP_SERVICES)
+    retry_command = compose_command(
+        repo_root,
+        "--profile",
+        "app",
+        "up",
+        "-d",
+        "--no-deps",
+        "--force-recreate",
+        *APP_SERVICES,
+    )
     for attempt in range(1, 3):
         time.sleep(8 * attempt)
         retry = run_command(retry_command, repo_root, env=runtime_app_env(repo_root), timeout=300)
@@ -5888,6 +6527,30 @@ def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str
         if not compose_app_up_transient_error(retry.stdout):
             return findings
     return findings
+
+
+def refresh_mqtt_broker(repo_root: Path) -> dict[str, Any]:
+    command = compose_command(
+        repo_root,
+        "up",
+        "-d",
+        "--no-deps",
+        "--force-recreate",
+        "--wait",
+        "--wait-timeout",
+        "60",
+        "mosquitto",
+    )
+    result = run_command(
+        command, repo_root, env=runtime_env(repo_root), timeout=120
+    )
+    return process_step_finding(
+        "pass" if result.returncode == 0 else "fail",
+        "compose.mqtt-broker-refresh",
+        f"Refresh MQTT broker secret-file mounts exit code {result.returncode}.",
+        result,
+        command,
+    )
 
 
 def log_review_matches(lines: Iterable[str], service: str | None = None) -> list[dict[str, Any]]:
@@ -15553,12 +16216,60 @@ def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
 def command_runtime_scanner_process_check(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     service = "ospd-openvas"
+    secret_path = runtime_secret_path(
+        repo_root, TURBOVAS_MQTT_OSPD_PASSWORD_SECRET
+    )
+    secret_metadata = runtime_secret_file_metadata(secret_path)
+    expected_uid = int(runtime_env(repo_root)["TURBOVAS_UID"])
+    actual_uid = (
+        secret_path.lstat().st_uid if secret_metadata["exists"] else None
+    )
+    secret_metadata["owner_uid"] = actual_uid
+    secret_metadata["expected_owner_uid"] = expected_uid
+    secret_metadata["owner_ok"] = actual_uid == expected_uid
+    secret_file_ok = (
+        secret_metadata["exists"]
+        and secret_metadata["permission_ok"]
+        and secret_metadata["owner_ok"]
+    )
+    secret_content = ""
+    if secret_file_ok:
+        try:
+            secret_content = read_private_text(
+                secret_path, MAX_RUNTIME_SECRET_BYTES
+            )
+        except (OSError, UnicodeDecodeError):
+            secret_file_ok = False
+        else:
+            if secret_content.endswith("\n"):
+                secret_content = secret_content[:-1]
+                if secret_content.endswith("\r"):
+                    secret_content = secret_content[:-1]
+            if (
+                not secret_content
+                or "\x00" in secret_content
+                or "\n" in secret_content
+                or "\r" in secret_content
+            ):
+                secret_file_ok = False
+    findings.append(
+        finding(
+            "pass" if secret_file_ok else "fail",
+            "ospd.mqtt-secret-file",
+            "OSPD MQTT secret file exists with owner-only permissions."
+            if secret_file_ok
+            else "OSPD MQTT secret file is missing or accessible outside its owner.",
+            details=secret_metadata,
+        )
+    )
     running = container_running(repo_root, service)
     findings.append(finding("pass" if running else "fail", "ospd.running", "ospd-openvas container is running." if running else "ospd-openvas container is not running; run just runtime-app-up.", details={"service": service}))
     if not running:
         return make_result("runtime-scanner-process-check", repo_root, "Scanner process check stopped because ospd-openvas is not running.", findings)
 
-    process_probe = exec_in_service(repo_root, service, ["ps", "-eo", "pid,ppid,stat,comm,args"])
+    process_probe = exec_in_service(
+        repo_root, service, ["ps", "-eo", "pid,ppid,stat,comm"]
+    )
     summary = summarize_scanner_processes(process_probe.stdout)
     zombie_count = summary["zombie_count"]
     active_count = summary["active_scanner_child_count"]
@@ -15579,9 +16290,206 @@ def command_runtime_scanner_process_check(repo_root: Path) -> dict[str, Any]:
             status,
             "ospd.process-zombies",
             message,
-            details={"process_summary": summary, "output_tail": output_tail(process_probe.stdout, 80)},
+            details={"process_summary": summary},
         )
     )
+
+    exposure_probe = exec_in_service(
+        repo_root, service, ospd_mqtt_secret_exposure_probe_command(repo_root)
+    )
+    exposure: dict[str, Any] = {}
+    if exposure_probe.returncode == 0:
+        try:
+            exposure = json.loads(exposure_probe.stdout)
+        except json.JSONDecodeError:
+            exposure = {}
+    mqtt_environment = mqtt_runtime_environment_evidence(repo_root)
+    environment_ok = (
+        mqtt_environment["inspected_pair_count"]
+        == mqtt_environment["expected_pair_count"]
+        and not mqtt_environment["unreadable_secret_names"]
+        and not mqtt_environment["uninspected_pairs"]
+        and not mqtt_environment["key_exposure_pairs"]
+        and not mqtt_environment["value_exposure_pairs"]
+        and not mqtt_environment["uninspected_config_services"]
+        and not mqtt_environment["config_secret_exposure_services"]
+    )
+    findings.append(
+        finding(
+            "pass" if environment_ok else "fail",
+            "mqtt.environment-secret-exposure",
+            "MQTT credentials are absent from broker and scanner service environments."
+            if environment_ok
+            else "MQTT credential environment exposure remains or could not be verified.",
+            details=mqtt_environment,
+        )
+    )
+    mqtt_mounts = mqtt_runtime_mount_evidence(repo_root)
+    mounts_ok = (
+        mqtt_mounts["matched_mount_count"]
+        == mqtt_mounts["expected_mount_count"]
+        and not mqtt_mounts["uninspected_mounts"]
+        and not mqtt_mounts["unmatched_mounts"]
+        and not mqtt_mounts["stale_mounts"]
+    )
+    findings.append(
+        finding(
+            "pass" if mounts_ok else "fail",
+            "mqtt.read-only-secret-mounts",
+            "MQTT consumers use the exact expected read-only secret-file mounts."
+            if mounts_ok
+            else "MQTT secret-file mounts are missing, writable, or could not be verified.",
+            details=mqtt_mounts,
+        )
+    )
+    exposure_ok = (
+        bool(exposure)
+        and not exposure.get("cmdline_secret_pids")
+        and not exposure.get("inline_password_option_pids")
+        and not exposure.get("cmdline_unreadable_pids")
+        and not exposure.get("unexpected_password_file_option_pids")
+    )
+    findings.append(
+        finding(
+            "pass" if exposure_ok else "fail",
+            "ospd.mqtt-secret-exposure",
+            "OSPD MQTT password is absent from process arguments."
+            if exposure_ok
+            else "OSPD MQTT password or plaintext option remains exposed or could not be verified.",
+            details={
+                "probe_exit_code": exposure_probe.returncode,
+                "cmdline_secret_pids": exposure.get(
+                    "cmdline_secret_pids", []
+                ),
+                "inline_password_option_pids": exposure.get(
+                    "inline_password_option_pids", []
+                ),
+                "cmdline_unreadable_pids": exposure.get(
+                    "cmdline_unreadable_pids", []
+                ),
+                "unexpected_password_file_option_pids": exposure.get(
+                    "unexpected_password_file_option_pids", []
+                ),
+            },
+        )
+    )
+    file_option_pids = exposure.get(
+        "exact_password_file_option_pids", []
+    )
+    findings.append(
+        finding(
+            "pass" if file_option_pids else "fail",
+            "ospd.mqtt-password-file-option",
+            "ospd-openvas uses the file-backed MQTT password option."
+            if file_option_pids
+            else "ospd-openvas is not using the file-backed MQTT password option.",
+            details={
+                "probe_exit_code": exposure_probe.returncode,
+                "configured_process_count": len(file_option_pids),
+            },
+        )
+    )
+
+    notus_probe = exec_in_service(
+        repo_root,
+        "notus-scanner",
+        notus_mqtt_secret_exposure_probe_command(repo_root),
+    )
+    notus_exposure: dict[str, Any] = {}
+    if notus_probe.returncode == 0:
+        try:
+            notus_exposure = json.loads(notus_probe.stdout)
+        except json.JSONDecodeError:
+            notus_exposure = {}
+    notus_file_option_pids = notus_exposure.get(
+        "exact_password_file_option_pids", []
+    )
+    notus_ok = (
+        bool(notus_exposure)
+        and bool(notus_file_option_pids)
+        and not notus_exposure.get("cmdline_secret_pids")
+        and not notus_exposure.get("inline_password_option_pids")
+        and not notus_exposure.get("cmdline_unreadable_pids")
+        and not notus_exposure.get("unexpected_password_file_option_pids")
+    )
+    findings.append(
+        finding(
+            "pass" if notus_ok else "fail",
+            "notus.mqtt-secret-exposure",
+            "Notus MQTT password is absent from process arguments and the exact file option is active."
+            if notus_ok
+            else "Notus MQTT password handling remains exposed or could not be verified.",
+            details={
+                "probe_exit_code": notus_probe.returncode,
+                "configured_process_count": len(notus_file_option_pids),
+                "cmdline_secret_pids": notus_exposure.get(
+                    "cmdline_secret_pids", []
+                ),
+                "inline_password_option_pids": notus_exposure.get(
+                    "inline_password_option_pids", []
+                ),
+                "cmdline_unreadable_pids": notus_exposure.get(
+                    "cmdline_unreadable_pids", []
+                ),
+                "unexpected_password_file_option_pids": notus_exposure.get(
+                    "unexpected_password_file_option_pids", []
+                ),
+            },
+        )
+    )
+
+    authentication_probes = (
+        (
+            "ospd-openvas",
+            "ospd",
+            TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+            "/workspace/build/venvs/ospd-openvas/bin/python",
+            True,
+        ),
+        (
+            "notus-scanner",
+            "notus",
+            TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+            "/workspace/build/venvs/notus-scanner/bin/python",
+            False,
+        ),
+    )
+    for (
+        auth_service,
+        username,
+        container_secret,
+        python_executable,
+        drop_privileges,
+    ) in authentication_probes:
+        auth_probe = exec_in_service(
+            repo_root,
+            auth_service,
+            mqtt_authenticated_probe_command(
+                repo_root,
+                username,
+                container_secret,
+                python_executable,
+                drop_privileges,
+            ),
+        )
+        auth_ok = (
+            auth_probe.returncode == 0
+            and "mqtt-auth-ok" in auth_probe.stdout
+        )
+        findings.append(
+            finding(
+                "pass" if auth_ok else "fail",
+                f"{username}.mqtt-authentication",
+                f"{username} authenticated to the MQTT broker from its service context."
+                if auth_ok
+                else f"{username} could not authenticate to the MQTT broker from its service context.",
+                details={
+                    "service": auth_service,
+                    "probe_exit_code": auth_probe.returncode,
+                    "authenticated": auth_ok,
+                },
+            )
+        )
     return make_result("runtime-scanner-process-check", repo_root, "Scanner process check completed.", findings)
 
 
@@ -16961,6 +17869,7 @@ def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[s
         return runtime_app_up_status_only_result(result) if status_only else result
     infra = command_up(repo_root)
     findings.append(finding(infra["status"], "runtime.infrastructure", infra["summary"], details={"status": infra["status"]}))
+    findings.append(refresh_mqtt_broker(repo_root))
     db_init = command_runtime_init(repo_root)
     findings.append(finding(db_init["status"], "runtime.database-init", db_init["summary"], details={"status": db_init["status"]}))
     scanner_redis = command_runtime_scanner_redis_init(repo_root, probe_openvas=False)
@@ -17134,7 +18043,27 @@ def direct_bootstrap_status_only_result(result: dict[str, Any]) -> dict[str, Any
 
 def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
-    env = native_api_direct_runtime_env(repo_root)
+    try:
+        env = native_api_direct_runtime_env(repo_root)
+    except (OSError, UnicodeDecodeError):
+        env = runtime_app_env(repo_root)
+        env[TURBOVAS_API_DIRECT_ENV] = "1"
+        env.setdefault(
+            TURBOVAS_API_DIRECT_HOST_ENV,
+            TURBOVAS_API_DIRECT_DEFAULT_HOST,
+        )
+        env.setdefault(
+            TURBOVAS_API_DIRECT_PORT_ENV,
+            TURBOVAS_API_DIRECT_DEFAULT_PORT,
+        )
+        env.setdefault(
+            TURBOVAS_API_DIRECT_BIND_ENV,
+            f"0.0.0.0:{TURBOVAS_API_DIRECT_CONTAINER_PORT}",
+        )
+        env.setdefault(
+            TURBOVAS_API_BEARER_TOKEN_FILE_ENV,
+            TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE,
+        )
     try:
         token = native_api_direct_bearer_token(repo_root, env)
     except OSError:

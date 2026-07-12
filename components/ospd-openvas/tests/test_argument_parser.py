@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -108,6 +109,23 @@ class ArgumentParserTestCase(unittest.TestCase):
         self.assertEqual(args.mqtt_broker_port, DEFAULT_MQTT_BROKER_PORT)
         self.assertEqual(args.disable_notus_hashsum_verification, False)
         self.assertEqual(args.signature_check, False)
+        self.assertIsNone(args.mqtt_broker_password)
+        self.assertIsNone(args.mqtt_broker_password_file)
+
+    def test_mqtt_broker_password_file(self):
+        args = self.parse_args(
+            ['--mqtt-broker-password-file=/run/secrets/mqtt-ospd-password']
+        )
+        self.assertEqual(
+            args.mqtt_broker_password_file,
+            '/run/secrets/mqtt-ospd-password',
+        )
+        self.assertIsNone(args.mqtt_broker_password)
+
+    @patch('sys.stderr', new_callable=StringIO)
+    def test_plaintext_mqtt_broker_password_is_rejected(self, _mock_stderr):
+        with self.assertRaises(SystemExit):
+            self.parse_args(['--mqtt-broker-password=secret'])
 
 
 class ArgumentParserConfigTestCase(unittest.TestCase):
@@ -139,7 +157,8 @@ class ArgumentParserConfigTestCase(unittest.TestCase):
         self.assertEqual(args.mqtt_broker_address, 'foo.bar.com')
         self.assertEqual(args.mqtt_broker_port, 1234)
         self.assertEqual(args.mqtt_broker_username, 'ospd')
-        self.assertEqual(args.mqtt_broker_password, 'secret')
+        self.assertIsNone(args.mqtt_broker_password)
+        self.assertEqual(args.mqtt_broker_password_file, '/foo/mqtt-password')
         self.assertEqual(args.notus_feed_dir, '/foo/advisories')
         self.assertEqual(args.foreground, True)
         self.assertEqual(args.socket_mode, '0o700')

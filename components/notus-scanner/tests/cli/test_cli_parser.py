@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -36,6 +37,15 @@ class CliParserTestCase(unittest.TestCase):
     def test_mqtt_broker_port(self):
         args = self.parse_args(["--mqtt-broker-port=12345"])
         self.assertEqual(args.mqtt_broker_port, 12345)
+
+    def test_mqtt_broker_password_file(self):
+        args = self.parse_args(
+            ["--mqtt-broker-password-file=/run/secrets/mqtt-notus-password"]
+        )
+        self.assertEqual(
+            args.mqtt_broker_password_file,
+            "/run/secrets/mqtt-notus-password",
+        )
 
         args = self.parse_args(["-p", "12345"])
         self.assertEqual(args.mqtt_broker_port, 12345)
@@ -85,6 +95,7 @@ class CliParserTestCase(unittest.TestCase):
         self.assertEqual(args.log_level, DEFAULT_LOG_LEVEL)
         self.assertEqual(args.mqtt_broker_port, DEFAULT_MQTT_BROKER_PORT)
         self.assertEqual(args.mqtt_broker_address, DEFAULT_MQTT_BROKER_ADDRESS)
+        self.assertIsNone(args.mqtt_broker_password_file)
         self.assertEqual(args.pid_file, DEFAULT_PID_FILE)
         self.assertEqual(args.disable_hashsum_verification, False)
         self.assertFalse(args.foreground)
@@ -99,16 +110,14 @@ class CliParserTestCase(unittest.TestCase):
 
     def test_config_file(self):
         with tempfile.NamedTemporaryFile() as fp:
-            fp.write(
-                b"""[notus-scanner]
+            fp.write(b"""[notus-scanner]
                 mqtt-broker-address="1.2.3.4"
                 mqtt-broker-port="123"
                 products-directory="/tmp"
                 pid-file="foo.bar"
                 log-file="foo.log"
                 log-level="DEBUG"
-                """
-            )
+                """)
             fp.flush()
 
             args = self.parse_args(["-c", fp.name])

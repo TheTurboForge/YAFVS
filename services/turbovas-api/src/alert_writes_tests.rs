@@ -880,9 +880,8 @@ fn alert_email_create_sensitive_sql_is_parameterized_unlogged_and_scrubbed() {
 #[test]
 fn alert_delivery_reference_deletes_lock_before_usage_checks() {
     let credential_sql = include_str!("../../../components/gvmd/src/manage_sql.c");
-    let format_sql = include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
     let config_sql = include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
-    for source in [credential_sql, format_sql, config_sql] {
+    for source in [credential_sql, config_sql] {
         let lock = source.find("FOR UPDATE;").expect("delete lock");
         let usage = source[lock..]
             .find("_in_use (")

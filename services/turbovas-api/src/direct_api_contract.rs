@@ -198,9 +198,6 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::DELETE, ["", "api", "v1", "report-configs", report_config_id, "trash"]) => {
             direct_api_write_id_segment_is_allowed(report_config_id)
         }
-        (&Method::PATCH, ["", "api", "v1", "report-formats", report_format_id]) => {
-            direct_api_write_id_segment_is_allowed(report_format_id)
-        }
         (&Method::POST, ["", "api", "v1", "scan-configs"]) => true,
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scan-configs", scan_config_id]) => {
             direct_api_write_id_segment_is_allowed(scan_config_id)

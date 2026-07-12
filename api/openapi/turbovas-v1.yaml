@@ -4628,50 +4628,6 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-    patch:
-      operationId: patchReportFormatsByReportFormatId
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-format-metadata-modify
-      x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: preserve-existing-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Patch report-format metadata
-      description: Direct write-control endpoint for changing a non-predefined report format name, summary, or active flag. File import/export, verification, parameter and option mutations, and delete behavior remain inherited until those filesystem and signature semantics are designed.
-      parameters:
-        - $ref: '#/components/parameters/ReportFormatId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReportFormatPatchRequest'
-      responses:
-        '200':
-          description: Report format updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportFormatAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
   /report-formats/{report_format_id}/export:
     get:
       operationId: getReportFormatsByReportFormatIdExport
@@ -4680,7 +4636,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: report-format-metadata-export-read
       summary: Export report-format metadata JSON
-      description: Direct scriptable report-format metadata export backed by gvmd/PostgreSQL. This returns the same native report-format detail JSON. Legacy report-format file export/import, verification, parameter and option writes, and delete behavior remain on inherited compatibility paths while native semantics are designed.
+      description: Direct scriptable metadata export for trusted built-in report formats. Custom executable report-format import and activation are retired; report output uses dedicated typed report endpoints.
       parameters:
         - $ref: '#/components/parameters/ReportFormatId'
       responses:
@@ -8772,23 +8728,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReportFormatAsset'
-    ReportFormatPatchRequest:
-      type: object
-      additionalProperties: false
-      minProperties: 1
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 4096
-          description: New report-format display name. Blank names are rejected after trimming.
-        summary:
-          type: string
-          maxLength: 4096
-          description: New report-format summary. Blank summaries clear the summary after trimming.
-        active:
-          type: boolean
-          description: Enable or disable this non-predefined report format.
     TrashcanSummary:
       type: object
       required: [items, total]

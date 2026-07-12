@@ -29,7 +29,6 @@ use crate::{
         clone_report_config, create_report_config, delete_report_config, hard_delete_report_config,
         patch_report_config, restore_report_config,
     },
-    report_format_writes::patch_report_format,
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
     scan_config_writes::{
         clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
@@ -96,10 +95,6 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/report-configs/:report_config_id/trash",
                 delete(hard_delete_report_config),
-            )
-            .route(
-                "/api/v1/report-formats/:report_format_id",
-                patch(patch_report_format),
             )
             .route("/api/v1/scan-configs", post(create_scan_config))
             .route(

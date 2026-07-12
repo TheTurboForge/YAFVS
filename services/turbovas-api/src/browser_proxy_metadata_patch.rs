@@ -21,9 +21,6 @@ use crate::{
     credential_writes::{create_credential, patch_credential},
     errors::ApiError,
     override_writes::delete_override,
-    report_format_payloads::ReportFormatAssetItem,
-    report_format_write_validation::ReportFormatPatchRequest,
-    report_format_writes::patch_report_format,
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_verify::{ScannerVerifyResult, verify_scanner},
     scanner_write_validation::{ScannerConfigurationRequest, ScannerPatchRequest},
@@ -260,23 +257,6 @@ pub(crate) async fn browser_proxy_patch_alert(
     patch_alert(
         State(state),
         Path(alert_id),
-        Some(Extension(operator)),
-        Json(request),
-    )
-    .await
-}
-
-pub(crate) async fn browser_proxy_patch_report_format(
-    State(state): State<AppState>,
-    Extension(auth): Extension<BrowserProxyAuth>,
-    Path(report_format_id): Path<String>,
-    headers: HeaderMap,
-    Json(request): Json<ReportFormatPatchRequest>,
-) -> Result<Json<ReportFormatAssetItem>, ApiError> {
-    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
-    patch_report_format(
-        State(state),
-        Path(report_format_id),
         Some(Extension(operator)),
         Json(request),
     )

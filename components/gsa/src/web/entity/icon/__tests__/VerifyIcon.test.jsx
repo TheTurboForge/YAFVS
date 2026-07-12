@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,15 +7,15 @@
 import {describe, test, expect, testing} from '@gsa/testing';
 import {rendererWith, fireEvent} from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
-import ReportFormat from 'gmp/models/report-format';
+import Scanner from 'gmp/models/scanner';
 import VerifyIcon from 'web/entity/icon/VerifyIcon';
 import Theme from 'web/utils/Theme';
 
 describe('Entity VerifyIcon component tests', () => {
   test('should render in active state with correct permissions', () => {
     const caps = new Capabilities(['everything']);
-    const entity = ReportFormat.fromElement({
-      permissions: {permission: [{name: 'verify_report_format'}]},
+    const entity = Scanner.fromElement({
+      permissions: {permission: [{name: 'verify_scanner'}]},
     });
     const clickHandler = testing.fn();
 
@@ -27,7 +28,7 @@ describe('Entity VerifyIcon component tests', () => {
     expect(element).not.toHaveAttribute('disabled');
     expect(element).not.toHaveAttribute('data-disabled', 'true');
 
-    expect(entity.userCapabilities.mayOp('verify_report_format')).toEqual(true);
+    expect(entity.userCapabilities.mayOp('verify_scanner')).toEqual(true);
 
     fireEvent.click(element);
 
@@ -36,8 +37,8 @@ describe('Entity VerifyIcon component tests', () => {
 
   test('should render in active state with correct permissions and name given', () => {
     const caps = new Capabilities(['everything']);
-    const entity = ReportFormat.fromElement({
-      permissions: {permission: [{name: 'verify_report_format'}]},
+    const entity = Scanner.fromElement({
+      permissions: {permission: [{name: 'verify_scanner'}]},
     });
     const clickHandler = testing.fn();
 
@@ -46,7 +47,7 @@ describe('Entity VerifyIcon component tests', () => {
     const {element} = render(
       <VerifyIcon
         entity={entity}
-        name="report_format"
+        name="scanner"
         onClick={clickHandler}
       />,
     );
@@ -54,7 +55,7 @@ describe('Entity VerifyIcon component tests', () => {
     expect(element).not.toHaveComputedStyle('fill', Theme.inputBorderGray);
     expect(element).not.toHaveColor(Theme.inputBorderGray);
 
-    expect(entity.userCapabilities.mayOp('verify_report_format')).toEqual(true);
+    expect(entity.userCapabilities.mayOp('verify_scanner')).toEqual(true);
 
     fireEvent.click(element);
 
@@ -63,28 +64,7 @@ describe('Entity VerifyIcon component tests', () => {
 
   test('should deactivate if wrong command level permissions are given', () => {
     const caps = new Capabilities(['authenticate']);
-    const entity = ReportFormat.fromElement({
-      permissions: {permission: [{name: 'verify_report_format'}]},
-    });
-    const clickHandler = testing.fn();
-
-    const {render} = rendererWith({capabilities: caps});
-
-    const {element} = render(
-      <VerifyIcon entity={entity} onClick={clickHandler} />,
-    );
-
-    expect(entity.userCapabilities.mayOp('verify_report_format')).toEqual(true);
-
-    fireEvent.click(element);
-    expect(clickHandler).not.toHaveBeenCalled();
-    expect(element).toHaveAttribute('disabled');
-    expect(element).toHaveAttribute('data-disabled', 'true');
-  });
-
-  test('should deactivate if wrong resource level permissions are given', () => {
-    const caps = new Capabilities(['everything']);
-    const entity = ReportFormat.fromElement({
+    const entity = Scanner.fromElement({
       permissions: {permission: [{name: 'verify_scanner'}]},
     });
     const clickHandler = testing.fn();
@@ -95,7 +75,28 @@ describe('Entity VerifyIcon component tests', () => {
       <VerifyIcon entity={entity} onClick={clickHandler} />,
     );
 
-    expect(entity.userCapabilities.mayOp('verify_report_format')).toEqual(
+    expect(entity.userCapabilities.mayOp('verify_scanner')).toEqual(true);
+
+    fireEvent.click(element);
+    expect(clickHandler).not.toHaveBeenCalled();
+    expect(element).toHaveAttribute('disabled');
+    expect(element).toHaveAttribute('data-disabled', 'true');
+  });
+
+  test('should deactivate if wrong resource level permissions are given', () => {
+    const caps = new Capabilities(['everything']);
+    const entity = Scanner.fromElement({
+      permissions: {permission: [{name: 'get_scanners'}]},
+    });
+    const clickHandler = testing.fn();
+
+    const {render} = rendererWith({capabilities: caps});
+
+    const {element} = render(
+      <VerifyIcon entity={entity} onClick={clickHandler} />,
+    );
+
+    expect(entity.userCapabilities.mayOp('verify_scanner')).toEqual(
       false,
     );
 

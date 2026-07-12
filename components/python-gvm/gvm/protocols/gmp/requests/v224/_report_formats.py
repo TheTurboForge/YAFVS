@@ -1,14 +1,15 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 
 from gvm._enum import Enum
-from gvm.errors import InvalidArgument, RequiredArgument
+from gvm.errors import RequiredArgument
 from gvm.protocols.core import Request
 from gvm.utils import to_bool
-from gvm.xml import XmlCommand, XmlError
+from gvm.xml import XmlCommand
 
 from .._entity_id import EntityID
 
@@ -41,54 +42,6 @@ class ReportFormatType(Enum):
 
 
 class ReportFormats:
-    @classmethod
-    def clone_report_format(
-        cls, report_format_id: EntityID | ReportFormatType
-    ) -> Request:
-        """Clone a report format from an existing one
-
-        Args:
-            report_format_id: UUID of the existing report format
-                              or ReportFormatType (enum)
-        """
-        if not report_format_id:
-            raise RequiredArgument(
-                function=cls.clone_report_format.__name__,
-                argument="report_format_id",
-            )
-
-        cmd = XmlCommand("create_report_format")
-        cmd.add_element("copy", str(report_format_id))
-        return cmd
-
-    @classmethod
-    def delete_report_format(
-        cls,
-        report_format_id: EntityID | ReportFormatType,
-        *,
-        ultimate: bool | None = False,
-    ) -> Request:
-        """Deletes an existing report format
-
-        Args:
-            report_format_id: UUID of the report format to be deleted.
-                              or ReportFormatType (enum)
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        if not report_format_id:
-            raise RequiredArgument(
-                function=cls.delete_report_format.__name__,
-                argument="report_format_id",
-            )
-
-        cmd = XmlCommand("delete_report_format")
-
-        cmd.set_attribute("report_format_id", str(report_format_id))
-
-        cmd.set_attribute("ultimate", to_bool(ultimate))
-
-        return cmd
-
     @staticmethod
     def get_report_formats(
         *,
@@ -149,106 +102,4 @@ class ReportFormats:
 
         # for single entity always request all details
         cmd.set_attribute("details", "1")
-        return cmd
-
-    @classmethod
-    def import_report_format(cls, report_format: str) -> Request:
-        """Import a report format from XML
-
-        Args:
-            report_format: Report format XML as string to import. This XML must
-                contain a :code:`<get_report_formats_response>` root element.
-        """
-        if not report_format:
-            raise RequiredArgument(
-                function=cls.import_report_format.__name__,
-                argument="report_format",
-            )
-
-        cmd = XmlCommand("create_report_format")
-
-        try:
-            cmd.append_xml_str(report_format)
-        except XmlError as e:
-            raise InvalidArgument(
-                function=cls.import_report_format.__name__,
-                argument="report_format",
-            ) from e
-
-        return cmd
-
-    @classmethod
-    def modify_report_format(
-        cls,
-        report_format_id: EntityID | ReportFormatType,
-        *,
-        active: bool | None = None,
-        name: str | None = None,
-        summary: str | None = None,
-        param_name: str | None = None,
-        param_value: str | None = None,
-    ) -> Request:
-        """Modifies an existing report format.
-
-        Args:
-            report_format_id: UUID of report format to modify
-                              or ReportFormatType (enum)
-            active: Whether the report format is active.
-            name: The name of the report format.
-            summary: A summary of the report format.
-            param_name: The name of the param.
-            param_value: The value of the param.
-        """
-        if not report_format_id:
-            raise RequiredArgument(
-                function=cls.modify_report_format.__name__,
-                argument="report_format_id ",
-            )
-
-        cmd = XmlCommand("modify_report_format")
-
-        cmd.set_attribute("report_format_id", str(report_format_id))
-
-        if active is not None:
-            cmd.add_element("active", to_bool(active))
-
-        if name:
-            cmd.add_element("name", name)
-
-        if summary:
-            cmd.add_element("summary", summary)
-
-        if param_name:
-            xml_param = cmd.add_element("param")
-            xml_param.add_element("name", param_name)
-
-            if param_value is not None:
-                xml_param.add_element("value", param_value)
-
-        return cmd
-
-    @classmethod
-    def verify_report_format(
-        cls, report_format_id: EntityID | ReportFormatType
-    ) -> Request:
-        """Verify an existing report format
-
-        Verifies the trust level of an existing report format. It will be
-        checked whether the signature of the report format currently matches the
-        report format. This includes the script and files used to generate
-        reports of this format. It is *not* verified if the report format works
-        as expected by the user.
-
-        Args:
-            report_format_id: UUID of the report format to be verified
-                              or ReportFormatType (enum)
-        """
-        if not report_format_id:
-            raise RequiredArgument(
-                function=cls.verify_report_format.__name__,
-                argument="report_format_id",
-            )
-
-        cmd = XmlCommand("verify_report_format")
-        cmd.set_attribute("report_format_id", str(report_format_id))
         return cmd

@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -39,25 +40,6 @@ typedef struct
   gchar *type_min;  ///< Minimum value for integer type.
   gchar *value;     ///< Value of param.
 } create_report_format_param_t;
-
-int
-create_report_format (const char *, const char *, const char *, const char *,
-                      const char *, const char *, array_t *, array_t *,
-                      array_t *, const char *, const char *,
-                      report_format_t *);
-
-int
-copy_report_format (const char *, const char *, report_format_t*);
-
-int
-modify_report_format (const char *, const char *, const char *, const char *,
-                      const char *, const char *);
-
-int
-delete_report_format (const char *, int);
-
-int
-verify_report_format (const char *);
 
 char *
 report_format_uuid (report_format_t);

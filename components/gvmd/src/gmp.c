@@ -84,7 +84,6 @@
 #include "gmp_logout.h"
 #include "gmp_port_lists.h"
 #include "gmp_report_configs.h"
-#include "gmp_report_formats.h"
 #include "gmp_tls_certificates.h"
 #include "manage.h"
 #include "manage_acl.h"
@@ -1120,27 +1119,6 @@ delete_report_data_reset (delete_report_data_t *data)
   memset (data, 0, sizeof (delete_report_data_t));
 }
 
-/**
- * @brief Command data for the delete_report_format command.
- */
-typedef struct
-{
-  char *report_format_id;   ///< ID of report format to delete.
-  int ultimate;     ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_report_format_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_report_format_data_reset (delete_report_format_data_t *data)
-{
-  free (data->report_format_id);
-
-  memset (data, 0, sizeof (delete_report_format_data_t));
-}
 
 /**
  * @brief Command data for the delete_schedule command.
@@ -2293,36 +2271,6 @@ modify_port_list_data_reset (modify_port_list_data_t *data)
   memset (data, 0, sizeof (modify_port_list_data_t));
 }
 
-/**
- * @brief Command data for the modify_report_format command.
- */
-typedef struct
-{
-  char *active;               ///< Boolean.  Whether report format is active.
-  char *name;                 ///< Name.
-  char *param_name;           ///< Param name.
-  char *param_value;          ///< Param value.
-  char *report_format_id;     ///< ID of report format to modify.
-  char *summary;              ///< Summary.
-} modify_report_format_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_report_format_data_reset (modify_report_format_data_t *data)
-{
-  free (data->active);
-  free (data->name);
-  free (data->param_name);
-  free (data->param_value);
-  free (data->report_format_id);
-  free (data->summary);
-
-  memset (data, 0, sizeof (modify_report_format_data_t));
-}
 
 /**
  * @brief Command data for the modify_scanner command.
@@ -2741,26 +2689,6 @@ test_alert_data_reset (test_alert_data_t *data)
   memset (data, 0, sizeof (test_alert_data_t));
 }
 
-/**
- * @brief Command data for the verify_report_format command.
- */
-typedef struct
-{
-  char *report_format_id;   ///< ID of report format to verify.
-} verify_report_format_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-verify_report_format_data_reset (verify_report_format_data_t *data)
-{
-  free (data->report_format_id);
-
-  memset (data, 0, sizeof (verify_report_format_data_t));
-}
 
 /**
  * @brief Command data for the verify_scanner command.
@@ -2809,7 +2737,6 @@ typedef union
   delete_port_list_data_t delete_port_list;           ///< delete_port_list
   delete_port_range_data_t delete_port_range;         ///< delete_port_range
   delete_report_data_t delete_report;                 ///< delete_report
-  delete_report_format_data_t delete_report_format;   ///< delete_report_format
   scope_command_data_t delete_scope;                  ///< delete_scope
   delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
@@ -2853,7 +2780,6 @@ typedef union
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_filter_data_t modify_filter;                 ///< modify_filter
   modify_port_list_data_t modify_port_list;           ///< modify_port_list
-  modify_report_format_data_t modify_report_format;   ///< modify_report_format
   scope_command_data_t modify_scope;                  ///< modify_scope
   modify_scanner_data_t modify_scanner;               ///< modify_scanner
   modify_setting_data_t modify_setting;               ///< modify_setting
@@ -2866,7 +2792,6 @@ typedef union
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
   test_alert_data_t test_alert;                       ///< test_alert
-  verify_report_format_data_t verify_report_format;   ///< verify_report_format
   verify_scanner_data_t verify_scanner;               ///< verify_scanner
 } command_data_t;
 
@@ -3016,11 +2941,6 @@ static delete_port_range_data_t *delete_port_range_data
 static delete_report_data_t *delete_report_data
  = (delete_report_data_t*) &(command_data.delete_report);
 
-/**
- * @brief Parser callback data for DELETE_REPORT_FORMAT.
- */
-static delete_report_format_data_t *delete_report_format_data
- = (delete_report_format_data_t*) &(command_data.delete_report_format);
 
 /**
  * @brief Parser callback data for DELETE_SCOPE.
@@ -3280,11 +3200,6 @@ static modify_override_data_t *modify_override_data
 static modify_port_list_data_t *modify_port_list_data
  = &(command_data.modify_port_list);
 
-/**
- * @brief Parser callback data for MODIFY_REPORT_FORMAT.
- */
-static modify_report_format_data_t *modify_report_format_data
- = &(command_data.modify_report_format);
 
 /**
  * @brief Parser callback data for MODIFY_SCOPE.
@@ -3356,11 +3271,6 @@ static stop_task_data_t *stop_task_data
 static test_alert_data_t *test_alert_data
  = (test_alert_data_t*) &(command_data.test_alert);
 
-/**
- * @brief Parser callback data for VERIFY_REPORT_FORMAT.
- */
-static verify_report_format_data_t *verify_report_format_data
- = (verify_report_format_data_t*) &(command_data.verify_report_format);
 
 /**
  * @brief Parser callback data for VERIFY_SCANNER.
@@ -3489,7 +3399,6 @@ typedef enum
   CLIENT_CREATE_PORT_RANGE_START,
   CLIENT_CREATE_PORT_RANGE_TYPE,
   CLIENT_CREATE_REPORT_CONFIG,
-  CLIENT_CREATE_REPORT_FORMAT,
   CLIENT_CREATE_SCOPE,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
@@ -3570,7 +3479,6 @@ typedef enum
   CLIENT_DELETE_PORT_RANGE,
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_REPORT_CONFIG,
-  CLIENT_DELETE_REPORT_FORMAT,
   CLIENT_DELETE_SCOPE,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
@@ -3695,13 +3603,6 @@ typedef enum
   CLIENT_MODIFY_PORT_LIST_COMMENT,
   CLIENT_MODIFY_PORT_LIST_NAME,
   CLIENT_MODIFY_REPORT_CONFIG,
-  CLIENT_MODIFY_REPORT_FORMAT,
-  CLIENT_MODIFY_REPORT_FORMAT_ACTIVE,
-  CLIENT_MODIFY_REPORT_FORMAT_NAME,
-  CLIENT_MODIFY_REPORT_FORMAT_PARAM,
-  CLIENT_MODIFY_REPORT_FORMAT_PARAM_NAME,
-  CLIENT_MODIFY_REPORT_FORMAT_PARAM_VALUE,
-  CLIENT_MODIFY_REPORT_FORMAT_SUMMARY,
   CLIENT_MODIFY_SCOPE,
   CLIENT_MODIFY_SCANNER,
   CLIENT_MODIFY_SCANNER_COMMENT,
@@ -3777,7 +3678,6 @@ typedef enum
 #if ENABLE_CREDENTIAL_STORES
   CLIENT_VERIFY_CREDENTIAL_STORE,
 #endif
-  CLIENT_VERIFY_REPORT_FORMAT,
   CLIENT_VERIFY_SCANNER,
 } client_state_t;
 
@@ -4004,12 +3904,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                         attribute_values);
             set_client_state (CLIENT_CREATE_REPORT_CONFIG);
           }
-        else if (strcasecmp ("CREATE_REPORT_FORMAT", element_name) == 0)
-          {
-            create_report_format_start (gmp_parser, attribute_names,
-                                        attribute_values);
-            set_client_state (CLIENT_CREATE_REPORT_FORMAT);
-          }
         else if (strcasecmp ("CREATE_SCOPE", element_name) == 0)
           {
             scope_command_data_start (create_scope_data, attribute_names,
@@ -4144,19 +4038,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             delete_start ("report_config", "Report Config",
                           attribute_names, attribute_values);
             set_client_state (CLIENT_DELETE_REPORT_CONFIG);
-          }
-        else if (strcasecmp ("DELETE_REPORT_FORMAT", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "report_format_id",
-                              &delete_report_format_data->report_format_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_report_format_data->ultimate = strcmp (attribute,
-                                                            "0");
-            else
-              delete_report_format_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_REPORT_FORMAT);
           }
         else if (strcasecmp ("DELETE_SCOPE", element_name) == 0)
           {
@@ -4975,13 +4856,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                         attribute_values);
             set_client_state (CLIENT_MODIFY_REPORT_CONFIG);
           }
-        else if (strcasecmp ("MODIFY_REPORT_FORMAT", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values,
-                              "report_format_id",
-                              &modify_report_format_data->report_format_id);
-            set_client_state (CLIENT_MODIFY_REPORT_FORMAT);
-          }
         else if (strcasecmp ("MODIFY_SCOPE", element_name) == 0)
           {
             scope_command_data_start (modify_scope_data, attribute_names,
@@ -5077,12 +4951,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_VERIFY_CREDENTIAL_STORE);
           }
 #endif
-        else if (strcasecmp ("VERIFY_REPORT_FORMAT", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "report_format_id",
-                              &verify_report_format_data->report_format_id);
-            set_client_state (CLIENT_VERIFY_REPORT_FORMAT);
-          }
         else if (strcasecmp ("VERIFY_SCANNER", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "scanner_id",
@@ -17044,7 +16912,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTIC);
         break;
 
-      CASE_DELETE (REPORT_FORMAT, report_format, "Report format");
 
       case CLIENT_DELETE_SCOPE:
         handle_delete_scope (gmp_parser, error);
@@ -18980,12 +18847,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_CREATE_REPORT_CONFIG:
         create_report_config_element_end (gmp_parser, error, element_name);
         break;
-
-      case CLIENT_CREATE_REPORT_FORMAT:
-        if (create_report_format_element_end (gmp_parser, error, element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-
 
       case CLIENT_CREATE_SCOPE:
         handle_create_scope (gmp_parser, error);
@@ -21245,92 +21106,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_PORT_LIST, COMMENT);
       CLOSE (CLIENT_MODIFY_PORT_LIST, NAME);
 
-      case CLIENT_MODIFY_REPORT_FORMAT:
-        {
-          switch (modify_report_format
-                   (modify_report_format_data->report_format_id,
-                    modify_report_format_data->name,
-                    modify_report_format_data->summary,
-                    modify_report_format_data->active,
-                    modify_report_format_data->param_name,
-                    modify_report_format_data->param_value))
-            {
-              case 0:
-                SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_report_format"));
-                log_event ("report_format", "Report Format",
-                           modify_report_format_data->report_format_id,
-                           "modified");
-                break;
-              case 1:
-                if (send_find_error_to_client
-                     ("modify_report_format", "report_format",
-                      modify_report_format_data->report_format_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("report_format", "Report Format",
-                                modify_report_format_data->report_format_id,
-                                "modified");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX
-                   ("modify_report_format",
-                    "A report_format_id is required"));
-                log_event_fail ("report_format", "Report Format",
-                                modify_report_format_data->report_format_id,
-                                "modified");
-                break;
-              case 3:
-                if (send_find_error_to_client
-                     ("modify_report_format", "report format param",
-                      modify_report_format_data->param_name, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("report_format", "Report Format",
-                                modify_report_format_data->report_format_id,
-                                "modified");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_report_format",
-                                    "Parameter validation failed"));
-                log_event_fail ("report_format", "Report Format",
-                                modify_report_format_data->report_format_id,
-                                "modified");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_report_format",
-                                    "Permission denied"));
-                log_event_fail ("report_format", "Report Format",
-                                modify_report_format_data->report_format_id,
-                                "modified");
-                break;
-              default:
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR
-                                         ("modify_report_format"));
-                log_event_fail ("report_format", "Report Format",
-                                modify_report_format_data->report_format_id,
-                                "modified");
-                break;
-            }
-
-          modify_report_format_data_reset (modify_report_format_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_REPORT_FORMAT, ACTIVE);
-      CLOSE (CLIENT_MODIFY_REPORT_FORMAT, NAME);
-      CLOSE (CLIENT_MODIFY_REPORT_FORMAT, SUMMARY);
-      CLOSE (CLIENT_MODIFY_REPORT_FORMAT, PARAM);
-      CLOSE (CLIENT_MODIFY_REPORT_FORMAT_PARAM, NAME);
-      CLOSE (CLIENT_MODIFY_REPORT_FORMAT_PARAM, VALUE);
 
       case CLIENT_MODIFY_REPORT_CONFIG:
         modify_report_config_element_end (gmp_parser, error, element_name);
@@ -22734,44 +22509,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           break;
         }
 #endif
-      case CLIENT_VERIFY_REPORT_FORMAT:
-        if (verify_report_format_data->report_format_id)
-          {
-            switch (verify_report_format
-                     (verify_report_format_data->report_format_id))
-              {
-                case 0:
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK ("verify_report_format"));
-                  break;
-                case 1:
-                  if (send_find_error_to_client
-                       ("verify_report_format", "report format",
-                        verify_report_format_data->report_format_id,
-                        gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("verify_report_format",
-                                      "Permission denied"));
-                  break;
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("verify_report_format"));
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("verify_report_format",
-                              "A report_format_id"
-                              " attribute is required"));
-        verify_report_format_data_reset (verify_report_format_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
 
       case CLIENT_VERIFY_SCANNER:
         if (verify_scanner_data->scanner_id)
@@ -22957,20 +22694,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
         break;
 
 
-      APPEND (CLIENT_MODIFY_REPORT_FORMAT_ACTIVE,
-              &modify_report_format_data->active);
-
-      APPEND (CLIENT_MODIFY_REPORT_FORMAT_NAME,
-              &modify_report_format_data->name);
-
-      APPEND (CLIENT_MODIFY_REPORT_FORMAT_SUMMARY,
-              &modify_report_format_data->summary);
-
-      APPEND (CLIENT_MODIFY_REPORT_FORMAT_PARAM_NAME,
-              &modify_report_format_data->param_name);
-
-      APPEND (CLIENT_MODIFY_REPORT_FORMAT_PARAM_VALUE,
-              &modify_report_format_data->param_value);
 
 
       APPEND (CLIENT_MODIFY_SETTING_NAME,
@@ -23223,15 +22946,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       case CLIENT_CREATE_REPORT_CONFIG:
         create_report_config_element_text (text, text_len);
         break;
-
-
-      case CLIENT_CREATE_REPORT_FORMAT:
-        create_report_format_element_text (text, text_len);
-        break;
-
-
-
-
 
 
       APPEND (CLIENT_CREATE_SCANNER_NAME,

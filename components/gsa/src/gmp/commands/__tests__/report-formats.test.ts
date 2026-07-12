@@ -7,11 +7,7 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ReportFormatCommand from 'gmp/commands/report-format';
 import {ReportFormatsCommand} from 'gmp/commands/report-formats';
-import {
-  createActionResultResponse,
-  createHttp,
-  createResponse,
-} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -34,6 +30,15 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
 };
 
 describe('ReportFormatsCommand tests', () => {
+  test('should expose report-format detail as read-only', () => {
+    const cmd = new ReportFormatCommand(createNativeHttp());
+
+    expect('clone' in cmd).toEqual(false);
+    expect('delete' in cmd).toEqual(false);
+    expect('save' in cmd).toEqual(false);
+    expect('import' in cmd).toEqual(false);
+  });
+
   test('should fetch report format detail through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -153,99 +158,6 @@ describe('ReportFormatsCommand tests', () => {
       },
     );
     expect(result.data.id).toEqual('report-format-id');
-  });
-
-  test('should import report format through inherited GMP action', async () => {
-    const response = createActionResultResponse({
-      action: 'import_report_format',
-      id: 'report-format-id',
-      message: 'Imported Report Format',
-    });
-    const fakeHttp = createHttp(response);
-
-    const cmd = new ReportFormatCommand(fakeHttp);
-    await cmd.import({xmlFile: '<get_report_formats_response />'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'import_report_format',
-        xml_file: '<get_report_formats_response />',
-      },
-    });
-  });
-
-  test('should save report format metadata through native API when available', async () => {
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({id: 'report-format-id'}),
-      ok: true,
-      status: 200,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp();
-
-    const cmd = new ReportFormatCommand(fakeHttp);
-    const result = await cmd.save({
-      active: true,
-      id: 'report-format-id',
-      name: 'Custom XML',
-      summary: 'Custom report format',
-    });
-
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/report-formats/report-format-id',
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats/report-format-id',
-      {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
-          Authorization: 'Bearer jwt-token',
-        },
-        body: JSON.stringify({
-          active: true,
-          name: 'Custom XML',
-          summary: 'Custom report format',
-        }),
-      },
-    );
-    expect(result.data).toEqual({id: 'report-format-id'});
-  });
-
-  test('should ignore extra dialog fields when saving report format metadata natively', async () => {
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({id: 'report-format-id'}),
-      ok: true,
-      status: 200,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp();
-
-    const cmd = new ReportFormatCommand(fakeHttp);
-    await cmd.save({
-      active: false,
-      id: 'report-format-id',
-      name: 'Custom XML',
-      summary: 'Custom report format',
-      params: [{name: 'format-param'}],
-    } as never);
-
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats/report-format-id',
-      expect.objectContaining({
-        method: 'PATCH',
-        body: JSON.stringify({
-          active: false,
-          name: 'Custom XML',
-          summary: 'Custom report format',
-        }),
-      }),
-    );
   });
 
   test('should export report format metadata through native API when available', async () => {

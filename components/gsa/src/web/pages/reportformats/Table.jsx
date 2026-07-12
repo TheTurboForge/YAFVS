@@ -1,10 +1,10 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {_l} from 'gmp/locale/lang';
-import createEntitiesFooter from 'web/entities/createEntitiesFooter';
 import createEntitiesHeader from 'web/entities/createEntitiesHeader';
 import createEntitiesTable from 'web/entities/createEntitiesTable';
 import withRowDetails from 'web/entities/withRowDetails';
@@ -41,13 +41,9 @@ export const SORT_FIELDS = [
 
 const ReportFormatsTable = createEntitiesTable({
   emptyTitle: _l('No report formats available'),
-  header: createEntitiesHeader(SORT_FIELDS),
+  header: createEntitiesHeader(SORT_FIELDS, null),
   row: Row,
   rowDetails: withRowDetails('reportformat', 10)(ReportFormatDetails),
-  footer: createEntitiesFooter({
-    span: 6,
-    trash: true,
-  }),
 });
 
 export default ReportFormatsTable;

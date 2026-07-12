@@ -769,8 +769,6 @@ mod tests {
         let port_lists = include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
         let report_configs =
             include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
-        let report_formats =
-            include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
         let schedules = include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
         let tags = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
         let targets = include_str!("../../../components/gvmd/src/manage_sql_targets.c");
@@ -850,12 +848,6 @@ mod tests {
                 first_resource_access: "find_report_config_with_permission",
             },
             LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql_report_formats.c",
-                source: report_formats,
-                definition: "delete_report_format (const char *report_format_id, int ultimate)",
-                first_resource_access: "find_report_format_with_permission",
-            },
-            LegacyTrashCountWriter {
                 file: "components/gvmd/src/manage_sql_schedules.c",
                 source: schedules,
                 definition: "delete_schedule (const char *schedule_id, int ultimate)",
@@ -877,8 +869,8 @@ mod tests {
 
         assert_eq!(
             writers.len(),
-            16,
-            "the 13-family writer inventory is explicit"
+            15,
+            "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(
             LEGACY_TRASH_COUNT_WRITER_EXCLUSIONS.len(),

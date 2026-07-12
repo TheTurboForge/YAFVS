@@ -128,11 +128,6 @@ fn native_write_owner_resolvers_lock_operator_rows_for_key_share() {
             "resolve_report_config_write_operator_owner",
         ),
         (
-            "report_format_write_db.rs",
-            include_str!("report_format_write_db.rs"),
-            "resolve_report_format_write_operator_owner",
-        ),
-        (
             "scan_config_write_db.rs",
             include_str!("scan_config_write_db.rs"),
             "resolve_scan_config_write_operator_owner",
@@ -174,7 +169,7 @@ fn native_write_owner_resolvers_lock_operator_rows_for_key_share() {
         ),
     ];
 
-    assert_eq!(resolvers.len(), 16);
+    assert_eq!(resolvers.len(), 15);
     for (file, source, resolver) in resolvers {
         let marker = format!("pub(crate) async fn {resolver}");
         let resolver_tail = source

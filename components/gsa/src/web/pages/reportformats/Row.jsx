@@ -1,62 +1,20 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import React from 'react';
 import Comment from 'web/components/comment/Comment';
-import IconDivider from 'web/components/layout/IconDivider';
 import TableData from 'web/components/table/TableData';
 import TableRow from 'web/components/table/TableRow';
 import EntityNameTableData from 'web/entities/EntityNameTableData';
-import withEntitiesActions from 'web/entities/withEntitiesActions';
-import EditIcon from 'web/entity/icon/EditIcon';
-import TrashIcon from 'web/entity/icon/TrashIcon';
 import useTranslation from 'web/hooks/useTranslation';
-import compose from 'web/utils/Compose';
 import PropTypes from 'web/utils/PropTypes';
 import {renderYesNo} from 'web/utils/Render';
 import {formattedUserSettingShortDate} from 'web/utils/user-setting-time-date-formatters';
-import withCapabilities from 'web/utils/withCapabilities';
 
-const Actions = compose(
-  withCapabilities,
-  withEntitiesActions,
-)(({entity, onReportFormatDeleteClick, onReportFormatEditClick}) => {
-  const [_] = useTranslation();
-
-  return (
-    <IconDivider grow align={['center', 'center']}>
-      <TrashIcon
-        displayName={_('Report Format')}
-        entity={entity}
-        name="report_format"
-        onClick={onReportFormatDeleteClick}
-      />
-      <EditIcon
-        disabled={entity.predefined}
-        displayName={_('Report Format')}
-        entity={entity}
-        name="report_format"
-        onClick={onReportFormatEditClick}
-      />
-    </IconDivider>
-  );
-});
-
-Actions.propTypes = {
-  entity: PropTypes.model.isRequired,
-  onReportFormatDeleteClick: PropTypes.func.isRequired,
-  onReportFormatEditClick: PropTypes.func.isRequired,
-};
-
-const Row = ({
-  actionsComponent: ActionsComponent = Actions,
-  entity,
-  links = true,
-  onToggleDetailsClick,
-  ...props
-}) => {
+const Row = ({entity, links = true, onToggleDetailsClick}) => {
   const [_] = useTranslation();
 
   return (
@@ -79,13 +37,11 @@ const Row = ({
         )}
       </TableData>
       <TableData>{renderYesNo(entity.isActive())}</TableData>
-      <ActionsComponent {...props} entity={entity} />
     </TableRow>
   );
 };
 
 Row.propTypes = {
-  actionsComponent: PropTypes.component,
   entity: PropTypes.model.isRequired,
   links: PropTypes.bool,
   onToggleDetailsClick: PropTypes.func.isRequired,

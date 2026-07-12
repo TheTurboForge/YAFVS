@@ -30,7 +30,6 @@ const CAPABILITY_NAMES = [
   'create_port_list',
   'create_port_range',
   'create_report_config',
-  'create_report_format',
   'create_scanner',
   'create_scope',
   'create_schedule',
@@ -49,7 +48,6 @@ const CAPABILITY_NAMES = [
   'delete_port_range',
   'delete_report',
   'delete_report_config',
-  'delete_report_format',
   'delete_scanner',
   'delete_scope',
   'delete_schedule',
@@ -98,7 +96,6 @@ const CAPABILITY_NAMES = [
   'modify_override',
   'modify_port_list',
   'modify_report_config',
-  'modify_report_format',
   'modify_scanner',
   'modify_scope',
   'modify_schedule',
@@ -114,7 +111,6 @@ const CAPABILITY_NAMES = [
   'stop_task',
   'sync_config',
   'test_alert',
-  'verify_report_format',
   'verify_scanner',
 ] as const;
 

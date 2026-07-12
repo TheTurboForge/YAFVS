@@ -2608,38 +2608,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def clone_report_format(
-        self, report_format_id: EntityID | ReportFormatType
-    ) -> T:
-        """Clone a report format from an existing one
-
-        Args:
-            report_format_id: UUID of the existing report format
-                              or ReportFormatType (enum)
-        """
-        return self._send_request_and_transform_response(
-            ReportFormats.clone_report_format(report_format_id)
-        )
-
-    def delete_report_format(
-        self,
-        report_format_id: EntityID | ReportFormatType,
-        *,
-        ultimate: bool | None = False,
-    ) -> T:
-        """Deletes an existing report format
-
-        Args:
-            report_format_id: UUID of the report format to be deleted.
-                              or ReportFormatType (enum)
-            ultimate: Whether to remove entirely, or to the trashcan.
-        """
-        return self._send_request_and_transform_response(
-            ReportFormats.delete_report_format(
-                report_format_id, ultimate=ultimate
-            )
-        )
-
     def get_report_formats(
         self,
         *,
@@ -2682,66 +2650,4 @@ class GMPv224(GvmProtocol[T]):
         """
         return self._send_request_and_transform_response(
             ReportFormats.get_report_format(report_format_id)
-        )
-
-    def import_report_format(self, report_format: str) -> T:
-        """Import a report format from XML
-
-        Args:
-            report_format: Report format XML as string to import. This XML must
-                contain a :code:`<get_report_formats_response>` root element.
-        """
-        return self._send_request_and_transform_response(
-            ReportFormats.import_report_format(report_format)
-        )
-
-    def modify_report_format(
-        self,
-        report_format_id: EntityID | ReportFormatType,
-        *,
-        active: bool | None = None,
-        name: str | None = None,
-        summary: str | None = None,
-        param_name: str | None = None,
-        param_value: str | None = None,
-    ) -> T:
-        """Modifies an existing report format.
-
-        Args:
-            report_format_id: UUID of report format to modify
-                              or ReportFormatType (enum)
-            active: Whether the report format is active.
-            name: The name of the report format.
-            summary: A summary of the report format.
-            param_name: The name of the param.
-            param_value: The value of the param.
-        """
-        return self._send_request_and_transform_response(
-            ReportFormats.modify_report_format(
-                report_format_id,
-                active=active,
-                name=name,
-                summary=summary,
-                param_name=param_name,
-                param_value=param_value,
-            )
-        )
-
-    def verify_report_format(
-        self, report_format_id: EntityID | ReportFormatType
-    ) -> T:
-        """Verify an existing report format
-
-        Verifies the trust level of an existing report format. It will be
-        checked whether the signature of the report format currently matches the
-        report format. This includes the script and files used to generate
-        reports of this format. It is *not* verified if the report format works
-        as expected by the user.
-
-        Args:
-            report_format_id: UUID of the report format to be verified
-                              or ReportFormatType (enum)
-        """
-        return self._send_request_and_transform_response(
-            ReportFormats.verify_report_format(report_format_id)
         )

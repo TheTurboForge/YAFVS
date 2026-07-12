@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -11,18 +12,6 @@
 #include <gvm/base/array.h>
 #include <gvm/util/xmlutils.h>
 
-void
-create_report_format_start (gmp_parser_t *, const gchar **, const gchar **);
-
-void
-create_report_format_element_start (gmp_parser_t *, const gchar *, const gchar **,
-                                const gchar **);
-
-int
-create_report_format_element_end (gmp_parser_t *, GError **error, const gchar *);
-
-void
-create_report_format_element_text (const gchar *, gsize);
 
 void
 params_options_free (array_t *);

@@ -22,7 +22,7 @@ interface EntityVerify extends WithEntityType {
   };
 }
 
-type VerifyType = 'report_format' | 'scanner';
+type VerifyType = 'scanner';
 
 interface EntityVerifyIconProps<TEntity extends EntityVerify> extends Omit<
   React.ComponentProps<typeof VerifyIcon>,

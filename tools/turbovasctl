@@ -592,7 +592,6 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "report-format-metadata-detail-read",
         "report-format-metadata-export-read",
         "report-format-metadata-list-read",
-        "report-format-metadata-modify",
         "result-list-and-effective-overrides-read",
         "saved-filter-create",
         "saved-filter-clone",
@@ -1531,12 +1530,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/report-formats/{report_format_id}"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-format-metadata-detail-read",
-    },
-    ("patch", "/report-formats/{report_format_id}"): {
-        "x-turbovas-inherited-still-owns": "report-format-file-import-export-verify-param-writes-and-deletes",
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "report-format-metadata-modify",
-        "x-turbovas-safety-contract": "write-control-v1",
     },
     ("get", "/report-formats/{report_format_id}/export"): {
         "x-turbovas-maturity": "live-read",
@@ -9133,13 +9126,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/report-formats/{report_format_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Report Format detail (migrated through gsad same-origin proxy)", "read-only report-format automation"],
-            },
-            {
-                "method": "patch",
-                "endpoint": "/api/v1/report-formats/{report_format_id}",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["GSA Report Format metadata save", "direct native report-format metadata patch"],
             },
             {
                 "endpoint": "/api/v1/report-formats/{report_format_id}/export",

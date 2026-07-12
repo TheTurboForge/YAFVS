@@ -421,9 +421,11 @@ flags, alert/report-config backlinks, parameters, and timestamps. Report formats
 are scanner output configuration, so these endpoints stay inside the
 authenticated operator boundary. Direct scriptable
 `GET /api/v1/report-formats/{report_format_id}/export` returns the same native
-detail JSON for metadata export; it does not replace legacy report-format file
-export/import, verification, edits, or deletion, which remain inherited until
-native write semantics are designed.
+detail JSON for metadata export. TurboVAS deliberately retires custom
+executable report-format import, editing, verification, cloning, and deletion
+instead of reproducing those plugin semantics in the native API. Report output
+uses retained trusted built-in/feed formats or dedicated typed native export
+contracts.
 
 Native Security Information CVE catalog rows include the CVE identifier,
 description, CVSS vector, severity, vulnerable product strings, optional EPSS

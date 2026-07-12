@@ -6,16 +6,26 @@ use axum::http::Method;
 
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
-const GSA_REPORT_FORMAT_COMMAND_TS: &str =
-    include_str!("../../../components/gsa/src/gmp/commands/report-format.ts");
-const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
-const GMP_REPORT_FORMATS_C: &str =
-    include_str!("../../../components/gvmd/src/gmp_report_formats.c");
 const MANAGE_PG_C: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_REPORT_FORMATS_C: &str =
     include_str!("../../../components/gvmd/src/manage_report_formats.c");
 const MANAGE_SQL_REPORT_FORMATS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
+const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_GMP_SCHEMA: &str =
+    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSA_REPORT_FORMAT_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/report-format.ts");
+const GSA_REPORT_FORMAT_CAPABILITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
+const GSA_REPORT_FORMAT_TABLE: &str =
+    include_str!("../../../components/gsa/src/web/pages/reportformats/Table.jsx");
+const PYTHON_GMP: &str =
+    include_str!("../../../components/python-gvm/gvm/protocols/gmp/_gmp224.py");
+const PYTHON_REPORT_FORMAT_REQUESTS: &str = include_str!(
+    "../../../components/python-gvm/gvm/protocols/gmp/requests/v224/_report_formats.py"
+);
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -48,44 +58,6 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn gsa_report_format_import_still_uses_inherited_gmp_action() {
-    for required in [
-        "import({xmlFile}: {xmlFile: string})",
-        "cmd: 'import_report_format'",
-        "xml_file: xmlFile",
-        "return this.action(data)",
-    ] {
-        assert!(
-            GSA_REPORT_FORMAT_COMMAND_TS.contains(required),
-            "GSA report-format import command missing inherited action fragment: {required}"
-        );
-    }
-    assert!(
-        !GSA_REPORT_FORMAT_COMMAND_TS.contains("importNativeReportFormat"),
-        "native report-format import must not appear before XML/file semantics are designed"
-    );
-}
-
-#[test]
-fn gsad_import_wraps_uploaded_xml_in_create_report_format() {
-    let import_gmp = inherited_function(GSAD_GMP_C, "import_report_format_gmp");
-    for required in [
-        "<create_report_format>",
-        "params_value (params, \"xml_file\")",
-        "gmp (connection, credentials, NULL, &entity",
-        "entity_attribute (entity, \"id\")",
-        "params_add (params, \"report_format_id\"",
-        "response_from_entity",
-        "MHD_HTTP_INTERNAL_SERVER_ERROR",
-    ] {
-        assert!(
-            import_gmp.contains(required),
-            "gsad report-format import path missing {required}"
-        );
-    }
-}
-
-#[test]
 fn report_format_metadata_export_reuses_detail_loader() {
     let source = include_str!("report_formats.rs");
     let export_source = source
@@ -108,34 +80,7 @@ fn report_format_metadata_export_reuses_detail_loader() {
 }
 
 #[test]
-fn inherited_gmp_report_format_create_parses_copy_or_import_payloads() {
-    let create_run = inherited_function(GMP_REPORT_FORMATS_C, "create_report_format_run");
-    for required in [
-        "entity_child (entity, \"copy\")",
-        "copy_report_format",
-        "entity_child (entity, \"get_report_formats_response\")",
-        "entity_child (get_report_formats_response, \"report_format\")",
-        "parse_report_format_entity",
-        "GET_REPORT_FORMATS_RESPONSE requires a",
-        "GET_REPORT_FORMATS_RESPONSE ID must be",
-        "!is_uuid (report_format_id)",
-        "create_report_format (report_format_id",
-        "XML_OK_CREATED_ID (\"create_report_format\")",
-        "Report format exists already",
-        "Every FILE must have a name",
-        "PARAM requires a DEFAULT element",
-        "Duplicate PARAM name",
-        "Bogus PARAM type",
-    ] {
-        assert!(
-            create_run.contains(required),
-            "GMP report-format create/import parser missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_report_format_import_mutates_db_files_signatures_and_events() {
+fn trusted_feed_report_format_import_mutates_db_files_signatures_and_events() {
     let import_file = inherited_function(MANAGE_REPORT_FORMATS_C, "create_report_format_from_file");
     for required in [
         "parse_xml_file (path, &report_format)",
@@ -228,10 +173,7 @@ fn inherited_report_format_import_mutates_db_files_signatures_and_events() {
 
 #[test]
 fn trusted_report_format_execution_is_shell_free_and_fail_closed() {
-    let runner = inherited_function(
-        MANAGE_SQL_REPORT_FORMATS_C,
-        "run_report_format_script",
-    );
+    let runner = inherited_function(MANAGE_SQL_REPORT_FORMATS_C, "run_report_format_script");
     for required in [
         "execv (script, argv)",
         "dup2 (output_fd, STDOUT_FILENO)",
@@ -268,7 +210,109 @@ fn trusted_report_format_execution_is_shell_free_and_fail_closed() {
 }
 
 #[test]
-fn native_report_format_file_and_param_paths_remain_inherited() {
+fn custom_executable_report_format_mutation_surfaces_are_retired() {
+    for (surface, source, forbidden) in [
+        ("GSA command", GSA_REPORT_FORMAT_COMMAND, "async save("),
+        ("GSA command", GSA_REPORT_FORMAT_COMMAND, "async import("),
+        ("GSA command", GSA_REPORT_FORMAT_COMMAND, "EntityCommand"),
+        (
+            "GSA capabilities",
+            GSA_REPORT_FORMAT_CAPABILITIES,
+            "'delete_report_format'",
+        ),
+        (
+            "GSA report-format table",
+            GSA_REPORT_FORMAT_TABLE,
+            "trash: true",
+        ),
+        (
+            "GSA report-format table",
+            GSA_REPORT_FORMAT_TABLE,
+            "tags: true",
+        ),
+        ("gsad GMP bridge", GSAD_GMP_C, "delete_report_format_gmp"),
+        ("gsad GMP bridge", GSAD_GMP_C, "import_report_format_gmp"),
+        ("gsad GMP bridge", GSAD_GMP_C, "save_report_format_gmp"),
+        (
+            "gvmd GMP parser",
+            GVMD_GMP_C,
+            "strcasecmp (\"CREATE_REPORT_FORMAT\"",
+        ),
+        (
+            "gvmd GMP parser",
+            GVMD_GMP_C,
+            "strcasecmp (\"DELETE_REPORT_FORMAT\"",
+        ),
+        (
+            "gvmd GMP parser",
+            GVMD_GMP_C,
+            "strcasecmp (\"MODIFY_REPORT_FORMAT\"",
+        ),
+        (
+            "gvmd GMP parser",
+            GVMD_GMP_C,
+            "strcasecmp (\"VERIFY_REPORT_FORMAT\"",
+        ),
+        (
+            "GMP schema",
+            GVMD_GMP_SCHEMA,
+            "<name>create_report_format</name>",
+        ),
+        (
+            "GMP schema",
+            GVMD_GMP_SCHEMA,
+            "<name>delete_report_format</name>",
+        ),
+        (
+            "GMP schema",
+            GVMD_GMP_SCHEMA,
+            "<name>modify_report_format</name>",
+        ),
+        (
+            "GMP schema",
+            GVMD_GMP_SCHEMA,
+            "<name>verify_report_format</name>",
+        ),
+        ("python-gvm", PYTHON_GMP, "def clone_report_format("),
+        ("python-gvm", PYTHON_GMP, "def delete_report_format("),
+        ("python-gvm", PYTHON_GMP, "def import_report_format("),
+        ("python-gvm", PYTHON_GMP, "def modify_report_format("),
+        ("python-gvm", PYTHON_GMP, "def verify_report_format("),
+        (
+            "python-gvm requests",
+            PYTHON_REPORT_FORMAT_REQUESTS,
+            "def clone_report_format(",
+        ),
+        (
+            "python-gvm requests",
+            PYTHON_REPORT_FORMAT_REQUESTS,
+            "def delete_report_format(",
+        ),
+        (
+            "python-gvm requests",
+            PYTHON_REPORT_FORMAT_REQUESTS,
+            "def import_report_format(",
+        ),
+        (
+            "python-gvm requests",
+            PYTHON_REPORT_FORMAT_REQUESTS,
+            "def modify_report_format(",
+        ),
+        (
+            "python-gvm requests",
+            PYTHON_REPORT_FORMAT_REQUESTS,
+            "def verify_report_format(",
+        ),
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "retired custom report-format surface remains in {surface}: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn report_format_reads_and_trusted_builtin_exports_remain_native() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,
         "/api/v1/report-formats",
@@ -284,7 +328,7 @@ fn native_report_format_file_and_param_paths_remain_inherited() {
         "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc",
         false,
     ));
-    assert!(direct_api_v1_method_is_allowed(
+    assert!(!direct_api_v1_method_is_allowed(
         &Method::PATCH,
         "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc",
         true,
@@ -307,21 +351,7 @@ fn native_report_format_file_and_param_paths_remain_inherited() {
             "OpenAPI report-format list block unexpectedly exposes operation {forbidden}"
         );
     }
-    for required in [
-        "patch:",
-        "operationId: patchReportFormatsByReportFormatId",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: report-format-metadata-modify",
-        "x-turbovas-inherited-still-owns: report-format-file-import-export-verify-param-writes-and-deletes",
-        "x-turbovas-safety-contract: write-control-v1",
-        "$ref: '#/components/schemas/ReportFormatPatchRequest'",
-    ] {
-        assert!(
-            detail_block.contains(required),
-            "OpenAPI report-format patch block missing {required}"
-        );
-    }
-    for forbidden in ["\n    post:", "\n    delete:"] {
+    for forbidden in ["\n    post:", "\n    patch:", "\n    delete:"] {
         assert!(
             !detail_block.contains(forbidden),
             "OpenAPI report-format detail block unexpectedly exposes operation {forbidden}"

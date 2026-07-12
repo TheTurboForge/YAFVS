@@ -432,15 +432,6 @@ get_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 get_report_formats_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                         gsad_command_response_data_t *);
-char *
-delete_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
-import_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
-save_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
 
 char *
 get_resource_names_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

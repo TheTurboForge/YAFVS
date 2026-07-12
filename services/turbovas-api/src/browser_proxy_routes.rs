@@ -24,8 +24,7 @@ use crate::{
         browser_proxy_create_credential, browser_proxy_create_scanner, browser_proxy_create_task,
         browser_proxy_delete_alert, browser_proxy_delete_override, browser_proxy_delete_task,
         browser_proxy_delete_tls_certificate, browser_proxy_patch_alert,
-        browser_proxy_patch_credential, browser_proxy_patch_report_format,
-        browser_proxy_patch_scanner, browser_proxy_patch_task,
+        browser_proxy_patch_credential, browser_proxy_patch_scanner, browser_proxy_patch_task,
         browser_proxy_replace_scanner_configuration, browser_proxy_replace_task,
         browser_proxy_replace_task_target, browser_proxy_start_task, browser_proxy_stop_task,
         browser_proxy_verify_scanner,
@@ -152,10 +151,6 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/report-configs/:report_config_id/trash",
             delete(browser_proxy_hard_delete_report_config),
-        )
-        .route(
-            "/api/v1/report-formats/:report_format_id",
-            patch(browser_proxy_patch_report_format),
         )
         .route("/api/v1/tags/:tag_id", patch(browser_proxy_patch_tag))
         .route("/api/v1/tags/:tag_id", delete(browser_proxy_delete_tag))

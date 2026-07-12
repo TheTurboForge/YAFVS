@@ -4,41 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand from 'gmp/commands/entity';
+import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import logger from 'gmp/log';
-import type {Element} from 'gmp/models/model';
-import ReportFormat from 'gmp/models/report-format';
 import {
   exportNativeReportFormatMetadata,
   fetchNativeReportFormat,
-  patchNativeReportFormat,
 } from 'gmp/native-api/report-formats';
 
-interface ReportFormatResponseData extends XmlResponseData {
-  get_report_format?: {
-    get_report_formats_response?: {
-      report_format?: Element;
-    };
-  };
-}
-
-const log = logger.getLogger('gmp.commands.reportformats');
-
-export class ReportFormatCommand extends EntityCommand<ReportFormat> {
+export class ReportFormatCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'report_format', ReportFormat);
-  }
-
-  import({xmlFile}: {xmlFile: string}) {
-    const data = {
-      cmd: 'import_report_format',
-      xml_file: xmlFile,
-    };
-    log.debug('Importing report format', data);
-    return this.action(data);
+    super(http);
   }
 
   async export({id}: {id: string}) {
@@ -49,18 +25,6 @@ export class ReportFormatCommand extends EntityCommand<ReportFormat> {
     return new Response(await fetchNativeReportFormat(this.http, id));
   }
 
-  async save(args: {active: boolean; id: string; name: string; summary: string}) {
-    const {active, id, name, summary} = args;
-
-    return patchNativeReportFormat(this.http, id, {active, name, summary});
-  }
-
-  getElementFromRoot(root: XmlResponseData) {
-    return (
-      (root as ReportFormatResponseData).get_report_format
-        ?.get_report_formats_response?.report_format ?? {}
-    );
-  }
 }
 
 export default ReportFormatCommand;

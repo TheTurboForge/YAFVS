@@ -31,24 +31,15 @@ import TableHeader from 'web/components/table/TableHeader';
 import TableRow from 'web/components/table/TableRow';
 import EntitiesTab from 'web/entity/EntitiesTab';
 import EntityPage from 'web/entity/EntityPage';
-import CreateIcon from 'web/entity/icon/CreateIcon';
-import EditIcon from 'web/entity/icon/EditIcon';
-import TrashIcon from 'web/entity/icon/TrashIcon';
-import {goToDetails, goToList} from 'web/entity/navigation';
 import EntityTags from 'web/entity/Tags';
 import withEntityContainer from 'web/entity/withEntityContainer';
 import useTranslation from 'web/hooks/useTranslation';
 import ReportFormatDetails from 'web/pages/reportformats/Details';
-import ReportFormatComponent from 'web/pages/reportformats/ReportFormatComponent';
 import {selector, loadEntity} from 'web/store/entities/reportformats';
 import PropTypes from 'web/utils/PropTypes';
 import {renderYesNo} from 'web/utils/Render';
-const ToolBarIcons = ({
-  entity,
-  onReportFormatImportClick,
-  onReportFormatDeleteClick,
-  onReportFormatEditClick,
-}) => {
+
+const ToolBarIcons = () => {
   const [_] = useTranslation();
 
   return (
@@ -61,42 +52,15 @@ const ToolBarIcons = ({
         />
         <ListIcon page="report-formats" title={_('Report Formats List')} />
       </IconDivider>
-      <IconDivider>
-        <CreateIcon
-          displayName={_('Report Format')}
-          entity={entity}
-          onClick={onReportFormatImportClick}
-        />
-        <EditIcon
-          disabled={entity.predefined}
-          displayName={_('Report Format')}
-          entity={entity}
-          onClick={onReportFormatEditClick}
-        />
-        <TrashIcon
-          displayName={_('Report Format')}
-          entity={entity}
-          onClick={onReportFormatDeleteClick}
-        />
-      </IconDivider>
     </Divider>
   );
 };
 
-ToolBarIcons.propTypes = {
-  entity: PropTypes.model.isRequired,
-  onReportFormatDeleteClick: PropTypes.func.isRequired,
-  onReportFormatEditClick: PropTypes.func.isRequired,
-  onReportFormatImportClick: PropTypes.func.isRequired,
-};
-
-const Details = ({entity, links = true}) => {
-  return (
-    <Layout flex="column">
-      <ReportFormatDetails entity={entity} links={links} />
-    </Layout>
-  );
-};
+const Details = ({entity, links = true}) => (
+  <Layout flex="column">
+    <ReportFormatDetails entity={entity} links={links} />
+  </Layout>
+);
 
 Details.propTypes = {
   entity: PropTypes.model.isRequired,
@@ -132,9 +96,9 @@ const ReportFormatParamValue = ({
     `;
     return (
       <OptionsList>
-        {param.value.map(option => {
-          return <li key={param.name + '=' + option}>{option}</li>;
-        })}
+        {param.value.map(option => (
+          <li key={param.name + '=' + option}>{option}</li>
+        ))}
       </OptionsList>
     );
   } else if (param.type === 'text') {
@@ -169,16 +133,14 @@ const Parameters = ({entity}) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {params.map(param => {
-              return (
-                <TableRow key={param.name}>
-                  <TableDataAlignTop>{param.name}</TableDataAlignTop>
-                  <TableData>
-                    <ReportFormatParamValue param={param} value={param.value} />
-                  </TableData>
-                </TableRow>
-              );
-            })}
+            {params.map(param => (
+              <TableRow key={param.name}>
+                <TableDataAlignTop>{param.name}</TableDataAlignTop>
+                <TableData>
+                  <ReportFormatParamValue param={param} value={param.value} />
+                </TableData>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       )}
@@ -190,78 +152,56 @@ Parameters.propTypes = {
   entity: PropTypes.model.isRequired,
 };
 
-const Page = ({
-  entity,
-  links = true,
-  onChanged,
-  onError,
-
-  ...props
-}) => {
+const Page = ({entity, links = true, onChanged, onError, ...props}) => {
   const [_] = useTranslation();
 
   return (
-    <ReportFormatComponent
-      onDeleteError={onError}
-      onDeleted={goToList('reportformats', props)}
-      onImported={goToDetails('reportformat', props)}
-      onSaved={onChanged}
+    <EntityPage
+      {...props}
+      entity={entity}
+      sectionIcon={<ReportFormatIcon size="large" />}
+      title={_('Report Format')}
+      toolBarIcons={ToolBarIcons}
     >
-      {({delete: delete_func, edit, import: import_func, save}) => (
-        <EntityPage
-          {...props}
-          entity={entity}
-          sectionIcon={<ReportFormatIcon size="large" />}
-          title={_('Report Format')}
-          toolBarIcons={ToolBarIcons}
-          onReportFormatDeleteClick={delete_func}
-          onReportFormatEditClick={edit}
-          onReportFormatImportClick={import_func}
-          onReportFormatSaveClick={save}
-        >
-          {() => {
-            return (
-              <React.Fragment>
-                <PageTitle
-                  title={_('Report Format: {{name}}', {name: entity.name})}
-                />
-                <TabsContainer flex="column" grow="1">
-                  <TabLayout align={['start', 'end']} grow="1">
-                    <TabList align={['start', 'stretch']}>
-                      <Tab>{_('Information')}</Tab>
-                      <EntitiesTab entities={entity.params}>
-                        {_('Parameters')}
-                      </EntitiesTab>
-                      <EntitiesTab entities={entity.userTags}>
-                        {_('User Tags')}
-                      </EntitiesTab>
-                    </TabList>
-                  </TabLayout>
+      {() => (
+        <>
+          <PageTitle
+            title={_('Report Format: {{name}}', {name: entity.name})}
+          />
+          <TabsContainer flex="column" grow="1">
+            <TabLayout align={['start', 'end']} grow="1">
+              <TabList align={['start', 'stretch']}>
+                <Tab>{_('Information')}</Tab>
+                <EntitiesTab entities={entity.params}>
+                  {_('Parameters')}
+                </EntitiesTab>
+                <EntitiesTab entities={entity.userTags}>
+                  {_('User Tags')}
+                </EntitiesTab>
+              </TabList>
+            </TabLayout>
 
-                  <Tabs>
-                    <TabPanels>
-                      <TabPanel>
-                        <Details entity={entity} links={links} />
-                      </TabPanel>
-                      <TabPanel>
-                        <Parameters entity={entity} />
-                      </TabPanel>
-                      <TabPanel>
-                        <EntityTags
-                          entity={entity}
-                          onChanged={onChanged}
-                          onError={onError}
-                        />
-                      </TabPanel>
-                    </TabPanels>
-                  </Tabs>
-                </TabsContainer>
-              </React.Fragment>
-            );
-          }}
-        </EntityPage>
+            <Tabs>
+              <TabPanels>
+                <TabPanel>
+                  <Details entity={entity} links={links} />
+                </TabPanel>
+                <TabPanel>
+                  <Parameters entity={entity} />
+                </TabPanel>
+                <TabPanel>
+                  <EntityTags
+                    entity={entity}
+                    onChanged={onChanged}
+                    onError={onError}
+                  />
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
+          </TabsContainer>
+        </>
       )}
-    </ReportFormatComponent>
+    </EntityPage>
   );
 };
 
@@ -274,16 +214,10 @@ Page.propTypes = {
 
 const load = gmp => {
   const loadEntityFunc = loadEntity(gmp);
-  return id => dispatch =>
-    Promise.all([
-      dispatch(loadEntityFunc(id)),
-    ]);
+  return id => dispatch => Promise.all([dispatch(loadEntityFunc(id))]);
 };
 
-const mapStateToProps = (rootState, {id}) => {
-  return {
-  };
-};
+const mapStateToProps = () => ({});
 
 export default withEntityContainer('reportformat', {
   entitySelector: selector,

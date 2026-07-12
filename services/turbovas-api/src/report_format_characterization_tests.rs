@@ -227,6 +227,47 @@ fn inherited_report_format_import_mutates_db_files_signatures_and_events() {
 }
 
 #[test]
+fn trusted_report_format_execution_is_shell_free_and_fail_closed() {
+    let runner = inherited_function(
+        MANAGE_SQL_REPORT_FORMATS_C,
+        "run_report_format_script",
+    );
+    for required in [
+        "execv (script, argv)",
+        "dup2 (output_fd, STDOUT_FILENO)",
+        r#"open ("/dev/null", O_WRONLY | O_CLOEXEC)"#,
+        "cleanup_manage_process (FALSE)",
+        "setgroups (0, NULL)",
+        "waitpid (pid, &status, 0)",
+    ] {
+        assert!(
+            runner.contains(required),
+            "trusted report generator missing shell-free execution fragment: {required}"
+        );
+    }
+    for forbidden in ["system (", "g_strdup_printf", "/bin/sh", "command ="] {
+        assert!(
+            !runner.contains(forbidden),
+            "trusted report generator must not use shell command construction: {forbidden}"
+        );
+    }
+
+    let apply = inherited_function(MANAGE_SQL_REPORT_FORMATS_C, "apply_report_format");
+    for required in [
+        "report_format_predefined (report_format) == 0",
+        "report_format_trust (report_format) != TRUST_YES",
+        "report_format_extension_is_safe",
+        "output_file, output_fd",
+        "unlink (output_file)",
+    ] {
+        assert!(
+            apply.contains(required),
+            "report-format application missing fail-closed fragment: {required}"
+        );
+    }
+}
+
+#[test]
 fn native_report_format_file_and_param_paths_remain_inherited() {
     assert!(direct_api_v1_method_is_allowed(
         &Method::GET,

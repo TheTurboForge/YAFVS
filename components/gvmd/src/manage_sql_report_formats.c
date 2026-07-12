@@ -3602,18 +3602,18 @@ run_report_format_script (gchar *report_format_id,
                           gchar *xml_file,
                           gchar *xml_dir,
                           gchar *report_format_extra,
-                          gchar *output_file)
+                          gchar *output_file,
+                          int output_fd)
 {
   iterator_t formats;
   report_format_t report_format;
   gchar *script, *script_dir, *owner;
   get_data_t report_format_get;
-
-  gchar *command;
-  char *previous_dir;
-  int ret;
-
-  /* Setup file names and complete report. */
+  gboolean drop_privileges = FALSE;
+  uid_t run_uid = 0;
+  gid_t run_gid = 0;
+  pid_t pid;
+  int status;
 
   memset (&report_format_get, '\0', sizeof (report_format_get));
   report_format_get.id = report_format_id;
@@ -3626,271 +3626,151 @@ run_report_format_script (gchar *report_format_id,
     }
 
   report_format = get_iterator_resource (&formats);
-
   owner = sql_string ("SELECT uuid FROM users"
                       " WHERE id = (SELECT owner FROM"
                       "             report_formats WHERE id = %llu);",
                       report_format);
+  cleanup_iterator (&formats);
+
+  if (owner == NULL)
+    {
+      g_warning ("%s: Report format owner is missing", __func__);
+      return -1;
+    }
+
   script_dir = g_build_filename (GVMD_STATE_DIR,
                                  "report_formats",
                                  owner,
                                  report_format_id,
                                  NULL);
   g_free (owner);
-
-  cleanup_iterator (&formats);
-
   script = g_build_filename (script_dir, "generate", NULL);
 
-  if (!gvm_file_is_readable (script))
+  if (!gvm_file_is_readable (script) || !gvm_file_is_executable (script))
     {
-      g_warning ("%s: No generate script found at %s",
+      g_warning ("%s: Report generator is not readable and executable: %s",
                  __func__, script);
       g_free (script);
       g_free (script_dir);
       return -1;
     }
-  else if (!gvm_file_is_executable (script))
-    {
-      g_warning ("%s: script %s is not executable",
-                 __func__, script);
-      g_free (script);
-      g_free (script_dir);
-      return -1;
-    }
-
-  /* Change into the script directory. */
-
-  previous_dir = getcwd (NULL, 0);
-  if (previous_dir == NULL)
-    {
-      g_warning ("%s: Failed to getcwd: %s",
-                  __func__,
-                  strerror (errno));
-      g_free (previous_dir);
-      g_free (script);
-      g_free (script_dir);
-      return -1;
-    }
-
-  if (chdir (script_dir))
-    {
-      g_warning ("%s: Failed to chdir: %s",
-                  __func__,
-                  strerror (errno));
-      g_free (previous_dir);
-      g_free (script);
-      g_free (script_dir);
-      return -1;
-    }
-  g_free (script_dir);
-
-  /* Call the script. */
-
-  command = g_strdup_printf ("%s %s '%s' > %s"
-                             " 2> /dev/null",
-                             script,
-                             xml_file,
-                             report_format_extra,
-                             output_file);
-  g_free (script);
-
-  g_debug ("   command: %s", command);
 
   if (geteuid () == 0)
     {
-      pid_t pid;
-      struct passwd *nobody;
+      struct passwd *nobody = getpwnam ("nobody");
 
-      /* Run the command with lower privileges in a fork. */
-
-      nobody = getpwnam ("nobody");
-      if ((nobody == NULL)
+      if (nobody == NULL
           || chown (xml_dir, nobody->pw_uid, nobody->pw_gid)
           || chown (xml_file, nobody->pw_uid, nobody->pw_gid)
           || chown (output_file, nobody->pw_uid, nobody->pw_gid))
         {
-          g_warning ("%s: Failed to set dir permissions: %s",
-                      __func__,
-                      strerror (errno));
-          g_free (previous_dir);
+          g_warning ("%s: Failed to prepare report generator ownership: %s",
+                     __func__, strerror (errno));
+          g_free (script);
+          g_free (script_dir);
           return -1;
         }
 
-      pid = fork ();
-      switch (pid)
-        {
-          case 0:
-            {
-              /* Child.  Drop privileges, run command, exit. */
-
-              init_sentry ();
-              setproctitle ("Generating report");
-
-              cleanup_manage_process (FALSE);
-
-              if (setgroups (0,NULL))
-                {
-                  g_warning ("%s (child): setgroups: %s",
-                              __func__, strerror (errno));
-                  gvm_close_sentry ();
-                  exit (EXIT_FAILURE);
-                }
-              if (setgid (nobody->pw_gid))
-                {
-                  g_warning ("%s (child): setgid: %s",
-                              __func__,
-                              strerror (errno));
-                  gvm_close_sentry ();
-                  exit (EXIT_FAILURE);
-                }
-              if (setuid (nobody->pw_uid))
-                {
-                  g_warning ("%s (child): setuid: %s",
-                              __func__,
-                              strerror (errno));
-                  gvm_close_sentry ();
-                  exit (EXIT_FAILURE);
-                }
-
-              ret = system (command);
-              /* Report scripts should return 0 since version 21.04 */
-              if (ret == -1 || WIFEXITED(ret) == 0 || WEXITSTATUS(ret))
-                {
-                  g_warning ("%s (child):"
-                              " system failed with ret %i, %i, %s",
-                              __func__,
-                              ret,
-                              WEXITSTATUS (ret),
-                              command);
-                  gvm_close_sentry ();
-                  exit (EXIT_FAILURE);
-                }
-
-              gvm_close_sentry ();
-              exit (EXIT_SUCCESS);
-            }
-
-          case -1:
-            /* Parent when error. */
-
-            g_warning ("%s: Failed to fork: %s",
-                        __func__,
-                        strerror (errno));
-            if (chdir (previous_dir))
-              g_warning ("%s: and chdir failed",
-                          __func__);
-            g_free (previous_dir);
-            g_free (command);
-            return -1;
-            break;
-
-          default:
-            {
-              int status;
-
-              /* Parent on success.  Wait for child, and check result. */
-
-
-              while (waitpid (pid, &status, 0) < 0)
-                {
-                  if (errno == ECHILD)
-                    {
-                      g_warning ("%s: Failed to get child exit status",
-                                  __func__);
-                      if (chdir (previous_dir))
-                        g_warning ("%s: and chdir failed",
-                                    __func__);
-                      g_free (previous_dir);
-                      return -1;
-                    }
-                  if (errno == EINTR)
-                    continue;
-                  g_warning ("%s: wait: %s",
-                              __func__,
-                              strerror (errno));
-                  if (chdir (previous_dir))
-                    g_warning ("%s: and chdir failed",
-                                __func__);
-                  g_free (previous_dir);
-                  return -1;
-                }
-              if (WIFEXITED (status))
-                switch (WEXITSTATUS (status))
-                  {
-                    case EXIT_SUCCESS:
-                      break;
-                    case EXIT_FAILURE:
-                    default:
-                      g_warning ("%s: child failed, %s",
-                                  __func__,
-                                  command);
-                      if (chdir (previous_dir))
-                        g_warning ("%s: and chdir failed",
-                                    __func__);
-                      g_free (previous_dir);
-                      g_free (command);
-                      return -1;
-                  }
-              else
-                {
-                  g_warning ("%s: child failed, %s",
-                              __func__,
-                              command);
-                  if (chdir (previous_dir))
-                    g_warning ("%s: and chdir failed",
-                                __func__);
-                  g_free (command);
-                  g_free (previous_dir);
-                  return -1;
-                }
-              g_free (command);
-
-              /* Child succeeded, continue to process result. */
-
-              break;
-            }
-        }
-    }
-  else
-    {
-      /* Just run the command as the current user. */
-
-      ret = system (command);
-      /* Report scripts should return 0 since version 21.04 */
-      if (ret == -1 || WIFEXITED(ret) == 0 || WEXITSTATUS(ret))
-        {
-          g_warning ("%s: system failed with ret %i, %i, %s",
-                      __func__,
-                      ret,
-                      WEXITSTATUS (ret),
-                      command);
-          if (chdir (previous_dir))
-            g_warning ("%s: and chdir failed",
-                        __func__);
-          g_free (previous_dir);
-          g_free (command);
-          return -1;
-        }
-
-      g_free (command);
+      drop_privileges = TRUE;
+      run_uid = nobody->pw_uid;
+      run_gid = nobody->pw_gid;
     }
 
-  /* Change back to the previous directory. */
-
-  if (chdir (previous_dir))
+  pid = fork ();
+  if (pid == -1)
     {
-      g_warning ("%s: Failed to chdir back: %s",
-                  __func__,
-                  strerror (errno));
-      g_free (previous_dir);
+      g_warning ("%s: Failed to fork: %s", __func__, strerror (errno));
+      g_free (script);
+      g_free (script_dir);
       return -1;
     }
-  g_free (previous_dir);
+
+  if (pid == 0)
+    {
+      int null_fd;
+      gchar *argv[] = {
+        script,
+        xml_file,
+        report_format_extra ? report_format_extra : "",
+        NULL
+      };
+
+      init_sentry ();
+      setproctitle ("Generating report");
+      cleanup_manage_process (FALSE);
+
+      if (drop_privileges
+          && (setgroups (0, NULL)
+              || setgid (run_gid)
+              || setuid (run_uid)))
+        {
+          gvm_close_sentry ();
+          _exit (EXIT_FAILURE);
+        }
+
+      if (chdir (script_dir)
+          || dup2 (output_fd, STDOUT_FILENO) == -1)
+        {
+          gvm_close_sentry ();
+          _exit (EXIT_FAILURE);
+        }
+
+      null_fd = open ("/dev/null", O_WRONLY | O_CLOEXEC);
+      if (null_fd == -1 || dup2 (null_fd, STDERR_FILENO) == -1)
+        {
+          if (null_fd != -1)
+            close (null_fd);
+          gvm_close_sentry ();
+          _exit (EXIT_FAILURE);
+        }
+      close (null_fd);
+      if (output_fd != STDOUT_FILENO)
+        close (output_fd);
+
+      execv (script, argv);
+      gvm_close_sentry ();
+      _exit (EXIT_FAILURE);
+    }
+
+  g_free (script);
+  g_free (script_dir);
+
+  while (waitpid (pid, &status, 0) < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      g_warning ("%s: waitpid failed: %s", __func__, strerror (errno));
+      return -1;
+    }
+
+  if (!WIFEXITED (status) || WEXITSTATUS (status) != EXIT_SUCCESS)
+    {
+      g_warning ("%s: Report generator failed", __func__);
+      return -1;
+    }
 
   return 0;
 }
 
+static gboolean
+report_format_extension_is_safe (const gchar *extension)
+{
+  gsize index, length;
+
+  if (extension == NULL)
+    return FALSE;
+
+  length = strlen (extension);
+  if (length == 0 || length > 12)
+    return FALSE;
+
+  for (index = 0; index < length; index++)
+    if (!g_ascii_islower (extension[index])
+        && !g_ascii_isdigit (extension[index]))
+      return FALSE;
+
+  return TRUE;
+}
 /**
  * @brief Completes a report by adding report format info.
  *
@@ -4045,6 +3925,14 @@ apply_report_format (gchar *report_format_id,
       return NULL;
     }
 
+  if (report_format_predefined (report_format) == 0
+      || report_format_trust (report_format) != TRUST_YES)
+    {
+      g_message ("%s: Report format '%s' is not a trusted built-in format",
+                 __func__, report_format_id);
+      return NULL;
+    }
+
   /* Get subreports. */
   temp_dirs = NULL;
   temp_files = NULL;
@@ -4177,6 +4065,14 @@ apply_report_format (gchar *report_format_id,
 
   /* Generate output file. */
   out_file_ext = report_format_extension (report_format);
+  if (!report_format_extension_is_safe (out_file_ext))
+    {
+      g_warning ("%s: Report format '%s' has an unsafe extension",
+                 __func__, report_format_id);
+      g_free (out_file_ext);
+      output_file = NULL;
+      goto cleanup;
+    }
   out_file_part = g_strdup_printf ("%s-XXXXXX.%s",
                                    report_format_id, out_file_ext);
   output_file = g_build_filename (xml_dir, out_file_part, NULL);
@@ -4195,13 +4091,22 @@ apply_report_format (gchar *report_format_id,
 
   if (print_report_xml_end (xml_start, xml_file, report_format, report_config))
     {
+      close (output_fd);
       g_free (output_file);
       output_file = NULL;
       goto cleanup;
     }
 
-  run_report_format_script (report_format_id,
-                            xml_file, xml_dir, files_xml, output_file);
+  if (run_report_format_script (report_format_id, xml_file, xml_dir, files_xml,
+                                output_file, output_fd))
+    {
+      close (output_fd);
+      unlink (output_file);
+      g_free (output_file);
+      output_file = NULL;
+      goto cleanup;
+    }
+  close (output_fd);
 
   /* Clean up and return filename. */
  cleanup:

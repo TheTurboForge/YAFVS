@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -30,7 +31,7 @@ Ensure (gsad_session, should_add_and_get_user)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   const gchar *token = gsad_user_get_token (user);
   gsad_session_add_user (user);
@@ -51,8 +52,6 @@ Ensure (gsad_session, should_add_and_get_user)
                is_equal_to_string ("language1"));
   assert_that (gsad_user_get_client_address (retrieved_user),
                is_equal_to_string ("address1"));
-  assert_that (gsad_user_get_jwt (retrieved_user), is_equal_to_string ("jwt1"));
-
   gsad_user_free (user);
   gsad_user_free (retrieved_user);
 }
@@ -61,7 +60,7 @@ Ensure (gsad_session, should_allow_to_add_user_twice)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user_copy = gsad_user_copy (user);
 
   gsad_session_add_user (user);
@@ -77,7 +76,7 @@ Ensure (gsad_session, should_allow_to_add_user_twice)
 
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_session_add_user (user2);
 
   assert_that (gsad_session_get_user_count (), is_equal_to (2));
@@ -100,13 +99,13 @@ Ensure (gsad_session, should_allow_to_get_users_by_username)
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password2", "timezone2",
-                             "capabilities2", "language2", "address2", "jwt2");
+                             "capabilities2", "language2", "address2");
   gsad_user_t *user3 =
     gsad_user_new_with_data ("username2", "password3", "timezone3",
-                             "capabilities3", "language3", "address3", "jwt3");
+                             "capabilities3", "language3", "address3");
 
   gsad_session_add_user (user1);
   gsad_session_add_user (user2);
@@ -155,7 +154,7 @@ Ensure (gsad_session, should_allow_to_remove_user)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   gsad_session_add_user (user);
 
@@ -178,13 +177,13 @@ Ensure (gsad_session, should_remove_other_sessions)
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password2", "timezone2",
-                             "capabilities2", "language2", "address2", "jwt2");
+                             "capabilities2", "language2", "address2");
   gsad_user_t *user3 =
     gsad_user_new_with_data ("username1", "password3", "timezone3",
-                             "capabilities3", "language3", "address3", "jwt3");
+                             "capabilities3", "language3", "address3");
 
   gsad_session_add_user (user1);
   gsad_session_add_user (user2);
@@ -211,7 +210,7 @@ Ensure (gsad_session, should_replace_user)
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 = gsad_user_copy (user1);
   gsad_user_set_password (user2, "password2");
 
@@ -239,10 +238,10 @@ Ensure (gsad_session, should_not_replace_user_if_not_exists)
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password2", "timezone2",
-                             "capabilities2", "language2", "address2", "jwt2");
+                             "capabilities2", "language2", "address2");
 
   assert_string_not_equal (gsad_user_get_token (user1),
                            gsad_user_get_token (user2));
@@ -274,10 +273,10 @@ Ensure (gsad_session, should_allow_to_logout_with_unknown_user)
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   gsad_session_add_user (user1);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
@@ -293,7 +292,7 @@ Ensure (gsad_session, should_allow_to_logout_user)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_session_add_user (user);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
 

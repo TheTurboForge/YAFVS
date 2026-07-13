@@ -1,4 +1,5 @@
 /* Copyright (C) 2016-2021 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -34,8 +35,7 @@ gsad_user_new (void);
 gsad_user_t *
 gsad_user_new_with_data (const gchar *username, const gchar *password,
                          const gchar *timezone, const gchar *capabilities,
-                         const gchar *language, const gchar *address,
-                         const gchar *jwt);
+                         const gchar *language, const gchar *address);
 
 void
 gsad_user_free (gsad_user_t *user);
@@ -75,9 +75,6 @@ gsad_user_get_timezone (gsad_user_t *user);
 
 const gchar *
 gsad_user_get_client_address (gsad_user_t *user);
-
-const gchar *
-gsad_user_get_jwt (gsad_user_t *user);
 
 const gchar *
 gsad_user_get_capabilities (gsad_user_t *user);

@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -31,7 +32,7 @@ Ensure (gsad_user_session, should_allow_to_add_user)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   int ret = gsad_user_session_add (user);
   assert_that (ret, is_equal_to (0));
@@ -56,8 +57,7 @@ Ensure (gsad_user_session, should_allow_to_add_user)
                is_equal_to_string ("language1"));
   assert_that (gsad_user_get_client_address (retrieved_user),
                is_equal_to_string ("address1"));
-  assert_that (gsad_user_get_jwt (retrieved_user), is_equal_to_string ("jwt1"));
-
+  gsad_user_free (retrieved_user);
   gsad_user_free (user);
 }
 
@@ -66,13 +66,13 @@ Ensure (gsad_user_session,
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user3 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   gsad_settings_t *gsad_global_settings = gsad_settings_get_global_settings ();
   gsad_settings_set_user_session_limit (gsad_global_settings, 2);
@@ -98,13 +98,13 @@ Ensure (gsad_user_session, should_remove_expired_sessions)
 {
   gsad_user_t *user1 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user2 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_t *user3 =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   int ret = gsad_user_session_add (user1);
   assert_that (ret, is_equal_to (0));
@@ -129,7 +129,7 @@ Ensure (gsad_user_session, should_check_session_expiration)
   gsad_settings_t *gsad_global_settings = gsad_settings_get_global_settings ();
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
 
   gsad_settings_set_session_timeout (gsad_global_settings, 100);
 
@@ -149,7 +149,7 @@ Ensure (gsad_user_session, should_allow_to_get_the_timeout)
   gsad_settings_set_session_timeout (gsad_global_settings, timeout_in_minutes);
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   user->time = 0;
   assert_equal (gsad_user_get_time (user), 0);
   assert_equal (gsad_user_session_get_timeout (user), timeout_in_minutes * 60);
@@ -181,7 +181,7 @@ Ensure (gsad_user_session,
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_session_add (user);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
 
@@ -203,7 +203,7 @@ Ensure (gsad_user_session,
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_session_add (user);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
 
@@ -222,7 +222,7 @@ Ensure (gsad_user_session,
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_session_add (user);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
 
@@ -241,7 +241,7 @@ Ensure (gsad_user_session,
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_session_add (user);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
 
@@ -262,7 +262,7 @@ Ensure (
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   gsad_user_session_add (user);
   assert_that (gsad_session_get_user_count (), is_equal_to (1));
 
@@ -283,7 +283,7 @@ Ensure (gsad_user_session, should_allow_to_find_user)
   gsad_settings_set_session_timeout (gsad_global_settings, 600);
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   // set the user time to 10 seconds ago to test
   // that the session of the retrieved user is not renewed when found
   user->time = user->time - 10;
@@ -310,7 +310,6 @@ Ensure (gsad_user_session, should_allow_to_find_user)
                is_equal_to_string ("language1"));
   assert_that (gsad_user_get_client_address (user_return),
                is_equal_to_string ("address1"));
-  assert_that (gsad_user_get_jwt (user_return), is_equal_to_string ("jwt1"));
   assert_that (gsad_user_get_time (user_return),
                is_equal_to (gsad_user_get_time (user)));
 
@@ -328,7 +327,7 @@ Ensure (gsad_user_session, should_allow_to_renew_timeout)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   user->time = 0;
   assert_equal (gsad_user_get_time (user), 0);
   gsad_session_add_user (user);

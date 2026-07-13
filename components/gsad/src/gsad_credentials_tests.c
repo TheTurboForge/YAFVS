@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -37,7 +38,7 @@ Ensure (gsad_credentials, should_allow_to_set_user)
 {
   gsad_credentials_t *credentials = gsad_credentials_new ();
   gsad_user_t *user = gsad_user_new_with_data (
-    "testuser", "testpassword", "UTC", "capabilities", "en", "address", "jwt");
+    "testuser", "testpassword", "UTC", "capabilities", "en", "address");
 
   assert_that (credentials, is_not_null);
   assert_that (gsad_credentials_get_user (credentials), is_null);
@@ -58,8 +59,6 @@ Ensure (gsad_credentials, should_allow_to_set_user)
   assert_that (gsad_user_get_language (stored_user), is_equal_to_string ("en"));
   assert_that (gsad_user_get_client_address (stored_user),
                is_equal_to_string ("address"));
-  assert_that (gsad_user_get_jwt (stored_user), is_equal_to_string ("jwt"));
-
   gsad_credentials_free (credentials);
   gsad_user_free (user);
 }

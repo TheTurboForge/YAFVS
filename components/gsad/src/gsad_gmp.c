@@ -14032,7 +14032,7 @@ login (gsad_http_connection_t *con, params_t *params,
         {
           gsad_user_t *user =
             gsad_user_new_with_data (login, password, timezone, capabilities,
-                                     language, client_address, jwt);
+                                     language, client_address);
 
           int add_user = gsad_user_session_add (user);
           if (add_user)

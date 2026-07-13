@@ -1,4 +1,5 @@
 /* Copyright (C) 2016-2021 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -46,7 +47,6 @@ gsad_user_new (void)
  * @param[in] capabilities  Capabilities of user.
  * @param[in] language      User Interface Language (language code)
  * @param[in] address       Client's IP address.
- * @param[in] jwt           JWT token value
  *
  * @return A new user with the given data, cookie and token values generated,
  * and session time set to current time.
@@ -54,8 +54,7 @@ gsad_user_new (void)
 gsad_user_t *
 gsad_user_new_with_data (const gchar *username, const gchar *password,
                          const gchar *timezone, const gchar *capabilities,
-                         const gchar *language, const gchar *address,
-                         const gchar *jwt)
+                         const gchar *language, const gchar *address)
 {
   gsad_user_t *user = gsad_user_new ();
 
@@ -68,7 +67,6 @@ gsad_user_new_with_data (const gchar *username, const gchar *password,
   user->capabilities = g_strdup (capabilities);
   user->language = g_strdup (language);
   user->address = g_strdup (address);
-  user->jwt = g_strdup (jwt);
   user->time = time (NULL);
 
   gsad_user_set_language (user, language);
@@ -97,7 +95,6 @@ gsad_user_free (gsad_user_t *user)
   g_free (user->capabilities);
   g_free (user->language);
   g_free (user->address);
-  g_free (user->jwt);
   g_free (user);
 }
 
@@ -128,7 +125,6 @@ gsad_user_copy (gsad_user_t *user)
   copy->language = g_strdup (user->language);
   copy->address = g_strdup (user->address);
   copy->time = user->time;
-  copy->jwt = g_strdup (user->jwt);
 
   return copy;
 }
@@ -201,20 +197,6 @@ const gchar *
 gsad_user_get_capabilities (gsad_user_t *user)
 {
   return user->capabilities;
-}
-
-/**
- * @brief Get the JWT token value of a user
- *
- * @param[in] user User whose JWT token value is to be retrieved.
- *
- * @return The JWT token value of the user. The caller should not modify or free
- * the returned string, as it is owned by the user object.
- */
-const gchar *
-gsad_user_get_jwt (gsad_user_t *user)
-{
-  return user->jwt;
 }
 
 /**

@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -24,7 +25,6 @@ struct gsad_user
   gchar *language;     ///< User Interface Language.
   gchar *address;      ///< Client's IP address.
   time_t time;         ///< Login time.
-  gchar *jwt;          ///< JSON Web token value.
 };
 
 #endif /* _GSAD_USER_INTERNAL_H */

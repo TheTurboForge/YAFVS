@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -28,7 +29,6 @@ Ensure (gsad_user, should_create_new_user)
   assert_that (gsad_user_get_capabilities (user), is_null);
   assert_that (gsad_user_get_language (user), is_null);
   assert_that (gsad_user_get_client_address (user), is_null);
-  assert_that (gsad_user_get_jwt (user), is_null);
   assert_that (gsad_user_get_token (user), is_null);
   assert_that (gsad_user_get_cookie (user), is_null);
   assert_that (gsad_user_get_time (user), is_equal_to ((time_t) 0));
@@ -44,10 +44,9 @@ Ensure (gsad_user, should_create_new_user_with_data)
   const gchar *capabilities = "capabilities";
   const gchar *language = "en";
   const gchar *address = "127.0.0.1";
-  const gchar *jwt = "jwt_token";
 
-  gsad_user_t *user = gsad_user_new_with_data (
-    username, password, timezone, capabilities, language, address, jwt);
+  gsad_user_t *user = gsad_user_new_with_data (username, password, timezone,
+                                               capabilities, language, address);
 
   assert_that (user, is_not_null);
   assert_that (gsad_user_get_username (user), is_equal_to_string (username));
@@ -58,7 +57,6 @@ Ensure (gsad_user, should_create_new_user_with_data)
   assert_that (gsad_user_get_language (user), is_equal_to_string (language));
   assert_that (gsad_user_get_client_address (user),
                is_equal_to_string (address));
-  assert_that (gsad_user_get_jwt (user), is_equal_to_string (jwt));
   assert_that (gsad_user_get_token (user), is_not_null);
   assert_that (gsad_user_get_cookie (user), is_not_null);
   assert_that (gsad_user_get_time (user), is_greater_than (0));
@@ -74,10 +72,9 @@ Ensure (gsad_user, should_copy_user)
   const gchar *capabilities = "capabilities";
   const gchar *language = "en";
   const gchar *address = "127.0.0.1";
-  const gchar *jwt = "jwt_token";
 
-  gsad_user_t *user = gsad_user_new_with_data (
-    username, password, timezone, capabilities, language, address, jwt);
+  gsad_user_t *user = gsad_user_new_with_data (username, password, timezone,
+                                               capabilities, language, address);
 
   gsad_user_t *copy = gsad_user_copy (user);
 
@@ -97,8 +94,6 @@ Ensure (gsad_user, should_copy_user)
                is_not_equal_to (gsad_user_get_language (user)));
   assert_that (gsad_user_get_client_address (copy),
                is_not_equal_to (gsad_user_get_client_address (user)));
-  assert_that (gsad_user_get_jwt (copy),
-               is_not_equal_to (gsad_user_get_jwt (user)));
   assert_that (gsad_user_get_token (copy),
                is_not_equal_to (gsad_user_get_token (user)));
   assert_that (gsad_user_get_cookie (copy),
@@ -114,7 +109,6 @@ Ensure (gsad_user, should_copy_user)
   assert_that (gsad_user_get_language (copy), is_equal_to_string (language));
   assert_that (gsad_user_get_client_address (copy),
                is_equal_to_string (address));
-  assert_that (gsad_user_get_jwt (copy), is_equal_to_string (jwt));
   assert_that (gsad_user_get_token (copy), is_not_null);
   assert_that (gsad_user_get_cookie (copy), is_not_null);
   assert_that (gsad_user_get_time (copy), is_greater_than (0));
@@ -212,7 +206,7 @@ Ensure (gsad_user, should_allow_to_renew_time)
 {
   gsad_user_t *user =
     gsad_user_new_with_data ("username1", "password1", "timezone1",
-                             "capabilities1", "language1", "address1", "jwt1");
+                             "capabilities1", "language1", "address1");
   user->time = 0;
   assert_equal (gsad_user_get_time (user), 0);
 

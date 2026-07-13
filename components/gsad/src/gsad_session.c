@@ -1,4 +1,5 @@
 /* Copyright (C) 2018-2021 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -291,8 +292,8 @@ gsad_session_remove_other_sessions (const gchar *keep_id, const gchar *username)
         {
           const char *itempassword = gsad_user_get_password (item);
 
-          g_debug ("%s: logging out user '%s', token '%s'", __func__, itemname,
-                   itemtoken);
+          g_debug ("%s: logging out another session for user '%s'", __func__,
+                   itemname);
 
           if (itemname && itempassword)
             logout_gmp (itemname, itempassword);

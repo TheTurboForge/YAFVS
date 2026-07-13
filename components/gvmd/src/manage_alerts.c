@@ -28,6 +28,7 @@
 #include <glib/gstdio.h>
 #include <grp.h>
 #include <pwd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -2117,6 +2118,14 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
       g_warning ("%s", error->message);
       g_error_free (error);
       g_free (report_file);
+      gvm_file_remove_recurse (report_dir);
+      return -1;
+    }
+  if (g_chmod (report_file, S_IRUSR | S_IWUSR))
+    {
+      g_warning ("%s: chmod failed: %s", __func__, strerror (errno));
+      g_free (report_file);
+      gvm_file_remove_recurse (report_dir);
       return -1;
     }
 
@@ -2136,8 +2145,19 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
     {
       g_warning ("%s", error->message);
       g_error_free (error);
+      alert_secure_gfree_bytes (pkcs12, pkcs12_len);
       g_free (report_file);
       g_free (pkcs12_file);
+      gvm_file_remove_recurse (report_dir);
+      return -1;
+    }
+  alert_secure_gfree_bytes (pkcs12, pkcs12_len);
+  if (g_chmod (pkcs12_file, S_IRUSR | S_IWUSR))
+    {
+      g_warning ("%s: chmod failed: %s", __func__, strerror (errno));
+      g_free (report_file);
+      g_free (pkcs12_file);
+      gvm_file_remove_recurse (report_dir);
       return -1;
     }
 
@@ -2156,9 +2176,10 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
     {
       g_free (report_file);
       g_free (pkcs12_file);
-      g_free (clean_password);
+      alert_secure_gfree (clean_password);
       g_free (script);
       g_free (script_dir);
+      gvm_file_remove_recurse (report_dir);
       return -1;
     }
 
@@ -2177,10 +2198,11 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                    strerror (errno));
         g_free (report_file);
         g_free (pkcs12_file);
-        g_free (clean_password);
+        alert_secure_gfree (clean_password);
         g_free (previous_dir);
         g_free (script);
         g_free (script_dir);
+        gvm_file_remove_recurse (report_dir);
         return -1;
       }
 
@@ -2191,10 +2213,11 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                    strerror (errno));
         g_free (report_file);
         g_free (pkcs12_file);
-        g_free (clean_password);
+        alert_secure_gfree (clean_password);
         g_free (previous_dir);
         g_free (script);
         g_free (script_dir);
+        gvm_file_remove_recurse (report_dir);
         return -1;
       }
     g_free (script_dir);
@@ -2215,9 +2238,9 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
     g_free (script);
     g_free (clean_ip);
     g_free (clean_port);
-    g_free (clean_password);
+    alert_secure_gfree (clean_password);
 
-    g_debug ("   command: %s", command);
+    g_debug ("%s: invoking Sourcefire connector", __func__);
 
     if (geteuid () == 0)
       {
@@ -2235,9 +2258,13 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
             g_warning ("%s: Failed to set permissions for user nobody: %s",
                        __func__,
                        strerror (errno));
+            if (chdir (previous_dir))
+              g_warning ("%s: and chdir failed", __func__);
             g_free (report_file);
             g_free (pkcs12_file);
             g_free (previous_dir);
+            alert_secure_gfree (command);
+            gvm_file_remove_recurse (report_dir);
             return -1;
           }
         g_free (report_file);
@@ -2283,12 +2310,8 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                  * specified what it must be in the past. */
                 if (ret == -1)
                   {
-                    g_warning ("%s (child):"
-                               " system failed with ret %i, %i, %s",
-                               __func__,
-                               ret,
-                               WEXITSTATUS (ret),
-                               command);
+                    g_warning ("%s (child): system failed: %s", __func__,
+                               strerror (errno));
                     gvm_close_sentry ();
                     exit (EXIT_FAILURE);
                   }
@@ -2307,7 +2330,8 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
               g_warning ("%s: and chdir failed",
                          __func__);
             g_free (previous_dir);
-            g_free (command);
+            alert_secure_gfree (command);
+            gvm_file_remove_recurse (report_dir);
             return -1;
             break;
 
@@ -2328,6 +2352,8 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                           g_warning ("%s: and chdir failed",
                                      __func__);
                         g_free (previous_dir);
+                        alert_secure_gfree (command);
+                        gvm_file_remove_recurse (report_dir);
                         return -1;
                       }
                     if (errno == EINTR)
@@ -2339,7 +2365,8 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                       g_warning ("%s: and chdir failed",
                                  __func__);
                     g_free (previous_dir);
-                    g_free (command);
+                    alert_secure_gfree (command);
+                    gvm_file_remove_recurse (report_dir);
                     return -1;
                   }
                 if (WIFEXITED (status))
@@ -2349,31 +2376,31 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                       break;
                     case EXIT_FAILURE:
                     default:
-                      g_warning ("%s: child failed, %s",
-                                 __func__,
-                                 command);
+                      g_warning ("%s: Sourcefire connector child failed",
+                                 __func__);
                       if (chdir (previous_dir))
                         g_warning ("%s: and chdir failed",
                                    __func__);
                       g_free (previous_dir);
-                      g_free (command);
+                      alert_secure_gfree (command);
+                      gvm_file_remove_recurse (report_dir);
                       return -1;
                     }
                 else
                   {
-                    g_warning ("%s: child failed, %s",
-                               __func__,
-                               command);
+                    g_warning ("%s: Sourcefire connector child failed",
+                               __func__);
                     if (chdir (previous_dir))
                       g_warning ("%s: and chdir failed",
                                  __func__);
                     g_free (previous_dir);
-                    g_free (command);
+                    alert_secure_gfree (command);
+                    gvm_file_remove_recurse (report_dir);
                     return -1;
                   }
 
                 /* Child succeeded, continue to process result. */
-                g_free (command);
+                alert_secure_gfree (command);
                 break;
               }
           }
@@ -2389,20 +2416,17 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
          * specified what it must be in the past. */
         if (ret == -1)
           {
-            g_warning ("%s: system failed with ret %i, %i, %s",
-                       __func__,
-                       ret,
-                       WEXITSTATUS (ret),
-                       command);
+            g_warning ("%s: system failed: %s", __func__, strerror (errno));
             if (chdir (previous_dir))
               g_warning ("%s: and chdir failed",
                          __func__);
             g_free (previous_dir);
-            g_free (command);
+            alert_secure_gfree (command);
+            gvm_file_remove_recurse (report_dir);
             return -1;
           }
 
-        g_free (command);
+        alert_secure_gfree (command);
       }
 
     /* Change back to the previous directory. */
@@ -2413,6 +2437,7 @@ send_to_sourcefire (const char *ip, const char *port, const char *pkcs12_64,
                    __func__,
                    strerror (errno));
         g_free (previous_dir);
+        gvm_file_remove_recurse (report_dir);
         return -1;
       }
     g_free (previous_dir);
@@ -5237,7 +5262,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
             {
               g_free (ip);
               g_free (port);
-              g_free (pkcs12);
+              alert_secure_free (pkcs12);
               g_free (pkcs12_credential_id);
               return -1;
             }
@@ -5245,7 +5270,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
             {
               g_free (ip);
               g_free (port);
-              g_free (pkcs12);
+              alert_secure_free (pkcs12);
               g_free (pkcs12_credential_id);
               return -4;
             }
@@ -5258,16 +5283,14 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
 
           g_debug ("  sourcefire   ip: %s", ip);
           g_debug ("  sourcefire port: %s", port);
-          g_debug ("sourcefire pkcs12: %s", pkcs12);
-
           ret = send_to_sourcefire (ip, port, pkcs12, pkcs12_password,
                                     report_content);
 
           free (ip);
           g_free (port);
-          free (pkcs12);
+          alert_secure_free (pkcs12);
           g_free (report_content);
-          g_free (pkcs12_password);
+          alert_secure_gfree (pkcs12_password);
 
           return ret;
         }

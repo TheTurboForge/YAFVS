@@ -1,4 +1,5 @@
 /* Copyright (C) 2016-2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -123,9 +124,8 @@ gsad_user_session_find (const gchar *cookie, const gchar *token,
 
       else if ((cookie == NULL) || !str_equal (user->cookie, cookie))
         {
-          g_debug ("Cookie mismatch for user '%s': expected '%s', got '%s'",
-                   gsad_user_get_username (user), null_or_value (user->cookie),
-                   null_or_value (cookie));
+          g_debug ("Cookie mismatch for user '%s'",
+                   gsad_user_get_username (user));
           gsad_user_free (user);
           return USER_BAD_MISSING_COOKIE;
         }

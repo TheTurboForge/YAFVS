@@ -19,9 +19,9 @@ use crate::{
     },
     alert_write_validation::{
         AlertCloneRequest, AlertCreateRequest, AlertPatchRequest, ValidatedAlertCreate,
-        ValidatedAlertEmailCreate, ValidatedAlertSmbCreate, ValidatedAlertSnmpCreate,
-        ValidatedAlertSyslogCreate, validate_alert_clone_request, validate_alert_create_request,
-        validate_alert_patch_request,
+        ValidatedAlertEmailCreate, ValidatedAlertScpCreate, ValidatedAlertSmbCreate,
+        ValidatedAlertSnmpCreate, ValidatedAlertSyslogCreate, validate_alert_clone_request,
+        validate_alert_create_request, validate_alert_patch_request,
     },
     alerts::load_alert_asset_detail,
     app_state::AppState,
@@ -45,6 +45,15 @@ pub(crate) async fn create_alert(
     let alert_id = match &request {
         ValidatedAlertCreate::Email(request) => {
             request_alert_email_create(
+                &gvmd_control_socket_path(),
+                &control_secret,
+                operator.user_uuid(),
+                request,
+            )
+            .await?
+        }
+        ValidatedAlertCreate::Scp(request) => {
+            request_alert_scp_create(
                 &gvmd_control_socket_path(),
                 &control_secret,
                 operator.user_uuid(),
@@ -236,6 +245,50 @@ pub(crate) fn alert_snmp_create_command(
         request.snmp_agent.as_bytes(),
         request.snmp_community.as_bytes(),
         request.snmp_message.as_bytes(),
+    ] {
+        command.push(b' ');
+        append_alert_create_base64(&mut command, field);
+    }
+    command.push(b'\n');
+    ScrubbedControlFrame::new(command)
+}
+
+pub(crate) async fn request_alert_scp_create(
+    socket_path: &str,
+    control_secret: &str,
+    operator_uuid: &str,
+    request: &ValidatedAlertScpCreate,
+) -> Result<String, ApiError> {
+    let command = alert_scp_create_command(control_secret, operator_uuid, request);
+    let response =
+        request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes()).await;
+    let response = response.map_err(map_control_socket_error)?;
+    parse_alert_create_response(&response)
+}
+
+pub(crate) fn alert_scp_create_command(
+    control_secret: &str,
+    operator_uuid: &str,
+    request: &ValidatedAlertScpCreate,
+) -> ScrubbedControlFrame {
+    let mut command = Vec::with_capacity(32_768);
+    command.extend_from_slice(b"alert-scp-create ");
+    command.extend_from_slice(control_secret.as_bytes());
+    command.push(b' ');
+    command.extend_from_slice(operator_uuid.as_bytes());
+    command.push(b' ');
+    command.push(if request.active { b'1' } else { b'0' });
+    let port = request.scp_port.to_string();
+    for field in [
+        request.name.as_bytes(),
+        request.comment.as_bytes(),
+        request.status.as_str().as_bytes(),
+        request.scp_credential_id.as_bytes(),
+        request.scp_host.as_bytes(),
+        port.as_bytes(),
+        request.scp_known_hosts.as_bytes(),
+        request.scp_path.as_bytes(),
+        request.report_format_id.as_bytes(),
     ] {
         command.push(b' ');
         append_alert_create_base64(&mut command, field);

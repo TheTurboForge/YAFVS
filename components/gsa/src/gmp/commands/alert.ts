@@ -16,6 +16,7 @@ import Alert, {
   CONDITION_TYPE_ALWAYS,
   EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
   METHOD_TYPE_EMAIL,
+  METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
   METHOD_TYPE_SYSLOG,
@@ -222,6 +223,7 @@ const isNativeAlertNoFilter = (value: unknown): boolean =>
 
 const NATIVE_ALERT_CREATE_METHODS: AlertMethodType[] = [
   METHOD_TYPE_EMAIL,
+  METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
   METHOD_TYPE_SYSLOG,
@@ -267,6 +269,19 @@ const nativeAlertCreateRequestFromParams = ({
       snmp_agent: other.method_data_snmp_agent,
       snmp_community: other.method_data_snmp_community,
       snmp_message: other.method_data_snmp_message,
+    };
+  }
+
+  if (method === METHOD_TYPE_SCP) {
+    return {
+      method: 'SCP',
+      ...shared,
+      scp_credential_id: other.method_data_scp_credential,
+      scp_host: other.method_data_scp_host,
+      scp_port: other.method_data_scp_port,
+      scp_known_hosts: other.method_data_scp_known_hosts,
+      scp_path: other.method_data_scp_path,
+      report_format_id: other.method_data_scp_report_format,
     };
   }
 

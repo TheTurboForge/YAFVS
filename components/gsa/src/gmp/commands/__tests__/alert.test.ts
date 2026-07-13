@@ -21,6 +21,7 @@ import {
   METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
+  METHOD_TYPE_START_TASK,
   METHOD_TYPE_SYSLOG,
 } from 'gmp/models/alert';
 import {YES_VALUE} from 'gmp/parser';
@@ -387,6 +388,66 @@ describe('AlertCommand tests', () => {
     );
   });
 
+  test('should create an SCP alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: true,
+      name: 'SCP alert',
+      comment: 'pinned host key',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_SCP,
+      event_data_status: 'Done',
+      method_data_scp_credential: '11111111-1111-4111-8111-111111111111',
+      method_data_scp_host: 'scp.example',
+      method_data_scp_port: 2222,
+      method_data_scp_known_hosts:
+        '[scp.example]:2222 ssh-ed25519 [REDACTED HOST KEY]',
+      method_data_scp_path: '/var/reports',
+      method_data_scp_report_format: '22222222-2222-4222-8222-222222222222',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: 'SCP',
+          name: 'SCP alert',
+          comment: 'pinned host key',
+          active: true,
+          status: 'Done',
+          scp_credential_id: '11111111-1111-4111-8111-111111111111',
+          scp_host: 'scp.example',
+          scp_port: 2222,
+          scp_known_hosts:
+            '[scp.example]:2222 ssh-ed25519 [REDACTED HOST KEY]',
+          scp_path: '/var/reports',
+          report_format_id: '22222222-2222-4222-8222-222222222222',
+        }),
+      },
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should not fall back to GMP when native alert delete fails', async () => {
     const response = createActionResultResponse();
     const fetchMock = testing.fn().mockResolvedValue({
@@ -722,7 +783,7 @@ describe('AlertCommand tests', () => {
       name: 'Unsupported method',
       event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
       condition: CONDITION_TYPE_ALWAYS,
-      method: METHOD_TYPE_SCP,
+      method: METHOD_TYPE_START_TASK,
     });
 
     expect(fetchMock).not.toHaveBeenCalled();

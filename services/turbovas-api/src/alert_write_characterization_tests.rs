@@ -805,3 +805,84 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
     assert!(!delete.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
     assert!(!clone.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
 }
+
+#[test]
+fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_write_documented() {
+    let parser = inherited_function(
+        TURBOVAS_CONTROL_C,
+        "turbovas_control_parse_alert_scp_create_request",
+    );
+    for required in [
+        "TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND",
+        "turbovas_control_parse_authenticated_prefix",
+        "TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES",
+        "TURBOVAS_CONTROL_ALERT_SCP_PORT_MAX_BYTES",
+        "turbovas_control_uuid_is_valid (alert->credential_uuid)",
+        "turbovas_control_uuid_is_valid (alert->report_format_uuid)",
+        "turbovas_control_alert_scp_port_is_valid (alert->port)",
+        "alert->known_hosts, strlen (alert->known_hosts), TRUE",
+        "alert->path, strlen (alert->path), FALSE",
+        "turbovas_control_alert_scp_create_request_clear (alert)",
+    ] {
+        assert!(
+            parser.contains(required),
+            "SCP control parser missing {required}"
+        );
+    }
+
+    let create = inherited_function(TURBOVAS_CONTROL_C, "turbovas_control_create_alert_scp");
+    for required in [
+        "turbovas_control_start_operator_session (operator_uuid)",
+        "scp_credential",
+        "scp_host",
+        "scp_port",
+        "scp_known_hosts",
+        "scp_path",
+        "scp_report_format",
+        "create_alert_scp_with_report_refs",
+        "turbovas_control_secure_array_free (method_data)",
+        "turbovas_control_finish_operator_session ()",
+    ] {
+        assert!(
+            create.contains(required),
+            "SCP control create missing {required}"
+        );
+    }
+    assert!(
+        TURBOVAS_CONTROL_C
+            .contains("turbovas_control_alert_scp_create_request_clear (&scp_alert_request)")
+    );
+    assert!(TURBOVAS_CONTROL_C.contains("turbovas_control_secure_clear (request, request_len)"));
+
+    let create_path = openapi_path_block("/alerts");
+    let create = openapi_operation_block(&create_path, "post");
+    for required in [
+        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-create",
+        "summary: Create a task-status EMAIL, SMB, Syslog, SNMP, or SCP alert",
+        "Creates one operator-owned EMAIL, SMB, Syslog, SNMP, or SCP alert",
+    ] {
+        assert!(
+            create.contains(required),
+            "SCP create metadata missing {required}"
+        );
+    }
+    assert!(!create.contains("alert-scp-start-task-create-test-actions"));
+
+    let schema = OPENAPI
+        .split_once("    AlertScpCreateRequest:\n")
+        .expect("SCP create schema must exist")
+        .1
+        .split_once("    AlertSmbCreateRequest:\n")
+        .expect("SCP create schema must be bounded")
+        .0;
+    for required in [
+        "additionalProperties: false",
+        "required: [method, name, active, status, scp_credential_id, scp_host, scp_port, scp_known_hosts, scp_path, report_format_id]",
+        "const: SCP",
+        "minimum: 1",
+        "maximum: 65535",
+        "Required OpenSSH known-hosts content used as the exclusive host-key trust source",
+    ] {
+        assert!(schema.contains(required), "SCP schema missing {required}");
+    }
+}

@@ -80,6 +80,11 @@ static gchar *received_smb_credential;
 static gchar *received_smb_file_path;
 static gchar *received_smb_max_protocol;
 static gchar *received_smb_share_path;
+static gchar *received_scp_credential;
+static gchar *received_scp_host;
+static gchar *received_scp_port;
+static gchar *received_scp_known_hosts;
+static gchar *received_scp_path;
 static gchar *received_snmp_agent;
 static gchar *received_snmp_community;
 static gchar *received_snmp_message;
@@ -341,6 +346,47 @@ __wrap_create_alert_smb_with_report_refs (
     g_strdup (test_alert_data_value (method_data, "smb_max_protocol"));
   received_atomic_report_format = g_strdup (report_format_id);
   assert_that (smb_credential_id, is_equal_to_string (received_smb_credential));
+  assert_that (condition_data->len, is_equal_to (1));
+  assert_that (g_ptr_array_index (condition_data, 0), is_null);
+  *alert = 9;
+  return create_alert_result;
+}
+
+int
+__wrap_create_alert_scp_with_report_refs (
+  const char *name, const char *comment, const char *active,
+  GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
+  const char *scp_credential_id, const char *report_format_id, alert_t *alert)
+{
+  (void) name;
+  (void) comment;
+  create_alert_calls++;
+  received_alert_event = EVENT_TASK_RUN_STATUS_CHANGED;
+  received_alert_condition = ALERT_CONDITION_ALWAYS;
+  received_alert_method = ALERT_METHOD_SCP;
+  g_free (received_active);
+  g_free (received_event_status);
+  g_free (received_scp_credential);
+  g_free (received_scp_host);
+  g_free (received_scp_port);
+  g_free (received_scp_known_hosts);
+  g_free (received_scp_path);
+  g_free (received_report_format);
+  g_free (received_atomic_report_format);
+  received_active = g_strdup (active);
+  received_event_status =
+    g_strdup (test_alert_data_value (event_data, "status"));
+  received_scp_credential =
+    g_strdup (test_alert_data_value (method_data, "scp_credential"));
+  received_scp_host = g_strdup (test_alert_data_value (method_data, "scp_host"));
+  received_scp_port = g_strdup (test_alert_data_value (method_data, "scp_port"));
+  received_scp_known_hosts =
+    g_strdup (test_alert_data_value (method_data, "scp_known_hosts"));
+  received_scp_path = g_strdup (test_alert_data_value (method_data, "scp_path"));
+  received_report_format =
+    g_strdup (test_alert_data_value (method_data, "scp_report_format"));
+  received_atomic_report_format = g_strdup (report_format_id);
+  assert_that (scp_credential_id, is_equal_to_string (received_scp_credential));
   assert_that (condition_data->len, is_equal_to (1));
   assert_that (g_ptr_array_index (condition_data, 0), is_null);
   *alert = 9;
@@ -1672,6 +1718,35 @@ test_alert_email_create_request (const char *active, const char *name,
     "%s\n",
     active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
     notice, fields[6], fields[7], fields[8]);
+  for (index = 0; index < G_N_ELEMENTS (fields); index++)
+    g_free (fields[index]);
+  return request;
+}
+
+static gchar *
+test_alert_scp_create_request (const char *active, const char *name,
+                               const char *comment, const char *status,
+                               const char *credential_uuid, const char *host,
+                               const char *port, const char *known_hosts,
+                               const char *path,
+                               const char *report_format_uuid)
+{
+  const char *values[] = {
+    name, comment, status, credential_uuid, host,
+    port, known_hosts, path, report_format_uuid,
+  };
+  gchar *fields[G_N_ELEMENTS (values)];
+  gchar *request;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (values); index++)
+    fields[index] =
+      g_base64_encode ((const guchar *) values[index], strlen (values[index]));
+  request = g_strdup_printf (
+    "alert-scp-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s %s\n",
+    active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
+    fields[6], fields[7], fields[8]);
   for (index = 0; index < G_N_ELEMENTS (fields); index++)
     g_free (fields[index]);
   return request;
@@ -3617,6 +3692,202 @@ Ensure (turbovas_control, dispatches_malformed_alert_smb_without_payload)
   assert_that (strstr (response, "private-path"), is_null);
 }
 
+Ensure (turbovas_control, parses_canonical_bounded_alert_scp_requests)
+{
+  gchar *request = test_alert_scp_create_request (
+    "1", "SCP alert", "private delivery", "Done",
+    "123e4567-e89b-12d3-a456-426614174010", "scp.example.test", "65535",
+    "scp.example.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey",
+    "/var/reports/scan.pdf", "123e4567-e89b-12d3-a456-426614174011");
+  char operator_uuid[37];
+  turbovas_control_alert_scp_create_request_t alert = {0};
+
+  assert_that (turbovas_control_parse_alert_scp_create_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (alert.name, is_equal_to_string ("SCP alert"));
+  assert_that (alert.comment, is_equal_to_string ("private delivery"));
+  assert_that (alert.status, is_equal_to_string ("Done"));
+  assert_that (alert.credential_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174010"));
+  assert_that (alert.host, is_equal_to_string ("scp.example.test"));
+  assert_that (alert.port, is_equal_to_string ("65535"));
+  assert_that (alert.known_hosts,
+               is_equal_to_string (
+                 "scp.example.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey"));
+  assert_that (alert.path, is_equal_to_string ("/var/reports/scan.pdf"));
+  assert_that (alert.report_format_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174011"));
+  assert_that (alert.active, is_true);
+  turbovas_control_alert_scp_create_request_clear (&alert);
+  g_free (request);
+}
+
+Ensure (turbovas_control, rejects_malformed_or_oversized_alert_scp_requests)
+{
+  gchar *oversized =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_SCP_HOST_MAX_BYTES + 1, 'x');
+  gchar *requests[] = {
+    test_alert_scp_create_request (
+      "2", "SCP alert", "", "Done",
+      "123e4567-e89b-12d3-a456-426614174010", "scp.example.test", "22",
+      "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    test_alert_scp_create_request (
+      "1", "SCP alert", "", "Invalid",
+      "123e4567-e89b-12d3-a456-426614174010", "scp.example.test", "22",
+      "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    test_alert_scp_create_request (
+      "1", "SCP alert", "", "Done", "not-a-uuid", "scp.example.test",
+      "22", "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    test_alert_scp_create_request (
+      "1", "SCP alert", "", "Done",
+      "123e4567-e89b-12d3-a456-426614174010", "scp.example.test", "0",
+      "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    test_alert_scp_create_request (
+      "1", "SCP alert", "", "Done",
+      "123e4567-e89b-12d3-a456-426614174010", "scp.example.test", "65536",
+      "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    test_alert_scp_create_request (
+      "1", "SCP alert", "", "Done",
+      "123e4567-e89b-12d3-a456-426614174010", "scp.example.test", "+22",
+      "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    test_alert_scp_create_request (
+      "1", "SCP alert", "", "Done",
+      "123e4567-e89b-12d3-a456-426614174010", oversized, "22",
+      "scp.example.test key", "/var/reports/scan.pdf",
+      "123e4567-e89b-12d3-a456-426614174011"),
+    g_strdup ("alert-scp-create " TEST_CONTROL_SECRET " "
+              "123e4567-e89b-12d3-a456-426614174000 1 QQ== extra\n"),
+  };
+  char operator_uuid[37];
+  size_t index;
+  turbovas_control_alert_scp_create_request_t alert = {0};
+
+  for (index = 0; index < G_N_ELEMENTS (requests); index++)
+    {
+      assert_that (turbovas_control_parse_alert_scp_create_request (
+                     requests[index], strlen (requests[index]),
+                     TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                     operator_uuid, &alert),
+                   is_false);
+      g_free (requests[index]);
+    }
+  g_free (oversized);
+}
+
+Ensure (turbovas_control, maps_alert_scp_arrays_session_and_success_audit)
+{
+  const turbovas_control_alert_scp_create_request_t request = {
+    .name = "SCP alert",
+    .comment = "private delivery",
+    .status = "Done",
+    .credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
+    .host = "scp.example.test",
+    .port = "22",
+    .known_hosts = "scp.example.test ssh-ed25519 AAAAC3NzaTestKey",
+    .path = "/var/reports/scan.pdf",
+    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
+    .active = TRUE,
+  };
+  char created_uuid[37];
+
+  alert_uuid_lookup_fails = FALSE;
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (
+    turbovas_control_create_alert_scp ("123e4567-e89b-12d3-a456-426614174000",
+                                       &request, created_uuid),
+    is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174004"));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (received_alert_event,
+               is_equal_to (EVENT_TASK_RUN_STATUS_CHANGED));
+  assert_that (received_alert_condition, is_equal_to (ALERT_CONDITION_ALWAYS));
+  assert_that (received_alert_method, is_equal_to (ALERT_METHOD_SCP));
+  assert_that (received_active, is_equal_to_string ("1"));
+  assert_that (received_event_status, is_equal_to_string (request.status));
+  assert_that (received_scp_credential,
+               is_equal_to_string (request.credential_uuid));
+  assert_that (received_scp_host, is_equal_to_string (request.host));
+  assert_that (received_scp_port, is_equal_to_string (request.port));
+  assert_that (received_scp_known_hosts, is_equal_to_string (request.known_hosts));
+  assert_that (received_scp_path, is_equal_to_string (request.path));
+  assert_that (received_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (received_atomic_report_format,
+               is_equal_to_string (request.report_format_uuid));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+}
+
+Ensure (turbovas_control, dispatches_alert_scp_errors_without_secrets)
+{
+  gchar *request = test_alert_scp_create_request (
+    "0", "SCP alert", "private delivery", "Done",
+    "123e4567-e89b-12d3-a456-426614174010", "private-scp-host", "22",
+    "private-known-host", "/private/path",
+    "123e4567-e89b-12d3-a456-426614174011");
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 16;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("16 invalid_scp_port\n")));
+  assert_that (response, is_equal_to_string ("16 invalid_scp_port\n"));
+  assert_that (create_alert_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (strstr (response, TEST_CONTROL_SECRET), is_null);
+  assert_that (strstr (response, "private-scp-host"), is_null);
+  assert_that (strstr (response, "private-known-host"), is_null);
+  create_alert_result = 0;
+  g_free (request);
+}
+
+Ensure (turbovas_control, dispatches_malformed_alert_scp_without_payload)
+{
+  const char *request = "alert-scp-create " TEST_CONTROL_SECRET " "
+                        "123e4567-e89b-12d3-a456-426614174000 private-scp-path\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (strstr (response, TEST_CONTROL_SECRET), is_null);
+  assert_that (strstr (response, "private-scp-path"), is_null);
+}
+
 Ensure (turbovas_control, rejects_nonexistent_operator_before_session_setup)
 {
   cleanup_calls = 0;
@@ -4368,6 +4639,16 @@ main (int argc, char **argv)
                          rejects_missing_snmp_owner_and_maps_alert_errors);
   add_test_with_context (suite, turbovas_control,
                          returns_malformed_for_truncated_alert_frame);
+  add_test_with_context (suite, turbovas_control,
+                         parses_canonical_bounded_alert_scp_requests);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_or_oversized_alert_scp_requests);
+  add_test_with_context (suite, turbovas_control,
+                         maps_alert_scp_arrays_session_and_success_audit);
+  add_test_with_context (suite, turbovas_control,
+                         dispatches_alert_scp_errors_without_secrets);
+  add_test_with_context (suite, turbovas_control,
+                         dispatches_malformed_alert_scp_without_payload);
   add_test_with_context (suite, turbovas_control,
                          parses_canonical_bounded_alert_smb_requests);
   add_test_with_context (suite, turbovas_control,

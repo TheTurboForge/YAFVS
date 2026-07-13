@@ -1,5 +1,6 @@
 #!/bin/bash
 # Copyright (C) 2016-2022 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -9,22 +10,32 @@ USERNAME=$1
 HOST=$2
 PORT=$3
 DEST=$4
-KNOWN_HOSTS=$5
+KNOWN_HOSTS_FILE=$5
 PRIVATE_KEY_FILE=$6
 PASSWORD_FILE=$7
 REPORT_FILE=$8
 
-KNOWN_HOSTS_FILE=`mktemp` || exit 1
-echo $KNOWN_HOSTS > $KNOWN_HOSTS_FILE
+umask 077
 
-ERROR_FILE=`mktemp` || exit 1
+ERROR_FILE=$(mktemp) || {
+  exit 1
+}
+
+# shellcheck disable=SC2317  # Invoked by the trap below.
+cleanup() {
+  rm -f -- "$PASSWORD_FILE" "$ERROR_FILE"
+}
+trap cleanup EXIT HUP INT TERM
+
+if [ ! -s "$KNOWN_HOSTS_FILE" ]
+then
+  printf '%s\n' "SCP alert: required pinned host key is missing" >&2
+  exit 1
+fi
 
 log_error() {
-  # remove \r used in line feed by scp or sshpass (\r\n)
-  # which can make journalctl interpret the output as blob data
-  MESSAGE=`echo "$1" | tr -d '\r'`
-  logger "SCP alert: $MESSAGE"
-  echo "$MESSAGE" >&2
+  logger -- "SCP alert: $1"
+  printf '%s\n' "$1" >&2
 }
 
 shell_esc() {
@@ -34,55 +45,68 @@ shell_esc() {
 if [ -z "$GVMD_SCP_ALERT_TIMEOUT" ]
 then
   TIMEOUT="15m"
- else
+else
   TIMEOUT="$GVMD_SCP_ALERT_TIMEOUT"
+fi
+if [[ ! "$TIMEOUT" =~ ^[1-9][0-9]*([smh])?$ ]]
+then
+  log_error "Invalid configured timeout"
+  exit 1
 fi
 
 # Escape destination because it is also expanded on the remote end.
-DEST_ESC=`shell_esc "$DEST"`
+DEST_ESC=$(shell_esc "$DEST")
+
+SCP_OPTIONS=(
+  -F /dev/null
+  -P "$PORT"
+  -o HashKnownHosts=no
+  -o StrictHostKeyChecking=yes
+  -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE"
+  -o GlobalKnownHostsFile=/dev/null
+  -o IdentityAgent=none
+  -o IdentitiesOnly=yes
+)
 
 if [ -z "$PRIVATE_KEY_FILE" ]
 then
-  timeout $TIMEOUT sshpass -f ${PASSWORD_FILE} scp -P "$PORT" -o HashKnownHosts=no -o UserKnownHostsFile="${KNOWN_HOSTS_FILE} ~/.ssh/known_hosts ~/.ssh/known_hosts2 /etc/ssh/ssh_known_hosts" "${REPORT_FILE}" "${USERNAME}@${HOST}:${DEST_ESC}" 2>$ERROR_FILE
+  timeout "$TIMEOUT" sshpass -f "$PASSWORD_FILE" scp "${SCP_OPTIONS[@]}" -- \
+    "$REPORT_FILE" "${USERNAME}@${HOST}:${DEST_ESC}" 2>"$ERROR_FILE"
 else
-  timeout $TIMEOUT sshpass -f ${PASSWORD_FILE} -P "passphrase" scp -P "$PORT" -i "$PRIVATE_KEY_FILE" -o PasswordAuthentication=no -o HashKnownHosts=no -o UserKnownHostsFile="${KNOWN_HOSTS_FILE} ~/.ssh/known_hosts ~/.ssh/known_hosts2 /etc/ssh/ssh_known_hosts" "${REPORT_FILE}" "${USERNAME}@${HOST}:${DEST_ESC}" 2>$ERROR_FILE
+  timeout "$TIMEOUT" sshpass -f "$PASSWORD_FILE" -P "passphrase" scp \
+    "${SCP_OPTIONS[@]}" -i "$PRIVATE_KEY_FILE" -o PasswordAuthentication=no -- \
+    "$REPORT_FILE" "${USERNAME}@${HOST}:${DEST_ESC}" 2>"$ERROR_FILE"
 fi
 
 EXIT_CODE=$?
 
-ERROR_SHORT=`head -n 3 $ERROR_FILE`
-
 if [ $EXIT_CODE -eq 1 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Invalid command line argument: $ERROR_SHORT"
+  log_error "SCP delivery failed: invalid command line argument"
 elif [ $EXIT_CODE -eq 2 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Conflicting arguments given: $ERROR_SHORT"
+  log_error "SCP delivery failed: conflicting arguments"
 elif [ $EXIT_CODE -eq 3 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: General runtime error: $ERROR_SHORT"
+  log_error "SCP delivery failed: runtime error"
 elif [ $EXIT_CODE -eq 4 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Unrecognized response from ssh (parse error): $ERROR_SHORT"
+  log_error "SCP delivery failed: unrecognized SSH response"
 elif [ $EXIT_CODE -eq 5 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Invalid/incorrect password: $ERROR_SHORT"
+  log_error "SCP delivery failed: authentication rejected"
 elif [ $EXIT_CODE -eq 6 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Host public key is unknown: $ERROR_SHORT"
+  log_error "SCP delivery failed: host key rejected"
 elif [ $EXIT_CODE -eq 124 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Timeout after $TIMEOUT: $ERROR_SHORT"
+  log_error "SCP delivery failed: timeout after $TIMEOUT"
 elif [ $EXIT_CODE -eq 127 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: Command not found: $ERROR_SHORT"
+  log_error "SCP delivery failed: required command not found"
 elif [ $EXIT_CODE -ne 0 ]
 then
-  log_error "sshpass failed with exit code ${EXIT_CODE}: $ERROR_SHORT"
+  log_error "SCP delivery failed with exit code ${EXIT_CODE}"
 fi
-
-rm $KNOWN_HOSTS_FILE
-rm $PASSWORD_FILE
-rm $ERROR_FILE
 
 exit $EXIT_CODE

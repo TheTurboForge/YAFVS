@@ -3200,7 +3200,7 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(alert_create["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(alert_create["direct_access"], "direct_write_control")
-        self.assertIn("direct native EMAIL/SMB/Syslog/SNMP alert creation", alert_create["replacement_candidates"])
+        self.assertIn("direct native EMAIL/SMB/Syslog/SNMP/SCP alert creation", alert_create["replacement_candidates"])
         api_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         proxy_source = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
         alerts_api_declared = '.route("/api/v1/alerts"' in api_source
@@ -4220,7 +4220,7 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
         expected_replaces_values = ['alert-clone',
-         'alert-email-smb-syslog-snmp-create',
+         'alert-email-smb-syslog-snmp-scp-create',
          'alert-metadata-detail-read',
          'alert-metadata-export-read',
          'alert-metadata-list-read',
@@ -4396,7 +4396,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'vulnerability-detail-read',
          'vulnerability-list-read',
          'vulnerability-metadata-export-read']
-        expected_inherited_still_owns_values = ['alert-scp-start-task-create-test-actions-and-delivery-payload-mutations',
+        expected_inherited_still_owns_values = ['alert-start-task-create-test-actions-and-delivery-payload-mutations',
          'credential-secret-updates-non-up-usk-types-and-deletes',
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',

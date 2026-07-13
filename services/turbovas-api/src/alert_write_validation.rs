@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::net::IpAddr;
+
 use serde::{Deserialize, Deserializer};
 use uuid::Uuid;
 
@@ -185,6 +187,22 @@ pub(crate) struct AlertSnmpCreateRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AlertScpCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) scp_credential_id: SensitiveAlertField,
+    pub(crate) scp_host: SensitiveAlertField,
+    pub(crate) scp_port: u16,
+    pub(crate) scp_known_hosts: SensitiveAlertField,
+    pub(crate) scp_path: SensitiveAlertField,
+    pub(crate) report_format_id: SensitiveAlertField,
+}
+
+#[derive(Deserialize)]
 #[serde(tag = "method")]
 pub(crate) enum AlertCreateRequest {
     #[serde(rename = "EMAIL")]
@@ -195,6 +213,8 @@ pub(crate) enum AlertCreateRequest {
     Syslog(AlertSyslogCreateRequest),
     #[serde(rename = "SNMP")]
     Snmp(AlertSnmpCreateRequest),
+    #[serde(rename = "SCP")]
+    Scp(AlertScpCreateRequest),
 }
 
 pub(crate) struct ValidatedAlertEmailCreate {
@@ -240,11 +260,25 @@ pub(crate) struct ValidatedAlertSnmpCreate {
     pub(crate) snmp_message: SensitiveAlertField,
 }
 
+pub(crate) struct ValidatedAlertScpCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) scp_credential_id: SensitiveAlertField,
+    pub(crate) scp_host: SensitiveAlertField,
+    pub(crate) scp_port: u16,
+    pub(crate) scp_known_hosts: SensitiveAlertField,
+    pub(crate) scp_path: SensitiveAlertField,
+    pub(crate) report_format_id: SensitiveAlertField,
+}
+
 pub(crate) enum ValidatedAlertCreate {
     Email(ValidatedAlertEmailCreate),
     Smb(ValidatedAlertSmbCreate),
     Syslog(ValidatedAlertSyslogCreate),
     Snmp(ValidatedAlertSnmpCreate),
+    Scp(ValidatedAlertScpCreate),
 }
 
 pub(crate) fn validate_alert_create_request(
@@ -263,7 +297,86 @@ pub(crate) fn validate_alert_create_request(
         AlertCreateRequest::Snmp(request) => {
             validate_alert_snmp_create_request(request).map(ValidatedAlertCreate::Snmp)
         }
+        AlertCreateRequest::Scp(request) => {
+            validate_alert_scp_create_request(request).map(ValidatedAlertCreate::Scp)
+        }
     }
+}
+
+pub(crate) fn validate_alert_scp_create_request(
+    request: AlertScpCreateRequest,
+) -> Result<ValidatedAlertScpCreate, ApiError> {
+    let name = normalize_alert_create_text(request.name, "name", true)?;
+    let comment = request
+        .comment
+        .map(|value| normalize_alert_create_text(value, "comment", false))
+        .transpose()?
+        .unwrap_or_default();
+    debug_assert!(request.status.as_str().len() <= MAX_ALERT_STATUS_BYTES);
+    let scp_credential_id =
+        validate_required_alert_uuid(request.scp_credential_id, "scp_credential_id")?;
+    let scp_host = validate_scp_host(request.scp_host)?;
+    if request.scp_port == 0 {
+        return Err(ApiError::BadRequest(
+            "scp_port must be between 1 and 65535".to_string(),
+        ));
+    }
+    let scp_known_hosts = validate_sensitive_alert_message(
+        request.scp_known_hosts,
+        "scp_known_hosts",
+        MAX_ALERT_TEXT_BYTES,
+    )?;
+    if scp_known_hosts.as_bytes().is_empty() {
+        return Err(ApiError::BadRequest(
+            "scp_known_hosts is required for pinned host-key verification".to_string(),
+        ));
+    }
+    let scp_path =
+        validate_sensitive_alert_text(request.scp_path, "scp_path", true, MAX_ALERT_TEXT_BYTES)?;
+    let report_format_id =
+        validate_required_alert_uuid(request.report_format_id, "report_format_id")?;
+
+    Ok(ValidatedAlertScpCreate {
+        name,
+        comment,
+        active: request.active,
+        status: request.status,
+        scp_credential_id,
+        scp_host,
+        scp_port: request.scp_port,
+        scp_known_hosts,
+        scp_path,
+        report_format_id,
+    })
+}
+
+fn validate_scp_host(value: SensitiveAlertField) -> Result<SensitiveAlertField, ApiError> {
+    let value = validate_sensitive_alert_text(value, "scp_host", true, MAX_ALERT_TEXT_BYTES)?;
+    let host = std::str::from_utf8(value.as_bytes()).expect("validated UTF-8 SCP host");
+    let valid_ip = host.parse::<IpAddr>().is_ok();
+    let valid_name = host.len() <= 253
+        && !host.ends_with('.')
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                && label
+                    .as_bytes()
+                    .first()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+                && label
+                    .as_bytes()
+                    .last()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+        });
+    if !valid_ip && !valid_name {
+        return Err(ApiError::BadRequest(
+            "scp_host must be an IP address or DNS host name".to_string(),
+        ));
+    }
+    Ok(value)
 }
 
 pub(crate) fn validate_alert_syslog_create_request(

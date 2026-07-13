@@ -2085,14 +2085,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: alert-email-smb-syslog-snmp-create
-      x-turbovas-inherited-still-owns: alert-scp-start-task-create-test-actions-and-delivery-payload-mutations
+      x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-create
+      x-turbovas-inherited-still-owns: alert-start-task-create-test-actions-and-delivery-payload-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: alert-delivery-control
-      summary: Create a task-status EMAIL, SMB, Syslog, or SNMP alert
-      description: Creates one operator-owned EMAIL, SMB, Syslog, or SNMP alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, SMB paths, subjects, SNMP fields, credential/report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. SCP and Start Task creation, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
+      summary: Create a task-status EMAIL, SMB, Syslog, SNMP, or SCP alert
+      description: Creates one operator-owned EMAIL, SMB, Syslog, SNMP, or SCP alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, paths, subjects, SNMP fields, known-host pins, credential/report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Start Task creation, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
       requestBody:
         required: true
         content:
@@ -10132,6 +10132,7 @@ components:
         - $ref: '#/components/schemas/AlertSmbCreateRequest'
         - $ref: '#/components/schemas/AlertSyslogCreateRequest'
         - $ref: '#/components/schemas/AlertSnmpCreateRequest'
+        - $ref: '#/components/schemas/AlertScpCreateRequest'
       discriminator:
         propertyName: method
         mapping:
@@ -10139,6 +10140,7 @@ components:
           SMB: '#/components/schemas/AlertSmbCreateRequest'
           SYSLOG: '#/components/schemas/AlertSyslogCreateRequest'
           SNMP: '#/components/schemas/AlertSnmpCreateRequest'
+          SCP: '#/components/schemas/AlertScpCreateRequest'
     AlertEmailCreateRequest:
       type: object
       additionalProperties: false
@@ -10213,6 +10215,68 @@ components:
             notice:
               enum: [include, attach]
           required: [report_format_id]
+    AlertScpCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [method, name, active, status, scp_credential_id, scp_host, scp_port, scp_known_hosts, scp_path, report_format_id]
+      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + SCP alert creation. The SSH credential and report format are resolved and locked under the request operator before the alert is inserted. Explicit known-hosts content is mandatory; delivery does not fall back to ambient host-key stores.
+      properties:
+        method:
+          type: string
+          const: SCP
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+        scp_credential_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+        scp_host:
+          type: string
+          minLength: 1
+          maxLength: 253
+          x-turbovas-max-bytes: 253
+          writeOnly: true
+        scp_port:
+          type: integer
+          format: uint16
+          minimum: 1
+          maximum: 65535
+          writeOnly: true
+        scp_known_hosts:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+          description: Required OpenSSH known-hosts content used as the exclusive host-key trust source. CR, LF, and tab are preserved; other control characters are rejected.
+        scp_path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        report_format_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
     AlertSmbCreateRequest:
       type: object
       additionalProperties: false

@@ -471,10 +471,14 @@ validate_scp_data (alert_method_t method, const gchar *name, gchar **data)
   if (method == ALERT_METHOD_SCP
       && strcmp (name, "scp_port") == 0)
     {
-      int port;
+      unsigned long port;
+      char *end = NULL;
 
-      port = atoi (*data);
-      if (port <= 0 || port > 65535)
+      if (strspn (*data, "0123456789") != strlen (*data))
+        return 16;
+      errno = 0;
+      port = strtoul (*data, &end, 10);
+      if (errno || end == *data || *end != '\0' || port == 0 || port > 65535)
         return 16;
     }
 
@@ -813,7 +817,7 @@ create_alert_body (const char* name, const char* comment,
       gboolean sensitive;
 
       sensitive = method == ALERT_METHOD_EMAIL || method == ALERT_METHOD_SMB
-                  || method == ALERT_METHOD_SNMP;
+                  || method == ALERT_METHOD_SNMP || method == ALERT_METHOD_SCP;
       data_name = sql_quote (item);
       data = sensitive ? g_strdup (item + strlen (item) + 1)
                        : sql_quote (item + strlen (item) + 1);
@@ -906,6 +910,50 @@ lock_alert_smb_credential (const char *credential_id)
 }
 
 /**
+ * @brief Resolve, lock and validate an operator-owned SSH credential.
+ *
+ * @return 0 success, 18 unavailable or invalid SCP credential,
+ *         -1 database error.
+ */
+static int
+lock_alert_scp_credential (const char *credential_id)
+{
+  credential_t credential = 0;
+  credential_t locked_credential;
+  gchar *quoted_owner_uuid;
+  char *type;
+  int ret;
+
+  if (credential_id == NULL || credential_id[0] == '\0')
+    return 18;
+  if (find_credential_with_permission (credential_id, &credential,
+                                       "get_credentials"))
+    return -1;
+  if (credential == 0)
+    return 18;
+
+  quoted_owner_uuid = sql_quote (current_credentials.uuid);
+  ret =
+    sql_int64 (&locked_credential,
+               "SELECT credentials.id FROM credentials"
+               " JOIN users ON users.id = credentials.owner"
+               " WHERE credentials.id = %llu AND users.uuid = '%s' FOR SHARE;",
+               credential, quoted_owner_uuid);
+  g_free (quoted_owner_uuid);
+  if (ret == 1)
+    return 18;
+  if (ret || locked_credential != credential)
+    return -1;
+
+  type = credential_type (credential);
+  if (type == NULL)
+    return -1;
+  ret = strcmp (type, "up") == 0 || strcmp (type, "usk") == 0 ? 0 : 18;
+  free (type);
+  return ret;
+}
+
+/**
  * @brief Create an alert.
  *
  * This public entry point retains the transaction and permission behavior of
@@ -915,6 +963,8 @@ lock_alert_smb_credential (const char *credential_id)
  * @return See create_alert_body().
  */
 static int lock_alert_create_owner ();
+static int
+lock_alert_report_format (const char *, report_format_t *);
 
 /**
  * @brief Atomically create a task-status alert with an always condition.
@@ -950,6 +1000,64 @@ create_alert_task_status_changed (const char *name, const char *comment,
                              EVENT_TASK_RUN_STATUS_CHANGED, event_data,
                              ALERT_CONDITION_ALWAYS, condition_data, method,
                              method_data, alert);
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
+    }
+
+  sql_commit ();
+  return 0;
+}
+
+/**
+ * @brief Atomically create a task-status SCP alert with delivery references.
+ *
+ * The request operator, owned SSH credential and report format remain locked
+ * through validation and insertion.
+ *
+ * @return See create_alert_body().
+ */
+int
+create_alert_scp_with_report_refs (const char *name, const char *comment,
+                                   const char *active, GPtrArray *event_data,
+                                   GPtrArray *condition_data,
+                                   GPtrArray *method_data,
+                                   const char *scp_credential_id,
+                                   const char *report_format_id, alert_t *alert)
+{
+  report_format_t report_format = 0;
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  sql_begin_immediate ();
+
+  if (acl_user_may ("create_alert") == 0)
+    {
+      sql_rollback ();
+      return 99;
+    }
+
+  ret = lock_alert_create_owner ();
+  if (ret == 0)
+    ret = lock_alert_scp_credential (scp_credential_id);
+
+  if (ret == 0 && (report_format_id == NULL || report_format_id[0] == '\0'))
+    ret = 17;
+  else if (ret == 0)
+    {
+      ret = lock_alert_report_format (report_format_id, &report_format);
+      if (ret == 90)
+        ret = 17;
+    }
+
+  if (ret == 0)
+    ret = create_alert_body (name, comment, NULL, active,
+                             EVENT_TASK_RUN_STATUS_CHANGED, event_data,
+                             ALERT_CONDITION_ALWAYS, condition_data,
+                             ALERT_METHOD_SCP, method_data, alert);
+
   if (ret)
     {
       sql_rollback ();

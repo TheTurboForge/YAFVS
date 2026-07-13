@@ -1589,6 +1589,17 @@ alert_write_data_file (const char *directory, const char *filename,
       return -1;
     }
 
+  if (chmod (path, S_IRUSR | S_IWUSR))
+    {
+      g_warning ("%s: Failed to set owner-only permissions for %s: %s",
+                 __func__,
+                 description ? description : "extra data",
+                 strerror (errno));
+      g_unlink (path);
+      g_free (path);
+      return -1;
+    }
+
   if (geteuid () == 0)
     {
       struct passwd *nobody;
@@ -1758,19 +1769,16 @@ scp_to_host (const char *username, const char *password,
   const char *alert_id = "2db07698-ec49-11e5-bcff-28d24461215b";
   char report_dir[] = "/tmp/gvmd_alert_XXXXXX";
   gchar *report_path, *error_path, *password_path, *private_key_path;
+  gchar *known_hosts_path;
   gchar *clean_username, *clean_host, *clean_path, *clean_private_key_path;
-  gchar *clean_known_hosts, *command_args;
+  gchar *clean_known_hosts_path, *command_args;
   int report_fd, error_fd, password_fd;
   int ret;
 
-  g_debug ("scp to host: %s@%s:%d:%s", username, host, port, path);
-
   if (password == NULL || username == NULL || host == NULL || path == NULL
+      || known_hosts == NULL || known_hosts[0] == '\0'
       || port <= 0 || port > 65535)
     return -1;
-
-  if (known_hosts == NULL)
-    known_hosts = "";
 
   /* Setup files, including password but not private key */
   ret = alert_script_init ("report", report, report_size,
@@ -1781,7 +1789,7 @@ scp_to_host (const char *username, const char *password,
   if (ret)
     return -1;
 
-  if (private_key)
+  if (private_key && private_key[0] != '\0')
     {
       /* Setup private key here because alert_script_init and alert_script_exec
        *  only handle one extra file. */
@@ -1801,35 +1809,49 @@ scp_to_host (const char *username, const char *password,
   else
     private_key_path = g_strdup ("");
 
+  if (alert_write_data_file (report_dir, "known_hosts",
+                             known_hosts, strlen (known_hosts),
+                             "known hosts", &known_hosts_path))
+    {
+      close_alert_fd (&report_fd);
+      close_alert_fd (&error_fd);
+      close_alert_fd (&password_fd);
+      alert_script_cleanup (report_dir, report_path, error_path,
+                            password_path);
+      g_free (private_key_path);
+      return -1;
+    }
+
   /* Create arguments */
   clean_username = g_shell_quote (username);
   clean_host = g_shell_quote (host);
   clean_path = g_shell_quote (path);
-  clean_known_hosts = g_shell_quote (known_hosts);
+  clean_known_hosts_path = g_shell_quote (known_hosts_path);
   clean_private_key_path = g_shell_quote (private_key_path);
   command_args = g_strdup_printf ("%s %s %d %s %s %s",
                                   clean_username,
                                   clean_host,
                                   port,
                                   clean_path,
-                                  clean_known_hosts,
+                                  clean_known_hosts_path,
                                   clean_private_key_path);
-  g_free (clean_username);
-  g_free (clean_host);
-  g_free (clean_path);
-  g_free (clean_known_hosts);
-  g_free (clean_private_key_path);
+  alert_secure_gfree (clean_username);
+  alert_secure_gfree (clean_host);
+  alert_secure_gfree (clean_path);
+  alert_secure_gfree (clean_known_hosts_path);
+  alert_secure_gfree (clean_private_key_path);
 
   /* Run script */
   ret = alert_script_exec (alert_id, command_args, report_path, report_dir,
                            error_path, password_path, report_fd, error_fd,
                            password_fd, script_message);
-  g_free (command_args);
+  alert_secure_gfree (command_args);
   if (ret)
     {
       alert_script_cleanup (report_dir, report_path, error_path,
                             password_path);
       g_free (private_key_path);
+      g_free (known_hosts_path);
       return ret;
     }
 
@@ -1837,6 +1859,7 @@ scp_to_host (const char *username, const char *password,
   ret = alert_script_cleanup (report_dir, report_path, error_path,
                               password_path);
   g_free (private_key_path);
+  g_free (known_hosts_path);
   return ret;
 }
 
@@ -3259,8 +3282,8 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
           char *private_key, *password, *username, *host, *path, *known_hosts;
           char *port_str;
           int port;
-          gchar *report_content, *alert_path;
-          gsize content_length;
+          gchar *report_content = NULL, *alert_path;
+          gsize content_length = 0;
           report_format_t report_format;
           int ret;
 
@@ -3273,10 +3296,12 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
                                                    &credential,
                                                    "get_credentials"))
                 {
+                  alert_secure_free (credential_id);
                   return -1;
                 }
               else if (credential == 0)
                 {
+                  alert_secure_free (credential_id);
                   return -4;
                 }
               else
@@ -3299,21 +3324,22 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
                   known_hosts = alert_data (alert, "method", "scp_known_hosts");
 
                   alert_path = scp_alert_path_print (path, task);
-                  free (path);
+                  alert_secure_free (path);
 
                   ret = scp_to_host (username, password, private_key,
                                      host, port, alert_path, known_hosts,
                                      message, strlen (message),
                                      script_message);
 
-                  g_free (message);
-                  free (private_key);
-                  free (password);
-                  free (username);
-                  free (host);
-                  free (port_str);
-                  g_free (alert_path);
-                  free (known_hosts);
+                  alert_secure_gfree (message);
+                  alert_secure_free (credential_id);
+                  alert_secure_free (private_key);
+                  alert_secure_free (password);
+                  alert_secure_free (username);
+                  alert_secure_free (host);
+                  alert_secure_free (port_str);
+                  alert_secure_gfree (alert_path);
+                  alert_secure_free (known_hosts);
 
                   return ret;
                 }
@@ -3332,6 +3358,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
           if (ret || report_content == NULL)
             {
               g_warning ("%s: Empty Report", __func__);
+              alert_secure_gfree_bytes (report_content, content_length);
               return -1;
             }
 
@@ -3339,12 +3366,14 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
           if (find_credential_with_permission (credential_id, &credential,
                                                "get_credentials"))
             {
-              g_free (report_content);
+              alert_secure_free (credential_id);
+              alert_secure_gfree_bytes (report_content, content_length);
               return -1;
             }
           else if (credential == 0)
             {
-              g_free (report_content);
+              alert_secure_free (credential_id);
+              alert_secure_gfree_bytes (report_content, content_length);
               return -4;
             }
           else
@@ -3365,22 +3394,23 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
               known_hosts = alert_data (alert, "method", "scp_known_hosts");
 
               alert_path = scp_alert_path_print (path, task);
-              free (path);
+              alert_secure_free (path);
 
               ret = scp_to_host (username, password, private_key,
                                  host, port, alert_path, known_hosts,
                                  report_content, content_length,
                                  script_message);
 
-              free (private_key);
-              free (password);
-              free (username);
-              free (host);
-              free (port_str);
-              g_free (alert_path);
-              free (known_hosts);
+              alert_secure_free (credential_id);
+              alert_secure_free (private_key);
+              alert_secure_free (password);
+              alert_secure_free (username);
+              alert_secure_free (host);
+              alert_secure_free (port_str);
+              alert_secure_gfree (alert_path);
+              alert_secure_free (known_hosts);
             }
-          g_free (report_content);
+          alert_secure_gfree_bytes (report_content, content_length);
 
           return ret;
         }

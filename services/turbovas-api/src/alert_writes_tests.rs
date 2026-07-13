@@ -9,13 +9,14 @@ use crate::{
     alert_write_validation::{
         AlertCloneRequest, AlertCreateRequest, AlertEmailCreateRequest, AlertPatchRequest,
         MAX_ALERT_MESSAGE_BYTES, MAX_ALERT_SUBJECT_BYTES, MAX_ALERT_TEXT_BYTES,
-        ValidatedAlertCreate, ValidatedAlertSmbCreate, ValidatedAlertSnmpCreate,
-        ValidatedAlertSyslogCreate, validate_alert_clone_request, validate_alert_create_request,
-        validate_alert_email_create_request, validate_alert_patch_request,
+        ValidatedAlertCreate, ValidatedAlertScpCreate, ValidatedAlertSmbCreate,
+        ValidatedAlertSnmpCreate, ValidatedAlertSyslogCreate, validate_alert_clone_request,
+        validate_alert_create_request, validate_alert_email_create_request,
+        validate_alert_patch_request,
     },
     alert_writes::{
-        alert_email_create_command, alert_smb_create_command, alert_snmp_create_command,
-        alert_syslog_create_command, parse_alert_create_response,
+        alert_email_create_command, alert_scp_create_command, alert_smb_create_command,
+        alert_snmp_create_command, alert_syslog_create_command, parse_alert_create_response,
     },
     errors::ApiError,
     gvmd_control::{
@@ -38,6 +39,162 @@ fn email_create_json(notice: &str) -> serde_json::Value {
     })
 }
 
+#[test]
+fn alert_scp_create_frame_is_exact_bounded_and_scrubbed_without_value_leaks() {
+    let request = validated_scp_create();
+    let mut frame =
+        alert_scp_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &request);
+    assert_eq!(
+        frame.as_bytes(),
+        concat!(
+            "alert-scp-create 0123456789abcdef0123456789abcdef ",
+            "12345678-1234-4234-8234-123456789abc 1 ",
+            "RGFpbHkgU0NQIGZpbmRpbmdz T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj ",
+            "MTkyLjAuMi40NA== MjIyMg== ",
+            "WzE5Mi4wLjIuNDRdOjIyMjIgc3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSVRlc3RLZXk= ",
+            "L3Zhci9yZXBvcnRzL2RhaWx5LnBkZg== ",
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj\n"
+        )
+        .as_bytes()
+    );
+    assert!(frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    frame.scrub();
+    assert!(frame.as_bytes().iter().all(|byte| *byte == 0));
+
+    let mut maximum = scp_create_json();
+    for field in ["name", "comment", "scp_known_hosts", "scp_path"] {
+        maximum[field] = serde_json::json!("x".repeat(MAX_ALERT_TEXT_BYTES));
+    }
+    let maximum = serde_json::from_value::<AlertCreateRequest>(maximum).unwrap();
+    let maximum = match validate_alert_create_request(maximum).unwrap() {
+        ValidatedAlertCreate::Scp(request) => request,
+        _ => unreachable!(),
+    };
+    let maximum_frame =
+        alert_scp_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &maximum);
+    assert!(maximum_frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+}
+
+#[test]
+fn alert_scp_create_shape_is_strict_and_cross_method_fields_are_rejected() {
+    assert!(matches!(
+        validate_alert_create_request(
+            serde_json::from_value::<AlertCreateRequest>(scp_create_json()).unwrap()
+        ),
+        Ok(ValidatedAlertCreate::Scp(_))
+    ));
+
+    for field in [
+        "method",
+        "name",
+        "active",
+        "status",
+        "scp_credential_id",
+        "scp_host",
+        "scp_port",
+        "scp_known_hosts",
+        "scp_path",
+        "report_format_id",
+    ] {
+        let mut value = scp_create_json();
+        value.as_object_mut().unwrap().remove(field);
+        assert!(
+            serde_json::from_value::<AlertCreateRequest>(value).is_err(),
+            "{field} must be required"
+        );
+    }
+
+    for (field, value) in [
+        (
+            "smb_share_path",
+            serde_json::json!("\\\\fileserver\\reports"),
+        ),
+        ("to_address", serde_json::json!("security@example.invalid")),
+        ("unexpected", serde_json::json!(true)),
+    ] {
+        let mut request = scp_create_json();
+        request[field] = value;
+        assert!(serde_json::from_value::<AlertCreateRequest>(request).is_err());
+    }
+}
+
+#[test]
+fn alert_scp_create_rejects_unpinned_or_invalid_delivery_controls() {
+    for field in ["scp_credential_id", "report_format_id"] {
+        for invalid in [
+            "not-a-uuid".to_string(),
+            format!(" {TEST_UUID} "),
+            TEST_UUID.replace("-", ""),
+        ] {
+            let mut value = scp_create_json();
+            value[field] = serde_json::json!(invalid);
+            let request = serde_json::from_value::<AlertCreateRequest>(value).unwrap();
+            assert!(matches!(
+                validate_alert_create_request(request),
+                Err(ApiError::BadRequest(_))
+            ));
+        }
+    }
+
+    for (field, invalid) in [
+        ("scp_host", ""),
+        ("scp_host", "host name"),
+        ("scp_host", "host.example.invalid."),
+        ("scp_host", "host\nexample.invalid"),
+        ("scp_path", ""),
+        ("scp_path", "reports\u{000b}daily.pdf"),
+        ("scp_known_hosts", ""),
+        ("scp_known_hosts", "ssh-ed25519 AAAA\u{000b}key"),
+    ] {
+        let mut value = scp_create_json();
+        value[field] = serde_json::json!(invalid);
+        let request = serde_json::from_value::<AlertCreateRequest>(value).unwrap();
+        assert!(matches!(
+            validate_alert_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+
+    let mut zero_port = scp_create_json();
+    zero_port["scp_port"] = serde_json::json!(0);
+    let request = serde_json::from_value::<AlertCreateRequest>(zero_port).unwrap();
+    assert!(matches!(
+        validate_alert_create_request(request),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let mut oversized_port = scp_create_json();
+    oversized_port["scp_port"] = serde_json::json!(65_536);
+    assert!(serde_json::from_value::<AlertCreateRequest>(oversized_port).is_err());
+
+    let known_hosts = "[192.0.2.44]:2222 ssh-ed25519 AAAA\r\nssh-rsa BBBB\tcomment";
+    let mut permitted_controls = scp_create_json();
+    permitted_controls["scp_known_hosts"] = serde_json::json!(known_hosts);
+    let request = serde_json::from_value::<AlertCreateRequest>(permitted_controls).unwrap();
+    let ValidatedAlertCreate::Scp(validated) = validate_alert_create_request(request).unwrap()
+    else {
+        panic!("SCP method must select SCP request");
+    };
+    assert_eq!(validated.scp_known_hosts.as_bytes(), known_hosts.as_bytes());
+}
+
+fn scp_create_json() -> serde_json::Value {
+    serde_json::json!({
+        "method": "SCP",
+        "name": "Daily SCP findings",
+        "comment": "Operator delivery",
+        "active": true,
+        "status": "Done",
+        "scp_credential_id": TEST_UUID,
+        "scp_host": "192.0.2.44",
+        "scp_port": 2222,
+        "scp_known_hosts": "[192.0.2.44]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey",
+        "scp_path": "/var/reports/daily.pdf",
+        "report_format_id": TEST_UUID
+    })
+}
+
 fn syslog_create_json() -> serde_json::Value {
     serde_json::json!({
         "method": "SYSLOG",
@@ -46,6 +203,15 @@ fn syslog_create_json() -> serde_json::Value {
         "active": true,
         "status": "Done"
     })
+}
+
+fn validated_scp_create() -> ValidatedAlertScpCreate {
+    let request = serde_json::from_value::<AlertCreateRequest>(scp_create_json())
+        .expect("valid SCP alert request shape");
+    match validate_alert_create_request(request).expect("valid SCP alert request") {
+        ValidatedAlertCreate::Scp(request) => request,
+        _ => panic!("SCP method must select SCP request"),
+    }
 }
 
 fn snmp_create_json() -> serde_json::Value {
@@ -233,7 +399,7 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "operationId: postAlerts",
         "x-turbovas-direct: true",
         "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: alert-email-smb-syslog-snmp-create",
+        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-create",
         "x-turbovas-operator-identity: direct-token-operator",
         "x-turbovas-owner-semantics: request-operator-owner",
         "x-turbovas-safety-contract: write-control-v1",
@@ -270,6 +436,7 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
     assert!(schema.contains("enum: [simple, include, attach]"));
     assert!(schema.contains("enum: [default, NT1, SMB2, SMB3]"));
     assert!(schema.contains("writeOnly: true"));
+    assert!(schema.contains("AlertScpCreateRequest"));
     for field in [
         "to_address",
         "from_address",
@@ -281,6 +448,11 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "smb_share_path",
         "smb_file_path",
         "smb_max_protocol",
+        "scp_credential_id",
+        "scp_host",
+        "scp_port",
+        "scp_known_hosts",
+        "scp_path",
     ] {
         assert!(schema.contains(&format!("{field}:")));
     }
@@ -870,10 +1042,12 @@ fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape
     assert!(handler.contains("ValidatedAlertCreate::Smb(request)"));
     assert!(handler.contains("ValidatedAlertCreate::Syslog(request)"));
     assert!(handler.contains("ValidatedAlertCreate::Snmp(request)"));
+    assert!(handler.contains("ValidatedAlertCreate::Scp(request)"));
     assert!(handler.contains("request_alert_email_create"));
     assert!(handler.contains("request_alert_smb_create"));
     assert!(handler.contains("request_alert_syslog_create"));
     assert!(handler.contains("request_alert_snmp_create"));
+    assert!(handler.contains("request_alert_scp_create"));
     assert!(handler.contains("load_alert_asset_detail"));
     assert!(handler.contains("JOIN users u ON u.id = a.owner"));
     assert!(handler.contains("u.uuid = $2"));
@@ -889,6 +1063,11 @@ fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape
         "smb_credential_id",
         "smb_share_path",
         "smb_file_path",
+        "scp_credential_id",
+        "scp_host",
+        "scp_port",
+        "scp_known_hosts",
+        "scp_path",
     ] {
         assert!(
             !handler.contains(forbidden),
@@ -978,6 +1157,81 @@ fn alert_snmp_secrets_are_byte_backed_parameterized_unlogged_and_scrubbed() {
         assert!(
             delivery.contains(required),
             "SNMP secret cleanup missing {required}"
+        );
+    }
+}
+
+#[test]
+fn alert_scp_delivery_is_pinned_isolated_unlogged_and_scrubbed() {
+    let validation = include_str!("alert_write_validation.rs");
+    for field in [
+        "scp_credential_id: SensitiveAlertField",
+        "scp_host: SensitiveAlertField",
+        "scp_known_hosts: SensitiveAlertField",
+        "scp_path: SensitiveAlertField",
+        "report_format_id: SensitiveAlertField",
+    ] {
+        assert!(
+            validation.contains(field),
+            "missing sensitive SCP field {field}"
+        );
+    }
+
+    let manager = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+    assert!(manager.contains("|| method == ALERT_METHOD_SCP"));
+    assert!(manager.contains("lock_alert_scp_credential"));
+    assert!(manager.contains("FOR SHARE;"));
+    assert!(manager.contains("create_alert_scp_with_report_refs"));
+
+    let delivery = include_str!("../../../components/gvmd/src/manage_alerts.c");
+    for forbidden in [
+        "g_debug (\"scp to host",
+        "g_debug (\"scp_",
+        "clean_known_hosts =",
+        "system failed with ret %i, %i, %s",
+        "child failed, %s",
+    ] {
+        assert!(!delivery.contains(forbidden), "SCP log leaks {forbidden}");
+    }
+    for required in [
+        "chmod (path, S_IRUSR | S_IWUSR)",
+        "alert_write_data_file (report_dir, \"known_hosts\"",
+        "clean_known_hosts_path = g_shell_quote (known_hosts_path)",
+        "alert_secure_gfree (command_args)",
+        "alert_secure_free (credential_id)",
+        "alert_secure_free (private_key)",
+        "alert_secure_free (password)",
+        "alert_secure_free (username)",
+        "alert_secure_free (host)",
+        "alert_secure_free (port_str)",
+        "alert_secure_free (known_hosts)",
+        "alert_secure_gfree (alert_path)",
+        "alert_secure_gfree_bytes (report_content, content_length)",
+    ] {
+        assert!(
+            delivery.contains(required),
+            "SCP secret cleanup missing {required}"
+        );
+    }
+
+    let script = include_str!("../../../components/gvmd/src/alert_methods/SCP/alert");
+    for required in [
+        "-F /dev/null",
+        "StrictHostKeyChecking=yes",
+        "UserKnownHostsFile=$KNOWN_HOSTS_FILE",
+        "GlobalKnownHostsFile=/dev/null",
+        "IdentityAgent=none",
+        "IdentitiesOnly=yes",
+    ] {
+        assert!(
+            script.contains(required),
+            "SCP isolation missing {required}"
+        );
+    }
+    for forbidden in ["~/.ssh", "ERROR_SHORT", "$KNOWN_HOSTS >"] {
+        assert!(
+            !script.contains(forbidden),
+            "SCP script retains unsafe behavior {forbidden}"
         );
     }
 }
